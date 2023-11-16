@@ -2,12 +2,16 @@
 
 . common/templates/config.yaml
 
+set -e
+set -x
+
 ##ocp_version=4.13.19
 
-# Install the needed
-rpm -q podman || sudo yum install podman  -y 
-rpm -q jq     || sudo yum install jq      -y 
-rpm -q nmstate|| sudo yum install nmstate -y 
+# Ensure dependencies installed 
+rpm -q podman || sudo dnf install podman  -y 
+rpm -q jq     || sudo dnf install jq      -y 
+rpm -q nmstate|| sudo dnf install nmstate -y 
+which pip3    || sudo dnf install python3-pip -y
 which j2      || pip3 install j2cli 
 
 mkdir -p install-mirror 
@@ -24,28 +28,29 @@ echo ver_oc=$ver_oc
 echo ver_install=$ver_install
 
 if [ "$ver_oc" != "$ver_install" -o "$ver_oc" != "$ocp_version" ]; then
-	echo "Warning: Missmatched versions of oc ($ver_oc) and openshift-install ($ver_install)!"
-	echo "Downlaod the latest versions and replace these binaries? (y/n) [n]"
+	echo "Warning: Missing or missmatched versions of oc ($ver_oc) and openshift-install ($ver_install)!"
+	echo -n "Downlaod the latest versions and replace these binaries for version $ver_install? (y/n) [n]: "
 	read yn
 
 
 	if [ "$yn" = "y" ]; then
 		[ ! -s openshift-client-linux-$ocp_version.tar.gz ] && \
-		       	wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_version/openshift-client-linux-$ocp_version.tar.gz
+		       	curl -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_version/openshift-client-linux-$ocp_version.tar.gz
 		tar xzvf openshift-client-linux-$ocp_version.tar.gz oc
 		loc_oc=$(which oc)
+		mkdir -p ~/bin
 		[ ! "$loc_oc" ] && loc_oc=~/bin
 		sudo install oc $loc_oc
 
 		[ ! -s openshift-install-linux-$ocp_version.tar.gz ] && \
-		       	wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_version/openshift-install-linux-$ocp_version.tar.gz
+		       	curl -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_version/openshift-install-linux-$ocp_version.tar.gz
 		tar xzvf openshift-install-linux-$ocp_version.tar.gz openshift-install
 		loc_installer=$(which openshift-install)
 		[ ! "$loc_installer" ] && loc_installer=~/bin
 		sudo install openshift-install $loc_installer
 
 		[ ! -s oc-mirror.tar.gz ] && \
-			wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_version/oc-mirror.tar.gz
+			curl -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_version/oc-mirror.tar.gz
 		tar xvzf oc-mirror.tar.gz
 		chmod +x oc-mirror
 		sudo install oc-mirror ~/bin
@@ -55,28 +60,39 @@ if [ "$ver_oc" != "$ver_install" -o "$ver_oc" != "$ocp_version" ]; then
 	fi
 fi
 
-export reg_host=registry.lan 
-export reg_port=8443
-export reg_path=openshift4
-
-res=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance)
+res=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
 # Mirror registry installed?
 if [ "$res" != "200" ]; then
 
-	[ ! -s mirror-registry.tar.gz ] && \
-		wget https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
+	./mirror-registry help || tar xzf mirror-registry.tar.gz || \
+		curl -OL https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
-	[ ! -s mirror-registry ] && tar xzvf mirror-registry.tar.gz 
+	./mirror-registry help || tar xzf mirror-registry.tar.gz 
+
+	#[ ! -s mirror-registry.tar.gz ] && \
+	#	curl -OL https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
+
+	#[ ! -s mirror-registry ] && tar xzvf mirror-registry.tar.gz 
 
 	./mirror-registry install --quayHostname $reg_host | tee .install.output
 	# Sample output 
 	# Quay is available at https://registry.lan:8443 with credentials (init, cG79mTdkAo0P3ZgLsy12VMi56NU48nla)
 
-	line=$(grep -o "Quay is available at" .install.output)
+	line=$(grep -o "Quay is available at.*" .install.output)
 	reg_user=$(echo $line | awk '{print $8}' | cut -d\( -f2 | cut -d, -f1)
 	reg_password=$(echo $line | awk '{print $9}' | cut -d\) -f1 )
-	echo $reg_user:$reg_password > ~/.registry-creds.txt && chmod 400 ~/.registry-creds.txt 
+	echo $reg_user:$reg_password > ~/.registry-creds.txt && chmod 600 ~/.registry-creds.txt 
+else
+	# DO WE WANT TO SUPPORT EXISTING MIRROR REG?
+	if [ ! -s ~/.registry-creds.txt ]; then
+		echo "Enter username and password for registry: https://$reg_host:$reg_port/"
+		echo -n "Username: "
+		read u
+		echo -n "Password: "
+		read -s p
+		echo "$u:$p" > ~/.registry-creds.txt && chmod 600 ~/.registry-creds.txt
+	fi
 fi
 
 set -x
@@ -88,9 +104,6 @@ export reg_url=https://$reg_host:$reg_port
 reg_creds=$(cat ~/.registry-creds.txt)
 echo reg_creds=$reg_creds
 echo reg_url=$reg_url
-
-#echo reg_user=$reg_user
-#echo reg_password=$reg_password
 
 #set +x
 
@@ -108,6 +121,7 @@ export enc_password=$(echo -n "$reg_creds" | base64 -w0)
 
 mkdir -p ~/.docker ~/.containers
 j2 ../common/templates/template-pull-secret.json.j2 > pull-secret-mirror.json
+[ ! -s $pull_secret_file ] && echo "Error: Your pull secret file [$pull_secret_file] does not exist!" && exit 1
 jq -s '.[0] * .[1]' pull-secret-mirror.json  $pull_secret_file > pull-secret.json
 cp pull-secret.json ~/.docker/config.json
 cp pull-secret.json ~/.containers/auth.json  
@@ -118,7 +132,7 @@ diff ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/root
 	sudo update-ca-trust extract
 
 # Now mirror the images 
-#oc mirror --config=imageset-config.yaml docker://$reg_host:$reg_port/$reg_path
+oc mirror --config=imageset-config.yaml docker://$reg_host:$reg_port/$reg_path
 
 set -x
 res_dir=$(ls -trd1 oc-mirror-workspace/results-* | tail -1)
