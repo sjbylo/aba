@@ -13,10 +13,10 @@ mirror:
       type: ocp
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.15
-    packages:
-    - name: serverless-operator
-      channels:
-      - name: stable
+#    packages:
+#    - name: serverless-operator
+#      channels:
+#      - name: stable
   additionalImages:
-  - name: registry.redhat.io/ubi8/ubi:latest
+  - name: registry.redhat.io/ubi9/ubi:latest
   helm: {}
