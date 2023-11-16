@@ -3,13 +3,21 @@
 
 DIR=$1.src
 
+echo Checking if govc is installed
+which govc 2>/dev/null || \
+	curl -sL -o - "https://github.com/vmware/govmomi/releases/latest/download/govc_$(uname -s)_$(uname -m).tar.gz" | tar -C ~/bin -xvzf - govc
+
+echo Checking if dig is installed
+which dig 2>/dev/null || sudo dnf install bind-utils -y
+
+
 # Ensure govc can access vCenter or ESXi
 if [ ! -s ~/.vmware.conf ]; then
 	mkdir -p $DIR 
 	cp common/templates/vmware.conf ~/.vmware.conf
 	echo "Please edit the values in ~/.vmware.conf to enable authentication with vCenter/ESXi"
 	read -t 5 yn
-	vim ~/.vmware.conf
+	vi ~/.vmware.conf
 	. ~/.vmware.conf
 	echo Testing connection to VMware:
 	govc about || exit 1
@@ -28,7 +36,7 @@ if [ ! -s $DIR/config.yaml ]; then
 	cp common/templates/config.yaml $DIR
 	echo "Please edit the values in $DIR/config.yaml to define the cluster configuration"
 	read -t 5 yn
-	vim $DIR/config.yaml
+	vi $DIR/config.yaml
 	exec $0 $@
 fi
 
@@ -53,9 +61,15 @@ then
 
 set -x
 
-	[ -s install-mirror/$pull_secret_file ] && \
-		export pull_secret=$(cat install-mirror/$pull_secret_file) || \
-		echo WARNING: No pull secret file found at install-mirror/$pull_secret_file
+	export pull_secret=
+	export ssh_key_pub=
+	export additional_trust_bundle=
+	export image_content_sources=
+
+	pull_secret_mirror_file=pull-secret-mirror.json  # FIXME add to config file?
+	[ -s install-mirror/$pull_secret_mirror_file ] && \
+		export pull_secret=$(cat install-mirror/$pull_secret_mirror_file) || \
+		echo WARNING: No pull secret file found at install-mirror/$pull_secret_mirror_file
 	[ -s $additional_trust_bundle_file ] && \
 		export additional_trust_bundle=$(cat $additional_trust_bundle_file) || \
 		echo WARNING: No key $additional_trust_bundle_file
@@ -69,6 +83,30 @@ set -x
 #export additional_trust_bundle_file=~/quay-install/quay-rootCA/rootCA.pem
 #export ssh_key_file=~/.ssh/id_rsa.pub
 #export image_content_sources_file=image-content-sources.yaml
+
+	
+#export cluster_name=ocp1
+#export base_domain=example.com
+## Set your ingress and api IP addresses (ignored for single node OpenShift (SNO)
+#export api_vip="10.0.1.216"
+#export ingress_vip="10.0.1.226
+
+	ip=$(dig +short api.$cluster_name.$base_domain)
+	[ ! "$ip" = "$api_vip" ] && echo "WARNING: DNS record api.$cluster_name.$base_domain not resolvable!" && exit 1
+
+	# Ensure apps DNS exists 
+	ip=$(dig +short x.apps.$cluster_name.$base_domain)
+	[ ! "$ip" = "$ingress_vip" ] && echo "WARNING: DNS record \*.apps.$cluster_name.$base_domain not resolvable!" && exit 1
+
+#export reg_host=registry.example.com
+#export reg_port=8443
+#export reg_path=openshift4
+
+	# Ensure registry dns entry exists 
+	ip=$(dig +short $reg_host)
+	ip_int=$(ip route get 1 | grep -oP 'src \K\S+')
+	[ ! "$ip" = "$ip_int" ] && echo "WARNING: DNS record $reg_host is not resolvable!" && exit 1
+
 
 	# Use j2cli to render the templates
 	j2 common/templates/agent-config.yaml.j2 -o $DIR/agent-config.yaml 
