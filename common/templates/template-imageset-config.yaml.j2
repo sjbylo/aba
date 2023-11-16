@@ -1,0 +1,22 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v1alpha2
+storageConfig:
+  registry:
+    imageURL: {{ reg_host }}:{{ reg_port }}/{{ reg_path }}
+    skipTLS: false
+mirror:
+  platform:
+    channels:
+    - name: stable-{{ ocp_ver_major }}
+      minVersion: {{ ocp_ver }}
+      maxVersion: {{ ocp_ver }}
+      type: ocp
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.15
+    packages:
+    - name: serverless-operator
+      channels:
+      - name: stable
+  additionalImages:
+  - name: registry.redhat.io/ubi8/ubi:latest
+  helm: {}

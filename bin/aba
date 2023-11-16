@@ -1,0 +1,88 @@
+#!/bin/bash -e
+
+DIR=`dirname $0`
+cd $DIR/..
+#D=$PWD
+export PATH=$PWD/bin:$PWD/common/scripts:$PATH
+
+if [ "$1" = "--debug" ]; then
+	set -x 
+	shift 
+fi
+
+if [ $# -eq 0 -o "$1" = "-h" ]; then
+	cat <<-END
+		Usage: `basename $0` <directory> 
+
+		If the directory does not exist it will be created and a config file added.
+		Edit the config file and run the command again. 
+
+		Usage: `basename $0` <command> <directory> 
+
+		Commands:
+
+		create:    Create the VMs using the config files (install-config.yaml and agent-config.yaml)
+		refresh:   Delete and re-create the VMs 
+		stop:      Power down the VMs
+		start:     Power on the VMs
+		monitor:   View the installation progress on the rendezvous server after the agent service has started
+END
+		exit
+fi
+
+if [ "$1" = "create" ]; then
+	shift
+	exec create-vms.sh $@
+elif [ "$1" = "generate" -o "$1" = "gen" ]; then
+	shift
+	exec generate-image.sh $@
+elif [ "$1" = "init" ]; then
+	shift
+	exec init.sh $@
+elif [ "$1" = "delete" ]; then
+	shift
+	exec delete-vms.sh $@
+elif [ "$1" = "refresh" ]; then
+	shift
+	exec refresh-vms.sh $@
+elif [ "$1" = "stop" ]; then
+	shift
+	exec stop-vms.sh $@
+elif [ "$1" = "start" ]; then
+	shift
+	exec start-vms.sh $@
+elif [ "$1" = "monitor" -o "$1" = "mon" ]; then
+	shift
+	exec monitor-install.sh $@
+elif [ "$1" = "upload" -o "$1" = "up" ]; then
+	shift
+	exec upload-image.sh $@
+elif [ "$1" = "-h" -o "$1" = "--help" ]; then
+	shift
+	#exec $0 $@
+	exec $0 
+elif [ "$1" = "reset" ]; then
+	rm -vrf ~/.cache/agent/
+	rm -f ~/.vmware.conf
+	exit 
+fi
+
+bin/init.sh $@
+
+eval `common/scripts/cluster-config.sh $@ || exit 1`
+
+
+echo Generating the ISO image for $CLUSTER_NAME.$BASE_DOMAIN ...
+echo "openshift-install agent create image --dir $MANEFEST_DIR "
+
+rm -rf $MANEFEST_DIR && cp -rp $MANEFEST_SRC_DIR $MANEFEST_DIR && openshift-install agent create image --dir $MANEFEST_DIR 
+
+echo Uploading image ...
+upload-image.sh $@
+
+echo Refresh VMs ...
+refresh-vms.sh $MANEFEST_SRC_DIR
+
+echo Monitoring the installation progress ...
+monitor-install.sh $@
+

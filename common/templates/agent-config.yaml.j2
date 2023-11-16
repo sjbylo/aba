@@ -1,0 +1,62 @@
+apiVersion: v1alpha1
+kind: AgentConfig
+metadata:
+  name: {{ cluster_name }}
+rendezvousIP: {{ rendezvous_ip }}
+hosts:
+  {% for host in range(num_masters|int) %}
+  - hostname: {{ master_prefix }}{{ loop.index }}
+    role: master
+    interfaces:
+     - name: ens160
+       macAddress: "{{ mac_prefix + '%02d' % loop.index }}"
+    networkConfig:
+      interfaces:
+        - name: ens160
+          type: ethernet
+          state: up
+          mac-address: "{{ mac_prefix + '%02d' % loop.index }}"
+          ipv4:
+            enabled: true
+            address:
+              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip_index|int - 1 ) }}
+                prefix-length: {{ prefix_length }}
+            dhcp: false
+      dns-resolver:
+        config:
+          server:
+            - {{ dns_server }}
+      routes:
+        config:
+          - destination: 0.0.0.0/0
+            next-hop-address: {{ next_hop_address }}
+            next-hop-interface: ens160
+  {% endfor %}
+  {% for host in range(num_workers|int) %}
+  - hostname: {{ worker_prefix }}{{ loop.index }}
+    role: worker
+    interfaces:
+     - name: ens160
+       macAddress: {{ mac_prefix + '%02d' % (loop.index + 9 ) }}
+    networkConfig:
+      interfaces:
+        - name: ens160
+          type: ethernet
+          state: up
+          mac-address: {{ mac_prefix + '%02d' % (loop.index + 9 ) }}
+          ipv4:
+            enabled: true
+            address:
+              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip_index|int + 9) }}
+                prefix-length: {{ prefix_length }}
+            dhcp: false
+      dns-resolver:
+        config:
+          server:
+            - {{ dns_server }}
+      routes:
+        config:
+          - destination: 0.0.0.0/0
+            next-hop-address: {{ next_hop_address }}
+            next-hop-interface: ens160
+  {% endfor %}
