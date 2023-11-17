@@ -91,12 +91,17 @@ set -x
 #export api_vip="10.0.1.216"
 #export ingress_vip="10.0.1.226
 
-	ip=$(dig +short api.$cluster_name.$base_domain)
-	[ ! "$ip" = "$api_vip" ] && echo "WARNING: DNS record api.$cluster_name.$base_domain not resolvable!" && exit 1
+	# If NOT SNO...
+	if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
 
-	# Ensure apps DNS exists 
-	ip=$(dig +short x.apps.$cluster_name.$base_domain)
-	[ ! "$ip" = "$ingress_vip" ] && echo "WARNING: DNS record \*.apps.$cluster_name.$base_domain not resolvable!" && exit 1
+		# Ensure api DNS exists 
+		ip=$(dig +short api.$cluster_name.$base_domain)
+		[ ! "$ip" = "$api_vip" ] && echo "WARNING: DNS record api.$cluster_name.$base_domain not resolvable!" && exit 1
+
+		# Ensure apps DNS exists 
+		ip=$(dig +short x.apps.$cluster_name.$base_domain)
+		[ ! "$ip" = "$ingress_vip" ] && echo "WARNING: DNS record \*.apps.$cluster_name.$base_domain not resolvable!" && exit 1
+	fi
 
 #export reg_host=registry.example.com
 #export reg_port=8443
