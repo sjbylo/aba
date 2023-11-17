@@ -87,7 +87,7 @@ if [ "$res" != "200" ]; then
 	echo -n $reg_user:$reg_password > ~/.registry-creds.txt && chmod 600 ~/.registry-creds.txt 
 
 	# Allow access to the registry 
-	firewall-cmd --state && firewall-cmd --add-port=8443/tcp  --permanent && firewall-cmd --reload
+	sudo firewall-cmd --state && firewall-cmd --add-port=8443/tcp  --permanent && firewall-cmd --reload
 else
 	line=$(grep -o "Quay is available at.*" .install.output)
 	reg_user=$(echo $line | awk '{print $8}' | cut -d\( -f2 | cut -d, -f1)
