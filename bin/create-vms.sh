@@ -18,8 +18,9 @@ WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 # The vm template is configured to use CDROM from shared storage (i.e. reachable by all VMs).
 
 # Set the cpu and ram for the masters
-cpu=4
-[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 ] && cpu=8   # For SNO
+cpu=8
+mem=16
+[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 ] && cpu=16   # For SNO
 
 i=1
 for name in $CP_NAMES ; do
@@ -29,7 +30,7 @@ for name in $CP_NAMES ; do
 	govc vm.create \
 		-g rhel9_64Guest \
 		-c=$cpu \
-		-m=`expr 16 \* 1024` \
+		-m=`expr $mem \* 1024` \
 		-disk-datastore=$GOVC_DATASTORE \
 		-net.adapter vmxnet3 \
 		-net.address="${CP_MAC_ADDRESSES_ARRAY[$a]}" \
@@ -51,6 +52,8 @@ for name in $CP_NAMES ; do
 	let i=$i+1
 done
 
+cpu=8
+mem=24
 i=1
 for name in $WORKER_NAMES ; do
 	a=`expr $i-1`
@@ -58,8 +61,8 @@ for name in $WORKER_NAMES ; do
 	echo Create worker: $name VM with ${WORKER_MAC_ADDRESSES_ARRAY[$a]} images/agent-${CLUSTER_NAME}.iso $FOLDER/${CLUSTER_NAME}-$name
 	govc vm.create \
 		-g rhel9_64Guest \
-		-c=8 \
-		-m=`expr 24 \* 1024` \
+		-c=$cpu \
+		-m=`expr $mem \* 1024` \
 		-net.adapter vmxnet3 \
 		-disk-datastore=$GOVC_DATASTORE \
 		-net.address="${WORKER_MAC_ADDRESSES_ARRAY[$a]}" \
