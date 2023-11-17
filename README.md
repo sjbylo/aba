@@ -10,10 +10,11 @@ Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $H
 A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
 
 The following will install the mirror registry on your bastion host and configure the needed pull secrets and certificates. 
-Be sure to set the correct values for vCenter.  ESXi will also work.   'basic' is just the name of the directory to use for agent-based config files.
+Be sure to set the correct values for vCenter.  ESXi will also work. 
 ```
 bin/init-rag.sh basic   
 ```
+- 'basic' is just the name of the directory to use to store agent-based config files.
 
 The following will install openshift using the Agent-based assisted installer. 
 Be sure to go through *all* the values in ~/.vmware.conf and config.yaml. Be sure to set up your DNS entries in advance. 
