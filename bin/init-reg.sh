@@ -1,7 +1,9 @@
 #!/bin/bash
 
+[ ! "$1" ] && echo Usage: `basename $0` directory && exit 1
+
 mkdir -p $1.src
-[ ! -s $1.src/config.yaml ] && vi $1.src/config.yaml 
+[ ! -s $1.src/config.yaml ] && cp common/templates/config.yaml $1.src/config.yaml && vi $1.src/config.yaml
 . $1.src/config.yaml
 
 set -e
@@ -10,56 +12,69 @@ set -x
 ##ocp_version=4.13.19
 
 # Ensure dependencies installed 
-rpm -q podman || sudo dnf install podman  -y 
-rpm -q jq     || sudo dnf install jq      -y 
-rpm -q nmstate|| sudo dnf install nmstate -y 
-which pip3    || sudo dnf install python3-pip -y
-which j2      || pip3 install j2cli 
+inst=
+rpm -q --quiet nmstate|| inst=1
+rpm -q --quiet podman || inst=1
+rpm -q --quiet jq     || inst=1
+rpm -q --quiet nmstate|| inst=1
+
+[ "$inst" ] && sudo dnf install podman jq nmstate python3-pip -y
+
+which j2 || pip3 install j2cli 
 
 mkdir -p install-mirror 
 cd install-mirror
 
 #set -x
-which oc 
-ver_oc=$(oc version --client=true | grep "Client Version:" | awk '{print $3}')
+which oc && ver_oc=$(oc version --client=true | grep "Client Version:" | awk '{print $3}')
 
-which openshift-install 
-ver_install=$(openshift-install version | grep "openshift-install" | awk '{print $2}')
+which openshift-install && ver_install=$(openshift-install version | grep "openshift-install" | awk '{print $2}')
 
 echo ver_oc=$ver_oc
 echo ver_install=$ver_install
 
-if [ "$ver_oc" != "$ver_install" -o "$ver_oc" != "$ocp_version" ]; then
+if [ ! "$ver_oc" -o ! "$ver_install" -o "$ver_oc" != "$ver_install" -o "$ver_oc" != "$ocp_version" ]; then
+	set +x
 	echo "Warning: Missing or missmatched versions of oc ($ver_oc) and openshift-install ($ver_install)!"
 	echo -n "Downlaod the latest versions and replace these binaries for version $ver_install? (y/n) [n]: "
 	read yn
 
+	set -x
 
 	if [ "$yn" = "y" ]; then
+		echo Installing oc version $ocp_version
+
+		mkdir -p ~/bin
+
 		[ ! -s openshift-client-linux-$ocp_version.tar.gz ] && \
 		       	curl -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_version/openshift-client-linux-$ocp_version.tar.gz
 		tar xzvf openshift-client-linux-$ocp_version.tar.gz oc
-		loc_oc=$(which oc)
-		mkdir -p ~/bin
+		loc_oc=$(which oc || true)
 		[ ! "$loc_oc" ] && loc_oc=~/bin
 		sudo install oc $loc_oc
 
+		echo Installing openshift-install version $ocp_version
 		[ ! -s openshift-install-linux-$ocp_version.tar.gz ] && \
 		       	curl -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_version/openshift-install-linux-$ocp_version.tar.gz
 		tar xzvf openshift-install-linux-$ocp_version.tar.gz openshift-install
-		loc_installer=$(which openshift-install)
+		loc_installer=$(which openshift-install || true)
 		[ ! "$loc_installer" ] && loc_installer=~/bin
 		sudo install openshift-install $loc_installer
 
+		echo Installing oc-mirror version $ocp_version
 		[ ! -s oc-mirror.tar.gz ] && \
 			curl -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_version/oc-mirror.tar.gz
 		tar xvzf oc-mirror.tar.gz
 		chmod +x oc-mirror
-		sudo install oc-mirror ~/bin
+		loc_ocm=$(which oc-mirror || true)
+		[ ! "$loc_ocm" ] && loc_ocm=~/bin
+		sudo install oc-mirror $loc_ocm 
 
 	else
-		echo "Doing nothing! Be warned that these versions should match!" 
+		echo "Doing nothing! Be warned that oc and openshidft-install need to match!" 
 	fi
+else
+	echo "oc and openshidft-install are installed ansd the same version."
 fi
 
 res=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
@@ -87,7 +102,7 @@ if [ "$res" != "200" ]; then
 	echo -n $reg_user:$reg_password > ~/.registry-creds.txt && chmod 600 ~/.registry-creds.txt 
 
 	# Allow access to the registry 
-	sudo firewall-cmd --state && firewall-cmd --add-port=8443/tcp  --permanent && firewall-cmd --reload
+	sudo firewall-cmd --state && sudo firewall-cmd --add-port=8443/tcp  --permanent && sudo firewall-cmd --reload
 else
 	line=$(grep -o "Quay is available at.*" .install.output)
 	reg_user=$(echo $line | awk '{print $8}' | cut -d\( -f2 | cut -d, -f1)
