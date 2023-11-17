@@ -1,6 +1,8 @@
 #!/bin/bash
 
-. common/templates/config.yaml
+mkdir -p $1.src
+[ ! -s $1.src/config.yaml ] && vi $1.src/config.yaml 
+. $1.src/config.yaml
 
 set -e
 set -x
@@ -87,15 +89,20 @@ if [ "$res" != "200" ]; then
 	# Allow access to the registry 
 	firewall-cmd --state && firewall-cmd --add-port=8443/tcp  --permanent && firewall-cmd --reload
 else
+	line=$(grep -o "Quay is available at.*" .install.output)
+	reg_user=$(echo $line | awk '{print $8}' | cut -d\( -f2 | cut -d, -f1)
+	reg_password=$(echo $line | awk '{print $9}' | cut -d\) -f1 )
+	echo $reg_user:$reg_password > ~/.registry-creds.txt && chmod 600 ~/.registry-creds.txt 
+
 	# DO WE WANT TO SUPPORT EXISTING MIRROR REG?
-	if [ ! -s ~/.registry-creds.txt ]; then
-		echo "Enter username and password for registry: https://$reg_host:$reg_port/"
-		echo -n "Username: "
-		read u
-		echo -n "Password: "
-		read -s p
-		echo "$u:$p" > ~/.registry-creds.txt && chmod 600 ~/.registry-creds.txt
-	fi
+#	if [ ! -s ~/.registry-creds.txt ]; then
+#		echo "Enter username and password for registry: https://$reg_host:$reg_port/"
+#		echo -n "Username: "
+#		read u
+#		echo -n "Password: "
+#		read -s p
+#		echo "$u:$p" > ~/.registry-creds.txt && chmod 600 ~/.registry-creds.txt
+#	fi
 fi
 
 set -x
