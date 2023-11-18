@@ -42,7 +42,7 @@ elif [ "$1" = "generate" -o "$1" = "gen" ]; then
 elif [ "$1" = "init" ]; then
 	shift
 	exec init.sh $@
-elif [ "$1" = "delete" ]; then
+elif [ "$1" = "delete" -o "$1" = "del" ]; then
 	shift
 	exec delete-vms.sh $@
 elif [ "$1" = "refresh" ]; then

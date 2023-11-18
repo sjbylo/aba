@@ -41,7 +41,8 @@ if [ ! -s $DIR/aba.conf ]; then
 fi
 
 # If the files already exist, try to use them, don't overwrite them
-if [ -s $DIR/aba.conf -a ! -s $DIR/agent-config.yaml -a ! -s $DIR/install-config.yaml ]
+#if [ -s $DIR/aba.conf -a ! -s $DIR/agent-config.yaml -a ! -s $DIR/install-config.yaml ]
+if [ -s $DIR/aba.conf ]
 then
 	source $DIR/aba.conf
 	source ~/.mirror.conf
@@ -109,10 +110,11 @@ set -x
 	ip_int=$(ip route get 1 | grep -oP 'src \K\S+')
 	[ ! "$ip" = "$ip_int" ] && echo "WARNING: DNS record [$reg_host] is not resolvable!" && exit 1
 
-
 	# Use j2cli to render the templates
-	j2 common/templates/agent-config.yaml.j2 -o $DIR/agent-config.yaml 
-	j2 common/templates/install-config.yaml.j2 -o $DIR/install-config.yaml 
+	[ ! -s $DIR/agent-config.yaml ] && \
+		j2 common/templates/agent-config.yaml.j2   -o $DIR/agent-config.yaml   || echo WARNING: not overwriting $DIR/agent-config.yaml
+	[ ! -s $DIR/install-config.yaml ] && \
+		j2 common/templates/install-config.yaml.j2 -o $DIR/install-config.yaml || echo WARNING: not overwriting $DIR/install-config.yaml
 
 	exec $0 $@
 fi
