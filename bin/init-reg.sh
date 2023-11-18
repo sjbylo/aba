@@ -3,8 +3,8 @@
 [ ! "$1" ] && echo Usage: `basename $0` directory && exit 1
 
 mkdir -p $1.src
-[ ! -s $1.src/config.yaml ] && cp common/templates/config.yaml $1.src/config.yaml && vi $1.src/config.yaml
-. $1.src/config.yaml
+[ ! -s $1.src/aba.conf ] && cp common/templates/aba.conf $1.src/aba.conf && vi $1.src/aba.conf
+. $1.src/aba.conf
 
 set -e
 set -x

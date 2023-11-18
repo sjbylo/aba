@@ -31,19 +31,19 @@ then
 fi
 
 # Ensure the top level config file is configured 
-if [ ! -s $DIR/config.yaml ]; then
+if [ ! -s $DIR/aba.conf ]; then
 	mkdir -p $DIR 
-	cp common/templates/config.yaml $DIR
-	echo "Please edit the values in $DIR/config.yaml to define the cluster configuration"
+	cp common/templates/aba.conf $DIR
+	echo "Please edit the values in $DIR/aba.conf to define the cluster configuration"
 	read -t 5 yn
-	vi $DIR/config.yaml
+	vi $DIR/aba.conf
 	exec $0 $@
 fi
 
 # If the files already exist, try to use them, don't overwrite them
-if [ -s $DIR/config.yaml -a ! -s $DIR/agent-config.yaml -a ! -s $DIR/install-config.yaml ]
+if [ -s $DIR/aba.conf -a ! -s $DIR/agent-config.yaml -a ! -s $DIR/install-config.yaml ]
 then
-	source $DIR/config.yaml
+	source $DIR/aba.conf
 
 	# Set the rendezvous_ip to the the first master's ip
 	export rendezvous_ip=$machine_ip_prefix$starting_ip_index

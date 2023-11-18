@@ -10,7 +10,7 @@ if [ "$1" = "--debug" ]; then
 	shift 
 fi
 
-if [ $# -eq 0 -o "$1" = "-h" ]; then
+if [ $# -eq 0 -o "$1" = "-h" -o "$1" = "--help" ]; then
 	cat <<-END
 		Usage: `basename $0` <directory> 
 
@@ -64,6 +64,7 @@ elif [ "$1" = "-h" -o "$1" = "--help" ]; then
 elif [ "$1" = "reset" ]; then
 	rm -vrf ~/.cache/agent/
 	rm -f ~/.vmware.conf
+	#rm -f install-mirror/imageset*
 	exit 
 fi
 
