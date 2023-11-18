@@ -44,6 +44,7 @@ fi
 if [ -s $DIR/aba.conf -a ! -s $DIR/agent-config.yaml -a ! -s $DIR/install-config.yaml ]
 then
 	source $DIR/aba.conf
+	source ~/.mirror.conf
 
 	# Set the rendezvous_ip to the the first master's ip
 	export rendezvous_ip=$machine_ip_prefix$starting_ip_index
@@ -96,17 +97,17 @@ set -x
 
 		# Ensure api DNS exists 
 		ip=$(dig +short api.$cluster_name.$base_domain)
-		[ ! "$ip" = "$api_vip" ] && echo "WARNING: DNS record api.$cluster_name.$base_domain not resolvable!" && exit 1
+		[ ! "$ip" = "$api_vip" ] && echo "WARNING: DNS record [api.$cluster_name.$base_domain] not resolvable!" && exit 1
 
 		# Ensure apps DNS exists 
 		ip=$(dig +short x.apps.$cluster_name.$base_domain)
-		[ ! "$ip" = "$ingress_vip" ] && echo "WARNING: DNS record \*.apps.$cluster_name.$base_domain not resolvable!" && exit 1
+		[ ! "$ip" = "$ingress_vip" ] && echo "WARNING: DNS record [\*.apps.$cluster_name.$base_domain] not resolvable!" && exit 1
 	fi
 
 	# Ensure registry dns entry exists 
 	ip=$(dig +short $reg_host)
 	ip_int=$(ip route get 1 | grep -oP 'src \K\S+')
-	[ ! "$ip" = "$ip_int" ] && echo "WARNING: DNS record $reg_host is not resolvable!" && exit 1
+	[ ! "$ip" = "$ip_int" ] && echo "WARNING: DNS record [$reg_host] is not resolvable!" && exit 1
 
 
 	# Use j2cli to render the templates

@@ -4,7 +4,7 @@ metadata:
   name: {{ cluster_name }}
 rendezvousIP: {{ rendezvous_ip }}
 hosts:
-  {% for host in range(num_masters|int) %}
+  {%- for host in range(num_masters|int) %}
   - hostname: {{ master_prefix }}{{ loop.index }}
     role: master
     interfaces:
@@ -32,7 +32,7 @@ hosts:
             next-hop-address: {{ next_hop_address }}
             next-hop-interface: ens160
   {% endfor %}
-  {% for host in range(num_workers|int) %}
+  {%- for host in range(num_workers|int) %}
   - hostname: {{ worker_prefix }}{{ loop.index }}
     role: worker
     interfaces:
