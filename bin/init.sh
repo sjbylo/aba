@@ -103,10 +103,6 @@ set -x
 		[ ! "$ip" = "$ingress_vip" ] && echo "WARNING: DNS record \*.apps.$cluster_name.$base_domain not resolvable!" && exit 1
 	fi
 
-#export reg_host=registry.example.com
-#export reg_port=8443
-#export reg_path=openshift4
-
 	# Ensure registry dns entry exists 
 	ip=$(dig +short $reg_host)
 	ip_int=$(ip route get 1 | grep -oP 'src \K\S+')

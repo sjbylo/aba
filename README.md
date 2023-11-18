@@ -27,7 +27,7 @@ The following command will:
 Be sure to set the correct values for vCenter.  Note that ESXi will also work (see the values in ~/.vmware.conf) 
 
 ```
-bin/init-rag.sh basic   
+bin/init-reg.sh basic   
 ```
 - 'basic' is just the name of the directory to use to store agent-based config files.  You can choose any name you wish, e.g. 'sno' or 'compact'.
 
@@ -42,4 +42,12 @@ Run the following for more instructions.
 ```
 bin/aba -h 
 ```
+
+
+
+# Miscellaneous
+
+Govc is used to create and manage VMs on ESXi or vSphere.
+
+https://github.com/vmware/govmomi/tree/main/govc
 

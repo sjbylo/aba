@@ -102,7 +102,7 @@ if [ "$res" != "200" ]; then
 	echo -n $reg_user:$reg_password > ~/.registry-creds.txt && chmod 600 ~/.registry-creds.txt 
 
 	# Allow access to the registry 
-	sudo firewall-cmd --state && sudo firewall-cmd --add-port=8443/tcp  --permanent && sudo firewall-cmd --reload
+	sudo firewall-cmd --state && sudo firewall-cmd --add-port=$reg_port/tcp  --permanent && sudo firewall-cmd --reload
 else
 	line=$(grep -o "Quay is available at.*" .install.output)
 	reg_user=$(echo $line | awk '{print $8}' | cut -d\( -f2 | cut -d, -f1)
@@ -140,12 +140,12 @@ export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 echo ocp_ver=$ocp_ver
 echo ocp_ver_major=$ocp_ver_major
 
-j2 ../common/templates/template-imageset-config.yaml.j2 > imageset-config.yaml 
+j2 ../common/templates/imageset-config.yaml.j2 > imageset-config.yaml 
 
 export enc_password=$(echo -n "$reg_creds" | base64 -w0)
 
 mkdir -p ~/.docker ~/.containers
-j2 ../common/templates/template-pull-secret.json.j2 > pull-secret-mirror.json
+j2 ../common/templates/pull-secret-mirror.json.j2 > pull-secret-mirror.json
 [ ! -s $pull_secret_file ] && echo "Error: Your pull secret file [$pull_secret_file] does not exist!" && exit 1
 jq -s '.[0] * .[1]' pull-secret-mirror.json  $pull_secret_file > pull-secret.json
 cp pull-secret.json ~/.docker/config.json
