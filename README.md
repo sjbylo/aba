@@ -43,3 +43,11 @@ Run the following for more instructions.
 bin/aba -h 
 ```
 
+
+
+# Miscellaneous
+
+Govc is used to create and manage VMs on ESXi or vSphere.
+
+https://github.com/vmware/govmomi/tree/main/govc
+
