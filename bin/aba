@@ -1,8 +1,11 @@
 #!/bin/bash -e
 
+umask 077
+
 DIR=`dirname $0`
 cd $DIR/..
 #D=$PWD
+# Include aba bin path and common scripts
 export PATH=$PWD/bin:$PWD/common/scripts:$PATH
 
 if [ "$1" = "--debug" ]; then
