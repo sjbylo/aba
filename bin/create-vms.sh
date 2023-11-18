@@ -9,13 +9,27 @@ fi
 CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
 WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 
+####common/scripts/cluster-config.sh $@ 
+
+echo Checking mac addresses already in use ...
+arp -an > /tmp/.all.mac 
+for mac in $CP_MAC_ADDRESSES
+do
+	echo checking $mac ...
+	if grep -q " $mac " /tmp/.all.mac; then
+		echo "WARNING"
+		echo "Mac address $mac is already in use.  If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
+		echo "Change 'mac_prefix' in $1.src/aba.conf and run '$0 $1' again?"
+		rm -f $1.src/agent-config.yaml $1.src/install-config.yaml
+		exit 1
+	fi
+done
+
 . ~/.vmware.conf
 
+# If we accessing vCenter (and not ESXi directly) 
 [ "$VC" ] && echo Create folder: $FOLDER
 [ "$VC" ] && govc folder.create $FOLDER || true
-
-# Remember to put the VMs on the local fast storage!
-# The vm template is configured to use CDROM from shared storage (i.e. reachable by all VMs).
 
 # Set the cpu and ram for the masters
 cpu=8
