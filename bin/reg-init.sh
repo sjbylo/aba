@@ -31,7 +31,7 @@ which openshift-install >/dev/null 2>&1 && openshift_install_ver=$(openshift-ins
 
 if [ ! "$oc_ver" -o ! "$openshift_install_ver" -o "$oc_ver" != "$openshift_install_ver" -o "$oc_ver" != "$ocp_target_ver" ]; then
 	echo "Warning: Missing or missmatched versions of oc ($oc_ver) and openshift-install ($openshift_install_ver)!"
-	echo -n "Downlaod the latest versions and replace these binaries for version $openshift_install_ver? (y/n) [n]: "
+	echo -n "Download the latest versions and replace these binaries with version $ocp_target_ver? (y/n) [n]: "
 	read yn
 
 	if [ "$yn" = "y" ]; then
