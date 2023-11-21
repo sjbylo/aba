@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+[ ! "$1" ] && echo "Usage: `basename $0` --dir <directory>" && exit 1
+
 common/scripts/validate.sh $@
 
 if [ ! "$CLUSTER_NAME" ]; then
@@ -9,6 +11,8 @@ fi
 . ~/.vmware.conf
 
 for name in $WORKER_NAMES $CP_NAMES; do
-	govc vm.power -off ${CLUSTER_NAME}-$name
+	# Shut down guest if vmware tools exist
+	govc vm.power -s ${CLUSTER_NAME}-$name || govc vm.power -off ${CLUSTER_NAME}-$name 
+	
 done
 

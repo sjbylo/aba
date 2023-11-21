@@ -4,75 +4,99 @@ umask 077
 
 DIR=`dirname $0`
 cd $DIR/..
-#D=$PWD
+
 # Include aba bin path and common scripts
 export PATH=$PWD/bin:$PWD/common/scripts:$PATH
 
 if [ "$1" = "--debug" ]; then
-	set -x 
+	export DEBUG_ABA=1
+	set -x
 	shift 
 fi
 
+# Show help
 if [ $# -eq 0 -o "$1" = "-h" -o "$1" = "--help" ]; then
 	cat <<-END
-		Usage: `basename $0` <directory> 
+		Usage: `basename $0` <command> --dir <directory> 
 
 		If the directory does not exist it will be created and a config file added.
 		Edit the config file and run the command again. 
 
-		Usage: `basename $0` <command> <directory> 
+		Example:
+		  `basename $0` reg init
+		  `basename $0` --dir compact 
 
 		Commands:
 
-		create:    Create the VMs using the config files (install-config.yaml and agent-config.yaml)
-		refresh:   Delete and re-create the VMs 
-		stop:      Power down the VMs
-		start:     Power on the VMs
-		monitor:   View the installation progress on the rendezvous server after the agent service has started
+		reg init          Install and initialize a mirror registry on the local host (bastion).
+		reg delete|del    Uninstall the mirror registry.
+
+		vmw upload	  Upload the ISO image to vSphere or ESXi.
+		vmw create        Create the VMs using the config files (install-config.yaml and agent-config.yaml).
+		vmw stop          Power down the VMs.
+		vmw start         Power on the VMs.
+		vmw refresh       Delete and re-create the VMs.
+		monitor           View the installation progress on the rendezvous server after the agent service has started
+
+		reset             Delete some of the generated files.
 END
 		exit
 fi
 
-if [ "$1" = "create" ]; then
+if [ "$1" = "reg" -o "$1" = "registry" ]; then
 	shift
-	exec create-vms.sh $@
-elif [ "$1" = "generate" -o "$1" = "gen" ]; then
-	shift
-	exec generate-image.sh $@
-elif [ "$1" = "init" ]; then
-	shift
-	exec init.sh $@
-elif [ "$1" = "delete" -o "$1" = "del" ]; then
-	shift
-	exec delete-vms.sh $@
-elif [ "$1" = "refresh" ]; then
-	shift
-	exec refresh-vms.sh $@
-elif [ "$1" = "stop" ]; then
-	shift
-	exec stop-vms.sh $@
-elif [ "$1" = "start" ]; then
-	shift
-	exec start-vms.sh $@
+	[ "$1" = "init" ] && exec reg-init.sh $@
+	[ "$1" = "delete" -o "$1" = "del" ] && exec reg-delete.sh $@
+
+	echo "Usage: Expecting 'init' or 'delete' commands.  Run `basename $0` for help."
+	exit 1
+elif [ "$1" = "vmw" ]; then
+	shift 
+	if [ "$1" = "create" ]; then
+		shift
+		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-create.sh $@
+		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+	elif [ "$1" = "delete" -o "$1" = "del" ]; then
+		shift
+		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-delete.sh $@
+		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+	elif [ "$1" = "refresh" ]; then
+		shift
+		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-refresh.sh $@
+		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+	elif [ "$1" = "stop" ]; then
+		shift 
+		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-stop.sh $@
+		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+	elif [ "$1" = "start" ]; then
+		shift
+		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-start.sh $@
+		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+	elif [ "$1" = "upload" -o "$1" = "up" ]; then
+		shift
+		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-upload.sh $@
+		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+	else
+		echo "Usage: expecting one of upload|create|refresh|stop|start|delete --dir <dir>.  Run `basename $0` for help." && exit 1
+	fi
 elif [ "$1" = "monitor" -o "$1" = "mon" ]; then
 	shift
-	exec monitor-install.sh $@
-elif [ "$1" = "upload" -o "$1" = "up" ]; then
-	shift
-	exec upload-image.sh $@
-elif [ "$1" = "-h" -o "$1" = "--help" ]; then
-	shift
-	#exec $0 $@
-	exec $0 
+	[ "$1" = "--dir" -a "$2" ] && shift && exec monitor-install.sh $@
+	echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
 elif [ "$1" = "reset" ]; then
-	rm -vrf ~/.cache/agent/
-	rm -f ~/.vmware.conf
-	#rm -f install-mirror/imageset*
-	exit 
+	exec reset.sh $@
 fi
 
+if [ "$1" = "--dir" ]; then
+	shift
+else
+	echo "Must use --dir <directory>" && exit 1
+fi
+
+# Ensure all config files (~/.vmware.conf, <directory>/{install|agent}-config.yaml) are in place
 bin/init.sh $@
 
+# Extract details from the <directory>/{install|agent}-config.yaml files:
 eval `common/scripts/cluster-config.sh $@ || exit 1`
 
 
@@ -82,10 +106,10 @@ echo "openshift-install agent create image --dir $MANEFEST_DIR "
 rm -rf $MANEFEST_DIR && cp -rp $MANEFEST_SRC_DIR $MANEFEST_DIR && openshift-install agent create image --dir $MANEFEST_DIR 
 
 echo Uploading image ...
-upload-image.sh $@
+vmw-upload.sh $@
 
 echo Refresh VMs ...
-refresh-vms.sh $MANEFEST_SRC_DIR
+vmw-refresh.sh $MANEFEST_SRC_DIR
 
 echo Monitoring the installation progress ...
 monitor-install.sh $@

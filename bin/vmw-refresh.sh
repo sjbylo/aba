@@ -6,9 +6,9 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval `common/scripts/cluster-config.sh $@ || exit 1`
 fi
 
-delete-vms.sh $@
+vmw-delete.sh $@
 
-create-vms.sh $@
+vmw-create.sh $@
 
-start-vms.sh $@
+vmw-start.sh $@
 

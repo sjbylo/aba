@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+[ ! "$1" ] && echo "Usage: `basename $0` --dir <directory>" && exit 1
+
 common/scripts/validate.sh $@
 
 if [ ! "$CLUSTER_NAME" ]; then

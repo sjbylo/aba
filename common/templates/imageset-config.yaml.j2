@@ -7,7 +7,7 @@ storageConfig:
 mirror:
   platform:
     channels:
-    - name: stable-{{ ocp_ver_major }}
+    - name: {{ channel }}-{{ ocp_ver_major }}
       minVersion: {{ ocp_ver }}
       maxVersion: {{ ocp_ver }}
       type: ocp

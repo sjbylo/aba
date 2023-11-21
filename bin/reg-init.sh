@@ -1,16 +1,14 @@
-#!/bin/bash
+#!/bin/bash -e
 
 [ ! "$1" ] && echo Usage: `basename $0` directory && exit 1
+[ "$DEBUG_ABA" ] && set -x
 
 umask 077
 
 [ ! -s ~/.mirror.conf ] && cp common/templates/mirror.conf ~/.mirror.conf && vi ~/.mirror.conf
 . ~/.mirror.conf
 
-set -e
-set -x
-
-# Ensure dependencies installed 
+echo Ensure dependencies installed ...
 inst=
 rpm -q --quiet nmstate|| inst=1
 rpm -q --quiet podman || inst=1
@@ -19,23 +17,21 @@ rpm -q --quiet nmstate|| inst=1
 
 [ "$inst" ] && sudo dnf install podman jq nmstate python3-pip -y
 
-which j2 || pip3 install j2cli 
-
+which j2 >/dev/null 2>&1 || pip3 install j2cli 
 
 mkdir -p install-mirror 
 cd install-mirror
 
 # Fetch versions of any existing oc and openshift-install binaries
-which oc >/dev/null 2>&1 && ver_oc=$(oc version --client=true | grep "Client Version:" | awk '{print $3}')
-which openshift-install >/dev/null 2>&1 && ver_install=$(openshift-install version | grep "openshift-install" | awk '{print $2}')
+which oc >/dev/null 2>&1 && oc_ver=$(oc version --client=true | grep "Client Version:" | awk '{print $3}')
+which openshift-install >/dev/null 2>&1 && openshift_install_ver=$(openshift-install version | grep "openshift-install" | awk '{print $2}')
 
-echo ver_oc=$ver_oc
-echo ver_install=$ver_install
+[ "$oc_ver" ] && echo "Found oc v$oc_ver" || echo "No oc found!"
+[ "$openshift_install_ver" ] && echo "Found openshift-install v$openshift_install_ver" || echo "No openshift-install found!" 
 
-if [ ! "$ver_oc" -o ! "$ver_install" -o "$ver_oc" != "$ver_install" -o "$ver_oc" != "$ocp_target_ver" ]; then
-	set +x
-	echo "Warning: Missing or missmatched versions of oc ($ver_oc) and openshift-install ($ver_install)!"
-	echo -n "Downlaod the latest versions and replace these binaries for version $ver_install? (y/n) [n]: "
+if [ ! "$oc_ver" -o ! "$openshift_install_ver" -o "$oc_ver" != "$openshift_install_ver" -o "$oc_ver" != "$ocp_target_ver" ]; then
+	echo "Warning: Missing or missmatched versions of oc ($oc_ver) and openshift-install ($openshift_install_ver)!"
+	echo -n "Downlaod the latest versions and replace these binaries for version $openshift_install_ver? (y/n) [n]: "
 	read yn
 
 	if [ "$yn" = "y" ]; then
@@ -75,10 +71,12 @@ else
 fi
 
 # Can the registry mirror already be reached?
-res=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
+res_remote=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
+res_local=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://127.0.0.1:${reg_port}/health/instance || true)
 
 # Mirror registry installed?
-if [ "$res" != "200" ]; then
+if [ "$res_local" != "200" ]; then
+	echo Installing Quay registry on this host ...
 	echo Checking mirror-registry binary ...
 	if [ ! -x mirror-registry ]; then
 		if [ ! -s mirror-registry.tar.gz ]; then
@@ -107,60 +105,61 @@ if [ "$res" != "200" ]; then
 
 	echo Allowing access to the registry port [reg_port] ...
 	sudo firewall-cmd --state && sudo firewall-cmd --add-port=$reg_port/tcp  --permanent && sudo firewall-cmd --reload
-#else
-#	line=$(grep -o "Quay is available at.*" .install.output)
-#	reg_user=$(echo $line | awk '{print $8}' | cut -d\( -f2 | cut -d, -f1)
-#	reg_password=$(echo $line | awk '{print $9}' | cut -d\) -f1 )
-#	echo -n $reg_user:$reg_password > ~/.registry-creds.txt && chmod 600 ~/.registry-creds.txt 
-#
-#	# DO WE WANT TO SUPPORT EXISTING MIRROR REG?
-#	if [ ! -s ~/.registry-creds.txt ]; then
-#		echo "Enter username and password for registry: https://$reg_host:$reg_port/"
-#		echo -n "Username: "
-#		read u
-#		echo -n "Password: "
-#		read -s p
-#		echo "$u:$p" > ~/.registry-creds.txt && chmod 600 ~/.registry-creds.txt
-#	fi
+else
+	echo 
+	echo WARNING: 
+	echo "Registry detected on localhost at https://127.0.0.1:${reg_port}/health/instance"
+	echo "This script does not yet support the use of an existing registry and needs to install Quay registry on this host (bastion) itself."
+	echo "If aba installed the detected registry, then continue to use it".
+
+	if [ "$res_remote" = "200" ]; then
+		echo 
+		echo "A registry was also detected at https://$reg_host:${reg_port}/health/instance"
+	fi
+	exit 1
 fi
 
 export reg_url=https://$reg_host:$reg_port
 
 reg_creds=$(cat ~/.registry-creds.txt)
-#echo reg_creds=$reg_creds
-#echo reg_url=$reg_url
 
-echo Checking registry access ...
+echo Checking registry access is working using "podman login" ...
 podman login -u init -p $reg_password $reg_url --tls-verify=false 
 
 export ocp_ver=$ocp_target_ver
 export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
 
-#echo ocp_ver=$ocp_ver
-#echo ocp_ver_major=$ocp_ver_major
+
+echo Generating imageset-config.yaml for oc-mirror ...
 
 j2 ../common/templates/imageset-config.yaml.j2 > imageset-config.yaml 
 
 export enc_password=$(echo -n "$reg_creds" | base64 -w0)
 
+
 echo Configuring ~/.docker/config.json and ~/.containers/auth.json 
+
 mkdir -p ~/.docker ~/.containers
 j2 ../common/templates/pull-secret-mirror.json.j2 > pull-secret-mirror.json
-[ ! -s $pull_secret_file ] && echo "Error: Your pull secret file [$pull_secret_file] does not exist!" && exit 1
+[ ! -s $pull_secret_file ] && echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
+ls -l pull-secret-mirror.json $pull_secret_file 
 jq -s '.[0] * .[1]' pull-secret-mirror.json  $pull_secret_file > pull-secret.json
 cp pull-secret.json ~/.docker/config.json
 cp pull-secret.json ~/.containers/auth.json  
 
 # Check if the cert needs to be updated
-diff ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null || \
-	sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ \
+diff ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2|| \
+	sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 	sudo update-ca-trust extract
 
 echo 
-echo Mirroring the images.  Ensure there is enough space under $HOME.  This can take 10-20 mins to complete. 
-oc mirror --config=imageset-config.yaml docker://$reg_host:$reg_port/$reg_path
+echo Now mirroring the images.  Ensure there is enough disk space under $HOME.  This can take 10-20 mins to complete. 
 
-echo Configure imageContentSourcePolicy.yaml ...
+# Set up script to help for manual re-sync
+echo "oc mirror --config=imageset-config.yaml docker://$reg_host:$reg_port/$reg_path" > go.sh && chmod 700 go.sh 
+./go.sh 
+
+echo Generating imageContentSourcePolicy.yaml ...
 res_dir=$(ls -trd1 oc-mirror-workspace/results-* | tail -1)
 [ ! "$res_dir" ] && echo "Cannot find latest oc-mirror-workspace/results-* directory under $PWD" && exit 1
 export image_sources=$(cat $res_dir/imageContentSourcePolicy.yaml | grep -B1 -A1 $reg_host:$reg_port/$reg_path/openshift/release | sed "s/^  //")
@@ -170,4 +169,7 @@ export reg_cert=$(cat ~/quay-install/quay-rootCA/rootCA.pem)
 cp ~/quay-install/quay-rootCA/rootCA.pem . 
 echo "$image_sources" > image-content-sources.yaml
 
+echo 
+echo Done $0
+echo 
 

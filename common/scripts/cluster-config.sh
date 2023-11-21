@@ -1,6 +1,8 @@
 #!/bin/bash -e
 # This script extracts the needed values from the agent-config.yaml and the install-config.yaml files.
 
+[ ! "$1" ] && echo "Usage: `basename $0` <directory>" && exit 1
+
 yaml2json()
 {
 	python -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'

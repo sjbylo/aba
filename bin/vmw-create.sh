@@ -1,5 +1,8 @@
 #!/bin/bash -e
 
+[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
+[ "$DEBUG_ABA" ] && set -x
+
 common/scripts/validate.sh $@
 
 if [ ! "$CLUSTER_NAME" ]; then
@@ -11,31 +14,40 @@ WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 
 ####common/scripts/cluster-config.sh $@ 
 
+# Delete arp cache 
+#arp -an | cut -d\( -f2 | cut -d\) -f1 | xargs -L1 sudo arp -d
+#ping -c2 -b 10.0.1.255
+#echo arp
+#arp -an 
+#sleep 1
+
 echo Checking mac addresses already in use ...
 arp -an > /tmp/.all.mac 
 for mac in $CP_MAC_ADDRESSES
 do
 	echo checking $mac ...
-	if grep -q " $mac " /tmp/.all.mac; then
-		echo "WARNING"
+	if grep " $mac " /tmp/.all.mac; then
+		echo 
+		echo "WARNING:"
 		echo "Mac address $mac is already in use.  If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
-		echo "Change 'mac_prefix' in $1.src/aba.conf and run '$0 $1' again?"
+		echo "Change 'mac_prefix' in $1.src/aba.conf and run the command again."
 		#rm -f $1.src/agent-config.yaml $1.src/install-config.yaml
-		sleep 8
-		#exit 1
+		exit 1
 	fi
 done
 
+# Read in the cpu and mem values 
+[ -s $1/aba.conf ] && . $1/aba.conf || exit 1
+
 . ~/.vmware.conf
+[ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
 
 # If we accessing vCenter (and not ESXi directly) 
 [ "$VC" ] && echo Create folder: $FOLDER
 [ "$VC" ] && govc folder.create $FOLDER || true
 
-# Set the cpu and ram for the masters
-cpu=8
-mem=16
-[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 ] && cpu=16   # For SNO
+# Check and increase CPU count for SNO, if needed
+[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 16 ] && master_cpu_count=16   # For SNO
 
 i=1
 for name in $CP_NAMES ; do
@@ -44,8 +56,8 @@ for name in $CP_NAMES ; do
 	echo Create master: $name VM with ${CP_MAC_ADDRESSES_ARRAY[$a]} images/agent-${CLUSTER_NAME}.iso $FOLDER/${CLUSTER_NAME}-$name
 	govc vm.create \
 		-g rhel9_64Guest \
-		-c=$cpu \
-		-m=`expr $mem \* 1024` \
+		-c=$master_cpu_count \
+		-m=`expr $master_mem \* 1024` \
 		-disk-datastore=$GOVC_DATASTORE \
 		-net.adapter vmxnet3 \
 		-net.address="${CP_MAC_ADDRESSES_ARRAY[$a]}" \
@@ -67,8 +79,6 @@ for name in $CP_NAMES ; do
 	let i=$i+1
 done
 
-cpu=8
-mem=24
 i=1
 for name in $WORKER_NAMES ; do
 	a=`expr $i-1`
@@ -76,8 +86,8 @@ for name in $WORKER_NAMES ; do
 	echo Create worker: $name VM with ${WORKER_MAC_ADDRESSES_ARRAY[$a]} images/agent-${CLUSTER_NAME}.iso $FOLDER/${CLUSTER_NAME}-$name
 	govc vm.create \
 		-g rhel9_64Guest \
-		-c=$cpu \
-		-m=`expr $mem \* 1024` \
+		-c=$worker_cpu_count \
+		-m=`expr $worker_mem \* 1024` \
 		-net.adapter vmxnet3 \
 		-disk-datastore=$GOVC_DATASTORE \
 		-net.address="${WORKER_MAC_ADDRESSES_ARRAY[$a]}" \
