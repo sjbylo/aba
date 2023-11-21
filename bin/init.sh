@@ -35,6 +35,7 @@ if [ -s $DIR/agent-config.yaml -a -s $DIR/install-config.yaml ]
 then
 	# But, if aba.conf has been changed ... refresh them ...
 	if [ $DIR/aba.conf -nt $DIR/agent-config.yaml -a $DIR/aba.conf -nt $DIR/install-config.yaml ]; then
+		echo Removing older files: $DIR/agent-config.yaml $DIR/install-config.yaml
 		rm -f $DIR/agent-config.yaml $DIR/install-config.yaml 
 	else
 		echo "Using files $DIR/agent-config.yaml $DIR/install-config.yaml"
@@ -98,7 +99,7 @@ then
 		export image_content_sources=$(cat install-mirror/$image_content_sources_file) || \
 		echo WARNING: No file install-mirror/$image_content_sources_file ...
 
-	echo Checking if dig is installed
+	echo Checking if dig is installed.  
 	which dig 2>/dev/null || sudo dnf install bind-utils -y
 
 	# If NOT SNO...

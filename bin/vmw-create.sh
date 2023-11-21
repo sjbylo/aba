@@ -14,6 +14,9 @@ WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 
 ####common/scripts/cluster-config.sh $@ 
 
+echo "Checking if the command 'arp' is availiable ..."
+which arp >/dev/null 2>&1 || sudo yum install net-tools -y 
+
 # Delete arp cache 
 #arp -an | cut -d\( -f2 | cut -d\) -f1 | xargs -L1 sudo arp -d
 #ping -c2 -b 10.0.1.255
@@ -32,7 +35,7 @@ do
 		echo "Mac address $mac is already in use.  If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
 		echo "Change 'mac_prefix' in $1.src/aba.conf and run the command again."
 		#rm -f $1.src/agent-config.yaml $1.src/install-config.yaml
-		exit 1
+		exit 
 	fi
 done
 
