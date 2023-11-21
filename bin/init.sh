@@ -124,7 +124,6 @@ then
 	[ ! -s $DIR/install-config.yaml ] && \
 		j2 common/templates/install-config.yaml.j2 -o $DIR/install-config.yaml || echo WARNING: not overwriting $DIR/install-config.yaml
 
-	set -x
 	exec $0 $@
 fi
 
