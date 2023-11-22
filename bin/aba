@@ -30,10 +30,11 @@ fi
 # Show help
 if [ $# -eq 0 -o "$1" = "-h" -o "$1" = "--help" ]; then
 	cat <<-END
-		Usage: `basename $0` <command> --dir <directory> 
+		Usage: `basename $0` [--debug] <command> --dir <directory> 
 
-		If the directory does not exist it will be created and a config file added.
-		Edit the config file and run the command again. 
+		If the directory does not exist it will be created and configuration files added.
+		The configuration files need to be edited to match your environment. 
+		If needed, edit the configuration files and run the command again. 
 
 		Example:
 		  `basename $0` reg init
@@ -51,7 +52,7 @@ if [ $# -eq 0 -o "$1" = "-h" -o "$1" = "--help" ]; then
 		vmw refresh       Delete and re-create the VMs.
 		monitor           View the installation progress on the rendezvous server after the agent service has started
 
-		reset             Delete some of the generated files.
+		reset             Delete the generated files.
 END
 		exit
 fi
