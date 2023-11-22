@@ -12,11 +12,11 @@ bin/init.sh $@
 . ~/.vmware.conf
 
 for name in $CP_NAMES ; do
-	govc vm.power -off ${CLUSTER_NAME}-$name
+	govc vm.power -off ${CLUSTER_NAME}-$name || true
 done
 
 i=1
 for name in $WORKER_NAMES ; do
-	govc vm.power -off ${CLUSTER_NAME}-$name
+	govc vm.power -off ${CLUSTER_NAME}-$name || true
 done
 

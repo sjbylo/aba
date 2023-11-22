@@ -108,24 +108,21 @@ fi
 if [ "$1" = "--dir" ]; then
 	shift
 else
-	echo "Must use --dir <directory>" && exit 1
+	echo "Must use vmw <command> --dir <directory>" && exit 1
 fi
 
 # Ensure all config files (~/.vmware.conf, <directory>/{install|agent}-config.yaml) are in place
 bin/init.sh $@
 
-# Extract details from the <directory>.src/{install|agent}-config.yaml files:
-#####eval `common/scripts/cluster-config.sh $@ || exit 1`
-
-echo Generating image ...
-generate-image.sh $@
+echo Powering off VMs ...
+bin/vmw-poweroff.sh $@ || exit 
 
 echo Uploading image ...
-vmw-upload.sh $@
+bin/vmw-upload.sh $@ || exit 
 
 echo Refreshing VMs ...
-vmw-refresh.sh $@
+bin/vmw-refresh.sh $@ || exit 
 
-echo Monitoring the installation progress ...
-monitor-install.sh $@
+echo Monitoring installation progress ...
+bin/monitor-install.sh $@ || exit 
 
