@@ -24,13 +24,15 @@ Aba automatically completes the following:
 
 ## Basic use 
 
-- First, install a bastion host with a fresh version of RHEL (a 'minimal install' of RHEL 9.3 has been tested, other recent versions of RHEL should work too).  
-- Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).  It's a good idea to make the file user read-only, e.g. 'chmod 600 ~/.pull-secret.json'.
-  - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
+- First, install a bastion host with a fresh version of RHEL
+   - a 'minimal install' of RHEL 9.3 has been tested, other recent versions of RHEL should work too.
+- Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
+   - It's a good idea to make the file user read-only, e.g. `chmod 600 ~/.pull-secret.json`.
+   - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
 - Create the needed DNS A records for the following, *for example* (use your own domain):
-  - OCP API: api.ocp1.example.com - points to a free IP in your private subnet. 
-  - OCP Ingress: *.apps.ocp1.example.com - points to a free IP in your private subnet. 
-  - Quay mirror registry: registry.example.com - points to the IP address of your RHEL bastion. 
+   - OCP API: api.ocp1.example.com - points to a free IP in your private subnet. 
+   - OCP Ingress: *.apps.ocp1.example.com - points to a free IP in your private subnet. 
+   - Quay mirror registry: registry.example.com - points to the IP address of your RHEL bastion. 
 
 The below command will:
   - If needed, install 'oc' and 'openshift-install' with the same specified version
