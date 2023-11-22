@@ -67,12 +67,15 @@ bin/aba mon --dir mycluster
 Other examples of commands, when working with VMware:
 
 ```
-bin/aba vmw refresh --dir compact    # This will delete the VMs and recreate them,
-                                     #  causing a re-install of the 'compact' cluster
-bin/aba vmw stop --dir compact       # This will shut down the guest OS (CoreOS) of
-                                     # all VMs in the 'compact' cluster.
-bin/aba vmw start --dir compact      # This will power on all the VMs for the 
-                                     # 'compact' deployment. 
+bin/aba vmw refresh --dir compact    # Delete the VMs and re-create them causing a re-install
+                                     # of the 'compact' cluster.
+bin/aba vmw stop --dir compact       # Shut down the guest OS (CoreOS) of all VMs in the
+                                     # 'compact' cluster.
+bin/aba vmw start --dir compact      # Power on all VMs in the 'compact' cluster. 
+bin/aba vmw delete --dir compact     # Delete all the VMs in the 'compact' cluster. 
+
+Options:
+
 bin/aba --debug ...                  # Turn debug mode (set -x) on.
 ```
 
