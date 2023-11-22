@@ -1,7 +1,8 @@
 #!/bin/bash 
 # Script to generate the agent-config.yaml and install-config.yaml files
 
-echo Exec $0 $@
+[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
+[ "$DEBUG_ABA" ] && set -x
 
 DIR=$1.src
 

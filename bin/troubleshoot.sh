@@ -1,4 +1,7 @@
-#!/bin/bash 
+#!/bin/bash -e
+
+[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
+[ "$DEBUG_ABA" ] && set -x
 
 common/scripts/validate.sh $@
 

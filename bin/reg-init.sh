@@ -78,7 +78,8 @@ fi
 
 # Can the registry mirror already be reached?
 res_remote=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
-res_local=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://127.0.0.1:${reg_port}/health/instance || true)
+[ "$http_proxy" -o "$HTTP_PROXY" ] && no_proxy=$no_proxy,localhost   # adjust is proxy in use
+res_local=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://localhost:${reg_port}/health/instance || true)
 
 # Mirror registry installed?
 if [ "$res_local" != "200" ]; then
@@ -114,7 +115,7 @@ if [ "$res_local" != "200" ]; then
 else
 	echo 
 	echo WARNING: 
-	echo "Registry detected on localhost at https://127.0.0.1:${reg_port}/health/instance"
+	echo "Registry detected on localhost at https://localhost:${reg_port}/health/instance"
 	echo "This script does not yet support the use of an existing registry and needs to install Quay registry on this host (bastion) itself."
 	echo "If aba installed the detected registry, then continue to use it".
 

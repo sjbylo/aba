@@ -1,9 +1,7 @@
 #!/bin/bash -e
 
-#. ~/proxy-unset.sh
-#rm -vrf ~/.cache/agent/
-
-common/scripts/validate.sh $@
+[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
+[ "$DEBUG_ABA" ] && set -x
 
 eval `common/scripts/cluster-config.sh $@ || exit 1`
 
