@@ -64,6 +64,15 @@ You can also run this command to monitor the progress of the Agent-based install
 bin/aba mon --dir mycluster
 ```
 
+Other examples of commands, when working with VMware:
+
+```
+bin/aba vmw refresh --dir compact         # This will delete the VMs and recreate them, causing a re-install of the 'compact' cluster
+bin/aba vmw stop --dir compact            # This will shut down the guest OS (CoreOS) of all VMs in the 'compact' cluster.
+bin/aba vmw start --dir compact           # This will power on all the VMs for the 'compact' deployment. 
+bin/aba --debug ...                       # Turn debug (set -x) on.
+```
+
 Run the following for more instructions.
 
 ```
