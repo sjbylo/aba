@@ -3,16 +3,13 @@
 [ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$DEBUG_ABA" ] && set -x
 
-
-
-#eval `cluster-config.sh $@`
 if [ ! "$CLUSTER_NAME" ]; then
 	eval `common/scripts/cluster-config.sh $@ || exit 1`
 fi
 
 bin/init.sh $@
 
-. ~/.vmware.conf || exit 1
+. ~/.vmware.conf 
 
 i=1
 for name in $CP_NAMES $WORKER_NAMES; do
@@ -20,6 +17,8 @@ for name in $CP_NAMES $WORKER_NAMES; do
 	govc vm.destroy ${CLUSTER_NAME}-$name || true
 done
 
-[ "$VC" ] && echo govc object.destroy $FOLDER
-[ "$VC" ] && govc object.destroy $FOLDER || true
+if [ "$VC" ]; then
+	echo govc object.destroy $FOLDER
+	govc object.destroy $FOLDER || true
+fi
 
