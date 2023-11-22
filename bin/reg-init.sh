@@ -5,7 +5,13 @@
 
 umask 077
 
-[ ! -s ~/.mirror.conf ] && cp common/templates/mirror.conf ~/.mirror.conf && vi ~/.mirror.conf
+if [ ! -s ~/.mirror.conf ]; then
+	cp common/templates/mirror.conf ~/.mirror.conf
+	echo 
+	echo "Please edit the values in ~/.mirror.conf to match your environment.  Hit return key to continue or Ctr-C to abort."
+	read yn
+	vi ~/.mirror.conf
+fi
 . ~/.mirror.conf
 
 echo Ensure dependencies installed ...

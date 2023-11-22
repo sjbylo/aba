@@ -5,11 +5,9 @@
 DIR=`dirname $0`
 cd $DIR/..
 
-DIR=$1.src
+[ "$1" ] && DIR=$1.src
 
-rm -vrf ~/.cache/agent/
-rm -f ~/.vmware.conf
-#rm -f install-mirror/imageset*
-rm -vf $DIR/install-config.yaml
-rm -vf $DIR/agent-config.yaml
+rm -vrf ~/.cache/agent/ ~/.vmware.conf ~/.mirror.conf 
+
+[ "$DIR" ] && rm -vf $DIR/install-config.yaml $DIR/agent-config.yaml
 

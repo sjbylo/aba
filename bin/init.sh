@@ -11,8 +11,9 @@ if [ ! -s ~/.vmware.conf ]; then
 	touch $DIR/agent.x86_64.iso.uploaded
 	cp common/templates/vmware.conf ~/.vmware.conf
 
-	echo "Please edit the values in ~/.vmware.conf to enable authentication with vCenter/ESXi"
-	read -t 5 yn
+	echo 
+	echo "Please edit the values in ~/.vmware.conf to enable authentication with vCenter/ESXi.  Hit return key to continue or Ctr-C to abort."
+	read yn
 	vi ~/.vmware.conf
 	. ~/.vmware.conf
 	echo Testing connection to VMware:
@@ -48,8 +49,11 @@ if [ ! -s $DIR/aba.conf ]; then
 	mkdir -p $DIR 
 	touch $DIR/agent.x86_64.iso.uploaded
 	cp common/templates/aba.conf $DIR
+
+	echo
 	echo "Please edit the values in $DIR/aba.conf to define the cluster configuration"
-	read -t 5 yn
+	echo "Hit return key to continue or Ctr-C to abort."
+	read yn
 	vi $DIR/aba.conf
 	exec $0 $@
 fi
