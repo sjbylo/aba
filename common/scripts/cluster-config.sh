@@ -22,6 +22,7 @@ ICONF_TMP=/tmp/.install-config.yaml
 ACONF=$MANEFEST_SRC_DIR/agent-config.yaml  
 ACONF_TMP=/tmp/.agent-config.yaml  
 
+
 cat $ICONF | yaml2json > $ICONF_TMP
 cat $ACONF | yaml2json > $ACONF_TMP
 

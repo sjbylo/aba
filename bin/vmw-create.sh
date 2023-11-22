@@ -3,44 +3,72 @@
 [ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$DEBUG_ABA" ] && set -x
 
-common/scripts/validate.sh $@
-
 if [ ! "$CLUSTER_NAME" ]; then
 	eval `common/scripts/cluster-config.sh $@ || exit 1`
 fi
 
+bin/init.sh $@
+
 CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
 WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
-
-####common/scripts/cluster-config.sh $@ 
 
 echo "Checking if the command 'arp' is availiable ..."
 which arp >/dev/null 2>&1 || sudo yum install net-tools -y 
 
-# Delete arp cache 
-#arp -an | cut -d\( -f2 | cut -d\) -f1 | xargs -L1 sudo arp -d
-#ping -c2 -b 10.0.1.255
-#echo arp
-#arp -an 
-#sleep 1
-
-echo Checking mac addresses already in use ...
-arp -an > /tmp/.all.mac 
-for mac in $CP_MAC_ADDRESSES
+echo Checking mac addresses that could already in use ...
+arp -an > /tmp/.all_arp_entries 
+INUSE=
+> /tmp/.list_of_matching_arp_entries
+for mac in $CP_MAC_ADDRESSES $WORKER_MAC_ADDRESSES
 do
-	echo checking $mac ...
-	if grep " $mac " /tmp/.all.mac; then
-		echo 
-		echo "WARNING:"
-		echo "Mac address $mac is already in use.  If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
-		echo "Change 'mac_prefix' in $1.src/aba.conf and run the command again."
-		#rm -f $1.src/agent-config.yaml $1.src/install-config.yaml
-		exit 1
+	#echo checking mac address: $mac ...
+	if grep -q " $mac " /tmp/.all_arp_entries; then
+		echo "Warning: Mac address $mac is already in use or has been in use."
+		INUSE=1
+		echo $mac >> /tmp/.list_of_matching_arp_entries
 	fi
 done
 
+[ "$INUSE" ] && echo && echo "Consider changing 'mac_prefix' in $1.src/aba.conf and try again." && sleep 2 && echo 
+
+echo Checking ip and mac addresses currently in use ...
+> /tmp/.mac_list_filtered
+if [ -s /tmp/.list_of_matching_arp_entries ]; then
+	for mac in `cat /tmp/.list_of_matching_arp_entries`
+	do
+		grep $mac /tmp/.all_arp_entries >> /tmp/.mac_list_filtered
+	done
+
+	ips=$(cat /tmp/.mac_list_filtered | cut -d\( -f2 | cut -d\) -f1)
+
+	if [ "$ips" ]; then
+		# Delete arp cache and refresh IPs with ping...
+		echo "$ips" | xargs -L1 sudo arp -d
+		for ip in $ips
+		do
+			ping -c1 $ip >/dev/null 2>&1 &
+		done
+		wait 
+		sleep 2
+
+		arp -an > /tmp/.all_arp_entries 
+		P=
+		INUSE=
+		for mac in $CP_MAC_ADDRESSES $WORKER_MAC_ADDRESSES
+		do
+			#echo checking $mac ...
+			if grep -q " $mac " /tmp/.all_arp_entries; then
+				P="$P $mac"
+				INUSE=1
+			fi
+		done
+		[ "$INUSE" ] && echo -e "WARNING: One or more mac addresses currently in use ($P).\nConsider Changing 'mac_prefix' in $1.src/aba.conf and try again." && \
+				echo "If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" && exit 1
+	fi
+fi
+
 # Read in the cpu and mem values 
-[ -s $1/aba.conf ] && . $1/aba.conf || exit 1
+[ -s $1.src/aba.conf ] && . $1.src/aba.conf || exit 1
 
 . ~/.vmware.conf
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE

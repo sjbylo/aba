@@ -21,7 +21,7 @@ cd $DIR/..
 # Include aba bin path and common scripts
 export PATH=$PWD/bin:$PWD/common/scripts:$PATH
 
-if [ "$1" = "--debug" ]; then
+if [ "$1" = "--debug" -o "$1" = "-d" ]; then
 	export DEBUG_ABA=1
 	set -x
 	shift 
@@ -82,6 +82,10 @@ elif [ "$1" = "vmw" ]; then
 		shift 
 		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-stop.sh $@
 		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+	elif [ "$1" = "poweroff" ]; then
+		shift 
+		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-poweroff.sh $@
+		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
 	elif [ "$1" = "start" ]; then
 		shift
 		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-start.sh $@
@@ -91,7 +95,7 @@ elif [ "$1" = "vmw" ]; then
 		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-upload.sh $@
 		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
 	else
-		echo "Usage: expecting one of upload|create|refresh|stop|start|delete --dir <dir>.  Run `basename $0` for help." && exit 1
+		echo "Usage: expecting one of upload|create|refresh|stop|poweroff|start|delete --dir <dir>.  Run `basename $0` for help." && exit 1
 	fi
 elif [ "$1" = "monitor" -o "$1" = "mon" ]; then
 	shift
@@ -110,20 +114,17 @@ fi
 # Ensure all config files (~/.vmware.conf, <directory>/{install|agent}-config.yaml) are in place
 bin/init.sh $@
 
-# Extract details from the <directory>/{install|agent}-config.yaml files:
-eval `common/scripts/cluster-config.sh $@ || exit 1`
+# Extract details from the <directory>.src/{install|agent}-config.yaml files:
+#####eval `common/scripts/cluster-config.sh $@ || exit 1`
 
-
-echo Generating the ISO image for $CLUSTER_NAME.$BASE_DOMAIN ...
-echo "openshift-install agent create image --dir $MANEFEST_DIR "
-
-rm -rf $MANEFEST_DIR && cp -rp $MANEFEST_SRC_DIR $MANEFEST_DIR && openshift-install agent create image --dir $MANEFEST_DIR 
+echo Generating image ...
+generate-image.sh $@
 
 echo Uploading image ...
 vmw-upload.sh $@
 
-echo Refresh VMs ...
-vmw-refresh.sh $MANEFEST_SRC_DIR
+echo Refreshing VMs ...
+vmw-refresh.sh $@
 
 echo Monitoring the installation progress ...
 monitor-install.sh $@

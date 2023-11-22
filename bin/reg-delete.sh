@@ -5,9 +5,10 @@
 
 
 cd install-mirror
-# Root is needed to uninstall
+
 # ./mirror-registry uninstall --autoApprove -v
 ./mirror-registry uninstall -v
 
-rm -f ~/.registry-creds.txt rootCA.pem
+echo Cleaning up files ...
+rm -vf ~/.registry-creds.txt rootCA.pem ~/.mirror.conf 
 

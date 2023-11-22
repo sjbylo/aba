@@ -3,11 +3,11 @@
 [ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$DEBUG_ABA" ] && set -x
 
-common/scripts/validate.sh $@
-
 if [ ! "$CLUSTER_NAME" ]; then
 	eval `common/scripts/cluster-config.sh $@ || exit 1`
 fi
+
+bin/init.sh $@
 
 echo Viewing events on the rendezvous server at $RENDEZVOUSIP ...
 sleep 1

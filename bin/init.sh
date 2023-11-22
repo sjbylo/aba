@@ -32,6 +32,12 @@ if [ ! -s ~/.vmware.conf ]; then
 	exec $0 $@
 fi
 
+#if [ $DIR/aba.conf -nt $DIR/install-config.yaml -o $DIR/aba.conf -nt $DIR/agent-config.yaml ]; then
+	#echo "$DIR/aba.conf has been updated.  Re-generate the Agent-based configuration files?"
+	#read yn
+	#[ "$yn" = "y" ] && rm -f $DIR/install-config.yaml $DIR/agent-config.yaml
+#fi
+
 # If both files are already defined, use them as is. 
 if [ -s $DIR/agent-config.yaml -a -s $DIR/install-config.yaml ]
 then
@@ -40,7 +46,7 @@ then
 		echo Removing older files: $DIR/agent-config.yaml $DIR/install-config.yaml
 		rm -f $DIR/agent-config.yaml $DIR/install-config.yaml 
 	else
-		echo "Using files $DIR/agent-config.yaml $DIR/install-config.yaml"
+		####echo "Using files $DIR/agent-config.yaml $DIR/install-config.yaml"
 		exit 0
 	fi
 fi
@@ -125,6 +131,7 @@ then
 	[ ! "$ip" = "$ip_int" ] && echo "WARNING: DNS record [$reg_host] is not resolvable!" && exit 1
 
 	# Use j2cli to render the templates
+	echo Generating Agent-based configuration files: $DIR/agent-config.yaml and $DIR/install-config.yaml 
 	[ ! -s $DIR/agent-config.yaml ] && \
 		j2 common/templates/agent-config.yaml.j2   -o $DIR/agent-config.yaml   || echo WARNING: not overwriting $DIR/agent-config.yaml
 	[ ! -s $DIR/install-config.yaml ] && \
