@@ -1,6 +1,7 @@
 # Aba is an agent-based wrapper
 
 Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a disconnected environment, onto vSphere or ESXi (or bare-metal) using the Agent-based installer.
+
 Aba automatically completes the following:
   1. installs the Quay mirror registry onto localhost (your bastion) 
   1. uses Quay's credentials to build out the Agent-based configuration files
@@ -14,6 +15,7 @@ Aba automatically completes the following:
 - NTP (OCP requires that ESXi be configured with NTP).
 - vSphere with vCenter API access.  ESXi can also be used on its own (i.e. without vCenter).
 - a RHEL host or VM for the bastion (where Quay mirror registry will be installed). 
+- Access to sudo.
 - Internet access from your bastion to download the container images.
 - So far, only a "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported, which means the bastion needs to have both Internet access and access to the private subnet.  Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is work-in-progress. 
 
@@ -23,9 +25,9 @@ Aba automatically completes the following:
 - Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).  It's a good idea to make the file user read-only, e.g. 'chmod 600 ~/.pull-secret.json'.
   - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
 - Create the needed DNS A records for the following, *for example* (use your own domain):
-  - OCP API: api.ocp1.example.com
-  - OCP Ingress: *.apps.ocp1.example.com
-  - Quay mirror registry: registry.example.com
+  - OCP API: api.ocp1.example.com - points to a free IP in your private subnet. 
+  - OCP Ingress: *.apps.ocp1.example.com - points to a free IP in your private subnet. 
+  - Quay mirror registry: registry.example.com - points to the IP address of your RHEL bastion. 
 
 The below command will:
   - If needed, install 'oc' and 'openshift-install' with the same specified version
