@@ -12,7 +12,7 @@ The default use-case will install the Quay mirror registry onto localhost (basti
 - vSphere with vCenter API access.  ESXi can also be used on its own (i.e. without vCenter).
 - a RHEL host or VM for the bastion (where Quay mirror registry will be installed). 
 - Internet access from your bastion to download the container images.
-- So far, only a "(partially disconnected environment)[https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial]" is supported.  Fully air-gapped (or "(fully disconnected environment)[https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full]" is work-in-progress. 
+- So far, only a "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported.  Fully air-gapped (or "(fully disconnected environment)[https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full]" is work-in-progress. 
 
 ## Basic use 
 
