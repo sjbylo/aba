@@ -23,7 +23,7 @@ Aba automatically completes the following:
 - Root access with sudo.
 - 50G or more disk space in your home directory. 
 - Internet access from your bastion to download the container images.
-   - So far, only a "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported, which means the bastion needs to have both Internet access and access to the private subnet.  Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is work-in-progress. 
+   - So far, only a "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported, which means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift (can be disconnected).  Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is work-in-progress. 
 
 ## Basic use 
 

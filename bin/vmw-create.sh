@@ -13,7 +13,8 @@ CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
 WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 
 echo "Checking if the command 'arp' is availiable ..."
-which arp >/dev/null 2>&1 || sudo yum install net-tools -y 
+rpm --quiet -q net-tools || sudo dnf install net-tools -y
+##which arp >/dev/null 2>&1 || sudo dnf install net-tools -y 
 
 echo Checking mac addresses that could already in use ...
 arp -an > /tmp/.all_arp_entries 
