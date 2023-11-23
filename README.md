@@ -87,11 +87,23 @@ Run the following for more instructions.
 bin/aba -h 
 ```
 
+# Features that might not yet work
 
+- Using an existing registry has not yet been tested.  It should work as long as the dependent files are placed at the right locations where aba looks for them:
+  - pull-secret-mirror.json
+  - rootCA.pem
+  - image-content-sources.yaml
 
-# Miscellaneous
+- Fully air-gapped use case is not yet implemented.  A way can be found to first download all images to a directory, then to copy all files into the internal bastion, then import the images into a registry.  Optionally also install the registry on the internal bastion. 
 
-Govc is used to create and manage VMs on ESXi or vSphere.
+- Allow to install some workers with different CPU/MEM sizes which can be used to install cluster infra sub-systems, e.g. Ceph and/or ES etc (infra nodes).
+
+# Misscealanous 
+
+- Once a cluster config directory has been created (e.g. compact.src) some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed and aba can be run again to create the ISO and the VMs etc.  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP address changes, default route should work fine.  Changes, like adding link bondng may break the command to parse and extract the config.  The following is the script that is used to extract the cluster config from the agent-config yaml files. This must work. 
+  - image-content-sources.yaml compact 
+
+- Govc is used to create and manage VMs on ESXi or vSphere.
 
 https://github.com/vmware/govmomi/tree/main/govc
 
