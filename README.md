@@ -20,6 +20,7 @@ Aba automatically completes the following:
    - ESXi can also be used on its own (i.e. without vCenter).
 - a RHEL host or VM for the bastion (where Quay mirror registry will be installed). 
 - Root access with sudo.
+- 50G or more disk space in your home directory. 
 - Internet access from your bastion to download the container images.
    - So far, only a "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported, which means the bastion needs to have both Internet access and access to the private subnet.  Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is work-in-progress. 
 
@@ -87,7 +88,9 @@ Run the following for more instructions.
 bin/aba -h 
 ```
 
-# Features that might not yet work
+# Features that are not implemented yet or might not yet
+
+- Specifying a different location to install Quay registry data.
 
 - Using an existing registry has not yet been tested.  It should work as long as the dependent files are placed at the right locations where aba looks for them:
   - pull-secret-mirror.json
