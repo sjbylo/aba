@@ -69,38 +69,38 @@ elif [ "$1" = "vmw" ]; then
 	if [ "$1" = "create" ]; then
 		shift
 		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-create.sh $@
-		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+		echo "Usage: --dir <directory>.  See `basename $0` -h for help." && exit 1
 	elif [ "$1" = "delete" -o "$1" = "del" ]; then
 		shift
 		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-delete.sh $@
-		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+		echo "Usage: --dir <directory>.  See `basename $0` -h for help." && exit 1
 	elif [ "$1" = "refresh" ]; then
 		shift
 		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-refresh.sh $@
-		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+		echo "Usage: --dir <directory>.  See `basename $0` -h for help." && exit 1
 	elif [ "$1" = "stop" ]; then
 		shift 
 		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-stop.sh $@
-		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+		echo "Usage: --dir <directory>.  See `basename $0` -h for help." && exit 1
 	elif [ "$1" = "poweroff" ]; then
 		shift 
 		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-poweroff.sh $@
-		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+		echo "Usage: --dir <directory>.  See `basename $0` -h for help." && exit 1
 	elif [ "$1" = "start" ]; then
 		shift
 		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-start.sh $@
-		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+		echo "Usage: --dir <directory>.  See `basename $0` -h for help." && exit 1
 	elif [ "$1" = "upload" -o "$1" = "up" ]; then
 		shift
 		[ "$1" = "--dir" -a "$2" ] && shift && exec vmw-upload.sh $@
-		echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+		echo "Usage: --dir <directory>.  See `basename $0` -h for help." && exit 1
 	else
 		echo "Usage: expecting one of upload|create|refresh|stop|poweroff|start|delete --dir <dir>.  Run `basename $0` for help." && exit 1
 	fi
 elif [ "$1" = "monitor" -o "$1" = "mon" ]; then
 	shift
 	[ "$1" = "--dir" -a "$2" ] && shift && exec monitor-install.sh $@
-	echo "Must use --dir <directory>.  See `basename $0` -h for help." && exit 1
+	echo "Usage: --dir <directory>.  See `basename $0` -h for help." && exit 1
 elif [ "$1" = "reset" ]; then
 	exec reset.sh $@
 fi
@@ -108,7 +108,7 @@ fi
 if [ "$1" = "--dir" ]; then
 	shift
 else
-	echo "Must use vmw <command> --dir <directory>" && exit 1
+	echo "Usage: vmw <command> --dir <directory>" && exit 1
 fi
 
 # Ensure all config files (~/.vmware.conf, <directory>/{install|agent}-config.yaml) are in place
