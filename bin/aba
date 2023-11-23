@@ -117,6 +117,9 @@ bin/init.sh $@
 echo Powering off VMs ...
 bin/vmw-poweroff.sh $@ || exit 
 
+echo Generating image ...
+bin/generate-image.sh $@ 
+
 echo Uploading image ...
 bin/vmw-upload.sh $@ || exit 
 

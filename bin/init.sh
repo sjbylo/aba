@@ -139,7 +139,7 @@ else
 
 		# Use j2cli to render the templates
 		##[ ! -s $DIR/agent-config.yaml ] && \
-		ls -ltr $DIR
+		##ls -ltr $DIR
 		if [ $DIR/aba.conf -nt $DIR/agent-config.yaml ]; then
 			echo Generating Agent-based configuration file: $DIR/agent-config.yaml 
 			j2 common/templates/agent-config.yaml.j2   -o $DIR/agent-config.yaml
@@ -148,7 +148,7 @@ else
 		fi
 
 		##[ ! -s $DIR/install-config.yaml ] && \
-		ls -ltr $DIR
+		##ls -ltr $DIR
 		if [ $DIR/aba.conf -nt $DIR/install-config.yaml ]; then
 			echo Generating Agent-based configuration file: $DIR/install-config.yaml 
 			j2 common/templates/install-config.yaml.j2 -o $DIR/install-config.yaml 
@@ -158,5 +158,4 @@ else
 	fi
 fi
 
-bin/generate-image.sh $@ 
 

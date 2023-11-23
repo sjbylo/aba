@@ -14,7 +14,8 @@ if [ $MANEFEST_SRC_DIR/install-config.yaml -nt $MANEFEST_DIR/agent.x86_64.iso -o
 	# Refresh the ISO
 	rm -rf $MANEFEST_DIR && cp -rp $MANEFEST_SRC_DIR $MANEFEST_DIR && openshift-install agent create image --dir $MANEFEST_DIR 
 else
-	echo "Not re-generating ISO file since the agent-based configuration files have not been updated"
-	sleep 1
+	##echo "Not re-generating ISO file since the agent-based configuration files have not been updated"
+	##sleep 1
+	:
 fi
 

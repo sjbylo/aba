@@ -22,6 +22,8 @@ ICONF_TMP=/tmp/.install-config.yaml
 ACONF=$MANEFEST_SRC_DIR/agent-config.yaml  
 ACONF_TMP=/tmp/.agent-config.yaml  
 
+# If the files don't exist, nothing to do!
+#[ -s $ICONF -a -s $ACONF ] && exit 0
 
 cat $ICONF | yaml2json > $ICONF_TMP
 cat $ACONF | yaml2json > $ACONF_TMP
