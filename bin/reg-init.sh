@@ -14,12 +14,14 @@ if [ ! -s ~/.mirror.conf ]; then
 fi
 . ~/.mirror.conf
 
-echo Ensure dependencies installed ...
+[ ! -s $pull_secret_file ] && \
+	echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
+
+echo Ensure dependencies installed (podman nmstate jq python3-pip j2) ...
 inst=
 rpm -q --quiet nmstate|| inst=1
 rpm -q --quiet podman || inst=1
 rpm -q --quiet jq     || inst=1
-rpm -q --quiet nmstate|| inst=1
 
 [ "$inst" ] && sudo dnf install podman jq nmstate python3-pip -y
 
@@ -148,7 +150,7 @@ echo Configuring ~/.docker/config.json and ~/.containers/auth.json
 
 mkdir -p ~/.docker ~/.containers
 j2 ../common/templates/pull-secret-mirror.json.j2 > pull-secret-mirror.json
-[ ! -s $pull_secret_file ] && echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
+###[ ! -s $pull_secret_file ] && echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 ls -l pull-secret-mirror.json $pull_secret_file 
 jq -s '.[0] * .[1]' pull-secret-mirror.json  $pull_secret_file > pull-secret.json
 cp pull-secret.json ~/.docker/config.json
