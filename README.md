@@ -28,7 +28,7 @@ Aba automatically completes the following:
 ## Basic use 
 
 - First, install a bastion host with a fresh version of RHEL
-   - a 'minimal install' of RHEL 9.3 has been tested, other recent versions of RHEL should work too.
+   - a 'minimal install' of RHEL 9.3 and RHEL 8.9 has been tested, other recent versions of RHEL should work too.
       - For RHEL 8, see [this readme](README-install-j2cli-on-rhel-8.md) on how to install j2cli.
 - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to a user's home directory on the bastion. 
 - Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
