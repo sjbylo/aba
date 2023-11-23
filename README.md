@@ -18,6 +18,7 @@ Aba automatically completes the following:
    - OCP requires that ESXi be configured with NTP.
 - vSphere with vCenter API access.  
    - ESXi can also be used on its own (i.e. without vCenter).
+   - Ensure enough priviledges to vCenter, see the [documentation](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) for more.
 - a RHEL host or VM for the bastion (where Quay mirror registry will be installed). 
 - Root access with sudo.
 - 50G or more disk space in your home directory. 
