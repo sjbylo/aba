@@ -84,7 +84,7 @@ i=1
 for name in $CP_NAMES ; do
 	a=`expr $i-1`
 
-	echo Create master: $name VM with ${CP_MAC_ADDRESSES_ARRAY[$a]} images/agent-${CLUSTER_NAME}.iso $FOLDER/${CLUSTER_NAME}-$name
+	echo "Create master: $name VM with ${CP_MAC_ADDRESSES_ARRAY[$a]} [$ISO_DATASTORE] images/agent-${CLUSTER_NAME}.iso $FOLDER/${CLUSTER_NAME}-$name"
 	govc vm.create \
 		-g rhel9_64Guest \
 		-c=$master_cpu_count \
@@ -100,7 +100,7 @@ for name in $CP_NAMES ; do
 
 	govc vm.change -vm ${CLUSTER_NAME}-$name -e disk.enableUUID=TRUE
 
-	echo Create and attach disk
+	echo "Create and attach disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
 		-vm ${CLUSTER_NAME}-$name \
 		-name ${CLUSTER_NAME}-$name/${CLUSTER_NAME}-$name \
@@ -114,7 +114,7 @@ i=1
 for name in $WORKER_NAMES ; do
 	a=`expr $i-1`
 
-	echo Create worker: $name VM with ${WORKER_MAC_ADDRESSES_ARRAY[$a]} images/agent-${CLUSTER_NAME}.iso $FOLDER/${CLUSTER_NAME}-$name
+	echo "Create worker: $name VM with ${WORKER_MAC_ADDRESSES_ARRAY[$a]} [$ISO_DATASTORE] images/agent-${CLUSTER_NAME}.iso $FOLDER/${CLUSTER_NAME}-$name"
 	govc vm.create \
 		-g rhel9_64Guest \
 		-c=$worker_cpu_count \
@@ -130,7 +130,7 @@ for name in $WORKER_NAMES ; do
 
 	govc vm.change -vm ${CLUSTER_NAME}-$name -e disk.enableUUID=TRUE
 
-	echo Create and attach disk
+	echo "Create and attach disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
 		-vm ${CLUSTER_NAME}-$name \
 		-name ${CLUSTER_NAME}-$name/${CLUSTER_NAME}-$name \
