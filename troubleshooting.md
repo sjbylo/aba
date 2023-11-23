@@ -48,9 +48,9 @@ Be sure the release image can be pulled.
 It is normal to see warnings, errors and failure messages.  But, after 5-10 mins you should see more possitive messages.
 
 Typical errors:
-- "unable to get REST mapping for"
-- "no matches for kind" etc 
-- "Failed to create"
+- "unable to get REST mapping for ..."
+- "no matches for kind ..." 
+- "Failed to create ..."
 
 
 
@@ -84,7 +84,8 @@ Then...
 Nov 19 02:39:21 master1 bootkube.sh[10004]: All self-hosted control plane components successfully started
 Nov 19 02:39:21 master1 bootkube.sh[10004]: Waiting for 2 masters to join        0 masters joined the cluster
 
-Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master2 joined the cluster                                                                                    Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master3 joined the cluster                                                                                    
+Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master2 joined the cluster                                                                                    
+Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master3 joined the cluster                                                                                    
 Nov 19 02:39:26 master1 bootkube.sh[10004]:         2 masters joined the cluster
 Nov 19 02:39:26 master1 bootkube.sh[10004]: All self-hosted control plane components successfully started
 Nov 19 02:39:26 master1 bootkube.sh[10004]: Sending bootstrap-success event.Waiting for remaining assets to be created.
