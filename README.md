@@ -3,10 +3,11 @@
 Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a disconnected environment, onto vSphere or ESXi (or bare-metal) using the Agent-based installer.
 
 Aba automatically completes the following:
-1. installs the Quay mirror registry onto localhost (your bastion) 
-1. uses Quay's credentials to build out the Agent-based configuration files
-1. generates the needed boot ISO
-1. creates the required VMs in ESXi (or vSphere) and powers them on. 
+1. Installs the Quay mirror registry onto localhost (your bastion) - Optional. 
+1. Uses Quay's credentials to build out the Agent-based configuration files.
+1. Generates the needed boot ISO.
+1. Creates the required VMs in ESXi (or vSphere) and powers them on. 
+1. Monitors the installtion progress. 
 
 ## Prerequisites
 
