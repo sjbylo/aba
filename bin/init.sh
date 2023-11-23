@@ -95,9 +95,9 @@ else
 			fi
 		fi
 
-		[ -s $additional_trust_bundle_file ] && \
-			export additional_trust_bundle=$(cat $additional_trust_bundle_file) || \
-				echo WARNING: No file $additional_trust_bundle_file
+		[ -s install-mirror/$additional_trust_bundle_file ] && \
+			export additional_trust_bundle=$(cat install-mirror/$additional_trust_bundle_file) || \
+				echo WARNING: No file install-mirror/$additional_trust_bundle_file
 
 		[ -s install-mirror/$image_content_sources_file -a "$additional_trust_bundle" ] && \
 			export image_content_sources=$(cat install-mirror/$image_content_sources_file) || \
@@ -135,7 +135,7 @@ else
 		# Ensure registry dns entry exists and points to the bastion's ip
 		ip=$(dig +short $reg_host)
 		ip_int=$(ip route get 1 | grep -oP 'src \K\S+')
-		[ "$ip" != "$ip_int" ] && echo "WARNING: DNS record [$reg_host] is not resolvable!" && exit 1
+		[ "$ip" != "$ip_int" ] && echo "WARNING: DNS record [$reg_host] does not resolve to the bastion ip [$ip_int]!" ### && exit 1
 
 		# Use j2cli to render the templates
 		##[ ! -s $DIR/agent-config.yaml ] && \

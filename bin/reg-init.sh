@@ -17,7 +17,7 @@ fi
 [ ! -s $pull_secret_file ] && \
 	echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 
-echo Ensure dependencies installed (podman nmstate jq python3-pip j2) ...
+echo "Ensure dependencies installed (podman nmstate jq python3-pip j2) ..."
 inst=
 rpm -q --quiet nmstate|| inst=1
 rpm -q --quiet podman || inst=1

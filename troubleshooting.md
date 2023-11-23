@@ -22,6 +22,27 @@ Started Assisted Service container
 
 Be sure the Assisted Service can be started.
 
+If it fails, it will show:
+
+```
+Nov 23 09:31:53 master1 systemd[1]: Starting Assisted Service container...
+Nov 23 09:31:53 master1 podman[2424]: Trying to pull quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:d28c9adc6863eb1d3983d15f5da41a91d39bc7c5493092006f95d7acd2463fe6...
+Nov 23 09:31:56 master1 podman[2424]: Error: initializing source docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:d28c9adc6863eb1d3983d15f5da41a91d39bc7c5493092006f95d7acd2463fe6: reading manifest sha256:d28c9adc6863eb1d3983d15f5da41a91d39bc7c5493092006f95d7acd2463fe6 in quay.io/openshift-release-dev/ocp-v4.0-art-dev: unauthorized: access to the requested resource is not authorized
+Nov 23 09:31:56 master1 systemd[1]: assisted-service.service: Main process exited, code=exited, status=125/n/a
+Nov 23 09:31:56 master1 systemd[1]: Dependency failed for Assisted Service container.
+Nov 23 09:31:56 master1 systemd[1]: assisted-service.service: Job assisted-service.service/start failed with result 'dependency'.
+Nov 23 09:31:56 master1 systemd[1]: assisted-service.service: Failed with result 'exit-code'.
+Nov 23 09:31:56 master1 systemd[1]: assisted-service.service: Scheduled restart job, restart counter is at 1.
+Nov 23 09:31:56 master1 systemd[1]: Stopped Assisted Service container.
+```
+
+
+If the image cannot be pulled from the registry:
+
+```
+unauthorized: access to the requested resource is not authorized
+```
+
 ```
 ...
 Successfully registered InfraEnv ocp1 with id
