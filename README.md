@@ -98,7 +98,7 @@ bin/aba -h
 
 - Allow to install some workers with different CPU/MEM sizes which can be used to install cluster infra sub-systems, e.g. Ceph and/or ES etc (infra nodes).
 
-# [200~Miscellaneous[201~ 
+# Miscellaneous
 
 - Once a cluster config directory has been created (e.g. compact.src) some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed and aba can be run again to create the ISO and the VMs etc.  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP address changes, default route should work fine.  Changes, like adding link bonding may break the command to parse and extract the config.  The following is the script that is used to extract the cluster config from the agent-config yaml files. This must work. 
   - image-content-sources.yaml compact 
