@@ -101,9 +101,10 @@ bin/aba -h
 # Miscellaneous
 
 - Once a cluster config directory has been created (e.g. compact.src) some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed and aba can be run again to create the ISO and the VMs etc.  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP address changes, default route should work fine.  Changes, like adding link bonding may break the command to parse and extract the config.  The following is the script that is used to extract the cluster config from the agent-config yaml files. This must work. 
-  - common/scripts/cluster-config.sh compact    # example execution 
+```
+common/scripts/cluster-config.sh compact    # example execution 
+```
 
 - Govc is used to create and manage VMs on ESXi or vSphere.
-
-https://github.com/vmware/govmomi/tree/main/govc
+  - https://github.com/vmware/govmomi/tree/main/govc
 
