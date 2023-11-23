@@ -83,12 +83,11 @@ Then...
 ```
 Nov 19 02:39:21 master1 bootkube.sh[10004]: All self-hosted control plane components successfully started
 Nov 19 02:39:21 master1 bootkube.sh[10004]: Waiting for 2 masters to join        0 masters joined the cluster
-
 Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master2 joined the cluster                                                                                    
 Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master3 joined the cluster                                                                                    
 Nov 19 02:39:26 master1 bootkube.sh[10004]:         2 masters joined the cluster
 Nov 19 02:39:26 master1 bootkube.sh[10004]: All self-hosted control plane components successfully started
-Nov 19 02:39:26 master1 bootkube.sh[10004]: Sending bootstrap-success event.Waiting for remaining assets to be created.
+Nov 19 02:39:26 master1 bootkube.sh[10004]: Sending bootstrap-success event. Waiting for remaining assets to be created.
 ```
 
 
