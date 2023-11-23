@@ -142,7 +142,8 @@ else
 		##ls -ltr $DIR
 		if [ $DIR/aba.conf -nt $DIR/agent-config.yaml ]; then
 			echo Generating Agent-based configuration file: $DIR/agent-config.yaml 
-			j2 common/templates/agent-config.yaml.j2   -o $DIR/agent-config.yaml
+			#j2 common/templates/agent-config.yaml.j2   -o $DIR/agent-config.yaml
+			j2 common/templates/agent-config.yaml.j2 > $DIR/agent-config.yaml
 		else
 			echo WARNING: not overwriting $DIR/agent-config.yaml due to changes.
 		fi
@@ -151,7 +152,8 @@ else
 		##ls -ltr $DIR
 		if [ $DIR/aba.conf -nt $DIR/install-config.yaml ]; then
 			echo Generating Agent-based configuration file: $DIR/install-config.yaml 
-			j2 common/templates/install-config.yaml.j2 -o $DIR/install-config.yaml 
+			#j2 common/templates/install-config.yaml.j2 -o $DIR/install-config.yaml 
+			j2 common/templates/install-config.yaml.j2 > $DIR/install-config.yaml 
 		else
 			echo WARNING: not overwriting $DIR/install-config.yaml due to changes.
 		fi

@@ -5,7 +5,7 @@
 
 yaml2json()
 {
-	python -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'
+	python3 -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'
 }
 
 . ~/.vmware.conf  # This is needed for $VMW_FOLDER
