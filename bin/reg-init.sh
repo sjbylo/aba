@@ -177,7 +177,8 @@ export image_sources=$(cat $res_dir/imageContentSourcePolicy.yaml | grep -B1 -A1
 export ssh_key_pub=$(cat ~/.ssh/id_rsa.pub)
 export pull_secret=$(cat pull-secret.json)
 export reg_cert=$(cat ~/quay-install/quay-rootCA/rootCA.pem)
-cp ~/quay-install/quay-rootCA/rootCA.pem . 
+#cp ~/quay-install/quay-rootCA/rootCA.pem . 
+ln -s ~/quay-install/quay-rootCA/rootCA.pem 
 echo "$image_sources" > image-content-sources.yaml
 
 echo 
