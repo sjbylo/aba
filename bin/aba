@@ -114,7 +114,7 @@ fi
 # Ensure all config files (~/.vmware.conf, <directory>/{install|agent}-config.yaml) are in place
 bin/init.sh $@
 
-echo Powering off VMs ...
+echo Powering off VMs ...   # FIXME: only need to power off the VMs IF a new iso needs to be uploaded
 bin/vmw-poweroff.sh $@ || exit 
 
 echo Generating image ...

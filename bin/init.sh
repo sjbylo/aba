@@ -99,7 +99,7 @@ else
 			export additional_trust_bundle=$(cat install-mirror/$additional_trust_bundle_file) || \
 				echo WARNING: No file install-mirror/$additional_trust_bundle_file
 
-		[ -s install-mirror/$image_content_sources_file -a "$additional_trust_bundle" ] && \
+		[ -s install-mirror/$image_content_sources_file ] && \
 			export image_content_sources=$(cat install-mirror/$image_content_sources_file) || \
 				echo WARNING: No file install-mirror/$image_content_sources_file ...
 
