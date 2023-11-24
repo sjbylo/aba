@@ -79,8 +79,10 @@ else
 fi
 
 # Can the registry mirror already be reached?
+[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
 res_remote=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
-[ "$http_proxy" -o "$HTTP_PROXY" ] && no_proxy=$no_proxy,localhost   # adjust is proxy in use
+
+[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\blocalhost\b" || no_proxy=$no_proxy,localhost 		  # adjust if proxy in use
 res_local=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://localhost:${reg_port}/health/instance || true)
 
 # Mirror registry installed?
