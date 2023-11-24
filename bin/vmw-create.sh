@@ -69,7 +69,7 @@ if [ -s /tmp/.list_of_matching_arp_entries ]; then
 fi
 
 # Read in the cpu and mem values 
-[ -s $1.src/aba.conf ] && . $1.src/aba.conf || exit 1
+[ -s $1.src/aba.conf ] && source $1.src/aba.conf || exit 1
 
 . ~/.vmware.conf
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
