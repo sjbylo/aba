@@ -7,7 +7,7 @@ OCP_VER = 4.13.19
 
 #all: templates scripts oc ~/bin/oc ~/bin/openshift-install install rootCA.pem mirror.conf 
 #all: mirror.conf  templates scripts ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror install
-all: mirror.conf templates scripts install
+all: mirror.conf templates scripts install sync
 
 #rootCA.pem: ../deps/rootCA.pem 
 #	ln -s ../deps/rootCA.pem 
