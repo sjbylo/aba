@@ -1,0 +1,70 @@
+#!/bin/bash 
+
+# Function to display an error message and the last executed command
+show_error() {
+	local exit_code=$?
+	echo 
+	echo Script error: 
+	echo "Error occurred in command: '$BASH_COMMAND'"
+	echo "Error code: $exit_code"
+	exit $exit_code
+}
+
+# Set the trap to call the show_error function on ERR signal
+trap 'show_error' ERR
+
+umask 077
+
+# Include aba bin path and common scripts
+export PATH=$PWD/bin:$PWD/common/scripts:$PATH
+
+if [ "$1" = "--debug" -o "$1" = "-d" ]; then
+	export DEBUG_ABA=1
+	set -x
+	shift 
+fi
+
+# Show help
+if [ $# -eq 0 -o "$1" = "-h" -o "$1" = "--help" ]; then
+	cat <<-END
+		Usage: `basename $0` [--debug] <command> --dir <directory> 
+
+		If the directory does not exist it will be created and configuration files added.
+		The configuration files need to be edited to match your environment. 
+		If needed, edit the configuration files and run the command again. 
+
+		Example:
+		  `basename $0` reg init
+		  `basename $0` --dir compact 
+
+		Commands:
+
+		reg init          Install and initialize a mirror registry on the local host (bastion).
+		reg delete|del    Uninstall the mirror registry.
+
+		vmw upload	  Upload the ISO image to vSphere or ESXi.
+		vmw create        Create the VMs using the config files (install-config.yaml and agent-config.yaml).
+		vmw stop          Power down the VMs.
+		vmw start         Power on the VMs.
+		vmw refresh       Delete and re-create the VMs.
+		monitor           View the installation progress on the rendezvous server after the agent service has started
+
+		reset             Delete the generated files.
+END
+		exit
+fi
+
+[ ! "$1" ] && echo "Usage: $(basename $0) <dir>" && exit 1
+
+if [ "$1" = "mirror" ]; then
+	mkdir -p mirror 
+	cp 2common/templates/Makefile.mirror mirror/Makefile
+	cd mirror
+else
+	mkdir -p $1
+	cp 2common/templates/Makefile $1
+	cd $1
+	make
+fi
+
+

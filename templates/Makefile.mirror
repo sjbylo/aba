@@ -1,0 +1,47 @@
+# No file exists to check timestamps
+.PHONY: all clean delete create 
+
+TEMPLATES = ../templates
+SCRIPTS   = ../scripts
+OCP_VER = 4.13.19
+
+#all: templates scripts oc ~/bin/oc ~/bin/openshift-install install rootCA.pem mirror.conf 
+#all: mirror.conf  templates scripts ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror install
+all: mirror.conf templates scripts install
+
+#rootCA.pem: ../deps/rootCA.pem 
+#	ln -s ../deps/rootCA.pem 
+
+templates: $(TEMPLATES)
+	ln -s $(TEMPLATES) 
+
+scripts: $(SCRIPTS)
+	ln -s $(SCRIPTS) 
+
+mirror.conf:
+	cp $(TEMPLATES)/mirror.conf .
+	vi mirror.conf
+
+install:
+	# Install Quay Mirror
+	$(SCRIPTS)/reg-install.sh 
+
+uninstall:
+	# Uninstall Quay Mirror
+	$(SCRIPTS)/reg-uninstall.sh 
+
+stage:
+	# Stage
+	$(SCRIPTS)/reg-stage.sh 
+
+sync:
+	# Add images to the mirror registry
+	$(SCRIPTS)/reg-sync.sh 
+	
+upload:
+	# Add images to the mirror registry
+	$(SCRIPTS)/reg-upload.sh 
+	
+
+clean:
+	rm -rf deps *.tar *.tgz *.gz *.yaml install-quay mirror-registry scripts templates .??*
