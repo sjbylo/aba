@@ -38,9 +38,9 @@ sync:
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-sync.sh 
 	
-upload:
+load:
 	# Add images to the mirror registry
-	$(SCRIPTS)/reg-upload.sh 
+	$(SCRIPTS)/reg-load.sh 
 	
 
 clean:

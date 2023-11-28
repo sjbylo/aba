@@ -25,7 +25,8 @@ if [ "$1" = "--debug" -o "$1" = "-d" ]; then
 fi
 
 # Show help
-if [ $# -eq 0 -o "$1" = "-h" -o "$1" = "--help" ]; then
+#if [ $# -eq 0 -o "$1" = "-h" -o "$1" = "--help" ]; then
+if [ "$1" = "-h" -o "$1" = "--help" ]; then
 	cat <<-END
 		Usage: `basename $0` [--debug] <command> --dir <directory> 
 
@@ -54,17 +55,12 @@ END
 		exit
 fi
 
-[ ! "$1" ] && echo "Usage: $(basename $0) <dir>" && exit 1
+rpm -q make >/dev/null 2>&1 || sudo dnf install make -y >/dev/null 2>&1
 
-if [ "$1" = "mirror" ]; then
-	mkdir -p mirror 
-	cp 2common/templates/Makefile.mirror mirror/Makefile
-	cd mirror
-else
-	mkdir -p $1
-	cp 2common/templates/Makefile $1
-	cd $1
-	make
-fi
+##[ ! "$1" ] && echo "Usage: $(basename $0) <dir>" && exit 1
 
+# Super hacky way to get the latest stable OCP version number.
+stable=$(curl -sk https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/ | egrep -o "[0-9]+\.[0-9]+\.[0-9]+"| sort -n | uniq -c | sort -n | tail -1 | awk '{print $2}')
+
+make ocp_target_ver=$stable
 
