@@ -97,7 +97,7 @@ echo Generating imageContentSourcePolicy.yaml ...
 ###export image_sources=$(cat $res_dir/imageContentSourcePolicy.yaml | grep -B1 -A1 $reg_host:$reg_port/$reg_path/openshift/release | sed "s/^  //")
 
 j2 ../templates/image-content-sources.yaml.j2 > image-content-sources.yaml
-ln -s ../install-quay/image-content-sources.yaml ../deps
+ln -fs ../install-quay/image-content-sources.yaml ../deps
 
 #export ssh_key_pub=$(cat ~/.ssh/id_rsa.pub)
 #export pull_secret=$(cat pull-secret.json)

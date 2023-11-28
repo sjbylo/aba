@@ -10,13 +10,13 @@ all: cli mirror install-connected ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirr
 
 cli:
 	mkdir -p cli
-	ln -fs $(TEMPLATES)/Makefile.cli cli/Makefile
+	#ln -fs $(TEMPLATES)/Makefile.cli cli/Makefile
 	make -C cli
 
 mirror:
 	mkdir -p mirror
 	echo ocp_target_ver=$(ocp_target_ver) > mirror/openshift-version.conf
-	ln -fs $(TEMPLATES)/Makefile.mirror mirror/Makefile
+	#ln -fs $(TEMPLATES)/Makefile.mirror mirror/Makefile
 
 install-connected:
 	make -C mirror
@@ -31,6 +31,11 @@ sno:
 	mkdir -p sno
 	ln -fs $(TEMPLATES)/Makefile sno/Makefile
 	make -C sno
+
+compact:
+	mkdir -p compact
+	ln -fs $(TEMPLATES)/Makefile compact/Makefile
+	make -C compact
 
 stage:
 	make -C mirror stage

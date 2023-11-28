@@ -7,8 +7,8 @@ CMD      ?= "get co"
 
 all: templates scripts id_rsa.pub rootCA.pem aba.conf mirror.conf vmware.conf install-config.yaml agent-config.yaml agent-based/agent.x86_64.iso image-content-sources.yaml .iso-uploaded .refreshed mon
 
-rootCA.pem: ../mirror/deps/rootCA.pem
-	ln -fs ../mirror/deps/rootCA.pem  
+rootCA.pem: ../deps/rootCA.pem
+	ln -fs ../deps/rootCA.pem  
 
 id_rsa.pub: ~/.ssh/id_rsa.pub
 	ln -fs ~/.ssh/id_rsa.pub 
@@ -82,8 +82,8 @@ imageset-config.yaml:
 	# FIXME
 	touch imageset-config.yaml
 
-image-content-sources.yaml: ../mirror/deps/image-content-sources.yaml
-	ln -s ../mirror/deps/image-content-sources.yaml
+image-content-sources.yaml: ../deps/image-content-sources.yaml
+	ln -s ../deps/image-content-sources.yaml
 
 delete:
 	$(SCRIPTS)/vmw-delete.sh
