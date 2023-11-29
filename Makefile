@@ -4,6 +4,8 @@
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 ocp_target_ver   ?= 4.13.19
+d        ?= 
+DEBUG     = $d
 
 #all: mirror install sync ocp-install
 all: cli mirror install-connected ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror
@@ -37,8 +39,8 @@ compact:
 	ln -fs $(TEMPLATES)/Makefile compact/Makefile
 	make -C compact
 
-stage:
-	make -C mirror stage
+save:
+	make -C mirror save d=$(d)
 
 load:
 	make -C mirror load

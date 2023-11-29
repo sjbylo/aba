@@ -1,3 +1,7 @@
+oc mirror fails with error "invalid mirror sequence order"
+https://access.redhat.com/solutions/7026766
+
+
 # Troubleshooting 
 
 Try these commands in order to discover any problems with the installation of OCP using Agent-based.

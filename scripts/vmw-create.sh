@@ -14,7 +14,7 @@ WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 # Read in the cpu and mem values 
 source aba.conf 
 
-source ~/.vmware.conf
+source vmware.conf
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
 
 # If we are accessing vCenter (and not ESXi directly) 

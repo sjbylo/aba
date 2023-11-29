@@ -9,7 +9,7 @@ fi
 
 #bin/init.sh $@
 
-. ~/.vmware.conf
+. vmware.conf
 
 for name in $WORKER_NAMES $CP_NAMES ; do
 	govc vm.power -on ${CLUSTER_NAME}-$name

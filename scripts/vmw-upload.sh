@@ -9,7 +9,7 @@ fi
 
 #bin/init.sh $@
 
-. ~/.vmware.conf
+. vmware.conf
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
 
 # If the ISO is newer, then upload it

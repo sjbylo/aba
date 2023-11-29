@@ -19,8 +19,6 @@ export rendezvous_ip=$machine_ip_prefix$starting_ip_index
 
 echo Validating the cluster configuraiton ...
 
-set -x
-
 export pull_secret=
 export ssh_key_pub=
 export additional_trust_bundle=
@@ -35,9 +33,9 @@ echo Looking for registry pull secret ...
 if [ -s $pull_secret_mirror_file ]; then
 	export pull_secret=$(cat $pull_secret_mirror_file) 
 else
-	echo WARNING: No pull secret file found in $pull_secret_mirror_file.  Trying to use ~/.pull-secret.json.
-	if [ -s ~/.pull-secret.json ]; then
-		export pull_secret=$(cat ~/.pull-secret.json) 
+	echo WARNING: No pull secret file found in $pull_secret_mirror_file.  Trying to use ../pull-secret.json.
+	if [ -s ../pull-secret.json ]; then
+		export pull_secret=$(cat ../pull-secret.json) 
 	else
 		echo "Error: No pull secrets found!!"
 		exit 1

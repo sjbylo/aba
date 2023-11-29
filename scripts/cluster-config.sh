@@ -8,7 +8,7 @@ yaml2json()
 	python3 -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'
 }
 
-. ~/.vmware.conf  # This is needed for $VMW_FOLDER
+. vmware.conf  # This is needed for $VMW_FOLDER
 
 export MANEFEST_SRC_DIR=.
 export MANEFEST_DIR=agent-based

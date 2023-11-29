@@ -2,7 +2,7 @@
 
 umask 077
 
-. ~/.mirror.conf
+. mirror.conf
 
 echo "Ensure dependencies installed (podman nmstate jq python3-pip j2) ..."
 inst=

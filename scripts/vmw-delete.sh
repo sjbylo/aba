@@ -9,7 +9,7 @@ fi
 
 #bin/init.sh $@
 
-. ~/.vmware.conf 
+. vmware.conf 
 
 for name in $CP_NAMES $WORKER_NAMES; do
 	echo Destroy VM ${CLUSTER_NAME}-$name

@@ -9,7 +9,7 @@ fi
 
 #bin/init.sh $@
 
-. ~/.vmware.conf
+. vmware.conf
 
 for name in $CP_NAMES $WORKER_NAMES; do
 	govc vm.power -off ${CLUSTER_NAME}-$name || true
