@@ -4,6 +4,10 @@
 
 umask 077
 
+rpm -q --quiet jq   	|| inst=1
+[ "$inst" ] && sudo dnf install jq -y >/dev/null 2>&1
+
+
 source ./mirror.conf
 
 # This is a pull secret for RH registry
@@ -17,7 +21,7 @@ else
 	echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 fi
 
-which j2 >/dev/null 2>&1 || pip3 install j2cli  >/dev/null 2>&1
+which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
 
 export reg_url=https://$reg_host:$reg_port
 

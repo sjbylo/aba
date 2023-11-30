@@ -24,7 +24,7 @@ source mirror.conf
 
 
 echo "Ensure dependencies installed (j2) ..."
-which j2 >/dev/null 2>&1 || pip3 install j2cli  >/dev/null 2>&1
+which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
 
 # Can the registry mirror already be reached?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use

@@ -38,7 +38,7 @@ rpm -q --quiet jq     || inst=1
 
 [ "$inst" ] && sudo dnf install podman jq nmstate python3-pip -y >/dev/null 2>&1
 
-which j2 >/dev/null 2>&1 || pip3 install j2cli  >/dev/null 2>&1
+which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
 
 export reg_url=https://$reg_host:$reg_port
 

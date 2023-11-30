@@ -14,7 +14,7 @@ rpm -q --quiet jq     || inst=1
 
 [ "$inst" ] && sudo dnf install podman jq nmstate python3-pip -y
 
-which j2 >/dev/null 2>&1 || pip3 install j2cli 
+which j2 >/dev/null 2>&1 || pip3 install j2cli --user 
 
 ###REMOVED
 ###REMOVED

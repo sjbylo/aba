@@ -17,7 +17,7 @@ rpm -q --quiet python3-pip   	|| inst=1
 ### not needed [ "$inst" ] && sudo dnf install podman jq nmstate python3-pip -y >/dev/null 2>&1
 [ "$inst" ] && sudo dnf install podman python3-pip -y >/dev/null 2>&1
 
-which j2 >/dev/null 2>&1 || sudo pip3 install  --user j2cli  >/dev/null 2>&1
+which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
 
 # Mirror registry installed?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
@@ -123,8 +123,8 @@ diff ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/root
 	sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 	sudo update-ca-trust extract
 
-echo Generating imageContentSourcePolicy.yaml ...
-j2 ./templates/image-content-sources.yaml.j2 > ./deps/image-content-sources.yaml
-#ln -fs ./install-quay/image-content-sources.yaml ./deps
+##echo Generating imageContentSourcePolicy.yaml ...
+##j2 ./templates/image-content-sources.yaml.j2 > ./deps/image-content-sources.yaml
+###ln -fs ./install-quay/image-content-sources.yaml ./deps
 
 cp ~/quay-install/quay-rootCA/rootCA.pem deps/

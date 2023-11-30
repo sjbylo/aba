@@ -31,7 +31,7 @@ rpm -q --quiet jq     || inst=1
 
 [ "$inst" ] && sudo dnf install jq -y >/dev/null 2>&1
 
-which j2 >/dev/null 2>&1 || pip3 install j2cli  >/dev/null 2>&1
+which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
 
 export ocp_ver=$ocp_target_ver
 export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)

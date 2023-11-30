@@ -9,7 +9,7 @@ umask 077
 
 source mirror.conf
 
-which j2 >/dev/null 2>&1 || pip3 install j2cli  >/dev/null 2>&1
+which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
 
 echo Generating imageContentSourcePolicy.yaml ...
 j2 ./templates/image-content-sources.yaml.j2 > ../deps/image-content-sources.yaml
