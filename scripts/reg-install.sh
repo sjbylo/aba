@@ -11,12 +11,13 @@ source mirror.conf
 echo "Ensure dependencies installed (podman python3-pip j2) ..."
 inst=
 # not needed rpm -q --quiet nmstate|| inst=1
-# rpm -q --quiet podman || inst=1
-# not needed rpm -q --quiet jq     || inst=1
+rpm -q --quiet podman     	|| inst=1
+rpm -q --quiet python3-pip   	|| inst=1
 
 ### not needed [ "$inst" ] && sudo dnf install podman jq nmstate python3-pip -y >/dev/null 2>&1
+[ "$inst" ] && sudo dnf install podman python3-pip -y >/dev/null 2>&1
 
-which j2 >/dev/null 2>&1 || pip3 install j2cli  >/dev/null 2>&1
+which j2 >/dev/null 2>&1 || sudo pip3 install  --user j2cli  >/dev/null 2>&1
 
 # Mirror registry installed?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use

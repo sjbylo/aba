@@ -3,7 +3,10 @@
 
 ocp_target_ver  ?= 4.14.3
 
-all: ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror 
+all: ~/bin ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror 
+
+~/bin:
+	mkdir ~/bin
 
 # oc
 ~/bin/oc: openshift-client-linux-$(ocp_target_ver).tar.gz

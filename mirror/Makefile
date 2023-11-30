@@ -8,10 +8,10 @@ debug   ?=
 
 #all: templates scripts oc ~/bin/oc ~/bin/openshift-install install rootCA.pem mirror.conf 
 #all: mirror.conf  templates scripts ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror install
-all: deps mirror-registry templates scripts mirror.conf install sync
+all: deps templates scripts mirror-registry mirror.conf install sync
 
-step1: deps mirror-registry templates scripts mirror.conf save 
-step2: deps mirror-registry templates scripts mirror.conf load
+step1: deps templates scripts mirror-registry mirror.conf save 
+step2: deps templates scripts mirror-registry mirror.conf load
 
 deps:
 	mkdir deps 
@@ -35,7 +35,7 @@ scripts: $(SCRIPTS)
 mirror.conf:
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
-install: mirror.conf
+install: deps templates scripts mirror.conf mirror-registry 
 	# Install Quay Mirror
 	$(SCRIPTS)/reg-install.sh  $(debug)
 
