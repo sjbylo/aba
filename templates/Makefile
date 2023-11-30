@@ -1,5 +1,5 @@
 # Used, since no file exists to check timestamps
-.PHONY: all clean cleanall delete create start stop kill mon refresh cmd
+.PHONY: all clean cleanall delete create start stop kill mon refresh cmd ssh
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
@@ -80,6 +80,7 @@ refresh: vmware.conf
 	$(SCRIPTS)/vmw-delete.sh $(debug)
 	$(SCRIPTS)/vmw-create.sh $(debug)
 	$(SCRIPTS)/vmw-start.sh --start $(debug)
+	touch .refreshed
 
 imageset-config.yaml:
 	# FIXME
@@ -115,6 +116,9 @@ getco:
 
 cmd:
 	$(SCRIPTS)/command.sh $(CMD)
+
+ssh:
+	scripts/ssh-rendezvous.sh
 
 clean:
 	# Fixme

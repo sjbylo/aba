@@ -72,8 +72,8 @@ echo "Ensure there is enough disk space under $HOME.  This can take 10-20 mins t
 echo "oc mirror --config=imageset-config.yaml docker://$reg_host:$reg_port/$reg_path" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 ./sync-mirror.sh 
 
-echo Generating deps/image-content-sources.yaml 
-j2 ./templates/image-content-sources.yaml.j2 > ./deps/image-content-sources.yaml
+#echo Generating deps/image-content-sources.yaml 
+#j2 ./templates/image-content-sources.yaml.j2 > ./deps/image-content-sources.yaml
 #ln -fs ./install-quay/image-content-sources.yaml ./deps
 
 ###ln -fs ~/quay-install/quay-rootCA/rootCA.pem ./deps/rootCA.pem

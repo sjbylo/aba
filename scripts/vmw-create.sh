@@ -4,6 +4,8 @@
 
 [ "$1" = "--start" ] && START_VM=1
 
+scripts/install-govc.sh
+
 if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`
 fi

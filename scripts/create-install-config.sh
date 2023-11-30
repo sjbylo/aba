@@ -11,8 +11,11 @@ source mirror.conf
 
 scripts/verify-release-image.sh
 
-echo Checking if dig is installed ...
-which dig 2>/dev/null >&2 || sudo dnf install bind-utils -y
+echo Checking if nmstate and skopeo are installed ...
+inst=
+rpm --quiet -q bind-utils 	|| inst="$inst bind-utils"
+rpm --quiet -q nmstate	 	|| inst="$inst nmstate"
+[ "$inst" ] && sudo dnf install $inst -y >/dev/null
 
 # Set the rendezvous_ip to the the first master's ip
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).

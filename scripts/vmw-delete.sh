@@ -2,6 +2,8 @@
 
 . scripts/include_all.sh
 
+scripts/install-govc.sh
+
 #[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$1" ] && set -x
 

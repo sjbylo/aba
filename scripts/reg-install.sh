@@ -123,8 +123,4 @@ diff ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/root
 	sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 	sudo update-ca-trust extract
 
-##echo Generating imageContentSourcePolicy.yaml ...
-##j2 ./templates/image-content-sources.yaml.j2 > ./deps/image-content-sources.yaml
-###ln -fs ./install-quay/image-content-sources.yaml ./deps
-
 cp ~/quay-install/quay-rootCA/rootCA.pem deps/
