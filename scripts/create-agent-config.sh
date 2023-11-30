@@ -1,8 +1,10 @@
 #!/bin/bash 
 # Script to generate the agent-config.yaml file
 
+. scripts/include_all.sh
+
 #[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
-#[ "$DEBUG_ABA" ] && set -x
+[ "$1" ] && set -x 
 
 source aba.conf
 source mirror.conf

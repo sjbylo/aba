@@ -1,6 +1,8 @@
 #!/bin/bash 
 # Script to do some simple verification of install-config.yaml
 
+. scripts/include_all.sh
+
 source aba.conf
 source mirror.conf
 

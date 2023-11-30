@@ -59,8 +59,27 @@ rpm -q make >/dev/null 2>&1 || sudo dnf install make -y >/dev/null 2>&1
 
 ##[ ! "$1" ] && echo "Usage: $(basename $0) <dir>" && exit 1
 
-# Super hacky way to get the latest stable OCP version number.
-stable=$(curl -sk https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/ | egrep -o "[0-9]+\.[0-9]+\.[0-9]+"| sort -n | uniq -c | sort -n | tail -1 | awk '{print $2}')
+## Super hacky way to get the latest stable OCP version number.
+#stable_ver=$(curl -sk https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/ | egrep -o "[0-9]+\.[0-9]+\.[0-9]+"| sort -n | uniq -c | sort -n | tail -1 | awk '{print $2}')
+stable_ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+"| awk '{print $2}')
 
-make ocp_target_ver=$stable
+##make ocp_target_ver=$stable_ver
+
+which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | egrep -o "[0-9]+\.[0-9]+\.[0-9]+")
+[ "$cur_ver" ] && text="or hit Return [$cur_ver]:"
+
+target_ver=
+while ! echo "$target_ver" | egrep "^[0-9]+\.[0-9]+\.[0-9]+" 
+do
+	echo "OpenShift latest stable is $stable_ver (s)"
+	[ "$cur_ver" ] && echo "The current installed version is $cur_ver (Return)"
+	echo "Which version of OpenShift do you want to install? Enter version or 's' $text "
+	read target_ver
+	[ "$target_ver" = "" ] && target_ver=$cur_ver
+	[ "$target_ver" = "s" ] && target_ver=$stable_ver
+done
+
+echo "$target_ver" > mirror/target-ocp-version.conf
+
+[ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver clean all
 

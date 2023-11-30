@@ -1,4 +1,6 @@
 #!/bin/bash 
 
-oc --kubeconfig=agent-based/auth/kubeconfig $@
+. scripts/include_all.sh
+
+oc --kubeconfig=iso-agent-based/auth/kubeconfig $@
 

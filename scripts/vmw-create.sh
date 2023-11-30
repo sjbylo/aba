@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+. scripts/include_all.sh
+
 [ "$1" = "--start" ] && START_VM=1
 
 if [ ! "$CLUSTER_NAME" ]; then

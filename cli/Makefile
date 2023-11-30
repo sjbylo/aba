@@ -1,32 +1,41 @@
 # No file exists to check timestamps
 .PHONY: all clean 
 
-OCP_VER  ?= 4.13.19
+ocp_target_ver  ?= 4.14.3
 
-#all: mirror install sync ocp-install
 all: ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror 
 
-# CLI tools 
-~/bin/oc: openshift-client-linux-$(OCP_VER).tar.gz
-	tar -C ~/bin -xzvf openshift-client-linux-$(OCP_VER).tar.gz oc
+# oc
+~/bin/oc: openshift-client-linux-$(ocp_target_ver).tar.gz
+	tar -C ~/bin -xzvf openshift-client-linux-$(ocp_target_ver).tar.gz oc
 	touch ~/bin/oc
 
-openshift-client-linux-$(OCP_VER).tar.gz:
-	curl -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(OCP_VER)/openshift-client-linux-$(OCP_VER).tar.gz
+openshift-client-linux-$(ocp_target_ver).tar.gz:
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/openshift-client-linux-$(ocp_target_ver).tar.gz
 
-~/bin/openshift-install: openshift-install-linux-$(OCP_VER).tar.gz 
-	tar -C ~/bin -xzvf openshift-install-linux-$(OCP_VER).tar.gz openshift-install
+
+# openshift-install
+~/bin/openshift-install: openshift-install-linux-$(ocp_target_ver).tar.gz 
+	tar -C ~/bin -xzvf openshift-install-linux-$(ocp_target_ver).tar.gz openshift-install
 	touch ~/bin/openshift-install
 
-openshift-install-linux-$(OCP_VER).tar.gz:
-	curl -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(OCP_VER)/openshift-install-linux-$(OCP_VER).tar.gz
+openshift-install-linux-$(ocp_target_ver).tar.gz:
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/openshift-install-linux-$(ocp_target_ver).tar.gz
 
+
+# oc-mirror
 ~/bin/oc-mirror: oc-mirror.tar.gz
 	tar -C ~/bin -xvzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
 	touch ~/bin/oc-mirror
 
 oc-mirror.tar.gz:
-	curl -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(OCP_VER)/oc-mirror.tar.gz
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/oc-mirror.tar.gz
 
 
+~/.pull-secret.json:
+	$(SCRIPTS)/install-pull-secret.sh 
+
+
+clean:
+	rm -f ~/bin/{oc,oc-mirror,openshift-install}

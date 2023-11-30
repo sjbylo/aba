@@ -4,14 +4,17 @@
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 CMD      ?= "get co"
+debug    ?= 
+version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 
-all: templates scripts id_rsa.pub rootCA.pem aba.conf mirror.conf vmware.conf install-config.yaml agent-config.yaml agent-based/agent.x86_64.iso image-content-sources.yaml .iso-uploaded .refreshed mon
+#all: mirror.conf templates scripts id_rsa.pub rootCA.pem aba.conf vmware.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso image-content-sources.yaml .iso-uploaded .refreshed mon
+all: mirror.conf templates scripts            aba.conf vmware.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso image-content-sources.yaml .iso-uploaded .refreshed mon
 
-rootCA.pem: ../deps/rootCA.pem
-	ln -fs ../deps/rootCA.pem  
+#rootCA.pem: ../deps/rootCA.pem
+#	ln -fs ../deps/rootCA.pem  
 
-id_rsa.pub: ~/.ssh/id_rsa.pub
-	ln -fs ~/.ssh/id_rsa.pub 
+#id_rsa.pub: ~/.ssh/id_rsa.pub
+#	ln -fs ~/.ssh/id_rsa.pub 
 
 templates: $(TEMPLATES)
 	ln -s $(TEMPLATES) 
@@ -27,88 +30,88 @@ aba.conf:
 	cp $(TEMPLATES)/aba.conf .
 	vi aba.conf
 
-mirror.conf:
-	# copy and edit mirror.conf
-	cp $(TEMPLATES)/mirror.conf .
-	vi mirror.conf
+mirror.conf: ../mirror/mirror.conf
+	ln -s ../mirror/mirror.conf 
 
 vmware.conf:
 	# copy and edit vmware.conf
-	cp $(TEMPLATES)/vmware.conf .
+	[ -s ../vmware.conf ] && ln -s ../vmware.conf || cp $(TEMPLATES)/vmware.conf .
 	vi vmware.conf
+	##cp -f vmware.conf ..
 
-install-config.yaml: aba.conf rootCA.pem id_rsa.pub imageset-config.yaml image-content-sources.yaml pull-secret-mirror.json templates scripts 
-	$(SCRIPTS)/create-install-config.sh 
+#install-config.yaml: aba.conf rootCA.pem id_rsa.pub imageset-config.yaml image-content-sources.yaml pull-secret-mirror.json templates scripts 
+install-config.yaml: aba.conf                        imageset-config.yaml image-content-sources.yaml pull-secret-mirror.json templates scripts 
+	$(SCRIPTS)/create-install-config.sh $(debug)
 
 # depends on mirror in case the ocp version changes 
 agent-config.yaml: aba.conf mirror.conf templates scripts 
-	$(SCRIPTS)/create-agent-config.sh 
+	$(SCRIPTS)/create-agent-config.sh $(debug)
 
 #work/iso: path-to-cached-iso-file openshift-install 
-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml #  openshift-install
-	$(SCRIPTS)/generate-image.sh 
+iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml #  openshift-install
+	$(SCRIPTS)/generate-image.sh $(debug)
 
 #oc:
-#	$(SCRIPTS)/install-oc.sh 
+#	$(SCRIPTS)/install-oc.sh $(debug)
 
 openshift-install: oc oc-mirror
-	$(SCRIPTS)/install-openshift-install.sh 
+	$(SCRIPTS)/install-openshift-install.sh $(debug)
 
 oc-mirror:
-	$(SCRIPTS)/install-oc-mirror.sh 
+	$(SCRIPTS)/install-oc-mirror.sh $(debug)
 
 # Depends on the binary version of openshift-install
 #agent-iso: install-config.yaml agent-config.yaml openshift-install
-#	$(SCRIPTS)/build-iso.sh 
+#	$(SCRIPTS)/build-iso.sh $(debug)
 
-.iso-uploaded: agent-based/agent.x86_64.iso
-	$(SCRIPTS)/vmw-kill.sh
-	$(SCRIPTS)/vmw-upload.sh && touch .iso-uploaded
+.iso-uploaded: vmware.conf iso-agent-based/agent.x86_64.iso
+	$(SCRIPTS)/vmw-kill.sh $(debug)
+	$(SCRIPTS)/vmw-upload.sh $(debug) && touch .iso-uploaded
 
-vmw: vmw-upload
-	$(SCRIPTS)/vmw-refresh.sh
+vmw: vmw-upload vmware.conf
+	$(SCRIPTS)/vmw-refresh.sh $(debug)
 
-.refreshed: agent-based/agent.x86_64.iso
-	$(SCRIPTS)/vmw-delete.sh
-	$(SCRIPTS)/vmw-create.sh --start
+.refreshed: iso-agent-based/agent.x86_64.iso vmware.conf
+	$(SCRIPTS)/vmw-delete.sh $(debug)
+	$(SCRIPTS)/vmw-create.sh --start $(debug) 
 	touch .refreshed
 
-refresh: 
-	$(SCRIPTS)/vmw-delete.sh
-	$(SCRIPTS)/vmw-create.sh
-	$(SCRIPTS)/vmw-start.sh --start
+refresh: vmware.conf
+	$(SCRIPTS)/vmw-delete.sh $(debug)
+	$(SCRIPTS)/vmw-create.sh $(debug)
+	$(SCRIPTS)/vmw-start.sh --start $(debug)
 
 imageset-config.yaml:
 	# FIXME
 	touch imageset-config.yaml
 
 image-content-sources.yaml: ../deps/image-content-sources.yaml
-	ln -s ../deps/image-content-sources.yaml
+	scripts/create-image-content-sources.sh $(debug)
 
-delete:
-	$(SCRIPTS)/vmw-delete.sh
+delete: vmware.conf
+	$(SCRIPTS)/vmw-delete.sh $(debug)
 
-create:
-	$(SCRIPTS)/vmw-create.sh
+create: vmware.conf
+	$(SCRIPTS)/vmw-create.sh $(debug)
 
-stop:
-	$(SCRIPTS)/vmw-stop.sh
+stop: vmware.conf
+	$(SCRIPTS)/vmw-stop.sh $(debug)
 
-start:
-	$(SCRIPTS)/vmw-start.sh 
+start: vmware.conf
+	$(SCRIPTS)/vmw-start.sh $(debug)
 
-kill:
-	$(SCRIPTS)/vmw-kill.sh
+kill: vmware.conf
+	$(SCRIPTS)/vmw-kill.sh $(debug)
 
 mon:
-	$(SCRIPTS)/monitor-install.sh
+	$(SCRIPTS)/monitor-install.sh $(debug)
 
 cleanall: clean
 	rm -f aba.conf 
 	rm -f mirror.conf vmware.conf 
 
 getco:
-	oc --kubeconfig agent-based/auth/kubeconfig get co
+	oc --kubeconfig iso-agent-based/auth/kubeconfig get co
 
 cmd:
 	$(SCRIPTS)/command.sh $(CMD)
@@ -118,5 +121,5 @@ clean:
 	rm -f install-config.yaml agent-config.yaml 
 	rm -f path-to-cached-iso-file imageset.yaml rootCA.pem 
 	rm -f scripts templates
-	rm -rf work 
+	rm -rf work iso-agent-based 
 

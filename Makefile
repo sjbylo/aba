@@ -1,11 +1,14 @@
 # No file exists to check timestamps
 .PHONY: all cli clean mirror install-connected install sync sno save load
 
-TEMPLATES = ../templates
-SCRIPTS   = ../scripts
+TEMPLATES = templates
+SCRIPTS   = scripts
 ocp_target_ver   ?= 4.13.19
 d        ?= 
 DEBUG     = $d
+#version  ?= 4.14.2
+version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
+
 
 #all: mirror install sync ocp-install
 all: cli mirror install-connected ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror
@@ -44,3 +47,10 @@ save:
 
 load:
 	make -C mirror load
+
+openshift:
+	mkdir -p $(dir)
+	ln -fs templates/Makefile $(dir)/Makefile
+	ln -fs ../templates $(dir)
+	make -C $(dir) 
+

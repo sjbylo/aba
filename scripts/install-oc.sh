@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+. scripts/include_all.sh
+
 umask 077
 
 . mirror.conf
@@ -14,8 +16,8 @@ rpm -q --quiet jq     || inst=1
 
 which j2 >/dev/null 2>&1 || pip3 install j2cli 
 
-mkdir -p install-mirror 
-cd install-mirror
+###REMOVED
+###REMOVED
 
 # Fetch versions of any existing oc and openshift-install binaries
 which oc >/dev/null 2>&1 && oc_ver=$(oc version --client=true | grep "Client Version:" | awk '{print $3}')

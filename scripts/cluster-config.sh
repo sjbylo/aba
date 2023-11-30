@@ -1,6 +1,8 @@
 #!/bin/bash -e
 # This script extracts the needed values from the agent-config.yaml and the install-config.yaml files.
 
+. scripts/include_all.sh
+
 #[ ! "$1" ] && echo "Usage: `basename $0` <directory>" && exit 1
 
 yaml2json()
@@ -11,7 +13,7 @@ yaml2json()
 . vmware.conf  # This is needed for $VMW_FOLDER
 
 export MANEFEST_SRC_DIR=.
-export MANEFEST_DIR=agent-based
+export MANEFEST_DIR=iso-agent-based
 
 echo export MANEFEST_DIR=$MANEFEST_DIR
 echo export MANEFEST_SRC_DIR=$MANEFEST_SRC_DIR

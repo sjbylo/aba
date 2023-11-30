@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+. scripts/include_all.sh
+
 if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`
 fi

@@ -1,17 +1,17 @@
 #!/bin/bash -e
 # Refresh the ISO
 
-source scripts/include-trap.sh
+. scripts/include_all.sh
 
 echo ===================
-scripts/cluster-config.sh 
+scripts/cluster-config.sh | sed "s/export //g" 
 echo ===================
 eval `scripts/cluster-config.sh || exit 1`
 
 echo Generating the ISO image for $CLUSTER_NAME.$BASE_DOMAIN ...
 
-rm -rf agent-based 
-mkdir -p agent-based
+rm -rf iso-agent-based 
+mkdir -p iso-agent-based
 
 cp -v install-config.yaml agent-config.yaml $MANEFEST_DIR 
 
