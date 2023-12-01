@@ -67,6 +67,8 @@ if [ "$reg_code" != "200" ]; then
 
 		#--quayRoot <example_1directory_name>
 
+		rm -rf deps/*
+
 		# Fetch root CA from remote host so the connection can be tested
 		if [ ! -d ~/quay-install/quay-rootCA ]; then
 			mkdir -p ~/quay-install/quay-rootCA

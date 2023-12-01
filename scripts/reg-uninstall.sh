@@ -9,8 +9,11 @@ inst=
 rpm -q --quiet podman     	|| inst=1
 [ "$inst" ] && sudo dnf install podman -y >/dev/null 
 
+. mirror.conf
+
+echo Uninstalling $reg_host ...
 ./mirror-registry uninstall -v
 
 echo Cleaning up files ...
-rm -vf registry-creds.txt rootCA.pem 
+rm -vf registry-creds.txt rootCA.pem deps/*
 
