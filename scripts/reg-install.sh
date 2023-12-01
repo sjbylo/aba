@@ -24,6 +24,9 @@ which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
 if [ "$reg_code" != "200" ]; then
+	echo Allowing access to the registry at $reg_host/$reg_port ...
+	ssh $(whoami)@$reg_host -- "sudo firewall-cmd --state && sudo firewall-cmd --add-port=$reg_port/tcp --permanent && sudo firewall-cmd --reload"
+
 	echo "Installing Quay registry on host $reg_host ..."
 
 #	# Ensure registry dns entry exists and points to the bastion's ip
@@ -92,8 +95,6 @@ if [ "$reg_code" != "200" ]; then
 		echo No install script output .install.output found. Cannot configure registry credentials. Exiting ... && exit 
 	fi
 
-	echo Allowing access to the registry port [reg_port] ...
-	ssh $(whoami)@$reg_host sudo firewall-cmd --state && sudo firewall-cmd --add-port=$reg_port/tcp --permanent && sudo firewall-cmd --reload
 #else
 	###echo 
 	###echo WARNING: 

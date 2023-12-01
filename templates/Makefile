@@ -86,7 +86,8 @@ imageset-config.yaml:
 	# FIXME
 	touch imageset-config.yaml
 
-image-content-sources.yaml: ../deps/image-content-sources.yaml
+#image-content-sources.yaml: ../deps/image-content-sources.yaml
+image-content-sources.yaml: 
 	scripts/create-image-content-sources.sh $(debug)
 
 delete: vmware.conf

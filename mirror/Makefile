@@ -13,6 +13,8 @@ all: deps templates scripts mirror-registry mirror.conf install sync
 step1: deps templates scripts mirror-registry mirror.conf save 
 step2: deps templates scripts mirror-registry mirror.conf load
 
+init: deps templates scripts mirror.conf mirror-registry
+
 deps:
 	mkdir deps 
 
@@ -43,7 +45,7 @@ uninstall: mirror-registry
 	# Uninstall Quay Mirror
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 
-save:
+save: init
 	$(SCRIPTS)/reg-save.sh  $(debug)
 
 sync:
