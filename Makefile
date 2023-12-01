@@ -27,6 +27,9 @@ install-connected:
 install:
 	make -C mirror install
 
+uninstall:
+	make -C mirror uninstall
+
 sync:
 	make -C mirror sync
 
