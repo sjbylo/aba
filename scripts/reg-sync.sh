@@ -61,7 +61,7 @@ podman login -u init -p $reg_password $reg_url --tls-verify=false
 echo Generating imageset-config.yaml for oc-mirror ...
 export ocp_ver=$ocp_target_ver
 export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
-j2 ./templates/imageset-config.yaml.j2 > imageset-config.yaml 
+j2 ./templates/imageset-config-sync.yaml.j2 > imageset-config-sync.yaml 
 
 ./scripts/create-containers-auth.sh
 
@@ -69,12 +69,7 @@ echo "Now mirroring the images.  "
 echo "Ensure there is enough disk space under $HOME.  This can take 10-20 mins to complete."
 
 # Set up script to help for manual re-sync
-echo "oc mirror --config=imageset-config.yaml docker://$reg_host:$reg_port/$reg_path" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+echo "oc mirror --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 ./sync-mirror.sh 
 
-#echo Generating deps/image-content-sources.yaml 
-#j2 ./templates/image-content-sources.yaml.j2 > ./deps/image-content-sources.yaml
-#ln -fs ./install-quay/image-content-sources.yaml ./deps
-
-###ln -fs ~/quay-install/quay-rootCA/rootCA.pem ./deps/rootCA.pem
 

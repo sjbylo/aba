@@ -4,6 +4,11 @@
 
 [ "$1" ] && set -x
 
+inst=
+# not needed rpm -q --quiet nmstate|| inst=1
+rpm -q --quiet podman     	|| inst=1
+[ "$inst" ] && sudo dnf install podman -y >/dev/null 
+
 ./mirror-registry uninstall -v
 
 echo Cleaning up files ...
