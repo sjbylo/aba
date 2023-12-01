@@ -27,9 +27,10 @@ source mirror.conf
 
 echo "Ensure dependencies installed (python3-pip j2) ..."
 inst=
+rpm -q --quiet python3-pip     || inst=1
 rpm -q --quiet jq     || inst=1
 
-[ "$inst" ] && sudo dnf install jq -y >/dev/null 2>&1
+[ "$inst" ] && sudo dnf install jq python3-pip -y >/dev/null 2>&1
 
 which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
 

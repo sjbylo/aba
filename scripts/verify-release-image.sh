@@ -5,6 +5,8 @@
 
 image=$(openshift-install version| grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
 
+rpm --quiet -q skopeo >/dev/null 2>&1 || sudo dnf install skopeo -y >/dev/null 
+
 echo "Verifying the release image: docker://$reg_host:$reg_port/openshift4/openshift/release-images$image"
 
 if ! skopeo inspect docker://$reg_host:$reg_port/openshift4/openshift/release-images$image >/dev/null; then
