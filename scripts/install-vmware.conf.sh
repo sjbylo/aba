@@ -9,6 +9,8 @@ read yn
 vi ../vmware.conf
 source ../vmware.conf
 
+scripts/install-govc.sh
+
 if ! govc about; then
 	rm -f ../vmware.conf
 	exit 1

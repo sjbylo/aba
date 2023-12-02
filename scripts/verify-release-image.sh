@@ -1,7 +1,12 @@
 #!/bin/bash
 # Verify the CLI versions match the mirror images
 
-[ -s mirror/mirror.conf ] && source mirror/mirror.conf || source mirror.conf
+source scripts/include_all.sh
+
+[ "$1" ] && set -x
+
+#[ -s mirror/mirror.conf ] && source mirror/mirror.conf || source mirror.conf
+source mirror.conf
 
 release_image=$(openshift-install version| grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
 
