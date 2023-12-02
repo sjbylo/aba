@@ -52,7 +52,7 @@ uninstall: init mirror-registry
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	rm -f .mirror-installed
 
-save: init install
+save: init 
 	$(SCRIPTS)/reg-save.sh  $(debug)
 
 sync: init .mirror-installed
