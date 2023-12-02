@@ -42,14 +42,10 @@ END
 		exit
 fi
 
-install_rpms make
-
-## Super hacky way to get the latest stable OCP version number.
-#stable_ver=$(curl -sk https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/ | egrep -o "[0-9]+\.[0-9]+\.[0-9]+"| sort -n | uniq -c | sort -n | tail -1 | awk '{print $2}')
+## Get the latest stable OCP version number.
 stable_ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+"| awk '{print $2}')
 offer_ver=$stable_ver
 
-##make ocp_target_ver=$stable_ver
 
 which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | egrep -o "[0-9]+\.[0-9]+\.[0-9]+")
 [ "$cur_ver" ] && text="or hit Return " && offer_ver=$cur_ver
@@ -67,5 +63,7 @@ done
 
 echo "$target_ver" > mirror/target-ocp-version.conf
 
+install_rpms make
 [ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver clean all
+
 
