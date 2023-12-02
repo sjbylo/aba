@@ -2,13 +2,14 @@
 
 . scripts/include_all.sh
 
+[ "$1" ] && set -x
+
 umask 077
 
 install_rpm jq
 install_pip j2cli
 
-
-source ./mirror.conf
+source mirror.conf
 
 # This is a pull secret for RH registry
 pull_secret_mirror_file=pull-secret-mirror.json
@@ -20,7 +21,6 @@ elif [ -s $pull_secret_file ]; then
 else
 	echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 fi
-
 
 mkdir -p ~/.docker ~/.containers
 
