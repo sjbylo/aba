@@ -63,7 +63,7 @@ done
 
 echo "$target_ver" > mirror/target-ocp-version.conf
 
-install_rpms make
+install_rpm make
 [ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver clean all
 
 
