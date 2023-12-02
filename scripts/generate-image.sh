@@ -3,9 +3,11 @@
 
 . scripts/include_all.sh
 
-echo ===================
-scripts/cluster-config.sh | sed "s/export //g" 
-echo ===================
+echo ==================================================================	
+echo Cluster configuration
+echo =====================
+scripts/cluster-config.sh | sed "s/export /  /g" 
+echo ==================================================================	
 eval `scripts/cluster-config.sh || exit 1`
 
 echo Generating the ISO image for $CLUSTER_NAME.$BASE_DOMAIN ...

@@ -69,3 +69,5 @@ if [ -s /tmp/.list_of_matching_arp_entries ]; then
 	fi
 fi
 
+exit 0
+
