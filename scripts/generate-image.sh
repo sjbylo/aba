@@ -13,7 +13,7 @@ echo Generating the ISO image for $CLUSTER_NAME.$BASE_DOMAIN ...
 rm -rf iso-agent-based 
 mkdir -p iso-agent-based
 
-cp -v install-config.yaml agent-config.yaml $MANEFEST_DIR 
+cp install-config.yaml agent-config.yaml $MANEFEST_DIR 
 
 rm -rf $MANEFEST_DIR.backup
 cp -rp $MANEFEST_DIR $MANEFEST_DIR.backup

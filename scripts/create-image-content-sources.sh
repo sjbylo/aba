@@ -7,9 +7,10 @@
 
 umask 077
 
-source mirror.conf
+install_rpm python3-pip
+install_pip j2cli
 
-which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
+source mirror.conf
 
 echo Generating imageContentSourcePolicy.yaml ...
 j2 ./templates/image-content-sources.yaml.j2 > ../deps/image-content-sources.yaml

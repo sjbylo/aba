@@ -13,8 +13,10 @@ source mirror.conf
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
 export rendezvous_ip=$machine_ip_prefix$starting_ip_index
 
-echo Checking if dig is installed ...
-which dig 2>/dev/null >&2 || sudo dnf install bind-utils -y
+# Checking if dig is installed ...
+install_rpm bind-utils
+#install_pip j2cli
+
 
 echo Validating the cluster configuraiton ...
 

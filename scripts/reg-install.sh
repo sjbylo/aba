@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
@@ -8,16 +8,15 @@ umask 077
 
 source mirror.conf
 
-echo "Ensure dependencies installed (podman python3-pip j2) ..."
-inst=
-# not needed rpm -q --quiet nmstate|| inst=1
-rpm -q --quiet podman     	|| inst=1
-rpm -q --quiet python3-pip   	|| inst=1
+cat > .ssh.conf <<END
+StrictHostKeyChecking no
+UserKnownHostsFile=/dev/null
+ConnectTimeout=15
+END
 
-### not needed [ "$inst" ] && sudo dnf install podman jq nmstate python3-pip -y >/dev/null 2>&1
-[ "$inst" ] && sudo dnf install podman python3-pip -y >/dev/null 2>&1
+install_rpm podman python3-pip
+install_pip j2cli
 
-which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
 
 # Mirror registry installed?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
@@ -29,63 +28,45 @@ if [ "$reg_code" != "200" ]; then
 
 	echo "Installing Quay registry on host $reg_host ..."
 
-#	# Ensure registry dns entry exists and points to the bastion's ip
-#	ip=$(dig +short $reg_host)
-#	ip_int=$(ip route get 1 | grep -oP 'src \K\S+')
 
-	# Host is remote 
-#	if [ "$ip" != "$ip_int" ]; then
+	if ! ssh $(whoami)@$reg_host hostname; then
+		echo "Error: Can't ssh to $(whoami)@$reg_host"
+		echo "Configure ssh to the host $reg_host and try again."
+		exit 1
+	else
+		echo "Ssh access to [$reg_host] is working ..."
+	fi
 
-		if ! ssh $(whoami)@$reg_host hostname; then
-			echo "Error: Can't ssh to $(whoami)@$reg_host"
-			echo "Configure ssh to the host $reg_host and try again."
-			exit 1
-		else
-			echo "Ssh access to [$reg_host] is working ..."
-		fi
+	echo "Installing mirror registry on the host [$reg_host] with user $(whoami) ..."
 
-		echo "Installing mirror registry on the host [$reg_host] with user $(whoami) ..."
-
+	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --quayHostname $reg_host -k ~/.ssh/id_rsa'"
+	if [ "$reg_pw" ]; then
+		set_pw="--initPassword $reg_pw"
 		echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --quayHostname $reg_host -k ~/.ssh/id_rsa'"
-		if [ "$reg_pw" ]; then
-			set_pw="--initPassword $reg_pw"
-			echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --quayHostname $reg_host -k ~/.ssh/id_rsa'"
-			./mirror-registry install -v \
-		  		--targetHostname $reg_host \
-		  		--targetUsername $(whoami) \
-		  		--quayHostname $reg_host \
-		  		-k ~/.ssh/id_rsa \
-				--initPassword $reg_pw | tee .install.output || rm -f .install.output
-		else
-			./mirror-registry install -v \
-		  		--targetHostname $reg_host \
-		  		--targetUsername $(whoami) \
-		  		--quayHostname $reg_host \
-		  		-k ~/.ssh/id_rsa \
-					| tee .install.output || rm -f .install.output
-		fi
+		./mirror-registry install -v \
+	  		--targetHostname $reg_host \
+	  		--targetUsername $(whoami) \
+	  		--quayHostname $reg_host \
+	  		-k ~/.ssh/id_rsa \
+			--initPassword $reg_pw | tee .install.output || rm -f .install.output
+	else
+		./mirror-registry install -v \
+	  		--targetHostname $reg_host \
+	  		--targetUsername $(whoami) \
+	  		--quayHostname $reg_host \
+	  		-k ~/.ssh/id_rsa \
+				| tee .install.output || rm -f .install.output
+	fi
 
-		#--quayRoot <example_1directory_name>
+	#--quayRoot <example_1directory_name>
 
-		rm -rf deps/*
+	rm -rf deps/*
 
-		# Fetch root CA from remote host so the connection can be tested
-		if [ ! -d ~/quay-install/quay-rootCA ]; then
-			mkdir -p ~/quay-install/quay-rootCA
-			scp -p $(whoami)@$reg_host:quay-install/quay-rootCA/* ~/quay-install/quay-rootCA
-		fi
-	#else
-		#[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\blocalhost\b" || no_proxy=$no_proxy,localhost 		  # adjust if proxy in use
-		#res_local=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://localhost:${reg_port}/health/instance || true)
-		#
-		#[ $res_local -eq 200 ] && echo "Registry already installed on localhost [$reg_host]" && exit 
-		#
-		#echo "Installing mirror registry on the localhost [$reg_host] ..."
-		#echo "Running command './mirror-registry install --quayHostname $reg_host'"
-		#./mirror-registry install --quayHostname $reg_host | tee .install.output || rm -f .install.output
-		## Sample output of the above command
-		## Quay is available at https://registry.lan:8443 with credentials (init, cG79mTdkAo0P3ZgLsy12VMi56NU48nla)
-	#fi
+	# Fetch root CA from remote host so the connection can be tested
+	if [ ! -d ~/quay-install/quay-rootCA ]; then
+		mkdir -p ~/quay-install/quay-rootCA
+		scp -p $(whoami)@$reg_host:quay-install/quay-rootCA/* ~/quay-install/quay-rootCA
+	fi
 
 	if [ -s .install.output ]; then
 		echo Creating json registry credentials in ./registry-creds.txt ...
@@ -96,34 +77,21 @@ if [ "$reg_code" != "200" ]; then
 	else
 		echo No install script output .install.output found. Cannot configure registry credentials. Exiting ... && exit 
 	fi
-
-#else
-	###echo 
-	###echo WARNING: 
-	###echo "Registry detected on localhost at https://localhost:${reg_port}/health/instance"
-
-#	echo "This script does not yet support the use of an existing registry and needs to install Quay registry on this host (bastion) itself."
-#	echo "If aba installed the detected registry, then continue to use it".
-#
-#	if [ "$res_remote" = "200" ]; then
-#		echo 
-#		echo "A registry was also detected at https://$reg_host:${reg_port}/health/instance"
-##	fi
-#	exit 1
 fi
 
+# Configure the pull secret for this mirror registry 
 export reg_url=https://$reg_host:$reg_port
-
-reg_creds=$(cat ./registry-creds.txt)
-
-echo Checking registry access is working using "podman login" ...
-podman login -u init -p $reg_password $reg_url --tls-verify=false 
-
-scripts/create-containers-auth.sh
 
 # Check if the cert needs to be updated
 diff ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2|| \
 	sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 	sudo update-ca-trust extract
 
+echo -n "Checking registry access is working using 'podman login': "
+podman login -u init -p $reg_password $reg_url 
+
+reg_creds=$(cat ./registry-creds.txt)
+scripts/create-containers-auth.sh
+
 cp ~/quay-install/quay-rootCA/rootCA.pem deps/
+

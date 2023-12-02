@@ -11,11 +11,9 @@ source mirror.conf
 
 scripts/verify-release-image.sh
 
-echo Checking if nmstate and skopeo are installed ...
-inst=
-rpm --quiet -q bind-utils 	|| inst="$inst bind-utils"
-rpm --quiet -q nmstate	 	|| inst="$inst nmstate"
-[ "$inst" ] && sudo dnf install $inst -y >/dev/null
+install_rpm bind-utils nmstate python3-pip
+install_pip j2cli
+
 
 # Set the rendezvous_ip to the the first master's ip
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).

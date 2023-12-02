@@ -27,7 +27,7 @@ openshift-install-linux-$(ocp_target_ver).tar.gz:
 
 
 # oc-mirror
-~/bin/oc-mirror: oc-mirror.tar.gz
+~/bin/oc-mirror: oc-mirror.tar.gz ~/bin/oc 
 	tar -C ~/bin -xvzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
 	touch ~/bin/oc-mirror
@@ -41,4 +41,4 @@ oc-mirror.tar.gz:
 
 
 clean:
-	rm -f ~/bin/{oc,oc-mirror,openshift-install}
+	rm -f ~/bin/{oc,oc-mirror,openshift-install} 

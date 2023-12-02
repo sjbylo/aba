@@ -2,7 +2,9 @@
 
 . scripts/include_all.sh
 
-[ "$1" = "--start" ] && START_VM=1
+[ "$1" = "--start" ] && START_VM=1 && shift
+
+[ "$1" ] && set -x
 
 scripts/install-govc.sh
 
@@ -13,7 +15,7 @@ fi
 CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
 WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 
-###scripts/check-macs.sh || exit 
+scripts/check-macs.sh || exit 
 
 # Read in the cpu and mem values 
 source aba.conf 

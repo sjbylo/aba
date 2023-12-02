@@ -28,18 +28,10 @@ if [ ! "$SNO" ]; then
 fi
 
 
-		#export pull_secret=
-		#export ssh_key_pub=
-		#export additional_trust_bundle=
-		#export image_content_sources=
-
-		#pull_secret_mirror_file=pull-secret-mirror.json  
-
 ip_api=$(dig +short api.$cluster_name.$base_domain)
 ip_apps=$(dig +short x.apps.$cluster_name.$base_domain)
 	
 # If NOT SNO...
-##if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
 if [ ! "$SNO" ]; then
 	# Ensure api DNS exists 
 	[ "$ip_api" != "$api_vip" ] && echo "WARNING: DNS record [api.$cluster_name.$base_domain] does not resolve to [$api_vip]" && exit 1
@@ -57,9 +49,10 @@ else
 		echo "WARNING: DNS record [\*.apps.$cluster_name.$base_domain] does not resolve to the rendezvous ip [$rendezvous_ip]" && exit 1
 fi
 
-# Ensure registry dns entry exists and points to the bastion's ip
-ip=$(dig +short $reg_host)
-ip_int=$(ip route get 1 | grep -oP 'src \K\S+')
-[ "$ip" != "$ip_int" ] && echo "WARNING: DNS record [$reg_host] does not resolve to the bastion ip [$ip_int]!" ### && exit 1
+### Ensure registry dns entry exists and points to the bastion's ip
+##ip=$(dig +short $reg_host)
+##ip_int=$(ip route get 1 | grep -oP 'src \K\S+')
+##[ "$ip" != "$ip_int" ] && echo "WARNING: DNS record [$reg_host] does not resolve to the bastion ip [$ip_int]!" ### && exit 1
 
 exit 0
+

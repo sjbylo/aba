@@ -4,8 +4,8 @@
 
 umask 077
 
-rpm -q --quiet jq   	|| inst=1
-[ "$inst" ] && sudo dnf install jq -y >/dev/null 2>&1
+install_rpm jq
+install_pip j2cli
 
 
 source ./mirror.conf
@@ -21,9 +21,6 @@ else
 	echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 fi
 
-which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
-
-export reg_url=https://$reg_host:$reg_port
 
 mkdir -p ~/.docker ~/.containers
 
@@ -32,7 +29,7 @@ if [ -s ./registry-creds.txt ]; then
 	reg_creds=$(cat ./registry-creds.txt)
 	export enc_password=$(echo -n "$reg_creds" | base64 -w0)
 
-	# enc_password used in template 
+	# Inputs: enc_password, reg_host and reg_port 
 	j2 ./templates/pull-secret-mirror.json.j2 > ./deps/pull-secret-mirror.json
 
 	# Merge the two files

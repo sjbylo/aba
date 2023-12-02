@@ -2,20 +2,11 @@
 
 . scripts/include_all.sh
 
-#[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$1" ] && set -x 
 
 if [ ! "$CLUSTER_NAME" ]; then
 	eval $(scripts/cluster-config.sh $@ || exit 1)
 fi
-
-#bin/init.sh $@
-
-cat > .ssh.conf <<END
-StrictHostKeyChecking no
-UserKnownHostsFile=/dev/null
-ConnectTimeout=15
-END
 
 echo 
 echo =================================================================================

@@ -9,8 +9,10 @@ fi
 CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
 WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 
-echo "Checking if the command 'arp' is availiable ..."
-rpm --quiet -q net-tools || sudo dnf install net-tools -y >/dev/null 2>&1 || true
+# Need command 'arp' 
+install_rpm net-tools
+#install_pip j2cli
+
 
 # if arp cannot be installed, then skip this script
 which arp >/dev/null || exit 0

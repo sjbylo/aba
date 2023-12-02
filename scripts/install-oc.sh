@@ -4,20 +4,11 @@
 
 umask 077
 
-. mirror.conf
+source mirror.conf
 
-echo "Ensure dependencies installed (podman nmstate jq python3-pip j2) ..."
-inst=
-rpm -q --quiet nmstate|| inst=1
-rpm -q --quiet podman || inst=1
-rpm -q --quiet jq     || inst=1
+install_rpm nmstate podman jq python3-pip
+install_pip j2cli
 
-[ "$inst" ] && sudo dnf install podman jq nmstate python3-pip -y
-
-which j2 >/dev/null 2>&1 || pip3 install j2cli --user 
-
-###REMOVED
-###REMOVED
 
 # Fetch versions of any existing oc and openshift-install binaries
 which oc >/dev/null 2>&1 && oc_ver=$(oc version --client=true | grep "Client Version:" | awk '{print $3}')

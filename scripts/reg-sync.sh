@@ -6,9 +6,6 @@ umask 077
 
 source mirror.conf
 
-###REMOVED mkdir install-quay
-###REMOVED cd install-quay
-
 if [ -s save/mirror_seq1_000000.tar ]; then
 	echo 
 	echo "WARNING: You already have images saved on local disk in $PWD/save."
@@ -32,13 +29,9 @@ else
 fi
 
 
-echo "Ensure dependencies installed (podman nmstate jq python3-pip j2) ..."
-inst=
-rpm -q --quiet jq     || inst=1
+install_rpm podman python3-pip 
+install_pip j2cli
 
-[ "$inst" ] && sudo dnf install podman jq nmstate python3-pip -y >/dev/null 2>&1
-
-which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
 
 export reg_url=https://$reg_host:$reg_port
 
@@ -55,8 +48,8 @@ if [ "$reg_code" != "200" ]; then
 	echo "Error: Registry at https://$reg_host:${reg_port}/ is not responding" && exit 1
 fi
 
-echo Checking registry access is working using "podman login" ...
-podman login -u init -p $reg_password $reg_url --tls-verify=false 
+echo -n "Checking registry access is working using 'podman login': "
+podman login -u init -p $reg_password $reg_url 
 
 echo Generating imageset-config.yaml for oc-mirror ...
 export ocp_ver=$ocp_target_ver

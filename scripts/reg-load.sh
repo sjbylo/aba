@@ -1,30 +1,13 @@
 #!/bin/bash -e
 
+source scripts/include_all.sh
 
 umask 077
 
 source mirror.conf
 
-###REMOVED mkdir install-quay
-###REMOVED cd install-quay
-
-### This is a pull secret for RH registry
-##pull_secret_mirror_file=pull-secret-mirror.json
-
-##echo pull_secret_file=$pull_secret_file
-
-##if [ -s $pull_secret_mirror_file ]; then
-	##echo Using $pull_secret_mirror_file ...
-##elif [ -s $pull_secret_file ]; then
-	###SB#ln -fs ./pull-secret.json pull-secret.json 
-	##:
-##else
-	##echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
-##fi
-
-
-echo "Ensure dependencies installed (j2) ..."
-which j2 >/dev/null 2>&1 || pip3 install j2cli --user  >/dev/null 2>&1
+install_rpm podman python3-pip
+install_pip j2cli
 
 # Can the registry mirror already be reached?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
@@ -32,9 +15,8 @@ res_remote=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg
 
 export reg_url=https://$reg_host:$reg_port
 
-echo Checking registry access is working using "podman login" ...
-set -e
-podman login -u init -p $reg_password $reg_url --tls-verify=false 
+echo -n "Checking registry access is working using 'podman login': "
+podman login -u init -p $reg_password $reg_url 
 
 # Run create container auth
 ./scripts/create-containers-auth.sh 

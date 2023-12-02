@@ -3,13 +3,13 @@
 
 [ -s mirror/mirror.conf ] && source mirror/mirror.conf || source mirror.conf
 
-image=$(openshift-install version| grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
+release_image=$(openshift-install version| grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
 
-rpm --quiet -q skopeo >/dev/null 2>&1 || sudo dnf install skopeo -y >/dev/null 
+install_rpm skopeo
 
-echo "Verifying the release image: docker://$reg_host:$reg_port/openshift4/openshift/release-images$image"
+echo "Verifying the release image: docker://$reg_host:$reg_port/openshift4/openshift/release-images$release_image"
 
-if ! skopeo inspect docker://$reg_host:$reg_port/openshift4/openshift/release-images$image >/dev/null; then
+if ! skopeo inspect docker://$reg_host:$reg_port/openshift4/openshift/release-images$release_image >/dev/null; then
 	echo
 	echo "Error: The $(which openshift-install) CLI version not match the release image version in your registry!"
 	echo "       Be sure to in stall the correct oc, openshift-install, oc-mirror versions and try again!"
