@@ -7,7 +7,7 @@ CMD      ?= "get co"
 debug    ?= 
 version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 
-all: mirror.conf templates scripts aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso image-content-sources.yaml .iso-uploaded .refreshed mon
+all: templates scripts mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso image-content-sources.yaml .iso-uploaded .refreshed mon
 
 templates:
 	ln -s $(TEMPLATES) 
