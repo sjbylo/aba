@@ -2,7 +2,6 @@
 
 . scripts/include_all.sh
 
-
 [ "$1" = "-d" ] && set -x
 
 umask 077

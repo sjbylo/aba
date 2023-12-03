@@ -3,7 +3,6 @@
 
 . scripts/include_all.sh
 
-#[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$1" ] && set -x
 
 source aba.conf
@@ -29,52 +28,52 @@ export ssh_key_pub=
 export additional_trust_bundle=
 export image_content_sources=
 
-pull_secret_mirror_file=../deps/pull-secret-mirror.json  
+# FIXME - add to makefile
+ln -fs ../mirror/deps 
 
 # Generate the needed iso-agent-based config files ...
 
 # Read in the needed files ...
-echo Looking for mirror registry pull secret file ...
-if [ -s $pull_secret_mirror_file ]; then
-	export pull_secret=$(cat $pull_secret_mirror_file) 
-	echo Found mirror registry pull secret file at $pull_secret_mirror_file
+
+if [ -s deps/pull-secret-mirror.json ]; then
+	export pull_secret=$(cat deps/pull-secret-mirror.json) 
+	echo Found mirror registry pull secret file at deps/pull-secret-mirror.json
+
+	# If we pull from the local reg. then we define the image content sources
+	[ -s templates/image-content-sources.yaml.j2 ] && \
+		export image_content_sources=$(j2 templates/image-content-sources.yaml.j2) || \
+			echo WARNING: No file templates/image-content-sources.yaml.j2
+
+	# ... we also, need a root CA...
+	if [ -s deps/rootCA.pem ]; then
+		export additional_trust_bundle=$(cat deps/rootCA.pem) 
+		echo Found root CA file at deps/rootCA.pem
+	else	
+		echo ERROR: No file rootCA.pem
+		exit 1
+	fi
 else
-	echo WARNING: No mirror registry pull secret file found at $pull_secret_mirror_file.  Trying to use ./pull-secret.json.
-	if [ -s ./pull-secret.json ]; then
-		export pull_secret=$(cat ./pull-secret.json) 
-		echo Found pull secret file at $PWD/pull-secret.json
+	#echo WARNING: No mirror registry pull secret file found at deps/pull-secret-mirror.json.  Trying to use ./pull-secret.json.
+	if [ -s deps/pull-secret-full.json ]; then
+		export pull_secret=$(cat deps/pull-secret-full.json)
+		echo Found pull secret file at deps/pull-secret-full.json
 	else
-		echo "Error: No pull secrets found!!"
+		echo "Error: No pull secrets found. Aborting!" 
 		exit 1
 	fi
 fi
-
-# FIXME this should be simpler
-ln -fs ../mirror/deps 
-[ -s deps/$additional_trust_bundle_file ] && \
-	export additional_trust_bundle=$(cat deps/$additional_trust_bundle_file) || \
-		echo WARNING: No file $additional_trust_bundle_file
-
-scripts/create-image-content-sources.sh 
-
-[ -s $image_content_sources_file ] && \
-	export image_content_sources=$(cat $image_content_sources_file) || \
-		echo WARNING: No file $image_content_sources_file ...
 
 [ -s $ssh_key_file ] && \
 	export ssh_key_pub=$(cat $ssh_key_file) || \
 		echo WARNING: No file $ssh_key_file ...
 
-[ "$additional_trust_bundle" -a ! "$pull_secret" ] && echo && echo "Error: The registry cert is defined but the pull secret is not!" && exit 1
-[ ! "$additional_trust_bundle" -a "$pull_secret" ] && echo && echo "Error: The pull secret is defined but the cert is not!" && exit 1
-
 # Check the registry is defined if it's in use
 if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
 	[ ! "$reg_host" ] && echo && echo "Error: registry host is not defined!" && exit 1
-	[ ! "$reg_port" ] && echo && echo "Error: registry port is not defined!" && exit 1
 fi
 
 echo Generating Agent-based configuration file: $PWD/install-config.yaml 
+# Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret ...
 j2 templates/install-config.yaml.j2 > install-config.yaml 
 
 
