@@ -40,9 +40,9 @@ if [ -s deps/pull-secret-mirror.json ]; then
 	echo Found mirror registry pull secret file at deps/pull-secret-mirror.json
 
 	# If we pull from the local reg. then we define the image content sources
-	[ -s templates/image-content-sources.yaml.j2 ] && \
-		export image_content_sources=$(j2 templates/image-content-sources.yaml.j2) || \
-			echo WARNING: No file templates/image-content-sources.yaml.j2
+	##[ -s templates/image-content-sources.yaml.j2 ] && \
+		export image_content_sources=$(j2 templates/image-content-sources.yaml.j2) #|| \
+			# echo WARNING: No file templates/image-content-sources.yaml.j2
 
 	# ... we also, need a root CA...
 	if [ -s deps/rootCA.pem ]; then
@@ -54,9 +54,9 @@ if [ -s deps/pull-secret-mirror.json ]; then
 	fi
 else
 	#echo WARNING: No mirror registry pull secret file found at deps/pull-secret-mirror.json.  Trying to use ./pull-secret.json.
-	if [ -s deps/pull-secret-full.json ]; then
-		export pull_secret=$(cat deps/pull-secret-full.json)
-		echo Found pull secret file at deps/pull-secret-full.json
+	if [ -s ~/.pull-secret.json ]; then
+		export pull_secret=$(cat ~/.pull-secret.json)
+		echo Found pull secret file at ~/.pull-secret.json
 	else
 		echo "Error: No pull secrets found. Aborting!" 
 		exit 1
