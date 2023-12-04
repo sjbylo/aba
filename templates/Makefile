@@ -7,7 +7,7 @@ CMD      ?= "get co"
 debug    ?= 
 version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 
-all: templates scripts mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso image-content-sources.yaml .iso-uploaded .refreshed mon
+all: templates scripts mirror mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso .iso-uploaded .refreshed mon
 
 templates:
 	ln -s $(TEMPLATES) 
@@ -15,13 +15,16 @@ templates:
 scripts: 
 	ln -s $(SCRIPTS) 
 
-# Fixme
-pull-secret-mirror.json: 
-	#cp ~/.pull-secret.json  pull-secret.json
-	touch pull-secret-mirror.json
+mirror: 
+	ln -s ../mirror
 
-mirror.conf: ../mirror/mirror.conf
-	ln -s ../mirror/mirror.conf 
+### Fixme
+##pull-secret-mirror.json: 
+##	#cp ~/.pull-secret.json  pull-secret.json
+##	touch pull-secret-mirror.json
+
+mirror.conf: ##mirror ###mirror/mirror.conf
+	ln -s mirror/mirror.conf 
 
 vmware.conf: ../vmware.conf 
 	[ -s ../vmware.conf ] && cp ../vmware.conf .
@@ -33,7 +36,7 @@ aba.conf:
 	cp $(TEMPLATES)/aba.conf .
 	vi aba.conf
 
-install-config.yaml: aba.conf imageset-config.yaml image-content-sources.yaml pull-secret-mirror.json templates scripts 
+install-config.yaml: templates scripts aba.conf 
 	$(SCRIPTS)/create-install-config.sh $(debug)
 
 agent-config.yaml: aba.conf mirror.conf templates scripts 
@@ -63,13 +66,6 @@ refresh:
 
 #vmw: vmw-upload vmware.conf
 #	$(SCRIPTS)/vmw-refresh.sh $(debug)
-
-imageset-config.yaml:
-	# FIXME
-	touch imageset-config.yaml
-
-image-content-sources.yaml: 
-	scripts/create-image-content-sources.sh $(debug)
 
 delete:
 	$(SCRIPTS)/vmw-delete.sh $(debug)
@@ -101,11 +97,11 @@ ssh:
 clean:
 	# Fixme
 	rm -f install-config.yaml agent-config.yaml 
-	rm -f ~/.cache/agent imageset.*.yaml rootCA.pem 
+	rm -f ~/.cache/agent rootCA.pem 
 	rm -f scripts templates
 	rm -rf iso-agent-based 
 
-cleanall: clean
+distclean: clean
 	rm -f aba.conf 
 	rm -f mirror.conf vmware.conf 
 
