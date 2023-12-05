@@ -18,7 +18,7 @@ Aba automatically completes the following:
    - OCP requires that ESXi be configured with NTP.
 - vSphere with vCenter API access. This is optional, you can manually boot your bar-metal machines using the ISO.
    - ESXi can also be used on its own (i.e. without vCenter).
-   - Ensure enough priviledges to vCenter, see the [documentation](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) for more.
+   - Ensure enough privileges to vCenter, see the [documentation](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) for more.
 - Bastion with Internet access
   - a RHEL host or VM (where Quay mirror registry can be installed). 
   - Root access with sudo.
@@ -32,7 +32,7 @@ Aba automatically completes the following:
 - First, install a bastion host with a fresh version of RHEL
    - a 'minimal install' of RHEL 9.3 and RHEL 8.9 has been tested, other recent versions of RHEL should work too.
 - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to a user's home directory on the bastion. 
-  - IMPORTANT: run 'git chackout dev' or 'git clone -b dev https://github.com/sjbylo/aba.git' to use the 'dev' branch. 
+  - IMPORTANT: run 'git checkout dev' or 'git clone -b dev https://github.com/sjbylo/aba.git' to use the 'dev' branch. 
 - Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
    - It's a good idea to make the file user read-only, e.g. `chmod 600 ~/.pull-secret.json`.
    - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
@@ -86,7 +86,7 @@ Install OpenShift
 ```
 make sno
 ```
-- This will create a directory 'sno' and then install SNO OpenShift using Agent-based installer.  By defaqult it will use VMware. 
+- This will create a directory 'sno' and then install SNO OpenShift using Agent-based installer.  By default it will use VMware. 
 - Be sure to go through *all* the values in '~/.vmware.conf' and 'aba.conf'. Be sure to set up your DNS entries in advance. 
 - aba will show you the install progress.  If there are any issues - e.g. missing DNS records - fix them and then run the same command again.  All commands should be idempotent.
 
