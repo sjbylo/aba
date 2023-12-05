@@ -87,7 +87,7 @@ Install OpenShift
 make sno
 ```
 - This will create a directory 'sno' and then install SNO OpenShift using Agent-based installer.  By default it will use VMware. 
-- Be sure to go through *all* the values in '~/.vmware.conf' and 'aba.conf'. Be sure to set up your DNS entries in advance. 
+- Be sure to go through *all* the values in 'vmware.conf' and 'aba.conf'. Be sure to set up your DNS entries in advance. 
 - aba will show you the install progress.  If there are any issues - e.g. missing DNS records - fix them and then run the same command again.  All commands should be idempotent.
 
 ```
