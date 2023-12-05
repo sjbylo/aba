@@ -48,30 +48,36 @@ To install identical versions of oc, oc-mirror and openshift-install, run:
 ./aba 
 ```
 
-For connected mode (bastion has access to both the Internet and the private subnet).
+## For connected mode 
 
-The below command will:
-  - install the Quay mirror registry on your bastion host
-  - mirror the correct OCP version images and 
-  - copy the registry pull secret and certificate into 'mirror/deps'
+- Bastion has access to both the Internet and the private subnet (but not necessarily at the same time).
 
 ```
 make sync
 ```
-- This will install quay on the bastion, pull images from the Internet to write them to quay. 
+This command will:
+  - install Quay registry on the bastion
+  - pull images from the Internet and write them to quay. 
+  - Copy the registry pull secret and certificate into 'mirror/deps' for later use. 
 
-For disconnected mode (bastion has access to the Internet only)
+
+## For disconnected mode 
+
+- Bastion has access to the Internet only.
 
 ```
 make save
 ```
+- This will pull the images and save them to a local directory mirror/save.
 
-Then, copy them to another bastion host in the private subnet, e.g. on a thumb drive.
+Then, copy *the whole aba/ directory* and sub-directories to your internal bastion host in the private subnet, e.g. via a thumb drive or DVD. 
+
+On the internal bastion:
 
 ```
 make load
 ```
-- This will install quay (from the aba. files) and then load the images into quay.
+- This will install quay (from the files that were copied) and then load the images into quay.
 
 
 Install OpenShift 
@@ -116,8 +122,8 @@ make delete                          # Delete all the VMs in the 'compact' clust
 Using an existing registry.  
 
 This should work as long as your existing Quay's dependent files are placed at the right locations where aba looks for them:
-  - mirror/desp/pull-secret-mirror.json   (pull secret for your registry)
-  - mirror/desp/rootCA.pem                (the root CA key file for your registry) 
+  - mirror/deps/pull-secret-mirror.json   (pull secret for your registry)
+  - mirror/deps/rootCA.pem                (the root CA key file for your registry) 
 
 # Features that are not implemented yet or might not yet
 
