@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash 
 # This script extracts the needed values from the agent-config.yaml and the install-config.yaml files.
 
 . scripts/include_all.sh

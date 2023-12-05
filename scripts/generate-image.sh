@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash 
 # Refresh the ISO
 
 . scripts/include_all.sh

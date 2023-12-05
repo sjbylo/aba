@@ -1,10 +1,10 @@
-#!/bin/bash -e
+#!/bin/bash 
 
 source scripts/include_all.sh
 
-scripts/install-govc.sh
-
 [ "$1" ] && set -x
+
+scripts/install-govc.sh
 
 if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`

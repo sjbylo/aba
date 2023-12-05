@@ -7,7 +7,7 @@ CMD      ?= "get co"
 debug    ?= 
 version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 
-all: templates scripts mirror mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso iso-agent-based/upload refresh-poweroff mon
+all: templates scripts mirror mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso iso-agent-based/upload force-refresh mon
 
 templates:
 	ln -s $(TEMPLATES) 
@@ -18,12 +18,7 @@ scripts:
 mirror: 
 	ln -s ../mirror
 
-### Fixme
-##pull-secret-mirror.json: 
-##	#cp ~/.pull-secret.json  pull-secret.json
-##	touch pull-secret-mirror.json
-
-mirror.conf: ##mirror ###mirror/mirror.conf
+mirror.conf: mirror 
 	ln -s mirror/mirror.conf 
 
 vmware.conf: ../vmware.conf 
@@ -50,18 +45,14 @@ poweroff: iso-agent-based/agent.x86_64.iso
 	$(SCRIPTS)/vmw-kill.sh $(debug)
 	touch poweroff
 
-#iso-agent-based/upload: iso-agent-based/agent.x86_64.iso
-#	$(SCRIPTS)/vmw-upload.sh $(debug) 
-#	touch iso-agent-based/upload
-
 iso-agent-based/upload: poweroff
 	$(SCRIPTS)/vmw-upload.sh $(debug) 
 	touch iso-agent-based/upload
 
-refresh-poweroff: poweroff
+force-refresh: poweroff
 	$(SCRIPTS)/vmw-delete.sh $(debug)
 	$(SCRIPTS)/vmw-create.sh --start $(debug) 
-	touch refresh-poweroff
+	touch force-refresh
 
 refresh: 
 	$(SCRIPTS)/vmw-delete.sh $(debug)
@@ -98,9 +89,9 @@ ssh:
 
 clean:
 	# Fixme
-	rm -f install-config.yaml agent-config.yaml 
-	rm -f ~/.cache/agent rootCA.pem 
 	rm -f scripts templates
+	rm -f install-config.yaml agent-config.yaml 
+	rm -f ~/.cache/agent 
 	rm -rf iso-agent-based 
 
 distclean: clean

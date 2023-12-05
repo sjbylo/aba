@@ -10,7 +10,7 @@ version := $(shell cat target-ocp-version.conf)
 
 init: deps templates scripts mirror.conf mirror-registry
 
-all: init registry install sync
+all: sync
 
 # For air-gapped
 step1: init save 

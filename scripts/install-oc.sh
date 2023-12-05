@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash 
 
 . scripts/include_all.sh
 
