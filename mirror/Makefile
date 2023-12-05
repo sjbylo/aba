@@ -44,10 +44,12 @@ install: init
 	# Install Quay Mirror
 	$(SCRIPTS)/reg-install.sh $(debug) && touch install
 
-uninstall: init mirror-registry
+#uninstall: ###init mirror-registry
+#init: deps templates scripts mirror.conf mirror-registry
+uninstall: mirror-registry scripts templates
 	# Uninstall Quay Mirror
-	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	rm -f install
+	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 
 save: init 
 	$(SCRIPTS)/reg-save.sh  $(debug)
@@ -61,9 +63,9 @@ load: init save install
 	$(SCRIPTS)/reg-load.sh  $(debug)
 	
 clean: 
-	rm -rf *.yaml *.sh save install oc-mirror-workspace
+	rm -rf *.yaml *.sh save install oc-mirror-workspace .??*
 
-distclean: uninstall
-	rm -rf deps *.tar.gz *.tar scripts templates registry-creds.txt
+distclean: uninstall clean
+	rm -rf deps *.tar.gz *.tar scripts templates registry-creds.txt *.conf mirror-registry
 
 
