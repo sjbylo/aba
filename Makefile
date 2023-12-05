@@ -58,3 +58,7 @@ ocp:
 clean:
 	make -C mirror clean 
 	make -C cli clean 
+
+distclean:
+	make -C mirror distclean 
+	make -C cli distclean 
