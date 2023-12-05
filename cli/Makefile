@@ -42,3 +42,6 @@ oc-mirror.tar.gz:
 
 clean:
 	rm -f ~/bin/{oc,oc-mirror,openshift-install} 
+
+distclean:
+	rm -f *.tar.gz
