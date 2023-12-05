@@ -60,6 +60,10 @@ load: init save install
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-load.sh  $(debug)
 	
-clean: uninstall 
-	rm -rf deps *.yaml *.sh save install scripts templates registry-creds.txt oc-mirror-workspace
+clean: 
+	rm -rf *.yaml *.sh save install oc-mirror-workspace
+
+distclean: uninstall
+	rm deps *.tar.gz scripts templatesc registry-creds.txt
+
 
