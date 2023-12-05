@@ -7,7 +7,7 @@ CMD      ?= "get co"
 debug    ?= 
 version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 
-all: templates scripts mirror mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso .iso-uploaded .refreshed mon
+all: templates scripts mirror mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso iso-agent-based/upload refresh-poweroff mon
 
 templates:
 	ln -s $(TEMPLATES) 
@@ -28,6 +28,7 @@ mirror.conf: ##mirror ###mirror/mirror.conf
 
 vmware.conf: ../vmware.conf 
 	[ -s ../vmware.conf ] && cp ../vmware.conf .
+	touch vmware.conf
 
 ../vmware.conf: templates 
 	scripts/install-vmware.conf.sh
@@ -36,36 +37,37 @@ aba.conf:
 	cp $(TEMPLATES)/aba.conf .
 	vi aba.conf
 
-install-config.yaml: templates scripts aba.conf 
+install-config.yaml: templates scripts aba.conf mirror.conf
 	$(SCRIPTS)/create-install-config.sh $(debug)
 
 agent-config.yaml: aba.conf mirror.conf templates scripts 
 	$(SCRIPTS)/create-agent-config.sh $(debug)
 
-iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml #  openshift-install
+iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml 
 	$(SCRIPTS)/generate-image.sh $(debug)
 
-.iso-uploaded: iso-agent-based/agent.x86_64.iso
-	$(SCRIPTS)/vmw-upload.sh $(debug) 
-	touch .iso-uploaded
-
-.killed: .iso-uploaded
+poweroff: iso-agent-based/agent.x86_64.iso
 	$(SCRIPTS)/vmw-kill.sh $(debug)
-	touch .killed
+	touch poweroff
 
-.refreshed: .killed
+#iso-agent-based/upload: iso-agent-based/agent.x86_64.iso
+#	$(SCRIPTS)/vmw-upload.sh $(debug) 
+#	touch iso-agent-based/upload
+
+iso-agent-based/upload: poweroff
+	$(SCRIPTS)/vmw-upload.sh $(debug) 
+	touch iso-agent-based/upload
+
+refresh-poweroff: poweroff
 	$(SCRIPTS)/vmw-delete.sh $(debug)
 	$(SCRIPTS)/vmw-create.sh --start $(debug) 
-	touch .refreshed
+	touch refresh-poweroff
 
 refresh: 
 	$(SCRIPTS)/vmw-delete.sh $(debug)
 	$(SCRIPTS)/vmw-create.sh $(debug)
 	$(SCRIPTS)/vmw-start.sh --start $(debug)
-	touch .refreshed
-
-#vmw: vmw-upload vmware.conf
-#	$(SCRIPTS)/vmw-refresh.sh $(debug)
+	touch refresh
 
 delete:
 	$(SCRIPTS)/vmw-delete.sh $(debug)

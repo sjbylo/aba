@@ -42,7 +42,8 @@ mirror.conf: ../mirror.conf
 
 install: init
 	# Install Quay Mirror
-	$(SCRIPTS)/reg-install.sh $(debug) && touch install
+	$(SCRIPTS)/reg-install.sh $(debug) 
+	touch install
 
 #uninstall: ###init mirror-registry
 #init: deps templates scripts mirror.conf mirror-registry
