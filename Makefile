@@ -49,7 +49,7 @@ save:
 load:
 	make -C mirror load
 
-openshift:
+ocp:
 	mkdir -p $(dir)
 	ln -fs templates/Makefile $(dir)/Makefile
 	ln -fs ../templates $(dir)
@@ -57,4 +57,4 @@ openshift:
 
 clean:
 	make -C mirror clean 
-
+	make -C cli clean 
