@@ -40,29 +40,26 @@ mirror.conf: ../mirror.conf
 ../mirror.conf: templates/mirror.conf templates 
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
-.mirror-installed: mirror-registry
-	$(SCRIPTS)/reg-install.sh $(debug) && touch .mirror-installed
-	
 install: init
 	# Install Quay Mirror
-	$(SCRIPTS)/reg-install.sh $(debug) && touch .mirror-installed
+	$(SCRIPTS)/reg-install.sh $(debug) && touch install
 
 uninstall: init mirror-registry
 	# Uninstall Quay Mirror
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
-	rm -f .mirror-installed
+	rm -f install
 
 save: init 
 	$(SCRIPTS)/reg-save.sh  $(debug)
 
-sync: init .mirror-installed
+sync: init install
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-sync.sh  $(debug)
 	
-load: init save .mirror-installed
+load: init save install
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-load.sh  $(debug)
 	
 clean: uninstall 
-	rm -rf deps *.yaml *.sh save .mirror-installed scripts templates registry-creds.txt oc-mirror-workspace
+	rm -rf deps *.yaml *.sh save install scripts templates registry-creds.txt oc-mirror-workspace
 
