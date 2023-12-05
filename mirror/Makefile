@@ -5,6 +5,8 @@ TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 OCP_VER = 4.13.19
 debug   ?=
+#version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
+version := $(shell cat target-ocp-version.conf)
 
 init: deps templates scripts mirror.conf mirror-registry
 
@@ -34,11 +36,10 @@ rootCA.pem: deps install ~/quay-install/quay-rootCA/rootCA.pem
 	cp ~/quay-install/quay-rootCA/rootCA.pem  deps
 
 mirror.conf: ../mirror.conf
-	#$(SCRIPTS)/create-mirror-conf.sh $(debug)
 	cp ../mirror.conf .
 
 ../mirror.conf: templates/mirror.conf templates 
-	$(SCRIPTS)/create-mirror-conf.sh $(debug)
+	$(SCRIPTS)/create-mirror-conf.sh -v $(version) $(debug)
 
 install: init
 	# Install Quay Mirror
