@@ -64,6 +64,6 @@ clean:
 	rm -rf *.yaml *.sh save install oc-mirror-workspace
 
 distclean: uninstall
-	rm deps *.tar.gz scripts templatesc registry-creds.txt
+	rm -rf deps *.tar.gz *.tar scripts templates registry-creds.txt
 
 
