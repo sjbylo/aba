@@ -55,3 +55,6 @@ openshift:
 	ln -fs ../templates $(dir)
 	make -C $(dir) 
 
+clean:
+	make -C mirror clean 
+

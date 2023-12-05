@@ -1,5 +1,5 @@
 # No file exists to check timestamps
-.PHONY: all deps clean save sync load step1 step2 mirror.conf install
+.PHONY: all init deps clean save sync load step1 step2 mirror.conf install
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
@@ -59,7 +59,7 @@ sync: init .mirror-installed
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-sync.sh  $(debug)
 	
-load: init .mirror-installed
+load: init save .mirror-installed
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-load.sh  $(debug)
 	
