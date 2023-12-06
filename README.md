@@ -143,9 +143,10 @@ make delete                          # Delete all the VMs in the 'compact' clust
 
 Using an existing registry.  
 
-This should work as long as your existing Quay's credential files are placed at the right location where aba looks for them:
+This should work as long as your existing registry credential files are placed at the right location where aba looks for them:
   - mirror/deps/pull-secret-mirror.json   (pull secret for your registry)
   - mirror/deps/rootCA.pem                (the root CA key file for your registry) 
+Then, manually add your mirror's pull secret to ~/.containers/auth.yaml and ~/.docker/auth.yaml.
 
 # Features that are not implemented yet
 
