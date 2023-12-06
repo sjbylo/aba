@@ -30,8 +30,10 @@ fi
 #echo Checking api_vip and ingress_vip are defined ...
 if [ ! "$SNO" ]; then
 	[ ! "$api_vip" -o ! "$ingress_vip" ] && echo "Error: 'api_vip' and 'ingress_vip' must be defined for this configuration" && exit 1
+	echo "'api_vip' and 'ingress_vip' are defined [$api_vip] [$ingress_vip]"
+else
+	[ "$api_vip" -o "$ingress_vip" ] && echo "'api_vip' and 'ingress_vip' are defined. No need for SNO, they will be ignored." 
 fi
-echo "'api_vip' and 'ingress_vip' are defined [$api_vip] [$ingress_vip]"
 
 
 ip_api=$(dig +short api.$cluster_name.$base_domain)

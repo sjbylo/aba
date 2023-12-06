@@ -8,8 +8,8 @@ CMD      ?= "get co"
 debug    ?= 
 version := $(shell ../scripts/fetch-ocp-stable-version.sh)
 
-#all: mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso iso-agent-based/upload force-refresh mon
-all: vmware.conf force-refresh mon
+#all: mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso upload force-refresh mon
+all: vmware.conf iso-agent-based/agent.x86_64.iso upload force-refresh mon
 
 templates:
 	ln -s ../templates
@@ -49,9 +49,9 @@ poweroff: iso-agent-based/agent.x86_64.iso vmware.conf
 	scripts/vmw-kill.sh $(debug)
 	touch poweroff
 
-iso-agent-based/upload: poweroff vmware.conf
+upload: poweroff vmware.conf
 	scripts/vmw-upload.sh $(debug) 
-	touch iso-agent-based/upload
+	touch upload
 
 force-refresh: poweroff vmware.conf
 	scripts/vmw-delete.sh $(debug)
