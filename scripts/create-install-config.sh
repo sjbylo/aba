@@ -21,7 +21,7 @@ export rendezvous_ip=$machine_ip_prefix$starting_ip_index
 #SNO=
 #[ $num_masters -eq 1 -a $num_workers -eq 0 ] && SNO=1 && echo Configuring for SNO ...
 
-echo Validating the cluster configuraiton ...
+##echo Validating the cluster configuraiton ...
 
 export pull_secret=
 export ssh_key_pub=
@@ -37,7 +37,7 @@ ln -fs ../mirror/deps
 
 if [ -s deps/pull-secret-mirror.json ]; then
 	export pull_secret=$(cat deps/pull-secret-mirror.json) 
-	echo Found mirror registry pull secret file at deps/pull-secret-mirror.json
+	echo Using mirror registry pull secret file at deps/pull-secret-mirror.json
 
 	# If we pull from the local reg. then we define the image content sources
 	##[ -s templates/image-content-sources.yaml.j2 ] && \
@@ -47,7 +47,7 @@ if [ -s deps/pull-secret-mirror.json ]; then
 	# ... we also, need a root CA...
 	if [ -s deps/rootCA.pem ]; then
 		export additional_trust_bundle=$(cat deps/rootCA.pem) 
-		echo Found root CA file at deps/rootCA.pem
+		echo Using root CA file at deps/rootCA.pem
 	else	
 		echo ERROR: No file rootCA.pem
 		exit 1

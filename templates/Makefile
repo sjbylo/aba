@@ -7,7 +7,7 @@ CMD      ?= "get co"
 debug    ?= 
 version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 
-all: templates scripts mirror mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso iso-agent-based/upload force-refresh mon
+all: mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso iso-agent-based/upload force-refresh mon
 
 templates:
 	ln -s $(TEMPLATES) 
@@ -20,6 +20,7 @@ mirror:
 
 mirror.conf: mirror 
 	ln -s mirror/mirror.conf 
+	touch mirror.conf
 
 vmware.conf: ../vmware.conf 
 	[ -s ../vmware.conf ] && cp ../vmware.conf .
@@ -27,6 +28,7 @@ vmware.conf: ../vmware.conf
 
 ../vmware.conf: templates 
 	scripts/install-vmware.conf.sh
+	touch ../vmware.conf
 
 aba.conf: 
 	cp $(TEMPLATES)/aba.conf .
@@ -91,7 +93,7 @@ clean:
 	# Fixme
 	rm -f scripts templates
 	rm -f install-config.yaml agent-config.yaml 
-	rm -f ~/.cache/agent 
+	rm -rf ~/.cache/agent poweroff refresh refresh-poweroff
 	rm -rf iso-agent-based 
 
 distclean: clean

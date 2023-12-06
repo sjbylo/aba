@@ -8,14 +8,14 @@ if [ ! -s ../vmware.conf ]; then
 	read yn
 
 	vi ../vmware.conf
-fi
 
-scripts/install-govc.sh
+	scripts/install-govc.sh
 
-source ../vmware.conf
-if ! govc about; then
-	rm -f ../vmware.conf
-	exit 1
+	source ../vmware.conf
+	if ! govc about; then
+		rm -f ../vmware.conf
+		exit 1
+	fi
 fi
 
 exit 0
