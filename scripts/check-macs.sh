@@ -23,7 +23,7 @@ INUSE=
 > /tmp/.list_of_matching_arp_entries
 for mac in $CP_MAC_ADDRESSES $WORKER_MAC_ADDRESSES
 do
-	echo checking mac address: $mac ...
+	##echo checking mac address: $mac ...
 	if grep -q " $mac " /tmp/.all_arp_entries; then
 		echo "Warning: Mac address $mac might already be in use."
 		INUSE=1

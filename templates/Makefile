@@ -60,8 +60,7 @@ force-refresh: poweroff vmware.conf
 
 refresh:  vmware.conf
 	scripts/vmw-delete.sh $(debug)
-	scripts/vmw-create.sh $(debug)
-	scripts/vmw-start.sh --start $(debug)
+	scripts/vmw-create.sh --start $(debug) 
 	touch refresh
 
 delete: vmware.conf
