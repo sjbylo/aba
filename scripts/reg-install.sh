@@ -22,8 +22,12 @@ install_pip j2cli
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
+# Fixme, exit if already installed
 if [ "$reg_code" != "200" ]; then
 	echo "Installing Quay registry on host $reg_host ..."
+
+	# FIXME: We are using ssh, even if the registry is installed locally. 
+	[ ! -s ~/.ssh/id_rsa ] && mkdir -p ~/.ssh && ssh-keygen -b 2048 -t rsa -f ~/.ssh/id_rsa -N ""
 
 	if ! ssh -F .ssh.conf $(whoami)@$reg_host hostname; then
 		echo "Error: Can't ssh to $(whoami)@$reg_host"

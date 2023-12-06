@@ -18,5 +18,4 @@ if [ ! -s ../vmware.conf ]; then
 	fi
 fi
 
-exit 0
 

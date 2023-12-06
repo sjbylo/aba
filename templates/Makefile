@@ -9,7 +9,7 @@ debug    ?=
 version := $(shell ../scripts/fetch-ocp-stable-version.sh)
 
 #all: mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso iso-agent-based/upload force-refresh mon
-all: force-refresh mon
+all: vmware.conf force-refresh mon
 
 templates:
 	ln -s ../templates
@@ -28,13 +28,13 @@ vmware.conf: ../vmware.conf
 	[ -s ../vmware.conf ] && cp ../vmware.conf .
 	touch vmware.conf
 
-../vmware.conf: templates 
+../vmware.conf: templates scripts
 	scripts/install-vmware.conf.sh
 	touch ../vmware.conf
 
 aba.conf: 
 	cp templates/aba.conf .
-	$EDITOR aba.conf
+	$(EDITOR) aba.conf
 
 install-config.yaml: templates scripts aba.conf mirror.conf
 	scripts/create-install-config.sh $(debug)
@@ -45,38 +45,38 @@ agent-config.yaml: aba.conf mirror.conf templates scripts
 iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml 
 	scripts/generate-image.sh $(debug)
 
-poweroff: iso-agent-based/agent.x86_64.iso
+poweroff: iso-agent-based/agent.x86_64.iso vmware.conf
 	scripts/vmw-kill.sh $(debug)
 	touch poweroff
 
-iso-agent-based/upload: poweroff
+iso-agent-based/upload: poweroff vmware.conf
 	scripts/vmw-upload.sh $(debug) 
 	touch iso-agent-based/upload
 
-force-refresh: poweroff
+force-refresh: poweroff vmware.conf
 	scripts/vmw-delete.sh $(debug)
 	scripts/vmw-create.sh --start $(debug) 
 	touch force-refresh
 
-refresh: 
+refresh:  vmware.conf
 	scripts/vmw-delete.sh $(debug)
 	scripts/vmw-create.sh $(debug)
 	scripts/vmw-start.sh --start $(debug)
 	touch refresh
 
-delete:
+delete: vmware.conf
 	scripts/vmw-delete.sh $(debug)
 
-create:
+create: vmware.conf
 	scripts/vmw-create.sh $(debug)
 
-stop:
+stop: vmware.conf
 	scripts/vmw-stop.sh $(debug)
 
-start:
+start: vmware.conf
 	scripts/vmw-start.sh $(debug)
 
-kill: 
+kill:  vmware.conf
 	scripts/vmw-kill.sh $(debug)
 
 mon:
