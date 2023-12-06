@@ -1,5 +1,5 @@
 # No file exists to check timestamps
-.PHONY: all init deps clean save sync load step1 step2 mirror.conf install
+.PHONY: all deps clean sync load step1 step2 mirror.conf install
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
@@ -19,10 +19,10 @@ step2: init load
 deps:
 	mkdir -p deps 
 
-templates: $(TEMPLATES)
+templates:
 	ln -s $(TEMPLATES) 
 
-scripts: $(SCRIPTS)
+scripts: 
 	ln -s $(SCRIPTS) 
 
 mirror-registry: mirror-registry.tar.gz
@@ -37,6 +37,7 @@ rootCA.pem: deps install ~/quay-install/quay-rootCA/rootCA.pem
 
 mirror.conf: ../mirror.conf
 	cp ../mirror.conf .
+	touch mirror.conf
 
 ../mirror.conf: templates/mirror.conf templates target-ocp-version.conf
 	$(SCRIPTS)/create-mirror-conf.sh -v $(version) $(debug)
@@ -55,6 +56,7 @@ uninstall: mirror-registry scripts templates
 
 save: init 
 	$(SCRIPTS)/reg-save.sh  $(debug)
+	touch save
 
 sync: init install
 	# Add images to the mirror registry
