@@ -81,7 +81,8 @@ Example:
 # On the external bastion:
 cd 		# Assuming aba is directly under your $HOME dir
 tar czf aba.tgz bin aba/*.conf aba/Makefile aba/scripts aba/templates aba/*.md aba/mirror aba/cli 
-# Then, on the internal bastion:
+# Copy the file 'aba.tgz' to your internal bastion.
+# Then, on the internal bastion run:
 cd
 tar xzvf aba.tgz 
 sudo dnf install make -y 
@@ -135,15 +136,16 @@ make stop                            # Shut down the guest OS (CoreOS) of all VM
                                      # 'compact' cluster.
 make start                           # Power on all VMs in the 'compact' cluster. 
 make delete                          # Delete all the VMs in the 'compact' cluster. 
+```
 
 
 Using an existing registry.  
 
-This should work as long as your existing Quay's dependent files are placed at the right locations where aba looks for them:
+This should work as long as your existing Quay's credential files are placed at the right location where aba looks for them:
   - mirror/deps/pull-secret-mirror.json   (pull secret for your registry)
   - mirror/deps/rootCA.pem                (the root CA key file for your registry) 
 
-# Features that are not implemented yet or might not yet
+# Features that are not implemented yet
 
 - Specifying a different location to install Quay registry data.
 
@@ -152,6 +154,7 @@ This should work as long as your existing Quay's dependent files are placed at t
 # Miscellaneous
 
 - Once a cluster config directory has been created (e.g. compact) some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed and aba can be run again to create the ISO and the VMs etc.  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP address changes, default route should work fine.  Changes, like adding link bonding may break the command to parse and extract the config.  The following is the script that is used to extract the cluster config from the agent-config yaml files. This must work. 
+
 ```
 cd compact
 scripts/cluster-config.sh     # example execution 
