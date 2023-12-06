@@ -1,9 +1,10 @@
 # Aba is an agent-based wrapper
 
-Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a disconnected environment, onto vSphere or ESXi (or bare-metal) using the Agent-based installer.
+Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a disconnected environment, onto vSphere or 
+ESXi (or bare-metal) using the Agent-based installer.
 
 Aba automatically completes the following:
-1. Installs the Quay mirror registry onto localhost (your bastion).  This is optional as you can use your existing registry. 
+1. Installs the Quay mirror registry onto localhost (your bastion).  This is optional as you can choose to use your existing registry. 
 1. Uses Quay's credentials to build out the Agent-based configuration files.
 1. Generates the needed boot ISO.
 1. Creates the required VMs in ESXi (or vSphere) and powers them on. 
@@ -49,7 +50,7 @@ To install identical versions of oc, oc-mirror and openshift-install, run:
 ./aba 
 ```
 
-## For connected mode 
+## Connected mode 
 
 - Bastion has access to both the Internet and the private subnet (but not necessarily at the same time).
 
@@ -58,14 +59,14 @@ cd mirror
 make sync
 ```
 This command will:
-  - install Quay registry on the bastion
-  - pull images from the Internet and write them to quay. 
-  - Copy the registry pull secret and certificate into 'mirror/deps' for later use. 
+  - install Quay registry on the bastion.
+  - pull images from the Internet and write them to quay.
+  - copy the registry pull secret and certificate into the 'mirror/deps' dir for later use. 
 
 
-## For disconnected mode 
+## Disconnected mode (air-gapped) 
 
-- Bastion has access to the Internet only.
+- Bastion (external) has access to the Internet only.
 
 ```
 cd mirror
@@ -80,17 +81,17 @@ Example:
 ```
 # On the external bastion:
 cd 		# Assuming aba is directly under your $HOME dir
-tar czf aba.tgz bin aba/*.conf aba/Makefile aba/scripts aba/templates aba/*.md aba/mirror aba/cli 
+tar czf aba.tgz aba/aba bin aba/*.conf aba/Makefile aba/scripts aba/templates aba/*.md aba/mirror aba/cli 
 # Copy the file 'aba.tgz' to your internal bastion.
+
 # Then, on the internal bastion run:
 cd
 tar xzvf aba.tgz 
 sudo dnf install make -y 
-cd aba/mirror
-make load
+cd aba
 ```
 
-On the internal bastion:
+Load the images from local storage to the internal mirror registry.
 
 ```
 cd mirror
@@ -135,6 +136,7 @@ make refresh                         # Delete the VMs and re-create them causing
 make stop                            # Shut down the guest OS (CoreOS) of all VMs in the
                                      # 'compact' cluster.
 make start                           # Power on all VMs in the 'compact' cluster. 
+
 make delete                          # Delete all the VMs in the 'compact' cluster. 
 ```
 
