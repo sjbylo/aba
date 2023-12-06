@@ -54,6 +54,7 @@ To install identical versions of oc, oc-mirror and openshift-install, run:
 - Bastion has access to both the Internet and the private subnet (but not necessarily at the same time).
 
 ```
+cd mirror
 make sync
 ```
 This command will:
@@ -67,15 +68,31 @@ This command will:
 - Bastion has access to the Internet only.
 
 ```
+cd mirror
 make save
 ```
 - This will pull the images and save them to a local directory mirror/save.
 
 Then, copy *the whole aba/ directory* and sub-directories to your internal bastion host in the private subnet, e.g. via a thumb drive or DVD. 
 
+Example:
+
+```
+# On the external bastion:
+cd 		# Assuming aba is directly under your $HOME dir
+tar czf aba.tgz bin aba/*.conf aba/Makefile aba/scripts aba/templates aba/*.md aba/mirror aba/cli 
+# Then, on the internal bastion:
+cd
+tar xzvf aba.tgz 
+sudo dnf install make -y 
+cd aba/mirror
+make load
+```
+
 On the internal bastion:
 
 ```
+cd mirror
 make load
 ```
 - This will install quay (from the files that were copied) and then load the images into quay.
