@@ -10,7 +10,7 @@ if [ -s save/mirror_seq1_000000.tar ]; then
 	echo 
 	echo "WARNING: You already have images saved on local disk in $PWD/save."
 	echo "         Sure you don't want to 'make load' them into the mirror registry at $reg_host?" &&
-	echo -n "         Enter Return to continue ot Ctl-C to abort [y]: "
+	echo -n "         Enter Return to continue (sync) or Ctl-C to abort: "
 	read yn
 fi
 

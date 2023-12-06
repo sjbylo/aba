@@ -1,19 +1,21 @@
 # Used, since no file exists to check timestamps
 .PHONY: all clean cleanall delete create start stop kill mon refresh cmd ssh 
 
+EDITOR   ?= vi      		# Set vi or nano or you fav. editor
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 CMD      ?= "get co"
 debug    ?= 
-version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
+version := $(shell ../scripts/fetch-ocp-stable-version.sh)
 
-all: mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso iso-agent-based/upload force-refresh mon
+#all: mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso iso-agent-based/upload force-refresh mon
+all: force-refresh mon
 
 templates:
-	ln -s $(TEMPLATES) 
+	ln -s ../templates
 
 scripts: 
-	ln -s $(SCRIPTS) 
+	ln -s ../scripts
 
 mirror: 
 	ln -s ../mirror
@@ -31,60 +33,60 @@ vmware.conf: ../vmware.conf
 	touch ../vmware.conf
 
 aba.conf: 
-	cp $(TEMPLATES)/aba.conf .
-	vi aba.conf
+	cp templates/aba.conf .
+	$EDITOR aba.conf
 
 install-config.yaml: templates scripts aba.conf mirror.conf
-	$(SCRIPTS)/create-install-config.sh $(debug)
+	scripts/create-install-config.sh $(debug)
 
 agent-config.yaml: aba.conf mirror.conf templates scripts 
-	$(SCRIPTS)/create-agent-config.sh $(debug)
+	scripts/create-agent-config.sh $(debug)
 
 iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml 
-	$(SCRIPTS)/generate-image.sh $(debug)
+	scripts/generate-image.sh $(debug)
 
 poweroff: iso-agent-based/agent.x86_64.iso
-	$(SCRIPTS)/vmw-kill.sh $(debug)
+	scripts/vmw-kill.sh $(debug)
 	touch poweroff
 
 iso-agent-based/upload: poweroff
-	$(SCRIPTS)/vmw-upload.sh $(debug) 
+	scripts/vmw-upload.sh $(debug) 
 	touch iso-agent-based/upload
 
 force-refresh: poweroff
-	$(SCRIPTS)/vmw-delete.sh $(debug)
-	$(SCRIPTS)/vmw-create.sh --start $(debug) 
+	scripts/vmw-delete.sh $(debug)
+	scripts/vmw-create.sh --start $(debug) 
 	touch force-refresh
 
 refresh: 
-	$(SCRIPTS)/vmw-delete.sh $(debug)
-	$(SCRIPTS)/vmw-create.sh $(debug)
-	$(SCRIPTS)/vmw-start.sh --start $(debug)
+	scripts/vmw-delete.sh $(debug)
+	scripts/vmw-create.sh $(debug)
+	scripts/vmw-start.sh --start $(debug)
 	touch refresh
 
 delete:
-	$(SCRIPTS)/vmw-delete.sh $(debug)
+	scripts/vmw-delete.sh $(debug)
 
 create:
-	$(SCRIPTS)/vmw-create.sh $(debug)
+	scripts/vmw-create.sh $(debug)
 
 stop:
-	$(SCRIPTS)/vmw-stop.sh $(debug)
+	scripts/vmw-stop.sh $(debug)
 
 start:
-	$(SCRIPTS)/vmw-start.sh $(debug)
+	scripts/vmw-start.sh $(debug)
 
 kill: 
-	$(SCRIPTS)/vmw-kill.sh $(debug)
+	scripts/vmw-kill.sh $(debug)
 
 mon:
-	$(SCRIPTS)/monitor-install.sh $(debug)
+	scripts/monitor-install.sh $(debug)
 
 getco:
 	oc --kubeconfig iso-agent-based/auth/kubeconfig get co
 
 cmd:
-	$(SCRIPTS)/command.sh $(CMD)
+	scripts/command.sh $(CMD)
 
 ssh:
 	scripts/ssh-rendezvous.sh
