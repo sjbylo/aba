@@ -8,9 +8,9 @@ debug   ?=
 #version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 version := $(shell cat target-ocp-version.conf)
 
-init: deps templates scripts mirror.conf mirror-registry
-
 all: sync
+
+init: deps templates scripts mirror.conf mirror-registry
 
 # For air-gapped
 step1: init save 
@@ -38,7 +38,7 @@ rootCA.pem: deps install ~/quay-install/quay-rootCA/rootCA.pem
 mirror.conf: ../mirror.conf
 	cp ../mirror.conf .
 
-../mirror.conf: templates/mirror.conf templates 
+../mirror.conf: templates/mirror.conf templates target-ocp-version.conf
 	$(SCRIPTS)/create-mirror-conf.sh -v $(version) $(debug)
 
 install: init

@@ -1,9 +1,9 @@
 # No file exists to check timestamps
 .PHONY: all clean 
 
-ocp_target_ver  ?= 4.14.3
+ocp_target_ver  := $(shell cat ../mirror/target-ocp-version.conf)
 
-all: ~/bin ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror 
+all: ~/bin ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror #  ~/.pull-secret.json
 
 ~/bin:
 	mkdir ~/bin
@@ -36,12 +36,12 @@ oc-mirror.tar.gz:
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/oc-mirror.tar.gz
 
 
-~/.pull-secret.json:
-	$(SCRIPTS)/install-pull-secret.sh 
-
+#~/.pull-secret.json:
+#	$(SCRIPTS)/install-pull-secret.sh 
 
 clean:
 	rm -f ~/bin/{oc,oc-mirror,openshift-install} 
 
 distclean:
 	rm -f *.tar.gz
+

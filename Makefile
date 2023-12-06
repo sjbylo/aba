@@ -10,15 +10,14 @@ DEBUG     = $d
 version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 
 
-#all: mirror install sync ocp-install
 all: cli mirror install-connected ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror
 
 cli:
-	mkdir -p cli
+	#mkdir -p cli
 	make -C cli
 
 mirror:
-	mkdir -p mirror
+	#mkdir -p mirror
 	echo ocp_target_ver=$(ocp_target_ver) > mirror/openshift-version.conf
 
 install-connected:
@@ -44,7 +43,7 @@ compact:
 	make -C compact
 
 save:
-	make -C mirror save d=$(d)
+	make -C mirror save 
 
 load:
 	make -C mirror load
@@ -62,3 +61,4 @@ clean:
 distclean:
 	make -C mirror distclean 
 	make -C cli distclean 
+
