@@ -4,10 +4,13 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
-###install_rpm podman 
-
 source mirror.conf
 
 echo Uninstalling mirror registry from host $reg_host ...
-./mirror-registry uninstall -v || true
+##./mirror-registry uninstall -v || true
+
+./mirror-registry uninstall -v \
+	--targetHostname $reg_host \
+  	--targetUsername $(whoami) \
+  	-k ~/.ssh/id_rsa 
 
