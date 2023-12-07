@@ -25,7 +25,8 @@ mirror.conf: mirror
 	touch mirror.conf
 
 vmware.conf: ../vmware.conf 
-	[ -s ../vmware.conf ] && cp ../vmware.conf .
+	#[ -s ../vmware.conf ] && cp ../vmware.conf .
+	cp ../vmware.conf .
 	touch vmware.conf
 
 ../vmware.conf: templates scripts

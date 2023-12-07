@@ -15,7 +15,7 @@ res_remote=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg
 
 export reg_url=https://$reg_host:$reg_port
 
-echo -n "Checking registry access is working using 'podman login': "
+echo -n "Checking registry access to $reg_url is working using 'podman login': "
 podman login -u init -p $reg_password $reg_url 
 
 # Run create container auth

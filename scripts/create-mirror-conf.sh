@@ -7,7 +7,7 @@
 [ "$1" ] && set -x
 
 # Copy and edit mirror.conf if needed 
-if [ ! -s mirror.conf ]; then
+##if [ ! -s mirror.conf ]; then
 	cp -f templates/mirror.conf ..
 
 	if [ ! "$ver" ]; then
@@ -29,5 +29,5 @@ if [ ! -s mirror.conf ]; then
 
 	# The top mirror.conf under aba/ has priority from now on
 	cp -f ../mirror.conf .
-fi
+###fi
 

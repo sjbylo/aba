@@ -1,5 +1,5 @@
 # No file exists to check timestamps
-.PHONY: all deps clean sync load step1 step2 mirror.conf install
+.PHONY: all clean distclean 
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
@@ -8,16 +8,19 @@ debug   ?=
 #version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 version := $(shell cat target-ocp-version.conf)
 
+# This is the default.  Install mirror reg. (if needed), sync images from the Internety directloy to the mirror. 
 all: sync
 
-init: deps templates scripts mirror.conf mirror-registry
+##fetch-ocp-stable-version.sh:
+##	echo "Stop!  Be sure to run ../aba first"
+##	exit 1
 
-# For air-gapped
-step1: init save 
-step2: init load
+init: .initialized
+.initialized: deps templates scripts mirror.conf mirror-registry 
+	touch .initialized
 
 deps:
-	mkdir -p deps 
+	mkdir deps 
 
 templates:
 	ln -s $(TEMPLATES) 
@@ -26,48 +29,53 @@ scripts:
 	ln -s $(SCRIPTS) 
 
 mirror-registry: mirror-registry.tar.gz
-	tar xzf mirror-registry.tar.gz
-	touch mirror-registry
+	tar xmzf mirror-registry.tar.gz
 
 mirror-registry.tar.gz:
-	curl --progress-bar -OL https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
+	curl --progress-bar -OL \
+	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
-rootCA.pem: deps install ~/quay-install/quay-rootCA/rootCA.pem 
-	cp ~/quay-install/quay-rootCA/rootCA.pem  deps
+deps/rootCA.pem: deps install ~/quay-install/quay-rootCA/rootCA.pem 
+	cp ~/quay-install/quay-rootCA/rootCA.pem deps/
 
 mirror.conf: ../mirror.conf
 	cp ../mirror.conf .
-	touch mirror.conf
 
-../mirror.conf: templates/mirror.conf templates target-ocp-version.conf
+../mirror.conf: templates templates/mirror.conf ###target-ocp-version.conf
 	$(SCRIPTS)/create-mirror-conf.sh -v $(version) $(debug)
 
-install: init
+install: init .installed
+.installed: 
 	# Install Quay Mirror
 	$(SCRIPTS)/reg-install.sh $(debug) 
-	touch install
+	rm -f .uninstalled 
+	touch .installed
 
-#uninstall: ###init mirror-registry
-#init: deps templates scripts mirror.conf mirror-registry
-uninstall: mirror-registry scripts templates
-	# Uninstall Quay Mirror
-	rm -f install
+uninstall: init .uninstalled
+.uninstalled: 
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
+	rm -f .installed
+	touch .uninstalled
 
-save: init 
+save: init .saved 
+.saved: 
 	$(SCRIPTS)/reg-save.sh  $(debug)
-	touch save
+	touch .saved
 
-sync: init install
+sync: init install .synced 
+.synced: 
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-sync.sh  $(debug)
+	touch .synced
 	
-load: init save install
+load: init save install .loaded
+.loaded: 
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-load.sh  $(debug)
+	touch .loaded
 	
 clean: 
-	rm -rf *.yaml *.sh save install oc-mirror-workspace .??*
+	rm -rf *.yaml *.sh save oc-mirror-workspace .??*
 
 distclean: uninstall clean
 	rm -rf deps *.tar.gz *.tar scripts templates registry-creds.txt *.conf mirror-registry
