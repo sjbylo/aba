@@ -19,7 +19,7 @@ install_pip j2cli
 
 
 # Mirror registry installed?
-[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
+[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
 # Fixme, exit if already installed
@@ -38,7 +38,9 @@ if [ "$reg_code" != "200" ]; then
 	fi
 
 	echo Allowing firewall access to the registry at $reg_host/$reg_port ...
-	ssh -F .ssh.conf $(whoami)@$reg_host -- "sudo firewall-cmd --state && sudo firewall-cmd --add-port=$reg_port/tcp --permanent && sudo firewall-cmd --reload"
+	ssh -F .ssh.conf $(whoami)@$reg_host -- "sudo firewall-cmd --state && \
+		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
+			sudo firewall-cmd --reload"
 
 	echo "Installing mirror registry on the host [$reg_host] with user $(whoami) ..."
 
@@ -63,22 +65,11 @@ if [ "$reg_code" != "200" ]; then
 		scp -F .ssh.conf -p $(whoami)@$reg_host:quay-install/quay-rootCA/* ~/quay-install/quay-rootCA
 	fi
 
-	#if [ -s .install.output ]; then
-		# Fixme
-		echo Creating json registry credentials in ./registry-creds.txt ...
+	echo Creating json registry credentials in registry-creds.txt ...
 
-		#line=$(grep -o "Quay is available at.*" .install.output)
-		#reg_user=$(echo $line | awk '{print $8}' | cut -d\( -f2 | cut -d, -f1)
+	reg_user=init
 
-		reg_user=init
-		reg_password=$reg_pw
-
-		#reg_password=$(echo $line | awk '{print $9}' | cut -d\) -f1 )
-
-		echo -n $reg_user:$reg_password > ./registry-creds.txt 
-	#else
-		#echo No install script output .install.output found. Cannot configure registry credentials. Exiting ... && exit 
-	#fi
+	echo -n $reg_user:$reg_pw > registry-creds.txt 
 
 	# Configure the pull secret for this mirror registry 
 	export reg_url=https://$reg_host:$reg_port
@@ -89,9 +80,9 @@ if [ "$reg_code" != "200" ]; then
 			sudo update-ca-trust extract
 
 	echo -n "Checking registry access is working using 'podman login': "
-	podman login -u init -p $reg_password $reg_url 
+	podman login -u init -p $reg_pw $reg_url 
 
-	reg_creds=$(cat ./registry-creds.txt)
+	reg_creds=$(cat registry-creds.txt)
 	scripts/create-containers-auth.sh
 
 	cp ~/quay-install/quay-rootCA/rootCA.pem deps/
