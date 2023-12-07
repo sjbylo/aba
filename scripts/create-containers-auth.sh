@@ -11,20 +11,20 @@ install_pip j2cli
 
 source mirror.conf
 
-# This is a pull secret for RH registry
-pull_secret_mirror_file=pull-secret-mirror.json
+# This is the pull secret for RH registry
+#pull_secret_mirror_file=pull-secret-mirror.json
 
-if [ -s $pull_secret_mirror_file ]; then
-	echo Using $pull_secret_mirror_file ...
-elif [ -s $pull_secret_file ]; then
-	:
-else
-	echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
-fi
+#if [ -s $pull_secret_mirror_file ]; then
+#	echo Using $pull_secret_mirror_file ...
+#elif [ -s $pull_secret_file ]; then
+#	:
+#else
+#	echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
+#fi
 
 mkdir -p ~/.docker ~/.containers
 
-# If the mirror creda are available add them also
+# If the mirror creds are available add them also
 if [ -s ./registry-creds.txt ]; then
 	reg_creds=$(cat ./registry-creds.txt)
 	export enc_password=$(echo -n "$reg_creds" | base64 -w0)
