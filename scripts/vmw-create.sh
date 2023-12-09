@@ -38,7 +38,7 @@ for name in $CP_NAMES ; do
 
 	echo "Create master: [$name] VM with [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$FOLDER/${CLUSTER_NAME}-$name]"
 	govc vm.create \
-		-g rhel9_64Guest \
+		-g rhel8_64Guest \
 		-c=$master_cpu_count \
 		-m=`expr $master_mem \* 1024` \
 		-disk-datastore=$GOVC_DATASTORE \
@@ -71,7 +71,7 @@ for name in $WORKER_NAMES ; do
 
 	echo "Create master: [$name] VM with [${WORKER_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$FOLDER/${CLUSTER_NAME}-$name]"
 	govc vm.create \
-		-g rhel9_64Guest \
+		-g rhel8_64Guest \
 		-c=$worker_cpu_count \
 		-m=`expr $worker_mem \* 1024` \
 		-net.adapter vmxnet3 \
