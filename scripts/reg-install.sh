@@ -22,12 +22,23 @@ install_pip j2cli
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
-# Fixme, exit if already installed
-if [ "$reg_code" != "200" ]; then
+if [ "$reg_code" = "200" ]; then
+	echo "Registry found at $reg_host:$reg_port. "
+	echo -n "Checking registry access is working using 'podman login': "
+	export reg_url=https://$reg_host:$reg_port
+	podman login -u init -p $reg_pw $reg_url 
+	
+	exit 0
+fi
+
+##if [ "$reg_code" != "200" ]; then
+
+# reg_ssh - fixme, use this for remote installs
+if [ "$reg_ssh" ]; then
 	echo "Installing Quay registry on host $reg_host ..."
 
 	# FIXME: We are using ssh, even if the registry is installed locally. 
-	[ ! -s ~/.ssh/id_rsa ] && mkdir -p ~/.ssh && ssh-keygen -b 2048 -t rsa -f ~/.ssh/id_rsa -N ""
+	###[ ! -s ~/.ssh/id_rsa ] && mkdir -p ~/.ssh && ssh-keygen -b 2048 -t rsa -f ~/.ssh/id_rsa -N ""
 
 	if ! ssh -F .ssh.conf $(whoami)@$reg_host hostname; then
 		echo "Error: Can't ssh to $(whoami)@$reg_host"
@@ -87,5 +98,48 @@ if [ "$reg_code" != "200" ]; then
 
 	cp ~/quay-install/quay-rootCA/rootCA.pem deps/
 
+else
+	echo "Installing Quay registry on localhost ..."
+
+	echo Allowing firewall access on localhost to the registry at $reg_host/$reg_port ...
+	sudo firewall-cmd --state && \
+		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
+			sudo firewall-cmd --reload
+
+	echo "Installing mirror registry on localhost ..."
+
+	if [ ! "$reg_pw" ]; then
+		reg_pw=$(openssl rand -base64 12)
+	fi
+
+	echo "Running command './mirror-registry install --quayHostname $reg_host'"
+
+	./mirror-registry install -v \
+  		--quayHostname $reg_host \
+		--initPassword $reg_pw 
+
+	rm -rf deps/*
+
+	echo Creating json registry credentials in registry-creds.txt ...
+
+	reg_user=init
+
+	echo -n $reg_user:$reg_pw > registry-creds.txt 
+
+	# Configure the pull secret for this mirror registry 
+	export reg_url=https://$reg_host:$reg_port
+
+	# Check if the cert needs to be updated
+	diff ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+		sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+			sudo update-ca-trust extract
+
+	echo -n "Checking registry access is working using 'podman login': "
+	podman login -u init -p $reg_pw $reg_url 
+
+	reg_creds=$(cat registry-creds.txt)
+	scripts/create-containers-auth.sh
+
+	cp ~/quay-install/quay-rootCA/rootCA.pem deps/
 fi
 
