@@ -34,7 +34,7 @@ Aba automatically completes the following:
 - First, install a bastion host with a fresh version of RHEL.
    - a 'minimal install' of RHEL 9.3 and RHEL 8.9 has been tested, other recent versions of RHEL should work too.
 - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to a user's home directory on the bastion. 
-- Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
+- When OpenShift installs, a secret is needed to allow access and pull images from Red Hat's registry.  Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
    - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
    - It's a good idea to make the file user read-only, e.g. `chmod 600 ~/.pull-secret.json`.
 - Create the needed DNS A records, *for example* (use your domain!):
