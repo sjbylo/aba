@@ -1,7 +1,7 @@
 # Aba is an agent-based wrapper
 
 Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a disconnected environment, onto vSphere or 
-ESXi (or bare-metal) using the Agent-based installer.
+ESXi (or bare-metal) using the Agent-based installer.  With this method there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
 
 Aba automatically completes the following:
 1. Installs the Quay mirror registry onto localhost (your bastion).  This is optional as you can choose to use your existing registry. 
@@ -14,16 +14,17 @@ Aba automatically completes the following:
 
 - A private subnet.
 - DNS
-   - with A records for OCP API, Ingress and registry. 
+   - with A records for OCP API, Ingress and the registry. 
 - NTP
    - OCP requires that NTP be configured. 
-- vSphere with vCenter API access. This is optional.  Bare-metal nodes can be booted manually using the generated ISO.
+- Optional vCenter API access. Bare-metal nodes can be booted manually using the generated ISO.
    - ESXi can also be used directly (i.e. without vCenter).
    - Ensure enough privileges to vCenter. See the [documentation](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) for more.
 - Bastion with Internet access
-  - A RHEL host or VM (where Quay mirror registry can be optionally installed). 
+  - A RHEL host or VM 
+  - If needed, Quay mirror registry can be installed here.
   - User account with sudo configured (root access). 
-  - 50G or (better) more disk space in your home directory. 
+  - 50G disk space in your home directory.  Much more space is required if Operators are intended to be installed. 
   - Internet access from your bastion to download the container images and RPMs. 
      - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift (this can then be fully disconnected).  
      - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported. 
