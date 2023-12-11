@@ -44,6 +44,7 @@ If the image cannot be pulled from the registry:
 ```
 unauthorized: access to the requested resource is not authorized
 ```
+- Check the pull-secret, the root CA cert, the registry hostname and port in the mirror.conf and aba.conf files. 
 
 Be sure the InfraEnv is properly set:
 
@@ -112,6 +113,13 @@ Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master3 joined the cl
 Nov 19 02:39:26 master1 bootkube.sh[10004]:         2 masters joined the cluster
 Nov 19 02:39:26 master1 bootkube.sh[10004]: All self-hosted control plane components successfully started
 Nov 19 02:39:26 master1 bootkube.sh[10004]: Sending bootstrap-success event. Waiting for remaining assets to be created.
+```
+
+Once bootkube has finished and the host has restarted run the following command to observe the installtion of OpenShift:
+
+```
+make cmd get co
+make cmd get nodes
 ```
 
 ## Other problems that might happen during mirroring: 
