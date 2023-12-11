@@ -11,61 +11,79 @@ if [ "$1" = "--debug" -o "$1" = "-d" ]; then
 	shift 
 fi
 
-# Show help
-if [ "$1" = "-h" -o "$1" = "--help" ]; then
-	cat <<-END
-		Usage: `basename $0` [--debug] <command> --dir <directory> 
-
-		If the directory does not exist it will be created and configuration files added.
-		The configuration files need to be edited to match your environment. 
-		If needed, edit the configuration files and run the command again. 
-
-		Example:
-		  `basename $0` reg init
-		  `basename $0` --dir compact 
-
-		Commands:
-
-		reg init          Install and initialize a mirror registry on the local host (bastion).
-		reg delete|del    Uninstall the mirror registry.
-
-		vmw upload	  Upload the ISO image to vSphere or ESXi.
-		vmw create        Create the VMs using the config files (install-config.yaml and agent-config.yaml).
-		vmw stop          Power down the VMs.
-		vmw start         Power on the VMs.
-		vmw refresh       Delete and re-create the VMs.
-		monitor           View the installation progress on the rendezvous server after the agent service has started
-
-		reset             Delete the generated files.
-END
-		exit
-fi
+## Show help
+#if [ "$1" = "-h" -o "$1" = "--help" ]; then
+#	cat <<-END
+#		Usage: `basename $0` [--debug] <command> --dir <directory> 
+#
+#		If the directory does not exist it will be created and configuration files added.
+#		The configuration files need to be edited to match your environment. 
+#		If needed, edit the configuration files and run the command again. 
+#
+#		Example:
+#		  `basename $0` reg init
+#		  `basename $0` --dir compact 
+#
+#		Commands:
+#
+#		reg init          Install and initialize a mirror registry on the local host (bastion).
+#		reg delete|del    Uninstall the mirror registry.
+#
+#		vmw upload	  Upload the ISO image to vSphere or ESXi.
+#		vmw create        Create the VMs using the config files (install-config.yaml and agent-config.yaml).
+#		vmw stop          Power down the VMs.
+#		vmw start         Power on the VMs.
+#		vmw refresh       Delete and re-create the VMs.
+#		monitor           View the installation progress on the rendezvous server after the agent service has started
+#
+#		reset             Delete the generated files.
+#END
+#		exit
+#fi
 
 dir=$(dirname $0)
 cd $dir
 
 ## Get the latest stable OCP version number.
-stable_ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+"| awk '{print $2}')
-offer_ver=$stable_ver
+stable_ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | tee /tmp/.release.txt | \
+	 egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+default_ver=$stable_ver
 
+# Extract the previous stable version
+stable_ver_point=`expr $(echo $stable_ver | grep ^4 | cut -d\. -f2) - 1`
+[ "$stable_ver_point" ] && \
+	stable_ver_prev=$(cat /tmp/.release.txt| grep -oE "4\.${stable_ver_point}\.[0-9]+" | tail -n 1)
 
 which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | egrep -o "[0-9]+\.[0-9]+\.[0-9]+")
-[ "$cur_ver" ] && text="or hit Return " && offer_ver=$cur_ver
+
+# If openshift-install is already installed, then offer that version also
+[ "$cur_ver" ] && or_ret="or hit Return " && default_ver=$cur_ver
 
 target_ver=
-while ! echo "$target_ver" | egrep "^[0-9]+\.[0-9]+\.[0-9]+" 
+while ! echo "$target_ver" | egrep -q "^[0-9]+\.[0-9]+\.[0-9]+" 
 do
-	echo "OpenShift latest stable is $stable_ver (s)"
+	[ "$stable_ver" ] && echo "OpenShift latest stable version is $stable_ver (s)" && or_s="or (s) "
+	[ "$stable_ver_point" ] && echo "OpenShift latest stable (previous) version is $stable_ver_prev (p)" && or_p="or (p) "
 	[ "$cur_ver" ] && echo "The current installed version is $cur_ver (Return)"
-	echo -n "Which version of OpenShift do you want to install? Enter version or 's' $text [$offer_ver]: "
+
+	echo    "Which version of OpenShift do you want to install?"
+	echo -n "Enter version $or_s$or_p$or_ret [$default_ver]: "
+
 	read target_ver
-	[ "$target_ver" = "" ] && target_ver=$offer_ver
+	[ ! "$target_ver" ] && target_ver=$default_ver
 	[ "$target_ver" = "s" ] && target_ver=$stable_ver
+	[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev
 done
 
 echo "$target_ver" > mirror/target-ocp-version.conf
 
 install_rpm make
+
 [ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver all
 
+echo
+echo "OK.  Now run the following:"
+echo "cd mirror"
+echo "make sync       # ... if you have a 'connected' bastion."
+echo "make save       # ... if you have a 'disconnected' (or air-gapped) bastion.  See the README file for more information."
 
