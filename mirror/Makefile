@@ -1,9 +1,9 @@
 # No file exists to check timestamps
-.PHONY: all clean distclean 
+.PHONY: all clean distclean loadclean syncclean saveclean uninstallclean installclean
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
-OCP_VER = 4.13.19
+###OCP_VER = 4.13.19
 debug   ?=
 #version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 version := $(shell cat target-ocp-version.conf)
@@ -51,28 +51,39 @@ install: init .installed
 	rm -f .uninstalled 
 	touch .installed
 
+installclean:
+	rm .installed
+
 uninstall: init .uninstalled
 .uninstalled: 
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	rm -f .installed
 	touch .uninstalled
+uninstallclean:
+	rm .uninstalled
 
 save: init .saved 
 .saved: 
 	$(SCRIPTS)/reg-save.sh  $(debug)
 	touch .saved
+saveclean:
+	rm .saved
 
 sync: init install .synced 
 .synced: 
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-sync.sh  $(debug)
 	touch .synced
+syncclean:
+	rm .synced
 	
 load: init save install .loaded
 .loaded: 
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-load.sh  $(debug)
 	touch .loaded
+loadclean:
+	rm .loaded
 	
 clean: 
 	rm -rf *.yaml *.sh save oc-mirror-workspace .??*
