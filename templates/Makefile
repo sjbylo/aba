@@ -1,5 +1,5 @@
 # Used, since no file exists to check timestamps
-.PHONY: all clean cleanall delete create start stop kill mon refresh cmd ssh 
+.PHONY: all clean cleanall delete create start stop kill mon refresh cmd ssh iso
 
 EDITOR   ?= vi      		# Set vi or nano or you fav. editor
 TEMPLATES = ../templates
@@ -43,6 +43,7 @@ install-config.yaml: templates scripts aba.conf mirror.conf
 agent-config.yaml: aba.conf mirror.conf templates scripts 
 	scripts/create-agent-config.sh $(debug)
 
+iso: iso-agent-based/agent.x86_64.iso
 iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml 
 	scripts/generate-image.sh $(debug)
 
@@ -96,6 +97,7 @@ clean:
 	rm -f scripts templates
 	rm -f install-config.yaml agent-config.yaml 
 	rm -rf ~/.cache/agent poweroff refresh refresh-poweroff
+	rm -f .??*
 	rm -rf iso-agent-based 
 
 distclean: clean
