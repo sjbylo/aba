@@ -48,6 +48,7 @@ if [ "$reg_code" != "200" ]; then
 	echo "Error: Registry at https://$reg_host:${reg_port}/ is not responding" && exit 1
 fi
 
+podman logout --all 
 echo -n "Checking registry access is working using 'podman login': "
 podman login -u init -p $reg_password $reg_url 
 
