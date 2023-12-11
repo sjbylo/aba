@@ -22,7 +22,7 @@ Nov 19 02:14:31 master1 podman[2600]: Copying blob sha256:43e3075e6dc816f272ecb9
 Started Assisted Service container
 ```
 
-- Be sure the Assisted Service imahe can be pulled and started.
+- Be sure the Assisted Service image can be pulled and started.
 
 If it fails the log will show:
 
@@ -74,7 +74,7 @@ Typical errors:
 - "no matches for kind ..." 
 - "Failed to create ..."
 
-But, after 5-10 mins you should see more possitive messages:
+But, after 5-10 mins you should see more positive messages:
 
 ```
 Nov 19 02:27:06 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-scheduler/openshift-kube-scheduler        DoesNotExist
