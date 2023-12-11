@@ -1,7 +1,8 @@
 # Aba is an agent-based wrapper
 
 Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a disconnected environment, onto vSphere or 
-ESXi (or bare-metal) using the Agent-based installer.  With this method there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
+ESXi (or bare-metal). 
+Aba uses the Agent-based installer under the covers which means there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
 
 Aba automatically completes the following:
 1. Installs the Quay mirror registry onto localhost (your bastion).  This is optional as you can choose to use your existing registry. 
@@ -147,7 +148,7 @@ make delete                          # Delete all the VMs in the 'sno' cluster.
 
 ## Using an existing registry 
 
-This works as long as your existing registry credential files (pull secret and roto CA) are placed at the correct location for aba to find them:
+This works as long as your existing registry credential files (pull secret and root CA) are placed at the correct location for aba to find them:
   - mirror/deps/pull-secret-mirror.json   (pull secret file for your registry)
   - mirror/deps/rootCA.pem                (root CA file for your registry) 
 Then, manually add your mirror's pull secret to ~/.containers/auth.yaml and ~/.docker/auth.yaml.
