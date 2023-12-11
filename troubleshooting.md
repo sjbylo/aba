@@ -1,15 +1,12 @@
-oc mirror fails with error "invalid mirror sequence order"
-https://access.redhat.com/solutions/7026766
-
-
 # Troubleshooting 
 
-Try these commands in order to discover any problems with the installation of OCP using Agent-based.
+Try these commands to discover any problems with the installation of OCP using the Agent-based method.
 
 Ssh to the rendezvous server:
 
 ```
-ssh core@<ip of rendezvous server>
+make ssh
+# This will run `ssh core@<ip of rendezvous server>`
 
 [core@master1 ~]$ journalctl -u assisted-service.service -f 
 Nov 19 02:14:31 master1 systemd[1]: Starting Assisted Service container...
@@ -21,12 +18,13 @@ Nov 19 02:14:31 master1 podman[2600]: Copying blob sha256:225bb0746beb8f28f6f4fa
 Nov 19 02:14:31 master1 podman[2600]: Copying blob sha256:d8190195889efb5333eeec18af9b6c82313edd4db62989bd3a357caca4f13f0e
 Nov 19 02:14:31 master1 podman[2600]: Copying blob sha256:43e3075e6dc816f272ecb9a69965e9e05b2938bfada8eec974e6ab4ab9de65f3
 ...
+
 Started Assisted Service container
 ```
 
-Be sure the Assisted Service can be started.
+- Be sure the Assisted Service imahe can be pulled and started.
 
-If it fails, it will show:
+If it fails the log will show:
 
 ```
 Nov 23 09:31:53 master1 systemd[1]: Starting Assisted Service container...
@@ -47,13 +45,13 @@ If the image cannot be pulled from the registry:
 unauthorized: access to the requested resource is not authorized
 ```
 
+Be sure the InfraEnv is properly set:
+
 ```
-...
 Successfully registered InfraEnv ocp1 with id
 ```
 
-Be sure the InfraEnv is properly set.
-
+Be sure the release image can be pulled:
 
 ```
 [core@master1 ~]$   journalctl -b -u release-image.service -f
@@ -63,21 +61,20 @@ Nov 19 02:18:18 master1 release-image-download.sh[5853]: 0adedea0b5eac1a9f85b61c
 Nov 19 02:18:19 master1 systemd[1]: Finished Download the OpenShift Release Image.
 ```
 
-Be sure the release image can be pulled.
-
+During bootkube installation:
 
 ```
 [core@master1 ~]$   journalctl -b -u bootkube.service -f
 ```
 
-It is normal to see warnings, errors and failure messages.  But, after 5-10 mins you should see more possitive messages.
+It is normal to see warnings, errors and failure messages.  
 
 Typical errors:
 - "unable to get REST mapping for ..."
 - "no matches for kind ..." 
 - "Failed to create ..."
 
-
+But, after 5-10 mins you should see more possitive messages:
 
 ```
 Nov 19 02:27:06 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-scheduler/openshift-kube-scheduler        DoesNotExist
@@ -86,6 +83,8 @@ Nov 19 02:27:06 master1 bootkube.sh[10004]:         Pod Status:openshift-cluster
 Nov 19 02:27:06 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-apiserver/kube-apiserver        DoesNotExist
 ```
 
+Installation progressing:
+
 ```
 Nov 19 02:38:46 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-apiserver/kube-apiserver        Pending
 Nov 19 02:38:46 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-scheduler/openshift-kube-scheduler        RunningNotReady
@@ -93,7 +92,7 @@ Nov 19 02:38:46 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-co
 Nov 19 02:38:46 master1 bootkube.sh[10004]:         Pod Status:openshift-cluster-version/cluster-version-operator        Ready
 ```
 
-
+Installation of bookkube complete:
 ```
 Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-apiserver/kube-apiserver        Ready
 Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-scheduler/openshift-kube-scheduler        Ready
@@ -103,7 +102,7 @@ Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-cluster
 
 ... successs!
 
-Then...
+Then, the log will show the following: 
 
 ```
 Nov 19 02:39:21 master1 bootkube.sh[10004]: All self-hosted control plane components successfully started
@@ -115,4 +114,8 @@ Nov 19 02:39:26 master1 bootkube.sh[10004]: All self-hosted control plane compon
 Nov 19 02:39:26 master1 bootkube.sh[10004]: Sending bootstrap-success event. Waiting for remaining assets to be created.
 ```
 
+## Other problems that might happen during mirroring: 
+
+oc mirror fails with error "invalid mirror sequence order"
+https://access.redhat.com/solutions/7026766
 
