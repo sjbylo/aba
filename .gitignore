@@ -1,4 +1,5 @@
 cli/*tar.gz
 mirror.conf
 vmware.conf
+mirror/.??*
 
