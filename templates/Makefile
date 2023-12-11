@@ -40,7 +40,7 @@ aba.conf:
 install-config.yaml: templates scripts aba.conf mirror.conf
 	scripts/create-install-config.sh $(debug)
 
-agent-config.yaml: aba.conf mirror.conf templates scripts 
+agent-config.yaml: templates scripts aba.conf mirror.conf 
 	scripts/create-agent-config.sh $(debug)
 
 iso: iso-agent-based/agent.x86_64.iso

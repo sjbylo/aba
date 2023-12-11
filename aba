@@ -64,7 +64,7 @@ while ! echo "$target_ver" | egrep -q "^[0-9]+\.[0-9]+\.[0-9]+"
 do
 	[ "$stable_ver" ] && echo "OpenShift latest stable version is $stable_ver (s)" && or_s="or (s) "
 	[ "$stable_ver_point" ] && echo "OpenShift latest stable (previous) version is $stable_ver_prev (p)" && or_p="or (p) "
-	[ "$cur_ver" ] && echo "The current installed version is $cur_ver (Return)"
+	[ "$cur_ver" ] && echo "The current installed version of 'openshift-install' is $cur_ver (Return)"
 
 	echo    "Which version of OpenShift do you want to install?"
 	echo -n "Enter version $or_s$or_p$or_ret [$default_ver]: "
@@ -75,7 +75,7 @@ do
 	[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev
 done
 
-echo "$target_ver" > mirror/target-ocp-version.conf
+echo "$target_ver" > target-ocp-version.conf
 
 install_rpm make
 

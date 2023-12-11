@@ -6,7 +6,7 @@ SCRIPTS   = ../scripts
 ###OCP_VER = 4.13.19
 debug   ?=
 #version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
-version := $(shell cat target-ocp-version.conf)
+##version := $(shell cat ../target-ocp-version.conf)
 
 # This is the default.  Install mirror reg. (if needed), sync images from the Internety directloy to the mirror. 
 all: sync
@@ -41,8 +41,12 @@ deps/rootCA.pem: deps install ~/quay-install/quay-rootCA/rootCA.pem
 mirror.conf: ../mirror.conf
 	cp ../mirror.conf .
 
-../mirror.conf: templates templates/mirror.conf ###target-ocp-version.conf
-	$(SCRIPTS)/create-mirror-conf.sh -v $(version) $(debug)
+../mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf
+	version=$(cat ../target-ocp-version.conf)
+	$(SCRIPTS)/create-mirror-conf.sh $(debug)
+
+../target-ocp-version.conf:
+	../aba
 
 install: init .installed
 .installed: 

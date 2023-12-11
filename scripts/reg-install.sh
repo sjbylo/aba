@@ -24,6 +24,7 @@ reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_p
 
 if [ "$reg_code" = "200" ]; then
 	echo "Registry found at $reg_host:$reg_port. "
+	podman logout --all 
 	echo -n "Checking registry access is working using 'podman login': "
 	export reg_url=https://$reg_host:$reg_port
 	podman login -u init -p $reg_pw $reg_url 
@@ -90,6 +91,7 @@ if [ "$reg_ssh" ]; then
 		sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 			sudo update-ca-trust extract
 
+	podman logout --all 
 	echo -n "Checking registry access is working using 'podman login': "
 	podman login -u init -p $reg_pw $reg_url 
 
@@ -135,6 +137,7 @@ else
 			sudo update-ca-trust extract
 
 	echo -n "Checking registry access is working using 'podman login': "
+	podman logout --all 
 	podman login -u init -p $reg_pw $reg_url 
 
 	reg_creds=$(cat registry-creds.txt)

@@ -1,7 +1,7 @@
 # No file exists to check timestamps
 .PHONY: all clean ~/bin/openshift-install ~/bin/oc ~/bin/oc-mirror
 
-ocp_target_ver  := $(shell cat ../mirror/target-ocp-version.conf)
+ocp_target_ver  := $(shell cat ../target-ocp-version.conf)
 
 all: ~/bin ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror #  ~/.pull-secret.json
 
