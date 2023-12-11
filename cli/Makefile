@@ -1,5 +1,5 @@
 # No file exists to check timestamps
-.PHONY: all clean 
+.PHONY: all clean ~/bin/openshift-install ~/bin/oc ~/bin/oc-mirror
 
 ocp_target_ver  := $(shell cat ../mirror/target-ocp-version.conf)
 
