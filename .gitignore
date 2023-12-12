@@ -2,4 +2,21 @@ cli/*tar.gz
 mirror.conf
 vmware.conf
 mirror/.??*
+*.md.bak
+target-ocp-version.conf
+mirror/deps/
+mirror/execution-environment.tar
+mirror/image-archive.tar
+mirror/imageset-config-sync.yaml
+mirror/mirror-registry
+mirror/mirror-registry.tar.gz
+mirror/oc-mirror-workspace
+mirror/pause.tar
+mirror/postgres.tar
+mirror/quay.tar
+mirror/redis.tar
+mirror/registry-creds.txt
+mirror/scripts
+mirror/templates
+mirror/*.sh
 
