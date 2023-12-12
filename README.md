@@ -48,12 +48,12 @@ Aba automatically completes the following:
      - Note: For Single Node OpenShift (SNO), the above records should point to a single IP address, used for the single OpenShift node. 
    - Quay mirror registry: registry.example.com 
      - points to the IP address where you want to install Quay (e.g. your bastion) or to your existing registry. 
-- Run ./aba command to initialize the installation process
 - If you are using an existing registry:
   - Copy your existing registry's credential files (pull secret and root CA) into the 'mirror/deps' directory, e.g.:
     - mirror/deps/pull-secret-mirror.json   (pull secret file for your registry)
     - mirror/deps/rootCA.pem                (root CA file for your registry) 
-  - Then, run 'make load' or 'make sync' to store the images into your registry. 
+  - Later, when the boot ISO is created, these files will be used. 
+- Finally, run ./aba command to initialize the installation process (see below).
 
 
 ## Getting Started 
