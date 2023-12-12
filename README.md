@@ -146,6 +146,18 @@ cd sno
 make mon
 ```
 
+After OpenShift has been installed you will see the following:
+
+```
+INFO Install complete!                            
+INFO To access the cluster as the system:admin user when using 'oc', run 
+INFO     export KUBECONFIG=/home/steve/aba/compact/iso-agent-based/auth/kubeconfig 
+INFO Access the OpenShift web-console here: https://console-openshift-console.apps.compact.example.com 
+INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ" 
+```
+
+If OpenShift does not install, see the Troubleshooting readme. 
+
 Other examples of commands, when working with VMware/ESXi:
 
 ```
