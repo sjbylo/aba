@@ -2,14 +2,15 @@
 
 Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a disconnected environment, onto vSphere or 
 ESXi (or bare-metal). 
-Aba uses the Agent-based installer under the covers which means there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
+Aba uses the Agent-based installer which means there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
 
 Aba automatically completes the following:
-1. Installs the Quay mirror registry onto localhost (your bastion).  This is optional as you can choose to use your existing registry. 
-1. Uses Quay's credentials to build out the Agent-based configuration files.
-1. Generates the needed boot ISO.
-1. Creates and starts the required VMs in ESXi (or vSphere).
+1. Installs the Quay mirror registry onto localhost or a remote host. This is optional as you can choose to use your existing registry. 
+1. Uses Quay's credentials and other inputs to build out the Agent-based configuration files.
+1. Triggers the generation of the needed agent-based boot ISO.
+1. Creates the required VMs in ESXi (or vSphere).
 1. Monitors the installation progress. 
+
 
 ## Prerequisites
 
@@ -21,37 +22,47 @@ Aba automatically completes the following:
 - Optional vCenter API access. Bare-metal nodes can be booted manually using the generated ISO.
    - ESXi can also be used directly (i.e. without vCenter).
    - Ensure enough privileges to vCenter. See the [documentation](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) for more.
-- Bastion with Internet access
+- Bastion with Internet access:
   - A RHEL host or VM 
-  - If needed, Quay mirror registry can be installed here.
+  - If needed, the Quay mirror registry can be installed here.
   - User account with sudo configured (root access). 
   - 50G disk space in your home directory.  Much more space is required if Operators are intended to be installed. 
   - Internet access from your bastion to download the container images and RPMs. 
-     - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift (this can then be fully disconnected).  
-     - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported. 
+     - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift (this can then be fully disconnected).   See 'Connected mode' below.
+     - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported.  See 'Disconnected mode' below.
 
-## Basic use of aba
+
+## Initial Steps
 
 - First, install a bastion host with a fresh version of RHEL.
    - a 'minimal install' of RHEL 9.3 and RHEL 8.9 has been tested, other recent versions of RHEL should work too.
 - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to a user's home directory on the bastion. 
-- When OpenShift installs, a secret is needed to allow access and pull images from Red Hat's registry.  Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
+- When OpenShift installs, a secret is needed to allow access to, and pull images from, Red Hat's registry.  Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
    - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
    - It's a good idea to make the file user read-only, e.g. `chmod 600 ~/.pull-secret.json`.
 - Create the needed DNS A records, *for example* (use your domain!):
    - OCP API: api.ocp1.example.com - points to a free IP in your private subnet. 
    - OCP Ingress: *.apps.ocp1.example.com - points to a free IP in your private subnet. 
      - Note: For Single Node OpenShift, the above records should point to a single IP address, used for the single OpenShift node. 
-   - Quay mirror registry: registry.example.com - points to the IP address of your RHEL bastion. 
+   - Quay mirror registry: registry.example.com - points to the IP address where you want to install Quay (e.g. your bastion) or to your existing registry. 
+- Run ./aba command to initialize the installation process
+- If you are using an existing registry:
+  - Copy your existing registry's credential files (pull secret and root CA) into the 'mirror/deps' directory, e.g.:
+    - mirror/deps/pull-secret-mirror.json   (pull secret file for your registry)
+    - mirror/deps/rootCA.pem                (root CA file for your registry) 
+  - Then, run 'make load' or 'make sync' to store the images into your registry. 
 
-Be sure to set the correct (govc) values to access vCenter in the vmware.conf file.  
-Note that ESXi will also work by changing the folder path (see the comments in the vmware.conf file).
 
-To install identical versions of oc, oc-mirror and openshift-install, run:
+## Getting Started 
+
+To set the version of OpenShift to install and, if needed, to download identical versions of oc, oc-mirror and openshift-install, run:
 
 ```
 ./aba 
 ```
+
+Now, choose either 'connected mode' or 'disconnected mode' below. 
+
 
 ## Connected mode 
 
@@ -69,7 +80,8 @@ This command will:
 
 ## Disconnected mode (air-gapped / fully disconnected) 
 
-In this mode, the bastion (external) has access to the Internet only. 
+In this mode, your external bastion has access to the Internet but no access to the private network.
+There is also an internal bastion host in a private subnet.
 
 ```
 cd mirror
@@ -78,7 +90,7 @@ make save
 
 - This will pull the images and save them to the local directory "mirror/save".
 
-Then, copy the whole aba/ directory and sub-directories to your internal bastion host in the private subnet, e.g. via a thumb drive or DVD. 
+Then, you need to copy the whole aba/ directory and sub-directories to your internal bastion host in the private subnet, e.g. via a thumb drive or DVD. 
 
 Example:
 
@@ -86,7 +98,7 @@ Example:
 # On the external bastion:
 cd 		                   # Assuming aba is directly under your $HOME dir
 tar czf aba.tgz aba/aba bin aba/*.conf aba/Makefile aba/scripts aba/templates aba/*.md aba/mirror aba/cli 
-# Copy the file 'aba.tgz' to your internal bastion.
+# Copy the file 'aba.tgz' to your internal bastiona via a thumb drive. 
 
 # Then, on the internal bastion run:
 cd
@@ -146,23 +158,22 @@ make delete                          # Delete all the VMs in the 'sno' cluster.
 ```
 
 
-## Using an existing registry 
-
-This works as long as your existing registry credential files (pull secret and root CA) are placed at the correct location for aba to find them:
-  - mirror/deps/pull-secret-mirror.json   (pull secret file for your registry)
-  - mirror/deps/rootCA.pem                (root CA file for your registry) 
-Then, manually add your mirror's pull secret to ~/.containers/auth.yaml and ~/.docker/auth.yaml.
-
-
 # Features that are not implemented yet
 
-- Specifying a different location to install Quay registry data.
+- Make it easier to install Operators (ImageContentSourcePolicy and CatalogSource) once OpenShift has been installed.
 
-- If you want to install some workers with different CPU/MEM sizes (which can be used to install cluster infra sub-systems, e.g. Ceph and/or ES etc - infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed. 
+- Make it easier to integrate with vSphere.
+
+- Make it easier to install the Internal registry. 
+
+- Specifying a different location to store Quay registry data (images).
+
 
 # Miscellaneous
 
-- Once a cluster config directory has been created (e.g. 'compact') and Agent-based configuration has been created, some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed. Aba can be run again to create the ISO and the VMs etc.  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP address changes and default route changes should work fine.  Changes, like adding link bonding may break the command to parse and extract the config.  The following is the script that is used to extract the cluster config from the agent-config yaml files. This must work. 
+- If you want to install workers with different CPU/MEM sizes (which can be used to install cluster infra sub-systems, e.g. Ceph and/or ES etc - infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed. 
+
+- Once a cluster config directory has been created (e.g. 'compact') and Agent-based configuration has been created, some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed. 'make' can be run again to re-create the ISO and the VMs etc.  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP address changes and default route changes should work fine.  Changes, like adding link bonding may break the command to parse and extract the config.  The following is the script that is used to extract the cluster config from the agent-config yaml files. This script must work for the VMs to be created. 
 
 ```
 cd compact
@@ -171,4 +182,7 @@ scripts/cluster-config.sh        # example execution to show the cluster configu
 
 - Govc is used to create and manage VMs on ESXi or vSphere.
   - https://github.com/vmware/govmomi/tree/main/govc
+
+Be sure to set the correct (govc) values to access vCenter in the vmware.conf file.  
+Note that ESXi will also work by changing the folder path (see the comments in the vmware.conf file).
 
