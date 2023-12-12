@@ -76,9 +76,9 @@ cd mirror
 make sync
 ```
 This command will:
-  - install Quay registry on the bastion.
+  - Optionally installs Quay registry on the bastion (unless you are using an existing registry). 
   - pull images from the Internet and store them in Quay.
-  - copy the registry's pull secret and certificate into the 'mirror/deps' dir for later use. 
+  - If Quay was installed, copy the registry's pull secret and certificate into the 'mirror/deps' dir for later use. 
 
 
 ## Disconnected mode (air-gapped / fully disconnected) 
@@ -93,7 +93,7 @@ make save
 
 - This will pull the images and save them to the local directory "mirror/save".
 
-Then, you need to copy the whole aba/ directory and sub-directories to your internal bastion host in the private subnet, e.g. via a thumb drive or DVD. 
+Then, copy the whole aba/ directory and sub-directories to your internal bastion host in the private subnet, e.g. via a thumb drive or DVD. 
 
 Example:
 
@@ -117,7 +117,7 @@ cd mirror
 make load
 ```
 - This will install Quay (from the files that were copied above) and then load the images into Quay.
-
+- Note that the internal bastion will need to install RPMs, e.g. from Satellite. 
 
 Install OpenShift 
 
