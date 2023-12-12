@@ -17,8 +17,21 @@ END
 install_rpm podman python3-pip
 install_pip j2cli
 
-if [ -s mirror/deps/rootCA.pem -a -s mirror/deps/pull-secret-mirror.json ]; then
-	echo "Existing registry credential files found in mirror/deps/. Using existing registry."
+if [ -s deps/rootCA.pem -a -s deps/pull-secret-mirror.json ]; then
+
+	# Check if the cert needs to be updated
+	diff deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2 || \
+		sudo cp deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem && \
+			sudo update-ca-trust extract
+
+	podman logout --all 
+	echo -n "Checking registry access is working using 'podman login': "
+	export reg_url=https://$reg_host:$reg_port
+	podman login --authfile deps/pull-secret-mirror.json $reg_url 
+
+	echo "Valid existing registry credential files found in mirror/deps/.  Using existing registry."
+
+	exit 0
 fi
 
 # Mirror registry installed?
@@ -27,13 +40,9 @@ reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_p
 
 if [ "$reg_code" = "200" ]; then
 	echo "Registry found at $reg_host:$reg_port. "
-	##podman logout --all 
-	##echo -n "Checking registry access is working using 'podman login': "
-	##export reg_url=https://$reg_host:$reg_port
-	##podman login -u init -p $reg_pw $reg_url 
 	
 	echo
-	echo "If this registry is your existing registry, copy this registry's pull secret and root CA files into 'mirror/desp'."
+	echo "If this registry is your existing registry, copy this registry's pull secret and root CA files into 'mirror/deps'."
 	echo -n "See the README for instructions.  Hit RETURN to continue: "
 	echo 
 	read yn
