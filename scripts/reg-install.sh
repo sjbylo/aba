@@ -17,6 +17,9 @@ END
 install_rpm podman python3-pip
 install_pip j2cli
 
+if [ -s mirror/deps/rootCA.pem -a -s mirror/deps/pull-secret-mirror.json ]; then
+	echo "Existing registry credential files found in mirror/deps/. Using existing registry."
+fi
 
 # Mirror registry installed?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
@@ -24,11 +27,17 @@ reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_p
 
 if [ "$reg_code" = "200" ]; then
 	echo "Registry found at $reg_host:$reg_port. "
-	podman logout --all 
-	echo -n "Checking registry access is working using 'podman login': "
-	export reg_url=https://$reg_host:$reg_port
-	podman login -u init -p $reg_pw $reg_url 
+	##podman logout --all 
+	##echo -n "Checking registry access is working using 'podman login': "
+	##export reg_url=https://$reg_host:$reg_port
+	##podman login -u init -p $reg_pw $reg_url 
 	
+	echo
+	echo "If this registry is your existing registry, copy this registry's pull secret and root CA files into 'mirror/desp'."
+	echo -n "See the README for instructions.  Hit RETURN to continue: "
+	echo 
+	read yn
+
 	exit 0
 fi
 
@@ -136,8 +145,8 @@ else
 		sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 			sudo update-ca-trust extract
 
-	echo -n "Checking registry access is working using 'podman login': "
 	podman logout --all 
+	echo -n "Checking registry access is working using 'podman login': "
 	podman login -u init -p $reg_pw $reg_url 
 
 	reg_creds=$(cat registry-creds.txt)
