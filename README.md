@@ -16,9 +16,9 @@ Aba automatically completes the following:
 
 - A private subnet.
 - DNS
-   - with A records for OCP API, Ingress and the registry. 
+   - with A records for OpenShift API, Ingress and the registry. 
 - NTP
-   - OCP requires that NTP be available. 
+   - OpenShift requires that NTP be available. 
 - Optional vCenter API access. Bare-metal nodes can be booted manually using the generated ISO.
    - ESXi can also be used directly (i.e. without vCenter).
    - Ensure enough privileges to vCenter. See the [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) documentation for more.
@@ -28,7 +28,7 @@ Aba automatically completes the following:
   - User account with sudo configured (root access). 
   - 50G disk space in your home directory.  Much more space is required if Operators are intended to be installed. 
   - Internet access from your bastion to download the container images and RPMs. 
-     - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift (this can then be fully disconnected).   See 'Connected mode' below.
+     - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift.   See 'Connected mode' below.
      - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported.  See 'Disconnected mode' below.
 
 
@@ -41,10 +41,13 @@ Aba automatically completes the following:
    - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
    - It's a good idea to make the file user read-only, e.g. `chmod 600 ~/.pull-secret.json`.
 - Create the needed DNS A records, *for example* (use your domain!):
-   - OCP API: api.ocp1.example.com - points to a free IP in your private subnet. 
-   - OCP Ingress: *.apps.ocp1.example.com - points to a free IP in your private subnet. 
-     - Note: For Single Node OpenShift, the above records should point to a single IP address, used for the single OpenShift node. 
-   - Quay mirror registry: registry.example.com - points to the IP address where you want to install Quay (e.g. your bastion) or to your existing registry. 
+   - OpenShift API: api.ocp1.example.com 
+     - points to a free IP in your private subnet. 
+   - OpenShift Ingress: *.apps.ocp1.example.com 
+     - points to a free IP in your private subnet. 
+     - Note: For Single Node OpenShift (SNO), the above records should point to a single IP address, used for the single OpenShift node. 
+   - Quay mirror registry: registry.example.com 
+     - points to the IP address where you want to install Quay (e.g. your bastion) or to your existing registry. 
 - Run ./aba command to initialize the installation process
 - If you are using an existing registry:
   - Copy your existing registry's credential files (pull secret and root CA) into the 'mirror/deps' directory, e.g.:
