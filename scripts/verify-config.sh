@@ -35,9 +35,11 @@ else
 	[ "$api_vip" -o "$ingress_vip" ] && echo "'api_vip' and 'ingress_vip' are defined. No need for SNO, they will be ignored." 
 fi
 
+# Checking if dig is installed ...
+install_rpm bind-utils
 
-ip_api=$(dig +short api.$cluster_name.$base_domain)
-ip_apps=$(dig +short x.apps.$cluster_name.$base_domain)
+ip_api=$(dig +time=8 +short api.$cluster_name.$base_domain)
+ip_apps=$(dig +time=8 +short x.apps.$cluster_name.$base_domain)
 	
 # If NOT SNO...
 if [ ! "$SNO" ]; then
