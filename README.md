@@ -122,7 +122,7 @@ make load
 
 Now continue with "Install OpenShift".
 
-# Install OpenShift 
+## Install OpenShift 
 
 ```
 make sno
@@ -176,7 +176,7 @@ make delete                          # Delete all the VMs in the 'sno' cluster.
 ```
 
 
-# Features that are not implemented yet
+## Features that are not implemented yet
 
 - Make it easier to install Operators (ImageContentSourcePolicy and CatalogSource) once OpenShift has been installed.
 
@@ -189,7 +189,7 @@ make delete                          # Delete all the VMs in the 'sno' cluster.
 - Specifying a different location to store Quay registry data (images).
 
 
-# Miscellaneous
+## Miscellaneous
 
 - If you want to install workers with different CPU/MEM sizes (which can be used to install cluster infra sub-systems, e.g. Ceph and/or ES etc - infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed. 
 
