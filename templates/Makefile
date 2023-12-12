@@ -93,14 +93,12 @@ ssh:
 	scripts/ssh-rendezvous.sh
 
 clean:
-	# Fixme
 	rm -f scripts templates
 	rm -f install-config.yaml agent-config.yaml 
+	rm -rf iso-agent-based 
 	rm -rf ~/.cache/agent poweroff refresh refresh-poweroff
 	rm -f .??*
-	rm -rf iso-agent-based 
 
 distclean: clean
-	rm -f aba.conf 
-	rm -f mirror.conf vmware.conf 
+	rm -f aba.conf mirror.conf vmware.conf 
 
