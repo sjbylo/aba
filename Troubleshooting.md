@@ -93,7 +93,7 @@ Nov 19 02:38:46 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-co
 Nov 19 02:38:46 master1 bootkube.sh[10004]:         Pod Status:openshift-cluster-version/cluster-version-operator        Ready
 ```
 
-Installation of bookkube complete:
+Installation of bootkube complete:
 ```
 Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-apiserver/kube-apiserver        Ready
 Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-scheduler/openshift-kube-scheduler        Ready
@@ -101,7 +101,7 @@ Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-co
 Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-cluster-version/cluster-version-operator        Ready
 ```
 
-... successs!
+... success!
 
 Then, the log will show the following: 
 
@@ -115,7 +115,7 @@ Nov 19 02:39:26 master1 bootkube.sh[10004]: All self-hosted control plane compon
 Nov 19 02:39:26 master1 bootkube.sh[10004]: Sending bootstrap-success event. Waiting for remaining assets to be created.
 ```
 
-Once bootkube has finished and the host has restarted run the following command to observe the installtion of OpenShift:
+Once bootkube has finished and the host has restarted run the following command to observe the installation of OpenShift:
 
 ```
 make cmd get co
