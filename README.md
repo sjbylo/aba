@@ -18,10 +18,10 @@ Aba automatically completes the following:
 - DNS
    - with A records for OCP API, Ingress and the registry. 
 - NTP
-   - OCP requires that NTP be configured. 
+   - OCP requires that NTP be available. 
 - Optional vCenter API access. Bare-metal nodes can be booted manually using the generated ISO.
    - ESXi can also be used directly (i.e. without vCenter).
-   - Ensure enough privileges to vCenter. See the [documentation](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) for more.
+   - Ensure enough privileges to vCenter. See the [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) documentation for more.
 - Bastion with Internet access:
   - A RHEL host or VM 
   - If needed, the Quay mirror registry can be installed here.
