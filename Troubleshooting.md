@@ -127,3 +127,14 @@ make cmd get nodes
 oc mirror fails with error "invalid mirror sequence order"
 https://access.redhat.com/solutions/7026766
 
+If you get the below error, there may be an IP/mac address conflict.  Ensure no other clusters with the same addresses are running.
+
+```
+INFO Unable to retrieve cluster metadata from Agent Rest API: [GET /v2/clusters/{cluster_id}][404] v2GetClusterNotFound  &{Code:0xc0000b3c30 Href:0xc0000b3c40 ID:0xc000f06cec Kind:0xc0000b3c50 Reason:0xc0000b3c60} 
+INFO Unable to retrieve cluster metadata from Agent Rest API: [GET /v2/clusters/{cluster_id}][404] v2GetClusterNotFound  &{Code:0xc000f855c0 Href:0xc000f855d0 ID:0xc000e80e5c Kind:0xc000f855e0 Reason:0xc000f855f0} 
+ERROR Attempted to gather ClusterOperator status after wait failure: Listing ClusterOperator objects: Get "https://api.compact.example.com:6443/apis/config.openshift.io/v1/clusteroperators": tls: failed to verify certificate: x509: certificate is valid for kubernetes, kubernetes.default, kubernetes.default.svc, kubernetes.default.svc.cluster.local, openshift, openshift.default, openshift.default.svc, openshift.default.svc.cluster.local, 172.30.0.1, not api.compact.example.com 
+INFO Use the following commands to gather logs from the cluster 
+INFO openshift-install gather bootstrap --help    
+ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadline exceeded 
+```
+
