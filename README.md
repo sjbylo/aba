@@ -165,9 +165,11 @@ make delete                          # Delete all the VMs in the 'sno' cluster.
 
 - Make it easier to install Operators (ImageContentSourcePolicy and CatalogSource) once OpenShift has been installed.
 
-- Make it easier to integrate with vSphere.
+- Make it easier to integrate with vSphere, including storage. 
 
 - Make it easier to install the Internal registry. 
+
+- Configure htpasswd login, add users, disable kubeadmin.
 
 - Specifying a different location to store Quay registry data (images).
 
