@@ -100,6 +100,8 @@ Example:
 
 ```
 # On the external bastion:
+cd mirror
+make clean			   # Remove unneeded large files
 cd 		                   # Assuming aba is directly under your $HOME dir
 tar czf aba.tgz aba/aba bin aba/*.conf aba/Makefile aba/scripts aba/templates aba/*.md aba/mirror aba/cli 
 # Copy the file 'aba.tgz' to your internal bastiona via a thumb drive. 
