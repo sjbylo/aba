@@ -80,6 +80,7 @@ This command will:
   - pull images from the Internet and store them in Quay.
   - If Quay was installed, copy the registry's pull secret and certificate into the 'mirror/deps' dir for later use. 
 
+Now continue with "Install OpenShift" below.
 
 ## Disconnected mode (air-gapped / fully disconnected) 
 
@@ -119,7 +120,9 @@ make load
 - This will install Quay (from the files that were copied above) and then load the images into Quay.
 - Note that the internal bastion will need to install RPMs, e.g. from Satellite. 
 
-Install OpenShift 
+Now continue with "Install OpenShift".
+
+# Install OpenShift 
 
 ```
 make sno
