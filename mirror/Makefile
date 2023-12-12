@@ -90,9 +90,9 @@ loadclean:
 	rm .loaded
 	
 clean: 
-	rm -rf *.yaml *.sh save oc-mirror-workspace .??*
+	rm -rf .??* *.tar mirror-registry
 
 distclean: uninstall clean
-	rm -rf deps *.tar.gz *.tar scripts templates registry-creds.txt *.conf mirror-registry
+	rm -rf deps *.tar.gz *.tar scripts templates registry-creds.txt *.conf mirror-registry oc-mirror-workspace *.sh *.yaml save
 
 
