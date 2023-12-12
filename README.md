@@ -164,15 +164,15 @@ If OpenShift does not install, see the Troubleshooting readme.
 Other examples of commands, when working with VMware/ESXi:
 
 ```
-cd sno                               # change to the directory with the agent-based install files ('sno' is just an example).
+cd sno           # change to the directory with the agent-based install files ('sno' is just an example).
 
-make refresh                         # Delete the VMs and re-create them causing the cluster to be re-installed.
+make refresh     # Delete the VMs and re-create them causing the cluster to be re-installed.
 
-make stop                            # Shut down the guest OS (CoreOS) of all VMs in the 'sno' cluster.
+make stop        # Shut down the guest OS (CoreOS) of all VMs in the 'sno' cluster.
 
-make start                           # Power on all VMs in the 'sno' cluster. 
+make start       # Power on all VMs in the 'sno' cluster. 
 
-make delete                          # Delete all the VMs in the 'sno' cluster. 
+make delete      # Delete all the VMs in the 'sno' cluster. 
 ```
 
 
