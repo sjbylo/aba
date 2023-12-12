@@ -1,5 +1,5 @@
 # No file exists to check timestamps
-.PHONY: all cli clean mirror install sync sno save load
+.PHONY: all cli clean mirror install sync sno save load test
 
 TEMPLATES = templates
 SCRIPTS   = scripts
@@ -48,7 +48,11 @@ ocp:
 	mkdir -p $(dir)
 	ln -fs templates/Makefile $(dir)/Makefile
 	ln -fs ../templates $(dir)
+	cp test/aba-sno.conf $(dir)/aba.conf
 	make -C $(dir) 
+
+test:
+	scripts/test.sh
 
 clean:
 	make -C mirror clean 
