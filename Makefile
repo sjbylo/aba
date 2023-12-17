@@ -9,6 +9,10 @@ DEBUG     = $d
 #version  ?= 4.14.2
 version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 
+##@ Help-related tasks
+.PHONY: help
+help: ## Help
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 #all: cli mirror ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror
 
@@ -19,27 +23,27 @@ cli:
 ##	#mkdir -p mirror
 ##	echo ocp_target_ver=$(ocp_target_ver) > mirror/openshift-version.conf
 
-install:
+install: ## Install Quay mirror registry 
 	make -C mirror install
 
-uninstall:
+uninstall: ## Uninstall Quay mirror registry 
 	make -C mirror uninstall
 
-sync:
+sync: ## Synchonrise images from Red Hat's public registry to the Quay mirror registry 
 	make -C mirror sync
 
-save:
+save: ## Save images from Red Hat's public registry to the local filesystem
 	make -C mirror save 
 
-load:
+load: ## Load images from the local filesystem to the Quay mirror registry
 	make -C mirror load
 
-sno:
+sno:  ## Install Single Node OpenShift
 	mkdir -p sno
 	ln -fs ../$(TEMPLATES)/Makefile sno/Makefile
 	make -C sno
 
-compact:
+compact:  ## Install a compact 3-node OpenShift cluster 
 	mkdir -p compact
 	ln -fs ../$(TEMPLATES)/Makefile compact/Makefile
 	make -C compact
