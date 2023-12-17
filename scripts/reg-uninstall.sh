@@ -9,8 +9,13 @@ source mirror.conf
 echo Uninstalling mirror registry from host $reg_host ...
 ##./mirror-registry uninstall -v || true
 
-./mirror-registry uninstall -v \
-	--targetHostname $reg_host \
-  	--targetUsername $(whoami) \
-  	-k ~/.ssh/id_rsa 
+if [ "$reg_ssh" ]; then
+	./mirror-registry uninstall -v \
+		--targetHostname $reg_host \
+  		--targetUsername $(whoami) \
+  		-k ~/.ssh/id_rsa 
+else
+	./mirror-registry uninstall -v 
+fi
+
 
