@@ -59,8 +59,10 @@ j2 ./templates/imageset-config-sync.yaml.j2 > imageset-config-sync.yaml
 
 ./scripts/create-containers-auth.sh
 
+[ ! "$reg_root" ] && reg_root=$HOME/quay-install
+
 echo "Now mirroring the images.  "
-echo "Ensure there is enough disk space under $HOME.  This can take 10-20 mins to complete."
+echo "Ensure there is enough disk space under $reg_root.  This can take 10-20 mins to complete."
 
 # Set up script to help for manual re-sync
 echo "oc mirror --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path" > sync-mirror.sh && chmod 700 sync-mirror.sh 

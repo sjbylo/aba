@@ -50,6 +50,13 @@ if [ "$reg_code" = "200" ]; then
 	exit 0
 fi
 
+
+if [ "$reg_root" ]; then
+	reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
+else
+	reg_root=$HOME/quay-install
+fi
+
 ##if [ "$reg_code" != "200" ]; then
 
 # reg_ssh - fixme, use this for remote installs
@@ -78,21 +85,21 @@ if [ "$reg_ssh" ]; then
 		reg_pw=$(openssl rand -base64 12)
 	fi
 
-	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --quayHostname $reg_host -k ~/.ssh/id_rsa'"
+	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --quayHostname $reg_host -k ~/.ssh/id_rsa $reg_root_opt'"
 
 	./mirror-registry install -v \
   		--targetHostname $reg_host \
   		--targetUsername $(whoami) \
   		--quayHostname $reg_host \
   		-k ~/.ssh/id_rsa \
-		--initPassword $reg_pw 
+		--initPassword $reg_pw $reg_root_opt
 
 	rm -rf deps/*
 
 	# Fetch root CA from remote host 
-	if [ ! -d ~/quay-install/quay-rootCA ]; then
-		mkdir -p ~/quay-install/quay-rootCA
-		scp -F .ssh.conf -p $(whoami)@$reg_host:quay-install/quay-rootCA/* ~/quay-install/quay-rootCA
+	if [ ! -d $reg_root/quay-rootCA ]; then
+		mkdir -p $reg_root/quay-rootCA
+		scp -F .ssh.conf -p $(whoami)@$reg_host:quay-install/quay-rootCA/* $reg_root/quay-rootCA
 	fi
 
 	echo Creating json registry credentials in registry-creds.txt ...
@@ -105,8 +112,8 @@ if [ "$reg_ssh" ]; then
 	export reg_url=https://$reg_host:$reg_port
 
 	# Check if the cert needs to be updated
-	diff ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-		sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+	diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+		sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 			sudo update-ca-trust extract
 
 	podman logout --all 
@@ -116,7 +123,7 @@ if [ "$reg_ssh" ]; then
 	reg_creds=$(cat registry-creds.txt)
 	scripts/create-containers-auth.sh
 
-	cp ~/quay-install/quay-rootCA/rootCA.pem deps/
+	cp $reg_root/quay-rootCA/rootCA.pem deps/
 
 else
 	echo "Installing Quay registry on localhost ..."
@@ -132,11 +139,11 @@ else
 		reg_pw=$(openssl rand -base64 12)
 	fi
 
-	echo "Running command './mirror-registry install --quayHostname $reg_host'"
+	echo "Running command './mirror-registry install --quayHostname $reg_host $reg_root_opt'"
 
 	./mirror-registry install -v \
   		--quayHostname $reg_host \
-		--initPassword $reg_pw 
+		--initPassword $reg_pw $reg_root_opt
 
 	rm -rf deps/*
 
@@ -150,8 +157,8 @@ else
 	export reg_url=https://$reg_host:$reg_port
 
 	# Check if the cert needs to be updated
-	diff ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-		sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+	diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+		sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 			sudo update-ca-trust extract
 
 	podman logout --all 
@@ -161,6 +168,6 @@ else
 	reg_creds=$(cat registry-creds.txt)
 	scripts/create-containers-auth.sh
 
-	cp ~/quay-install/quay-rootCA/rootCA.pem deps/
+	cp $reg_root/quay-rootCA/rootCA.pem deps/
 fi
 

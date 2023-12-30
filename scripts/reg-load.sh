@@ -28,14 +28,16 @@ export ocp_ver=$ocp_target_ver
 export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
 j2 ./templates/imageset-config.yaml.j2 > imageset-config.yaml 
 
+[ "$reg_root" ] || reg_root=$HOME/quay-install
+
 # Check if the cert needs to be updated
-diff ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-	sudo cp ~/quay-install/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+	sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 	sudo update-ca-trust extract
 
 echo 
 echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
-echo Ensure there is enough disk space under $HOME.  This can take 10-20 mins to complete. 
+echo Ensure there is enough disk space under $reg_root.  This can take 10-20 mins to complete. 
 
 # Set up script to help for manual re-sync
 echo "oc mirror --from=./save/mirror_seq1_000000.tar docker://$reg_host:$reg_port/$reg_path"  > upload-mirror.sh && chmod 700 upload-mirror.sh
