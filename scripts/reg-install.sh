@@ -52,7 +52,8 @@ fi
 
 
 if [ "$reg_root" ]; then
-	reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
+	#reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
+	reg_root_opt="--quayStorage ${reg_root}-storage"
 else
 	reg_root=$HOME/quay-install
 fi
@@ -111,6 +112,8 @@ if [ "$reg_ssh" ]; then
 	# Configure the pull secret for this mirror registry 
 	export reg_url=https://$reg_host:$reg_port
 
+	cp $reg_root/quay-rootCA/rootCA.pem deps/
+
 	# Check if the cert needs to be updated
 	diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
 		sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
@@ -122,8 +125,6 @@ if [ "$reg_ssh" ]; then
 
 	reg_creds=$(cat registry-creds.txt)
 	scripts/create-containers-auth.sh
-
-	cp $reg_root/quay-rootCA/rootCA.pem deps/
 
 else
 	echo "Installing Quay registry on localhost ..."
@@ -156,6 +157,8 @@ else
 	# Configure the pull secret for this mirror registry 
 	export reg_url=https://$reg_host:$reg_port
 
+	cp $reg_root/quay-rootCA/rootCA.pem deps/
+
 	# Check if the cert needs to be updated
 	diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
 		sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
@@ -167,7 +170,5 @@ else
 
 	reg_creds=$(cat registry-creds.txt)
 	scripts/create-containers-auth.sh
-
-	cp $reg_root/quay-rootCA/rootCA.pem deps/
 fi
 

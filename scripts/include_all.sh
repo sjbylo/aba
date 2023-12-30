@@ -34,7 +34,7 @@ install_pip() {
 	done
 	[ "$piplist" ] && \
 		echo "Installing pip3: $piplist" && \
-			unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY && \
+			#unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY && \
 			pip3 install --user $piplist >> .install.log  2>&1 
 	return 0
 }
