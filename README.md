@@ -208,3 +208,4 @@ scripts/cluster-config.sh        # example execution to show the cluster configu
 Be sure to set the correct (govc) values to access vCenter in the vmware.conf file.  
 Note that ESXi will also work by changing the folder path (see the comments in the vmware.conf file).
 
+
