@@ -15,19 +15,20 @@ install_all_clusters() {
 	do
 		echo Runtest: creating cluster $c
 		install_cluster $c
-	done
-
-	for c in $@
-	do
-		echo Runtest: deleting cluster $c
-		install_cluster $c
 		make -C $c delete
 	done
+
+	#for c in $@
+	#do
+		#echo Runtest: deleting cluster $c
+		#install_cluster $c
+	#done
 }
 
 ######################
 echo Runtest: START - sync
 mirror/mirror-registry uninstall --autoApprove || true
+rm -rf mirror/deps
 make -C mirror clean
 make sync 
 install_all_clusters sno compact standard 
@@ -35,6 +36,7 @@ install_all_clusters sno compact standard
 ######################
 echo Runtest: START - load
 mirror/mirror-registry uninstall --autoApprove || true
+rm -rf mirror/deps
 make -C mirror clean
 make save load
 install_all_clusters sno compact standard 
