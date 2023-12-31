@@ -25,8 +25,14 @@ install_all_clusters() {
 	#done
 }
 
-cp templates/mirror.conf .
-#make vmware.conf
+#####
+ver=$(cat ./target-ocp-version.conf)
+
+# Copy and edit mirror.conf if needed
+cp -f templates/mirror.conf .
+
+sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror.conf
+####
 
 ######################
 echo Runtest: START - sync
