@@ -25,6 +25,9 @@ install_all_clusters() {
 	#done
 }
 
+cp templates/mirror.conf .
+#make vmware.conf
+
 ######################
 echo Runtest: START - sync
 mirror/mirror-registry uninstall --autoApprove || true
