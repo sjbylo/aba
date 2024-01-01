@@ -65,4 +65,6 @@ clean:
 distclean:
 	make -C mirror distclean 
 	make -C cli distclean 
+	rm -rf sno compact standard 
+	rm *.conf 
 
