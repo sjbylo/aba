@@ -7,7 +7,8 @@ install_cluster() {
 	ln -fs ../templates/Makefile $1/Makefile
 	cp test/aba-$1.conf $1/aba.conf
 	make -C $1
-	#make -C $1 stop
+	echo $1 completed
+	make -C $1 stop
 }
 
 install_all_clusters() {
@@ -15,7 +16,7 @@ install_all_clusters() {
 	do
 		echo Runtest: creating cluster $c
 		install_cluster $c
-		make -C $c delete
+		#make -C $c delete
 	done
 
 	#for c in $@
