@@ -1,5 +1,8 @@
 #!/bin/bash 
 
+dir=$(dirname $0)
+cd $dir
+
 source scripts/include_all.sh
 
 # Include aba bin path and common scripts
@@ -40,9 +43,6 @@ fi
 #END
 #		exit
 #fi
-
-dir=$(dirname $0)
-cd $dir
 
 ## Get the latest stable OCP version number.
 stable_ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | tee /tmp/.release.txt | \
