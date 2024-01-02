@@ -8,7 +8,7 @@ install_cluster() {
 	cp test/aba-$1.conf $1/aba.conf
 	make -C $1
 	echo $1 completed
-	make -C $1 stop
+	make -C $1 delete  # delete to free up disk space!
 }
 
 install_all_clusters() {
@@ -37,16 +37,20 @@ sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirr
 
 ######################
 echo Runtest: START - sync
+make -C mirror mirror-registry
 mirror/mirror-registry uninstall --autoApprove || true
 rm -rf mirror/deps
+rm -rf mirror/save
 make -C mirror clean
 make sync 
 install_all_clusters sno compact standard 
 
 ######################
 echo Runtest: START - load
+make -C mirror mirror-registry
 mirror/mirror-registry uninstall --autoApprove || true
 rm -rf mirror/deps
+rm -rf mirror/save
 make -C mirror clean
 make save load
 install_all_clusters sno compact standard 
