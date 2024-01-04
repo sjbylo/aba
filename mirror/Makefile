@@ -1,19 +1,23 @@
 # No file exists to check timestamps
-.PHONY: all clean distclean loadclean syncclean saveclean uninstallclean installclean
+###.PHONY: all clean distclean loadclean syncclean saveclean uninstallclean installclean
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
-###OCP_VER = 4.13.19
 debug   ?=
 #version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 ##version := $(shell cat ../target-ocp-version.conf)
 
-# This is the default.  Install mirror reg. (if needed), sync images from the Internety directloy to the mirror. 
+# This is the default.  Install mirror reg. (if needed), sync images from the Internet directly to the mirror. 
+.PHONY: all 
 all: sync
 
 ##fetch-ocp-stable-version.sh:
 ##	echo "Stop!  Be sure to run ../aba first"
 ##	exit 1
+
+# FIXME
+../target-ocp-version.conf:
+	../aba
 
 init: .initialized
 .initialized: deps templates scripts mirror.conf mirror-registry 
@@ -45,9 +49,6 @@ mirror.conf: ../mirror.conf
 	version=$(cat ../target-ocp-version.conf)
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
-../target-ocp-version.conf:
-	../aba
-
 install: init .installed
 .installed: 
 	# Install Quay Mirror
@@ -55,6 +56,7 @@ install: init .installed
 	rm -f .uninstalled 
 	touch .installed
 
+.PHONY: installclean
 installclean:
 	rm .installed
 
@@ -63,6 +65,8 @@ uninstall: init .uninstalled
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	rm -f .installed
 	touch .uninstalled
+
+.PHONY: uninstallclean
 uninstallclean:
 	rm .uninstalled
 
@@ -70,6 +74,8 @@ save: init .saved
 .saved: 
 	$(SCRIPTS)/reg-save.sh  $(debug)
 	touch .saved
+
+.PHONY: saveclean
 saveclean:
 	rm .saved
 
@@ -78,6 +84,8 @@ sync: init install .synced
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-sync.sh  $(debug)
 	touch .synced
+
+.PHONY: syncclean
 syncclean:
 	rm .synced
 	
@@ -86,13 +94,22 @@ load: init save install .loaded
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-load.sh  $(debug)
 	touch .loaded
+
+.PHONY: loadclean
 loadclean:
 	rm .loaded
 	
-clean: 
+# Use 'tidy' before copying/moving files to internal bastion to reduce the amount of data to copy
+.PHONY: tidy 
+tidy:
 	rm -rf .??* *.tar mirror-registry
 
-distclean: uninstall clean
-	rm -rf deps *.tar.gz *.tar scripts templates registry-creds.txt *.conf mirror-registry oc-mirror-workspace *.sh *.yaml save
+.PHONY: clean
+clean: tidy
+	rm -rf save/ deps/
 
+.PHONY: distclean
+distclean: uninstall clean
+	rm -rf *.tar.gz oc-mirror-workspace 
+	rm -f  scripts templates registry-creds.txt *.conf *.sh *.yaml 
 
