@@ -20,7 +20,7 @@ install_pip j2cli
 if [ -s deps/rootCA.pem -a -s deps/pull-secret-mirror.json ]; then
 
 	# Check if the cert needs to be updated
-	diff deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2 || \
+	sudo diff deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2 || \
 		sudo cp deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem && \
 			sudo update-ca-trust extract
 
@@ -52,6 +52,7 @@ fi
 
 
 if [ "$reg_root" ]; then
+	# FIXME
 	#reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
 	reg_root_opt="--quayStorage ${reg_root}-storage"
 else
@@ -60,9 +61,9 @@ fi
 
 ##if [ "$reg_code" != "200" ]; then
 
-# reg_ssh - fixme, use this for remote installs
+# remote installs
 if [ "$reg_ssh" ]; then
-	echo "Installing Quay registry on host $reg_host ..."
+	echo "Installing Quay registry on remote host $reg_host ..."
 
 	# FIXME: We are using ssh, even if the registry is installed locally. 
 	###[ ! -s ~/.ssh/id_rsa ] && mkdir -p ~/.ssh && ssh-keygen -b 2048 -t rsa -f ~/.ssh/id_rsa -N ""
@@ -86,22 +87,23 @@ if [ "$reg_ssh" ]; then
 		reg_pw=$(openssl rand -base64 12)
 	fi
 
-	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --quayHostname $reg_host -k ~/.ssh/id_rsa $reg_root_opt'"
+	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --taregtHostname $reg_host -k ~/.ssh/id_rsa --initPassword xxx $reg_root_opt'"
 
 	./mirror-registry install -v \
-  		--targetHostname $reg_host \
-  		--targetUsername $(whoami) \
   		--quayHostname $reg_host \
+  		--targetUsername $(whoami) \
+  		--targetHostname $reg_host \
   		-k ~/.ssh/id_rsa \
 		--initPassword $reg_pw $reg_root_opt
 
 	rm -rf deps/*
 
 	# Fetch root CA from remote host 
-	if [ ! -d $reg_root/quay-rootCA ]; then
-		mkdir -p $reg_root/quay-rootCA
-		scp -F .ssh.conf -p $(whoami)@$reg_host:quay-install/quay-rootCA/* $reg_root/quay-rootCA
-	fi
+#	if [ ! -d $reg_root/quay-rootCA ]; then
+#		mkdir -p $reg_root/quay-rootCA
+#		scp -F .ssh.conf -p $(whoami)@$reg_host:$reg_root/quay-rootCA/* $reg_root/quay-rootCA
+#		scp -F .ssh.conf -p $(whoami)@$reg_host:$reg_root/quay-rootCA/rootCA.pem deps/
+#	fi
 
 	echo Creating json registry credentials in registry-creds.txt ...
 
@@ -112,11 +114,13 @@ if [ "$reg_ssh" ]; then
 	# Configure the pull secret for this mirror registry 
 	export reg_url=https://$reg_host:$reg_port
 
-	cp $reg_root/quay-rootCA/rootCA.pem deps/
+###	cp $reg_root/quay-rootCA/rootCA.pem deps/
+
+	scp -F .ssh.conf -p $(whoami)@$reg_host:$reg_root/quay-rootCA/rootCA.pem deps/
 
 	# Check if the cert needs to be updated
-	diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-		sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+	sudo diff deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+		sudo cp deps/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 			sudo update-ca-trust extract
 
 	podman logout --all 
@@ -160,8 +164,8 @@ else
 	cp $reg_root/quay-rootCA/rootCA.pem deps/
 
 	# Check if the cert needs to be updated
-	diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-		sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+	sudo diff deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+		sudo cp deps/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 			sudo update-ca-trust extract
 
 	podman logout --all 
