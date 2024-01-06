@@ -48,7 +48,13 @@ compact:  ## Install a compact 3-node OpenShift cluster
 	ln -fs ../$(TEMPLATES)/Makefile compact/Makefile
 	make -C compact
 
+standard:  ## Install a standard 3+2-node OpenShift cluster 
+	mkdir -p standard
+	ln -fs ../$(TEMPLATES)/Makefile standard/Makefile
+	make -C standard
+
 ocp:
+	[ ! "$(dir)" ] && echo "Must specify dir=newdir, e.g. make ocp dir=mycluster" && exit 1
 	mkdir -p $(dir)
 	ln -fs templates/Makefile $(dir)/Makefile
 	ln -fs ../templates $(dir)
