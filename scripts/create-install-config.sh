@@ -74,37 +74,5 @@ fi
 
 echo Generating Agent-based configuration file: $PWD/install-config.yaml 
 # Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret ...
-scripts/j2 templates/install-config.yaml.j2 > install-config.yaml2
-
-exit 0
-
-scripts/render_template.py --template install-config.yaml.j2 \
-	cluster_name \
-	base_domain \
-	num_masters \
-	num_workers \
-	additional_trust_bundle \
-	api_vip \
-	ingress_vip \
-	image_content_sources \
-	machine_network \
-	prefix_length \
-	pull_secret \
-	ssh_key_pub \
-		> install-config.yaml 
-
-#echo "scripts/render_template.py --template install-config.yaml.j2 \
-	#cluster_name="$cluster_name" \
-	#base_domain="$base_domain" \
-	#num_masters="$num_masters" \
-	#num_workers="$num_workers" \
-	#additional_trust_bundle="$additional_trust_bundle" \
-	#api_vip="$api_vip" \
-	#ingress_vip="$ingress_vip" \
-	#image_content_sources="$image_content_sources" \
-	#machine_network="$machine_network" \
-	#prefix_length="$prefix_length" \
-	#pull_secret="$pull_secret" \
-	#ssh_key_pub="$ssh_key_pub" \
-		#> install-config.yaml "
+scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 

@@ -45,7 +45,5 @@ scripts/verify-config.sh || exit 1
 
 # Use j2cli to render the templates
 echo Generating Agent-based configuration file: $PWD/agent-config.yaml 
-#j2 templates/agent-config.yaml.j2 > agent-config.yaml2
-
 scripts/j2 templates/agent-config.yaml.j2 > agent-config.yaml
 
