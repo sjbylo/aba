@@ -41,16 +41,19 @@ load: ## Load images from the local filesystem to the Quay mirror registry
 sno:  ## Install Single Node OpenShift
 	mkdir -p sno
 	ln -fs ../$(TEMPLATES)/Makefile sno/Makefile
+	cp $(TEMPLATES)/aba-sno.conf sno/aba.conf
 	make -C sno
 
 compact:  ## Install a compact 3-node OpenShift cluster 
 	mkdir -p compact
 	ln -fs ../$(TEMPLATES)/Makefile compact/Makefile
+	cp $(TEMPLATES)/aba-compact.conf compact/aba.conf
 	make -C compact
 
 standard:  ## Install a standard 3+2-node OpenShift cluster 
 	mkdir -p standard
 	ln -fs ../$(TEMPLATES)/Makefile standard/Makefile
+	cp $(TEMPLATES)/aba-standard.conf standard/aba.conf
 	make -C standard
 
 ocp:
