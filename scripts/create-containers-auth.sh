@@ -7,7 +7,7 @@
 umask 077
 
 install_rpm jq
-install_pip j2cli
+#install_pip j2cli
 
 source mirror.conf
 
@@ -30,7 +30,7 @@ if [ -s ./registry-creds.txt ]; then
 	export enc_password=$(echo -n "$reg_creds" | base64 -w0)
 
 	# Inputs: enc_password, reg_host and reg_port 
-	j2 ./templates/pull-secret-mirror.json.j2 > ./deps/pull-secret-mirror.json
+	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./deps/pull-secret-mirror.json
 
 	# Merge the two files
 	jq -s '.[0] * .[1]' ./deps/pull-secret-mirror.json $pull_secret_file > ./deps/pull-secret-full.json

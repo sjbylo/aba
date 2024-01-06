@@ -16,9 +16,10 @@ if [ "$reg_root" ]; then
 fi
 
 rm -rf deps 
-rm -rf ~/quay-install
 
 if [ "$reg_ssh" ]; then
+	#rm -rf ~/quay-install
+
 	echo "Running command: ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) -k ~/.ssh/id_rsa $reg_root_opt"
 	./mirror-registry uninstall -v \
 		--targetHostname $reg_host \

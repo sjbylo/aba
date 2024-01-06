@@ -45,20 +45,7 @@ scripts/verify-config.sh || exit 1
 
 # Use j2cli to render the templates
 echo Generating Agent-based configuration file: $PWD/agent-config.yaml 
-j2 templates/agent-config.yaml.j2 > agent-config.yaml2
-scripts/render_template.py --template agent-config.yaml.j2 \
-	rendezvous_ip=$rendezvous_ip \
-	cluster_name=$cluster_name \
-	num_masters=$num_masters \
-	num_workers=$num_workers \
-	mac_prefix="$mac_prefix" \
-	machine_ip_prefix=$machine_ip_prefix \
-	prefix_length=$prefix_length \
-	starting_ip_index=$starting_ip_index \
-	master_prefix=$master_prefix \
-	worker_prefix=$worker_prefix \
-	next_hop_address=$next_hop_address \
-	dns_server=$dns_server \
-		> agent-config.yaml
+#j2 templates/agent-config.yaml.j2 > agent-config.yaml2
 
+scripts/j2 templates/agent-config.yaml.j2 > agent-config.yaml
 

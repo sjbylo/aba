@@ -30,7 +30,7 @@ fi
 
 
 install_rpm podman python3-pip 
-install_pip j2cli
+#install_pip j2cli
 
 
 export reg_url=https://$reg_host:$reg_port
@@ -55,7 +55,7 @@ podman login -u init -p $reg_password $reg_url
 echo Generating imageset-config.yaml for oc-mirror ...
 export ocp_ver=$ocp_target_ver
 export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
-j2 ./templates/imageset-config-sync.yaml.j2 > imageset-config-sync.yaml 
+scripts/j2 ./templates/imageset-config-sync.yaml.j2 > imageset-config-sync.yaml 
 
 ./scripts/create-containers-auth.sh
 

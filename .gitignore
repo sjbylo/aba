@@ -8,6 +8,7 @@ mirror/.??*
 *.md.bak
 target-ocp-version.conf
 mirror/deps/
+mirror/imageset-config*yaml
 mirror/execution-environment.tar
 mirror/image-archive.tar
 mirror/imageset-config-sync.yaml
@@ -21,5 +22,6 @@ mirror/redis.tar
 mirror/registry-creds.txt
 mirror/scripts
 mirror/templates
+mirror/save
 mirror/*.sh
 

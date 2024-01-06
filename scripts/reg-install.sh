@@ -87,7 +87,7 @@ if [ "$reg_ssh" ]; then
 		reg_pw=$(openssl rand -base64 12)
 	fi
 
-	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --taregtHostname $reg_host -k ~/.ssh/id_rsa --initPassword xxx $reg_root_opt'"
+	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --taregtHostname $reg_host -k ~/.ssh/id_rsa --initPassword <hidden> $reg_root_opt'"
 
 	./mirror-registry install -v \
   		--quayHostname $reg_host \
@@ -98,15 +98,6 @@ if [ "$reg_ssh" ]; then
 
 	rm -rf deps/*
 
-	# Fetch root CA from remote host 
-#	if [ ! -d $reg_root/quay-rootCA ]; then
-#		mkdir -p $reg_root/quay-rootCA
-#		scp -F .ssh.conf -p $(whoami)@$reg_host:$reg_root/quay-rootCA/* $reg_root/quay-rootCA
-#		scp -F .ssh.conf -p $(whoami)@$reg_host:$reg_root/quay-rootCA/rootCA.pem deps/
-#	fi
-
-	echo Creating json registry credentials in registry-creds.txt ...
-
 	reg_user=init
 
 	echo -n $reg_user:$reg_pw > registry-creds.txt 
@@ -114,8 +105,7 @@ if [ "$reg_ssh" ]; then
 	# Configure the pull secret for this mirror registry 
 	export reg_url=https://$reg_host:$reg_port
 
-###	cp $reg_root/quay-rootCA/rootCA.pem deps/
-
+	# Fetch root CA from remote host 
 	scp -F .ssh.conf -p $(whoami)@$reg_host:$reg_root/quay-rootCA/rootCA.pem deps/
 
 	# Check if the cert needs to be updated
