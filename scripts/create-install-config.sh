@@ -10,7 +10,8 @@ source mirror.conf
 
 scripts/verify-release-image.sh
 
-install_rpm bind-utils nmstate python3-pip
+#install_rpm bind-utils nmstate python3-pip
+install_rpm bind-utils nmstate 
 #install_pip j2cli
 
 

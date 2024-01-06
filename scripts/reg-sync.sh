@@ -29,7 +29,8 @@ else
 fi
 
 
-install_rpm podman python3-pip 
+#install_rpm podman python3-pip 
+install_rpm podman 
 #install_pip j2cli
 
 

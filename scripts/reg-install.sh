@@ -14,8 +14,9 @@ UserKnownHostsFile=/dev/null
 ConnectTimeout=15
 END
 
-install_rpm podman python3-pip
-install_pip j2cli
+#install_rpm podman python3-pip
+install_rpm podman 
+#install_pip j2cli
 
 if [ -s deps/rootCA.pem -a -s deps/pull-secret-mirror.json ]; then
 

@@ -6,7 +6,8 @@ umask 077
 
 source mirror.conf
 
-install_rpm podman python3-pip
+#install_rpm podman python3-pip
+install_rpm podman 
 #install_pip j2cli
 
 # Can the registry mirror already be reached?
