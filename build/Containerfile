@@ -68,7 +68,7 @@ tar xvf openshift-client-linux-${OPTTARGETARCH}${OPENSHIFT_CLIENT_VERSION}.tar.g
 rm -rf openshift-client-linux-${OPTTARGETARCH}${OPENSHIFT_CLIENT_VERSION}.tar.gz  && rm -f /usr/local/bin/kubectl && ln -sf /usr/local/bin/oc /usr/local/bin/kubectl && \
 #curl -sSL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_${TARGETARCH} && chmod 755 /usr/local/bin/yq && \
 rm -rf /root/anaconda* /root/original-ks.cfg /usr/local/README && \
-pip3 install --no-cache-dir j2cli 
+#pip3 install --no-cache-dir j2cli 
 
 # The hypershift cli is downloaded directly from the cluster.
 # This could change when HCP goes GA - the alternative would
