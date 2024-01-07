@@ -27,10 +27,10 @@ if [ -s deps/rootCA.pem -a -s deps/pull-secret-mirror.json ]; then
 
 	podman logout --all 
 	echo -n "Checking registry access is working using 'podman login': "
-	export reg_url=https://$reg_host:$reg_port
+	reg_url=https://$reg_host:$reg_port
 	podman login --authfile deps/pull-secret-mirror.json $reg_url 
 
-	echo "Valid existing registry credential files found in mirror/deps/.  Using existing registry."
+	echo "Valid existing registry credential files found in mirror/deps/.  Using existing registry $reg_url"
 
 	exit 0
 fi
