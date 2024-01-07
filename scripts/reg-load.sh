@@ -16,10 +16,10 @@ res_remote=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg
 
 export reg_url=https://$reg_host:$reg_port
 
-podman logout --all 
-echo -n "Checking registry access to $reg_url is working using 'podman login': "
-##podman login -u init -p $reg_password $reg_url 
-podman login --authfile deps/pull-secret-mirror.json $reg_url 
+#podman logout --all 
+#echo -n "Checking registry access to $reg_url is working using 'podman login': "
+###podman login -u init -p $reg_password $reg_url 
+#podman login --authfile deps/pull-secret-mirror.json $reg_url 
 
 # Run create container auth
 ./scripts/create-containers-auth.sh 
@@ -27,6 +27,7 @@ podman login --authfile deps/pull-secret-mirror.json $reg_url
 echo Generating imageset-config.yaml for oc-mirror ...
 export ocp_ver=$ocp_target_ver
 export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
+[ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
 scripts/j2 ./templates/imageset-config.yaml.j2 > imageset-config.yaml 
 
 [ "$reg_root" ] || reg_root=$HOME/quay-install  # Only needed for the below message
@@ -43,8 +44,10 @@ echo
 echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
 echo Ensure there is enough disk space under $reg_root.  This can take 10-20 mins to complete. 
 
+[ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
+
 # Set up script to help for manual re-sync
-echo "oc mirror --from=./save/mirror_seq1_000000.tar docker://$reg_host:$reg_port/$reg_path"  > upload-mirror.sh && chmod 700 upload-mirror.sh
+echo "oc mirror $tls_verify_opts --from=./save/mirror_seq1_000000.tar docker://$reg_host:$reg_port/$reg_path"  > upload-mirror.sh && chmod 700 upload-mirror.sh
 ./upload-mirror.sh
 
 

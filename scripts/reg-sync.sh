@@ -49,13 +49,15 @@ if [ "$reg_code" != "200" ]; then
 	echo "Error: Registry at https://$reg_host:${reg_port}/ is not responding" && exit 1
 fi
 
-podman logout --all 
-echo -n "Checking registry access is working using 'podman login': "
-podman login -u init -p $reg_password $reg_url 
+#podman logout --all 
+#echo -n "Checking registry access is working using 'podman login': "
+#podman login -u init -p $reg_password $reg_url 
 
 echo Generating imageset-config.yaml for oc-mirror ...
 export ocp_ver=$ocp_target_ver
 export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
+set -x
+[ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
 scripts/j2 ./templates/imageset-config-sync.yaml.j2 > imageset-config-sync.yaml 
 
 ./scripts/create-containers-auth.sh
@@ -65,8 +67,10 @@ scripts/j2 ./templates/imageset-config-sync.yaml.j2 > imageset-config-sync.yaml
 echo "Now mirroring the images.  "
 echo "Ensure there is enough disk space under $reg_root.  This can take 10-20 mins to complete."
 
+[ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
+
 # Set up script to help for manual re-sync
-echo "oc mirror --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+echo "oc mirror $tls_verify_opts --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 ./sync-mirror.sh 
 
 
