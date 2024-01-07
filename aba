@@ -14,36 +14,6 @@ if [ "$1" = "--debug" -o "$1" = "-d" ]; then
 	shift 
 fi
 
-## Show help
-#if [ "$1" = "-h" -o "$1" = "--help" ]; then
-#	cat <<-END
-#		Usage: `basename $0` [--debug] <command> --dir <directory> 
-#
-#		If the directory does not exist it will be created and configuration files added.
-#		The configuration files need to be edited to match your environment. 
-#		If needed, edit the configuration files and run the command again. 
-#
-#		Example:
-#		  `basename $0` reg init
-#		  `basename $0` --dir compact 
-#
-#		Commands:
-#
-#		reg init          Install and initialize a mirror registry on the local host (bastion).
-#		reg delete|del    Uninstall the mirror registry.
-#
-#		vmw upload	  Upload the ISO image to vSphere or ESXi.
-#		vmw create        Create the VMs using the config files (install-config.yaml and agent-config.yaml).
-#		vmw stop          Power down the VMs.
-#		vmw start         Power on the VMs.
-#		vmw refresh       Delete and re-create the VMs.
-#		monitor           View the installation progress on the rendezvous server after the agent service has started
-#
-#		reset             Delete the generated files.
-#END
-#		exit
-#fi
-
 ## Get the latest stable OCP version number.
 stable_ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | tee /tmp/.release.txt | \
 	 egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
@@ -82,8 +52,14 @@ install_rpm make
 [ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver all
 
 echo
-echo "OK.  Now run the following:"
-echo "cd mirror"
-echo "make sync       # ... if you have a 'connected' bastion."
+echo "Now run the following:"
+echo "make sync       # ... if you have a 'connected' bastion and want to load the registry directly from the Internet."
 echo "make save       # ... if you have a 'disconnected' (or air-gapped) bastion.  See the README file for more information."
+echo "make load       # ... if you want to load the registry with the saved images.  See the README file for more information."
+echo 
+echo After the mirror is working, run one of the following:
+echo "make sno"
+echo "make compact"
+echo "make standard"
+echo "make cluster name=mycluster"
 

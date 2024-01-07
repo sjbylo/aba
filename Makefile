@@ -56,13 +56,8 @@ standard:  ## Install a standard 3+2-node OpenShift cluster
 	cp $(TEMPLATES)/aba-standard.conf standard/aba.conf
 	make -C standard
 
-ocp:
-	[ ! "$(dir)" ] && echo "Must specify dir=newdir, e.g. make ocp dir=mycluster" && exit 1
-	mkdir -p $(dir)
-	ln -fs templates/Makefile $(dir)/Makefile
-	ln -fs ../templates $(dir)
-	cp test/aba-sno.conf $(dir)/aba.conf
-	make -C $(dir) 
+cluster: ## Install a cluster 
+	scripts/setup-cluster.sh $(name) 
 
 test:
 	scripts/test.sh
