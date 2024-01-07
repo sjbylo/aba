@@ -18,19 +18,32 @@ END
 install_rpm podman 
 #install_pip j2cli
 
-if [ -s deps/rootCA.pem -a -s deps/pull-secret-mirror.json ]; then
+#if [ -s deps/rootCA.pem -a -s deps/pull-secret-mirror.json ]; then
+if [ -s deps/pull-secret-mirror.json ]; then
 
-	# Check if the cert needs to be updated
-	sudo diff deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2 || \
-		sudo cp deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem && \
-			sudo update-ca-trust extract
+	###
+	sudo rm -vf /etc/pki/ca-trust/source/anchors/rootCA*.pem
+	sudo update-ca-trust extract
+	###
+
+	reg_url=https://$reg_host:$reg_port
+
+	#if [ "$tls_verify" -a -s deps/rootCA.pem ]; then
+	if [ -s deps/rootCA.pem ]; then
+		# Check if the cert needs to be updated
+		sudo diff deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2 || \
+			sudo cp deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem && \
+				sudo update-ca-trust extract && \
+					echo "Cert 'deps/rootCA.pem' updated in system"
+	fi
+
+	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 	podman logout --all 
 	echo -n "Checking registry access is working using 'podman login': "
-	reg_url=https://$reg_host:$reg_port
-	podman login --authfile deps/pull-secret-mirror.json $reg_url 
+	podman login $tls_verify_opts --authfile deps/pull-secret-mirror.json $reg_url 
 
-	echo "Valid existing registry credential files found in mirror/deps/.  Using existing registry $reg_url"
+	echo "Valid registry credential files found in mirror/deps/.  Using existing registry $reg_url"
 
 	exit 0
 fi
@@ -43,12 +56,12 @@ if [ "$reg_code" = "200" ]; then
 	echo "Registry found at $reg_host:$reg_port. "
 	
 	echo
-	echo "If this registry is your existing registry, copy this registry's pull secret and root CA files into 'mirror/deps'."
+	echo "If this registry is your existing registry, copy this registry's pull secret and root CA files into 'mirror/deps/'."
 	echo -n "See the README for instructions.  Hit RETURN to continue: "
 	echo 
 	read yn
 
-	exit 0
+	exit 1
 fi
 
 
