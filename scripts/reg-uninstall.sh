@@ -15,7 +15,7 @@ if [ "$reg_root" ]; then
 #	reg_root=$HOME/quay-install  # FIXME Needed?
 fi
 
-rm -rf deps 
+rm -rf deps/*
 
 if [ "$reg_ssh" ]; then
 	#rm -rf ~/quay-install
