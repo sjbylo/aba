@@ -19,8 +19,12 @@ all: sync
 ../target-ocp-version.conf:
 	../aba
 
-init: .initialized
-.initialized: deps templates scripts mirror.conf mirror-registry 
+#init: .initialized
+#.initialized: deps templates scripts mirror.conf mirror-registry 
+#	touch .initialized
+
+init: deps templates scripts mirror.conf mirror-registry .initialized
+.initialized: 
 	touch .initialized
 
 deps:
@@ -46,7 +50,7 @@ mirror.conf: ../mirror.conf
 	cp ../mirror.conf .
 
 ../mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf
-	version=$(cat ../target-ocp-version.conf)
+	####version=$(cat ../target-ocp-version.conf)
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 install: init .installed
@@ -79,7 +83,8 @@ save: init .saved
 saveclean:
 	rm .saved
 
-sync: init install .synced 
+#sync: init install .synced 
+sync: install .synced 
 .synced: 
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-sync.sh  $(debug)
@@ -89,7 +94,8 @@ sync: init install .synced
 syncclean:
 	rm .synced
 	
-load: init save install .loaded
+#load: init save install .loaded
+load: save install .loaded
 .loaded: 
 	# Add images to the mirror registry
 	$(SCRIPTS)/reg-load.sh  $(debug)

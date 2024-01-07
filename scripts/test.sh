@@ -26,6 +26,8 @@ install_all_clusters() {
 	#done
 }
 
+make -C mirror uninstall
+
 #####
 ver=$(cat ./target-ocp-version.conf)
 
@@ -36,26 +38,25 @@ sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirr
 ####
 
 ## test for remote mirror
-#sed -i "s/registry.example.com/registry2.example.com/g" ./mirror.conf
-#sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror.conf
+sed -i "s/registry.example.com/registry2.example.com/g" ./mirror.conf
+sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror.conf
 ## test for remote mirror
 
 ######################
 echo Runtest: START - sync
-#make -C mirror mirror-registry
-#mirror/mirror-registry uninstall --autoApprove || true
-make -C mirror uninstall
+
 make -C mirror clean
 make sync   # This will install and sync
+
 #install_all_clusters sno compact standard 
 install_all_clusters sno
 
 ######################
 echo Runtest: START - load
-#make -C mirror mirror-registry
-#mirror/mirror-registry uninstall --autoApprove || true
+
 make -C mirror uninstall
 make -C mirror clean
+
 make load   #  This will save, install, load
 #install_all_clusters sno compact standard 
 install_all_clusters standard
