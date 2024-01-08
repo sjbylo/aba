@@ -1,6 +1,3 @@
-# No file exists to check timestamps
-###.PHONY: all clean distclean loadclean syncclean saveclean uninstallclean installclean
-
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 debug   ?=
@@ -18,10 +15,6 @@ all: sync
 # FIXME
 ../target-ocp-version.conf:
 	../aba
-
-#init: .initialized
-#.initialized: deps templates scripts mirror.conf mirror-registry 
-#	touch .initialized
 
 init: deps templates scripts mirror.conf mirror-registry .initialized
 .initialized: 
@@ -43,14 +36,13 @@ mirror-registry.tar.gz:
 	curl --progress-bar -OL \
 	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
-deps/rootCA.pem: deps install ~/quay-install/quay-rootCA/rootCA.pem 
-	cp ~/quay-install/quay-rootCA/rootCA.pem deps/
+# FIXME deps/rootCA.pem: deps install ~/quay-install/quay-rootCA/rootCA.pem 
+#	cp ~/quay-install/quay-rootCA/rootCA.pem deps/
 
-mirror.conf: ../mirror.conf
+mirror.conf: ../mirror.conf ## Set up the mirror.conf file. Note that aba/mirror.conf has priority over aba/mirror/mirror.conf.
 	cp ../mirror.conf .
 
-../mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf
-	####version=$(cat ../target-ocp-version.conf)
+../mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 install: init .installed
@@ -83,10 +75,8 @@ save: init .saved
 saveclean:
 	rm .saved
 
-#sync: init install .synced 
-sync: install .synced 
+sync: install .synced ## Sync images from the Internet to an internal registry. 
 .synced: 
-	# Add images to the mirror registry
 	$(SCRIPTS)/reg-sync.sh  $(debug)
 	touch .synced
 
@@ -94,10 +84,12 @@ sync: install .synced
 syncclean:
 	rm .synced
 	
-#load: init save install .loaded
-load: save install .loaded
+
+.PHONY: testload
+testload: save load install .loaded  ## Test the save, install, load process on a connected host
+
+load: install .loaded  ## Load the saved images into a registry on the internal bastion
 .loaded: 
-	# Add images to the mirror registry
 	$(SCRIPTS)/reg-load.sh  $(debug)
 	touch .loaded
 
@@ -105,15 +97,14 @@ load: save install .loaded
 loadclean:
 	rm .loaded
 	
-# Use 'tidy' before copying/moving files to internal bastion to reduce the amount of data to copy
 .PHONY: tidy 
-tidy:
+tidy: ## Tidy large uncompressed files before copying to internal bastion 
 	#rm -rf .??* *.tar mirror-registry
 	rm -rf *.tar mirror-registry   # Note that dot files are needed mby make on the internal bastion
 
 .PHONY: clean
 clean: tidy
-	rm -rf save/ deps/
+	rm -rf save/ deps/ .??* 
 
 .PHONY: distclean
 distclean: uninstall clean
