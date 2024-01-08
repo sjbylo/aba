@@ -47,7 +47,7 @@ done
 
 echo "$target_ver" > target-ocp-version.conf
 
-install_rpm make
+install_rpm podman make jq bind-utils nmstate net-tools skopeo
 
 [ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver all
 
