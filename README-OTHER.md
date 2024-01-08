@@ -17,5 +17,13 @@ ssh $(whoami)@10.0.1.6 -- "sudo firewall-cmd --add-port=$p/tcp --permanent && su
 ssh $(whoami)@10.0.1.6 -- "nc -l $p| tar xvzf -"
 cd
 p=22222
-tar czf - bin aba | nc 10.0.1.6 $p
+#tar czf - bin aba | nc 10.0.1.6 $p
+tar czf - `find bin aba -type f ! -path "*/.git*"` | nc 10.0.1.6 $p
 ```
+
+or with rsync over ssh
+
+```
+rsync --progress --partial -avz --exclude '*/.git*' bin aba $(whoami)@10.0.1.6:
+```
+
