@@ -108,7 +108,8 @@ loadclean:
 # Use 'tidy' before copying/moving files to internal bastion to reduce the amount of data to copy
 .PHONY: tidy 
 tidy:
-	rm -rf .??* *.tar mirror-registry
+	#rm -rf .??* *.tar mirror-registry
+	rm -rf *.tar mirror-registry   # Note that dot files are needed mby make on the internal bastion
 
 .PHONY: clean
 clean: tidy
