@@ -104,7 +104,7 @@ tidy: ## Tidy large uncompressed files before copying to internal bastion
 
 .PHONY: clean
 clean: tidy
-	rm -rf save/ deps/ .??* 
+	rm -rf save/ deps/* .??* 
 
 .PHONY: distclean
 distclean: uninstall clean
