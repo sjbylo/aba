@@ -3,7 +3,7 @@
 
 ocp_target_ver  := $(shell cat ../target-ocp-version.conf)
 
-all: ../target-ocp-version.conf ~/bin ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror 
+all: ../target-ocp-version.conf ~/bin ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror govc
 
 ~/bin:
 	mkdir ~/bin
@@ -35,6 +35,9 @@ openshift-install-linux-$(ocp_target_ver).tar.gz:
 oc-mirror.tar.gz:
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/oc-mirror.tar.gz
 
+
+govc:
+	curl -sL -o - "https://github.com/vmware/govmomi/releases/latest/download/govc_`uname -s`_`uname -m`.tar.gz" | tar -C ~/bin -xvzf - govc
 
 #~/.pull-secret.json:
 #	$(SCRIPTS)/install-pull-secret.sh 
