@@ -107,7 +107,8 @@ clean: tidy
 	rm -rf save/ deps/* .??* 
 
 .PHONY: distclean
-distclean: uninstall clean
-	rm -rf *.tar.gz oc-mirror-workspace 
+#distclean: uninstall clean
+distclean: clean
+	rm -rf *.tar.gz oc-mirror-workspace deps
 	rm -f  scripts templates registry-creds.txt *.conf *.sh *.yaml 
 
