@@ -21,8 +21,8 @@ sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ../mir
 
 echo ==========================================================
 echo "Edit the mirror/mirror.conf file"
-echo "Change the values to match your environment. Define the mirror registry where you intend it to be installed or"
-echo -n "where it already exists. Hit Return to edit or Ctrl-C to break. [y]"
+echo "Set the values to match your *private network*.  Define the mirror registry where you intend it to be installed or"
+echo -n "where it already exists. Hit Return to edit or Ctrl-C to abort [y]: "
 read yn
 
 vi ../mirror.conf

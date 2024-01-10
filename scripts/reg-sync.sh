@@ -56,7 +56,7 @@ fi
 echo Generating imageset-config.yaml for oc-mirror ...
 export ocp_ver=$ocp_target_ver
 export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
-set -x
+
 [ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
 scripts/j2 ./templates/imageset-config-sync.yaml.j2 > imageset-config-sync.yaml 
 

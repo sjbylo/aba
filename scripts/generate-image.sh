@@ -23,3 +23,5 @@ cp -rp $MANEFEST_DIR $MANEFEST_DIR.backup
 echo "openshift-install agent create image --dir $MANEFEST_DIR "
 openshift-install agent create image --dir $MANEFEST_DIR 
 
+echo 
+echo "The agent based ISO has been created in the 'iso-agent-based' directory"

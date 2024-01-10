@@ -16,6 +16,10 @@ help: ## Help
 
 #all: cli mirror ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror
 
+vmw: vmware.conf
+vmware.conf:
+	scripts/install-vmware.conf.sh
+
 cli:
 	make -C cli
 
@@ -63,6 +67,7 @@ test:
 	scripts/test.sh
 
 clean:
+	rm -f vmware.conf target-ocp-version.conf
 	make -C mirror clean 
 	make -C cli clean 
 

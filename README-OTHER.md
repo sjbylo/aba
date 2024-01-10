@@ -18,7 +18,8 @@ ssh $(whoami)@10.0.1.6 -- "nc -l $p| tar xvzf -"
 cd
 p=22222
 #tar czf - bin aba | nc 10.0.1.6 $p
-tar czf - `find bin aba -type f ! -path "*/.git*"` | nc 10.0.1.6 $p
+# Ensure aba can't be managed by git.  No need to copy everything over.
+tar czf - `find bin aba -type f ! -path "aba/.git*" -a ! -path "aba/cli/*"` | nc 10.0.1.6 $p
 ```
 
 or with rsync over ssh
