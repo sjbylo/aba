@@ -6,6 +6,7 @@ SCRIPTS   = scripts
 ocp_target_ver   ?= 4.13.19
 d        ?= 
 DEBUG     = $d
+dir    ?= /tmp
 #version  ?= 4.14.2
 version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 
@@ -38,6 +39,17 @@ sync: ## Synchonrise images from Red Hat's public registry to the Quay mirror re
 
 save: ## Save images from Red Hat's public registry to the local filesystem
 	make -C mirror save 
+
+.PHONY: tidy
+tidy:
+	make -C mirror tidy
+
+.PHONY: tar
+tar: tidy  ## Tar the repo to move to internet network, e.g. make tar dir=/dev/path/to/thumbdrive.  Default dir is /tmp.
+	scripts/create-tarball.sh $(dir)
+
+#tar: ## Tar up the aba repo, ready to move to the internet network
+	#make -C mirror tar 
 
 load: ## Load images from the local filesystem to the Quay mirror registry
 	make -C mirror load

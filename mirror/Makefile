@@ -1,6 +1,7 @@
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 debug   ?=
+
 #version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 ##version := $(shell cat ../target-ocp-version.conf)
 
@@ -94,17 +95,19 @@ uninstall: init .uninstalled ## Uninstall the registry
 .PHONY: uninstallclean
 uninstallclean:
 	rm .uninstalled
+
 .PHONY: tidy 
-tidy: ## Tidy large uncompressed files before copying to an internal bastion 
-	rm -rf *.tar mirror-registry   # Note that dot files are needed by 'make' on the internal bastion
+tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
+	rm -rf *.tar mirror-registry  # 'dot' files must not be tidied as 'make load' needs them on the internal bastion
 
 .PHONY: clean
 clean: tidy ## Clean up files
 	rm -rf save/ deps/* .??* 
+	rm -rf *.sh templates scripts imageset*yaml oc-mirror-workspace
 
 .PHONY: distclean
 #distclean: uninstall clean
 distclean: clean ## Clean up repo for distribution
 	rm -rf *.tar.gz oc-mirror-workspace deps
-	rm -f  scripts templates registry-creds.txt *.conf *.sh *.yaml 
+	rm -f .registry-creds.txt *.conf *.yaml 
 
