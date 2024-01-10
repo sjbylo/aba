@@ -25,8 +25,8 @@ source mirror.conf
 mkdir -p ~/.docker ~/.containers
 
 # If the mirror creds are available add them also
-if [ -s ./registry-creds.txt ]; then
-	reg_creds=$(cat ./registry-creds.txt)
+if [ -s ./.registry-creds.txt ]; then
+	reg_creds=$(cat ./.registry-creds.txt)
 	export enc_password=$(echo -n "$reg_creds" | base64 -w0)
 
 	# Inputs: enc_password, reg_host and reg_port 
@@ -34,6 +34,7 @@ if [ -s ./registry-creds.txt ]; then
 
 	# Merge the two files
 	jq -s '.[0] * .[1]' ./deps/pull-secret-mirror.json $pull_secret_file > ./deps/pull-secret-full.json
+
 	cp ./deps/pull-secret-full.json ~/.docker/config.json
 	cp ./deps/pull-secret-full.json ~/.containers/auth.json
 else
