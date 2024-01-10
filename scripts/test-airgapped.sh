@@ -64,7 +64,7 @@ p=22222
 cd
 # Use one of the other copy command!
 #time tar czf - `find bin aba -type f ! -path "aba/.git*" -a ! -path "aba/cli/*"` | ssh $(whoami)@$bastion2 tar xvzf -
-time rsync --progress --partial -avz --exclude '*/.git*' --exclude 'aba/cli/*' bin aba $(whoami)@10.0.1.6:
+time rsync --progress --partial --times -avz --exclude '*/.git*' --exclude 'aba/cli/*' bin aba $(whoami)@10.0.1.6:
 
 ssh $(whoami)@$bastion2 -- "cd ~/aba && make load sno" 
 
