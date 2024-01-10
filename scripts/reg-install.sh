@@ -14,10 +14,9 @@ UserKnownHostsFile=/dev/null
 ConnectTimeout=15
 END
 
-#install_rpm podman python3-pip
 install_rpm podman 
-#install_pip j2cli
 
+# Check for existing reg.creds (provided by user)
 #if [ -s deps/rootCA.pem -a -s deps/pull-secret-mirror.json ]; then
 if [ -s deps/pull-secret-mirror.json ]; then
 
@@ -48,13 +47,12 @@ if [ -s deps/pull-secret-mirror.json ]; then
 	exit 0
 fi
 
-# Mirror registry installed?
+# Mirror registry already installed?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
 if [ "$reg_code" = "200" ]; then
-	echo "Registry found at $reg_host:$reg_port. "
-	
+	echo "Quay registry found at $reg_host:$reg_port. "
 	echo
 	echo "If this registry is your existing registry, copy this registry's pull secret and root CA files into 'mirror/deps/'."
 	echo -n "See the README for instructions.  Hit RETURN to continue: "
@@ -64,27 +62,23 @@ if [ "$reg_code" = "200" ]; then
 	exit 1
 fi
 
-
+# Has user defined a registry root dir?
 if [ "$reg_root" ]; then
 	# FIXME
 	#reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
 	reg_root_opt="--quayStorage ${reg_root}-storage"
 else
+	# The default path
 	reg_root=$HOME/quay-install
 fi
 
-##if [ "$reg_code" != "200" ]; then
-
-# remote installs
+# Remote installs if ssh key defined 
 if [ "$reg_ssh" ]; then
 	echo "Installing Quay registry on remote host $reg_host ..."
 
-	# FIXME: We are using ssh, even if the registry is installed locally. 
-	###[ ! -s ~/.ssh/id_rsa ] && mkdir -p ~/.ssh && ssh-keygen -b 2048 -t rsa -f ~/.ssh/id_rsa -N ""
-
 	if ! ssh -F .ssh.conf $(whoami)@$reg_host hostname; then
 		echo "Error: Can't ssh to $(whoami)@$reg_host"
-		echo "Configure ssh to the host $reg_host and try again."
+		echo "Configure passwordless ssh to the host $reg_host and try again."
 		exit 1
 	else
 		echo "Ssh access to [$reg_host] is working ..."
@@ -107,14 +101,19 @@ if [ "$reg_ssh" ]; then
   		--quayHostname $reg_host \
   		--targetUsername $(whoami) \
   		--targetHostname $reg_host \
-  		-k ~/.ssh/id_rsa \
+  		-k $reg_ssh \
 		--initPassword $reg_pw $reg_root_opt
+
+	# Generate the script to be used to delete this registry
+	cmd="./mirror-registry uninstall --targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh --autoApprove"
+	echo "echo Running command \"$cmd\"" > ./reg-uninstall.sh
+	echo "$cmd" >> ./reg-uninstall.sh
 
 	rm -rf deps/*
 
 	reg_user=init
 
-	echo -n $reg_user:$reg_pw > registry-creds.txt 
+	echo -n $reg_user:$reg_pw > .registry-creds.txt 
 
 	# Configure the pull secret for this mirror registry 
 	export reg_url=https://$reg_host:$reg_port
@@ -131,7 +130,7 @@ if [ "$reg_ssh" ]; then
 	echo -n "Checking registry access is working using 'podman login': "
 	podman login -u init -p $reg_pw $reg_url 
 
-	reg_creds=$(cat registry-creds.txt)
+	reg_creds=$(cat .registry-creds.txt)
 	scripts/create-containers-auth.sh
 
 else
@@ -154,13 +153,16 @@ else
   		--quayHostname $reg_host \
 		--initPassword $reg_pw $reg_root_opt
 
-	rm -rf deps/*
+	# Generate the script to be used to delete this registry
+	cmd="./mirror-registry uninstall --autoApprove"
+	echo "echo Running command  \"$cmd\"" > ./reg-uninstall.sh
+	echo "$cmd" >> ./reg-uninstall.sh
 
-	echo Creating json registry credentials in registry-creds.txt ...
+	rm -rf deps/*
 
 	reg_user=init
 
-	echo -n $reg_user:$reg_pw > registry-creds.txt 
+	echo -n $reg_user:$reg_pw > .registry-creds.txt 
 
 	# Configure the pull secret for this mirror registry 
 	export reg_url=https://$reg_host:$reg_port
@@ -176,7 +178,7 @@ else
 	echo -n "Checking registry access is working using 'podman login': "
 	podman login -u init -p $reg_pw $reg_url 
 
-	reg_creds=$(cat registry-creds.txt)
+	reg_creds=$(cat .registry-creds.txt)
 	scripts/create-containers-auth.sh
 fi
 

@@ -7,18 +7,20 @@ source scripts/include_all.sh
 source mirror.conf
 
 echo Uninstalling mirror registry from host $reg_host ...
-##./mirror-registry uninstall -v || true
 
 if [ "$reg_root" ]; then
 	reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
-#else
-#	reg_root=$HOME/quay-install  # FIXME Needed?
 fi
 
 rm -rf deps/*
 
+if [ -s reg-uninstall.sh ]; then
+	bash -e ./reg-uninstall.sh
+	rm -f ./reg-uninstall.sh
+	exit 0
+fi
+
 if [ "$reg_ssh" ]; then
-	#rm -rf ~/quay-install
 
 	echo "Running command: ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) -k ~/.ssh/id_rsa $reg_root_opt"
 	./mirror-registry uninstall -v \
