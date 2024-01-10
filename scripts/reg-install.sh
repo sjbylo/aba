@@ -95,7 +95,7 @@ if [ "$reg_ssh" ]; then
 		reg_pw=$(openssl rand -base64 12)
 	fi
 
-	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --taregtHostname $reg_host -k ~/.ssh/id_rsa --initPassword <hidden> $reg_root_opt'"
+	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --taregtHostname $reg_host -k $reg_ssh --initPassword <hidden> $reg_root_opt'"
 
 	./mirror-registry install -v \
   		--quayHostname $reg_host \
