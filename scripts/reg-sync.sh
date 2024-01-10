@@ -29,9 +29,7 @@ else
 fi
 
 
-#install_rpm podman python3-pip 
-install_rpm podman 
-
+install_rpm podman  python3-jinja2  python3
 
 export reg_url=https://$reg_host:$reg_port
 

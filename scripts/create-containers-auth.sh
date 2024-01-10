@@ -6,7 +6,7 @@
 
 umask 077
 
-install_rpm jq
+install_rpm jq  python3-jinja2  python3
 
 source mirror.conf
 
