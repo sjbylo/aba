@@ -75,7 +75,7 @@ In this mode, the bastion has access to both the Internet and the private subnet
 make sync
 ```
 This command will:
-  - check the connection to your existing registry, if available.  But, set up your registry credentials first! See above for more.
+  - check the connection to your existing registry, if available (be sure to set up your registry credentials first! See above for more).
   - or, installs Quay registry on the bastion (or remote bastion) and copies the generated pull secret and certificate into the 'mirror/deps' dir for later use.
   - pull images from the Internet and store them in the registry.
 
@@ -106,8 +106,8 @@ make tar name=/dev/path/to/thumbdrive
 # Or, do this manually 
 cd 		                   # Assuming aba is directly under your $HOME dir
 make tidy 
-tar czf aba.tgz aba/aba bin aba/*.conf aba/Makefile aba/scripts aba/templates aba/*.md aba/mirror aba/cli 
-# Copy the file 'aba.tgz' to your internal bastion via a thumb drive. 
+tar czf /path/to/thumbdrive/aba.tgz `find bin aba -type f ! -path "aba/.git*" -a ! -path "aba/cli/*"` 
+# Copy the file 'aba.tgz' to your internal bastion via the thumb drive. 
 
 # Then, on the internal bastion run:
 cd
@@ -121,7 +121,7 @@ Load the images from local storage to the internal mirror registry.
 make load
 ```
 - This will install Quay (from the files that were copied above) and then load the images into Quay.
-- Note that the internal bastion will need to install RPMs, e.g. from Satellite. 
+- Note that the internal bastion will need to install RPMs, e.g. from Satellite (or configure 'dnf' to use a proxy for testing).
 
 Now continue with "Install OpenShift" below.
 
@@ -180,6 +180,8 @@ make stop        # Shut down the guest OS (CoreOS) of all VMs in the 'sno' clust
 make start       # Power on all VMs in the 'sno' cluster. 
 
 make delete      # Delete all the VMs in the 'sno' cluster. 
+
+make help        # This is available in all Makefiles (in aba/  aba/mirror/  aba/cli/ and aba/<mycluster>/) 
 ```
 
 
