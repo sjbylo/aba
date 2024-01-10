@@ -36,6 +36,7 @@ do
 	[ "$stable_ver_point" ] && echo "OpenShift latest stable (previous) version is $stable_ver_prev (p)" && or_p="or (p) "
 	[ "$cur_ver" ] && echo "The current installed version of 'openshift-install' is $cur_ver (Return)"
 
+	echo
 	echo    "Which version of OpenShift do you want to install?"
 	echo -n "Enter version $or_s$or_p$or_ret [$default_ver]: "
 
@@ -51,6 +52,17 @@ install_rpm podman make jq bind-utils nmstate net-tools skopeo
 
 [ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver all
 
+############
+# vmware.conf
+
+if [ ! -s vmware.conf ]; then
+	echo
+	echo -n "Do you want to use a vSphere or ESXi? (y/n) [y]: "
+	read yn
+	[ ! "$yn" -o "$yn" = "y" ] && make vmware.conf
+fi
+
+############
 echo
 echo "Now run the following:"
 echo "make sync       # ... if you have a 'connected' bastion and want to load the registry directly from the Internet."
