@@ -5,6 +5,7 @@
 [ "$1" ] && set -x 
 
 if [ ! "$CLUSTER_NAME" ]; then
+	scripts/cluster-config-check.sh
 	eval $(scripts/cluster-config.sh $@ || exit 1)
 fi
 

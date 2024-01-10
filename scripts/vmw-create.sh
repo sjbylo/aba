@@ -6,9 +6,15 @@
 
 [ "$1" ] && set -x
 
-scripts/install-govc.sh
+if [ -s vmware.conf ]; then
+	source vmware.conf  # This is needed for $VMW_FOLDER
+else
+	echo "vmware.conf file not defined. Run 'make vmw' to create it if needed"
+	exit 0
+fi
 
 if [ ! "$CLUSTER_NAME" ]; then
+	scripts/cluster-config-check.sh
 	eval `scripts/cluster-config.sh || exit 1`
 fi
 
@@ -20,7 +26,6 @@ scripts/check-macs.sh || exit
 # Read in the cpu and mem values 
 source aba.conf 
 
-source vmware.conf
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
 
 # If we are accessing vCenter (and not ESXi directly) 
