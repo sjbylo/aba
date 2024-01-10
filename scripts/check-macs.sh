@@ -12,7 +12,6 @@ WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 
 # Need command 'arp' 
 install_rpm net-tools
-#install_pip j2cli
 
 
 # if arp cannot be installed, then skip this script

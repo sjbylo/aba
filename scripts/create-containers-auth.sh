@@ -7,7 +7,6 @@
 umask 077
 
 install_rpm jq
-#install_pip j2cli
 
 source mirror.conf
 

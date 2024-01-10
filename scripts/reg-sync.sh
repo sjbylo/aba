@@ -31,7 +31,6 @@ fi
 
 #install_rpm podman python3-pip 
 install_rpm podman 
-#install_pip j2cli
 
 
 export reg_url=https://$reg_host:$reg_port
