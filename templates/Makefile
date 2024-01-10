@@ -1,5 +1,5 @@
 # Used, since no file exists to check timestamps
-.PHONY: all clean cleanall delete create start stop kill mon refresh cmd ssh iso
+#.PHONY: all clean cleanall delete create start stop kill mon refresh cmd ssh iso
 
 EDITOR   ?= vi      		# Set vi or nano or you fav. editor
 TEMPLATES = ../templates
@@ -9,7 +9,8 @@ debug    ?=
 version := $(shell ../scripts/fetch-ocp-stable-version.sh)
 
 #all: mirror.conf vmware.conf aba.conf install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso upload force-refresh mon
-all: vmware.conf iso-agent-based/agent.x86_64.iso upload force-refresh mon
+#all: iso-agent-based/agent.x86_64.iso upload force-refresh mon
+all: iso upload force-refresh mon
 
 templates:
 	ln -s ../templates
@@ -21,17 +22,18 @@ mirror:
 	ln -s ../mirror
 
 mirror.conf: mirror 
-	ln -s mirror/mirror.conf 
-	touch mirror.conf
+	ln -s mirror/mirror.conf
+	#touch mirror.conf
 
-vmware.conf: ../vmware.conf 
-	#[ -s ../vmware.conf ] && cp ../vmware.conf .
-	cp ../vmware.conf .
-	touch vmware.conf
+# FIXME: is this the right place to set up vmware.conf?
+#vmware.conf: ../vmware.conf
+vmware.conf: 
+	[ -s ../vmware.conf ] && ln -s ../vmware.conf || true
 
-../vmware.conf: templates scripts
-	scripts/install-vmware.conf.sh
-	touch ../vmware.conf
+# FIXME: is this the right place to set up vmware.conf?
+#../vmware.conf: templates scripts
+#	scripts/install-vmware.conf.sh
+#	touch ../vmware.conf
 
 aba.conf: 
 	cp templates/aba.conf .
@@ -40,18 +42,19 @@ aba.conf:
 install-config.yaml: templates scripts aba.conf mirror.conf
 	scripts/create-install-config.sh $(debug)
 
-agent-config.yaml: templates scripts aba.conf mirror.conf 
+agent-config.yaml: templates scripts aba.conf mirror.conf
 	scripts/create-agent-config.sh $(debug)
 
+#iso: install-config.yaml agent-config.yaml iso-agent-based/agent.x86_64.iso
 iso: iso-agent-based/agent.x86_64.iso
 iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml 
 	scripts/generate-image.sh $(debug)
 
-poweroff: iso-agent-based/agent.x86_64.iso vmware.conf
+poweroff: vmware.conf iso-agent-based/agent.x86_64.iso
 	scripts/vmw-kill.sh $(debug)
 	touch poweroff
 
-upload: poweroff vmware.conf
+upload: vmware.conf poweroff 
 	scripts/vmw-upload.sh $(debug) 
 	touch upload
 
@@ -63,7 +66,6 @@ force-refresh: poweroff vmware.conf
 refresh:  vmware.conf
 	scripts/vmw-delete.sh $(debug)
 	scripts/vmw-create.sh --start $(debug) 
-	touch refresh
 
 delete: vmware.conf
 	scripts/vmw-delete.sh $(debug)
@@ -71,6 +73,7 @@ delete: vmware.conf
 create: vmware.conf
 	scripts/vmw-create.sh $(debug)
 
+#.PHONEY: stop
 stop: vmware.conf
 	scripts/vmw-stop.sh $(debug)
 
@@ -92,13 +95,16 @@ cmd:
 ssh:
 	scripts/ssh-rendezvous.sh
 
+vmw:
+	make -C .. vmware.conf
+
 clean:
 	rm -f scripts templates
 	rm -f install-config.yaml agent-config.yaml 
 	rm -rf iso-agent-based 
-	rm -rf ~/.cache/agent poweroff refresh refresh-poweroff
+	rm -rf ~/.cache/agent .powered-off refresh refresh-poweroff
 	rm -f .??*
 
 distclean: clean
-	rm -f aba.conf mirror.conf vmware.conf 
+	rm -f aba.conf mirror.conf vmware.conf
 
