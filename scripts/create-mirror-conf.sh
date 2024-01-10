@@ -15,8 +15,6 @@ if [ ! "$ver" ]; then
 	echo "Please run ./aba first"
 	exit 1
 fi
-	
-sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ../mirror.conf
 
 echo ==========================================================
 echo "Edit the mirror/mirror.conf file"
@@ -26,6 +24,8 @@ read yn
 
 # Copy and edit mirror.conf if needed 
 [ ! -s ../mirror.conf ] && cp -f templates/mirror.conf ..
+
+sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ../mirror.conf
 
 vi ../mirror.conf
 
