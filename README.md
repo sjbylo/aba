@@ -118,6 +118,7 @@ cd aba
 Load the images from local storage to the internal mirror registry.
 
 ```
+sudo dnf install make -y 
 make load
 ```
 - This will install Quay (from the files that were copied above) and then load the images into Quay.
