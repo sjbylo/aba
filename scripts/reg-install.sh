@@ -76,6 +76,9 @@ fi
 if [ "$reg_ssh" ]; then
 	echo "Installing Quay registry on remote host $reg_host ..."
 
+	# If the key is missing, then generate one
+	[ ! -s $reg_ssh ] && ssh-keygen -t rsa -f $reg_ssh -N ''
+
 	if ! ssh -F .ssh.conf $(whoami)@$reg_host hostname; then
 		echo "Error: Can't ssh to $(whoami)@$reg_host"
 		echo "Configure passwordless ssh to the host $reg_host and try again."
