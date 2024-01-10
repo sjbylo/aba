@@ -74,6 +74,24 @@ fi
 
 # Remote installs if ssh key defined 
 if [ "$reg_ssh" ]; then
+	# Workaround START
+	# See: https://access.redhat.com/solutions/7040517
+	# Check for known issue where images need to be loaded on the remote host first
+	# This will load the needed images and fix the problem 
+	# Only need to do this workaround once
+	ssh -F .ssh.conf $(whoami)@$reg_host "rpm -q podman || sudo dnf install podman -y"
+	ssh -F .ssh.conf $(whoami)@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause || \
+	(
+		
+		ssh -F .ssh.conf $(whoami)@$reg_host mkdir -p .abatmp
+		scp -F .ssh.conf mirror-registry.tar.gz $(whoami)@$reg_host:.abatmp/
+		ssh -F .ssh.conf $(whoami)@$reg_host "cd .abatmp && tar xzf mirror-registry.tar.gz"
+		ssh -F .ssh.conf $(whoami)@$reg_host "cd .abatmp && ./mirror-registry install"
+		ssh -F .ssh.conf $(whoami)@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
+		ssh -F .ssh.conf $(whoami)@$reg_host rm -rf .abatmp 
+	)
+	# Workaround END
+			
 	echo "Installing Quay registry on remote host $reg_host ..."
 
 	# If the key is missing, then generate one
@@ -98,7 +116,7 @@ if [ "$reg_ssh" ]; then
 		reg_pw=$(openssl rand -base64 12)
 	fi
 
-	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --taregtHostname $reg_host -k $reg_ssh --initPassword <hidden> $reg_root_opt'"
+	echo "Running command './mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh --initPassword <hidden> $reg_root_opt'"
 
 	./mirror-registry install -v \
   		--quayHostname $reg_host \
