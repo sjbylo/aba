@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 dir=`dirname $0`
 cd $dir/..
@@ -22,7 +22,7 @@ install_all_clusters() {
 	done
 }
 
-####make -C mirror uninstall  # FIXME... add back and also "make vmware.conf" to prep.
+##make -C mirror uninstall  
 
 #####
 ver=$(cat ./target-ocp-version.conf)
@@ -64,6 +64,10 @@ p=22222
 cd
 # Use one of the other copy command!
 #time tar czf - `find bin aba -type f ! -path "aba/.git*" -a ! -path "aba/cli/*"` | ssh $(whoami)@$bastion2 tar xvzf -
+
+ssh $(whoami)@$bastion2 "rpm -q rsync || sudo yum install rsync -y"
+ssh $(whoami)@$bastion2 "rpm -q make  || sudo yum install make -y"
+rpm -q rsync || sudo yum install rsync -y 
 time rsync --progress --partial --times -avz --exclude '*/.git*' --exclude 'aba/cli/*' bin aba $(whoami)@10.0.1.6:
 
 ssh $(whoami)@$bastion2 -- "cd ~/aba && make load sno" 
