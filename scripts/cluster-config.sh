@@ -10,13 +10,14 @@ yaml2json()
 	python3 -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'
 }
 
-. vmware.conf  # This is needed for $VMW_FOLDER
-
 export MANEFEST_SRC_DIR=.
 export MANEFEST_DIR=iso-agent-based
 
 echo export MANEFEST_DIR=$MANEFEST_DIR
 echo export MANEFEST_SRC_DIR=$MANEFEST_SRC_DIR
+
+# This is only needed to know if the install is via vCenter or not (See VMW_FOLDER below)
+[ -s vmware.conf ] && . vmware.conf            # This is needed for $VMW_FOLDER
 
 ICONF=$MANEFEST_SRC_DIR/install-config.yaml  
 ICONF_TMP=/tmp/.install-config.yaml  
@@ -25,7 +26,7 @@ ACONF=$MANEFEST_SRC_DIR/agent-config.yaml
 ACONF_TMP=/tmp/.agent-config.yaml  
 
 # If the files don't exist, nothing to do!
-#[ -s $ICONF -a -s $ACONF ] && exit 0
+[ ! -s $ICONF -o ! -s $ACONF ] && echo "One of the files install-config.yaml and/or agent-config.yaml does not exist.  Cannot parse cluster configuration." && exit 0
 
 cat $ICONF | yaml2json > $ICONF_TMP
 cat $ACONF | yaml2json > $ACONF_TMP
@@ -48,14 +49,16 @@ WORKER_REPLICAS=`cat $ICONF_TMP | jq -r .compute[0].replicas`
 echo export WORKER_REPLICAS=$WORKER_REPLICAS
 
 # Check if using ESXi or vCenter 
-if [ "$VMW_FOLDER" == "/ha-datacenter/vm" ]; then
-	# For ESXi
-	export FOLDER=$VMW_FOLDER
-else
-	# For vCenter 
-	export FOLDER=$VMW_FOLDER/$CLUSTER_NAME
-	export VC=1
-	echo export VC=1
+if [ "$VMW_FOLDER" ]; then
+	if [ "$VMW_FOLDER" == "/ha-datacenter/vm" ]; then
+		# For ESXi
+		export FOLDER=$VMW_FOLDER
+	else
+		# For vCenter 
+		export FOLDER=$VMW_FOLDER/$CLUSTER_NAME
+		export VC=1
+		echo export VC=1
+	fi
 fi
 
 echo export FOLDER=$FOLDER
@@ -73,4 +76,8 @@ WORKER_MAC_ADDRESSES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "worke
 echo export WORKER_MAC_ADDRESSES=\"$WORKER_MAC_ADDRESSES\"
 
 rm -f $ICONF_TMP $ACONF_TMP
+
+# check
+[ ! "$CLUSTER_NAME" -o ! "$BASE_DOMAIN" ] && echo && echo "WARNING: The files install-config.yaml and/or agent-config.yaml chould not be parsed properly. " 
+
 
