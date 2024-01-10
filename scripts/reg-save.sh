@@ -8,8 +8,7 @@ umask 077
 
 source mirror.conf
 
-#install_rpm podman python3-pip
-install_rpm podman 
+install_rpm podman  python3-jinja2  python3
 
 export ocp_ver=$ocp_target_ver
 export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
