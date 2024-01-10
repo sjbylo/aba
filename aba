@@ -72,6 +72,7 @@ install_rpm podman make jq bind-utils nmstate net-tools skopeo
 
 ############
 # Offer next steps
+echo
 echo "----------------------------------------------------------------------------------------"
 echo "Now run one of the following to configure the registry and download the needed software."
 echo
