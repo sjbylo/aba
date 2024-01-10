@@ -14,7 +14,7 @@ if [ "$1" = "--debug" -o "$1" = "-d" ]; then
 	shift 
 fi
 
-cat build/message.txt
+cat message.txt
 
 ############
 # Determine OCP version 
