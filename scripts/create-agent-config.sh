@@ -47,3 +47,4 @@ scripts/verify-config.sh || exit 1
 echo Generating Agent-based configuration file: $PWD/agent-config.yaml 
 scripts/j2 templates/agent-config.yaml.j2 > agent-config.yaml
 
+echo

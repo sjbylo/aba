@@ -28,4 +28,4 @@ else
 	echo "Warning: ISO file may be attached to a running VM and cannot be overwritten.  Stop the VM first?"
 fi
 
-
+echo

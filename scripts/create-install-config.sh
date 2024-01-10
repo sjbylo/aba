@@ -77,3 +77,4 @@ echo Generating Agent-based configuration file: $PWD/install-config.yaml
 # Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret ...
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
+echo
