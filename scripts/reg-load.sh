@@ -8,7 +8,6 @@ source mirror.conf
 
 #install_rpm podman python3-pip
 install_rpm podman 
-#install_pip j2cli
 
 # Can the registry mirror already be reached?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
