@@ -1,5 +1,8 @@
 #!/bin/bash -ex
 
+dir=`dirname $0`
+cd $dir/..
+
 install_cluster() {
 	rm -rf $1
 	mkdir -p $1
@@ -44,9 +47,10 @@ bastion2=10.0.1.6
 # Have quay running somewhere that the internal bastion can reach
 make -C mirror install    # Install quay on internal bastion (just for testing)
 rm -f mirror/.installed   # Needed, since the install will normally only be run on the internal bastion
+rm -f mirror/.loaded      # Be sure this is not copied over in case it exists
 
 make save
-make -C mirror tidy
+make -C mirror tidy   # Remove some crud
 
 #####
 # 
@@ -58,9 +62,10 @@ p=22222
 
 #ssh $(whoami)@$bastion2 -- "rm -rf ~/bin/* ~/aba"
 cd
-##tar czf - `find bin aba -type f ! -path "*/.git*"` | ssh $(whoami)@$bastion2 tar xzf -
-#tar czf - `find bin aba -type f ! -path "aba/.git*" -a ! -path "aba/cli/*"` | ssh $(whoami)@$bastion2 tar xvzf -
-rsync --progress --partial -avz --exclude '*/.git*' --exclude 'aba/cli*' bin aba $(whoami)@10.0.1.6:
+# Use one of the other copy command!
+#time tar czf - `find bin aba -type f ! -path "aba/.git*" -a ! -path "aba/cli/*"` | ssh $(whoami)@$bastion2 tar xvzf -
+time rsync --progress --partial -avz --exclude '*/.git*' --exclude 'aba/cli/*' bin aba $(whoami)@10.0.1.6:
 
 ssh $(whoami)@$bastion2 -- "cd ~/aba && make load sno" 
+
 
