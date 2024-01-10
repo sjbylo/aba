@@ -3,6 +3,7 @@
 . scripts/include_all.sh
 
 if [ ! "$CLUSTER_NAME" ]; then
+	scripts/cluster-config-check.sh
 	eval `scripts/cluster-config.sh || exit 1`
 fi
 

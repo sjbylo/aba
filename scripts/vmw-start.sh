@@ -4,13 +4,17 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
-scripts/install-govc.sh
-
-if [ ! "$CLUSTER_NAME" ]; then
-	eval `scripts/cluster-config.sh || exit 1`
+if [ -s vmware.conf ]; then
+	source vmware.conf  # This is needed for $VMW_FOLDER
+else
+	echo "vmware.conf file not defined. Run 'make vmw' to create it if needed"
+	exit 0
 fi
 
-source vmware.conf
+if [ ! "$CLUSTER_NAME" ]; then
+	scripts/cluster-config-check.sh
+	eval `scripts/cluster-config.sh || exit 1`
+fi
 
 for name in $WORKER_NAMES $CP_NAMES ; do
 	govc vm.power -on ${CLUSTER_NAME}-$name
