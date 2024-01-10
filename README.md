@@ -1,7 +1,7 @@
 # Aba is an agent-based wrapper
 
 Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a disconnected environment, onto vSphere or 
-ESXi (or bare-metal). 
+ESXi or bare-metal. 
 Aba uses the Agent-based installer which means there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
 
 Aba automatically completes the following:
@@ -56,7 +56,7 @@ Aba automatically completes the following:
 - Finally, run ./aba command to initialize the installation process (see below).
 
 
-## Getting Started 
+## Getting Started with aba
 
 To set the version of OpenShift to install and, if needed, to download identical versions of oc, oc-mirror and openshift-install, run:
 
@@ -72,15 +72,15 @@ Now, choose either 'connected mode' or 'disconnected mode' below.
 In this mode, the bastion has access to both the Internet and the private subnet (but not necessarily at the same time).
 
 ```
-cd mirror
 make sync
 ```
 This command will:
-  - Optionally installs Quay registry on the bastion (unless you are using an existing registry). 
-  - pull images from the Internet and store them in Quay.
-  - If Quay was installed, copy the registry's pull secret and certificate into the 'mirror/deps' dir for later use. 
+  - check the connection to your existing registry, if available.  But, set up your registry credentials first! See above for more.
+  - or, installs Quay registry on the bastion (or remote bastion) and copies the generated pull secret and certificate into the 'mirror/deps' dir for later use.
+  - pull images from the Internet and store them in the registry.
 
-Now continue with "Install OpenShift" below.
+Now continue with "Install OpenShift" as below.
+
 
 ## Disconnected mode (air-gapped / fully disconnected) 
 
@@ -88,49 +88,52 @@ In this mode, your external bastion has access to the Internet but no access to 
 There is also an internal bastion host in a private subnet.
 
 ```
-cd mirror
 make save
 ```
 
-- This will pull the images and save them to the local directory "mirror/save".
+- This will pull the images from the Internet and save them to the local directory "mirror/save". Make sure there is enough disk space (30+ GB) here!
 
-Then, copy the whole aba/ directory and sub-directories to your internal bastion host in the private subnet, e.g. via a thumb drive or DVD. 
+Then, copy the whole aba/ directory and sub-directories to your internal bastion host in your private subnet, e.g. via a thumb drive or DVD. 
 
 Example:
 
 ```
 # On the external bastion:
-cd mirror
-make clean			   # Remove unneeded large files
+# Mount your thumbdrive
+make tar name=/dev/path/to/thumbdrive 
+
+
+# Or, do this manually 
 cd 		                   # Assuming aba is directly under your $HOME dir
+make tidy 
 tar czf aba.tgz aba/aba bin aba/*.conf aba/Makefile aba/scripts aba/templates aba/*.md aba/mirror aba/cli 
-# Copy the file 'aba.tgz' to your internal bastiona via a thumb drive. 
+# Copy the file 'aba.tgz' to your internal bastion via a thumb drive. 
 
 # Then, on the internal bastion run:
 cd
 tar xzvf aba.tgz            # Extract the tar file 
-sudo dnf install make -y    # Install 'make' 
 cd aba             
 ```
 
 Load the images from local storage to the internal mirror registry.
 
 ```
-cd mirror
 make load
 ```
 - This will install Quay (from the files that were copied above) and then load the images into Quay.
 - Note that the internal bastion will need to install RPMs, e.g. from Satellite. 
 
-Now continue with "Install OpenShift".
+Now continue with "Install OpenShift" below.
 
 ## Install OpenShift 
+
+Edit the file 'templates/aba-sno.conf' to match your environment.
 
 ```
 make sno
 ```
-- This will create a directory 'sno' and then install SNO OpenShift using the Agent-based installer.  By default, it will use VMware. 
-- Be sure to go through *all* the values in 'vmware.conf' and 'aba.conf'.
+- This will create a directory 'sno' and then install SNO OpenShift using the Agent-based installer.  If you are using vmware it will create the VMs for you.
+- Be sure to go through *all* the values in 'aba/vmware.conf' and 'sno/aba.conf'.
 - Be sure to set up your DNS entries in advance. 
 - Aba will show you the installation progress.  If there are any issues - e.g. missing DNS records - fix them and try again.  All commands are idempotent.
 
@@ -140,7 +143,7 @@ make compact
 - Run this to create a compact cluster (functions in a similar way to the above). 
 
 ```
-make ocp dir=mycluster
+make ocp name=mycluster
 ```
 - This will create a directory 'mycluster', copy the Makefile into it and then run 'make'.
 
@@ -160,6 +163,8 @@ INFO     export KUBECONFIG=/home/steve/aba/compact/iso-agent-based/auth/kubeconf
 INFO Access the OpenShift web-console here: https://console-openshift-console.apps.compact.example.com 
 INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ" 
 ```
+
+If you just want to create the agent-based iso file to boot bare-metal nodes, use "cd sno; make iso"
 
 If OpenShift does not install, see the Troubleshooting readme. 
 
@@ -184,16 +189,12 @@ make delete      # Delete all the VMs in the 'sno' cluster.
 
 - Make it easier to integrate with vSphere, including storage. 
 
-- Make it easier to install the Internal registry. 
-
 - Configure htpasswd login, add users, disable kubeadmin.
 
-- Specifying a different location to store Quay registry data (images).
+- Disable OperatorHub and configure the internal registry to serve images.
 
 
 ## Miscellaneous
-
-- If you want to install workers with different CPU/MEM sizes (which can be used to install cluster infra sub-systems, e.g. Ceph and/or ES etc - infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed. 
 
 - Once a cluster config directory has been created (e.g. 'compact') and Agent-based configuration has been created, some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed. 'make' can be run again to re-create the ISO and the VMs etc.  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP address changes and default route changes should work fine.  Changes, like adding link bonding may break the command to parse and extract the config.  The following is the script that is used to extract the cluster config from the agent-config yaml files. This script must work for the VMs to be created. 
 
@@ -201,6 +202,8 @@ make delete      # Delete all the VMs in the 'sno' cluster.
 cd compact
 scripts/cluster-config.sh        # example execution to show the cluster configuration extracted from the Agend-based files. 
 ```
+
+- If you want to install workers with different CPU/MEM sizes (which can be used to install cluster infra sub-systems, e.g. Ceph and/or ES etc - infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed (if using VMs).
 
 - Govc is used to create and manage VMs on ESXi or vSphere.
   - https://github.com/vmware/govmomi/tree/main/govc
