@@ -19,9 +19,7 @@ mirror/pause.tar
 mirror/postgres.tar
 mirror/quay.tar
 mirror/redis.tar
-mirror/registry-creds.txt
 mirror/scripts
 mirror/templates
 mirror/save
 mirror/*.sh
-
