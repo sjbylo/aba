@@ -8,13 +8,12 @@
 
 ver=$(cat ../target-ocp-version.conf)
 
-# Copy and edit mirror.conf if needed 
-cp -f templates/mirror.conf ..
-
 if [ ! "$ver" ]; then
 	### This URL seems to point to a permanent location to get the latest stable version
-	ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | \
-		egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+"| awk '{print $2}') 
+#	ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | \
+#		egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+"| awk '{print $2}') 
+	echo "Please run ./aba first"
+	exit 1
 fi
 	
 sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ../mirror.conf
@@ -24,6 +23,9 @@ echo "Edit the mirror/mirror.conf file"
 echo "Set the values to match your *private network*.  Define the mirror registry where you intend it to be installed or"
 echo -n "where it already exists. Hit Return to edit or Ctrl-C to abort [y]: "
 read yn
+
+# Copy and edit mirror.conf if needed 
+[ ! -s ../mirror.conf ] && cp -f templates/mirror.conf ..
 
 vi ../mirror.conf
 
