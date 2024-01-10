@@ -14,16 +14,22 @@ if [ "$1" = "--debug" -o "$1" = "-d" ]; then
 	shift 
 fi
 
-## Get the latest stable OCP version number.
+cat build/message.txt
+
+############
+# Determine OCP version 
+
+## Get the latest stable OCP version number, e.g. 4.14.6
 stable_ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | tee /tmp/.release.txt | \
 	 egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 default_ver=$stable_ver
 
-# Extract the previous stable version
+# Extract the previous stable point version, e.g. 4.13.23
 stable_ver_point=`expr $(echo $stable_ver | grep ^4 | cut -d\. -f2) - 1`
 [ "$stable_ver_point" ] && \
 	stable_ver_prev=$(cat /tmp/.release.txt| grep -oE "4\.${stable_ver_point}\.[0-9]+" | tail -n 1)
 
+# Determine any already installed tool versions
 which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | egrep -o "[0-9]+\.[0-9]+\.[0-9]+")
 
 # If openshift-install is already installed, then offer that version also
@@ -48,10 +54,6 @@ done
 
 echo "$target_ver" > target-ocp-version.conf
 
-install_rpm podman make jq bind-utils nmstate net-tools skopeo
-
-[ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver all
-
 ############
 # vmware.conf
 
@@ -62,16 +64,30 @@ if [ ! -s vmware.conf ]; then
 	[ ! "$yn" -o "$yn" = "y" ] && make vmware.conf
 fi
 
+# Install the main rpms that are needed
+install_rpm podman make jq bind-utils nmstate net-tools skopeo
+
+# Set up the CLIs
+[ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver all
+
 ############
+# Offer next steps
+echo "----------------------------------------------------------------------------------------"
+echo "Now run one of the following to configure the registry and download the needed software."
 echo
-echo "Now run the following:"
-echo "make sync       # ... if you have a 'connected' bastion and want to load the registry directly from the Internet."
-echo "make save       # ... if you have a 'disconnected' (or air-gapped) bastion.  See the README file for more information."
-echo "make load       # ... if you want to load the registry with the saved images.  See the README file for more information."
+echo "For a 'connected' installation:"
+echo "make sync       # Run on a 'connected bastion', to load the registry directly from the Internet."
+echo
+echo "For a dissconnected (or air-gapped) installation:"
+echo "make save       # First, run on a 'connected bastion', to 'save' the images from the Internet to local disk. Tar the *whole repo* to a thumb drive."
+echo "make load       # Run on a 'disconnected bastion' to load the saved images into a registry from the thumb drive."
+echo
+echo "See the README file for more information."
+
 echo 
-echo After the mirror is working, run one of the following:
-echo "make sno"
-echo "make compact"
-echo "make standard"
-echo "make cluster name=mycluster"
+echo After the mirror is working and loaded, run one of the following:
+echo "make sno                      # Warning: please first edit the template file templates/aba-sno.conf to match your environment"
+echo "make compact                  # Warning: please first edit the template file templates/aba-compact.conf to match your environment"
+echo "make standard                 # Warning: please first edit the template file templates/aba-standard.conf to match your environment"
+echo "make cluster name=mycluster   # This will set up a standard cluster and allow you to edit the aba.conf configuration file."
 
