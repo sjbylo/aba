@@ -16,9 +16,10 @@ install_rpm skopeo
 
 if ! skopeo inspect docker://$reg_host:$reg_port/openshift4/openshift/release-images$release_image >/dev/null; then
 	echo
-	echo "Error: The expected release image using the $(which openshift-install) CLI was not found in your registry!"
+	echo "Error: There was an error whilst checking for the expected release image in your registry!"
 	echo "       Be sure to install the correct oc, openshift-install, oc-mirror versions and try again!"
 	echo "       Failed to access the release image: docker://$reg_host:$reg_port/openshift4/openshift/release-images$release_image"
+
 	exit 1
 fi
 
