@@ -75,7 +75,7 @@ mirror.conf: ../mirror.conf ## Set up the mirror.conf file. Note that aba/mirror
 ../mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
-install: init .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into deps/ for existing registry.  See README.md.
+install: init mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into deps/ for existing registry.  See README.md.
 .installed: 
 	# Install Quay Mirror
 	$(SCRIPTS)/reg-install.sh $(debug) 
@@ -86,7 +86,7 @@ install: init .installed ## Set up the registry as per the settings in mirror.co
 installclean:
 	rm .installed
 
-uninstall: init .uninstalled ## Uninstall the registry 
+uninstall: init mirror-registry .uninstalled ## Uninstall the registry 
 .uninstalled: 
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	rm -f .installed
