@@ -6,7 +6,7 @@ SCRIPTS   = scripts
 ocp_target_ver   ?= 4.13.19
 d        ?= 
 DEBUG     = $d
-dir    ?= /tmp
+out    ?= /tmp
 
 ##@ Help-related tasks
 .PHONY: help
@@ -43,8 +43,8 @@ tidy:
 	make -C mirror tidy
 
 .PHONY: tar
-tar: tidy  ## Tar the repo to move to internet network, e.g. make tar dir=/dev/path/to/thumbdrive.  Default dir is /tmp.
-	scripts/create-tarball.sh $(dir)
+tar:  ## Tar the repo to move to internet network, e.g. make tar out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-repo.tgz
+	scripts/create-tarball.sh $(out)
 
 #tar: ## Tar up the aba repo, ready to move to the internet network
 	#make -C mirror tar 
