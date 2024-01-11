@@ -1,4 +1,6 @@
 #!/bin/bash -e
+# This test installs a mirror reg. on the internal bastion (just for testing) and then
+# treats that registry as an "existing registry" in the test internal workflow. 
 
 dir=`dirname $0`
 cd $dir/..

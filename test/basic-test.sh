@@ -1,4 +1,6 @@
 #!/bin/bash -e
+# This test is for a connected bastion.  It will sync images and install clusters, 
+# then savd/load images and install clusters. 
 
 install_cluster() {
 	rm -rf $1
