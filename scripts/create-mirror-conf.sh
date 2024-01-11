@@ -17,9 +17,12 @@ if [ ! "$ver" ]; then
 fi
 
 echo ==========================================================
-echo "Edit the mirror/mirror.conf file"
-echo "Set the values to match your *private network*.  Define the mirror registry where you intend it to be installed or"
-echo -n "where it already exists. Hit Return to edit or Ctrl-C to abort [y]: "
+echo "Edit the mirror/mirror.conf file?"
+echo "For an existing registry in your private network, set the values for that registry."
+echo "Otherwise, define the values for where you intend the registry to be installed in your private network." 
+echo -n "Hit Return to edit or Ctrl-C to abort [y]: "
+#echo "Set the values to match your *private network*.  Define the mirror registry where you intend it to be installed or"
+#echo -n "where it already exists. Hit Return to edit or Ctrl-C to abort [y]: "
 read yn
 
 # Copy and edit mirror.conf if needed 
