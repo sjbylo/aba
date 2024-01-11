@@ -7,8 +7,6 @@ ocp_target_ver   ?= 4.13.19
 d        ?= 
 DEBUG     = $d
 dir    ?= /tmp
-#version  ?= 4.14.2
-version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
 
 ##@ Help-related tasks
 .PHONY: help
