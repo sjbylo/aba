@@ -85,7 +85,7 @@ if [ "$reg_ssh" ]; then
 		
 		ssh -F .ssh.conf $(whoami)@$reg_host mkdir -p .abatmp
 		scp -F .ssh.conf mirror-registry.tar.gz $(whoami)@$reg_host:.abatmp/
-		ssh -F .ssh.conf $(whoami)@$reg_host "cd .abatmp && tar xzf mirror-registry.tar.gz"
+		ssh -F .ssh.conf $(whoami)@$reg_host "cd .abatmp && tar xmzf mirror-registry.tar.gz"
 		ssh -F .ssh.conf $(whoami)@$reg_host "cd .abatmp && ./mirror-registry install"
 		ssh -F .ssh.conf $(whoami)@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
 		ssh -F .ssh.conf $(whoami)@$reg_host rm -rf .abatmp 

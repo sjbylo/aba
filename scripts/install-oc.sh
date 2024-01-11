@@ -29,7 +29,7 @@ if [ ! "$oc_ver" -o ! "$openshift_install_ver" -o "$oc_ver" != "$openshift_insta
 
 		[ ! -s openshift-client-linux-$ocp_target_ver.tar.gz ] && \
 		       	curl -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_target_ver/openshift-client-linux-$ocp_target_ver.tar.gz
-		tar xzvf openshift-client-linux-$ocp_target_ver.tar.gz oc
+		tar xmzvf openshift-client-linux-$ocp_target_ver.tar.gz oc
 		loc_oc=$(which oc || true)
 		[ ! "$loc_oc" ] && loc_oc=~/bin
 		sudo install oc $loc_oc

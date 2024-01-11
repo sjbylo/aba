@@ -63,7 +63,7 @@ scripts:
 	ln -s $(SCRIPTS) 
 
 mirror-registry: mirror-registry.tar.gz ## Extract the mirror-registry binary 
-	tar xmzf mirror-registry.tar.gz
+	tar xmvzf mirror-registry.tar.gz
 
 mirror-registry.tar.gz: ## Download the mirror-registry tarball
 	curl --progress-bar -OL \
