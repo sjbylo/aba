@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 # This test installs a mirror reg. on the internal bastion (just for testing) and then
 # treats that registry as an "existing registry" in the test internal workflow. 
 
@@ -31,7 +31,7 @@ install_all_clusters() {
 
 # uninstall added to end of test
 ##make -C mirror uninstall  
-##rm -f mirror/regcreds/*  # if forget to uninstall reg.
+rm -f mirror/regcreds/*  # if forget to uninstall reg.
 
 ######################
 ver=$(cat ./target-ocp-version.conf)
