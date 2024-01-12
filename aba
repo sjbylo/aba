@@ -19,6 +19,11 @@ cat message.txt
 ############
 # Determine OCP version 
 
+if ! curl -sLI -o /dev/null https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt; then
+	echo "Error: Cannot access mirror.openshift.com"
+	exit 1
+fi
+
 ## Get the latest stable OCP version number, e.g. 4.14.6
 stable_ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | tee /tmp/.release.txt | \
 	 egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
