@@ -25,13 +25,15 @@ install_all_clusters() {
 	do
 		echo Runtest: creating cluster $c
 		install_cluster $c
-		#make -C $c delete
+		make -C $c delete
 	done
 }
 
 # uninstall added to end of test
 ##make -C mirror uninstall  
-rm -f mirror/regcreds/*  # if forget to uninstall reg.
+make distclean
+./aba
+#rm -f mirror/regcreds/*  # if forget to uninstall reg.
 
 ######################
 ver=$(cat ./target-ocp-version.conf)
