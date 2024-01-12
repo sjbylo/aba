@@ -2,6 +2,11 @@
 # This test installs a mirror reg. on the internal bastion (just for testing) and then
 # treats that registry as an "existing registry" in the test internal workflow. 
 
+# Required: 2 bastions (internal and external), for internal only yum works via a proxy. For external, the proxy is fully configured. 
+# Internal has no access to the Internet.  External has full access. 
+# Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses rsync to copy over the aba repo. 
+# Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
+
 dir=`dirname $0`
 cd $dir/..
 
@@ -26,7 +31,7 @@ install_all_clusters() {
 
 # uninstall added to end of test
 ##make -C mirror uninstall  
-##rm -f mirror/deps/*  # if forget to uninstall reg.
+##rm -f mirror/regcreds/*  # if forget to uninstall reg.
 
 ######################
 ver=$(cat ./target-ocp-version.conf)
@@ -67,15 +72,17 @@ cd
 # Use one or the other copy command!
 #time tar czf - `find bin aba -type f ! -path "aba/.git*" -a ! -path "aba/cli/*"` | ssh $(whoami)@$bastion2 tar xvzf -
 
+# Configure for testing:
 ssh $(whoami)@$bastion2 "rpm -q make  || sudo yum install make -y"
 ssh $(whoami)@$bastion2 "rpm -q rsync || sudo yum install rsync -y"
 rpm -q rsync || sudo yum install rsync -y 
 time rsync --progress --partial --times -avz --exclude '*/.git*' --exclude 'aba/cli/*' --exclude 'aba/mirror/mirror-registry' --exclude 'aba/mirror/*.tar' bin aba $(whoami)@10.0.1.6:
 #find bin aba -type f ! -path "aba/.git*" -a ! -path "aba/cli/*" -a ! -path "aba/mirror/mirror-registry" -a ! -path "aba/mirror/*.tar"
+#########
 
-ssh $(whoami)@$bastion2 -- "make -C aba/mirror loadclean"   #  This is needed, esp. on a 2nd run of this script
+ssh $(whoami)@$bastion2 -- "make -C aba/mirror loadclean"   #  This is needed, esp. on a 2nd run of this script, to ensure loading
 ssh $(whoami)@$bastion2 -- "make -C aba load sno" 
-ssh $(whoami)@$bastion2 -- "make -C aba load" 
+#ssh $(whoami)@$bastion2 -- "make -C aba load" 
 ssh $(whoami)@$bastion2 -- "make -C aba/sno delete" 
 
 cd aba
