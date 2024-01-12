@@ -70,7 +70,7 @@ if [ ! -s vmware.conf ]; then
 fi
 
 # Install the main rpms that are needed
-install_rpm podman make jq bind-utils nmstate net-tools skopeo
+sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 -y >/dev/null 2>&1
 
 # Set up the CLIs
 [ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver all
@@ -96,4 +96,5 @@ echo "make sno                      # Warning: please first edit the template fi
 echo "make compact                  # Warning: please first edit the template file templates/aba-compact.conf to match your environment"
 echo "make standard                 # Warning: please first edit the template file templates/aba-standard.conf to match your environment"
 echo "make cluster name=mycluster   # This will set up a standard cluster and allow you to edit the aba.conf configuration file."
+echo
 
