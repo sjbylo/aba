@@ -28,3 +28,4 @@ or with rsync over ssh
 rsync --progress --partial -avz --exclude '*/.git*' bin aba $(whoami)@10.0.1.6:
 ```
 
+
