@@ -21,7 +21,7 @@ sync: install .synced ## Sync images from the Internet directly to an internal r
 
 .PHONY: syncclean
 syncclean:
-	rm .synced
+	rm -f .synced
 	
 
 save: init .saved ## Save images from the Internet to local disk
@@ -31,7 +31,7 @@ save: init .saved ## Save images from the Internet to local disk
 
 .PHONY: saveclean
 saveclean:
-	rm .saved
+	rm -f .saved
 
 .PHONY: testload
 testload: save load install .loaded  # Test the save, install, load process on a connected host
@@ -43,7 +43,7 @@ load: install .loaded  ## Load the saved images into a registry on the internal 
 
 .PHONY: loadclean
 loadclean:
-	rm .loaded
+	rm -f .loaded
 	
 # FIXME
 ../target-ocp-version.conf:
@@ -80,21 +80,23 @@ install: init mirror-registry .installed ## Set up the registry as per the setti
 	# Install Quay Mirror
 	$(SCRIPTS)/reg-install.sh $(debug) 
 	rm -f .uninstalled 
+	rm -f .loaded
 	touch .installed
 
 .PHONY: installclean
 installclean:
-	rm .installed
+	rm -f .installed
 
 uninstall: init mirror-registry .uninstalled ## Uninstall the registry 
 .uninstalled: 
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	rm -f .installed
+	rm -f .loaded
 	touch .uninstalled
 
 .PHONY: uninstallclean
 uninstallclean:
-	rm .uninstalled
+	rm -f .uninstalled
 
 .PHONY: tidy 
 tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
@@ -106,8 +108,7 @@ clean: tidy ## Clean up files
 	rm -rf *.sh templates scripts imageset*yaml oc-mirror-workspace
 
 .PHONY: distclean
-#distclean: uninstall clean
-distclean: clean ## Clean up repo for distribution
+distclean: uninstall clean ## Clean up repo for distribution
 	rm -rf *.tar.gz oc-mirror-workspace regcreds
 	rm -f .registry-creds.txt *.conf *.yaml 
 
