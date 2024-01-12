@@ -49,12 +49,12 @@ loadclean:
 ../target-ocp-version.conf:
 	../aba
 
-init: deps templates scripts mirror.conf mirror-registry .initialized
+init: regcreds templates scripts mirror.conf mirror-registry .initialized
 .initialized: 
 	touch .initialized
 
-deps:
-	mkdir deps 
+regcreds:
+	mkdir regcreds 
 
 templates:
 	ln -s $(TEMPLATES) 
@@ -75,7 +75,7 @@ mirror.conf: ../mirror.conf ## Set up the mirror.conf file. Note that aba/mirror
 ../mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
-install: init mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into deps/ for existing registry.  See README.md.
+install: init mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 .installed: 
 	# Install Quay Mirror
 	$(SCRIPTS)/reg-install.sh $(debug) 
@@ -102,12 +102,12 @@ tidy: ## Tidy large uncompressed files before copying the repo to the internal b
 
 .PHONY: clean
 clean: tidy ## Clean up files
-	rm -rf save/ deps/* .??* 
+	rm -rf save/ regcreds/* .??* 
 	rm -rf *.sh templates scripts imageset*yaml oc-mirror-workspace
 
 .PHONY: distclean
 #distclean: uninstall clean
 distclean: clean ## Clean up repo for distribution
-	rm -rf *.tar.gz oc-mirror-workspace deps
+	rm -rf *.tar.gz oc-mirror-workspace regcreds
 	rm -f .registry-creds.txt *.conf *.yaml 
 

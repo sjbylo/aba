@@ -49,9 +49,9 @@ Aba automatically completes the following:
    - Quay mirror registry: registry.example.com 
      - points to the IP address where you want to install Quay (e.g. your bastion) or to your existing registry. 
 - If you are using an existing registry:
-  - Copy your existing registry's credential files (pull secret and root CA) into the 'mirror/deps' directory, e.g.:
-    - mirror/deps/pull-secret-mirror.json   (pull secret file for your registry)
-    - mirror/deps/rootCA.pem                (root CA file for your registry) 
+  - Copy your existing registry's credential files (pull secret and root CA) into the 'mirror/regcreds' directory, e.g.:
+    - mirror/regcreds/pull-secret-mirror.json   (pull secret file for your registry)
+    - mirror/regcreds/rootCA.pem                (root CA file for your registry) 
   - Later, when the boot ISO is created, these files will be used. 
 - Finally, run ./aba command to initialize the installation process (see below).
 
@@ -76,7 +76,7 @@ make sync
 ```
 This command will:
   - for an existing registry, check the connection is available and working (be sure to set up your registry credentials first! See above for more).
-  - or, installs Quay registry on the bastion (or remote bastion) and copies the generated pull secret and certificate into the 'mirror/deps' directory for later use.
+  - or, installs Quay registry on the bastion (or remote bastion) and copies the generated pull secret and certificate into the 'mirror/regcreds' directory for later use.
   - pull images from the Internet and store them in the registry.
 
 Now continue with "Install OpenShift" below.

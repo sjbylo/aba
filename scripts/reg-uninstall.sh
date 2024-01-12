@@ -12,7 +12,7 @@ if [ "$reg_root" ]; then
 	reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
 fi
 
-rm -rf deps/*
+rm -rf regcreds/*
 
 if [ -s reg-uninstall.sh ]; then
 	bash -e ./reg-uninstall.sh
