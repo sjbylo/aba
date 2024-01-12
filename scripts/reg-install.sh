@@ -14,7 +14,6 @@ UserKnownHostsFile=/dev/null
 ConnectTimeout=15
 END
 
-install_rpm podman 
 
 # Check for existing reg.creds (provided by user)
 #if [ -s regcreds/rootCA.pem -a -s regcreds/pull-secret-mirror.json ]; then

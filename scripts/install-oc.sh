@@ -7,7 +7,6 @@ umask 077
 source mirror.conf
 
 #install_rpm nmstate podman jq python3-pip
-install_rpm nmstate podman jq 
 
 
 # Fetch versions of any existing oc and openshift-install binaries

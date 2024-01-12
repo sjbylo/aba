@@ -6,7 +6,6 @@ umask 077
 
 source mirror.conf
 
-install_rpm podman  python3-jinja2 python3
 
 # Can the registry mirror already be reached?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
