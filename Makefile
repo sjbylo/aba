@@ -15,8 +15,14 @@ help: ## Help
 
 #all: cli mirror ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror
 
-init:
+.PHONY: aba
+aba:
 	./aba
+
+init: aba .init
+.init: 
+	# Installing/checking needed packages
+	sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 -y >/dev/null 2>&1
 
 vmw: vmware.conf
 vmware.conf:
