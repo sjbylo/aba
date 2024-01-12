@@ -5,6 +5,7 @@ Try these commands to discover any problems with the installation of OCP using t
 Ssh to the rendezvous server:
 
 ```
+cd sno
 make ssh
 # This will run `ssh core@<ip of rendezvous server>`
 
@@ -127,7 +128,7 @@ make cmd get nodes
 oc mirror fails with error "invalid mirror sequence order"
 https://access.redhat.com/solutions/7026766
 
-If you get the below error, there may be an IP/mac address conflict.  Ensure no other clusters with the same addresses are running.
+You might see the below error:
 
 ```
 INFO Unable to retrieve cluster metadata from Agent Rest API: [GET /v2/clusters/{cluster_id}][404] v2GetClusterNotFound  &{Code:0xc0000b3c30 Href:0xc0000b3c40 ID:0xc000f06cec Kind:0xc0000b3c50 Reason:0xc0000b3c60} 
