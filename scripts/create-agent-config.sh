@@ -3,7 +3,6 @@
 
 . scripts/include_all.sh
 
-install_rpm  python3-jinja2 python3
 
 #[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$1" ] && set -x 

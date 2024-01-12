@@ -10,7 +10,6 @@ source mirror.conf
 
 scripts/verify-release-image.sh
 
-install_rpm bind-utils nmstate  python3-jinja2 python3
 
 
 # Set the rendezvous_ip to the the first master's ip

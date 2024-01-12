@@ -11,7 +11,6 @@ CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
 WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 
 # Need command 'arp' 
-install_rpm net-tools
 
 
 # if arp cannot be installed, then skip this script

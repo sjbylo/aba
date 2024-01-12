@@ -36,7 +36,6 @@ else
 fi
 
 # Checking if dig is installed ...
-install_rpm bind-utils
 
 ip_api=$(dig +time=8 +short api.$cluster_name.$base_domain)
 ip_apps=$(dig +time=8 +short x.apps.$cluster_name.$base_domain)
