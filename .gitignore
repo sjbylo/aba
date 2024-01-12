@@ -7,7 +7,7 @@ vmware.conf
 mirror/.??*
 *.md.bak
 target-ocp-version.conf
-mirror/deps/
+mirror/regcreds/
 mirror/imageset-config*yaml
 mirror/execution-environment.tar
 mirror/image-archive.tar

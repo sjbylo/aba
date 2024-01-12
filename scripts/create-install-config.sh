@@ -28,15 +28,15 @@ export additional_trust_bundle=
 export image_content_sources=
 
 # FIXME - add to makefile
-ln -fs ../mirror/deps 
+ln -fs ../mirror/regcreds 
 
 # Generate the needed iso-agent-based config files ...
 
 # Read in the needed files ...
 
-if [ -s deps/pull-secret-mirror.json ]; then
-	export pull_secret=$(cat deps/pull-secret-mirror.json) 
-	echo Using mirror registry pull secret file at deps/pull-secret-mirror.json
+if [ -s regcreds/pull-secret-mirror.json ]; then
+	export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
+	echo Using mirror registry pull secret file at regcreds/pull-secret-mirror.json
 
 	# If we pull from the local reg. then we define the image content sources
 	##[ -s templates/image-content-sources.yaml.j2 ] && \
@@ -44,15 +44,15 @@ if [ -s deps/pull-secret-mirror.json ]; then
 			# echo WARNING: No file templates/image-content-sources.yaml.j2
 
 	# ... we also, need a root CA...
-	if [ -s deps/rootCA.pem ]; then
-		export additional_trust_bundle=$(cat deps/rootCA.pem) 
-		echo Using root CA file at deps/rootCA.pem
+	if [ -s regcreds/rootCA.pem ]; then
+		export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
+		echo Using root CA file at regcreds/rootCA.pem
 	else	
 		echo ERROR: No file rootCA.pem
 		exit 1
 	fi
 else
-	#echo WARNING: No mirror registry pull secret file found at deps/pull-secret-mirror.json.  Trying to use ./pull-secret.json.
+	#echo WARNING: No mirror registry pull secret file found at regcreds/pull-secret-mirror.json.  Trying to use ./pull-secret.json.
 	if [ -s ~/.pull-secret.json ]; then
 		export pull_secret=$(cat ~/.pull-secret.json)
 		echo Found pull secret file at ~/.pull-secret.json

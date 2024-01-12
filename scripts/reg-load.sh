@@ -17,7 +17,7 @@ export reg_url=https://$reg_host:$reg_port
 #podman logout --all 
 #echo -n "Checking registry access to $reg_url is working using 'podman login': "
 ###podman login -u init -p $reg_password $reg_url 
-#podman login --authfile deps/pull-secret-mirror.json $reg_url 
+#podman login --authfile regcreds/pull-secret-mirror.json $reg_url 
 
 # Run create container auth
 ./scripts/create-containers-auth.sh 
@@ -34,8 +34,8 @@ scripts/j2 ./templates/imageset-config.yaml.j2 > imageset-config.yaml
 #diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
 #	sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 #	sudo update-ca-trust extract
-diff deps/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-	sudo cp deps/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+	sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 	sudo update-ca-trust extract
 
 echo 
