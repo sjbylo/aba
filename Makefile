@@ -15,6 +15,9 @@ help: ## Help
 
 #all: cli mirror ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror
 
+init:
+	./aba
+
 vmw: vmware.conf
 vmware.conf:
 	scripts/install-vmware.conf.sh
