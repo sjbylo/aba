@@ -104,6 +104,7 @@ if [ "$reg_ssh" ]; then
 		echo "Ssh access to [$reg_host] is working ..."
 	fi
 
+	# mirror-registry installer does not open the port for us
 	echo Allowing firewall access to the registry at $reg_host/$reg_port ...
 	ssh -F .ssh.conf $(whoami)@$reg_host -- "sudo firewall-cmd --state && \
 		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
@@ -156,6 +157,7 @@ if [ "$reg_ssh" ]; then
 else
 	echo "Installing Quay registry on localhost ..."
 
+	# mirror-registry installer does not open the port for us
 	echo Allowing firewall access on localhost to the registry at $reg_host/$reg_port ...
 	sudo firewall-cmd --state && \
 		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
