@@ -7,53 +7,60 @@ Aba uses the [Agent-based installer](https://docs.openshift.com/container-platfo
 Aba automatically completes the following:
 1. Installs the Quay mirror registry onto localhost or a remote host. This is optional as you can choose to use your existing registry. 
 1. Uses Quay's credentials and other inputs to build out the Agent-based configuration files.
-1. Triggers the generation of the needed agent-based boot ISO.
-1. Optionally creates the required VMs in ESXi (or vSphere).
+1. Triggers the generation of the agent-based configuration files & boot ISO.
+1. Optionally creates the required VMs in ESXi or vSphere.
 1. Monitors the installation progress. 
 
 
 ## Prerequisites
 
-- A private subnet (although optional).
-- DNS
-   - with A records for OpenShift API, Ingress and the mirror registry. 
-- NTP
+- *Private subnet* (optional)
+- *DNS*
+   - with A records for OpenShift API, Ingress and the intrnal mirror registry.
+- *NTP*
    - OpenShift requires that NTP be available.
-- Optional vCenter API access. Bare-metal nodes can be booted manually using the generated ISO.
-   - ESXi can also be used directly (i.e. without vCenter).
-   - Ensure enough privileges to vCenter. If you don't want to provide 'admin' privileges see the [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) documentation for more.
-- Bastion with Internet access:
+- *Platform* (optional)
+   - vCenter API access. Bare-metal nodes can be booted manually using the generated ISO.
+      - ESXi can also be used directly (i.e. without vCenter).
+      - Ensure enough privileges to vCenter. If you don't want to provide 'admin' privileges see the [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) documentation for more.
+- *One or two Bastion hosts* 
   - A RHEL host or VM 
-  - If needed, the Quay mirror registry can be installed here.
+  - One bastion with Internet access
   - User account with sudo configured (root access). 
   - 50G or more of disk space in your home directory.  Much more space is required if Operators are intended to be installed. 
   - Internet access from your bastion to download the container images and RPMs. 
      - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift.   See 'Connected mode' below.
-     - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported.  See 'Disconnected mode' below.
+     - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported.  For this, 2 bastions are required.  See 'Disconnected mode' below.
 
 
 ## Initial Steps
 
-- First, install a bastion host with a fresh version of RHEL.
+- *Bastion*
+   - First, install a bastion host with a fresh version of RHEL.
    - a 'minimal install' of RHEL 9.3 and RHEL 8.9 has been tested, other recent versions of RHEL should work too.
-- Clone or copy this git repository (https://github.com/sjbylo/aba.git) to a user's home directory on the bastion. 
-- To install OpenShift, a secret is needed to allow access to, and pull images from, Red Hat's registry.  Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
-   - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
-   - It's a good idea to make the file user read-only, e.g. `chmod 600 ~/.pull-secret.json`.
-- Create the needed DNS A records, *for example* (use your domain!):
-   - OpenShift API: api.ocp1.example.com 
-     - points to a free IP in your private subnet. 
-   - OpenShift Ingress: *.apps.ocp1.example.com 
-     - points to a free IP in your private subnet. 
-     - Note: For Single Node OpenShift (SNO), the above records should point to a single IP address, used for the single OpenShift node. 
-   - Quay mirror registry: registry.example.com 
-     - points to the IP address where you want to install Quay (e.g. your bastion) or to your existing registry. 
-- If you are using an existing registry:
-  - Copy your existing registry's credential files (pull secret and root CA) into the 'mirror/regcreds' directory, e.g.:
-    - mirror/regcreds/pull-secret-mirror.json   (pull secret file for your registry)
-    - mirror/regcreds/rootCA.pem                (root CA file for your registry) 
-  - Later, when the boot ISO is created, these files will be used. 
-- Finally, run ./aba command to initialize the installation process (see below).
+- *Git repo*
+   - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to a user's home directory on the bastion. 
+- *Pull Secret*
+   - To install OpenShift, a secret is needed to allow access to, and pull images from, Red Hat's registry.  Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
+      - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
+      - It's a good idea to make the file user read-only, e.g. `chmod 600 ~/.pull-secret.json`.
+- *DNS*
+   - Create the needed DNS A records, *for example* (use your domain!):
+      - OpenShift API: api.ocp1.example.com 
+        - points to a free IP in your private subnet. 
+      - OpenShift Ingress: *.apps.ocp1.example.com 
+        - points to a free IP in your private subnet. 
+        - Note: For Single Node OpenShift (SNO), the above records should point to a single IP address, used for the single OpenShift node. 
+      - Quay mirror registry: registry.example.com 
+        - points to the IP address where you want to install Quay (e.g. your bastion) or to your existing registry. 
+- *Registry*
+   - If you are using an existing registry:
+     - Copy your existing registry's credential files (pull secret and root CA) into the 'mirror/regcreds' directory, e.g.:
+       - mirror/regcreds/pull-secret-mirror.json   (pull secret file for your registry)
+       - mirror/regcreds/rootCA.pem                (root CA file for your registry) 
+     - Later, when the boot ISO is created, these files will be used. 
+- *Finally*
+   - run the ./aba command to initialize the installation process (see 'Getting Started' below).
 
 
 ## Getting Started with aba
