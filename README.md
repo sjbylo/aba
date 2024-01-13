@@ -14,7 +14,7 @@ Aba automatically completes the following:
 
 ## Prerequisites
 
-- *Private subnet* (optional)
+- **Private subnet** (optional)
 - *DNS*
    - with A records for OpenShift API, Ingress and the intrnal mirror registry.
 - *NTP*
