@@ -19,18 +19,18 @@ Aba automatically completes the following:
    - with A records for OpenShift API, Ingress and the intrnal mirror registry.
 - *NTP*
    - OpenShift requires that NTP be available.
-- *Platform* (optional)
-   - vCenter API access. Bare-metal nodes can be booted manually using the generated ISO.
-      - ESXi can also be used directly (i.e. without vCenter).
-      - Ensure enough privileges to vCenter. If you don't want to provide 'admin' privileges see the [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) documentation for more.
 - *One or two Bastion hosts* 
   - A RHEL host or VM 
   - One bastion with Internet access
-  - User account with sudo configured (root access). 
+  - User account with sudo configured (with root access). 
   - 50G or more of disk space in your home directory.  Much more space is required if Operators are intended to be installed. 
   - Internet access from your bastion to download the container images and RPMs. 
      - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift.   See 'Connected mode' below.
      - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported.  For this, 2 bastions are required.  See 'Disconnected mode' below.
+- *Platform* (optional)
+   - vCenter API access. Bare-metal nodes can be booted manually using the generated ISO.
+      - ESXi can also be used directly (i.e. without vCenter).
+      - Ensure enough privileges to vCenter. If you don't want to provide 'admin' privileges see the [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) documentation for more.
 
 
 ## Initial Steps
@@ -39,7 +39,8 @@ Aba automatically completes the following:
    - First, install a bastion host with a fresh version of RHEL.
    - a 'minimal install' of RHEL 9.3 and RHEL 8.9 has been tested, other recent versions of RHEL should work too.
 - *Git repo*
-   - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to a user's home directory on the bastion. 
+   - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to your user's home directory on the bastion. 
+   - Ensure sudo is configured. 
 - *Pull Secret*
    - To install OpenShift, a secret is needed to allow access to, and pull images from, Red Hat's registry.  Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
       - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
@@ -71,7 +72,7 @@ To set the version of OpenShift to install and, if needed, to download identical
 ./aba 
 ```
 
-Now, continue with either 'connected mode' or 'disconnected mode' below. 
+Now, continue with either 'Connected mode' or 'Disconnected mode' below. 
 
 
 ## Connected mode 
