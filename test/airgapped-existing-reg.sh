@@ -31,8 +31,9 @@ install_all_clusters() {
 
 # uninstall added to end of test
 ##make -C mirror uninstall  
-make distclean
-./aba
+#make distclean
+
+./aba --version 4.13.27 --vmw ~/.vmware.conf
 #rm -f mirror/regcreds/*  # if forget to uninstall reg.
 
 ######################

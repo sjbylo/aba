@@ -2,6 +2,8 @@
 # This test is for a connected bastion.  It will sync images and install clusters, 
 # then savd/load images and install clusters. 
 
+./aba --version 4.13.27 --vmw ~/.vmware.conf 
+
 install_cluster() {
 	rm -rf $1
 	mkdir -p $1
@@ -28,14 +30,15 @@ install_all_clusters() {
 	#done
 }
 
-make -C mirror uninstall
+set -x
+#make -C mirror uninstall
 
+make -C mirror clean
 #####
 ver=$(cat ./target-ocp-version.conf)
 
 # Copy and edit mirror.conf if needed
 cp -f templates/mirror.conf .
-
 sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror.conf
 ####
 
@@ -47,7 +50,6 @@ sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirr
 ######################
 echo Runtest: START - sync
 
-make -C mirror clean
 make sync   # This will install and sync
 
 #install_all_clusters sno compact standard 
