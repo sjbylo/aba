@@ -87,6 +87,10 @@ install: init mirror-registry .installed ## Set up the registry as per the setti
 installclean:
 	rm -f .installed
 
+.PHONY: verify
+verify:
+	scripts/reg-verify.sh
+
 uninstall: init mirror-registry .uninstalled ## Uninstall the registry 
 .uninstalled: 
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
