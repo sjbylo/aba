@@ -8,15 +8,19 @@
 #fi
 
 if [ ! -s vmware.conf ]; then
-	cp templates/vmware.conf .
-
-	echo -n "Edit the govc configuration file (vmware.conf) for access to vCenter or ESXi. Hit Return to edit or Ctrl-C to abort: " 
+	echo "Edit the 'govc' config file (vmware.conf) to enable access to vCenter or ESXi. "
+	echo -n "Hit Return to edit or 'n' to abort (y/n) [y]: " 
 	read yn
-
-	vi vmware.conf
+	if [ "$yn" = "y" -o "$yn" = "" ]; then
+		[ -s ~/.vmware.conf ] && cp ~/.vmware.conf vmware.conf || cp templates/vmware.conf .
+		$EDITOR vmware.conf 
+	else
+		exit 0
+	fi
 
 	source vmware.conf
 
+	# Check access
 	if ! govc about; then
 		rm -f vmware.conf
 		exit 1
