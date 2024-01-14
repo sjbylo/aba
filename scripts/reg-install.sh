@@ -29,10 +29,11 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 	#if [ "$tls_verify" -a -s regcreds/rootCA.pem ]; then
 	if [ -s regcreds/rootCA.pem ]; then
 		# Check if the cert needs to be updated
-		sudo diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2 || \
-			sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem && \
-				sudo update-ca-trust extract && \
-					echo "Cert 'regcreds/rootCA.pem' updated in system"
+		if ! sudo diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2; then
+			sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 
+			sudo update-ca-trust extract
+			echo "Cert 'regcreds/rootCA.pem' updated in system trust"
+		fi
 	fi
 
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
