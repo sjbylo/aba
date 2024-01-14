@@ -13,6 +13,9 @@ show_error() {
 # Set the trap to call the show_error function on ERR signal
 trap 'show_error' ERR
 
+# Detect editor.  Assume nano if available
+which nano >/dev/null 2>&1 && export EDITOR=nano || export EDITOR=vim
+
 install_rpm() {
 	rpmlist=
 	for rpm in $@
