@@ -14,11 +14,11 @@ Aba automatically completes the following:
 
 ## Prerequisites
 
-- **Private subnet** (optional)
 - **DNS**
    - with A records for OpenShift API, Ingress and the intrnal mirror registry.
 - **NTP**
    - OpenShift requires that NTP be available.
+- **Private subnet** (optional)
 - **One or two Bastion hosts**
   - A RHEL host or VM 
   - One bastion with Internet access
