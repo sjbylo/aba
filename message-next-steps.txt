@@ -1,0 +1,22 @@
+----------------------------------------------------------------------------------------
+Now run one of the following to configure the registry and download the needed software.
+
+For a 'connected' installation:
+
+make sync                     # Run on a 'connected bastion', to load the registry directly from the Internet.
+
+For a dissconnected (or air-gapped) installation:
+
+make save                     # First, run on a 'connected bastion', to 'save' the images from the Internet to local disk. 
+                              # Tar the *whole repo* to a thumb drive.
+make load                     # Run on a 'disconnected bastion' to load the saved images into a registry from the thumb drive.
+
+See the README file for more information.
+
+After the mirror is working and loaded, run one of the following:
+
+make sno                      # Warning: please first edit the template file templates/aba-sno.conf to match your environment
+make compact                  # Warning: please first edit the template file templates/aba-compact.conf to match your environment
+make standard                 # Warning: please first edit the template file templates/aba-standard.conf to match your environment
+make cluster name=mycluster   # This will set up a standard cluster and allow you to edit the aba.conf configuration file.
+
