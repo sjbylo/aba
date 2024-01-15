@@ -16,6 +16,7 @@ help: ## Help
 
 sync: install .synced ## Sync images from the Internet directly to an internal registry. 
 .synced: 
+	### Upload images to the mirror registry from the Internet 
 	$(SCRIPTS)/reg-sync.sh  $(debug)
 	touch .synced
 
@@ -26,6 +27,7 @@ syncclean:
 
 save: init .saved ## Save images from the Internet to local disk
 .saved: 
+	### Save images to local disk from the Internet 
 	$(SCRIPTS)/reg-save.sh  $(debug)
 	touch .saved
 
@@ -38,6 +40,7 @@ testload: save load install .loaded  # Test the save, install, load process on a
 
 load: install .loaded  ## Load the saved images into a registry on the internal bastion
 .loaded: 
+	### Load images from local disk to mirror registry
 	$(SCRIPTS)/reg-load.sh  $(debug)
 	touch .loaded
 
@@ -85,7 +88,7 @@ mirror.conf: ../mirror.conf ## Set up the mirror.conf file. Note that aba/mirror
 
 install: init mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 .installed: 
-	# Install Quay Mirror
+	### Install Quay Mirror
 	$(SCRIPTS)/reg-install.sh $(debug) 
 	rm -f .uninstalled 
 	rm -f .loaded
@@ -101,6 +104,7 @@ verify:
 
 uninstall: init mirror-registry .uninstalled ## Uninstall the registry 
 .uninstalled: 
+	### Uninstall Quay Mirror
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	rm -f .installed
 	rm -f .loaded
