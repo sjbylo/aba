@@ -93,6 +93,9 @@ if [ ! "$auto_ver" ]; then
 
 fi
 
+# make is needed below
+sudo dnf install make -y >/dev/null 2>&1
+
 ############
 # vmware.conf
 if [ ! "$auto_vmw" ]; then

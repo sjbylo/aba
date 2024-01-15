@@ -14,7 +14,7 @@ show_error() {
 trap 'show_error' ERR
 
 # Detect editor.  Assume nano if available
-which nano >/dev/null 2>&1 && export EDITOR=nano || export EDITOR=vim
+which nano >/dev/null 2>&1 && export EDITOR=nano || export EDITOR=vi
 
 install_rpm() {
 	rpmlist=
