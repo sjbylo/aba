@@ -49,7 +49,15 @@ loadclean:
 ../target-ocp-version.conf:
 	../aba
 
-init: regcreds templates scripts mirror.conf mirror-registry .initialized
+rpms: .rpms
+.rpms:
+	sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 -y > .dnf-install.log 2>&1
+	touch .rpms
+
+rpmsclean:
+	rm -f .rpms
+
+init: .rpms regcreds templates scripts mirror.conf mirror-registry .initialized
 .initialized: 
 	touch .initialized
 
@@ -112,7 +120,8 @@ clean: tidy ## Clean up files
 	rm -rf *.sh templates scripts imageset*yaml oc-mirror-workspace
 
 .PHONY: distclean
-distclean: uninstall clean ## Clean up repo for distribution
+#distclean: uninstall clean ## Clean up repo for distribution
+distclean:            clean ## Clean up repo for distribution
 	rm -rf *.tar.gz oc-mirror-workspace regcreds
 	rm -f .registry-creds.txt *.conf *.yaml 
 

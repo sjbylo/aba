@@ -78,14 +78,14 @@ if [ ! "$auto_ver" ]; then
 		#[ "$stable_ver" ] && echo -e "OpenShift latest stable version is: \t\t\t$stable_ver (s)" && or_s="or $stable_ver (s) "
 		#[ "$stable_ver_point" ] && echo -e "OpenShift latest stable (prev) version is: \t\t$stable_ver_prev (p)" && or_p="or $stable_ver_prev (p) "
 		[ "$stable_ver" ] && or_s="or $stable_ver (latest) "
-		[ "$stable_ver_point" ] && or_p="or $stable_ver_prev (previous) "
+		[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (previous) "
 		#[ "$cur_ver" ] && echo -e "Current installed version of 'openshift-install' is: \t$cur_ver"
 
-		echo -n "Enter version $or_s$or_p$or_ret(l/p/Ret) [$default_ver]: "
+		echo -n "Enter version $or_s$or_p$or_ret(l/p/<version>/Enter) [$default_ver]: "
 
 		read target_ver
 		[ ! "$target_ver" ] && target_ver=$default_ver
-		[ "$target_ver" = "s" ] && target_ver=$stable_ver
+		[ "$target_ver" = "l" ] && target_ver=$stable_ver
 		[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev
 	done
 
@@ -106,7 +106,8 @@ if [ ! "$auto_vmw" ]; then
 fi
 
 # Install the main rpms that are needed
-sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 -y >/dev/null 2>&1
+# Now added to mirror/Makefile instead
+### FIXME  is this needed?  # sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 -y >/dev/null 2>&1
 
 # Set up the CLIs
 #[ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver all
