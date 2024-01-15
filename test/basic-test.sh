@@ -3,6 +3,9 @@
 # then savd/load images and install clusters. 
 
 ./aba --version 4.13.27 --vmw ~/.vmware.conf 
+dir=`dirname $0`
+cd $dir/..
+
 
 install_cluster() {
 	rm -rf $1
