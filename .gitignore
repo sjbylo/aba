@@ -4,7 +4,7 @@ standard
 cli/*tar.gz
 mirror.conf
 vmware.conf
-mirror/.??*
+mirror/.registry-creds.txt
 *.md.bak
 target-ocp-version.conf
 mirror/regcreds/
