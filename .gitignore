@@ -5,6 +5,10 @@ cli/*tar.gz
 mirror.conf
 vmware.conf
 mirror/.registry-creds.txt
+mirror/.dnf-install.log
+mirror/.initialized
+mirror/.oc-mirror.log
+mirror/.rpms
 *.md.bak
 target-ocp-version.conf
 mirror/regcreds/
