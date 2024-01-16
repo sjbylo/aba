@@ -33,9 +33,14 @@ scripts/j2 ./templates/imageset-config.yaml.j2 > imageset-config.yaml
 #diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
 #	sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 #	sudo update-ca-trust extract
-diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-	sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
-	sudo update-ca-trust extract
+if [ -s regcreds/rootCA.pem ]; then
+	if diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2; then
+		sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ 
+		sudo update-ca-trust extract
+	fi
+else
+	echo "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 
+fi
 
 echo 
 echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
