@@ -26,5 +26,6 @@ echo
 # Set up script to help for manual re-sync
 echo "oc mirror --config=./imageset-config-save.yaml file://save" > save-mirror.sh && chmod 700 save-mirror.sh 
 cat ./save-mirror.sh
+rm -rf save/   # WIll this help with the "sequence error"?
 ./save-mirror.sh
 

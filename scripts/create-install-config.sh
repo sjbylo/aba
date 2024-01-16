@@ -45,16 +45,16 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 	# ... we also, need a root CA...
 	if [ -s regcreds/rootCA.pem ]; then
 		export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
-		echo Using root CA file at regcreds/rootCA.pem
+		echo "Using root CA file at regcreds/rootCA.pem"
 	else	
-		echo ERROR: No file rootCA.pem
-		exit 1
+		echo "Warning: No file rootCA.pem.  Assuming mirror registry is using http."
+		##  exit 1  # Will only work without a cert if the registry is using http
 	fi
 else
 	#echo WARNING: No mirror registry pull secret file found at regcreds/pull-secret-mirror.json.  Trying to use ./pull-secret.json.
-	if [ -s ~/.pull-secret.json ]; then
-		export pull_secret=$(cat ~/.pull-secret.json)
-		echo Found pull secret file at ~/.pull-secret.json
+	if [ -s $pull_secret_file ]; then
+		export pull_secret=$(cat $pull_secret_file)
+		echo Found pull secret file at $pull_secret_file
 	else
 		echo "Error: No pull secrets found. Aborting!" 
 		exit 1
