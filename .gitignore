@@ -27,3 +27,4 @@ mirror/scripts
 mirror/templates
 mirror/save
 mirror/*.sh
+test/.ssh.conf
