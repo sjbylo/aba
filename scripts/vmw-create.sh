@@ -65,6 +65,13 @@ for name in $CP_NAMES ; do
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
+	govc vm.disk.create \
+		-vm ${CLUSTER_NAME}-$name \
+		-name ${CLUSTER_NAME}-$name/${CLUSTER_NAME}-${name}-2 \
+		-size 100GB \
+		-thick=false \
+		-ds=$GOVC_DATASTORE
+
 	[ "$START_VM" ] && govc vm.power -on ${CLUSTER_NAME}-$name
 
 	let i=$i+1
@@ -95,6 +102,13 @@ for name in $WORKER_NAMES ; do
 		-vm ${CLUSTER_NAME}-$name \
 		-name ${CLUSTER_NAME}-$name/${CLUSTER_NAME}-$name \
 		-size 120GB \
+		-thick=false \
+		-ds=$GOVC_DATASTORE
+
+	govc vm.disk.create \
+		-vm ${CLUSTER_NAME}-$name \
+		-name ${CLUSTER_NAME}-$name/${CLUSTER_NAME}-${name}-2 \
+		-size 100GB \
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 

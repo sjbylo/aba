@@ -2,10 +2,11 @@
 # This test is for a connected bastion.  It will sync images and install clusters, 
 # then savd/load images and install clusters. 
 
-./aba --version 4.13.27 --vmw ~/.vmware.conf 
-dir=`dirname $0`
-cd $dir/..
+cd `dirname $0`
+cd ..
 
+#./aba --version 4.13.27 --vmw ~/.vmware.conf 
+./aba --version 4.14.8 --vmw ~/.vmware.conf 
 
 install_cluster() {
 	rm -rf $1
@@ -50,13 +51,13 @@ sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirr
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror.conf
 ## test for remote mirror
 
-######################
-echo Runtest: START - sync
-
-make sync   # This will install and sync
-
-#install_all_clusters sno compact standard 
-install_all_clusters sno
+#######################
+#echo Runtest: START - sync
+#
+#make sync   # This will install and sync
+#
+##install_all_clusters sno compact standard 
+#install_all_clusters sno
 
 ######################
 echo Runtest: START - load

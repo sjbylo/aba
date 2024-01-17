@@ -8,14 +8,16 @@ umask 077
 
 source mirror.conf
 
+# Generate first imageset-config file.  Allow users to add images and operators to the config file and run "make saveclean save; ./save-mirror.sh" again. 
+if [ ! -s imageset-config-save.yaml ]; then
+	export ocp_ver=$ocp_target_ver
+	export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
 
-export ocp_ver=$ocp_target_ver
-export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
+	echo Generating imageset-config.yaml to save images to local disk ...
+	scripts/j2 ./templates/imageset-config-save.yaml.j2 > imageset-config-save.yaml 
+fi
 
-echo Generating imageset-config.yaml to save images to local disk ...
-scripts/j2 ./templates/imageset-config-save.yaml.j2 > imageset-config-save.yaml 
-
-./scripts/create-containers-auth.sh
+###./scripts/create-containers-auth.sh  # FIXME - needed here?
 
 echo 
 echo "Saving images from the external network (Internet) to mirror/save/."
@@ -26,6 +28,8 @@ echo
 # Set up script to help for manual re-sync
 echo "oc mirror --config=./imageset-config-save.yaml file://save" > save-mirror.sh && chmod 700 save-mirror.sh 
 cat ./save-mirror.sh
-rm -rf save/   # WIll this help with the "sequence error"?
+
+##### rm -rf save/   # Allow user to add more image sets (e.g. for adding operators or image updates) to the archive 
+
 ./save-mirror.sh
 
