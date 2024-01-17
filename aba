@@ -13,7 +13,7 @@ do
 		shift 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		shift 
-		echo $1 | egrep -o "[0-9]+\.[0-9]+\.[0-9]+" > target-ocp-version.conf
+		echo $1 | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" > target-ocp-version.conf
 		target_ver=$(cat target-ocp-version.conf)
 		shift 
 		auto_ver=1
@@ -42,7 +42,7 @@ if [ ! "$auto_ver" ]; then
 	fi
 
 	## Get the latest stable OCP version number, e.g. 4.14.6
-	stable_ver=$(cat /tmp/.release.txt | egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+	stable_ver=$(cat /tmp/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 	default_ver=$stable_ver
 
 	# Extract the previous stable point version, e.g. 4.13.23
@@ -51,7 +51,7 @@ if [ ! "$auto_ver" ]; then
 		stable_ver_prev=$(cat /tmp/.release.txt| grep -oE "4\.${stable_ver_point}\.[0-9]+" | tail -n 1)
 
 	# Determine any already installed tool versions
-	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | egrep -o "[0-9]+\.[0-9]+\.[0-9]+")
+	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
 
 	# If openshift-install is already installed, then offer that version also
 	[ "$cur_ver" ] && or_ret="or currently installed version " && default_ver=$cur_ver
@@ -63,11 +63,11 @@ if [ ! "$auto_ver" ]; then
 	echo    "Which version of OpenShift do you want to install?"
 
 	target_ver=
-	#while ! echo "$target_ver" | egrep -q "^[0-9]+\.[0-9]+\.[0-9]+"
+	#while ! echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"
 	while true
 	do
 		# Exit loop if release version exists
-		if echo "$target_ver" | egrep -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
+		if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
 			if curl -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 				break
 			else
@@ -96,6 +96,8 @@ fi
 # make is needed below
 sudo dnf install make -y >/dev/null 2>&1
 
+make -C cli ~/bin/govc 
+
 ############
 # vmware.conf
 if [ ! "$auto_vmw" ]; then
@@ -110,7 +112,7 @@ fi
 
 # Install the main rpms that are needed
 # Now added to mirror/Makefile instead
-### FIXME  is this needed?  # sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 -y >/dev/null 2>&1
+### FIXME  is this needed?  # sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml -y >/dev/null 2>&1
 
 # Set up the CLIs
 #[ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver all
