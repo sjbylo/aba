@@ -11,7 +11,7 @@ ver=$(cat ../target-ocp-version.conf)
 if [ ! "$ver" ]; then
 	### This URL seems to point to a permanent location to get the latest stable version
 #	ver=$(curl -s https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt | \
-#		egrep -o "Version: +[0-9]+\.[0-9]+\.[0-9]+"| awk '{print $2}') 
+#		grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+"| awk '{print $2}') 
 	echo "Please run ./aba first"
 	exit 1
 fi

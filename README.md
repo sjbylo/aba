@@ -37,7 +37,7 @@ Aba automatically completes the following:
 
 - **Bastion**
    - First, install a bastion host with a fresh version of RHEL.
-   - a 'minimal install' of RHEL 9.3 and RHEL 8.9 has been tested, other recent versions of RHEL should work too.
+   - a 'minimal install' of RHEL 9.3, RHEL 8.9 and Fedora 39 have been tested, other recent versions of RHEL/Fedora should work too.
 - **Git repo**
    - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to your user's home directory on the bastion. 
    - Ensure sudo is configured. 

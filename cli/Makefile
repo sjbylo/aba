@@ -48,7 +48,7 @@ oc-mirror.tar.gz: ## Download oc-mirror tarball
 #	$(SCRIPTS)/install-pull-secret.sh 
 
 clean: ## Clean up installed binaries
-	rm -f ~/bin/{oc,oc-mirror,openshift-install} 
+	rm -f ~/bin/{oc,oc-mirror,openshift-install,govc} 
 
 distclean: clean ## Clean up everything
 	rm -f *.tar.gz
