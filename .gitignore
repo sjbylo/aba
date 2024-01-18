@@ -28,3 +28,6 @@ mirror/templates
 mirror/save
 mirror/*.sh
 test/.ssh.conf
+test/mirror-registry.tar.gz
+*.ssh.conf
+mirror/.saved
