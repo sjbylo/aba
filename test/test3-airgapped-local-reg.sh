@@ -30,7 +30,7 @@ install_all_clusters() {
 
 # Revert a snapshot and power on the internal bastion vm
 ( . ~/.vmware.conf; govc snapshot.revert -vm bastion2-internal-rhel8 Latest; sleep 8; govc vm.power -on bastion2-internal-rhel8; sleep 8; )
-ssh $(whoami)@registry2.example.com -- "date" || sleep 3
+ssh $(whoami)@registry2.example.com -- "date" || sleep 2
 ssh $(whoami)@registry2.example.com -- "date" || sleep 2
 
 cd ..  # Change into "aba" dir
@@ -41,13 +41,13 @@ make distclean   # This will then skip trying to uninstall (which results in an 
 ver=$(cat ./target-ocp-version.conf)
 
 # Set up mirror config
-cp -f templates/mirror.conf .
-sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror.conf
+cp -f templates/mirror.conf mirror
+sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" mirror/mirror.conf
 
 ## test for remote mirror
-sed -i "s/registry.example.com/registry2.example.com/g" ./mirror.conf
-#sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror.conf
-cp mirror.conf mirror
+sed -i "s/registry.example.com/registry2.example.com/g" mirror/mirror.conf
+#sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" mirror/mirror.conf
+###cp mirror.conf mirror
 
 ######################
 echo Runtest: START - airgap

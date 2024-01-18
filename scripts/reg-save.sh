@@ -8,7 +8,7 @@ umask 077
 
 source mirror.conf
 
-# Generate first imageset-config file.  Allow users to add images and operators to the config file and run "make saveclean save; ./save-mirror.sh" again. 
+# Generate first imageset-config file.  Allow users to add images and operators to imageset-config-save.yaml and run "make save" again. 
 if [ ! -s imageset-config-save.yaml ]; then
 	export ocp_ver=$ocp_target_ver
 	export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)

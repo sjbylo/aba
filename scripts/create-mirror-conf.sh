@@ -2,8 +2,6 @@
 
 . scripts/include_all.sh
 
-###[ "$1" = "-v" ] && shift && ver=$1 && shift
-
 [ "$1" ] && set -x
 
 ver=$(cat ../target-ocp-version.conf)
@@ -19,19 +17,21 @@ fi
 echo ==========================================================
 echo "Edit the mirror/mirror.conf file?"
 echo "For an existing registry in your private network, set the values for that registry."
-echo "Otherwise, define the values for where you intend the registry to be installed in your private network." 
+echo "Otherwise, define the values for where you want the registry to be installed in your private network." 
 echo -n "Hit Return to edit or Ctrl-C to abort [y]: "
-#echo "Set the values to match your *private network*.  Define the mirror registry where you intend it to be installed or"
-#echo -n "where it already exists. Hit Return to edit or Ctrl-C to abort [y]: "
+
 read yn
 
-# Copy and edit mirror.conf if needed 
-[ ! -s ../mirror.conf ] && cp -f templates/mirror.conf ..
+## Copy and edit mirror.conf if needed 
+#[ ! -s ../mirror.conf ] && cp -f templates/mirror.conf ..
 
-sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ../mirror.conf
+cp -f templates/mirror.conf .
 
-vi ../mirror.conf
+# Add target version into the conf file
+sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" mirror.conf
 
-# The top mirror.conf under aba/ has priority from now on
-cp -f ../mirror.conf .
+$EDITOR mirror.conf
+
+### The top mirror.conf under aba/ has priority from now on
+###cp -f ../mirror.conf .
 

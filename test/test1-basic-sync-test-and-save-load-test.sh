@@ -38,34 +38,36 @@ set -x
 #make -C mirror uninstall
 
 make -C mirror clean
-#####
+##./aba --version 4.13.27 --vmw ~/.vmware.conf
 ver=$(cat ./target-ocp-version.conf)
 
 # Copy and edit mirror.conf if needed
-cp -f templates/mirror.conf .
-sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror.conf
+cp -f templates/mirror.conf mirror/
+sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror/mirror.conf
 ####
 
 ## test for remote mirror
-#sed -i "s/registry.example.com/registry2.example.com/g" ./mirror.conf
-#sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror.conf
+#sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
+sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf
 ## test for remote mirror
 
-#######################
-#echo Runtest: START - sync
-#
-#make sync   # This will install and sync
-#
-##install_all_clusters sno compact standard 
-#install_all_clusters sno
-
 ######################
-echo Runtest: START - load
+echo Runtest: START - sync
 
-make -C mirror uninstall
-make -C mirror clean
+make sync   # This will install and sync
 
-make save load   #  This will save, install, load
 #install_all_clusters sno compact standard 
-install_all_clusters standard
+install_all_clusters sno
+
+#######################
+#echo Runtest: START - load
+#
+#make -C mirror uninstall
+#make -C mirror clean
+#
+#make save load   #  This will save, install, load
+##install_all_clusters sno compact standard 
+#install_all_clusters standard
+
+make uninstall 
 
