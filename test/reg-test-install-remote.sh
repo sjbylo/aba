@@ -2,8 +2,6 @@
 # Install mirror reg remotly but using ssh, simulating "existing reg." use-case.
 
 cd `dirname $0`
-pwd
-ls
 
 cat > .ssh.conf <<END
 StrictHostKeyChecking no
@@ -11,7 +9,7 @@ UserKnownHostsFile=/dev/null
 ConnectTimeout=15
 END
 
-reg_host=registry2.example.com
+reg_host=$1
 
 ssh -F .ssh.conf $(whoami)@$reg_host "mkdir -p test"
 

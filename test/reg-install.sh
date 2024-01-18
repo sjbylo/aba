@@ -29,7 +29,7 @@ fi
 [ ! -x ./mirror-registry ] && tar xvmzf mirror-registry.tar.gz
 
 reg_root=~/quay-install
-reg_pw=password
+reg_pw=p4ssw0rd
 [ "$1" ] && reg_host=$1 || reg_host=registry2.example.com
 reg_port=8443
 

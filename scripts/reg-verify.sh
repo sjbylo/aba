@@ -47,3 +47,5 @@ if [ "$reg_code" = "200" ]; then
 fi
 
 #reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
+
+exit 1
