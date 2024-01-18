@@ -210,14 +210,48 @@ make help        # This is available in all Makefiles (in aba/  aba/mirror/  aba
 - Use PXE boot as alternative to ISO upload.
 
 
-## Miscellaneous
+## Customising agent-config.yaml and/or openshift-install.yaml files
 
-- Once a cluster config directory has been created (e.g. 'compact') and Agent-based configuration has been created, some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed. 'make' can be run again to re-create the ISO and the VMs etc.  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP address changes and default route changes should work fine.  Changes, like adding link bonding may break the command to parse and extract the config.  The following is the script that is used to extract the cluster config from the agent-config yaml files. This script must work for the VMs to be created. 
+- Once a cluster config directory has been created (e.g. 'compact') and Agent-based configuration has been created, some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed. 'make' can be run again to re-create the ISO and the VMs etc (if required).  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP address changes, default route changes, adding disk hints work fine.  
+
+The following script can be used to extract the cluster config from the agent-config yaml files. This script can be run to check that the correct information can be extracted to create the VMs. 
+
+Example:
+
+```
+cd sno
+
+# Edit agent-config.yaml to include, for example, the following to direct agent-based installer to install RHCOS onto the 2nd disk:
+
+```
+    rootDeviceHints:
+      deviceName: /dev/sdb
+```
+
+Check 'cluster-config.sh' is working:
 
 ```
 cd compact
 scripts/cluster-config.sh        # example execution to show the cluster configuration extracted from the Agend-based files. 
 ```
+
+Run make again to rebuild the agent-based ISO and refresh the VMs:
+
+```
+make
+...
+scripts/generate-image.sh
+...
+scripts/vmw-upload.sh
+...
+scripts/vmw-create.sh --start
+...
+scripts/monitor-install.sh
+```
+
+
+## Miscellaneous
+
 
 - If you want to install workers with different CPU/MEM sizes (which can be used to install cluster infra sub-systems, e.g. Ceph and/or ES etc - infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed (if using VMs).
 
