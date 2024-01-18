@@ -46,7 +46,7 @@ testload: save load install  # Test the save, install, load process on a connect
 
 rpms: .rpms
 .rpms:
-	sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 -y > .dnf-install.log 2>&1
+	sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml -y > .dnf-install.log 2>&1
 	touch .rpms
 
 rpmsclean:
@@ -106,7 +106,7 @@ uninstallclean:
 
 .PHONY: tidy 
 tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
-	rm -rf *.tar mirror-registry  # 'dot' files must not be tidied as 'make load' needs them on the internal bastion
+	rm -rf *.tar mirror-registry
 
 .PHONY: clean
 clean: tidy ## Clean up files

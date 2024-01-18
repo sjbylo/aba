@@ -5,8 +5,11 @@
 cd `dirname $0`
 cd ..
 
-#./aba --version 4.13.27 --vmw ~/.vmware.conf 
-./aba --version 4.14.8 --vmw ~/.vmware.conf 
+./aba --version 4.13.27 --vmw ~/.vmware.conf 
+#./aba --version 4.14.8 --vmw ~/.vmware.conf 
+make -C cli clean 
+make -C cli
+[ -s mirror/mirror.conf ] && touch mirror/mirror.conf
 
 install_cluster() {
 	rm -rf $1
@@ -35,39 +38,42 @@ install_all_clusters() {
 }
 
 set -x
-#make -C mirror uninstall
 
-make -C mirror clean
-##./aba --version 4.13.27 --vmw ~/.vmware.conf
-ver=$(cat ./target-ocp-version.conf)
+# If a mirror is not accessible, install one.  Otherwise, use existing mirror.
+if ! make -C mirror verify; then
+	make -C mirror uninstall clean
 
-# Copy and edit mirror.conf if needed
-cp -f templates/mirror.conf mirror/
-sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror/mirror.conf
-####
+	ver=$(cat ./target-ocp-version.conf)
 
-## test for remote mirror
-#sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
-sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf
-## test for remote mirror
+	# Copy and edit mirror.conf 
+	cp -f templates/mirror.conf mirror/
+	sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror/mirror.conf
+
+	## test the internal bastion (registry2.example.com) as mirror
+	#sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf  # Which host
+	#sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	       # Remote or localhost
+
+	make -C mirror install 
+fi
+
+. mirror/mirror.conf
+make -C mirror verify 
+echo "Mirror available at $reg_host:$reg_port"
 
 ######################
 echo Runtest: START - sync
 
-make sync   # This will install and sync
-
+make -C mirror sync   # This will install and sync
 #install_all_clusters sno compact standard 
 install_all_clusters sno
 
 #######################
 #echo Runtest: START - load
-#
-#make -C mirror uninstall
-#make -C mirror clean
-#
-#make save load   #  This will save, install, load
-##install_all_clusters sno compact standard 
-#install_all_clusters standard
 
-make uninstall 
+make -C mirror save load   #  This will save, install, load
+##install_all_clusters sno compact standard 
+install_all_clusters sno
+
+# Tidy up, if needed
+##make -C mirror uninstall 
 
