@@ -16,6 +16,8 @@ reg_host=registry2.example.com
 ssh -F .ssh.conf $(whoami)@$reg_host "mkdir -p test"
 
 ssh $(whoami)@$reg_host "rpm -q rsync || sudo yum install make rsync -y"
+rpm -q rsync || sudo yum install make rsync -y
+
 # Copy needed files
 rsync --progress --partial -avz reg-install.sh mirror-registry.tar.gz  $(whoami)@10.0.1.6:test
 
