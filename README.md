@@ -148,23 +148,25 @@ make sno
 - Aba will show you the installation progress.  You can also run 'make ssh' to log into the rendezvous server to troubleshoot. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands are idempotent.
 
 ```
-make compact    (or 'make standard' for 3+2)
+make compact    # for a 3 node cluster topology
+make standard   # for a 3+2 topology
 ```
+
 - Run this to create a compact cluster (works in a similar way to the above). 
 
 ```
 make ocp name=mycluster
 ```
-- This will create a directory 'mycluster', copy the Makefile into it and then run 'make'.
+- This command will create a directory 'mycluster', copy the Makefile into it and then run 'make'.
 
-If needed, the following command can be used to monitor the progress of the Agent-based installer.
+If needed, the following command can be used to monitor the progress of the Agent-based installer. For example: 
 
 ```
-cd sno
+cd <cluster dir>   # e.g. cd sno  
 make mon
 ```
 
-Get help from a Makefile using 'make help'
+Get help from a Makefile using 'make help'.
 
 After OpenShift has been installed you will see the following:
 
@@ -176,14 +178,27 @@ INFO Access the OpenShift web-console here: https://console-openshift-console.ap
 INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ" 
 ```
 
-If you just want to create the agent-based iso file to boot bare-metal nodes, use "cd sno; make iso"
+You can run commands against the cluster if you like using 'make', e.g. to show the installation progress:
+
+```
+make cmd CMD="get co"
+```
+
+If you only want to create the agent-based iso file to boot bare-metal nodes, use e.g.:
+
+```
+cd sno
+# then manually edit the 'agent-config.yaml' file to set the appropriate Mac addresses for your bare-metal nodes
+make iso
+# boot the bare-metal node(s) with the ISO file.
+```
 
 If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme. 
 
 Other examples of commands, when working with VMware/ESXi:
 
 ```
-cd sno           # change to the directory with the agent-based install files ('sno' is just an example).
+cd sno           # change to the directory with the agent-based install files, using 'sno' as an example.
 
 make refresh     # Delete the VMs and re-create them causing the cluster to be re-installed.
 
@@ -193,7 +208,7 @@ make start       # Power on all VMs in the 'sno' cluster.
 
 make delete      # Delete all the VMs in the 'sno' cluster. 
 
-make help        # This is available in all Makefiles (in aba/  aba/mirror/  aba/cli/ and aba/<mycluster>/) 
+make help        # Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/<mycluster>/Makefile) 
 ```
 
 

@@ -72,10 +72,10 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 	curl --progress-bar -OL \
 	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
-mirror.conf: ../mirror.conf ## Set up the mirror.conf file. Note that aba/mirror.conf has priority over aba/mirror/mirror.conf.
-	cp ../mirror.conf .
+#mirror.conf: ../mirror.conf ## Set up the mirror.conf file. Note that aba/mirror.conf has priority over aba/mirror/mirror.conf.
+#	cp ../mirror.conf .
 
-../mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
+mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 install: init mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
@@ -110,7 +110,8 @@ tidy: ## Tidy large uncompressed files before copying the repo to the internal b
 
 .PHONY: clean
 clean: tidy ## Clean up files
-	rm -rf save/ regcreds/* .??* 
+	#rm -rf save/ regcreds/* .??* 
+	rm -rf save/            .??* 
 	rm -rf *.sh templates scripts imageset*yaml oc-mirror-workspace
 
 .PHONY: distclean
