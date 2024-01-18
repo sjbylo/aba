@@ -25,29 +25,21 @@ syncclean:
 	rm -f .synced
 	
 
-save: init .saved ## Save images from the Internet to local disk
-.saved: 
-	### Save images to local disk from the Internet 
+# oc-mirror is idempotent so no need for dot flag files
+.PHONY: save
+save: init ## Save images from the Internet to local disk
+	### Save images from the Internet to local disk 
 	$(SCRIPTS)/reg-save.sh  $(debug)
-	touch .saved
 
-.PHONY: saveclean
-saveclean:
-	rm -f .saved
-
-.PHONY: testload
-testload: save load install .loaded  # Test the save, install, load process on a connected host
-
-load: install .loaded  ## Load the saved images into a registry on the internal bastion
-.loaded: 
+# oc-mirror is idempotent so no need for dot flag files
+.PHONY: load
+load: install ## Load the saved images into a registry on the internal bastion
 	### Load images from local disk to mirror registry
 	$(SCRIPTS)/reg-load.sh  $(debug)
-	touch .loaded
 
-.PHONY: loadclean
-loadclean:
-	rm -f .loaded
-	
+.PHONY: testload
+testload: save load install  # Test the save, install, load process on a connected host
+
 # FIXME
 ../target-ocp-version.conf:
 	../aba
@@ -91,7 +83,6 @@ install: init mirror-registry .installed ## Set up the registry as per the setti
 	### Install Quay Mirror
 	$(SCRIPTS)/reg-install.sh $(debug) 
 	rm -f .uninstalled 
-	rm -f .loaded
 	touch .installed
 
 .PHONY: installclean
@@ -107,7 +98,6 @@ uninstall: init mirror-registry .uninstalled ## Uninstall the registry
 	### Uninstall Quay Mirror
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	rm -f .installed
-	rm -f .loaded
 	touch .uninstalled
 
 .PHONY: uninstallclean
