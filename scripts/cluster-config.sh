@@ -77,7 +77,7 @@ echo export WORKER_MAC_ADDRESSES=\"$WORKER_MAC_ADDRESSES\"
 
 rm -f $ICONF_TMP $ACONF_TMP
 
-# check
-[ ! "$CLUSTER_NAME" -o ! "$BASE_DOMAIN" ] && echo && echo "WARNING: The files install-config.yaml and/or agent-config.yaml chould not be parsed properly. " 
+# basic check
+[ ! "$CLUSTER_NAME" -o ! "$BASE_DOMAIN" -o ! "$RENDEZVOUSIP" -o ! "$CP_REPLICAS" -o ! "$CP_NAMES" -o ! "$CP_MAC_ADDRESSES" -o ! "$WORKER_REPLICAS" -o ! "$WORKER_NAMES" -o ! "$WORKER_MAC_ADDRESSES" -o ! "$VMW_FOLDER" ] && echo && echo "WARNING: The files install-config.yaml and/or agent-config.yaml chould not be parsed properly. " 
 
 
