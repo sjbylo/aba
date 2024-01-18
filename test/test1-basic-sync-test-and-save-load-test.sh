@@ -7,7 +7,7 @@ cd ..
 
 ./aba --version 4.13.27 --vmw ~/.vmware.conf 
 #./aba --version 4.14.8 --vmw ~/.vmware.conf 
-make -C cli clean 
+#make -C cli clean 
 make -C cli
 [ -s mirror/mirror.conf ] && touch mirror/mirror.conf
 
@@ -41,7 +41,8 @@ set -x
 
 # If a mirror is not accessible, install one.  Otherwise, use existing mirror.
 if ! make -C mirror verify; then
-	make -C mirror uninstall clean
+	##make -C mirror uninstall clean
+	podman ps| grep registry.redhat.io/quay/quay-rhel8 && make -C mirror uninstall clean
 
 	ver=$(cat ./target-ocp-version.conf)
 
