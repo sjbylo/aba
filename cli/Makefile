@@ -17,7 +17,7 @@ help: ## Help
 	../aba
 
 # oc
-~/bin/oc: openshift-client-linux-$(ocp_target_ver).tar.gz ## Install oc into ~/bin
+~/bin/oc: ~/bin openshift-client-linux-$(ocp_target_ver).tar.gz ## Install oc into ~/bin
 	tar -C ~/bin -xmzf openshift-client-linux-$(ocp_target_ver).tar.gz oc
 
 openshift-client-linux-$(ocp_target_ver).tar.gz: ## Downlaod oc tarball 
@@ -25,7 +25,7 @@ openshift-client-linux-$(ocp_target_ver).tar.gz: ## Downlaod oc tarball
 
 
 # openshift-install
-~/bin/openshift-install: openshift-install-linux-$(ocp_target_ver).tar.gz  ## Install openshift-install into ~/bin
+~/bin/openshift-install: ~/bin openshift-install-linux-$(ocp_target_ver).tar.gz  ## Install openshift-install into ~/bin
 	tar -C ~/bin -xmzf openshift-install-linux-$(ocp_target_ver).tar.gz openshift-install
 
 openshift-install-linux-$(ocp_target_ver).tar.gz: ## Download openshift-install tarball
@@ -33,7 +33,7 @@ openshift-install-linux-$(ocp_target_ver).tar.gz: ## Download openshift-install 
 
 
 # oc-mirror
-~/bin/oc-mirror: oc-mirror.tar.gz ~/bin/oc ## Install oc-mirror into ~/bin
+~/bin/oc-mirror: ~/bin oc-mirror.tar.gz ~/bin/oc ## Install oc-mirror into ~/bin
 	tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
 
@@ -41,7 +41,7 @@ oc-mirror.tar.gz: ## Download oc-mirror tarball
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/oc-mirror.tar.gz
 
 
-~/bin/govc: ## Install govc into ~/bin
+~/bin/govc: ~/bin ## Install govc into ~/bin
 	curl -sL -o - "https://github.com/vmware/govmomi/releases/latest/download/govc_`uname -s`_`uname -m`.tar.gz" | tar -C ~/bin -xvzf - govc
 
 #~/.pull-secret.json:
