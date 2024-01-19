@@ -94,7 +94,7 @@ installclean:
 	rm -f .installed
 
 .PHONY: verify
-verify:
+verify: init 
 	scripts/reg-verify.sh
 
 uninstall: init mirror-registry .uninstalled ## Uninstall the registry 
