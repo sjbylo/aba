@@ -17,7 +17,7 @@ Aba automatically completes the following:
 - **DNS**
    - with A records for OpenShift API, Ingress and the intrnal mirror registry.
 - **NTP**
-   - OpenShift requires that NTP be available.
+   - OpenShift requires that NTP be available. Installation is possible without an NTP server. However, asynchronous server clocks will cause errors, which NTP server prevents.
 - **Private subnet** (optional)
 - **One or two Bastion hosts**
   - A RHEL host or VM 
