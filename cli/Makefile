@@ -51,7 +51,7 @@ oc-mirror.tar.gz: ## Download oc-mirror tarball
 
 ########################################
 # Govc
-~/bin/govc: .init                                           ## Install govc into ~/bin
+~/bin/govc: .init govc_Linux_x86_64.tar.gz                                           ## Install govc into ~/bin
 	tar -C ~/bin -xmzf govc_Linux_x86_64.tar.gz govc
 
 govc_Linux_x86_64.tar.gz:                                           ## Download govc tarball
