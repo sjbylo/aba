@@ -94,7 +94,8 @@ time rsync --delete --progress --partial --times -avz \
 	--exclude 'aba/cli/*' \
 	--exclude 'aba/mirror/mirror-registry' \
 	--exclude 'aba/mirror/*.tar' \
-	--exclude 'aba/mirror/.rpms' \
+	--exclude "aba/mirror/.rpms" \
+	--exclude 'aba/*/*/*.iso' \
 		bin aba $(whoami)@10.0.1.6:
 cd aba
 

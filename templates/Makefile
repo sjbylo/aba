@@ -12,17 +12,24 @@ all: iso .autoupload .autorefresh mon
 help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-# Add links, just for convenience 
-templates:
+init: .initialized
+.initialized:
 	ln -s ../templates
-
-scripts: 
 	ln -s ../scripts
-
-mirror: 
 	ln -s ../mirror
+	touch .initialized
 
-mirror.conf: mirror ## Set up the mirror.conf file
+# Add links, just for convenience 
+#templates:
+#	ln -s ../templates
+
+#scripts: 
+#	ln -s ../scripts
+
+#mirror: 
+#	ln -s ../mirror
+
+mirror.conf: .initialized ## Set up the mirror.conf file
 	ln -sf mirror/mirror.conf
 	touch mirror.conf
 
@@ -33,10 +40,12 @@ aba.conf: ## Edit the aba conf file
 	cp templates/aba.conf .
 	$(EDITOR) aba.conf
 
-install-config.yaml: templates scripts aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
+#install-config.yaml: templates scripts aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
+install-config.yaml: .initialized aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
 	scripts/create-install-config.sh $(debug)
 
-agent-config.yaml: templates scripts aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
+#agent-config.yaml: templates scripts aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
+agent-config.yaml: .initialized aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
 	scripts/create-agent-config.sh $(debug)
 
 # The following "auto" targets are meant just for the full end-to-end automation, to build a cluster
