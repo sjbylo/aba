@@ -51,8 +51,8 @@ if ! make -C mirror verify; then
 	sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror/mirror.conf
 
 	## test the internal bastion (registry2.example.com) as mirror
-	#sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf  # Which host
-	#sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	       # Remote or localhost
+	sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf  # Which host
+	sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	       # Remote or localhost
 
 	make -C mirror install 
 fi

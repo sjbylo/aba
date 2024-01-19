@@ -96,7 +96,7 @@ fi
 # make is needed below
 sudo dnf install make -y >/dev/null 2>&1
 
-make -C cli ~/bin/govc 
+make -C cli ~/bin ~/bin/govc 
 
 ############
 # vmware.conf
