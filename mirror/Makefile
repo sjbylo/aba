@@ -52,18 +52,21 @@ rpms: .rpms
 rpmsclean:
 	rm -f .rpms
 
-init: .rpms regcreds templates scripts mirror.conf mirror-registry .initialized
+#init:             .rpms regcreds templates scripts mirror.conf mirror-registry .initialized
+init: .initialized .rpms regcreds                    mirror.conf mirror-registry 
 .initialized: 
+	ln -s $(TEMPLATES) 
+	ln -s $(SCRIPTS) 
 	touch .initialized
 
 regcreds:
 	mkdir regcreds 
 
-templates:
-	ln -s $(TEMPLATES) 
+#templates:
+#	ln -s $(TEMPLATES) 
 
-scripts: 
-	ln -s $(SCRIPTS) 
+#scripts: 
+#	ln -s $(SCRIPTS) 
 
 mirror-registry: mirror-registry.tar.gz ## Extract the mirror-registry binary 
 	tar xmvzf mirror-registry.tar.gz
@@ -75,7 +78,8 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 #mirror.conf: ../mirror.conf ## Set up the mirror.conf file. Note that aba/mirror.conf has priority over aba/mirror/mirror.conf.
 #	cp ../mirror.conf .
 
-mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
+#mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
+mirror.conf:           templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 install: init mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
@@ -111,7 +115,7 @@ tidy: ## Tidy large uncompressed files before copying the repo to the internal b
 .PHONY: clean
 clean: tidy ## Clean up files
 	#rm -rf save/ regcreds/* .??* 
-	rm -rf save/            .??* 
+	rm -rf                  .??* 
 	rm -rf *.sh templates scripts imageset*yaml oc-mirror-workspace
 
 .PHONY: distclean
@@ -119,4 +123,5 @@ clean: tidy ## Clean up files
 distclean:            clean ## Clean up repo for distribution
 	rm -rf *.tar.gz oc-mirror-workspace regcreds
 	rm -f .registry-creds.txt *.conf *.yaml 
+	rm -rf save regcreds
 

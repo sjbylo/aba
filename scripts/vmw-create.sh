@@ -44,6 +44,7 @@ for name in $CP_NAMES ; do
 	echo "Create master: [$name] VM with [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$FOLDER/${CLUSTER_NAME}-$name]"
 	govc vm.create \
 		-g rhel8_64Guest \
+		-firmware=efi \
 		-c=$master_cpu_count \
 		-m=`expr $master_mem \* 1024` \
 		-disk-datastore=$GOVC_DATASTORE \
@@ -54,6 +55,8 @@ for name in $CP_NAMES ; do
 		-folder="$FOLDER" \
 		-on=false \
 		 ${CLUSTER_NAME}-$name
+
+	govc device.boot -secure -vm ${CLUSTER_NAME}-$name
 
 	govc vm.change -vm ${CLUSTER_NAME}-$name -e disk.enableUUID=TRUE
 
@@ -77,6 +80,7 @@ for name in $WORKER_NAMES ; do
 	echo "Create master: [$name] VM with [${WORKER_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$FOLDER/${CLUSTER_NAME}-$name]"
 	govc vm.create \
 		-g rhel8_64Guest \
+		-firmware=efi \
 		-c=$worker_cpu_count \
 		-m=`expr $worker_mem \* 1024` \
 		-net.adapter vmxnet3 \
@@ -87,6 +91,8 @@ for name in $WORKER_NAMES ; do
 		-folder="$FOLDER" \
 		-on=false \
 		 ${CLUSTER_NAME}-$name
+
+	govc device.boot -secure -vm ${CLUSTER_NAME}-$name
 
 	govc vm.change -vm ${CLUSTER_NAME}-$name -e disk.enableUUID=TRUE
 

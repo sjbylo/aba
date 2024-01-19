@@ -52,7 +52,7 @@ tidy:
 	make -C mirror tidy
 
 .PHONY: tar
-tar:  ## Tar the repo to move to internet network, e.g. make tar out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-repo.tgz
+tar:  ## Tar the repo to move to internal network, e.g. make tar out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-repo.tgz
 	scripts/create-tarball.sh $(out)
 
 #tar: ## Tar up the aba repo, ready to move to the internet network
