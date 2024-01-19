@@ -1,7 +1,7 @@
 EDITOR   ?= vi      		# Set vi or nano or you fav. editor
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
-CMD      ?= "get co"    # The default command
+#cmd      ?= "get co"    # The default command
 debug    ?= 		# Set debug=1 for some commands 
 
 # The default target will build a cluster from scratch 
@@ -100,12 +100,12 @@ getco: ## Run 'oc get co' command on the cluster
 	oc --kubeconfig iso-agent-based/auth/kubeconfig get co
 
 .PHONEY: cmd
-cmd: ## Run any command on the cluster, must provide command, e.g. CMD="oc get pods -A
-	scripts/command.sh $(CMD)
+cmd: ## Run any oc command on the cluster, must provide command, e.g. cmd="oc get pods -A", default is 'oc get co'
+	scripts/oc-command.sh $(cmd)
 
 .PHONEY: ssh
 ssh: ## Open ssh to the rendezvous host
-	scripts/ssh-rendezvous.sh
+	scripts/ssh-rendezvous.sh $(cmd)
 
 .PHONEY: vmw
 vmw: ## Configure VMW platform credentials

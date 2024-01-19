@@ -1,11 +1,11 @@
 #!/bin/bash 
 
-if [ "$@" ]; then
-	echo Running: ssh core@$(cat iso-agent-based/rendezvousIP) -- $@
-	ssh core@$(cat iso-agent-based/rendezvousIP) -- $@
+ip=$(cat iso-agent-based/rendezvousIP)
+if [ "$*" ]; then
+	echo "Running: ssh core@$ip -- $*"
+	ssh core@$ip -- $*
 else
-	echo Running: ssh core@$(cat iso-agent-based/rendezvousIP) 
-	ssh core@$(cat iso-agent-based/rendezvousIP) 
+	echo "Running: ssh core@$ip"
+	ssh core@$ip 
 fi
 
-#[ $? -ne 0 ] && echo "Note: If ssh fails, are the ssh keys configured, e.g. ~/.ssh/id_rsa and ~/.ssh/id_rsa.pub ?"
