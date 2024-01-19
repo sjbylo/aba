@@ -30,3 +30,7 @@ mirror/*.sh
 test/.ssh.conf
 test/mirror-registry.tar.gz
 *.ssh.conf
+cli/.init
+mirror/.installed
+mirror/.synced
+
