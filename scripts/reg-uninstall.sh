@@ -19,19 +19,19 @@ if [ -s reg-uninstall.sh ]; then
 fi
 
 # FIXME: Is this still needed? 
-#if [ "$reg_ssh" ]; then
-#
-#	echo "Running command: ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) -k $reg_ssh $reg_root_opt"
-#	./mirror-registry uninstall -v \
-#		--targetHostname $reg_host \
-#  		--targetUsername $(whoami) \
-#		--autoApprove \
-#  		-k $reg_ssh $reg_root_opt
-#else
-#	echo "Running command: ./mirror-registry uninstall -v $reg_root_opt"
-#	./mirror-registry uninstall -v --autoApprove $reg_root_opt
-#fi
+if [ "$reg_ssh" ]; then
+
+	echo "Running command: ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) -k $reg_ssh $reg_root_opt"
+	./mirror-registry uninstall -v \
+		--targetHostname $reg_host \
+  		--targetUsername $(whoami) \
+		--autoApprove \
+  		-k $reg_ssh $reg_root_opt
+else
+	echo "Running command: ./mirror-registry uninstall -v $reg_root_opt"
+	./mirror-registry uninstall -v --autoApprove $reg_root_opt
+fi
 
 # If there is no uninstall script, assume nothing to uninstall
-echo No mirror registry to uninstall
+#echo No mirror registry to uninstall
 echo

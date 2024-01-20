@@ -56,7 +56,7 @@ export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
 [ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
 scripts/j2 ./templates/imageset-config-sync.yaml.j2 > imageset-config-sync.yaml 
 
-./scripts/create-containers-auth.sh
+#### FIXME ./scripts/create-containers-auth.sh
 
 [ ! "$reg_root" ] && reg_root=$HOME/quay-install
 

@@ -135,7 +135,7 @@ if [ "$reg_ssh" ]; then
 
 	reg_user=init
 
-	echo -n $reg_user:$reg_pw > .registry-creds.txt 
+	#echo -n $reg_user:$reg_pw > .registry-creds.txt 
 
 	# Configure the pull secret for this mirror registry 
 	export reg_url=https://$reg_host:$reg_port
@@ -150,11 +150,15 @@ if [ "$reg_ssh" ]; then
 
 	podman logout --all 
 	echo -n "Checking registry access is working using 'podman login': "
-	podman login -u init -p $reg_pw $reg_url 
+	podman login -u $reg_user -p $reg_pw $reg_url 
 
-	reg_creds=$(cat .registry-creds.txt)
+	#reg_creds=$(cat .registry-creds.txt)
+	export enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)
+
+	# Inputs: enc_password, reg_host and reg_port 
+	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
+
 	scripts/create-containers-auth.sh
-
 else
 	echo "Installing Quay registry on localhost ..."
 
@@ -185,7 +189,7 @@ else
 
 	reg_user=init
 
-	echo -n $reg_user:$reg_pw > .registry-creds.txt 
+	#echo -n $reg_user:$reg_pw > .registry-creds.txt 
 
 	# Configure the pull secret for this mirror registry 
 	export reg_url=https://$reg_host:$reg_port
@@ -199,9 +203,14 @@ else
 
 	podman logout --all 
 	echo -n "Checking registry access is working using 'podman login': "
-	podman login -u init -p $reg_pw $reg_url 
+	podman login -u $reg_user -p $reg_pw $reg_url 
 
-	reg_creds=$(cat .registry-creds.txt)
+	#reg_creds=$(cat .registry-creds.txt)
+	export enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)
+
+	# Inputs: enc_password, reg_host and reg_port 
+	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
+
 	scripts/create-containers-auth.sh
 fi
 
