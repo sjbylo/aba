@@ -13,6 +13,7 @@ help: ## Help
 
 .init:
 	mkdir ~/bin
+	touch .init
 
 #~/bin:
 #	mkdir ~/bin
@@ -46,7 +47,7 @@ openshift-install-linux-$(ocp_target_ver).tar.gz:                               
 
 oc-mirror.tar.gz: ## Download oc-mirror tarball
 	#curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/oc-mirror.tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.14.8/oc-mirror.tar.gz   # This has bug fixes 
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.14.8/oc-mirror.tar.gz   # This tested version has bug fixes 
 
 
 ########################################
