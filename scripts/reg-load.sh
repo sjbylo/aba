@@ -19,7 +19,7 @@ export reg_url=https://$reg_host:$reg_port
 #podman login --authfile regcreds/pull-secret-mirror.json $reg_url 
 
 # Run create container auth
-./scripts/create-containers-auth.sh 
+#### FIXME ./scripts/create-containers-auth.sh 
 
 echo Generating imageset-config.yaml for oc-mirror ...
 export ocp_ver=$ocp_target_ver

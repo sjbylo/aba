@@ -17,8 +17,6 @@ if [ ! -s imageset-config-save.yaml ]; then
 	scripts/j2 ./templates/imageset-config-save.yaml.j2 > imageset-config-save.yaml 
 fi
 
-###./scripts/create-containers-auth.sh  # FIXME - needed here?
-
 echo 
 echo "Saving images from the external network (Internet) to mirror/save/."
 echo "Ensure there is enough disk space under $PWD/save.  "

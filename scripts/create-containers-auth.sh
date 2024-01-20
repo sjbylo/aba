@@ -1,11 +1,11 @@
 #!/bin/bash 
+# Find the available pull secrets and place them in the right locations: ~/.docker ~/.containers
 
 . scripts/include_all.sh
 
 [ "$1" ] && set -x
 
 umask 077
-
 
 source mirror.conf
 
@@ -23,15 +23,15 @@ source mirror.conf
 mkdir -p ~/.docker ~/.containers
 
 # If the mirror creds are available add them also
-if [ -s ./.registry-creds.txt ]; then
-	reg_creds=$(cat ./.registry-creds.txt)   # FIXME: this file is not needed!
-	export enc_password=$(echo -n "$reg_creds" | base64 -w0)
+##if [ -s ./.registry-creds.txt ]; then
+##	reg_creds=$(cat ./.registry-creds.txt)   # FIXME: this file is not needed!
+##	export enc_password=$(echo -n "$reg_creds" | base64 -w0)
+##
+##	# Inputs: enc_password, reg_host and reg_port 
+##	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
+##fi
 
-	# Inputs: enc_password, reg_host and reg_port 
-	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
-fi
-
-# 
+# If the Red Hat creds are available merge them 
 if [ -s regcreds/pull-secret-mirror.json -a -s $pull_secret_file ]; then
 	# Merge the two files
 	jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json $pull_secret_file > ./regcreds/pull-secret-full.json
@@ -41,33 +41,12 @@ if [ -s regcreds/pull-secret-mirror.json -a -s $pull_secret_file ]; then
 
 # If the mirror creds are available add them also
 elif [ -s regcreds/pull-secret-mirror.json ]; then
-	# Merge the two files
-	##jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json $pull_secret_file > ./regcreds/pull-secret-full.json
-
 	cp ./regcreds/pull-secret-mirror.json ~/.docker/config.json
 	cp ./regcreds/pull-secret-mirror.json ~/.containers/auth.json
 else
+	# Just use the Red Hat pull secret file
 	echo Configuring ~/.docker/config.json and ~/.containers/auth.json with Red Hat pull secret $pull_secret_file ...
 	cp $pull_secret_file ~/.docker/config.json
 	cp $pull_secret_file ~/.containers/auth.json  
 fi
-
-## If the mirror creds are available add them also
-#if [ -s ./.registry-creds.txt ]; then
-#	reg_creds=$(cat ./.registry-creds.txt)
-#	export enc_password=$(echo -n "$reg_creds" | base64 -w0)
-#
-#	# Inputs: enc_password, reg_host and reg_port 
-#	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
-#
-#	# Merge the two files
-#	jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json $pull_secret_file > ./regcreds/pull-secret-full.json
-#
-#	cp ./regcreds/pull-secret-full.json ~/.docker/config.json
-#	cp ./regcreds/pull-secret-full.json ~/.containers/auth.json
-#else
-#	echo Configuring ~/.docker/config.json and ~/.containers/auth.json with Red Hat pull secret ...
-#	cp $pull_secret_file ~/.docker/config.json
-#	cp $pull_secret_file ~/.containers/auth.json  
-#fi
 
