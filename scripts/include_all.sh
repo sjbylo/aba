@@ -1,3 +1,5 @@
+# Code that all scripts need.  Ensure this script does not create any std output.
+
 umask 077
 
 # Function to display an error message and the last executed command
@@ -14,7 +16,11 @@ show_error() {
 trap 'show_error' ERR
 
 # Detect editor.  Assume nano if available
-which nano >/dev/null 2>&1 && export EDITOR=nano || export EDITOR=vi
+if which nano >/dev/null 2>&1; then
+	export EDITOR=nano
+else
+	export EDITOR=vi
+fi
 
 install_rpm() {
 	rpmlist=

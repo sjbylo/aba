@@ -6,9 +6,10 @@ source scripts/include_all.sh
 
 source mirror.conf
 
-if [ "$reg_root" ]; then
-	reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
-fi
+# FIXME, only the uninstall script needed?
+#if [ "$reg_root" ]; then
+#	reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
+#fi
 
 if [ -s reg-uninstall.sh ]; then
 	echo Uninstalling mirror registry from host $reg_host ...
@@ -16,21 +17,25 @@ if [ -s reg-uninstall.sh ]; then
 	bash -e ./reg-uninstall.sh
 	rm -f ./reg-uninstall.sh
 	exit 0
+else
+	echo "No uninstall script 'mirror/reg-uninstall.sh' found. Aba did not install the mirror registry."
+	exit 1
 fi
 
 # FIXME: Is this still needed? 
-if [ "$reg_ssh" ]; then
+# FIXME, only the uninstall script needed?
+#if [ "$reg_ssh" ]; then
 
-	echo "Running command: ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) -k $reg_ssh $reg_root_opt"
-	./mirror-registry uninstall -v \
-		--targetHostname $reg_host \
-  		--targetUsername $(whoami) \
-		--autoApprove \
-  		-k $reg_ssh $reg_root_opt
-else
-	echo "Running command: ./mirror-registry uninstall -v $reg_root_opt"
-	./mirror-registry uninstall -v --autoApprove $reg_root_opt
-fi
+#	echo "Running command: ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) -k $reg_ssh $reg_root_opt"
+#	./mirror-registry uninstall -v \
+#		--targetHostname $reg_host \
+#  		--targetUsername $(whoami) \
+#		--autoApprove \
+#  		-k $reg_ssh $reg_root_opt
+#else
+#	echo "Running command: ./mirror-registry uninstall -v $reg_root_opt"
+#	./mirror-registry uninstall -v --autoApprove $reg_root_opt
+#fi
 
 # If there is no uninstall script, assume nothing to uninstall
 #echo No mirror registry to uninstall

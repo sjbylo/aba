@@ -28,8 +28,6 @@ else
 	echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 fi
 
-
-
 export reg_url=https://$reg_host:$reg_port
 
 # Can the registry mirror already be reached?
@@ -56,7 +54,8 @@ export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
 [ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
 scripts/j2 ./templates/imageset-config-sync.yaml.j2 > imageset-config-sync.yaml 
 
-#### FIXME ./scripts/create-containers-auth.sh
+# This is needed since sometimes an existing registry may already be available
+./scripts/create-containers-auth.sh
 
 [ ! "$reg_root" ] && reg_root=$HOME/quay-install
 
