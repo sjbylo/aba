@@ -2,6 +2,10 @@
 
 A toolbox container that can be used on an internel bastion in case rpms cannot be installed.
 
+Current status:
+nmstate not working inside a UBI container. Seeing errors with NM.SettingBond.get_valid_options() failing.
+Without nmstate can't create the ISO
+
 `Work in progress`
 
 Build:
