@@ -2,39 +2,32 @@ TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 debug   ?=
 
-#version := $(shell $(SCRIPTS)/fetch-ocp-stable-version.sh)
-##version := $(shell cat ../target-ocp-version.conf)
-
-## This is the default.  Install mirror reg. (if needed), sync images from the Internet directly to the mirror. 
-#.PHONY: all 
-#all: sync
-
 ##@ Help-related tasks
 .PHONY: help
 help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-sync: install .synced ## Sync images from the Internet directly to an internal registry. 
-.synced: 
+.PHONY: sync
+sync: install ## Sync images from the Internet directly to an internal registry. 
+	###
 	### Upload images to the mirror registry from the Internet 
+	###
 	$(SCRIPTS)/reg-sync.sh  $(debug)
-	touch .synced
 
-.PHONY: syncclean
-syncclean:
-	rm -f .synced
-	
-
-# oc-mirror is idempotent so no need for dot flag files
+# oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: save
 save: init ## Save images from the Internet to local disk
+	###
 	### Save images from the Internet to local disk 
+	###
 	$(SCRIPTS)/reg-save.sh  $(debug)
 
-# oc-mirror is idempotent so no need for dot flag files
+# oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
 load: install ## Load the saved images into a registry on the internal bastion
+	###
 	### Load images from local disk to mirror registry
+	###
 	$(SCRIPTS)/reg-load.sh  $(debug)
 
 .PHONY: testload
@@ -62,12 +55,6 @@ init: .initialized .rpms regcreds                    mirror.conf mirror-registry
 regcreds:
 	mkdir regcreds 
 
-#templates:
-#	ln -s $(TEMPLATES) 
-
-#scripts: 
-#	ln -s $(SCRIPTS) 
-
 mirror-registry: mirror-registry.tar.gz ## Extract the mirror-registry binary 
 	tar xmvzf mirror-registry.tar.gz
 
@@ -75,10 +62,6 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 	curl --progress-bar -OL \
 	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
-#mirror.conf: ../mirror.conf ## Set up the mirror.conf file. Note that aba/mirror.conf has priority over aba/mirror/mirror.conf.
-#	cp ../mirror.conf .
-
-#mirror.conf: templates templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
 mirror.conf:           templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
