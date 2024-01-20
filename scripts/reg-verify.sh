@@ -7,6 +7,7 @@ source scripts/include_all.sh
 umask 077
 
 source mirror.conf
+
 reg_url=https://$reg_host:$reg_port
 
 # Check for existing reg.creds (provided by user)

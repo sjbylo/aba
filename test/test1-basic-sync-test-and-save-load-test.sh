@@ -40,9 +40,10 @@ install_all_clusters() {
 set -x
 
 # If a mirror is not accessible, install one.  Otherwise, use existing mirror.
-if ! make -C mirror verify; then
+##if ! make -C mirror verify; then
 	##make -C mirror uninstall clean
-	podman ps| grep registry.redhat.io/quay/quay-rhel8 && make -C mirror uninstall clean
+	#podman ps| grep registry.redhat.io/quay/quay-rhel8 && make -C mirror uninstall clean
+	#ssh registry2.example.com -- podman ps| grep registry.redhat.io/quay/quay && (cd mirror; ./mirror-registry uuninstall)
 
 	ver=$(cat ./target-ocp-version.conf)
 
@@ -55,10 +56,10 @@ if ! make -C mirror verify; then
 	sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	       # Remote or localhost
 
 	make -C mirror install 
-fi
+##fi
 
 . mirror/mirror.conf
-make -C mirror verify 
+#make -C mirror verify 
 echo "Mirror available at $reg_host:$reg_port"
 
 ######################

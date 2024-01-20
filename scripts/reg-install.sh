@@ -64,9 +64,7 @@ fi
 
 # Has user defined a registry root dir?
 if [ "$reg_root" ]; then
-	# FIXME
-	#reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
-	reg_root_opt="--quayStorage ${reg_root}-storage"
+	reg_root_opt="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --pgStorage $reg_root/pg-data"
 else
 	# The default path
 	reg_root=$HOME/quay-install
@@ -117,7 +115,8 @@ if [ "$reg_ssh" ]; then
 		reg_pw=$(openssl rand -base64 12)
 	fi
 
-	echo "Running command: \"./mirror-registry install --quayHostname $reg_host --targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh --initPassword <hidden> $reg_root_opt\""
+	echo "Running command: \"./mirror-registry install --quayHostname $reg_host \
+		--targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh --initPassword <hidden> $reg_root_opt\""
 
 	./mirror-registry install -v \
   		--quayHostname $reg_host \
@@ -127,7 +126,7 @@ if [ "$reg_ssh" ]; then
 		--initPassword $reg_pw $reg_root_opt
 
 	# Generate the script to be used to delete this registry
-	cmd="./mirror-registry uninstall --targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh --autoApprove"
+	cmd="./mirror-registry uninstall --targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh $reg_root_opt --autoApprove"
 	echo "echo Running command: \"$cmd\"" > ./reg-uninstall.sh
 	echo "$cmd" >> ./reg-uninstall.sh
 
@@ -181,7 +180,7 @@ else
 		--initPassword $reg_pw $reg_root_opt
 
 	# Generate the script to be used to delete this registry
-	cmd="./mirror-registry uninstall --autoApprove"
+	cmd="./mirror-registry uninstall --autoApprove $reg_root_opt"
 	echo "echo Running command  \"$cmd\"" > ./reg-uninstall.sh
 	echo "$cmd" >> ./reg-uninstall.sh
 

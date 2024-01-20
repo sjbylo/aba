@@ -39,7 +39,7 @@ testload: save load install  # Test the save, install, load process on a connect
 
 rpms: .rpms
 .rpms:
-	sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml -y > .dnf-install.log 2>&1
+	sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl -y > .dnf-install.log 2>&1
 	touch .rpms
 
 rpmsclean:

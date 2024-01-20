@@ -24,6 +24,9 @@ if [ ! -s vmware.conf ]; then
 	if ! govc about; then
 		rm -f vmware.conf
 		exit 1
+	else
+		# Save working version for later
+		[ ! -s ~/.vmware.conf ] && cp vmware.conf ~/.vmware.conf
 	fi
 fi
 
