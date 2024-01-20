@@ -38,6 +38,7 @@ Aba automatically completes the following:
 - **Bastion**
    - First, install a bastion host with a fresh version of RHEL.
    - a 'minimal install' of RHEL 9.3, RHEL 8.9 and Fedora 39 have been tested, other recent versions of RHEL/Fedora should work too.
+      - Note that on Fedora 39, the mirror registry failed to install due to an [unexpected keyword argument 'cert_file'](https://github.com/quay/mirror-registry/issues/140) error, but remote installs (from Fedora) worked ok. 
 - **Git repo**
    - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to your user's home directory on the bastion. 
    - Ensure sudo is configured. 
