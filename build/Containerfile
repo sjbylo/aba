@@ -1,11 +1,12 @@
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+#FROM registry.access.redhat.com/ubi9/ubi:latest
 
 ARG TITLE="aba"
 ARG DESCRIPTION="ABA Utility Container"
 ARG MAINTAINER="stephenbylo@gmail.com"
 # https://spdx.org/licenses/
 ARG LICENSE="Apache-2.0"
-ARG URL="https://github.com/hybrid-cloud-patterns"
+ARG URL="https://github.com/aba"
 ARG SOURCE="https://github.com/hybrid-cloud-patterns/utility-container/blob/main/Containerfile"
 ARG HYPERSHIFT_URL="https://hypershift-cli-download-multicluster-engine.apps.hcp.aws.validatedpatterns.io/linux/amd64/hypershift.tar.gz"
 
@@ -43,7 +44,10 @@ ARG EXTRARPMS
 USER root
 
 RUN microdnf --disableplugin=subscription-manager install -y python3-pip make git-core tar vi nano jq which bind-utils findutils net-tools podman python3-pip python-yaml skopeo sudo && \
-microdnf install -y nmstate && \
+microdnf install -y ncurses && \
+microdnf install -y podman make jq bind-utils net-tools skopeo python3 python3-jinja2 python3-pyyaml && \
+#pip install nmstate && \
+#microdnf install -y nmstate && \
 microdnf remove -y $DNF_TO_REMOVE && \
 rpm -e --nodeps $RPM_TO_FORCEFULLY_REMOVE && \
 microdnf clean all && \
@@ -67,8 +71,10 @@ curl -sLfO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OPENSHIFT
 tar xvf openshift-client-linux-${OPTTARGETARCH}${OPENSHIFT_CLIENT_VERSION}.tar.gz -C /usr/local/bin && \
 rm -rf openshift-client-linux-${OPTTARGETARCH}${OPENSHIFT_CLIENT_VERSION}.tar.gz  && rm -f /usr/local/bin/kubectl && ln -sf /usr/local/bin/oc /usr/local/bin/kubectl && \
 #curl -sSL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_${TARGETARCH} && chmod 755 /usr/local/bin/yq && \
-rm -rf /root/anaconda* /root/original-ks.cfg /usr/local/README && \
+rm -rf /root/anaconda* /root/original-ks.cfg /usr/local/README
+
 #pip3 install --no-cache-dir j2cli 
+
 
 # The hypershift cli is downloaded directly from the cluster.
 # This could change when HCP goes GA - the alternative would
@@ -84,6 +90,8 @@ rm -rf /root/anaconda* /root/original-ks.cfg /usr/local/README && \
 # https://docs.ansible.com/ansible/latest/reference_appendices/config.html#collections-paths
 # otherwise whatever user openshift runs the container with won't find the collection
 
+RUN mkdir -p /aba
+
 #RUN pip3 install --no-cache-dir "ansible-core>=2.9" kubernetes openshift "boto3>=1.21" "botocore>=1.24" "awscli>=1.22" "azure-cli>=2.34" gcloud humanize --upgrade && \
 #ansible-galaxy collection install --collections-path /usr/share/ansible/collections kubernetes.core redhat_cop.controller_configuration && \
 #rm -rf /usr/local/lib/python3.9/site-packages/ansible_collections/$COLLECTIONS_TO_REMOVE && \
@@ -95,13 +103,14 @@ rm -rf /root/anaconda* /root/original-ks.cfg /usr/local/README && \
 #find /pattern-home/.ansible -type d -exec chmod 770 "{}" \;
 
 # We will have two important folders:
-# /pattern which will have the current pattern's git repo bindmounted
-# /pattern-home which stays inside the container only
+# /aba which will have the current pattern's git repo bindmounted
+# /aba-home which stays inside the container only
 # This split allows us to point all the ansible variables for temporary folders to
-# stay inside /pattern-home in the container. This way we are not going to fight for permissions
+# stay inside /aba-home in the container. This way we are not going to fight for permissions
 # (normally a container can have trouble to write back to the host)
-#USER 1001
-##ENV HOME=/pattern-home
+
+USER 1001
+#ENV HOME=/aba-home
 ##ENV ANSIBLE_REMOTE_TMP=/pattern-home/.ansible/tmp
 ##ENV ANSIBLE_LOCAL_TMP=/pattern-home/.ansible/tmp
 ##ENV ANSIBLE_LOCALHOST_WARNING=False
@@ -112,7 +121,15 @@ rm -rf /root/anaconda* /root/original-ks.cfg /usr/local/README && \
   ##  https://raw.githubusercontent.com/validatedpatterns/utilities/main/aws-tools/status-instances.py /usr/local/bin
 
 COPY default-cmd.sh /usr/local/bin
-COPY message.txt .
-WORKDIR /pattern
+COPY message-container.txt .
+WORKDIR /aba
+#RUN chmod 700 .
+USER root
+RUN git clone https://github.com/nmstate/nmstate.git && cd nmstate && python setup.py build
+USER root
+RUN python setup.py install
+
+#RUN pip install nmstate 
+
 CMD ["/usr/local/bin/default-cmd.sh"]
 

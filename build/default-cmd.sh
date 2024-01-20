@@ -1,3 +1,3 @@
 #!/bin/bash
 
-cat message.txt
+cat message-container.txt

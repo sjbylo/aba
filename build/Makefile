@@ -23,7 +23,7 @@ help: ## Help
 
 ##@ Build-related tasks
 .PHONY: build
-build: manifest podman-build test ## Build the container locally (all arches) and print installed test
+#build: manifest podman-build test ## Build the container locally (all arches) and print installed test
 
 .PHONY: amd64
 amd64: manifest podman-build-amd64 test-amd64 ## Build and test the container on amd64
@@ -42,7 +42,7 @@ podman-build: podman-build-amd64 podman-build-arm64 ## Build both amd64 and arm6
 podman-build-amd64: ## build the container in amd64
 	@echo "Building the utility container amd64"
 	buildah bud --arch=amd64 --build-arg TARGETARCH=amd64 --build-arg ALTTARGETARCH=x86_64 \
-		--build-arg OPTTARGETARCH='' --build-arg EXTRARPMS='bind-utils net-tools podman python3-pip skopeo' --format docker \
+		--build-arg OPTTARGETARCH='' --build-arg EXTRARPMS='podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml' --format docker \
 		-f Containerfile -t "${CONTAINER}-amd64"
 	buildah manifest add --arch=amd64 "${REGISTRY}/${CONTAINER}" "${REGISTRY}/${CONTAINER}-amd64"
 
@@ -104,12 +104,12 @@ versions: ## Print all the versions of software in the locally-built container
     " | sort | column --table -o '|'
 
 .PHONY: run
-run: ## Runs the container interactively
-	podman run --rm -it --net=host \
-		--security-opt label=disable \
-		-v ${HOME}:/pattern \
-		-v ${HOME}:${HOME} \
-		-w $$(pwd) "${REGISTRY}/${CONTAINER}-amd64" sh
+#run: ## Runs the container interactively
+#	podman run --rm -it --net=host \
+#		--security-opt label=disable \
+#		-v ${HOME}:/pattern \
+#		-v ${HOME}:${HOME} \
+#		-w $$(pwd) "${REGISTRY}/${CONTAINER}-amd64" sh
 
 .PHONY: super-linter
 super-linter: ## Runs super linter locally
@@ -160,4 +160,30 @@ cluster-stop: ## Stops the hosted-cluster machines
 		-v ${HOME}:${HOME} \
 		-v ${HOME}/.aws:/pattern-home/.aws \
 		"${REGISTRY}/${CONTAINER}" python3 /usr/local/bin/stop-instances.py -f ${CLUSTER}
+
+.PHONY: build
+build:
+	podman build -t aba-utils . 
+
+.PHONY: save
+save: build
+	podman save aba-utils:latest | gzip > aba-utils.tgz 
+
+.PHONY: load
+load:
+	gunzip -c aba-utils.tgz | podman load 
+
+upload:
+	echo Upload to quay.io
+
+run:
+	set -x
+	(cd ..; podman run -it --rm -w ${PWD} --security-opt label=disable -v ${HOME}:${HOME} -v ${HOME}:/root localhost/aba-utils:latest bash)
+
+#run: ## Runs the container interactively
+#	podman run --rm -it --net=host \
+#		--security-opt label=disable \
+#		-v ${HOME}:/pattern \
+#		-v ${HOME}:${HOME} \
+#		-w $$(pwd) "${REGISTRY}/${CONTAINER}-amd64" sh
 
