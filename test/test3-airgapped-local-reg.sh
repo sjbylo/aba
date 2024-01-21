@@ -29,9 +29,9 @@ install_all_clusters() {
 }
 
 # Revert a snapshot and power on the internal bastion vm
-( . ~/.vmware.conf; govc snapshot.revert -vm bastion2-internal-rhel8 Latest; sleep 8; govc vm.power -on bastion2-internal-rhel8; sleep 8; )
-ssh $(whoami)@registry2.example.com -- "date" || sleep 2
-ssh $(whoami)@registry2.example.com -- "date" || sleep 2
+### ( . ~/.vmware.conf; govc snapshot.revert -vm bastion2-internal-rhel8 Latest; sleep 8; govc vm.power -on bastion2-internal-rhel8; sleep 8; )
+### ssh $(whoami)@registry2.example.com -- "date" || sleep 2
+### ssh $(whoami)@registry2.example.com -- "date" || sleep 2
 
 cd ..  # Change into "aba" dir
 make distclean   # This will then skip trying to uninstall (which results in an error). 
@@ -85,7 +85,7 @@ time rsync --progress --partial --times -avz \
 
 #########
 
-ssh $(whoami)@$bastion2 -- "make -C aba/mirror loadclean"   #  This is needed, esp. on a 2nd run of this script, to ensure loading
+######ssh $(whoami)@$bastion2 -- "make -C aba/mirror loadclean"   #  This is needed, esp. on a 2nd run of this script, to ensure loading
 ssh $(whoami)@$bastion2 -- "make -C aba load sno" 
 #ssh $(whoami)@$bastion2 -- "make -C aba load" 
 ssh $(whoami)@$bastion2 -- "make -C aba/sno delete" 
