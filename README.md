@@ -28,15 +28,16 @@ Aba automatically completes the following:
      - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift.   See 'Connected mode' below.
      - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported.  For this, 2 bastions are required.  See 'Disconnected mode' below.
 - **Platform** (optional)
-   - vCenter API access. Bare-metal nodes can be booted manually using the generated ISO.
+   - vCenter API access. 
       - ESXi can also be used directly (i.e. without vCenter).
       - Ensure enough privileges to vCenter. If you don't want to provide 'admin' privileges see the [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) documentation for more.
+      - Note that bare-metal nodes can be booted manually using the generated ISO.
 
 
 ## Initial Steps
 
 - **Bastion**
-   - First, install a bastion host with a fresh version of RHEL.
+   - First, install a bastion host with a fresh version of RHEL. Fedora can also be used except Quay mirror fails to install on it. 
    - a 'minimal install' of RHEL 9.3, RHEL 8.9 and Fedora 39 have been tested, other recent versions of RHEL/Fedora should work too.
       - Note that on Fedora 39, the mirror registry failed to install due to an [unexpected keyword argument 'cert_file'](https://github.com/quay/mirror-registry/issues/140) error, but remote installs (from Fedora) worked ok. 
 - **Git repo**
@@ -47,14 +48,14 @@ Aba automatically completes the following:
       - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
       - It's a good idea to make the file user read-only, e.g. `chmod 600 ~/.pull-secret.json`.
 - **DNS**
-   - Create the needed DNS A records, *for example* (use your domain!):
+   - Create the required DNS A records, *for example* (use your domain!):
       - OpenShift API: api.ocp1.example.com 
         - points to a free IP in your private subnet. 
       - OpenShift Ingress: *.apps.ocp1.example.com 
         - points to a free IP in your private subnet. 
         - Note: For Single Node OpenShift (SNO), the above records should point to a single IP address, used for the single OpenShift node. 
       - Quay mirror registry: registry.example.com 
-        - points to the IP address where you want to install Quay (e.g. your bastion) or to your existing registry. 
+        - points to the IP address of the registry.  This can be either the one you want installed or your existing registry. 
 - **Registry**
    - If you are using an existing registry:
      - Copy your existing registry's credential files (pull secret and root CA) into the 'mirror/regcreds' directory, e.g.:
@@ -110,7 +111,7 @@ Example:
 # On the external bastion:
 # Mount your thumbdrive and:
 
-make tar name=/dev/path/to/thumbdrive 
+make tar out=/dev/path/to/thumbdrive 
 
 
 # Or, do this manually 
@@ -131,8 +132,8 @@ Load the images from local storage to the internal mirror registry.
 sudo dnf install make -y 
 make load
 ```
-- This will install Quay (from the files and configuration that were copied above) and then load the images into Quay.
-- Note that the internal bastion will need to install RPMs, e.g. from Satellite (or configure 'dnf' to use a proxy for testing).
+- This will (if needed) install Quay (from the files and configuration that were tar-ed & copied above) and then load the images into Quay.
+- Note that the internal bastion will need to install RPMs from a suitable repository (for testing it's possible to configure 'dnf' to use a proxy).
 
 Now continue with "Install OpenShift" below.
 
@@ -143,7 +144,7 @@ Edit the file 'templates/aba-sno.conf' to match your environment.
 ```
 make sno
 ```
-- This will create a directory 'sno' and then install SNO OpenShift using the Agent-based installer.  If you are using vmware it will create the VMs for you.
+- This will create a directory 'sno' and then install SNO OpenShift using the Agent-based installer.  If you are using VMware it will create the VMs for you.
 - Be sure to go through *all* the values in 'aba/vmware.conf' and 'sno/aba.conf'.
 - Be sure to set up your DNS entries in advance. See above on Prerequisites. 
 - Aba will show you the installation progress.  You can also run 'make ssh' to log into the rendezvous server to troubleshoot. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands are idempotent.
@@ -179,10 +180,10 @@ INFO Access the OpenShift web-console here: https://console-openshift-console.ap
 INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ" 
 ```
 
-You can run commands against the cluster if you like using 'make', e.g. to show the installation progress:
+You can run commands against the cluster if you like, e.g. to show the installation progress:
 
 ```
-make cmd CMD="get co"
+scripts/oc-command.sh get co 
 ```
 
 If you only want to create the agent-based iso file to boot bare-metal nodes, use e.g.:
@@ -199,15 +200,15 @@ If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) rea
 Other examples of commands, when working with VMware/ESXi:
 
 ```
-cd sno           # change to the directory with the agent-based install files, using 'sno' as an example.
+cd mycluster     # change to the directory with the agent-based install files, using 'mycluster' as an example.
 
 make refresh     # Delete the VMs and re-create them causing the cluster to be re-installed.
 
-make stop        # Shut down the guest OS (CoreOS) of all VMs in the 'sno' cluster.
+make stop        # Shut down the guest OS (CoreOS) of all VMs in the 'mycluster' cluster.
 
-make start       # Power on all VMs in the 'sno' cluster. 
+make start       # Power on all VMs in the 'mycluster' cluster. 
 
-make delete      # Delete all the VMs in the 'sno' cluster. 
+make delete      # Delete all the VMs in the 'mycluster' cluster. 
 
 make help        # Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/<mycluster>/Makefile) 
 ```
@@ -236,15 +237,16 @@ Example:
 
 ```
 cd sno
+```
 
-# Edit agent-config.yaml to include, for example, the following to direct agent-based installer to install RHCOS onto the 2nd disk:
+As an example, edit agent-config.yaml to include the following to direct agent-based installer to install RHCOS onto the 2nd disk:
 
 ```
     rootDeviceHints:
       deviceName: /dev/sdb
 ```
 
-Check 'cluster-config.sh' is working:
+Check 'cluster-config.sh' is able to parse all the data it needs to create the VMs:
 
 ```
 cd compact
