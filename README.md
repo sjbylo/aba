@@ -1,6 +1,6 @@
-# Aba is an agent-based wrapper
+# Aba is tooling, wrapped around the  agent-based installer for OpenShift. 
 
-Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a disconnected environment, onto vSphere or 
+Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a disconnected environment, either onto vSphere or 
 ESXi or bare-metal. 
 Aba uses the [Agent-based installer](https://docs.openshift.com/container-platform/4.14/installing/installing_with_agent_based_installer/preparing-to-install-with-agent-based-installer.html) which means there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
 
