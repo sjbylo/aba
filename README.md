@@ -5,8 +5,8 @@ ESXi or bare-metal.
 Aba uses the [Agent-based installer](https://docs.openshift.com/container-platform/4.14/installing/installing_with_agent_based_installer/preparing-to-install-with-agent-based-installer.html) which means there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
 
 Aba automatically completes the following:
-1. Makes use of any existing container regisrty or installs the Quay mirror registry for you. 
-1. Uses Quay's credentials and other inputs to generate the Agent-based configuration files.
+1. Makes use of any existing container registry you may already have or installs the Quay mirror registry for you. 
+1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
 1. Triggers the generation of the agent-based boot ISO. 
 1. Optionally creates the required VMs in ESXi or vSphere.
 1. Monitors the installation progress. 
