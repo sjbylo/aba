@@ -11,7 +11,7 @@ Aba automatically completes the following:
 1. Optionally creates the required VMs in ESXi or vSphere.
 1. Monitors the installation progress. 
 
-Use aba if you want to get Openshift up and running quickly without having to study and learn the documentation. 
+Use aba if you want to get Openshift up and running quickly without having to study the documentation in detail. 
 
 
 ## Prerequisites
