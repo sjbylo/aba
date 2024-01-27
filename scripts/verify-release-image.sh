@@ -9,17 +9,19 @@ source scripts/include_all.sh
 source mirror.conf
 
 release_sha=$(openshift-install version| grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
+release_ver=$(openshift-install version| grep "^openshift-install" | cut -d" " -f2)
 
 [ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/openshift4/openshift/release-images$release_sha >/dev/null; then
+
 	echo
-	echo "Error: There was an error whilst checking for the expected release image in your registry!"
-	echo "       Be sure to install the correct oc, openshift-install, oc-mirror versions and try again!"
+	echo "Error: There was an error whilst checking for the release image (expected version $release_ver) in your registry!"
+	echo "       Be sure that the images in your registry match the version of the 'openshift-install' CLI (currently version $release_ver)"
 	echo "       Failed to access the release image: docker://$reg_host:$reg_port/openshift4/openshift/release-images$release_sha"
 
 	exit 1
 fi
 
-echo "Release image is available in $reg_host:$reg_port"
+echo "Release image for version $release_ver is available in $reg_host:$reg_port"
 
