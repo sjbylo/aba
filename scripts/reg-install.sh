@@ -73,7 +73,7 @@ fi
 # Remote installs if ssh key defined 
 if [ "$reg_ssh" ]; then
 	# Workaround START
-	# See: https://access.redhat.com/solutions/7040517
+	# See: https://access.redhat.com/solutions/7040517 "Installing the mirror-registry to a remote disconnected host fails (on the first attempt)"
 	# Check for known issue where images need to be loaded on the remote host first
 	# This will load the needed images and fix the problem 
 	# Only need to do this workaround once
