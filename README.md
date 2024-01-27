@@ -1,7 +1,7 @@
-# Aba is tooling, wrapped around the  agent-based installer for OpenShift. 
+# Aba is tooling, wrapped around the agent-based installer for OpenShift.
 
 Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a fully or partially disconnected environment, either onto vSphere/ESXi or bare-metal. 
-Aba uses the [Agent-based installer](https://docs.openshift.com/container-platform/4.14/installing/installing_with_agent_based_installer/preparing-to-install-with-agent-based-installer.html) which means there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
+Because Aba uses the [Agent-based installer](https://docs.openshift.com/container-platform/4.14/installing/installing_with_agent_based_installer/preparing-to-install-with-agent-based-installer.html) there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
 
 Aba automatically completes the following:
 1. Makes use of any existing container registry you may already have or installs the Quay mirror registry for you. 
@@ -245,6 +245,16 @@ As an example, edit agent-config.yaml to include the following to direct agent-b
 ```
     rootDeviceHints:
       deviceName: /dev/sdb
+```
+
+or, adding vsphere integration into 'install-config.yaml'
+
+```
+platform:
+  vsphere:
+    apiVIP: "10.0.1.216"
+    ingressVIP: "10.0.1.226"
+
 ```
 
 Check 'cluster-config.sh' is able to parse all the data it needs to create the VMs:
