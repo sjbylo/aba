@@ -8,7 +8,7 @@ help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 .PHONY: sync
-sync: install ~/.pull-secret.json ## Sync images from the Internet directly to an internal registry. 
+sync: ~/.pull-secret.json install ## Sync images from the Internet directly to an internal registry. 
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
@@ -34,7 +34,7 @@ load: install ## Load the saved images into a registry on the internal bastion
 	$(SCRIPTS)/reg-load.sh  $(debug)
 
 .PHONY: testload
-testload: save load install  # Test the save, install, load process on a connected host
+testload: save install load     # Test the save, install, load process on a connected host
 
 # FIXME
 ../target-ocp-version.conf:
