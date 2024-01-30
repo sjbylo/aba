@@ -82,8 +82,9 @@ standard:  ## Install a standard 3+2-node OpenShift cluster
 cluster: ## Install a cluster 
 	scripts/setup-cluster.sh $(name) 
 
-test:
-	scripts/test.sh
+.PHONY: rsync
+rsync:  ## Copy (rsync) all required files to internal bastion for testing purposes only.  ip=hostname is required. 
+	scripts/test-airgapped.sh $(ip)
 
 clean:
 	rm -f vmware.conf target-ocp-version.conf
