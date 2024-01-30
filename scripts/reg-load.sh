@@ -21,11 +21,15 @@ export reg_url=https://$reg_host:$reg_port
 # Run create container auth
 #### FIXME ./scripts/create-containers-auth.sh 
 
-echo Generating imageset-config.yaml for oc-mirror ...
-export ocp_ver=$ocp_target_ver
-export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
-[ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
-scripts/j2 ./templates/imageset-config.yaml.j2 > imageset-config.yaml 
+##if [ ! -s imageset-config.yaml ]; then
+##	echo Generating imageset-config.yaml for oc-mirror ...
+##	export ocp_ver=$ocp_target_ver
+##	export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
+##	[ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
+##	scripts/j2 ./templates/imageset-config.yaml.j2 > imageset-config.yaml 
+##else
+##	echo Using existing imageset-config.yaml
+##fi
 
 [ "$reg_root" ] || reg_root=$HOME/quay-install  # Only needed for the below message
 
@@ -33,14 +37,14 @@ scripts/j2 ./templates/imageset-config.yaml.j2 > imageset-config.yaml
 #diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
 #	sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 #	sudo update-ca-trust extract
-if [ -s regcreds/rootCA.pem ]; then
-	if diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2; then
-		sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ 
-		sudo update-ca-trust extract
-	fi
-else
-	echo "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 
-fi
+##if [ -s regcreds/rootCA.pem ]; then
+##	if diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2; then
+##		sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ 
+##		sudo update-ca-trust extract
+##	fi
+##else
+##	echo "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 
+##fi
 
 echo 
 echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
