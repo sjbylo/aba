@@ -10,8 +10,7 @@
 cd `dirname $0`
 cd ..  # Change into "aba" dir
 
-./aba --version 4.13.27 --vmw ~/.vmware.conf 
-#./aba --version 4.14.8 --vmw ~/.vmware.conf 
+./aba --version 4.14.9 --vmw ~/.vmware.conf 
 [ -s mirror/mirror.conf ] && touch mirror/mirror.conf
 
 # Be sure this file exists
@@ -75,7 +74,10 @@ fi
 echo
 echo Running make save
 echo
+rm -rf mirror/save  
 make save
+
+[ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
 # If the VM snapshot is reverted, as above, no need to delete old files
 #ssh $(whoami)@$bastion2 -- "rm -rf ~/bin/* ~/aba"
@@ -88,21 +90,11 @@ ssh $(whoami)@$bastion2 "rpm -q rsync || sudo yum install make rsync -y"
 # Set up on local 
 rpm -q rsync || sudo yum install rsync -y 
 
-cd
-time rsync --delete --progress --partial --times -avz \
-	--exclude '*/.git*' \
-	--exclude 'aba/cli/*' \
-	--exclude 'aba/mirror/mirror-registry' \
-	--exclude 'aba/mirror/*.tar' \
-	--exclude "aba/mirror/.rpms" \
-	--exclude 'aba/*/*/*.iso' \
-		bin aba $(whoami)@10.0.1.6:
-cd aba
+make rsync ip=$bastion2
 
 # Do not copy over .rpms since they also need to be installed on the internal bastion
 
-echo Install the reg creds
-
+echo "Install the reg creds, simulating a manual config" 
 ssh $(whoami)@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
 ssh $(whoami)@$bastion2 -- "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
 
@@ -116,10 +108,34 @@ echo
 echo Running make load sno # on internal bastion
 echo
 ssh $(whoami)@$bastion2 -- "make -C aba load sno" 
+#ssh $(whoami)@$bastion2 -- "make -C aba/sno delete" 
+
+######################
+echo edit imageset conf file test
+cat >> mirror/imageset-config.yaml <<END
+  additionalImages:
+  - name: registry.redhat.io/ubi9/ubi:latest
+  - name: quay.io/sjbylo/flask-vote-app:latest
+END
+
+echo "Install the reg creds on localhost, simulating a manual config" 
+scp $(whoami)@$bastion2:quay-install/quay-rootCA/rootCA.pem mirror/regcreds
+scp $(whoami)@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
+make -C mirror verify 
+make -C mirror save 
+make -C mirror load
+
+######################
+
+ssh $(whoami)@$bastion2 -- "cd aba/sno && make cmd cmd='oc new-project demo'"
+ssh $(whoami)@$bastion2 -- "cd aba/sno && make cmd cmd='oc new-app --insecure-registry=true --image registry2.example.com:8443/openshift4/sjbylo/flask-vote-app --name vote-app -n demo'" 
+sleep 5
+ssh $(whoami)@$bastion2 -- "cd aba/sno && make cmd cmd='oc rollout status deployment vote-app -n demo'" 
+
 ssh $(whoami)@$bastion2 -- "make -C aba/sno delete" 
 
 ######################
 echo Cleanup test
 
-###test/reg-test-uninstall-remote.sh
+test/reg-test-uninstall-remote.sh
 
