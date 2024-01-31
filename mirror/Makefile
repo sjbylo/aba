@@ -49,7 +49,8 @@ rpmsclean:
 	rm -f .rpms
 
 #init:             .rpms regcreds templates scripts mirror.conf mirror-registry .initialized
-init: .initialized .rpms regcreds                    mirror.conf mirror-registry   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
+#init: .initialized .rpms regcreds                    mirror.conf mirror-registry   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
+init: .initialized .rpms regcreds                                mirror-registry   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
 .initialized: 
 	ln -s $(TEMPLATES) 
 	ln -s $(SCRIPTS) 
@@ -68,9 +69,11 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 mirror.conf:           templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
-install: init mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
+install: init mirror.conf mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 .installed: 
+	###
 	### Install Quay Mirror
+	###
 	$(SCRIPTS)/reg-install.sh $(debug) 
 	rm -f .uninstalled 
 	touch .installed
@@ -83,9 +86,12 @@ installclean:
 verify: init 
 	scripts/reg-verify.sh $(debug)
 
-uninstall: init mirror-registry .uninstalled ## Uninstall the registry 
+# FIXME: Should uninstall be .PHONY ?  does it need mirror.conf?! should already be available! 
+uninstall: init mirror-registry .uninstalled ## Uninstall the registry  
 .uninstalled: 
+	###
 	### Uninstall Quay Mirror
+	###
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	rm -f .installed
 	touch .uninstalled

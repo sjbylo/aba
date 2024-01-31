@@ -91,7 +91,7 @@ clean:
 	make -C mirror clean 
 	make -C cli clean 
 
-distclean:
+distclean: uninstall 
 	make -C mirror distclean 
 	make -C cli distclean 
 	rm -rf sno compact standard 
