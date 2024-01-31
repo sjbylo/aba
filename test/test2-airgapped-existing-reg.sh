@@ -112,7 +112,7 @@ ssh $(whoami)@$bastion2 -- "make -C aba load sno"
 
 ######################
 echo edit imageset conf file test
-cat >> mirror/imageset-config.yaml <<END
+cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
   - name: quay.io/sjbylo/flask-vote-app:latest

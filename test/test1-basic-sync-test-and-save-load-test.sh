@@ -56,7 +56,6 @@ set -x
 	sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf  # Which host
 	sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	       # Remote or localhost
 
-	make -C mirror uninstall clean
 	make -C mirror install 
 ##fi
 

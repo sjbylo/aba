@@ -34,8 +34,11 @@ echo Ensure there is enough disk space under $reg_root.  This can take 5-20 mins
 
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
+[ ! -d save ] && echo "Warning: Missing 'mirror/save' directory" && exit 1
+
 # Set up script to help for manual re-sync
-echo "oc mirror $tls_verify_opts --from=./save docker://$reg_host:$reg_port/$reg_path"  > load-mirror.sh && chmod 700 load-mirror.sh
+#echo "oc mirror $tls_verify_opts --from=save docker://$reg_host:$reg_port/$reg_path"  > load-mirror.sh && chmod 700 load-mirror.sh
+echo "cd save && oc mirror $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"  > load-mirror.sh && chmod 700 load-mirror.sh
 ./load-mirror.sh
 
 
