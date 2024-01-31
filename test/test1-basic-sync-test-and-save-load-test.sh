@@ -1,15 +1,16 @@
 #!/bin/bash -e
-# This test is for a connected bastion.  It will sync images and install clusters, 
-# then savd/load images and install clusters. 
+# This test is for a connected bastion.  It will install registry on remote bastion and then sync images and install clusters, 
+# ... then savd/load images and install clusters. 
 
 cd `dirname $0`
 cd ..
 
-./aba --version 4.13.27 --vmw ~/.vmware.conf 
-#./aba --version 4.14.8 --vmw ~/.vmware.conf 
+make distclean 
+./aba --version 4.14.9 --vmw ~/.vmware.conf 
 #make -C cli clean 
 make -C cli
 [ -s mirror/mirror.conf ] && touch mirror/mirror.conf
+#rm -f mirror/.installed mirror/regcreds/*
 
 install_cluster() {
 	rm -rf $1
@@ -41,7 +42,7 @@ set -x
 
 # If a mirror is not accessible, install one.  Otherwise, use existing mirror.
 ##if ! make -C mirror verify; then
-	##make -C mirror uninstall clean
+
 	#podman ps| grep registry.redhat.io/quay/quay-rhel8 && make -C mirror uninstall clean
 	#ssh registry2.example.com -- podman ps| grep registry.redhat.io/quay/quay && (cd mirror; ./mirror-registry uuninstall)
 
@@ -55,6 +56,7 @@ set -x
 	sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf  # Which host
 	sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	       # Remote or localhost
 
+	make -C mirror uninstall clean
 	make -C mirror install 
 ##fi
 
@@ -77,5 +79,5 @@ make -C mirror save load   #  This will save, install, load
 install_all_clusters sno
 
 # Tidy up, if needed
-##make -C mirror uninstall 
+make -C mirror uninstall 
 

@@ -18,8 +18,9 @@ if [ -s reg-uninstall.sh ]; then
 	rm -f ./reg-uninstall.sh
 	exit 0
 else
-	echo "No uninstall script 'mirror/reg-uninstall.sh' found. Aba did not install the mirror registry."
-	exit 1
+	echo "Warning: No uninstall script 'mirror/reg-uninstall.sh' found."
+	echo "If Aba did not install the mirror registry, then uninstall manually. Return to continue, Ctrl-C to abort." 
+	read yn
 fi
 
 # FIXME: Is this still needed? 

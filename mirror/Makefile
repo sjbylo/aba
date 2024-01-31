@@ -110,4 +110,5 @@ distclean:            clean ## Clean up repo for distribution
 	rm -rf *.tar.gz oc-mirror-workspace regcreds
 	rm -f .registry-creds.txt *.conf *.yaml 
 	rm -rf save regcreds
+	touch .uninstalled 
 
