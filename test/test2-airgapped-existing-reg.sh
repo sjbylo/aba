@@ -22,7 +22,7 @@ install_cluster() {
 	#ln -fs ../templates $1
 	ln -fs ../templates/Makefile $1/Makefile
 	cp templates/aba-$1.conf $1/aba.conf
-	make -C $1
+	make -C $1 upload 
 	echo $1 completed
 }
 
@@ -57,7 +57,7 @@ sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 #################################
 
 # See if existing remote reg. is working, otherwise reset and re-install 
-if ! ssh $(whoami)@registry2.example.com -- "cd aba/mirror && make verify"; then
+#if ! ssh $(whoami)@registry2.example.com -- "cd aba/mirror && make verify"; then
 	echo
 	echo Revert a snapshot and power on the internal bastion vm
 	echo
@@ -69,7 +69,7 @@ if ! ssh $(whoami)@registry2.example.com -- "cd aba/mirror && make verify"; then
 	echo Install 'existing' reg on bastion2
 	echo
 	test/reg-test-install-remote.sh registry2.example.com
-fi
+#fi
 
 echo
 echo Running make save
@@ -107,10 +107,14 @@ echo Runtest: START - airgap
 echo
 echo Running make load sno # on internal bastion
 echo
-ssh $(whoami)@$bastion2 -- "make -C aba load sno" 
+ssh $(whoami)@$bastion2 -- "make -C aba load" 
+ssh $(whoami)@$bastion2 -- "make -C aba/sno upload"   # Just test until iso upload
 #ssh $(whoami)@$bastion2 -- "make -C aba/sno delete" 
 
 ######################
+# Now simulate adding more images to the mirror registry
+######################
+
 echo edit imageset conf file test
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
@@ -119,6 +123,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 echo "Install the reg creds on localhost, simulating a manual config" 
+
 scp $(whoami)@$bastion2:quay-install/quay-rootCA/rootCA.pem mirror/regcreds
 scp $(whoami)@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
 make -C mirror verify 
@@ -127,12 +132,14 @@ make -C mirror load
 
 ######################
 
-ssh $(whoami)@$bastion2 -- "cd aba/sno && make cmd cmd='oc new-project demo'"
-ssh $(whoami)@$bastion2 -- "cd aba/sno && make cmd cmd='oc new-app --insecure-registry=true --image registry2.example.com:8443/openshift4/sjbylo/flask-vote-app --name vote-app -n demo'" 
-sleep 5
-ssh $(whoami)@$bastion2 -- "cd aba/sno && make cmd cmd='oc rollout status deployment vote-app -n demo'" 
+ssh $(whoami)@$bastion2 -- aba/test/deploy-test-app.sh
 
-ssh $(whoami)@$bastion2 -- "make -C aba/sno delete" 
+#ssh $(whoami)@$bastion2 -- "cd aba/sno && make cmd cmd='oc new-project demo'"
+#ssh $(whoami)@$bastion2 -- "cd aba/sno && make cmd cmd='oc new-app --insecure-registry=true --image registry2.example.com:8443/openshift4/sjbylo/flask-vote-app --name vote-app -n demo'" 
+#sleep 5
+#ssh $(whoami)@$bastion2 -- "cd aba/sno && make cmd cmd='oc rollout status deployment vote-app -n demo'" 
+#
+#ssh $(whoami)@$bastion2 -- "make -C aba/sno delete" 
 
 ######################
 echo Cleanup test
