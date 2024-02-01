@@ -19,16 +19,6 @@ init: .initialized
 	ln -s ../mirror
 	touch .initialized
 
-# Add links, just for convenience 
-#templates:
-#	ln -s ../templates
-
-#scripts: 
-#	ln -s ../scripts
-
-#mirror: 
-#	ln -s ../mirror
-
 mirror.conf: .initialized ## Set up the mirror.conf file
 	ln -sf mirror/mirror.conf
 	touch mirror.conf
@@ -40,39 +30,37 @@ aba.conf: ## Edit the aba conf file
 	cp templates/aba.conf .
 	$(EDITOR) aba.conf
 
-#install-config.yaml: templates scripts aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
-install-config.yaml: .initialized aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
+install-config.yaml: .initialized vmware.conf aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
 	scripts/create-install-config.sh $(debug)
 
-#agent-config.yaml: templates scripts aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
-agent-config.yaml: .initialized aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
+agent-config.yaml: .initialized vmware.conf aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
 	scripts/create-agent-config.sh $(debug)
 
 # The following "auto" targets are meant just for the full end-to-end automation, to build a cluster
-iso: iso-agent-based/agent.x86_64.iso ## Build the iso file
-iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml vmware.conf  # install-config.yaml might itself be dependent on vmware.conf params
+iso: iso-agent-based/agent.x86_64.iso ## Build the agent-based iso file
+iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note that install-config.yaml can itself be dependent on vmware.conf params
 	scripts/generate-image.sh $(debug)
 
-.autopoweroff: vmware.conf iso-agent-based/agent.x86_64.iso
+#.autopoweroff: vmware.conf iso-agent-based/agent.x86_64.iso
+.autopoweroff: iso-agent-based/agent.x86_64.iso
 	scripts/vmw-kill.sh $(debug)
 	touch .autopoweroff
 
-.autoupload: vmware.conf .autopoweroff iso-agent-based/agent.x86_64.iso
+upload: .autoupload vmware.conf ## Upload the ISO to the VMW platform
+#.autoupload: vmware.conf .autopoweroff iso-agent-based/agent.x86_64.iso
+.autoupload: .autopoweroff ####  ### iso-agent-based/agent.x86_64.iso
 	scripts/vmw-upload.sh $(debug) 
 	touch .autoupload
 
-.autorefresh: vmware.conf .autoupload
+##.autorefresh: vmware.conf .autoupload
+.autorefresh: .autoupload
 	scripts/vmw-delete.sh $(debug)
 	scripts/vmw-create.sh --start $(debug) 
 	touch .autorefresh
 
 # The following tagets are for interactive use 
-.PHONEY: upload
-upload: vmware.conf ## Upload the ISO to the VMW platform
-	scripts/vmw-upload.sh $(debug) 
-
 .PHONEY: refresh
-refresh:  vmware.conf ## Delete and re-create the VMs
+refresh: init  vmware.conf ## Delete and re-create the VMs
 	scripts/vmw-delete.sh $(debug)
 	scripts/vmw-create.sh --start $(debug) 
 
@@ -101,7 +89,7 @@ kill:  vmware.conf ## Kill or power off the VMs
 	scripts/vmw-kill.sh $(debug)
 
 .PHONEY: mon
-mon: ## Monitor the aghent-based installation
+mon: ## Monitor the agent-based installation of OpenShift 
 	scripts/monitor-install.sh $(debug)
 
 .PHONEY: getco
@@ -124,9 +112,11 @@ vmw: ## Configure VMW platform credentials
 clean: ## Clean up 
 	rm -f scripts templates
 	rm -f install-config.yaml agent-config.yaml 
-	rm -rf iso-agent-based 
+	rm -rf iso-agent-based*
 	rm -rf ~/.cache/agent 
 	rm -f .??*
+	rm -f mirror scripts templates
+	rm -f mirror.conf regcreds vmware.conf
 
 .PHONEY: distclean
 distclean: clean ## Clean up and make ready for distribution
