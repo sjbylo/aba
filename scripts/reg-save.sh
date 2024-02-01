@@ -31,7 +31,8 @@ echo "This can take 10-20 mins to complete!"
 echo 
 
 # Set up script to help for manual re-sync
-echo "cd save && oc mirror --config=./imageset-config-save.yaml file://." > save-mirror.sh && chmod 700 save-mirror.sh 
+# --continue-on-error  needed when mirroring operator images
+echo "cd save && oc mirror --continue-on-error --config=./imageset-config-save.yaml file://." > save-mirror.sh && chmod 700 save-mirror.sh 
 #echo "cd save && oc mirror --config=./imageset-config.yaml file://save" > save-mirror.sh && chmod 700 save-mirror.sh 
 cat ./save-mirror.sh
 
