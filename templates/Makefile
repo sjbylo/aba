@@ -31,14 +31,23 @@ aba.conf: ## Edit the aba conf file
 	$(EDITOR) aba.conf
 
 install-config.yaml: .initialized vmware.conf aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
+	###
+	### Create install-config.yaml
+	###
 	scripts/create-install-config.sh $(debug)
 
 agent-config.yaml: .initialized vmware.conf aba.conf mirror.conf ## Create the agent-based config file from the aba.conf file
+	###
+	### Create agent-config.yaml
+	###
 	scripts/create-agent-config.sh $(debug)
 
 # The following "auto" targets are meant just for the full end-to-end automation, to build a cluster
 iso: iso-agent-based/agent.x86_64.iso ## Build the agent-based iso file
 iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note that install-config.yaml can itself be dependent on vmware.conf params
+	###
+	### Create agent-based iso
+	###
 	scripts/generate-image.sh $(debug)
 
 #.autopoweroff: vmware.conf iso-agent-based/agent.x86_64.iso
