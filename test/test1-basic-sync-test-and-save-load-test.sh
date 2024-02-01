@@ -18,7 +18,7 @@ install_cluster() {
 	#ln -fs ../templates $1
 	ln -fs ../templates/Makefile $1/Makefile
 	cp templates/aba-$1.conf $1/aba.conf
-	make -C $1
+	make -C $1 upload
 	echo $1 completed
 	make -C $1 delete  # delete to free up disk space!
 }
@@ -55,6 +55,7 @@ set -x
 	## test the internal bastion (registry2.example.com) as mirror
 	sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf  # Which host
 	sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	       # Remote or localhost
+	sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	       # test other storage location
 
 	make -C mirror install 
 ##fi
