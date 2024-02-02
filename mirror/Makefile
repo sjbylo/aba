@@ -8,14 +8,14 @@ help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 .PHONY: sync
-sync: ~/.pull-secret.json install ## Sync images from the Internet directly to an internal registry. 
+sync: init ~/.pull-secret.json install ## Sync images from the Internet directly to an internal registry. 
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
 	$(SCRIPTS)/reg-sync.sh  $(debug)
 
 ~/.pull-secret.json:
-	scripts/install-pull-secret.sh
+	$(SCRIPTS)/install-pull-secret.sh
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: save
@@ -66,7 +66,9 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 	curl --progress-bar -OL \
 	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
-mirror.conf:           templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
+#mirror.conf:           templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
+# FIXME: If target-ocp-version.conf updates, change the version also in mirror.conf?
+mirror.conf:                                 ../target-ocp-version.conf ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 install: init mirror.conf mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
@@ -84,7 +86,7 @@ installclean:
 
 .PHONY: verify
 verify: init 
-	scripts/reg-verify.sh $(debug)
+	$(SCRIPTS)/reg-verify.sh $(debug)
 
 # FIXME: Should uninstall be .PHONY ?  does it need mirror.conf?! should already be available! 
 uninstall: init mirror-registry .uninstalled ## Uninstall the registry  

@@ -24,6 +24,18 @@ networking:
 platform:
   {%- if num_workers == '0' and num_masters == '1' %}
   none: {}
+  {%- elif GOVC_URL != '' %}
+  vsphere:
+    apiVIP: "{{ api_vip }}"
+    ingressVIP: "{{ ingress_vip}}"
+#    vcenters:
+#    - datacenters:
+#      - {{ GOVC_DATACENTER }}
+#      password: '{{ GOVC_PASSWORD }}'
+#      port: 443
+#      server: {{ GOVC_URL }}
+#      user: {{ GOVC_USER }}
+#    diskType: thin 
   {%- else %}
   baremetal:
     apiVIP: "{{ api_vip }}"

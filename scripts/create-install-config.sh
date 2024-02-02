@@ -7,9 +7,9 @@
 
 source aba.conf
 source mirror.conf
+source vmware.conf
 
 scripts/verify-release-image.sh
-
 
 
 # Set the rendezvous_ip to the the first master's ip

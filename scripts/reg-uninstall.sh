@@ -6,11 +6,6 @@ source scripts/include_all.sh
 
 source mirror.conf
 
-# FIXME, only the uninstall script needed?
-#if [ "$reg_root" ]; then
-#	reg_root_opt="--quayRoot $reg_root --quayStorage ${reg_root}-storage"
-#fi
-
 if [ -s reg-uninstall.sh ]; then
 	echo Uninstalling mirror registry from host $reg_host ...
 	rm -f regcreds/*
@@ -20,26 +15,38 @@ if [ -s reg-uninstall.sh ]; then
 else
 	echo
 	echo "Warning: No uninstall script 'mirror/reg-uninstall.sh' found."
-	echo "If Aba did not install the mirror registry, then uninstall manually. Return to continue, Ctrl-C to abort." 
+	echo "If Aba did not install the mirror registry, then uninstall it manually." 
 	echo
 	sleep 5
 	#read yn
 fi
 
-# FIXME: Is this still needed? 
-# FIXME, only the uninstall script needed?
-if [ "$reg_ssh" ] && ssh $(whoami)@reg_host podman ps | grep registry; then
-	echo "Running command: ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) -k $reg_ssh $reg_root_opt"
-	./mirror-registry uninstall -v \
-		--targetHostname $reg_host \
-  		--targetUsername $(whoami) \
-		--autoApprove \
-  		-k $reg_ssh $reg_root_opt
+# Try to uninstall any existing registry
+
+# Has user defined a registry root dir?
+if [ "$reg_root" ]; then
+	reg_root_opt="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --pgStorage $reg_root/pg-data"
+else
+	# The default path
+	reg_root=$HOME/quay-install
+fi
+
+if [ "$reg_ssh" ] && ssh $(whoami)@$reg_host podman ps | grep registry; then
+	cmd="./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) --autoApprove -k $reg_ssh $reg_root_opt"
+	echo "Running command: $cmd"
+	$cmd
+        ##./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) --autoApprove -k $reg_ssh $reg_root_opt
+
 elif podman ps | grep registry; then
-		echo "Running command: ./mirror-registry uninstall -v $reg_root_opt"
-		./mirror-registry uninstall -v --autoApprove $reg_root_opt
+	cmd="./mirror-registry uninstall -v --autoApprove $reg_root_opt"
+	echo "Running command: $cmd"
+	$cmd
+	##./mirror-registry uninstall -v --autoApprove $reg_root_opt
+
+	rm -f regcreds/*
 else
 	echo No mirror registry to uninstall
 fi
 
 echo
+

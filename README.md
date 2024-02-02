@@ -290,5 +290,10 @@ scripts/monitor-install.sh
 Be sure to set the correct (govc) values to access vCenter in the vmware.conf file.  
 Note that ESXi will also work by changing the folder path (see the comments in the vmware.conf file).
 
+Why 'make' was chosen to build Aba?
+
+The UNIX/Linux command "make" is a utility for automating tasks based on rules specified in a Makefile. It enhances efficiency by managing dependencies, 
+facilitating streamlined processes. Widely applied beyond software development, "make" proves versatile in system management, ensuring organized 
+execution of diverse tasks through predefined rules!
 
 
