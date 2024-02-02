@@ -18,7 +18,7 @@ install_cluster() {
 	#ln -fs ../templates $1
 	ln -fs ../templates/Makefile $1/Makefile
 	cp templates/aba-$1.conf $1/aba.conf
-	make -C $1 upload
+	make -C $1 
 	echo $1 completed
 	make -C $1 delete  # delete to free up disk space!
 }
@@ -40,44 +40,94 @@ install_all_clusters() {
 
 set -x
 
-# If a mirror is not accessible, install one.  Otherwise, use existing mirror.
-##if ! make -C mirror verify; then
 
-	#podman ps| grep registry.redhat.io/quay/quay-rhel8 && make -C mirror uninstall clean
-	#ssh registry2.example.com -- podman ps| grep registry.redhat.io/quay/quay && (cd mirror; ./mirror-registry uuninstall)
+ver=$(cat ./target-ocp-version.conf)
 
-	ver=$(cat ./target-ocp-version.conf)
+# Copy and edit mirror.conf 
+cp -f templates/mirror.conf mirror/
+sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror/mirror.conf
 
-	# Copy and edit mirror.conf 
-	cp -f templates/mirror.conf mirror/
-	sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror/mirror.conf
+# Various mirror tests:
 
-	## test the internal bastion (registry2.example.com) as mirror
-	sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf  # Which host
-	sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	       # Remote or localhost
-	sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	       # test other storage location
+sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
+sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
+#sed -i "s#channel=.*#channel=fast          #g" ./mirror/mirror.conf	    	# test channel
+#sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
+#sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test random password 
+### sed -i "s#tls_verify=true#tls_verify=            #g" ./mirror/mirror.conf  	# test tlsverify = false # sno install fails 
+### sed -i "s#reg_port=.*#reg_pw=443             #g" ./mirror/mirror.conf	    	# test port change
+#sed -i "s#reg_path=.*#reg_path=mypath             #g" ./mirror/mirror.conf	    	# test path
 
-	make -C mirror install 
-##fi
+make -C mirror install 
 
 . mirror/mirror.conf
-#make -C mirror verify 
+
 echo "Mirror available at $reg_host:$reg_port"
 
 ######################
 echo Runtest: START - sync
 
 make -C mirror sync   # This will install and sync
-#install_all_clusters sno compact standard 
+
 install_all_clusters sno
 
 #######################
 #echo Runtest: START - load
 
-make -C mirror save load   #  This will save, install, load
-##install_all_clusters sno compact standard 
+make -C mirror save load   #  This will save, install then load
+
 install_all_clusters sno
 
-# Tidy up, if needed
+# Tidy up
+make -C mirror uninstall 
+
+########################
+########################
+########################
+
+# Copy and edit mirror.conf 
+#cp -f templates/mirror.conf mirror/
+#sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror/mirror.conf
+
+# Various mirror tests:
+
+#sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
+#sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
+sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
+sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test random password 
+### sed -i "s#tls_verify=true#tls_verify=            #g" ./mirror/mirror.conf  	# test tlsverify = false # sno install fails 
+sed -i "s#reg_path=.*#reg_path=mypath             #g" ./mirror/mirror.conf	    	# test path
+
+make -C mirror install 
+
+######
+# Remove all traces of CA files 
+### rm -f mirror/regcreds/*pem   # Test without CA file
+### sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA*pem
+### sudo update-ca-trust extract
+
+rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
+######
+
+
+. mirror/mirror.conf
+
+echo "Mirror available at $reg_host:$reg_port"
+
+######################
+echo Runtest: START - sync
+
+make -C mirror sync   # This will install and sync
+
+install_all_clusters sno
+
+#######################
+#echo Runtest: START - load
+
+make -C mirror save load   #  This will save, install then load
+
+install_all_clusters sno
+
+# Tidy up
 make -C mirror uninstall 
 

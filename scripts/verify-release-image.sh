@@ -13,12 +13,12 @@ release_ver=$(openshift-install version| grep "^openshift-install" | cut -d" " -
 
 [ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
-if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/openshift4/openshift/release-images$release_sha >/dev/null; then
+if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha >/dev/null; then
 
 	echo
 	echo "Error: There was an error whilst checking for the release image (expected version $release_ver) in your registry!"
 	echo "       Be sure that the images in your registry match the version of the 'openshift-install' CLI (currently version $release_ver)"
-	echo "       Failed to access the release image: docker://$reg_host:$reg_port/openshift4/openshift/release-images$release_sha"
+	echo "       Failed to access the release image: docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha"
 
 	exit 1
 fi

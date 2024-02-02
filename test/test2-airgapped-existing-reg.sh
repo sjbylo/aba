@@ -22,7 +22,7 @@ install_cluster() {
 	#ln -fs ../templates $1
 	ln -fs ../templates/Makefile $1/Makefile
 	cp templates/aba-$1.conf $1/aba.conf
-	make -C $1 upload 
+	make -C $1 
 	echo $1 completed
 }
 
