@@ -8,7 +8,7 @@ help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 .PHONY: sync
-sync: init ~/.pull-secret.json install ## Sync images from the Internet directly to an internal registry. 
+sync: init ~/.pull-secret.json install ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
@@ -19,7 +19,7 @@ sync: init ~/.pull-secret.json install ## Sync images from the Internet directly
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: save
-save: init ~/.pull-secret.json ## Save images from the Internet to local disk
+save: init ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
 	###
 	### Save images from the Internet to local disk 
 	###
@@ -27,7 +27,7 @@ save: init ~/.pull-secret.json ## Save images from the Internet to local disk
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: install ## Load the saved images into a registry on the internal bastion
+load: install ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	###
 	### Load images from local disk to mirror registry
 	###
@@ -90,7 +90,7 @@ verify: init
 	touch .installed
 
 # FIXME: Should uninstall be .PHONY ?  does it need mirror.conf?! should already be available! 
-uninstall: init mirror-registry .uninstalled ## Uninstall the registry  
+uninstall: init mirror-registry .uninstalled ## Uninstall any previously installed registry  
 .uninstalled: 
 	###
 	### Uninstall Quay Mirror
