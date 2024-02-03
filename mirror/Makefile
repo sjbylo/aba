@@ -87,6 +87,7 @@ installclean:
 .PHONY: verify
 verify: init 
 	$(SCRIPTS)/reg-verify.sh $(debug)
+	touch .installed
 
 # FIXME: Should uninstall be .PHONY ?  does it need mirror.conf?! should already be available! 
 uninstall: init mirror-registry .uninstalled ## Uninstall the registry  

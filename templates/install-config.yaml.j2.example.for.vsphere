@@ -34,6 +34,24 @@ platform:
       user: 
     diskType: thin
 
+Depricated from 4.13
+
+platform:
+  vsphere:
+    vcenter: your.vcenter.server
+    username: username
+    password: password
+    datacenter: datacenter
+    defaultDatastore: datastore
+    folder: folder
+    resourcePool: resource_pool 
+    diskType: thin 
+    network: VM_Network
+    cluster: vsphere_cluster_name 
+    apiVIPs:
+      - api_vip
+    ingressVIPs:
+      - ingress_vip
 
 Sample
 

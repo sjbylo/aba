@@ -33,4 +33,4 @@ test/mirror-registry.tar.gz
 cli/.init
 mirror/.installed
 mirror/.synced
-
+mirror/.uninstalled

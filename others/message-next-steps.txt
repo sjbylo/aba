@@ -1,11 +1,11 @@
-----------------------------------------------------------------------------------------
-Now run one of the following to configure the registry and download the needed software.
+---------------------------------------------------------------------------------------------------
+Now run one of the two following options to configure the registry and download the needed software.
 
-For a 'connected' installation:
+1) For a 'connected' installation:
 
 make sync                     # Run on a 'connected bastion', to load the registry directly from the Internet.
 
-For a dissconnected (or air-gapped) installation:
+2) For a dissconnected (or air-gapped) installation:
 
 make save                     # First, run on a 'connected bastion', to 'save' the images from the Internet to local disk. 
 make tar out=/path/to/drive   # Archive the *whole repo* to a thumb drive.  Extract the tarball onto the internal bastion. 
@@ -13,7 +13,7 @@ make load                     # Run on a 'disconnected bastion' to load the save
 
 See the README file for more information.
 
-After the mirror is working and loaded, run one of the following:
+After the mirror registry is working and loaded, run one of the following to install OpenShift: 
 
 make sno                      # Warning: first edit the template file templates/aba-sno.conf to match your environment
 make compact                  # Warning: first edit the template file templates/aba-compact.conf to match your environment

@@ -29,7 +29,7 @@ done
 export PATH=$PWD/bin:$PATH
 
 if [ ! "$auto_ver" ]; then
-	cat message.txt
+	cat others/message.txt
 
 	############
 	# Determine OCP version 
@@ -121,6 +121,6 @@ make -C cli ocp_target_ver=$target_ver
 if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then
 	############
 	# Offer next steps
-	cat message-next-steps.txt
+	cat others/message-next-steps.txt
 fi
 
