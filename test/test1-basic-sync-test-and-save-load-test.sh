@@ -6,6 +6,7 @@ cd `dirname $0`
 cd ..
 
 make distclean 
+
 ./aba --version 4.14.9 --vmw ~/.vmware.conf 
 #make -C cli clean 
 make -C cli

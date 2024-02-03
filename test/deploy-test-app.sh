@@ -9,5 +9,4 @@ sleep 5
 
 make cmd cmd='oc rollout status deployment vote-app -n demo' 
 
-make -C aba/sno delete 
 
