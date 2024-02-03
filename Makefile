@@ -35,16 +35,16 @@ cli:
 ##	#mkdir -p mirror
 ##	echo ocp_target_ver=$(ocp_target_ver) > mirror/openshift-version.conf
 
-install: ## Install Quay mirror registry 
+install: ## Set up the registry as per the settings in mirror/mirror.conf. Place credential file(s) into mirror/regcreds/ for existing registry.  See README.md.
 	make -C mirror install
 
-uninstall: ## Uninstall Quay mirror registry 
+uninstall: ## Uninstall any previously installed registry  
 	make -C mirror uninstall
 
-sync: ## Synchonrise images from Red Hat's public registry to the Quay mirror registry 
+sync: ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	make -C mirror sync
 
-save: ## Save images from Red Hat's public registry to the local filesystem
+save: ## Save images from the Internet to mirror/save. 
 	make -C mirror save 
 
 .PHONY: tidy
@@ -58,7 +58,7 @@ tar:  ## Tar the repo to move to internal network, e.g. make tar out=/dev/path/t
 #tar: ## Tar up the aba repo, ready to move to the internet network
 	#make -C mirror tar 
 
-load: ## Load images from the local filesystem to the Quay mirror registry
+load: ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	make -C mirror load
 
 sno:  ## Install Single Node OpenShift
@@ -79,7 +79,7 @@ standard:  ## Install a standard 3+2-node OpenShift cluster
 	cp $(TEMPLATES)/aba-standard.conf standard/aba.conf
 	make -C standard
 
-cluster: ## Install a cluster 
+cluster: ## Install a cluster with your choice of topology, e.g. make cluster name=mycluster 
 	scripts/setup-cluster.sh $(name) 
 
 .PHONY: rsync

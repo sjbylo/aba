@@ -10,24 +10,15 @@ source mirror.conf
 
 export reg_url=https://$reg_host:$reg_port
 
-cat > .ssh.conf <<END
-StrictHostKeyChecking no
-UserKnownHostsFile=/dev/null
-ConnectTimeout=15
-END
-
-
 ###if [ -s regcreds/rootCA.pem -a -s regcreds/pull-secret-mirror.json ]; then
 
-# Check for existing registry credentials exist, e.g. provided by user
+# Check if 'registry' credentials exist, e.g. provided by user
 # For existing registry, user must provide at least the 'regcreds/pull-secret-mirror.json' file
 if [ -s regcreds/pull-secret-mirror.json ]; then
 
-	# Wipe any existing certs
-	sudo rm -vf /etc/pki/ca-trust/source/anchors/rootCA*.pem
-	sudo update-ca-trust extract
-
-	##reg_url=https://$reg_host:$reg_port
+	## Wipe any existing certs
+	#sudo rm -vf /etc/pki/ca-trust/source/anchors/rootCA*.pem
+	#sudo update-ca-trust extract
 
 	# Install cert, if available 
 	if [ -s regcreds/rootCA.pem ]; then
@@ -36,10 +27,15 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 			sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 
 			sudo update-ca-trust extract
 			echo "Cert 'regcreds/rootCA.pem' updated in system trust"
+		else
+			echo "regcreds/rootCA.pem already in system trust"
 		fi
+	else
+		echo "Warning: mirror pull secret provided (regcreds/pull-secret-mirror.json) but no rootCA.pem"
 	fi
 
-	# Test registry access 
+	# Test registry access with podman 
+
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 	podman logout --all 
@@ -51,6 +47,7 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 
 	exit 0
 fi
+
 
 # Detect mirror registry already installed?
 
@@ -76,6 +73,12 @@ else
 	reg_root=$HOME/quay-install
 fi
 
+cat > .ssh.conf <<END
+StrictHostKeyChecking no
+UserKnownHostsFile=/dev/null
+ConnectTimeout=15
+END
+
 # Remote install if ssh key defined 
 
 if [ "$reg_ssh" ]; then
@@ -83,7 +86,7 @@ if [ "$reg_ssh" ]; then
 	if ! ssh -F .ssh.conf $(whoami)@$reg_host hostname; then
 		echo
 		echo "Error: Can't ssh to $(whoami)@$reg_host"
-		echo "Configure passwordless ssh to the host $reg_host and try again."
+		echo "Configure passwordless ssh to $(whoami)@$reg_host and try again."
 		echo
 		exit 1
 	else
@@ -108,10 +111,11 @@ if [ "$reg_ssh" ]; then
 	)
 	# Workaround END ########
 			
+	# FIXME: this is not used
 	# If the key is missing, then generate one
 	[ ! -s $reg_ssh ] && ssh-keygen -t rsa -f $reg_ssh -N ''
 
-	# mirror-registry installer does not open the port for us
+	# Note that the mirror-registry installer does not open the port for us
 	echo Allowing firewall access to the registry at $reg_host/$reg_port ...
 	ssh -F .ssh.conf $(whoami)@$reg_host -- "sudo firewall-cmd --state && \
 		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
@@ -143,6 +147,7 @@ if [ "$reg_ssh" ]; then
 	#echo "echo Running command: \"$cmd\"" > ./reg-uninstall.sh
 	#echo "$cmd" >> ./reg-uninstall.sh
 
+	# Now, activate the uninstall script 
 	mv ./reg-uninstall.sh.provision reg-uninstall.sh
 
 	rm -rf regcreds/*
@@ -151,9 +156,6 @@ if [ "$reg_ssh" ]; then
 	scp -F .ssh.conf -p $(whoami)@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
 
 	reg_user=init
-
-	# Configure the pull secret for this mirror registry 
-	## export reg_url=https://$reg_host:$reg_port
 
 	# Check if the cert needs to be updated
 	sudo diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
@@ -167,6 +169,7 @@ if [ "$reg_ssh" ]; then
 	echo "Running: podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url"
 	podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url 
 
+	# Configure the pull secret for this mirror registry 
 	echo "Generating regcreds/pull-secret-mirror.json file"
 
 	export enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)
@@ -200,6 +203,7 @@ else
 		--initPassword $reg_pw $reg_root_opt
 
 
+	# Now, activate the uninstall script 
 	mv ./reg-uninstall.sh.provision reg-uninstall.sh
 
 	rm -rf regcreds/*
