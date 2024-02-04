@@ -32,7 +32,8 @@ cd ..  # Change into "aba" dir
 ######################
 # Set up test 
 
-make distclean 
+#make distclean 
+make uninstall clean 
 
 ./aba --version 4.14.9 --vmw ~/.vmware.conf 
 ver=$(cat ./target-ocp-version.conf)
