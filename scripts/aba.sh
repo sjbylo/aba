@@ -102,10 +102,6 @@ make -C cli ~/bin/govc
 # vmware.conf
 if [ ! "$auto_vmw" ]; then
 	if [ ! -s vmware.conf ]; then
-		#echo
-		#echo -n "Do you want to deploy to VMware (vSphere or ESXi)? (y/n) [y]: "
-		#read yn
-		#[ ! "$yn" -o "$yn" = "y" ] && make vmware.conf
 		make vmware.conf
 	fi
 fi
@@ -121,6 +117,7 @@ make -C cli ocp_target_ver=$target_ver
 if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then
 	############
 	# Offer next steps
+	echo
 	cat others/message-next-steps.txt
 fi
 
