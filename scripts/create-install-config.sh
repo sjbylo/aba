@@ -9,17 +9,9 @@ source aba.conf
 source mirror.conf
 [ -s vmware.conf ] && source vmware.conf
 
-scripts/verify-release-image.sh
-
-
 # Set the rendezvous_ip to the the first master's ip
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
 export rendezvous_ip=$machine_ip_prefix$starting_ip_index
-
-#SNO=
-#[ $num_masters -eq 1 -a $num_workers -eq 0 ] && SNO=1 && echo Configuring for SNO ...
-
-##echo Validating the cluster configuraiton ...
 
 export pull_secret=
 export ssh_key_pub=
@@ -70,6 +62,9 @@ if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
 	[ ! "$reg_host" ] && echo && echo "Error: registry host is not defined!" && exit 1
 fi
 
+# Check that the release image is available in the reg.
+scripts/verify-release-image.sh
+
 echo
 echo Generating Agent-based configuration file: $PWD/install-config.yaml 
 echo
@@ -77,3 +72,4 @@ echo
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
+echo "install-config.yaml generated successfully"

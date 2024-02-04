@@ -122,6 +122,8 @@ make -C mirror sync   # This will install and sync
 
 install_all_clusters sno
 
+echo "===> Test sync complete "
+
 #######################
 #echo Runtest: START - load
 
@@ -129,6 +131,7 @@ make -C mirror save load   #  This will save, install then load
 
 install_all_clusters sno
 
+echo "===> Test save/load complete "
 
 ##### Test not using VMware #####
 
@@ -139,6 +142,9 @@ ln -s ../templates/Makefile compact
 cp templates/aba-compact.conf compact/aba.conf
 make -C compact iso 
 
+echo "===> Test no vmware complete "
+
 # Tidy up
 make -C mirror uninstall 
 
+echo "===> Test complete "
