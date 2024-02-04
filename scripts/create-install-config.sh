@@ -7,7 +7,7 @@
 
 source aba.conf
 source mirror.conf
-source vmware.conf
+[ -s vmware.conf ] && source vmware.conf
 
 scripts/verify-release-image.sh
 
