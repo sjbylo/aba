@@ -92,6 +92,7 @@ This command will:
 
 Now continue with "Install OpenShift" below.
 
+Note that the above 'connected mode workflow' can be repeated, for example to install Operators or to upgrade OpenShift, by changing the 'sync/imageset-sync.yaml' file and running 'make sync' again.
 
 ## Disconnected mode (air-gapped / fully disconnected) 
 
@@ -102,7 +103,7 @@ There is also an internal bastion host in a private subnet.
 make save
 ```
 
-- This will pull the images from the Internet and save them to the local directory "mirror/save". Make sure there is enough disk space (30+ GB) here!
+- This will pull the images from the Internet and save them to the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators) here!
 
 Then, copy the whole aba/ directory and sub-directories to your internal bastion host in your private subnet, e.g. via a thumb drive. 
 
@@ -137,6 +138,8 @@ make load
 - Note that the internal bastion will need to install RPMs from a suitable repository (for testing it's possible to configure 'dnf' to use a proxy).
 
 Now continue with "Install OpenShift" below.
+
+Note that the above 'air-gapped workflow' can be repeated, for example to install Operators or to upgrade OpenShift by changing the 'save/imageset-save.yaml' file and running 'make save', copying the new 'tar' file(s) in the save/ directory over to your internal bastion and then loading them into the registry with 'make load'. 
 
 ## Install OpenShift 
 
