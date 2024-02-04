@@ -17,6 +17,7 @@ if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/open
 
 	echo
 	echo "Error: There was an error whilst checking for the release image (expected version $release_ver) in your registry!"
+	echo "       Did you remember to 'sync' or 'save/load' the images into your registry?"
 	echo "       Be sure that the images in your registry match the version of the 'openshift-install' CLI (currently version $release_ver)"
 	echo "       Failed to access the release image: docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha"
 

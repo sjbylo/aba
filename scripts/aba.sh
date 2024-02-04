@@ -111,7 +111,6 @@ fi
 ### FIXME  is this needed?  # sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl -y >/dev/null 2>&1
 
 # Set up the CLIs
-#[ "$target_ver" != "$cur_ver" ] && make -C cli ocp_target_ver=$target_ver all
 make -C cli ocp_target_ver=$target_ver 
 
 if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then

@@ -27,7 +27,7 @@ fi
 echo 
 echo "Saving images from the external network (Internet) to mirror/save/."
 echo "Ensure there is enough disk space under $PWD/save.  "
-echo "This can take 10-20 mins to complete!"
+echo "This can take 5-20+ mins to complete!"
 echo 
 
 # Set up script to help for manual re-sync

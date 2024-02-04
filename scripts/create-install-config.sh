@@ -35,7 +35,7 @@ ln -fs ../mirror/regcreds
 
 if [ -s regcreds/pull-secret-mirror.json ]; then
 	export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
-	echo Using mirror registry pull secret file at regcreds/pull-secret-mirror.json
+	echo Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at $reg_host
 
 	# If we pull from the local reg. then we define the image content sources
 	##[ -s templates/image-content-sources.yaml.j2 ] && \
@@ -70,9 +70,10 @@ if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
 	[ ! "$reg_host" ] && echo && echo "Error: registry host is not defined!" && exit 1
 fi
 
+echo
 echo Generating Agent-based configuration file: $PWD/install-config.yaml 
+echo
 # Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret ...
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
-echo

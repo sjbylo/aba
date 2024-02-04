@@ -14,8 +14,9 @@ if [ -s reg-uninstall.sh ]; then
 	exit 0
 else
 	echo
-	echo "Warning: No uninstall script 'mirror/reg-uninstall.sh' found."
-	echo "If Aba did not install the mirror registry, then uninstall it manually." 
+	#echo "Warning: No uninstall script 'mirror/reg-uninstall.sh' found."
+	echo "Warning: No Quay installation detected."
+	echo "If Aba did not install a mirror registry, uninstall it manually." 
 	echo
 	sleep 5
 	#read yn

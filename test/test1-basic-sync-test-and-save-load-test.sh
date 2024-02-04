@@ -129,6 +129,16 @@ make -C mirror save load   #  This will save, install then load
 
 install_all_clusters sno
 
+
+##### Test not using VMware #####
+
+> vmware.conf
+rm -rf compact 
+mkdir compact 
+ln -s ../templates/Makefile compact
+cp templates/aba-compact.conf compact/aba.conf
+make -C compact iso 
+
 # Tidy up
 make -C mirror uninstall 
 

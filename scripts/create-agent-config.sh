@@ -45,8 +45,9 @@ export rendezvous_ip=$machine_ip_prefix$starting_ip_index
 scripts/verify-config.sh || exit 1
 
 # Use j2cli to render the templates
+echo
 echo Generating Agent-based configuration file: $PWD/agent-config.yaml 
+echo
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
 scripts/j2 templates/agent-config.yaml.j2 > agent-config.yaml
 
-echo
