@@ -6,7 +6,7 @@
 echo ==================================================================	
 echo Cluster configuration
 echo =====================
-scripts/cluster-config.sh | sed "s/export /  /g" 
+scripts/cluster-config.sh | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t 
 echo ==================================================================	
 eval `scripts/cluster-config.sh || exit 1`
 
@@ -25,5 +25,4 @@ openshift-install agent create image --dir $MANEFEST_DIR
 
 echo 
 echo "The agent based ISO has been created in the 'iso-agent-based' directory"
-
 echo

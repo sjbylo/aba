@@ -43,18 +43,19 @@ testload: save install load     # Test the save, install, load process on a conn
 rpms: .rpms
 .rpms:
 	sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl -y > .dnf-install.log 2>&1
-	touch .rpms
+	@touch .rpms
 
 rpmsclean:
-	rm -f .rpms
+	@rm -f .rpms
 
 #init:             .rpms regcreds templates scripts mirror.conf mirror-registry .initialized
 #init: .initialized .rpms regcreds                    mirror.conf mirror-registry   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
 init: .initialized .rpms regcreds                                mirror-registry   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
 .initialized: 
-	ln -s $(TEMPLATES) 
-	ln -s $(SCRIPTS) 
-	touch .initialized
+	@ln -s $(TEMPLATES) 
+	@ln -s $(SCRIPTS) 
+	@touch .initialized
+	@echo Initialized $(PWD)
 
 regcreds:
 	mkdir regcreds 
@@ -77,31 +78,30 @@ install: init mirror.conf mirror-registry .installed ## Set up the registry as p
 	### Install Quay Mirror
 	###
 	$(SCRIPTS)/reg-install.sh $(debug) 
-	rm -f .uninstalled 
-	touch .installed
+	@rm -f .uninstalled 
+	@touch .installed
 
 .PHONY: installclean
 installclean:
-	rm -f .installed
+	@rm -f .installed
 
 .PHONY: verify
 verify: init 
 	$(SCRIPTS)/reg-verify.sh $(debug)
-	touch .installed
+	@touch .installed
 
-# FIXME: Should uninstall be .PHONY ?  does it need mirror.conf?! should already be available! 
 uninstall: init mirror-registry .uninstalled ## Uninstall any previously installed registry  
 .uninstalled: 
 	###
 	### Uninstall Quay Mirror
 	###
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
-	rm -f .installed
-	touch .uninstalled
+	@rm -f .installed
+	@touch .uninstalled
 
 .PHONY: uninstallclean
 uninstallclean:
-	rm -f .uninstalled
+	@rm -f .uninstalled
 
 .PHONY: tidy 
 tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
@@ -109,7 +109,6 @@ tidy: ## Tidy large uncompressed files before copying the repo to the internal b
 
 .PHONY: clean
 clean: tidy ## Clean up files
-	#rm -rf save/ regcreds/* .??* 
 	rm -rf                  .??* 
 	rm -rf *.sh templates scripts imageset*yaml oc-mirror-workspace
 

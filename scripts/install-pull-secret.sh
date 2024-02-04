@@ -1,16 +1,21 @@
 #!/bin/bash
 
-[ -s ~/.pull-secret.json ] && echo "Red Hat pull secret found at ~/.pull-secret.json" && exit 0
+if [ -s ~/.pull-secret.json ]; then
+	if ! grep -q registry.redhat.io ~/.pull-secret.json; then
+		echo "Was expecting to see the string 'registry.redhat.io' in your pull secret."
+		echo "The format of your pull secret looks wrong, please fix it and try again!"
+		exit 1
+	else
+		echo "Red Hat pull secret found at ~/.pull-secret.json"
+		exit 0
+	fi
+fi
 
 echo
-echo "Warning: Please write your Red Hat registry pull secret to the file ~/.pull-secret.json."
-echo "         Fetch your secret key from https://console.redhat.com/openshift/downloads#tool-pull-secret"
+echo "Error: To download images from Red Hat's registry, a pull secret is required."
+echo "       Please fetch your pull secret from https://console.redhat.com/openshift/downloads#tool-pull-secret"
+echo "       and save it to the file ~/.pull-secret.json in your home directory."
 echo
 
 exit 1
-
-# FIXME: Should we rather do this? ...
-#echo -n "Paste the pull secret and then hit Ctrl-D: "
-#umask 077
-#cat > ~/.pull-secret.json
 

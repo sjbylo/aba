@@ -10,7 +10,7 @@ if [ ! -s vmware.conf ]; then
 	if [ "$yn" = "y" -o "$yn" = "" ]; then
 		if [ -s ~/.vmware.conf ]; then
 			cp ~/.vmware.conf vmware.conf   # The working user edited file, if any
-		elif [ -s .vmware.conf ] 
+		elif [ -s .vmware.conf ]; then
 			cp .vmware.conf vmware.conf  # The user edited file, if any
 		else
 			cp templates/vmware.conf .  # The default template 

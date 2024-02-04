@@ -14,55 +14,48 @@ help: ## Help
 
 init: .initialized
 .initialized:
-	ln -s ../templates
-	ln -s ../scripts
-	ln -s ../mirror
-	touch .initialized
+	@ln -s ../templates
+	@ln -s ../scripts
+	@ln -s ../mirror
+	@touch .initialized
+	@echo Initialized $(PWD) successfully
 
 mirror.conf: .initialized ## Set up the mirror.conf file
-	ln -sf mirror/mirror.conf
-	touch mirror.conf
+	@ln -sf mirror/mirror.conf
+	@touch mirror.conf
+	@echo Using $(PWD)/mirror.conf file 
 
 vmware.conf: ## Use VMW vCenter or ESXi to create cluster
-	[ -s ../vmware.conf ] && ln -s ../vmware.conf || true
+	@[ -s ../vmware.conf ] && ln -s ../vmware.conf || true
 
 aba.conf:  ## Create and edit the aba conf file
 	cp templates/aba.conf .
 	$(EDITOR) aba.conf
 
 install-config.yaml: .initialized vmware.conf aba.conf mirror.conf  ## Create the agent-based config file based on the aba.conf file
-	###
-	### Create install-config.yaml
-	###
 	scripts/create-install-config.sh $(debug)
 
 agent-config.yaml: .initialized vmware.conf aba.conf mirror.conf  ## Create the agent-based config file based on the aba.conf file
-	###
-	### Create agent-config.yaml
-	###
 	scripts/create-agent-config.sh $(debug)
 
 # The following "auto" targets are meant just for the full end-to-end automation, to build a cluster
 iso: iso-agent-based/agent.x86_64.iso ## Build the agent-based iso file
 iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note that install-config.yaml can itself be dependent on vmware.conf params
-	###
-	### Create agent-based iso
-	###
 	scripts/generate-image.sh $(debug)
 
 .autopoweroff: iso-agent-based/agent.x86_64.iso
 	scripts/vmw-kill.sh $(debug)
-	touch .autopoweroff
+	@touch .autopoweroff
 
 upload: .autoupload vmware.conf ## Upload the ISO to the VMW platform
 .autoupload: .autopoweroff
 	scripts/vmw-upload.sh $(debug) 
-	touch .autoupload
+	@touch .autoupload
 
 .autorefresh: .autoupload
 	scripts/vmw-delete.sh $(debug)
 	scripts/vmw-create.sh --start $(debug) 
-	touch .autorefresh
+	@touch .autorefresh
 
 # The following tagets are for interactive use only
 .PHONEY: refresh
@@ -116,7 +109,7 @@ shell:  ## Open a shell with access to the cluster
 
 .PHONEY: vmw
 vmw: ## Configure VMW platform credentials
-	make -C .. vmware.conf
+	@make -C .. vmware.conf
 
 .PHONEY: clean
 clean: ## Clean up 
