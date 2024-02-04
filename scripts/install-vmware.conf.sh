@@ -22,6 +22,8 @@ if [ ! -s vmware.conf ]; then
 
 	source vmware.conf
 
+	make -C cli ~/bin/govc 
+
 	# Check access
 	if ! govc about; then
 		echo "Error: Cannot access vSphere or ESXi"

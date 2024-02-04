@@ -42,7 +42,8 @@ testload: save install load     # Test the save, install, load process on a conn
 
 rpms: .rpms
 .rpms:
-	sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl -y > .dnf-install.log 2>&1
+	@sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl -y >> .dnf-install.log 2>&1
+	@echo "All required rpms are installed"
 	@touch .rpms
 
 rpmsclean:
@@ -55,7 +56,7 @@ init: .initialized .rpms regcreds                                mirror-registry
 	@ln -s $(TEMPLATES) 
 	@ln -s $(SCRIPTS) 
 	@touch .initialized
-	@echo Initialized $(PWD)
+	@echo Initialized `pwd`
 
 regcreds:
 	mkdir regcreds 

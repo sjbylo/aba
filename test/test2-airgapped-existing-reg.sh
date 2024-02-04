@@ -120,6 +120,8 @@ ssh $(whoami)@$bastion2 -- "make -C aba load"
 #ssh $(whoami)@$bastion2 -- "make -C aba/sno upload"   # Just test until iso upload
 ssh $(whoami)@$bastion2 -- "make -C aba sno" 
 
+echo "===> Test 'air gapped' complete "
+
 ######################
 # Now simulate adding more images to the mirror registry
 ######################
@@ -149,6 +151,29 @@ ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
 
 ssh $(whoami)@$bastion2 -- aba/test/deploy-test-app.sh
 
+echo "===> Test 'vote-app' complete "
+
+echo
+echo Runtest: operator
+echo
+
+echo Edit imageset conf file test
+cat >> mirror/save/imageset-config-save.yaml <<END
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.14
+    packages:
+      - name: advanced-cluster-management
+        channels:
+        - name: release-2.9
+END
+
+make -C mirror save 
+make rsync ip=$bastion2
+ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
+ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
+
+echo "===> Test 'operator' complete "
+
 ssh $(whoami)@$bastion2 -- "make -C aba/sno delete" 
 
 ######################
@@ -156,3 +181,4 @@ echo Cleanup test
 
 test/reg-test-uninstall-remote.sh
 
+echo "===> Test complete "

@@ -19,8 +19,8 @@ help: ## Help
 
 init: aba .init
 .init: 
-	# Checking/Installing needed packages
 	@sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl -y >> .dnf-install.log 2>&1
+	@echo "All required rpms are installed"
 
 vmw: vmware.conf  ## Configure and use vSphere or ESXi to install OpenShift
 vmware.conf:

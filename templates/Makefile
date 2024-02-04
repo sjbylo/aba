@@ -18,12 +18,12 @@ init: .initialized
 	@ln -s ../scripts
 	@ln -s ../mirror
 	@touch .initialized
-	@echo Initialized $(PWD) successfully
+	@echo Initialized `pwd` successfully
 
 mirror.conf: .initialized ## Set up the mirror.conf file
 	@ln -sf mirror/mirror.conf
 	@touch mirror.conf
-	@echo Using $(PWD)/mirror.conf file 
+	@echo Using `pwd`/mirror.conf file 
 
 vmware.conf: ## Use VMW vCenter or ESXi to create cluster
 	@[ -s ../vmware.conf ] && ln -s ../vmware.conf || true
