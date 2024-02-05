@@ -5,8 +5,8 @@
 cd `dirname $0`
 cd ..
 
-#make distclean 
-make uninstall clean 
+make distclean 
+#make uninstall clean 
 
 ./aba --version 4.14.9 --vmw ~/.vmware.conf 
 #make -C cli clean 
