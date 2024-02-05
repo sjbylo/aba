@@ -82,10 +82,11 @@ END
 # Remote install if ssh key defined 
 
 if [ "$reg_ssh" ]; then
-	echo 
-	echo "Install Quay onto $reg_host? (y/n) [y]: "
-	read -t5 yn || true
-	[ "$yn" != "y" -a "$yn" != "" ] && exit 1
+	### FIXME 
+	### echo 
+	### echo "Install Quay onto $reg_host? (y/n) [y]: "
+	### read -t5 yn || true
+	### [ "$yn" != "y" -a "$yn" != "" ] && exit 1
 
 	if ! ssh -F .ssh.conf $(whoami)@$reg_host hostname; then
 		echo
