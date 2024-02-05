@@ -75,9 +75,6 @@ mirror.conf:                                 ../target-ocp-version.conf ## Confi
 
 install: init mirror.conf mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 .installed: 
-	###
-	### Install Quay Mirror
-	###
 	$(SCRIPTS)/reg-install.sh $(debug) 
 	@rm -f .uninstalled 
 	@touch .installed
