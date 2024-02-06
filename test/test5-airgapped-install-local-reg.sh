@@ -180,6 +180,7 @@ ssh $(whoami)@$bastion2 -- "make -C aba/sno delete"
 ######################
 echo Cleanup test
 
-test/reg-test-uninstall-remote.sh
+ssh $(whoami)@$bastion2 -- "make -C aba/mirror uninstall"
+### test/reg-test-uninstall-remote.sh
 
 echo "===> Test complete "
