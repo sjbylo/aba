@@ -1,4 +1,3 @@
-
 #!/bin/bash -e
 # Install mirror reg remotly but using ssh, simulating "existing reg. use-case.
 
