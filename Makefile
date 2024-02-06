@@ -49,6 +49,9 @@ tidy:
 tar:  ## Archive the repo in order to move it to the internal network, e.g. make tar out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-repo.tgz
 	scripts/create-tarball.sh $(out)
 
+tar2:  
+	@scripts/create-tarball2.sh $(out)
+
 load: ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	make -C mirror load
 
@@ -84,12 +87,13 @@ rsync:  ## Copy (rsync) all required files to internal bastion for testing purpo
 
 .PHONY: clean
 clean: ## Clean up 
-	rm -f vmware.conf target-ocp-version.conf
+	####rm -f vmware.conf # target-ocp-version.conf
 	make -C mirror clean 
 	make -C cli clean 
 
 .PHONY: distclean
 distclean: uninstall ## Clean up *everything*
+	rm -f vmware.conf target-ocp-version.conf
 	make -C mirror distclean 
 	make -C cli distclean 
 	rm -rf sno compact standard 
