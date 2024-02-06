@@ -19,7 +19,7 @@ sync: init ~/.pull-secret.json install ## Sync images from the Internet directly
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: save
-save: init ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
+save: init mirror.conf ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
 	###
 	### Save images from the Internet to local disk 
 	###
@@ -51,7 +51,7 @@ rpmsclean:
 
 #init:             .rpms regcreds templates scripts mirror.conf mirror-registry .initialized
 #init: .initialized .rpms regcreds                    mirror.conf mirror-registry   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
-init: .initialized .rpms regcreds                                mirror-registry   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
+init: .initialized .rpms regcreds                                mirror-registry.tar.gz   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
 .initialized: 
 	@ln -s $(TEMPLATES) 
 	@ln -s $(SCRIPTS) 
@@ -88,11 +88,12 @@ verify: init
 	$(SCRIPTS)/reg-verify.sh $(debug)
 	@touch .installed
 
-uninstall: init mirror-registry .uninstalled ## Uninstall any previously installed registry  
+uninstall: init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
 .uninstalled: 
 	###
 	### Uninstall Quay Mirror
 	###
+	@test -f .installed || exit 0
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	@rm -f .installed
 	@touch .uninstalled
@@ -103,12 +104,12 @@ uninstallclean:
 
 .PHONY: tidy 
 tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
-	rm -rf *.tar mirror-registry .rpms .installed .loaded
+	rm -rf *.tar mirror-registry .rpms .installed .loaded .initialized
 
 .PHONY: clean
 clean: tidy ## Clean up files
 	rm -rf                  .??* 
-	rm -rf *.sh templates scripts imageset*yaml oc-mirror-workspace
+	rm -rf *.sh templates scripts ### oc-mirror-workspace
 
 .PHONY: distclean
 #distclean: uninstall clean ## Clean up repo for distribution
