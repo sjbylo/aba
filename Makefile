@@ -47,10 +47,7 @@ tidy:
 
 .PHONY: tar
 tar:  ## Archive the repo in order to move it to the internal network, e.g. make tar out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-repo.tgz
-	scripts/create-tarball.sh $(out)
-
-tar2:  
-	@scripts/create-tarball2.sh $(out)
+	@scripts/create-tarball.sh $(out)
 
 load: ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	make -C mirror load
