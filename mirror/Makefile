@@ -86,6 +86,7 @@ installclean:
 .PHONY: verify
 verify: init 
 	$(SCRIPTS)/reg-verify.sh $(debug)
+	@rm -f .uninstalled 
 	@touch .installed
 
 uninstall: init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
