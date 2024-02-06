@@ -103,7 +103,7 @@ uninstallclean:
 
 .PHONY: tidy 
 tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
-	rm -rf *.tar mirror-registry
+	rm -rf *.tar mirror-registry .rpms .installed .loaded
 
 .PHONY: clean
 clean: tidy ## Clean up files

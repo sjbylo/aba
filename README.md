@@ -105,27 +105,36 @@ make save
 
 - This will pull the images from the Internet and save them to the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators) here!
 
-Then, copy the whole aba/ directory and sub-directories to your internal bastion host in your private subnet, e.g. via a thumb drive. 
+Then, copy the whole aba/ directory and sub-directories to your internal bastion host in your private subnet via a portable storage device, e.g. a thumb drive. 
 
 Example:
 
 ```
 # On the external bastion:
-# Mount your thumbdrive and:
+# Mount your thumb drive and:
 
 make tar out=/dev/path/to/thumbdrive 
 
 
 # Or, do this manually 
 cd 		                   # Assuming aba is directly under your $HOME dir
-tar czf /path/to/thumbdrive/aba.tgz $(find bin aba -type f ! -path "aba/.git*" -a ! -path "aba/cli/*" -a ! -path "aba/mirror/mirror-registry" -a ! -path "aba/mirror/*.tar")
+tar czf /path/to/thumbdrive/aba.tgz $(find bin aba -type f \
+		! -path "aba/.git*" -a \
+		! -path "aba/cli/*" -a \
+		! -path "aba/mirror/mirror-registry" -a \
+		! -path "aba/mirror/*.tar" \
+		! -path "aba/mirror/.installed" \
+		! -path "aba/mirror/.rpms" \
+		! -path "aba/mirror/.loaded" \
+		! -path "aba/*/iso-agent-based*")
 
-# Copy the file 'aba.tgz' to your internal bastion via the thumb drive. 
+# Copy the file 'aba.tgz' to your internal bastion via your portable storage device.
 
 # Then, on the internal bastion run:
 cd
 tar xzvf aba.tgz            # Extract the tar file. Ensure file timestamps are kept the same as on the external bastion.
 cd aba             
+make tidy
 ```
 
 Load the images from local storage to the internal mirror registry.
@@ -134,12 +143,12 @@ Load the images from local storage to the internal mirror registry.
 sudo dnf install make -y 
 make load
 ```
-- This will (if needed) install Quay (from the files and configuration that were tar-ed & copied above) and then load the images into Quay.
+- This will (if required) install Quay (from the files and configuration that were tar-ed & copied above) and then load the images into Quay.
 - Note that the internal bastion will need to install RPMs from a suitable repository (for testing it's possible to configure 'dnf' to use a proxy).
 
 Now continue with "Install OpenShift" below.
 
-Note that the above 'air-gapped workflow' can be repeated, for example to install Operators or to upgrade OpenShift by changing the 'save/imageset-save.yaml' file and running 'make save', copying the new 'tar' file(s) in the save/ directory over to your internal bastion and then loading them into the registry with 'make load'. 
+Note that the above 'air-gapped workflow' can be repeated, for example to install Operators or to upgrade OpenShift by changing the 'save/imageset-save.yaml' file on the external bastion and running 'make save', copying the new 'tar' file(s) in the save/ directory over to your internal bastion and then loading them into the registry with 'make load'. 
 
 ## Install OpenShift 
 
