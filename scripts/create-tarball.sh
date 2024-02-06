@@ -27,11 +27,14 @@ tar czvf $dir/aba-repo.tgz \
 		! -path "aba/.git*" -a \
 		! -path "aba/cli/*" -a \
 		! -path "aba/mirror/mirror-registry" -a \
-		! -path "aba/mirror/*.tar" \
-		! -path "aba/mirror/.installed" \
+		! -path "aba/mirror/.initialized" \
 		! -path "aba/mirror/.rpms" \
+		! -path "aba/mirror/.installed" \
 		! -path "aba/mirror/.loaded" \
+		! -path "aba/mirror/execution-environment.tar" \
+		! -path "aba/mirror/image-archive.tar" \
 		! -path "aba/*/iso-agent-based*" \
 	)
+
 # Note, avoid copying any large, unneeded files, e.g. any leftover ISO agent files and the mirror-registry .tar archives
 
