@@ -144,8 +144,9 @@ END
 ### make -C mirror verify 
 
 make -C mirror save 
-make rsync ip=$bastion2
-ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
+### make rsync ip=$bastion2 # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
+rsync aba/mirror/save/mirror_seq*_*.tar $bastion2:aba/mirror/save 
+### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
 
 ######################
@@ -169,8 +170,9 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 make -C mirror save 
-make rsync ip=$bastion2
-ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
+### make rsync ip=$bastion2  # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
+rsync aba/mirror/save/mirror_seq*_*.tar $bastion2:aba/mirror/save 
+### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
 
 echo "===> Test 'operator' complete "
