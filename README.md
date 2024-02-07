@@ -10,13 +10,13 @@ Aba automatically completes the following:
 1. Optionally creates the required VMs in ESXi or vSphere.
 1. Monitors the installation progress. 
 
-Use aba if you want to get Openshift up and running quickly without having to study the documentation in detail. 
+Use aba if you want to get OpenShift up and running quickly without having to study the documentation in detail. 
 
 
 ## Prerequisites
 
 - **DNS**
-   - with A records for OpenShift API, Ingress and the intrnal mirror registry.
+   - with A records for OpenShift API, Ingress and the internal mirror registry.
 - **NTP**
    - OpenShift requires that NTP be available. Installation is possible without an NTP server. However, asynchronous server clocks will cause errors, which NTP server prevents.
 - **Private subnet** (optional)
@@ -116,6 +116,10 @@ Example:
 # Mount your thumb drive and:
 
 make tar out=/dev/path/to/thumbdrive 
+or
+make tar out=- > /path/to/file.tgz
+or
+make tar out=- | ssh user@host "cat > file.tgz"
 
 
 # Or, do this manually 
@@ -242,7 +246,13 @@ make help        # Help is available in all Makefiles (in aba/Makefile  aba/mirr
 - Use PXE boot as alternative to ISO upload.
 
 
-## Customising agent-config.yaml and/or openshift-install.yaml files
+## Configuration files
+
+- aba/aba.conf is the 'global' config file, used to set the target version of OpenShift, your domain name, private network address, DNS IP, choice of editor etc
+- aba/mirror/mirror.conf describes your private/internal mirror registry (either existing or to-be-installed) 
+- aba/<cluster>/cluster.conf contains the parameters needed to build an OpenShift cluster, e.g. number of master and worker nodes, ingress IPs etc
+
+## Customizing agent-config.yaml and/or openshift-install.yaml files
 
 - Once a cluster config directory has been created (e.g. 'compact') and Agent-based configuration has been created, some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed. 'make' can be run again to re-create the ISO and the VMs etc (if required).  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints work fine.  
 
@@ -261,7 +271,7 @@ As an example, edit agent-config.yaml to include the following to direct agent-b
       deviceName: /dev/sdb
 ```
 
-or, adding vsphere integration into 'install-config.yaml'
+or, adding vSphere integration into 'install-config.yaml'
 
 ```
 platform:
