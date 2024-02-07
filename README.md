@@ -262,6 +262,7 @@ Example:
 
 ```
 cd sno
+scripts/cluster-config.sh        # example execution to show the cluster configuration extracted from the Agend-based config files. 
 ```
 
 As an example, edit agent-config.yaml to include the following to direct agent-based installer to install RHCOS onto the 2nd disk:
@@ -284,7 +285,6 @@ platform:
 Check 'cluster-config.sh' is able to parse all the data it needs to create the VMs:
 
 ```
-cd compact
 scripts/cluster-config.sh        # example execution to show the cluster configuration extracted from the Agend-based files. 
 ```
 
