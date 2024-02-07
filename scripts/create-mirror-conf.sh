@@ -19,7 +19,7 @@ echo -n "Configure your private mirror registry? Hit ENTER to continue or Ctrl-C
 read yn
 
 ### cp -f templates/mirror.conf .
-scripts/j2 templates/mirror.conf.js > mirror.conf
+scripts/j2 templates/mirror.conf.j2 > mirror.conf
 
 $editor mirror.conf
 
