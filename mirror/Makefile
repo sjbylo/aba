@@ -53,9 +53,9 @@ rpmsclean:
 #init: .initialized .rpms regcreds                    mirror.conf mirror-registry   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
 init: .initialized .rpms regcreds                                mirror-registry.tar.gz   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
 .initialized: 
-	@ln -s $(TEMPLATES) 
-	@ln -s $(SCRIPTS) 
-	@ln -s ../aba.conf 
+	@ln -fs $(TEMPLATES) 
+	@ln -fs $(SCRIPTS) 
+	@ln -fs ../aba.conf 
 	@touch .initialized
 	@echo Initialized `pwd`
 
