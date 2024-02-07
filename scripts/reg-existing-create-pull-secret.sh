@@ -1,5 +1,6 @@
 #!/bin/bash -e
 
+source aba.conf
 source mirror.conf
 
 read -p "Enter username [init]: " reg_user

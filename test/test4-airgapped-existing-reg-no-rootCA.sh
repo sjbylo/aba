@@ -19,7 +19,8 @@ install_cluster() {
 	mkdir -p $1
 	#ln -fs ../templates $1
 	ln -fs ../templates/Makefile $1/Makefile
-	cp templates/aba-$1.conf $1/aba.conf
+	#cp templates/cluster-$1.conf $1/cluster.conf
+	scripts/j2 templates/cluster-$1.conf > $1/cluster.conf
 	make -C $1
 	echo $1 completed
 }
@@ -44,11 +45,12 @@ cd ..  # Change into "aba" dir
 ### make distclean
 ### ./aba --version 4.13.27 --vmw ~/.vmware.conf
 
-ver=$(cat ./target-ocp-version.conf)
+### ver=$(cat ./target-ocp-version.conf)
+source aba.conf
 
 # Set up internal mirror config to look for existing mirror on registry2.example.com
 cp -f templates/mirror.conf mirror
-sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" mirror/mirror.conf
+### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" mirror/mirror.conf
 ## test for remote mirror
 sed -i "s/registry.example.com/registry2.example.com/g" mirror/mirror.conf
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" mirror/mirror.conf

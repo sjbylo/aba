@@ -1,10 +1,12 @@
 #!/bin/bash -e
 
+source aba.conf   # Fetch the domain name
+
 mkdir $1   # If dir exists, exit
 ln -fs ../templates/Makefile $1/Makefile
-cp templates/aba-standard.conf $1/aba.conf
-echo -n "Edit the config file $1/aba.conf, hit RETURN "
+scripts/j2 templates/cluster-standard.conf > $1/cluster.conf
+echo -n "Edit the config file $1/cluster.conf, hit RETURN "
 read yn
-vi $1/aba.conf
+$editor $1/cluster.conf
 make -C $1
 

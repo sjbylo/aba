@@ -37,7 +37,7 @@ load: install ## Load the saved images into a registry on the internal bastion (
 testload: save install load     # Test the save, install, load process on a connected host
 
 # FIXME
-../target-ocp-version.conf:
+../aba.conf:
 	../aba
 
 rpms: .rpms
@@ -55,6 +55,7 @@ init: .initialized .rpms regcreds                                mirror-registry
 .initialized: 
 	@ln -s $(TEMPLATES) 
 	@ln -s $(SCRIPTS) 
+	@ln -s ../aba.conf 
 	@touch .initialized
 	@echo Initialized `pwd`
 
@@ -68,9 +69,9 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 	curl --progress-bar -OL \
 	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
-#mirror.conf:           templates/mirror.conf ../target-ocp-version.conf ## Configure the mirror.conf file.
+#mirror.conf:           templates/mirror.conf ../aba.conf ## Configure the mirror.conf file.
 # FIXME: If target-ocp-version.conf updates, change the version also in mirror.conf?
-mirror.conf:                                 ../target-ocp-version.conf ## Configure the mirror.conf file.
+mirror.conf:                                 ../aba.conf ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 install: init mirror.conf mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.

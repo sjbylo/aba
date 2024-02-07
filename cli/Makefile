@@ -1,8 +1,9 @@
 # Makefile to download and install oc, openshift-install, oc-mirror and govc 
 
-ocp_target_ver  := $(shell cat ../target-ocp-version.conf)
+include ../aba.conf
+ocp_version := $(strip $(shell echo $(ocp_version)))
 
-all: ../target-ocp-version.conf ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc
+all: ../aba.conf ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc
 
 ##@ Help-related tasks
 .PHONY: help
@@ -13,23 +14,23 @@ help: ## Help
 	mkdir -p ~/bin
 	touch .init
 
-../target-ocp-version.conf:
+../aba.conf:
 	../aba
 
 ########################################
-~/bin/oc: .init openshift-client-linux-$(ocp_target_ver).tar.gz ## Install oc into ~/bin
-	tar -C ~/bin -xmzf openshift-client-linux-$(ocp_target_ver).tar.gz oc
+~/bin/oc: .init openshift-client-linux-$(ocp_version).tar.gz ## Install oc into ~/bin
+	tar -C ~/bin -xmzf openshift-client-linux-$(ocp_version).tar.gz oc
 
-openshift-client-linux-$(ocp_target_ver).tar.gz:  ## Downlaod oc tarball 
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/openshift-client-linux-$(ocp_target_ver).tar.gz
+openshift-client-linux-$(ocp_version).tar.gz:  ## Downlaod oc tarball 
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/openshift-client-linux-$(ocp_version).tar.gz
 
 
 ########################################
-~/bin/openshift-install: .init openshift-install-linux-$(ocp_target_ver).tar.gz  ## Install openshift-install into ~/bin
-	tar -C ~/bin -xmzf openshift-install-linux-$(ocp_target_ver).tar.gz openshift-install
+~/bin/openshift-install: .init openshift-install-linux-$(ocp_version).tar.gz  ## Install openshift-install into ~/bin
+	tar -C ~/bin -xmzf openshift-install-linux-$(ocp_version).tar.gz openshift-install
 
-openshift-install-linux-$(ocp_target_ver).tar.gz:  ## Download openshift-install tarball
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/openshift-install-linux-$(ocp_target_ver).tar.gz
+openshift-install-linux-$(ocp_version).tar.gz:  ## Download openshift-install tarball
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/openshift-install-linux-$(ocp_version).tar.gz
 
 
 ########################################
@@ -38,13 +39,13 @@ openshift-install-linux-$(ocp_target_ver).tar.gz:  ## Download openshift-install
 	chmod +x ~/bin/oc-mirror
 
 #oc-mirror.tar.gz: ## Download oc-mirror tarball
-#	#curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/oc-mirror.tar.gz
+#	#curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/oc-mirror.tar.gz
 #	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.14.8/oc-mirror.tar.gz   # This tested version has bug fixes 
 
 # Version 4.14 has bug fixes 
 oc-mirror.tar.gz: ## Download oc-mirror tarball ver 4.14.9 or higher 
 	# Installing oc-mirror version 4.14.9 or higher
-	../scripts/output_ver_lower_4.14.9.sh $(ocp_target_ver) && curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.14.9/oc-mirror.tar.gz || curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_target_ver)/oc-mirror.tar.gz 
+	../scripts/output_ver_lower_4.14.9.sh $(ocp_version) && curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.14.9/oc-mirror.tar.gz || curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/oc-mirror.tar.gz 
 
 ########################################
 ~/bin/govc: .init govc_Linux_x86_64.tar.gz    ## Install govc into ~/bin

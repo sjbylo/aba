@@ -75,6 +75,8 @@ To set the version of OpenShift to install and, if needed, to download identical
 ./aba 
 ```
 
+Note that this command will create the 'aba.conf' file which contains some values that you will want to change, e.g. your domain name, your network address etc.
+
 Now, continue with either 'Connected mode' or 'Disconnected mode' below. 
 
 
@@ -152,13 +154,13 @@ Note that the above 'air-gapped workflow' can be repeated, for example to instal
 
 ## Install OpenShift 
 
-Edit the file 'templates/aba-sno.conf' to match your environment. 
+Edit the file 'templates/cluster-sno.conf' to match your environment. 
 
 ```
 make sno
 ```
 - This will create a directory 'sno' and then install SNO OpenShift using the Agent-based installer.  If you are using VMware it will create the VMs for you.
-- Be sure to go through *all* the values in 'aba/vmware.conf' and 'sno/aba.conf'.
+- Be sure to go through *all* the values in 'aba/vmware.conf' and 'sno/cluster.conf'.
 - Be sure to set up your DNS entries in advance. See above on Prerequisites. 
 - Aba will show you the installation progress.  You can also run 'make ssh' to log into the rendezvous server to troubleshoot. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands are idempotent.
 

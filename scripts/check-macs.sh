@@ -30,7 +30,7 @@ do
 	fi
 done
 
-#[ "$INUSE" ] && echo && echo "Consider changing 'mac_prefix' in aba.conf and try again." && sleep 2 && echo 
+#[ "$INUSE" ] && echo && echo "Consider changing 'mac_prefix' in cluster.conf and try again." && sleep 2 && echo 
 
 ##echo Checking ip and mac addresses currently in use ...
 > /tmp/.mac_list_filtered
@@ -63,7 +63,7 @@ if [ -s /tmp/.list_of_matching_arp_entries ]; then
 				INUSE=1
 			fi
 		done
-		[ "$INUSE" ] && echo -e "WARNING: One or more mac addresses are currently in use ($P).\nConsider Changing 'mac_prefix' in aba.conf and try again." && \
+		[ "$INUSE" ] && echo -e "WARNING: One or more mac addresses are currently in use ($P).\nConsider Changing 'mac_prefix' in cluster.conf and try again." && \
 				echo "If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" && exit 1
 	fi
 fi

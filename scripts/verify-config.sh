@@ -3,6 +3,7 @@
 
 . scripts/include_all.sh
 
+source cluster.conf
 source aba.conf
 source mirror.conf
 

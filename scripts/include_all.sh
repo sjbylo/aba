@@ -17,9 +17,9 @@ trap 'show_error' ERR
 
 # Detect editor.  Assume nano if available
 if which nano >/dev/null 2>&1; then
-	export EDITOR=nano
+	export editor=nano
 else
-	export EDITOR=vi
+	export editor=vi
 fi
 
 install_rpm() {

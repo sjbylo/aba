@@ -25,7 +25,9 @@ mirror/quay.tar
 mirror/redis.tar
 mirror/scripts
 mirror/templates
+mirror/aba.conf
 mirror/save
+mirror/sync
 mirror/*.sh
 test/.ssh.conf
 test/mirror-registry.tar.gz
