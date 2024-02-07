@@ -7,6 +7,7 @@
 #[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$1" ] && set -x 
 
+source cluster.conf
 source aba.conf
 source mirror.conf
 

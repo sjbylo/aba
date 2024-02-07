@@ -15,7 +15,7 @@ if [ ! -s vmware.conf ]; then
 		else
 			cp templates/vmware.conf .  # The default template 
 		fi
-		$EDITOR vmware.conf 
+		$editor vmware.conf 
 	else
 		exit 0
 	fi

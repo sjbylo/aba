@@ -4,6 +4,7 @@ source scripts/include_all.sh
 
 umask 077
 
+source aba.conf
 source mirror.conf
 
 ### # Can the registry mirror already be reached?

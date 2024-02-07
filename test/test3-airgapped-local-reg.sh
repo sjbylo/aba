@@ -14,7 +14,8 @@ install_cluster() {
 	mkdir -p $1
 	#ln -fs ../templates $1
 	ln -fs ../templates/Makefile $1/Makefile
-	cp templates/aba-$1.conf $1/aba.conf
+	#cp templates/cluster-$1.conf $1/cluster.conf
+	scripts/j2 templates/cluster-$1.conf > $1/cluster.conf
 	make -C $1
 	echo $1 completed
 }
@@ -36,13 +37,14 @@ install_all_clusters() {
 cd ..  # Change into "aba" dir
 make distclean   # This will then skip trying to uninstall (which results in an error). 
 ./aba --version 4.13.27 --vmw ~/.vmware.conf
+source aba.conf
 
 ######################
 ver=$(cat ./target-ocp-version.conf)
 
 # Set up mirror config
 cp -f templates/mirror.conf mirror
-sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" mirror/mirror.conf
+### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" mirror/mirror.conf
 
 ## test for remote mirror
 sed -i "s/registry.example.com/registry2.example.com/g" mirror/mirror.conf

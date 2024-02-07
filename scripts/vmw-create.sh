@@ -24,7 +24,7 @@ WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
 scripts/check-macs.sh || exit 
 
 # Read in the cpu and mem values 
-source aba.conf 
+source cluster.conf 
 
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
 

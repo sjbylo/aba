@@ -4,6 +4,7 @@
 
 umask 077
 
+source aba.conf
 source mirror.conf
 
 if [ -s save/mirror_seq1_000000.tar ]; then
@@ -17,15 +18,15 @@ fi
 # This is a pull secret for RH registry
 pull_secret_mirror_file=pull-secret-mirror.json
 
-echo pull_secret_file=$pull_secret_file
+echo pull_secret_file=~/.pull-secret.json
 
 if [ -s $pull_secret_mirror_file ]; then
 	echo Using $pull_secret_mirror_file ...
-elif [ -s $pull_secret_file ]; then
+elif [ -s ~/.pull-secret.json ]; then
 	#SB#ln -fs ./pull-secret.json pull-secret.json 
 	:
 else
-	echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
+	echo "Error: Your pull secret file [~/.pull-secret.json] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 fi
 
 export reg_url=https://$reg_host:$reg_port
@@ -54,8 +55,8 @@ mkdir -p sync
 if [ ! -s sync/imageset-config-sync.yaml ]; then
 #if [ ! -s imageset-config.yaml ]; then
 	echo Generating sync/imageset-config-sync.yaml for oc-mirror ...
-	export ocp_ver=$ocp_target_ver
-	export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
+	export ocp_ver=$ocp_version
+	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 	[ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
 	scripts/j2 ./templates/imageset-config-sync.yaml.j2 > sync/imageset-config-sync.yaml 

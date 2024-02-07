@@ -57,21 +57,24 @@ load: ## Load the saved images into a registry on the internal bastion (as defin
 sno:  ## Install Single Node OpenShift
 	@mkdir -p sno
 	@ln -fs ../$(TEMPLATES)/Makefile sno/Makefile
-	@cp $(TEMPLATES)/aba-sno.conf sno/aba.conf
+	@make -C sno init
+	scripts/create-cluster-conf.sh sno
 	@make -C sno
 
 .PHONY: compact
 compact:  ## Install a compact 3-node OpenShift cluster 
 	@mkdir -p compact
 	@ln -fs ../$(TEMPLATES)/Makefile compact/Makefile
-	@cp $(TEMPLATES)/aba-compact.conf compact/aba.conf
+	@make -C compact init
+	@scripts/create-cluster-conf.sh compact
 	@make -C compact
 
 .PHONY: standard
 standard:  ## Install a standard 3+2-node OpenShift cluster 
 	@mkdir -p standard
 	@ln -fs ../$(TEMPLATES)/Makefile standard/Makefile
-	@cp $(TEMPLATES)/aba-standard.conf standard/aba.conf
+	@make -C standard init
+	@scripts/create-cluster-conf.sh standard
 	@make -C standard
 
 .PHONY: cluster
@@ -94,5 +97,5 @@ distclean: uninstall ## Clean up *everything*
 	make -C mirror distclean 
 	make -C cli distclean 
 	rm -rf sno compact standard 
-	rm -f *.conf 
+	#rm -f *.conf 
 

@@ -17,6 +17,7 @@ init: .initialized
 	@ln -s ../templates
 	@ln -s ../scripts
 	@ln -s ../mirror
+	@ln -s ../aba.conf
 	@touch .initialized
 	@echo Initialized `pwd` successfully
 
@@ -28,14 +29,15 @@ mirror.conf: .initialized ## Set up the mirror.conf file
 vmware.conf: ## Use VMW vCenter or ESXi to create cluster
 	@[ -s ../vmware.conf ] && ln -s ../vmware.conf || true
 
-aba.conf:  ## Create and edit the aba conf file
-	cp templates/aba.conf .
-	$(EDITOR) aba.conf
+cluster.conf:  ## Create and edit the cluster.conf file
+	scripts/create-cluster-conf.sh 
+	#cp templates/cluster.conf .
+	#$(EDITOR) cluster.conf
 
-install-config.yaml: .initialized vmware.conf aba.conf mirror.conf  ## Create the agent-based config file based on the aba.conf file
+install-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file
 	scripts/create-install-config.sh $(debug)
 
-agent-config.yaml: .initialized vmware.conf aba.conf mirror.conf  ## Create the agent-based config file based on the aba.conf file
+agent-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file
 	scripts/create-agent-config.sh $(debug)
 
 # The following "auto" targets are meant just for the full end-to-end automation, to build a cluster
@@ -123,5 +125,5 @@ clean: ## Clean up
 
 .PHONEY: distclean
 distclean: clean ## Clean up everything
-	rm -f aba.conf mirror.conf vmware.conf
+	rm -f cluster.conf mirror.conf vmware.conf
 

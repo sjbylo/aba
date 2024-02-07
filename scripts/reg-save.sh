@@ -6,6 +6,7 @@
 
 umask 077
 
+source aba.conf
 source mirror.conf
 
 mkdir -p save
@@ -13,8 +14,8 @@ mkdir -p save
 # Generate first imageset-config file for saving images.  
 # Do not overwrite the file. Allow users to add images and operators to imageset-config-save.yaml and run "make save" again. 
 if [ ! -s save/imageset-config-save.yaml ]; then
-	export ocp_ver=$ocp_target_ver
-	export ocp_ver_major=$(echo $ocp_target_ver | cut -d. -f1-2)
+	export ocp_ver=$ocp_version
+	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 	echo Generating save/imageset-config-save.yaml to save images to local disk ...
 	scripts/j2 ./templates/imageset-config-save.yaml.j2 > save/imageset-config-save.yaml 

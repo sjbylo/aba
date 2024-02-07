@@ -13,8 +13,9 @@ do
 		shift 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		shift 
-		echo $1 | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" > target-ocp-version.conf
-		target_ver=$(cat target-ocp-version.conf)
+		ver=$(echo $1 | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
+		sed -i "s/ocp_version=.*/ocp_version=$ver/g" aba.conf
+		target_ver=$ver
 		shift 
 		auto_ver=1
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
@@ -63,7 +64,6 @@ if [ ! "$auto_ver" ]; then
 	echo    "Which version of OpenShift do you want to install?"
 
 	target_ver=
-	#while ! echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"
 	while true
 	do
 		# Exit loop if release version exists
@@ -75,11 +75,8 @@ if [ ! "$auto_ver" ]; then
 			fi
 		fi
 
-		#[ "$stable_ver" ] && echo -e "OpenShift latest stable version is: \t\t\t$stable_ver (s)" && or_s="or $stable_ver (s) "
-		#[ "$stable_ver_point" ] && echo -e "OpenShift latest stable (prev) version is: \t\t$stable_ver_prev (p)" && or_p="or $stable_ver_prev (p) "
 		[ "$stable_ver" ] && or_s="or $stable_ver (latest) "
 		[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (previous) "
-		#[ "$cur_ver" ] && echo -e "Current installed version of 'openshift-install' is: \t$cur_ver"
 
 		echo -n "Enter version $or_s$or_p$or_ret(l/p/<version>/Enter) [$default_ver]: "
 
@@ -89,14 +86,13 @@ if [ ! "$auto_ver" ]; then
 		[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev
 	done
 
-	echo "$target_ver" > target-ocp-version.conf
+	sed -i "s/ocp_version=.*/ocp_version=$target_ver/g" aba.conf
+	#echo "$target_ver" > target-ocp-version.conf # FIXME to delete
 
 fi
 
 # make is needed below
 rpm --quiet -q make || sudo dnf install make -y >/dev/null 2>&1
-
-### make -C cli ~/bin/govc 
 
 ############
 # vmware.conf
@@ -111,7 +107,8 @@ fi
 ### FIXME  is this needed?  # sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl -y >/dev/null 2>&1
 
 # Set up the CLIs
-make -C cli ocp_target_ver=$target_ver 
+make -C cli 
+
 
 if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then
 	############

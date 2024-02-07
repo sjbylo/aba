@@ -5,7 +5,9 @@
 cd `dirname $0`
 cd ..
 
-make distclean 
+> mirror/mirror.conf
+#make distclean 
+make -C mirror distclean 
 #make uninstall clean 
 
 ./aba --version 4.14.9 --vmw ~/.vmware.conf 
@@ -19,7 +21,7 @@ install_cluster() {
 	mkdir -p $1
 	#ln -fs ../templates $1
 	ln -fs ../templates/Makefile $1/Makefile
-	cp templates/aba-$1.conf $1/aba.conf
+	scripts/j2 templates/cluster-$1.conf > $1/cluster.conf
 	make -C $1 
 	echo $1 completed
 	make -C $1 delete  # delete to free up disk space!
@@ -43,11 +45,12 @@ install_all_clusters() {
 set -x
 
 
-ver=$(cat ./target-ocp-version.conf)
+#### ver=$(cat ./target-ocp-version.conf)
+source ./aba.conf
 
 # Copy and edit mirror.conf 
-cp -f templates/mirror.conf mirror/
-sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror/mirror.conf
+scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
+### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
 
 # Various mirror tests:
 
@@ -89,7 +92,8 @@ make -C mirror uninstall
 
 # Copy and edit mirror.conf 
 #cp -f templates/mirror.conf mirror/
-#sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror/mirror.conf
+#scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
+#sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
 
 # Various mirror tests:
 
@@ -140,7 +144,7 @@ echo "===> Test save/load complete "
 rm -rf compact 
 mkdir compact 
 ln -s ../templates/Makefile compact
-cp templates/aba-compact.conf compact/aba.conf
+scripts/j2 templates/cluster-compact.conf > compact/cluster.conf
 make -C compact iso 
 
 echo "===> Test no vmware complete "

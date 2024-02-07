@@ -12,7 +12,8 @@ install_cluster() {
 	mkdir -p $1
 	#ln -fs ../templates $1
 	ln -fs ../templates/Makefile $1/Makefile
-	cp templates/aba-$1.conf $1/aba.conf
+	#cp templates/cluster-$1.conf $1/cluster.conf
+	scripts/j2 templates/cluster-$1.conf > $1/cluster.conf
 	make -C $1 
 	echo $1 completed
 }
@@ -32,12 +33,17 @@ cd ..  # Change into "aba" dir
 ######################
 # Set up test 
 
-make distclean 
+set -x
+
+source aba.conf
+##scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
+
+> mirror/mirror.conf
+#make distclean 
+make -C mirror distclean 
 #make uninstall clean 
 
 ./aba --version 4.14.9 --vmw ~/.vmware.conf 
-ver=$(cat ./target-ocp-version.conf)
-### [ -s mirror/mirror.conf ] && touch mirror/mirror.conf
 
 # Be sure this file exists
 make -C test mirror-registry.tar.gz
@@ -49,8 +55,9 @@ set -x
 
 #################################
 # Copy and edit mirror.conf 
-cp -f templates/mirror.conf mirror/
-sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ver/g" ./mirror/mirror.conf
+#cp -f templates/mirror.conf mirror/
+scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
+### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
 
 ## test the internal bastion (registry2.example.com) as mirror
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
@@ -145,7 +152,9 @@ END
 
 make -C mirror save 
 ### make rsync ip=$bastion2 # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
-rsync aba/mirror/save/mirror_seq*_*.tar $bastion2:aba/mirror/save 
+pwd
+#rsync --progress --partial --times -avz mirror/save/mirror_seq*_*.tar $bastion2:aba/mirror/save 
+rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 ### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
 
@@ -171,7 +180,8 @@ END
 
 make -C mirror save 
 ### make rsync ip=$bastion2  # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
-rsync aba/mirror/save/mirror_seq*_*.tar $bastion2:aba/mirror/save 
+pwd
+rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 ### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
 

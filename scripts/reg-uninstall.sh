@@ -4,6 +4,7 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
+source aba.conf
 source mirror.conf
 
 if [ -s reg-uninstall.sh ]; then

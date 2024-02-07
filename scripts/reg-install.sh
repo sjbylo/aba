@@ -6,6 +6,7 @@ source scripts/include_all.sh
 
 umask 077
 
+source aba.conf
 source mirror.conf
 
 export reg_url=https://$reg_host:$reg_port

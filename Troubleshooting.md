@@ -45,7 +45,7 @@ If the image cannot be pulled from the registry:
 ```
 unauthorized: access to the requested resource is not authorized
 ```
-- Check the pull-secret, the root CA cert, the registry hostname and port in the mirror.conf and aba.conf files. 
+- Check the pull-secret, the root CA cert, the registry hostname and port in the mirror.conf and cluster.conf files. 
 
 Be sure the InfraEnv is properly set:
 

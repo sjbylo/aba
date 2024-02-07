@@ -5,6 +5,7 @@
 
 [ "$1" ] && set -x
 
+source cluster.conf
 source aba.conf
 source mirror.conf
 [ -s vmware.conf ] && source vmware.conf
@@ -44,9 +45,9 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 	fi
 else
 	#echo WARNING: No mirror registry pull secret file found at regcreds/pull-secret-mirror.json.  Trying to use ./pull-secret.json.
-	if [ -s $pull_secret_file ]; then
-		export pull_secret=$(cat $pull_secret_file)
-		echo Found pull secret file at $pull_secret_file
+	if [ -s ~/.pull-secret.json ]; then
+		export pull_secret=$(cat ~/.pull-secret.json)
+		echo Found pull secret file at ~/.pull-secret.json
 	else
 		echo "Error: No pull secrets found. Aborting!" 
 		exit 1

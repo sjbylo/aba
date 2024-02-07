@@ -5,7 +5,7 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
-#[ -s mirror/mirror.conf ] && source mirror/mirror.conf || source mirror.conf
+source aba.conf
 source mirror.conf
 
 release_sha=$(openshift-install version| grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")

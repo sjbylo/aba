@@ -7,6 +7,7 @@
 
 umask 077
 
+source aba.conf
 source mirror.conf
 
 # This is the pull secret for RH registry
@@ -14,10 +15,10 @@ source mirror.conf
 
 #if [ -s $pull_secret_mirror_file ]; then
 #	echo Using $pull_secret_mirror_file ...
-#elif [ -s $pull_secret_file ]; then
+#elif [ -s ~/.pull-secret.json ]; then
 #	:
 #else
-#	echo "Error: Your pull secret file [$pull_secret_file] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
+#	echo "Error: Your pull secret file [~/.pull-secret.json] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 #fi
 
 mkdir -p ~/.docker ~/.containers
@@ -32,9 +33,9 @@ mkdir -p ~/.docker ~/.containers
 ##fi
 
 # If the Red Hat creds are available merge them 
-if [ -s regcreds/pull-secret-mirror.json -a -s $pull_secret_file ]; then
+if [ -s regcreds/pull-secret-mirror.json -a -s ~/.pull-secret.json ]; then
 	# Merge the two files
-	jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json $pull_secret_file > ./regcreds/pull-secret-full.json
+	jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json ~/.pull-secret.json > ./regcreds/pull-secret-full.json
 
 	cp ./regcreds/pull-secret-full.json ~/.docker/config.json
 	cp ./regcreds/pull-secret-full.json ~/.containers/auth.json
@@ -45,8 +46,8 @@ elif [ -s regcreds/pull-secret-mirror.json ]; then
 	cp ./regcreds/pull-secret-mirror.json ~/.containers/auth.json
 else
 	# Just use the Red Hat pull secret file
-	echo Configuring ~/.docker/config.json and ~/.containers/auth.json with Red Hat pull secret $pull_secret_file ...
-	cp $pull_secret_file ~/.docker/config.json
-	cp $pull_secret_file ~/.containers/auth.json  
+	echo Configuring ~/.docker/config.json and ~/.containers/auth.json with Red Hat pull secret ~/.pull-secret.json ...
+	cp ~/.pull-secret.json ~/.docker/config.json
+	cp ~/.pull-secret.json ~/.containers/auth.json  
 fi
 
