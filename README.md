@@ -75,7 +75,7 @@ To set the version of OpenShift to install and, if needed, to download identical
 ./aba 
 ```
 
-Note that this command will create the 'aba.conf' file which contains some values that you will want to change, e.g. your domain name, your network address etc.
+Note that this command will create the 'aba.conf' file which contains some values that you will *want to change*, e.g. your domain name, your network address etc.
 
 Now, continue with either 'Connected mode' or 'Disconnected mode' below. 
 
