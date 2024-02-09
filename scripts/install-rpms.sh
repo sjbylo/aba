@@ -9,6 +9,6 @@ do
 	echo "Installing required rpms $rpms ..."
 	sudo dnf install $rpms -y >> .dnf-install.log 2>&1
 	echo "Installed rpms"
-	return 
+	break 
 done
 
