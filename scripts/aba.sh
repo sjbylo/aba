@@ -14,7 +14,7 @@ do
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		shift 
 		ver=$(echo $1 | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
-		sed -i "s/ocp_version=.*/ocp_version=$ver/g" aba.conf
+		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver/g" aba.conf
 		target_ver=$ver
 		shift 
 		auto_ver=1
@@ -86,7 +86,8 @@ if [ ! "$auto_ver" ]; then
 		[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev
 	done
 
-	sed -i "s/ocp_version=.*/ocp_version=$target_ver/g" aba.conf
+	#sed -i "s/ocp_version=.*/ocp_version=$target_ver/g" aba.conf
+	sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver/g" aba.conf
 	#echo "$target_ver" > target-ocp-version.conf # FIXME to delete
 
 fi

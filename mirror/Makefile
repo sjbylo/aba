@@ -71,7 +71,9 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 	curl --progress-bar -OL \
 	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
-mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
+# mirror,.conf no longer depeneds on aba.conf 
+#mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
+mirror.conf:                                               ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 install: init mirror.conf mirror-registry .installed   ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
