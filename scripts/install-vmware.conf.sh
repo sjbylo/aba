@@ -1,6 +1,8 @@
 #!/bin/bash 
 # Install and edit the vmware (govc) conf file
 
+source scripts/include_all.sh
+
 if [ ! -s vmware.conf ]; then
 	echo
 	echo "Do you want to install OpenShift onto vSphere or ESXi?"
