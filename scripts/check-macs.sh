@@ -1,6 +1,6 @@
 #!/bin/bash 
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh

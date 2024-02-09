@@ -22,7 +22,7 @@ Use aba if you want to get OpenShift up and running quickly without having to st
 - **Private subnet** (optional)
 - **One or two Bastion hosts**
   - A RHEL host or VM 
-  - One bastion with Internet access
+  - One bastion (or laptop) with Internet access
   - User account with sudo configured (with root access). 
   - 50G or more of disk space in your home directory.  Much more space is required if Operators are intended to be installed. 
   - Internet access from your bastion to download the container images and RPMs. 
@@ -62,7 +62,7 @@ Use aba if you want to get OpenShift up and running quickly without having to st
      - Copy your existing registry's credential files (pull secret and root CA) into the 'mirror/regcreds' directory, e.g.:
        - mirror/regcreds/pull-secret-mirror.json   (pull secret file for your registry)
        - mirror/regcreds/rootCA.pem                (root CA file for your registry) 
-     - Later, when the boot ISO is created, these files will be used. 
+     - Later, when the images are pushed to the registry, these files will be used. 
 - **Finally**
    - run the ./aba command to initialize the installation process (see 'Getting Started' below).
 

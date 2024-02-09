@@ -4,8 +4,8 @@ source scripts/include_all.sh
 
 umask 077
 
-source aba.conf
-source mirror.conf
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
 
 ### # Can the registry mirror already be reached?
 ### [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use

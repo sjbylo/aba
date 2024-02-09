@@ -1,14 +1,14 @@
 #!/bin/bash 
 # Find the available pull secrets and place them in the right locations: ~/.docker ~/.containers
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
 umask 077
 
-source aba.conf
-source mirror.conf
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
 
 # This is the pull secret for RH registry
 #pull_secret_mirror_file=pull-secret-mirror.json

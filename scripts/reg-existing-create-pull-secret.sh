@@ -1,7 +1,11 @@
 #!/bin/bash -e
 
-source aba.conf
-source mirror.conf
+source scripts/include_all.sh
+
+[ "$1" ] && set -x
+
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
 
 read -p "Enter username [init]: " reg_user
 #read reg_user

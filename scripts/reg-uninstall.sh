@@ -4,8 +4,8 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
-source aba.conf
-source mirror.conf
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
 
 if [ -s reg-uninstall.sh ]; then
 	echo Uninstalling mirror registry from host $reg_host ...

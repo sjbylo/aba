@@ -1,7 +1,7 @@
 #!/bin/bash 
 # This script extracts the needed values from the agent-config.yaml and the install-config.yaml files.
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 #[ ! "$1" ] && echo "Usage: `basename $0` <directory>" && exit 1
 

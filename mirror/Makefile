@@ -8,7 +8,7 @@ help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 .PHONY: sync
-sync: init ~/.pull-secret.json install ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
+sync: init ~/.pull-secret.json install     ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
@@ -19,7 +19,8 @@ sync: init ~/.pull-secret.json install ## Sync images from the Internet directly
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: save
-save: init mirror.conf ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
+#save: init mirror.conf ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
+save: init             ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
 	###
 	### Save images from the Internet to local disk 
 	###
@@ -69,13 +70,12 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 	curl --progress-bar -OL \
 	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
-#mirror.conf:           templates/mirror.conf ../aba.conf ## Configure the mirror.conf file.
-# FIXME: If target-ocp-version.conf updates, change the version also in mirror.conf?
-mirror.conf:                                 ../aba.conf ## Configure the mirror.conf file.
+mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
-install: init mirror.conf mirror-registry .installed ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
+install: init mirror.conf mirror-registry .installed   ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 .installed: 
+	#@test ! -f .uninstalled && exit 0
 	$(SCRIPTS)/reg-install.sh $(debug) 
 	@rm -f .uninstalled 
 	@touch .installed
@@ -90,12 +90,10 @@ verify: init
 	@rm -f .uninstalled 
 	@touch .installed
 
-uninstall: init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
+#uninstall: init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
+uninstall: init             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
 .uninstalled: 
-	###
-	### Uninstall Quay Mirror
-	###
-	@test -f .installed || exit 0
+	#@test ! -f .installed && exit 0
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	@rm -f .installed
 	@touch .uninstalled

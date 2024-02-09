@@ -1,11 +1,11 @@
 #!/bin/bash 
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 umask 077
 
-source aba.conf
-source mirror.conf
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
 
 if [ -s save/mirror_seq1_000000.tar ]; then
 	echo 

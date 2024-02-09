@@ -7,43 +7,39 @@
 # Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses rsync to copy over the aba repo. 
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
-install_cluster() {
-	rm -rf $1
-	mkdir -p $1
-	#ln -fs ../templates $1
-	ln -fs ../templates/Makefile $1/Makefile
-	#cp templates/cluster-$1.conf $1/cluster.conf
-	scripts/j2 templates/cluster-$1.conf > $1/cluster.conf
-	make -C $1 
-	echo $1 completed
-}
-
-install_all_clusters() {
-	for c in $@
-	do
-		echo Runtest: creating cluster $c
-		install_cluster $c
-		make -C $c delete
-	done
-}
-
+source scripts/include_all.sh
 cd `dirname $0`
 cd ..  # Change into "aba" dir
+[ -f test/test.log ] && mv test/test.log test/test.log.bak
+
+mylog() {
+	echo $*
+	echo $* >> test/test.log
+}
+
+mylog
+mylog "===> Starting test $0"
+mylog
+
+#> test/test.log
+
+set -x
 
 ######################
 # Set up test 
 
-set -x
-
-source aba.conf
+source <(normalize-aba-conf)
 ##scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 > mirror/mirror.conf
 #make distclean 
 make -C mirror distclean 
+rm -rf sno compact standard 
 #make uninstall clean 
 
-./aba --version 4.14.9 --vmw ~/.vmware.conf 
+v=4.14.9
+./aba --version $v --vmw ~/.vmware.conf 
+mylog aba..conf configured for $v and vmware.conf
 
 # Be sure this file exists
 make -C test mirror-registry.tar.gz
@@ -51,22 +47,19 @@ make -C test mirror-registry.tar.gz
 bastion2=10.0.1.6
 p=22222
 
-set -x
-
 #################################
 # Copy and edit mirror.conf 
-#cp -f templates/mirror.conf mirror/
-scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
-### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
 
-## test the internal bastion (registry2.example.com) as mirror
+scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
+
+mylog "Test the internal bastion (registry2.example.com) as mirror"
+
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf
 #################################
 
-echo
-echo Revert a snapshot and power on the internal bastion vm
-echo
+mylog Revert a snapshot and power on the internal bastion vm
+
 (
 	. vmware.conf
 	govc snapshot.revert -vm bastion2-internal-rhel8 Latest
@@ -79,66 +72,59 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 2
 ssh $(whoami)@registry2.example.com -- "date" || sleep 3
 ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 
-### echo
-### echo Install 'existing' reg on bastion2
-### echo
-### test/reg-test-install-remote.sh registry2.example.com
+mylog done
 
-echo
-echo Running make save
-echo
-### rm -rf mirror/save  
+mylog "Running 'make save'"
+
 make save
 
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
+mylog Configure internal bastion with rsync and make
+
 # If the VM snapshot is reverted, as above, no need to delete old files
 ssh $(whoami)@$bastion2 -- "rm -rf ~/bin/* ~/aba"
 
-echo Configure bastion2 for testing, install make and rsync ...
+mylog Configure bastion2 for testing, install make and rsync ...
 ssh $(whoami)@$bastion2 "rpm -q make  || sudo yum install make rsync -y"
 ssh $(whoami)@$bastion2 "rpm -q rsync || sudo yum install make rsync -y"
 
 # Install rsync on localhost
 rpm -q rsync || sudo yum install rsync -y 
 
-# Sync files to instenal bastion
+mylog Sync files to instenal bastion ...
 make rsync ip=$bastion2
-
-# Do not copy over '.rpms' since they also need to be installed on the internal bastion
 
 ### echo "Install the reg creds, simulating a manual config" 
 ### ssh $(whoami)@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
 ### ssh $(whoami)@$bastion2 -- "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
 
-### # Verify registry working 
-### ssh $(whoami)@registry2.example.com -- "cd aba/mirror && make verify"  # FIXME, is this the correct process for 'existing' reg?
-
 ######################
-echo
-echo Runtest: START - airgap
-echo
+mylog Runtest: START - airgap
 
-echo
-echo "Running 'make load sno' on internal bastion"
-echo
+mylog "Running 'make load' on internal bastion"
+
 ssh $(whoami)@$bastion2 -- "sudo dnf install make -y" 
 ssh $(whoami)@$bastion2 -- "make -C aba load" 
-#ssh $(whoami)@$bastion2 -- "make -C aba/sno upload"   # Just test until iso upload
+
+mylog "Running 'make sno' on internal bastion"
+
+ssh $(whoami)@$bastion2 -- "rm -rf aba/sno" 
 ssh $(whoami)@$bastion2 -- "make -C aba sno" 
 
-echo "===> Test 'air gapped' complete "
+ssh $(whoami)@$bastion2 -- "make -C aba/sno cmd" 
+
+mylog "===> Test 'air gapped' complete "
 
 ######################
-# Now simulate adding more images to the mirror registry
+mylog Now simulate adding more images to the mirror registry
 ######################
 
-echo
-echo Runtest: vote-app
-echo
+mylog Runtest: vote-app
 
-echo Edit imageset conf file test
+mylog Edit imageset conf file test
+
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
@@ -150,25 +136,31 @@ END
 ### scp $(whoami)@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
 ### make -C mirror verify 
 
+mylog Run make save on external bastion
 make -C mirror save 
+
+mylog rsync save/ dir to internal bastion
+
 ### make rsync ip=$bastion2 # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
 pwd
 #rsync --progress --partial --times -avz mirror/save/mirror_seq*_*.tar $bastion2:aba/mirror/save 
 rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 ### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
+
+mylog Run make load on internal bastion
+
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
 
 ######################
 
 ssh $(whoami)@$bastion2 -- aba/test/deploy-test-app.sh
 
-echo "===> Test 'vote-app' complete "
+mylog "===> Test 'vote-app' complete "
 
-echo
-echo Runtest: operator
-echo
+mylog Runtest: operator
 
-echo Edit imageset conf file test
+mylog Edit imageset conf file test as operator
+
 cat >> mirror/save/imageset-config-save.yaml <<END
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.14
@@ -178,21 +170,27 @@ cat >> mirror/save/imageset-config-save.yaml <<END
         - name: release-2.9
 END
 
+mylog Run make save on external bastion
+
 make -C mirror save 
+
+mylog rsync save/ dir to internal bastion
+
 ### make rsync ip=$bastion2  # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
 pwd
 rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 ### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
+
+mylog Run make load on external bastion
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
 
-echo "===> Test 'operator' complete "
+mylog "===> Test 'operator' complete "
 
 ssh $(whoami)@$bastion2 -- "make -C aba/sno delete" 
 
 ######################
-echo Cleanup test
+mylog Cleanup test
 
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror uninstall"
-### test/reg-test-uninstall-remote.sh
 
-echo "===> Test complete "
+mylog "===> Test $0 complete "

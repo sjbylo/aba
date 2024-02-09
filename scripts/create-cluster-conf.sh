@@ -1,9 +1,9 @@
 #!/usr/bin/bash 
 # Script to set up the cluster.conf file
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
-source aba.conf
+source <(normalize-aba-conf)
 
 if [ ! "$ocp_version" ]; then
 	echo "Please run ./aba first!"

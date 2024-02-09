@@ -26,8 +26,35 @@ else
 fi
 
 # Tar up the needed files, exclude what's not needed and bulky
+#tar czf $dest \
+#	$(find bin aba -type f \
+#		! -path "aba/.git*" -a \
+#		! -path "aba/cli/*" -a \
+#		! -path "aba/mirror/mirror-registry" -a \
+#		! -path "aba/mirror/.initialized" \
+#		! -path "aba/mirror/.rpms" \
+#		! -path "aba/mirror/.installed" \
+#		! -path "aba/mirror/.loaded" \
+#		! -path "aba/mirror/execution-environment.tar" \
+#		! -path "aba/mirror/image-archive.tar" \
+#		! -path "aba/*/iso-agent-based*" \
+#	)
+
 tar czf $dest \
-	$(find bin aba -type f \
+	$(find \
+		bin \
+		aba/aba \
+		aba/aba.conf \
+		aba/Makefile \
+		aba/mirror \
+		aba/others \
+		aba/README.md \
+		aba/README-OTHER.md \
+		aba/scripts \
+		aba/templates \
+		aba/Troubleshooting.md \
+		aba/vmware.conf \
+	-type f \
 		! -path "aba/.git*" -a \
 		! -path "aba/cli/*" -a \
 		! -path "aba/mirror/mirror-registry" -a \
@@ -39,6 +66,7 @@ tar czf $dest \
 		! -path "aba/mirror/image-archive.tar" \
 		! -path "aba/*/iso-agent-based*" \
 	)
+
 
 # Note, avoid copying any large, unneeded files, e.g. any leftover ISO agent files and the mirror-registry .tar archives
 

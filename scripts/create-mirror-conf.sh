@@ -1,10 +1,10 @@
 #!/usr/bin/bash 
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
-source aba.conf
+source <(normalize-aba-conf)
 ### ver=$(cat ../target-ocp-version.conf)
 
 if [ ! "$ocp_version" ]; then

@@ -7,7 +7,7 @@ scripts/install-govc.sh
 [ "$1" ] && set -x
 
 if [ -s vmware.conf ]; then
-	source vmware.conf  # This is needed for $VMW_FOLDER
+	source <(normalize-vmware-conf)  # This is needed for $VMW_FOLDER
 else
 	echo "vmware.conf file not defined. Run 'make vmw' to create it if needed"
 	exit 0
