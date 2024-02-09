@@ -17,7 +17,7 @@ echo export MANEFEST_DIR=$MANEFEST_DIR
 echo export MANEFEST_SRC_DIR=$MANEFEST_SRC_DIR
 
 # This is only needed to know if the install is via vCenter or not (See VMW_FOLDER below)
-[ -s vmware.conf ] && . vmware.conf            # This is needed for $VMW_FOLDER
+[ -s vmware.conf ] && source <(normalize-vmware-conf)            # This is needed for $VMW_FOLDER
 
 ICONF=$MANEFEST_SRC_DIR/install-config.yaml  
 ICONF_TMP=/tmp/.install-config.yaml  
