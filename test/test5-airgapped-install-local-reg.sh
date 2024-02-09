@@ -61,7 +61,7 @@ sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 mylog Revert a snapshot and power on the internal bastion vm
 
 (
-	. vmware.conf
+	source <(normalize-vmware-conf)
 	govc snapshot.revert -vm bastion2-internal-rhel8 Latest
 	sleep 8
 	govc vm.power -on bastion2-internal-rhel8

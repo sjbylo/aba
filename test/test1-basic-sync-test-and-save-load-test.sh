@@ -30,7 +30,7 @@ make -C cli
 mylog Revert a snapshot and power on the internal bastion vm
 
 (
-	. vmware.conf
+	source <(normalize-vmware-conf)
 	govc snapshot.revert -vm bastion2-internal-rhel8 Latest
 	sleep 8
 	govc vm.power -on bastion2-internal-rhel8
@@ -68,7 +68,7 @@ mylog Install mirror
 
 make -C mirror install 
 
-. mirror/mirror.conf
+source <(normalize-mirror-conf)
 
 mylog "Mirror available at $reg_host:$reg_port"
 
@@ -142,7 +142,7 @@ rm -rf mirror/save   # The process will halt, otherwise with "You already have i
 ######
 
 
-. mirror/mirror.conf
+source <(normalize-mirror-conf)
 
 mylog "Mirror available at $reg_host:$reg_port"
 
