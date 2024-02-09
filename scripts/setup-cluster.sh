@@ -1,6 +1,10 @@
 #!/bin/bash -e
 
-source aba.conf   # Fetch the domain name
+source scripts/include_all.sh
+
+[ "$1" ] && set -x
+
+source <(normalize-aba-conf)   # Fetch the domain name
 
 mkdir $1   # If dir exists, exit
 ln -fs ../templates/Makefile $1/Makefile

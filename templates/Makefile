@@ -14,26 +14,27 @@ help: ## Help
 
 init: .initialized
 .initialized:
-	@ln -s ../templates
-	@ln -s ../scripts
-	@ln -s ../mirror
-	@ln -s ../aba.conf
+	@ln -fs ../templates
+	@ln -fs ../scripts
+	@ln -fs ../mirror
+	@ln -fs ../aba.conf
 	@touch .initialized
 	@echo Initialized `pwd` successfully
 
 mirror.conf: .initialized ## Set up the mirror.conf file
-	@ln -sf mirror/mirror.conf
+	@ln -fs mirror/mirror.conf
 	@touch mirror.conf
 	@echo Using `pwd`/mirror.conf file 
 
 vmware.conf: ## Use VMW vCenter or ESXi to create cluster
-	@[ -s ../vmware.conf ] && ln -s ../vmware.conf || true
+	@test -f ../vmware.conf && ln -s ../vmware.conf || true
 
 cluster.conf:  ## Create and edit the cluster.conf file
 	scripts/create-cluster-conf.sh 
 	#cp templates/cluster.conf .
 	#$(EDITOR) cluster.conf
 
+# Note that install-config.yaml can be configured with vSphere params (vmware.conf)
 install-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file
 	scripts/create-install-config.sh $(debug)
 

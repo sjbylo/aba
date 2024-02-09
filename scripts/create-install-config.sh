@@ -1,14 +1,14 @@
 #!/bin/bash 
 # Script to generate the install-config.yaml 
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
-source cluster.conf
-source aba.conf
-source mirror.conf
-[ -s vmware.conf ] && source vmware.conf
+source <(normalize-cluster-conf)
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
+[ -s vmware.conf ] && source <(normalize-vmware-conf)
 
 # Set the rendezvous_ip to the the first master's ip
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).

@@ -6,8 +6,10 @@ source scripts/include_all.sh
 
 umask 077
 
-source aba.conf
-source mirror.conf
+source <(normalize-aba-conf)
+#source <(cat aba.conf | sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g")
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
 
 export reg_url=https://$reg_host:$reg_port
 

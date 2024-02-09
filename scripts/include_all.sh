@@ -22,6 +22,58 @@ else
 	export editor=vi
 fi
 
+normalize-aba-conf() {
+	# Normalize or sanitize the config file
+	grep -q ^export aba.conf && cat aba.conf && return 0
+	cat aba.conf | \
+		cut -d"#" -f1 | \
+		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+			sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" | \
+			sed -e "s/^/export /g";
+}
+
+normalize-mirror-conf()
+{
+#	# Normalize or sanitize the config file
+	grep -q ^export mirror.conf && cat mirror.conf && return 0
+	cat mirror.conf | \
+		cut -d"#" -f1 | \
+		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+			sed -e "s/tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
+			sed -e "s/^/export /g";
+}
+
+normalize-cluster-conf()
+{
+#	# Normalize or sanitize the config file
+	grep -q ^export cluster.conf && cat cluster.conf && return 0
+	cat cluster.conf | \
+		cut -d"#" -f1 | \
+		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+			sed -e "s/tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
+			sed -e "s/^/export /g";
+}
+
+normalize-vmware-conf()
+{
+#	# Normalize or sanitize the config file
+	cat vmware.conf | \
+		cut -d"#" -f1 | \
+		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+			sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" | \
+			sed -e "s/^/export /g";
+}
+
+#normalize-mirror-conf() {
+#	# Normalize or sanitize the config file
+#	cat mirror.conf | \
+#		cut -d"#" -f1 | \
+#		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+#			sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" | \
+#			sed -e "s/^/export /g";
+#}
+
+
 install_rpm() {
 	rpmlist=
 	for rpm in $@

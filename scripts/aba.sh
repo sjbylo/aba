@@ -102,13 +102,8 @@ if [ ! "$auto_vmw" ]; then
 	fi
 fi
 
-# Install the main rpms that are needed
-# Now added to mirror/Makefile instead
-### FIXME  is this needed?  # sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl -y >/dev/null 2>&1
-
 # Set up the CLIs
 make -C cli 
-
 
 if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then
 	############

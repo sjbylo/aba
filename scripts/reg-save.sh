@@ -1,13 +1,13 @@
 #!/bin/bash 
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
 umask 077
 
-source aba.conf
-source mirror.conf
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
 
 mkdir -p save
 

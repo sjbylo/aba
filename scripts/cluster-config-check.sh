@@ -1,7 +1,7 @@
 #!/bin/bash 
 # This script checks to see if the needed values can be extracted from the agent-config.yaml and the install-config.yaml files.
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 export MANEFEST_SRC_DIR=.
 

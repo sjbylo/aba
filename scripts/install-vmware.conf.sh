@@ -20,7 +20,7 @@ if [ ! -s vmware.conf ]; then
 		exit 0
 	fi
 
-	source vmware.conf
+	source <(normalize-vmware-conf)
 
 	make -C cli ~/bin/govc 
 

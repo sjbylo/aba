@@ -55,7 +55,7 @@ load: ## Load the saved images into a registry on the internal bastion (as defin
 
 .PHONY: sno
 sno:  ## Install Single Node OpenShift
-	@mkdir -p sno
+	@mkdir sno || ( echo "Directory 'sno' already exists!" && exit 1 )
 	@ln -fs ../$(TEMPLATES)/Makefile sno/Makefile
 	@make -C sno init
 	scripts/create-cluster-conf.sh sno
@@ -63,7 +63,7 @@ sno:  ## Install Single Node OpenShift
 
 .PHONY: compact
 compact:  ## Install a compact 3-node OpenShift cluster 
-	@mkdir -p compact
+	@mkdir compact || ( echo "Directory 'compact' already exists!" && exit 1 )
 	@ln -fs ../$(TEMPLATES)/Makefile compact/Makefile
 	@make -C compact init
 	@scripts/create-cluster-conf.sh compact
@@ -71,7 +71,7 @@ compact:  ## Install a compact 3-node OpenShift cluster
 
 .PHONY: standard
 standard:  ## Install a standard 3+2-node OpenShift cluster 
-	@mkdir -p standard
+	@mkdir standard || ( echo "Directory 'standard' already exists!" && exit 1 )
 	@ln -fs ../$(TEMPLATES)/Makefile standard/Makefile
 	@make -C standard init
 	@scripts/create-cluster-conf.sh standard

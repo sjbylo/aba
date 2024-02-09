@@ -1,11 +1,11 @@
 #!/bin/bash 
 # Script to do some simple verification of install-config.yaml
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
-source cluster.conf
-source aba.conf
-source mirror.conf
+source <(normalize-cluster-conf)
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
 
 # Set the rendezvous_ip to the the first master's ip
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).

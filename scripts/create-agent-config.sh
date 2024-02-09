@@ -1,15 +1,15 @@
 #!/bin/bash 
 # Script to generate the agent-config.yaml file
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 
 #[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$1" ] && set -x 
 
-source cluster.conf
-source aba.conf
-source mirror.conf
+source <(normalize-cluster-conf)
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
 
 ####
 # Function to generate a random HEX digit
@@ -23,7 +23,7 @@ replace_hash_with_random_hex() {
     local output_string=""
 
     for ((i=0; i<${#input_string}; i++)); do
-        if [ "${input_string:i:1}" == "#" ]; then
+        if [ "${input_string:i:1}" == "x" ]; then
             output_string+=$(generate_random_hex)
         else
             output_string+="${input_string:i:1}"
