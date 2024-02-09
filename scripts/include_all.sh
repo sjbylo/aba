@@ -60,7 +60,6 @@ normalize-vmware-conf()
 	cat vmware.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
-			sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" | \
 			sed -e "s/^/export /g";
 }
 
