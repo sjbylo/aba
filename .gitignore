@@ -35,5 +35,5 @@ standard
 target-ocp-version.conf
 test/mirror-registry.tar.gz
 test/.ssh.conf
-test/test.log
+test/test.log*
 vmware.conf
