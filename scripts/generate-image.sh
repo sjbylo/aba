@@ -6,8 +6,8 @@ source scripts/include_all.sh
 echo ==================================================================	
 echo Cluster configuration
 echo =====================
-#scripts/cluster-config.sh | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t 
-scripts/cluster-config.sh | sed "s/^/  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t 
+scripts/cluster-config.sh | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t 
+#scripts/cluster-config.sh | sed "s/^/  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t 
 echo ==================================================================	
 eval `scripts/cluster-config.sh || exit 1`
 
