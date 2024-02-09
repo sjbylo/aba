@@ -17,12 +17,11 @@ if [ ! -s save/imageset-config-save.yaml ]; then
 	export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-	echo Generating save/imageset-config-save.yaml to save images to local disk ...
+	echo Generating save/imageset-config-save.yaml to save images to local disk for v$ocp_version and channel $ocp_channel ...
 	scripts/j2 ./templates/imageset-config-save.yaml.j2 > save/imageset-config-save.yaml 
-	#scripts/j2 ./templates/imageset-config.yaml.j2 > imageset-config.yaml 
 else
 	echo Using existing save/imageset-config-save.yaml
-	#echo Using existing imageset-config.yaml
+	echo "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make save' again."
 fi
 
 echo 
@@ -34,10 +33,9 @@ echo
 # Set up script to help for manual re-sync
 # --continue-on-error  needed when mirroring operator images
 echo "cd save && oc mirror --continue-on-error --config=./imageset-config-save.yaml file://." > save-mirror.sh && chmod 700 save-mirror.sh 
-#echo "cd save && oc mirror --config=./imageset-config.yaml file://save" > save-mirror.sh && chmod 700 save-mirror.sh 
 cat ./save-mirror.sh
 
-##### rm -rf save/   # Allow user to add more image sets (e.g. for adding operators or image updates) to the archive 
+# rm -rf save/   # Allow user to add more image sets (e.g. for adding operators or image updates) to the archive 
 
 ./save-mirror.sh
 

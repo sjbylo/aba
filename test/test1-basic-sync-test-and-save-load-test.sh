@@ -68,7 +68,7 @@ mylog Install mirror
 
 make -C mirror install 
 
-source <(normalize-mirror-conf)
+source <(cd mirror;normalize-mirror-conf)
 
 mylog "Mirror available at $reg_host:$reg_port"
 
@@ -142,7 +142,7 @@ rm -rf mirror/save   # The process will halt, otherwise with "You already have i
 ######
 
 
-source <(normalize-mirror-conf)
+source <(cd mirror;normalize-mirror-conf)
 
 mylog "Mirror available at $reg_host:$reg_port"
 
@@ -187,10 +187,12 @@ rm -rf compact
 ### scripts/j2 templates/cluster-compact.conf > compact/cluster.conf
 
 # This needs to be made manuually, since we only want to run "make iso"
+source <(normalize-aba-conf)
 mylog "make -C compact iso"
 rm -rf compact
 mkdir  compact
 ln -s ../templates/Makefile compact/Makefile
+scripts/j2 templates/cluster-compact.conf > compact/cluster.conf
 make -C compact iso 
 mylog "make -C compact iso - done"
 

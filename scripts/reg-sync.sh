@@ -10,7 +10,7 @@ source <(normalize-mirror-conf)
 if [ -s save/mirror_seq1_000000.tar ]; then
 	echo 
 	echo "WARNING: You already have images saved on local disk in $PWD/save."
-	echo "         Sure you don't want to 'make load' them into the mirror registry at $reg_host?" &&
+	echo "         Sure you don't want to 'make load' them into the mirror registry at $reg_host?"
 	echo -n "         Enter Return to continue (sync) or Ctl-C to abort: "
 	read yn
 fi
@@ -23,7 +23,6 @@ echo pull_secret_file=~/.pull-secret.json
 if [ -s $pull_secret_mirror_file ]; then
 	echo Using $pull_secret_mirror_file ...
 elif [ -s ~/.pull-secret.json ]; then
-	#SB#ln -fs ./pull-secret.json pull-secret.json 
 	:
 else
 	echo "Error: Your pull secret file [~/.pull-secret.json] does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
@@ -33,7 +32,6 @@ export reg_url=https://$reg_host:$reg_port
 
 # Can the registry mirror already be reached?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
-#reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
 ##[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\blocalhost\b" || no_proxy=$no_proxy,localhost 		  # adjust if proxy in use
@@ -53,17 +51,16 @@ mkdir -p sync
 # Generate first imageset-config file for syncing images.  
 # Do not overwrite the file. Allow users to add images and operators to imageset-config-sync.yaml and run "make sync" again. 
 if [ ! -s sync/imageset-config-sync.yaml ]; then
-#if [ ! -s imageset-config.yaml ]; then
-	echo Generating sync/imageset-config-sync.yaml for oc-mirror ...
 	export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
+	echo Generating oc-mirror sync/imageset-config-sync.yaml for v$ocp_version and channel $ocp_channel ...
+
 	[ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
 	scripts/j2 ./templates/imageset-config-sync.yaml.j2 > sync/imageset-config-sync.yaml 
-	#scripts/j2 ./templates/imageset-config.yaml.j2 > imageset-config.yaml 
 else
 	echo Using existing sync/imageset-config-sync.yaml
-	#echo Using existing imageset-config.yaml
+	echo "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make sync' again."
 fi
 
 # This is needed since sometimes an existing registry may already be available
