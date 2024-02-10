@@ -1,5 +1,8 @@
 # Troubleshooting 
 
+If you see the error "Cannot initialize user in a non-empty database" when trying to insall Quay, this usually means that Quay files - from a previous installation - still exist 
+and should be deleted.  Delete any old files from ~/quay-install and try again.
+
 Try these commands to discover any problems with the installation of OCP using the Agent-based method.
 
 Ssh to the rendezvous server:

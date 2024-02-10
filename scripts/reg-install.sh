@@ -58,12 +58,12 @@ fi
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
 if [ "$reg_code" = "200" ]; then
-	echo "Quay registry found at $reg_host:$reg_port. "
 	echo
-	echo "If this registry is your existing registry, copy this registry's pull secret file and (optionally) root CA file into 'mirror/regcreds/'."
-	echo -n "See the README.md for instructions."
+	echo "Warning: Quay registry already exists at $reg_host:$reg_port. "
+	echo "         If you want to use this registry, copy this registry's pull secret file and (optionally) root CA file into 'mirror/regcreds/' and try again."
+	echo "         They must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
+	echo "         See the README.md for further instructions."
 	echo 
-	#read yn
 
 	exit 1
 fi
