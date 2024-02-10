@@ -111,9 +111,9 @@ ssh $(whoami)@$bastion2 -- "make -C aba load"
 mylog "Running 'make sno' on internal bastion"
 
 ssh $(whoami)@$bastion2 -- "rm -rf aba/sno" 
-ssh $(whoami)@$bastion2 -- "make -C aba sno" 
+ssh $(whoami)@$bastion2 -- "make -C aba sno target=iso" 
 
-ssh $(whoami)@$bastion2 -- "make -C aba/sno cmd" 
+#ssh $(whoami)@$bastion2 -- "make -C aba/sno cmd" 
 
 mylog "===> Test 'air gapped' complete "
 

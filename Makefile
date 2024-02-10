@@ -61,7 +61,7 @@ sno:  ## Install Single Node OpenShift
 	@ln -fs ../$(TEMPLATES)/Makefile sno/Makefile
 	@make -C sno init
 	scripts/create-cluster-conf.sh sno
-	@make -C sno
+	@make -C sno $(target)
 
 .PHONY: compact
 compact:  ## Install a compact 3-node OpenShift cluster 
@@ -69,7 +69,7 @@ compact:  ## Install a compact 3-node OpenShift cluster
 	@ln -fs ../$(TEMPLATES)/Makefile compact/Makefile
 	@make -C compact init
 	@scripts/create-cluster-conf.sh compact
-	@make -C compact
+	@make -C compact $(target)
 
 .PHONY: standard
 standard:  ## Install a standard 3+2-node OpenShift cluster 
@@ -77,7 +77,7 @@ standard:  ## Install a standard 3+2-node OpenShift cluster
 	@ln -fs ../$(TEMPLATES)/Makefile standard/Makefile
 	@make -C standard init
 	@scripts/create-cluster-conf.sh standard
-	@make -C standard
+	@make -C standard $(target)
 
 .PHONY: cluster
 cluster: ## Install an OpenShift cluster with your choice of topology, e.g. make cluster name=mycluster 

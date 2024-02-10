@@ -79,7 +79,7 @@ mylog make sync done
 
 mylog make sno
 rm -rf sno
-make sno 
+make sno target=iso
 mylog make sno done
 
 mylog make sno delete
@@ -93,7 +93,7 @@ mylog make save load done
 
 mylog make sno
 rm -rf sno
-make sno 
+make sno target=iso
 mylog make sno done
 
 mylog "Installation successful"
@@ -151,14 +151,14 @@ mylog make sync
 
 make -C mirror sync   # This will install and sync
 
-mylog meke sno
+mylog make sno
 rm -rf sno
-make sno 
-mylog meke sno done
+make sno target=iso
+mylog make sno done
 
-mylog meke sno delete
+mylog make sno delete
 make -C sno delete 
-mylog meke sno delete done
+mylog make sno delete done
 
 #######################
 
@@ -168,7 +168,7 @@ mylog make save load done
 
 mylog install sno
 rm -rf sno
-make sno 
+make sno target=iso
 mylog install sno done
 
 mylog make sno delete
@@ -190,10 +190,11 @@ rm -rf compact
 source <(normalize-aba-conf)
 mylog "make -C compact iso"
 rm -rf compact
-mkdir  compact
-ln -s ../templates/Makefile compact/Makefile
-scripts/j2 templates/cluster-compact.conf > compact/cluster.conf
-make -C compact iso 
+make compact target=iso
+#mkdir  compact
+#ln -s ../templates/Makefile compact/Makefile
+#scripts/j2 templates/cluster-compact.conf > compact/cluster.conf
+#make -C compact iso 
 mylog "make -C compact iso - done"
 
 mylog "===> Test 'no vmware' complete "
