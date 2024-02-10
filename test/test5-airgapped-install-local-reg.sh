@@ -10,7 +10,6 @@
 source scripts/include_all.sh
 cd `dirname $0`
 cd ..  # Change into "aba" dir
-[ -f test/test.log ] && mv test/test.log test/test.log.bak
 
 mylog() {
 	echo $*
@@ -75,7 +74,6 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 mylog done
 
 mylog "Running 'make save'"
-
 make save
 
 # Smoke test!
@@ -93,7 +91,7 @@ ssh $(whoami)@$bastion2 "rpm -q rsync || sudo yum install make rsync -y"
 # Install rsync on localhost
 rpm -q rsync || sudo yum install rsync -y 
 
-mylog Sync files to instenal bastion ...
+mylog rsync files to instenal bastion ...
 make rsync ip=$bastion2
 
 ### echo "Install the reg creds, simulating a manual config" 
@@ -151,6 +149,8 @@ mylog Run make load on internal bastion
 
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
 
+ssh $(whoami)@$bastion2 -- "make -C aba/sno"
+
 ######################
 
 ssh $(whoami)@$bastion2 -- aba/test/deploy-test-app.sh
@@ -194,3 +194,5 @@ mylog Cleanup test
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror uninstall"
 
 mylog "===> Test $0 complete "
+
+[ -f test/test.log ] && cp test/test.log test/test.log.bak

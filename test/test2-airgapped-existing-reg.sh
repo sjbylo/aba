@@ -10,7 +10,6 @@
 source scripts/include_all.sh
 cd `dirname $0`
 cd ..  # Change into "aba" dir
-[ -f test/test.log ] && mv test/test.log test/test.log.bak
 
 mylog() {
 	echo $*
@@ -69,10 +68,12 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 2
 ssh $(whoami)@registry2.example.com -- "date" || sleep 3
 ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 
-mylog Install 'existing' reg on bastion2
+sudo mount -o remount,size=6G /tmp   # Needed for "make save" when Operators need to be saved
+
+mylog "Install 'existing' reg on bastion2"
 test/reg-test-install-remote.sh registry2.example.com
 
-mylog Running make save
+mylog make save
 rm -rf mirror/save  
 make save
 
@@ -90,6 +91,7 @@ ssh $(whoami)@$bastion2 "rpm -q rsync || sudo yum install make rsync -y"
 # Install rsync on localhost
 rpm -q rsync || sudo yum install rsync -y 
 
+mylog sync files
 # Sync files to instenal bastion
 make rsync ip=$bastion2
 
@@ -103,8 +105,10 @@ ssh $(whoami)@$bastion2 -- "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/
 mylog Runtest: START - airgap
 
 mylog "Running 'make load sno' on internal bastion"
+mylog make load
 ssh $(whoami)@$bastion2 -- "make -C aba load" 
 #ssh $(whoami)@$bastion2 -- "make -C aba/sno upload"   # Just test until iso upload
+mylog make sno target=iso
 ssh $(whoami)@$bastion2 -- "rm -rf aba/sno" 
 ssh $(whoami)@$bastion2 -- "make -C aba sno target=iso" 
 
@@ -119,6 +123,7 @@ mylog "===> Test 'air gapped' complete "
 mylog Runtest: vote-app
 
 mylog Edit imageset conf file test
+
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
@@ -130,13 +135,25 @@ END
 ### scp $(whoami)@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
 ### make -C mirror verify 
 
+mylog make save
 make -C mirror save 
+
+mylog make rsync
 make rsync ip=$bastion2
+
+mylog make load
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
+mylog make verify
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
+
+mylog make sno
+ssh $(whoami)@$bastion2 -- "make -C aba/sno"
+mylog make cmd
+ssh $(whoami)@$bastion2 -- "make -C aba/sno cmd"
 
 ######################
 
+mylog aba/test/deploy-test-app.sh on internal bastion
 ssh $(whoami)@$bastion2 -- aba/test/deploy-test-app.sh
 
 mylog "===> Test 'vote-app' complete "
@@ -144,6 +161,7 @@ mylog "===> Test 'vote-app' complete "
 mylog Runtest: operator
 
 mylog Edit imageset conf file test
+
 cat >> mirror/save/imageset-config-save.yaml <<END
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.14
@@ -174,6 +192,9 @@ ssh $(whoami)@$bastion2 -- "make -C aba/sno delete"
 ######################
 mylog Cleanup test
 
+mylog uninstall 
 test/reg-test-uninstall-remote.sh
 
 mylog "===> Test $0 complete "
+
+[ -f test/test.log ] && cp test/test.log test/test.log.bak

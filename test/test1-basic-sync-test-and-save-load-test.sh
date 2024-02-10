@@ -5,7 +5,6 @@
 source scripts/include_all.sh
 cd `dirname $0`
 cd ..
-[ -f test/test.log ] && mv test/test.log test/test.log.bak
 
 mylog() {
 	echo $*
@@ -203,4 +202,6 @@ mylog Tidy up mirror
 make -C mirror uninstall 
 
 mylog "===> Test $0 complete "
+
+[ -f test/test.log ] && cp test/test.log test/test.log.bak
 
