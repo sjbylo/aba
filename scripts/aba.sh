@@ -87,7 +87,7 @@ if [ ! "$auto_ver" ]; then
 	done
 
 	#sed -i "s/ocp_version=.*/ocp_version=$target_ver/g" aba.conf
-	sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver/g" aba.conf
+	sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
 	#echo "$target_ver" > target-ocp-version.conf # FIXME to delete
 
 fi

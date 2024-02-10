@@ -2,7 +2,7 @@
 
 source scripts/include_all.sh
 
-[ "$1" ] && set -x
+#[ "$1" ] && set -x
 
 source <(normalize-aba-conf)   # Fetch the domain name
 
