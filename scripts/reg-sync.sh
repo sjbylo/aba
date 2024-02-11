@@ -68,8 +68,10 @@ fi
 
 [ ! "$reg_root" ] && reg_root=$HOME/quay-install
 
+# FIXME: is this true for existing registry?!
 echo
 echo "Now mirroring the images."
+echo "Now loading the images to the registry $reg_host:$reg_port/$reg_path. "
 echo "Ensure there is enough disk space under $reg_root.  This can take 5-20+ mins to complete."
 echo
 

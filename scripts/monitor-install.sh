@@ -21,3 +21,8 @@ echo Running wait-for command ...
 echo "openshift-install agent wait-for install-complete --dir $MANEFEST_DIR"
 openshift-install agent wait-for install-complete --dir $MANEFEST_DIR    # --log-level=debug
 
+if [ $? -eq 0 ]; then
+	echo 
+	echo "Now the cluster has been installed, run 'source <(make shell)' and then 'oc whoami' to access the cluster"
+fi
+
