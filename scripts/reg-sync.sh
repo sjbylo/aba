@@ -79,6 +79,6 @@ echo
 
 # Set up script to help for manual re-sync
 # --continue-on-error seems to be needed when mirroring operator images!
-echo "cd sync && oc mirror $tls_verify_opts --continue-on-error --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+echo "cd sync && umask 0022 && oc mirror $tls_verify_opts --continue-on-error --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 ./sync-mirror.sh 
 

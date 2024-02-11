@@ -32,7 +32,7 @@ echo
 
 # Set up script to help for manual re-sync
 # --continue-on-error  needed when mirroring operator images
-echo "cd save && oc mirror --continue-on-error --config=./imageset-config-save.yaml file://." > save-mirror.sh && chmod 700 save-mirror.sh 
+echo "cd save && umask 0022 && oc mirror --continue-on-error --config=./imageset-config-save.yaml file://." > save-mirror.sh && chmod 700 save-mirror.sh 
 cat ./save-mirror.sh
 
 # rm -rf save/   # Allow user to add more image sets (e.g. for adding operators or image updates) to the archive 
