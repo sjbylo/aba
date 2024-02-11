@@ -6,9 +6,26 @@ source scripts/include_all.sh
 cd `dirname $0`
 cd ..
 
+test-cmd() {
+	echo "$@" >> test/test.log
+	eval "$@"
+
+	echo done >> test/test.log
+}
+
+remote-test-cmd() {
+	host=$1
+	shift
+
+	echo "$@" >> test/test.log
+	ssh $host -- "$@"
+
+	echo done >> test/test.log
+}
+
 mylog() {
-	echo $*
-	echo $* >> test/test.log
+	echo $@
+	echo $@ >> test/test.log
 }
 
 mylog
@@ -19,12 +36,12 @@ mylog
 
 > mirror/mirror.conf
 #make distclean 
-make -C mirror distclean 
+test-cmd 'make -C mirror distclean'
 #make uninstall clean 
 
-./aba --version 4.14.9 --vmw ~/.vmware.conf 
+test-cmd './aba --version 4.14.9 --vmw ~/.vmware.conf'
 #make -C cli clean 
-make -C cli
+test-cmd 'make -C cli'
 
 mylog Revert a snapshot and power on the internal bastion vm
 
@@ -45,7 +62,7 @@ set -x
 source <(normalize-aba-conf)
 
 # Copy and edit mirror.conf 
-scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
+test-cmd 'scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf'
 
 ### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
 
@@ -65,30 +82,39 @@ sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote 
 
 mylog Install mirror 
 
-make -C mirror install 
+test-cmd 'make -C mirror install'
 
-source <(cd mirror;normalize-mirror-conf)
+source <(cd mirror; normalize-mirror-conf)
 
 mylog "Mirror available at $reg_host:$reg_port"
 
+
+#test-cmd() {
+#	echo "$*"
+#	eval "$*"
+#	echo done
+#}
+
+#test-cmd 'ssh 10.0.1.6 -- "echo $PWD; hostname"'
+
 ######################
-mylog make sync
-make -C mirror sync   # This will install and sync
-mylog make sync done
+mylog "make -C mirror sync"
+test-cmd 'make -C mirror sync'   # This will install mirror and sync
+#mylog done
 
-mylog make sno
-rm -rf sno
-make sno target=iso
-mylog make sno done
-
-mylog make sno delete
-make -C sno delete 
-mylog make sno delete done
+if true; then
+	rm -rf sno
+	test-cmd make sno target=iso
+else
+	rm -rf sno
+	test-cmd make sno 
+	test-cmd make -C sno delete 
+fi
 
 #######################
-mylog make save load
+mylog "make -C mirror save load"
 make -C mirror save load   #  This will save, install then load
-mylog make save load done
+mylog done
 
 mylog make sno
 rm -rf sno

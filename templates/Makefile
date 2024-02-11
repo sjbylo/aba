@@ -106,9 +106,9 @@ cmd: ## Run any oc command on the cluster, must provide command, e.g. cmd="oc ge
 ssh: ## Open ssh to the rendezvous host for troubleshooting
 	scripts/ssh-rendezvous.sh $(cmd)
 
-.PHONEY: shell 
-shell:  ## Open a shell with access to the cluster
-	KUBECONFIG=iso-agent-based/auth/kubeconfig bash
+.PHONEY: shell   
+shell:  ## Access to the installed cluster. Run '. <(make shell)'
+	@echo "export KUBECONFIG=$(PWD)/iso-agent-based/auth/kubeconfig"
 
 .PHONEY: vmw
 vmw: ## Configure VMW platform credentials
