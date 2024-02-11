@@ -184,7 +184,7 @@ mylog Run make save on external bastion
 make -C mirror save 
 
 mylog Download mesh demo into test/mesh, for use by deploy script
-(cd test/mesh && git clone https://github.com/sjbylo/openshift-service-mesh-demo.git) 
+(rm -rf test/mesh && mkdir test/mesh && cd test/mesh && git clone https://github.com/sjbylo/openshift-service-mesh-demo.git) 
 
 ### make rsync ip=$bastion2  # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
 mylog rsync save/ dir to internal bastion

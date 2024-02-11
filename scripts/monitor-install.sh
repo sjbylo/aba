@@ -23,6 +23,6 @@ openshift-install agent wait-for install-complete --dir $MANEFEST_DIR    # --log
 
 if [ $? -eq 0 ]; then
 	echo 
-	echo "Now the cluster has been installed, run 'source <(make shell)' and then 'oc whoami' to access the cluster"
+	echo "Now the cluster has been installed, run 'source <(make -s shell)' and then 'oc whoami' to access the cluster"
 fi
 

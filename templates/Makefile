@@ -107,7 +107,7 @@ ssh: ## Open ssh to the rendezvous host for troubleshooting
 	scripts/ssh-rendezvous.sh $(cmd)
 
 .PHONEY: shell   
-shell:  ## Access to the installed cluster. Run '. <(make shell)'
+shell:  ## Access to the installed cluster. Run '. <(make -s shell)'
 	@echo "export KUBECONFIG=$(PWD)/iso-agent-based/auth/kubeconfig"
 
 .PHONEY: vmw
