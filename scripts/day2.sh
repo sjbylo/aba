@@ -11,6 +11,7 @@ umask 077
 source <(normalize-mirror-conf)
 
 # Add registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331
+# "Service Mesh Jaeger and Prometheus can't start in disconnected environment"
 if [ -s regcreds/rootCA.pem ]; then
 	echo "Adding the trust CA of the registry ($reg_host) ..."
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
@@ -25,4 +26,10 @@ if [ -s regcreds/rootCA.pem ]; then
 else	
 	echo "Warning: No file regcreds/rootCA.pem.  Assuming mirror registry is using http."
 fi
+
+# For disconnected environment, disable to online public catalog sources
+ret=$(curl -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/)
+[ "$ret" = "200" ] && \
+	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
+       		echo "Patched OperatorHub, disabled Red Hat public catalog sources"
 
