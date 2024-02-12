@@ -110,6 +110,11 @@ ssh: ## Open ssh to the rendezvous host for troubleshooting
 shell:  ## Access to the installed cluster. Run '. <(make -s shell)'
 	@echo "export KUBECONFIG=$(PWD)/iso-agent-based/auth/kubeconfig"
 
+.PHONEY:
+day2:
+	export KUBECONFIG=$(PWD)/iso-agent-based/auth/kubeconfig
+	scripts/day2.sh $(debug)
+
 .PHONEY: vmw
 vmw: ## Configure VMW platform credentials
 	@make -C .. vmware.conf
