@@ -10,7 +10,7 @@ remote-test-cmd() {
 	host=$1
 	shift
 
-	echo "$@" >> test/test.log
+	echo "$host: $@" >> test/test.log
 	ssh $host -- "$@"
 
 	echo done >> test/test.log
