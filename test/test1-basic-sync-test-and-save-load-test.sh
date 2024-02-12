@@ -6,27 +6,7 @@ source scripts/include_all.sh
 cd `dirname $0`
 cd ..
 
-test-cmd() {
-	echo "$@" >> test/test.log
-	eval "$@"
-
-	echo done >> test/test.log
-}
-
-remote-test-cmd() {
-	host=$1
-	shift
-
-	echo "$@" >> test/test.log
-	ssh $host -- "$@"
-
-	echo done >> test/test.log
-}
-
-mylog() {
-	echo $@
-	echo $@ >> test/test.log
-}
+source test/include.sh
 
 mylog
 mylog "===> Starting test $0"
@@ -100,7 +80,6 @@ mylog "Mirror available at $reg_host:$reg_port"
 ######################
 mylog "make -C mirror sync"
 test-cmd 'make -C mirror sync'   # This will install mirror and sync
-#mylog done
 
 if true; then
 	rm -rf sno
@@ -112,24 +91,14 @@ else
 fi
 
 #######################
-mylog "make -C mirror save load"
-make -C mirror save load   #  This will save, install then load
-mylog done
+test-cmd "make -C mirror save load"  #  This will save, install then load
 
-mylog make sno
 rm -rf sno
-make sno target=iso
-mylog make sno done
+test-cmd make sno target=iso
 
-mylog "Installation successful"
+test-cmd make -C sno delete 
 
-mylog make sno delete
-make -C sno delete 
-mylog "Deletion successful"
-
-mylog make mirror uninstall 
-
-make -C mirror uninstall 
+test-cmd make -C mirror uninstall 
 
 ########################
 ########################
@@ -152,9 +121,7 @@ sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test ran
 ### sed -i "s#tls_verify=true#tls_verify=            #g" ./mirror/mirror.conf  	# test tlsverify = false # sno install fails 
 sed -i "s#reg_path=.*#reg_path=mypath             #g" ./mirror/mirror.conf	    	# test path
 
-mylog make mirror install
-make -C mirror install 
-mylog make mirror install done
+test-cmd make -C mirror install 
 
 ######
 # Remove all traces of CA files 
@@ -162,43 +129,29 @@ mylog make mirror install done
 ### sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA*pem
 ### sudo update-ca-trust extract
 
-mylog rm mirror/save
+mylog "rm -rf mirror/save"
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
 ######
-
 
 source <(cd mirror;normalize-mirror-conf)
 
 mylog "Mirror available at $reg_host:$reg_port"
 
 ######################
-mylog make sync
+test-cmd make -C mirror sync   # This will install and sync
 
-make -C mirror sync   # This will install and sync
-
-mylog make sno
 rm -rf sno
-make sno target=iso
-mylog make sno done
-
-mylog make sno delete
-make -C sno delete 
-mylog make sno delete done
+test-cmd make sno target=iso
+#test-cmd make -C sno delete 
 
 #######################
 
-mylog make save load 
-make -C mirror save load   #  This will save, install then load
-mylog make save load done
+test-cmd make -C mirror save load   #  This will save, install then load
 
-mylog install sno
 rm -rf sno
-make sno target=iso
-mylog install sno done
+test-cmd make sno target=iso
 
-mylog make sno delete
-make -C sno delete 
-mylog make sno delete done
+test-cmd make -C sno delete 
 
 mylog "===> Test save/load complete "
 
@@ -213,21 +166,19 @@ rm -rf compact
 
 # This needs to be made manuually, since we only want to run "make iso"
 source <(normalize-aba-conf)
-mylog "make -C compact iso"
+
 rm -rf compact
-make compact target=iso
+test-cmd make compact target=iso
 #mkdir  compact
 #ln -s ../templates/Makefile compact/Makefile
 #scripts/j2 templates/cluster-compact.conf > compact/cluster.conf
 #make -C compact iso 
-mylog "make -C compact iso - done"
 
-mylog "===> Test 'no vmware' complete "
+mylog "Test 'no vmware' complete"
 
-mylog Tidy up mirror
-make -C mirror uninstall 
+test-cmd make -C mirror uninstall 
 
-mylog "===> Test $0 complete "
+mylog "Test $0 complete"
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak
 

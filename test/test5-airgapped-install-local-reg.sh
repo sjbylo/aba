@@ -155,7 +155,7 @@ ssh $(whoami)@$bastion2 -- "make -C aba/sno"
 
 ssh $(whoami)@$bastion2 -- aba/test/deploy-test-app.sh
 
-mylog "===> Test 'vote-app' complete "
+mylog "Test 'vote-app' complete"
 
 mylog Runtest: operator
 
@@ -195,15 +195,21 @@ rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save
 mylog Run make load on external bastion
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror load"
 
-mylog "===> Test 'operator' complete "
+ssh $(whoami)@$bastion2 -- "make -C aba/sno day2"   # Install CA cert and activate local op. hub
+### sleep 60
+### ssh $(whoami)@$bastion2 -- "aba/test/deploy-mesh.sh"
+
+mylog "Test: 'operator' complete "
 
 ssh $(whoami)@$bastion2 -- "make -C aba/sno delete" 
 
 ######################
 mylog Cleanup test
 
+mylog "make -C aba/mirror uninstall"
 ssh $(whoami)@$bastion2 -- "make -C aba/mirror uninstall"
 
 mylog "===> Test $0 complete "
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak
+
