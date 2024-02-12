@@ -33,3 +33,10 @@ ret=$(curl -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://r
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
        		echo "Patched OperatorHub, disabled Red Hat public catalog sources"
 
+# Install any CatalogSources
+list=$(find mirror/sync/oc-mirror-workspace/results-* mirror/save/oc-mirror-workspace/results-* -name catalogSource*.yaml 2>/dev/null || true)
+if [ "$list" ]; then
+	cs_file=$(ls -tr $list | tail -1)
+	oc apply -f $cs_file
+fi
+
