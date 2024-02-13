@@ -30,26 +30,29 @@ else
 fi
 
 echo "############################"
+
 # Try to apply the imageContentSourcePolicy resource files that were created by oc-mirror!
-# If one should have the same name, change its name by incrementing the value (-x) and try to apply again.
+# If one should clash with an existing ICSP resource, change its name by incrementing the value (-x) and try to apply it again.
+# See this issue: https://github.com/openshift/oc-mirror/issues/597
 for f in $(find mirror/s*/oc-* | grep /imageContentSourcePolicy.yaml$)
 do
 	echo Applying file $f
 	oc create -f $f && continue   # If it can be created, move to the next file
 
 	# If it can't be created....
-	# If it's different, then apply a seperate resource with a different name
+	# If it's different, then apply the resource with a different name
+	v=$(cat $f | grep "^  name: .*" | head -1 | cut -d- -f2)
 	while ! oc diff -f $f
 	do
 		# oc-mirror creates resources with names xxx-0 fetch the digit after the '-' and increment.
 		# head needed since soemtimes the files have more than one resource!
-		v=$(cat $f | grep "^  name: .*" | cut -d- -f2 | head -1)
 		let v=$v+1
 		echo $v | grep -E "^[0-9]+$" || continue  # Check $v is an integer
 
 		echo "Applying resource(s):" 
 		grep -E -o 'name: [^-]+' $f
 
+		# Adjust the name in the file
 		sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
 		oc create -f $f
 	done
@@ -73,13 +76,17 @@ fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
 
+sleep 60
+
 echo "Waiting for CatalogSource to become 'ready' ..."
-i=5
+i=2
 time while ! oc get catalogsources.operators.coreos.com  cs-redhat-operator-index -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -i ^ready$
 do
-	echo Sleeping $i
+	echo -n .
 	sleep $i
-	let i=$i+3
-	[ $i -gt 20 ] && echo "Giving up waiting ..." && break
+	let i=$i+1
+	[ $i -gt 25 ] && echo "Giving up waiting ..." && break
 done
+
+exit 0
 
