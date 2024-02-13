@@ -112,7 +112,6 @@ shell:  ## Access to the installed cluster. Run '. <(make -s shell)'
 
 .PHONEY:
 day2:
-	export KUBECONFIG=$(PWD)/iso-agent-based/auth/kubeconfig
 	scripts/day2.sh $(debug)
 
 .PHONEY: vmw

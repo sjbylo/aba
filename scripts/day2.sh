@@ -10,6 +10,8 @@ umask 077
 #source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
+export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
+	
 # Add registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331
 # "Service Mesh Jaeger and Prometheus can't start in disconnected environment"
 if [ -s regcreds/rootCA.pem ]; then
@@ -29,7 +31,7 @@ fi
 
 echo "############################"
 # Try to create the imageContentSourcePolicy resources that were created by oc-mirror.
-# If one should have the same name, change its name and try to apply.
+# If one should have the same name, change its name by incrementing the value (-x) and try to apply again.
 for f in $(find mirror/s*/oc-* | grep /imageContentSourcePolicy.yaml$)
 do
 	echo Applying file $f
@@ -52,7 +54,7 @@ done
 echo "############################"
 
 # For disconnected environment, disable to online public catalog sources
-ret=$(curl -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/)
+ret=$(curl -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/ || true)
 [ "$ret" = "200" ] && \
 	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
