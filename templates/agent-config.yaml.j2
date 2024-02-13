@@ -5,7 +5,11 @@ metadata:
 rendezvousIP: {{ rendezvous_ip }}
 hosts:
   {%- for host in range(num_masters|int) %}
+  {%- if num_workers == '0' and num_masters == '1' %}
+  - hostname: {{ cluster_name }}
+  {%- else %}
   - hostname: {{ master_prefix }}{{ loop.index }}
+  {% endif %}
     role: master
     interfaces:
      - name: ens160
