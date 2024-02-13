@@ -52,6 +52,8 @@ mylog "Test the internal bastion (registry2.example.com) as mirror"
 
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf
+#
+
 #################################
 
 mylog Revert a snapshot and power on the internal bastion vm
@@ -107,7 +109,12 @@ remote-test-cmd $bastion2 "make -C aba load"
 mylog "Running 'make sno' on internal bastion"
 
 remote-test-cmd $bastion2 "rm -rf aba/sno" 
+
+mylog Create the cluster iso only 
 remote-test-cmd $bastion2 "make -C aba sno target=iso" 
+
+mylog Add vm memory
+remote-test-cmd $bastion2 "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
 
 #ssh $(whoami)@$bastion2 -- "make -C aba/sno cmd" 
 
@@ -119,34 +126,40 @@ mylog Now simulate adding more images to the mirror registry
 
 mylog Runtest: vote-app
 
-mylog Edit imageset conf file test
-
+mylog Add ubi9 image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
-  - name: quay.io/sjbylo/flask-vote-app:latest
 END
-
-### echo "Install the reg creds on localhost, simulating a manual config" 
-### scp $(whoami)@$bastion2:quay-install/quay-rootCA/rootCA.pem mirror/regcreds
-### scp $(whoami)@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
-### make -C mirror verify 
 
 mylog Run make save on external bastion
 test-cmd make -C mirror save 
 
 mylog rsync save/ dir to internal bastion
 
-### make rsync ip=$bastion2 # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
-pwd
-#rsync --progress --partial --times -avz mirror/save/mirror_seq*_*.tar $bastion2:aba/mirror/save 
+### make rsync ip=$bastion2 # This copies over the whiole repo, incl. the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
 rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
-### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 
 mylog Run make load on internal bastion
-
 remote-test-cmd $bastion2 "make -C aba/mirror load"
 
+####################
+
+mylog Add vote-app image to imageset conf file 
+cat >> mirror/save/imageset-config-save.yaml <<END
+  - name: quay.io/sjbylo/flask-vote-app:latest
+END
+
+mylog Run make save on external bastion
+test-cmd make -C mirror save 
+
+mylog rsync save/ dir to internal bastion
+rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+
+mylog Run make load on internal bastion
+remote-test-cmd $bastion2 "make -C aba/mirror load"
+
+mylog Install the cluster proper now
 remote-test-cmd $bastion2 "make -C aba/sno"
 
 ######################
@@ -160,6 +173,15 @@ mylog Runtest: operator
 mylog Append operators to imageset conf
 
 cat >> mirror/save/imageset-config-save.yaml <<END
+  - name: quay.io/kiali/demo_travels_cars:v1
+  - name: quay.io/kiali/demo_travels_control:v1
+  - name: quay.io/kiali/demo_travels_discounts:v1
+  - name: quay.io/kiali/demo_travels_flights:v1
+  - name: quay.io/kiali/demo_travels_hotels:v1
+  - name: quay.io/kiali/demo_travels_insurances:v1
+  - name: quay.io/kiali/demo_travels_mysqldb:v1
+  - name: quay.io/kiali/demo_travels_portal:v1
+  - name: quay.io/kiali/demo_travels_travels:v1
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.14
     packages:
@@ -185,7 +207,8 @@ mylog Download mesh demo into test/mesh, for use by deploy script
 (
 	rm -rf test/mesh && mkdir test/mesh && cd test/mesh && git clone https://github.com/sjbylo/openshift-service-mesh-demo.git && \
 	cd openshift-service-mesh-demo && \
-	sed -i "s/quay\.io/$reg_host:$reg_port\/$reg_path/g" */*.yaml */*/*.yaml */*/*/*.yaml
+	sed -i "s/quay\.io/$reg_host:$reg_port\/$reg_path/g" */*.yaml */*/*.yaml */*/*/*.yaml &&
+	sed -i "s/source: .*/source: cs-redhat-operator-index/g" operators/* 
 ) 
 
 ### make rsync ip=$bastion2  # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
@@ -195,11 +218,12 @@ rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save
 rsync --progress --partial --times -avz test/mesh/   $bastion2:aba/test/mesh
 ### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 
-mylog Run make load on external bastion
+mylog Run make load on internal bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"
 
+test-cmd sleep 20
 remote-test-cmd $bastion2 "make -C aba/sno day2"   # Install CA cert and activate local op. hub
-sleep 60
+test-cmd sleep 60
 remote-test-cmd $bastion2 "aba/test/deploy-mesh.sh"
 
 mylog "Test: 'operator' complete "

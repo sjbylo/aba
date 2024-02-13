@@ -30,21 +30,25 @@ else
 fi
 
 echo "############################"
-# Try to create the imageContentSourcePolicy resources that were created by oc-mirror.
+# Try to apply the imageContentSourcePolicy resource files that were created by oc-mirror!
 # If one should have the same name, change its name by incrementing the value (-x) and try to apply again.
 for f in $(find mirror/s*/oc-* | grep /imageContentSourcePolicy.yaml$)
 do
 	echo Applying file $f
-	oc create -f $f && continue 
+	oc create -f $f && continue   # If it can be created, move to the next file
 
+	# If it can't be created....
 	# If it's different, then apply a seperate resource with a different name
 	if ! oc diff -f $f; then
-		# oc-mirror creates resources with names xxx-0  fetch the digit after the '-'
-		v=$(cat $f | grep "^  name: .*" | cut -d- -f2)
+		# oc-mirror creates resources with names xxx-0 fetch the digit after the '-' and increment.
+		# head needed since soemtimes the files have more than one resource!
+		v=$(cat $f | grep "^  name: .*" | cut -d- -f2 | head -1)
 		let v=$v+1
 		echo $v | grep -E "^[0-9]+$" || continue  # Check $v is an integer
 
-		echo "Applying resource (grep -E -o 'name: [^-]+' $f)-$v"
+		echo "Applying resource(s):" 
+		grep -E -o 'name: [^-]+' $f
+
 		sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
 		oc create -f $f
 	else
@@ -55,7 +59,7 @@ echo "############################"
 
 # For disconnected environment, disable to online public catalog sources
 ret=$(curl -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/ || true)
-[ "$ret" = "200" ] && \
+[ "$ret" != "200" ] && \
 	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
        		echo "Patched OperatorHub, disabled Red Hat public catalog sources"
