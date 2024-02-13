@@ -29,7 +29,7 @@ source <(normalize-aba-conf)
 
 > mirror/mirror.conf
 #make distclean 
-test-cmd make -C mirror distclean 
+test-cmd "make -C mirror distclean" 
 rm -rf sno compact standard 
 #make uninstall clean 
 
@@ -38,7 +38,7 @@ v=4.14.9
 mylog aba..conf configured for $v and vmware.conf
 
 # Be sure this file exists
-test-cmd make -C test mirror-registry.tar.gz
+test-cmd "make -C test mirror-registry.tar.gz"
 
 bastion2=10.0.1.6
 p=22222
@@ -74,7 +74,7 @@ mylog done
 
 source <(cd mirror && normalize-mirror-conf)
 
-test-cmd make save
+test-cmd "make save"
 
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
@@ -136,7 +136,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 mylog Save ubi image on external bastion
-test-cmd make -C mirror save 
+test-cmd "make -C mirror save"
 
 mylog rsync save/ dir to internal bastion
 
@@ -154,7 +154,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 mylog Save vote-app image on external bastion
-test-cmd make -C mirror save 
+test-cmd "make -C mirror save"
 
 mylog rsync save/ dir to internal bastion
 rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
@@ -167,7 +167,7 @@ remote-test-cmd $bastion2 "make -C aba/sno"
 
 ######################
 
-remote-test-cmd $bastion2 aba/test/deploy-test-app.sh
+remote-test-cmd $bastion2 "aba/test/deploy-test-app.sh"
 
 mylog "Test 'vote-app' complete"
 
@@ -204,7 +204,13 @@ END
 
 mylog Save the mesh images on external bastion
 
-test-cmd make -C mirror save 
+test-cmd "make -C mirror save"
+
+mylog rsync save/ dir to internal bastion
+rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+
+remote-test-cmd $bastion2 "make -C aba/mirror load"
+remote-test-cmd $bastion2 "make -C aba/sno day2"
 
 cat >> mirror/save/imageset-config-save.yaml <<END
       - name: jaeger-product
@@ -213,7 +219,8 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 mylog Save the jaeger-product images on external bastion
-test-cmd make -C mirror save 
+test-cmd "make -C mirror save"
+
 
 mylog Download mesh demo into test/mesh, for use by deploy script
 (
@@ -234,7 +241,6 @@ mylog Run make load on internal bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"
 
 test-cmd sleep 20
-remote-test-cmd $bastion2 "make -C aba/sno day2"   # Install CA cert and activate local op. hub
 remote-test-cmd $bastion2 "make -C aba/sno day2"   # Install CA cert and activate local op. hub
 test-cmd sleep 60
 remote-test-cmd $bastion2 "aba/test/deploy-mesh.sh"
