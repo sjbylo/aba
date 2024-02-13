@@ -70,6 +70,8 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 
 mylog done
 
+source <(cd mirror && normalize-mirror-conf)
+
 test-cmd make save
 
 # Smoke test!
@@ -180,20 +182,25 @@ mylog Run make save on external bastion
 test-cmd make -C mirror save 
 
 mylog Download mesh demo into test/mesh, for use by deploy script
-(rm -rf test/mesh && mkdir test/mesh && cd test/mesh && git clone https://github.com/sjbylo/openshift-service-mesh-demo.git) 
+(
+	rm -rf test/mesh && mkdir test/mesh && cd test/mesh && git clone https://github.com/sjbylo/openshift-service-mesh-demo.git && \
+	cd openshift-service-mesh-demo && \
+	sed -i "s/quay\.io/$reg_host:$reg_port\/$reg_path/g" */*.yaml */*/*.yaml */*/*/*.yaml
+) 
 
 ### make rsync ip=$bastion2  # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
 mylog rsync save/ dir to internal bastion
 pwd
 rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+rsync --progress --partial --times -avz test/mesh/   $bastion2:aba/test/mesh
 ### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 
 mylog Run make load on external bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"
 
 remote-test-cmd $bastion2 "make -C aba/sno day2"   # Install CA cert and activate local op. hub
-### sleep 60
-### ssh $(whoami)@$bastion2 -- "aba/test/deploy-mesh.sh"
+sleep 60
+remote-test-cmd $bastion2 "aba/test/deploy-mesh.sh"
 
 mylog "Test: 'operator' complete "
 
