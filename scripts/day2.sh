@@ -39,7 +39,8 @@ do
 
 	# If it can't be created....
 	# If it's different, then apply a seperate resource with a different name
-	if ! oc diff -f $f; then
+	while ! oc diff -f $f
+	do
 		# oc-mirror creates resources with names xxx-0 fetch the digit after the '-' and increment.
 		# head needed since soemtimes the files have more than one resource!
 		v=$(cat $f | grep "^  name: .*" | cut -d- -f2 | head -1)
@@ -51,9 +52,7 @@ do
 
 		sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
 		oc create -f $f
-	else
-		echo File is the same: $f
-	fi
+	done
 done
 echo "############################"
 

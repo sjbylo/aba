@@ -91,8 +91,11 @@ ssh $(whoami)@$bastion2 "rpm -q rsync || sudo yum install make rsync -y"
 # Install rsync on localhost
 rpm -q rsync || sudo yum install rsync -y 
 
-mylog rsync files to instenal bastion ...
-test-cmd make rsync ip=$bastion2
+mylog Tar+ssh files over to internal bastion: $bastion2 
+make tar out=- | ssh $bastion2 -- tar xzvf -
+
+### mylog rsync files to instenal bastion ...
+### test-cmd make rsync ip=$bastion2
 
 ### echo "Install the reg creds, simulating a manual config" 
 ### ssh $(whoami)@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
@@ -132,7 +135,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: registry.redhat.io/ubi9/ubi:latest
 END
 
-mylog Run make save on external bastion
+mylog Save ubi image on external bastion
 test-cmd make -C mirror save 
 
 mylog rsync save/ dir to internal bastion
@@ -140,7 +143,7 @@ mylog rsync save/ dir to internal bastion
 ### make rsync ip=$bastion2 # This copies over the whiole repo, incl. the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
 rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 
-mylog Run make load on internal bastion
+mylog Load ubi image on internal bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"
 
 ####################
@@ -150,13 +153,13 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-mylog Run make save on external bastion
+mylog Save vote-app image on external bastion
 test-cmd make -C mirror save 
 
 mylog rsync save/ dir to internal bastion
 rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 
-mylog Run make load on internal bastion
+mylog Load vote-app image on internal bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"
 
 mylog Install the cluster proper now
@@ -191,16 +194,25 @@ cat >> mirror/save/imageset-config-save.yaml <<END
       - name: kiali-ossm
         channels:
         - name: stable
-      - name: jaeger-product
-        channels:
-        - name: stable
+#      - name: jaeger-product
+#        channels:
+#        - name: stable
 #      - name: advanced-cluster-management
 #        channels:
 #        - name: release-2.9
 END
 
-mylog Run make save on external bastion
+mylog Save the mesh images on external bastion
 
+test-cmd make -C mirror save 
+
+cat >> mirror/save/imageset-config-save.yaml <<END
+      - name: jaeger-product
+        channels:
+        - name: stable
+END
+
+mylog Save the jaeger-product images on external bastion
 test-cmd make -C mirror save 
 
 mylog Download mesh demo into test/mesh, for use by deploy script
@@ -222,6 +234,7 @@ mylog Run make load on internal bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"
 
 test-cmd sleep 20
+remote-test-cmd $bastion2 "make -C aba/sno day2"   # Install CA cert and activate local op. hub
 remote-test-cmd $bastion2 "make -C aba/sno day2"   # Install CA cert and activate local op. hub
 test-cmd sleep 60
 remote-test-cmd $bastion2 "aba/test/deploy-mesh.sh"
