@@ -27,6 +27,30 @@ else
 	echo "Warning: No file regcreds/rootCA.pem.  Assuming mirror registry is using http."
 fi
 
+echo "############################"
+# Try to create the imageContentSourcePolicy resources that were created by oc-mirror.
+# If one should have the same name, change its name and try to apply.
+for f in $(find mirror/s*/oc-* | grep /imageContentSourcePolicy.yaml$)
+do
+	echo Applying file $f
+	oc create -f $f && continue 
+
+	# If it's different, then apply a seperate resource with a different name
+	if ! oc diff -f $f; then
+		# oc-mirror creates resources with names xxx-0  fetch the digit after the '-'
+		v=$(cat $f | grep "^  name: .*" | cut -d- -f2)
+		let v=$v+1
+		echo $v | grep -E "^[0-9]+$" || continue  # Check $v is an integer
+
+		echo "Applying resource (grep -E -o 'name: [^-]+' $f)-$v"
+		sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
+		oc create -f $f
+	else
+		echo File is the same: $f
+	fi
+done
+echo "############################"
+
 # For disconnected environment, disable to online public catalog sources
 ret=$(curl -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/)
 [ "$ret" = "200" ] && \
@@ -41,6 +65,8 @@ if [ "$list" ]; then
 	echo "Running: oc apply -f $cs_file"
 	oc apply -f $cs_file
 fi
+
+# Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
 
 echo "Waiting for CatalogSource to become 'ready' ..."
 i=5
