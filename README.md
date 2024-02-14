@@ -9,8 +9,12 @@ Aba automatically completes the following:
 1. Triggers the generation of the agent-based boot ISO. 
 1. Optionally creates the required VMs in ESXi or vSphere.
 1. Monitors the installation progress. 
+1. Allows for adding more images (e.g. Operators) as a day 1 or 2 procedure.
+1. Helps to configure the OperatorHub using the internal registry. 
+1. Helps by executing several workarounds for some typical issues with disconnected environments.
+1. Enables the integration with vSphere as a day 2 procedure (day 1 comming with OCP v4.15+)
 
-Use aba if you want to get OpenShift up and running quickly without having to study the documentation in detail. 
+Use aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail. 
 
 
 ## Prerequisites
