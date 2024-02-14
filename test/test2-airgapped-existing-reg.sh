@@ -10,6 +10,7 @@
 source scripts/include_all.sh
 cd `dirname $0`
 cd ..  # Change into "aba" dir
+[ ! -v $targetiso ] && targetiso="target=iso"   # Default is to only create iso
 
 source test/include.sh
 
@@ -32,6 +33,7 @@ rm -rf sno compact standard
 test-cmd ./aba --version 4.14.9 --vmw ~/.vmware.conf 
 ### ver=$(cat ./target-ocp-version.conf)
 source <(normalize-aba-conf)
+export ask=
 ### [ -s mirror/mirror.conf ] && touch mirror/mirror.conf
 
 # Be sure this file exists
@@ -105,9 +107,9 @@ mylog "Running 'make load sno' on internal bastion"
 mylog make load
 remote-test-cmd $bastion2 "make -C aba load" 
 #ssh $(whoami)@$bastion2 -- "make -C aba/sno upload"   # Just test until iso upload
-mylog make sno #target=iso
+mylog make sno $targetiso
 remote-test-cmd $bastion2 "rm -rf aba/sno" 
-remote-test-cmd $bastion2 "make -C aba sno #target=iso" 
+remote-test-cmd $bastion2 "make -C aba sno $targetiso" 
 
 #ssh $(whoami)@$bastion2 -- "make -C aba/sno cmd" 
 

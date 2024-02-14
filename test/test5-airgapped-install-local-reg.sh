@@ -10,6 +10,7 @@
 source scripts/include_all.sh
 cd `dirname $0`
 cd ..  # Change into "aba" dir
+[ ! -v $targetiso ] && targetiso="target=iso"   # Default is to only create iso
 
 source test/include.sh
 
@@ -25,6 +26,7 @@ set -x
 # Set up test 
 
 source <(normalize-aba-conf)
+export ask=
 ##scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 > mirror/mirror.conf
@@ -114,7 +116,7 @@ mylog "Running 'make sno' on internal bastion"
 remote-test-cmd $bastion2 "rm -rf aba/sno" 
 
 mylog Create the cluster iso only 
-remote-test-cmd $bastion2 "make -C aba sno #target=iso" 
+remote-test-cmd $bastion2 "make -C aba sno $targetiso" 
 
 mylog Add vm memory
 remote-test-cmd $bastion2 "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
