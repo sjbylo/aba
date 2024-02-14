@@ -63,15 +63,20 @@ normalize-vmware-conf()
 			sed -e "s/^/export /g";
 }
 
-#normalize-mirror-conf() {
-#	# Normalize or sanitize the config file
-#	cat mirror.conf | \
-#		cut -d"#" -f1 | \
-#		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
-#			sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" | \
-#			sed -e "s/^/export /g";
-#}
+ask() {
+	source <(normalize-aba-conf)
+	[ ! "$ask" ] && return 0  # reply "yes"
 
+	timer=
+	[ "$1" = "-t" ] && shift && timer="-t $1" && shift
+
+	echo
+	echo -n "===> $@ (y/n) [y]: "
+	read $timer yn
+	[ ! "$yn" -o "$yn" = "y" ] && return 0
+
+	return 1
+}
 
 install_rpm() {
 	rpmlist=
