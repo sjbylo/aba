@@ -136,9 +136,9 @@ if [ "$reg_ssh" ]; then
 	fi
 
 	# Generate the script to be used to delete this registry
-	cmd="./mirror-registry uninstall --targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh $reg_root_opt --autoApprove"
-	echo "echo Running command: \"$cmd\"" > ./reg-uninstall.sh.provision
-	echo "$cmd" >> ./reg-uninstall.sh.provision
+	uninstall_cmd="./mirror-registry uninstall --targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh $reg_root_opt --autoApprove"
+	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh.provision
+	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh.provision
 
 	echo "Running command: \"./mirror-registry install --quayHostname $reg_host \
 		--targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh --initPassword <hidden> $reg_root_opt\""
@@ -149,11 +149,6 @@ if [ "$reg_ssh" ]; then
   		--targetHostname $reg_host \
   		-k $reg_ssh \
 		--initPassword $reg_pw $reg_root_opt
-
-	# Generate the script to be used to delete this registry
-	#cmd="./mirror-registry uninstall --targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh $reg_root_opt --autoApprove"
-	#echo "echo Running command: \"$cmd\"" > ./reg-uninstall.sh
-	#echo "$cmd" >> ./reg-uninstall.sh
 
 	# Now, activate the uninstall script 
 	mv ./reg-uninstall.sh.provision reg-uninstall.sh
@@ -200,16 +195,15 @@ else
 	fi
 
 	# Generate the script to be used to delete this registry
-	cmd="./mirror-registry uninstall --autoApprove $reg_root_opt"
-	echo "echo Running command  \"$cmd\"" > ./reg-uninstall.sh.provision
-	echo "$cmd" >> ./reg-uninstall.sh.provision
+	uninstall_cmd="./mirror-registry uninstall --autoApprove $reg_root_opt"
+	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh.provision
+	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh.provision
 
 	echo "Running command: \"./mirror-registry install --quayHostname $reg_host $reg_root_opt\""
 
 	./mirror-registry install -v \
   		--quayHostname $reg_host \
 		--initPassword $reg_pw $reg_root_opt
-
 
 	# Now, activate the uninstall script 
 	mv ./reg-uninstall.sh.provision reg-uninstall.sh
