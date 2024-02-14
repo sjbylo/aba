@@ -26,7 +26,7 @@ ACONF=$MANEFEST_SRC_DIR/agent-config.yaml
 ACONF_TMP=/tmp/.agent-config.yaml  
 
 # If the files don't exist, nothing to do!
-[ ! -s $ICONF -o ! -s $ACONF ] && echo "One of the files install-config.yaml and/or agent-config.yaml does not exist.  Cannot parse cluster configuration." && exit 0
+[ ! -s $ICONF -o ! -s $ACONF ] && echo "One of the files $ICONF and/or $ACONF does not exist.  Cannot parse cluster configuration. Are you running this in the 'cluster' directory?" && exit 0
 
 cat $ICONF | yaml2json > $ICONF_TMP
 cat $ACONF | yaml2json > $ACONF_TMP
