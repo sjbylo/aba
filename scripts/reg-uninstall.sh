@@ -8,16 +8,17 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 if [ -s reg-uninstall.sh ]; then
-	echo Uninstalling mirror registry from host $reg_host ...
-	rm -f regcreds/*
-	bash -e ./reg-uninstall.sh
-	rm -f ./reg-uninstall.sh
+	if ask "Uninstall the mirror registry from host $reg_host"; then
+		#echo Uninstalling mirror registry from host $reg_host ...
+		rm -f regcreds/*
+		bash -e ./reg-uninstall.sh
+		rm -f ./reg-uninstall.sh
+	fi
 	exit 0
 else
 	echo
-	#echo "Warning: No uninstall script 'mirror/reg-uninstall.sh' found."
 	echo "Warning: No Quay installation detected."
-	echo "If Aba did not install a mirror registry, uninstall it manually." 
+	echo "If you installed a registry and want to remove it, please uninstall it manually." 
 	echo
 	sleep 5
 	#read yn
@@ -34,16 +35,19 @@ else
 fi
 
 if [ "$reg_ssh" ] && ssh $(whoami)@$reg_host podman ps | grep registry; then
-	cmd="./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) --autoApprove -k $reg_ssh $reg_root_opt"
-	echo "Running command: $cmd"
-	$cmd
-        ##./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) --autoApprove -k $reg_ssh $reg_root_opt
-
+	if ask "Uninstall the mirror registry from host $reg_host"; then
+		cmd="./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) --autoApprove -k $reg_ssh $reg_root_opt"
+		echo "Running command: $cmd"
+		$cmd
+        	##./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) --autoApprove -k $reg_ssh $reg_root_opt
+	fi
 elif podman ps | grep registry; then
-	cmd="./mirror-registry uninstall -v --autoApprove $reg_root_opt"
-	echo "Running command: $cmd"
-	$cmd
-	##./mirror-registry uninstall -v --autoApprove $reg_root_opt
+	if ask "Uninstall the mirror registry from localhost"; then
+		cmd="./mirror-registry uninstall -v --autoApprove $reg_root_opt"
+		echo "Running command: $cmd"
+		$cmd
+		##./mirror-registry uninstall -v --autoApprove $reg_root_opt
+	fi
 
 	rm -f regcreds/*
 else
