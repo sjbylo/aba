@@ -105,9 +105,9 @@ mylog "Running 'make load sno' on internal bastion"
 mylog make load
 remote-test-cmd $bastion2 "make -C aba load" 
 #ssh $(whoami)@$bastion2 -- "make -C aba/sno upload"   # Just test until iso upload
-mylog make sno target=iso
+mylog make sno #target=iso
 remote-test-cmd $bastion2 "rm -rf aba/sno" 
-remote-test-cmd $bastion2 "make -C aba sno target=iso" 
+remote-test-cmd $bastion2 "make -C aba sno #target=iso" 
 
 #ssh $(whoami)@$bastion2 -- "make -C aba/sno cmd" 
 
