@@ -19,7 +19,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`
 fi
 
-source <(normalize-aba-conf)
+source <(normalize-aba-conf)  # Fetch the 'ask' param
 
 if [ "$ask" ]; then
 	echo
@@ -27,7 +27,7 @@ if [ "$ask" ]; then
 		[ "$VC" ] && echo $FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
 	done
 
-	ask "Delete the above virtual machines(s)" || exit 1
+	ask "Delete the above virtual machine(s)" || exit 1
 fi
 
 for name in $CP_NAMES $WORKER_NAMES; do

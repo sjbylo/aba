@@ -2,8 +2,6 @@
 
 source scripts/include_all.sh
 
-####scripts/install-govc.sh
-
 [ "$1" ] && set -x
 
 if [ -s vmware.conf ]; then
@@ -16,6 +14,17 @@ fi
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
 	eval `scripts/cluster-config.sh || exit 1`
+fi
+
+source <(normalize-aba-conf)  # Fetch the 'ask' param
+
+if [ "$ask" ]; then
+	echo
+	for name in $CP_NAMES $WORKER_NAMES; do
+		[ "$VC" ] && echo $FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+	done
+
+	ask "Immediately power down the above virtual machine(s)" || exit 1
 fi
 
 for name in $CP_NAMES $WORKER_NAMES; do
