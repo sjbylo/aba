@@ -78,12 +78,11 @@ mylog "Mirror available at $reg_host:$reg_port"
 #test-cmd 'ssh 10.0.1.6 -- "echo $PWD; hostname"'
 
 ######################
-mylog "make -C mirror sync"
 test-cmd 'make -C mirror sync'   # This will install mirror and sync
 
 if true; then
 	rm -rf sno
-	test-cmd make sno target=iso
+	test-cmd make sno #target=iso
 else
 	rm -rf sno
 	test-cmd make sno 
@@ -94,7 +93,7 @@ fi
 test-cmd "make -C mirror save load"  #  This will save, install then load
 
 rm -rf sno
-test-cmd make sno target=iso
+test-cmd make sno #target=iso
 
 test-cmd make -C sno delete 
 
@@ -141,7 +140,8 @@ mylog "Mirror available at $reg_host:$reg_port"
 test-cmd make -C mirror sync   # This will install and sync
 
 rm -rf sno
-test-cmd make sno target=iso
+#test-cmd make sno #target=iso
+test-cmd make sno
 #test-cmd make -C sno delete 
 
 #######################
@@ -149,7 +149,7 @@ test-cmd make sno target=iso
 test-cmd make -C mirror save load   #  This will save, install then load
 
 rm -rf sno
-test-cmd make sno target=iso
+test-cmd make sno #target=iso
 
 test-cmd make -C sno delete 
 

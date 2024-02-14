@@ -114,7 +114,7 @@ mylog "Running 'make sno' on internal bastion"
 remote-test-cmd $bastion2 "rm -rf aba/sno" 
 
 mylog Create the cluster iso only 
-remote-test-cmd $bastion2 "make -C aba sno target=iso" 
+remote-test-cmd $bastion2 "make -C aba sno #target=iso" 
 
 mylog Add vm memory
 remote-test-cmd $bastion2 "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
@@ -234,7 +234,8 @@ mylog Download mesh demo into test/mesh, for use by deploy script
 mylog rsync save/ dir to internal bastion
 pwd
 rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
-rsync --progress --partial --times -avz test/mesh/   $bastion2:aba/test/mesh
+rm -f test/mirror-registry.tar.gz  # No need to copy this over!
+rsync --progress --partial --times -avz test   $bastion2:aba
 ### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 
 mylog Run make load on internal bastion
