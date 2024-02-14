@@ -5,6 +5,7 @@
 source scripts/include_all.sh
 cd `dirname $0`
 cd ..
+[ ! -v $targetiso ] && targetiso="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
 
 source test/include.sh
 
@@ -40,6 +41,7 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 set -x
 
 source <(normalize-aba-conf)
+export ask=
 
 # Copy and edit mirror.conf 
 test-cmd 'scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf'
@@ -82,7 +84,7 @@ test-cmd 'make -C mirror sync'   # This will install mirror and sync
 
 if true; then
 	rm -rf sno
-	test-cmd make sno #target=iso
+	test-cmd make sno $targetiso
 else
 	rm -rf sno
 	test-cmd make sno 
@@ -93,7 +95,7 @@ fi
 test-cmd "make -C mirror save load"  #  This will save, install then load
 
 rm -rf sno
-test-cmd make sno #target=iso
+test-cmd make sno $targetiso
 
 test-cmd make -C sno delete 
 
@@ -140,7 +142,7 @@ mylog "Mirror available at $reg_host:$reg_port"
 test-cmd make -C mirror sync   # This will install and sync
 
 rm -rf sno
-#test-cmd make sno #target=iso
+#test-cmd make sno $targetiso
 test-cmd make sno
 #test-cmd make -C sno delete 
 
@@ -149,7 +151,7 @@ test-cmd make sno
 test-cmd make -C mirror save load   #  This will save, install then load
 
 rm -rf sno
-test-cmd make sno #target=iso
+test-cmd make sno $targetiso
 
 test-cmd make -C sno delete 
 
@@ -165,10 +167,11 @@ rm -rf compact
 ### scripts/j2 templates/cluster-compact.conf > compact/cluster.conf
 
 # This needs to be made manuually, since we only want to run "make iso"
-source <(normalize-aba-conf)
+### source <(normalize-aba-conf)
+### export ask=
 
 rm -rf compact
-test-cmd make compact target=iso
+test-cmd make compact $targetiso
 #mkdir  compact
 #ln -s ../templates/Makefile compact/Makefile
 #scripts/j2 templates/cluster-compact.conf > compact/cluster.conf
