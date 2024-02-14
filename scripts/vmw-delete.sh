@@ -7,7 +7,7 @@ scripts/install-govc.sh
 [ "$1" ] && set -x
 
 if [ -s vmware.conf ]; then
-	source <(normalize-vmware-conf)  # This is needed for $VMW_FOLDER
+	source <(normalize-vmware-conf)  # This is needed for $VMW_FOLDER variable
 else
 	echo "vmware.conf file not defined. Run 'make vmw' to create it if needed"
 	exit 0
@@ -17,6 +17,14 @@ fi
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
 	eval `scripts/cluster-config.sh || exit 1`
+fi
+
+if [ "$ask" ]; then
+	for name in $CP_NAMES $WORKER_NAMES; do
+		echo ${CLUSTER_NAME}-$name
+	done
+
+	ask "Delete the above VMs" || exit 1
 fi
 
 for name in $CP_NAMES $WORKER_NAMES; do
