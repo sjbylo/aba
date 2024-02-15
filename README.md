@@ -119,24 +119,14 @@ Example:
 # On the external bastion:
 # Mount your thumb drive and:
 
-make tar out=/dev/path/to/thumbdrive 
+make inc
 or
-make tar out=- > /path/to/file.tgz
+make inc out=/dev/path/to/thumbdrive 
 or
-make tar out=- | ssh user@host "cat > file.tgz"
+make inc out=- > /path/to/aba.tgz
+or
+make inc out=- | ssh user@host "cat > aba.tgz"
 
-
-# Or, do this manually 
-cd 		                   # Assuming aba is directly under your $HOME dir
-tar czf /path/to/thumbdrive/aba.tgz $(find bin aba -type f \
-		! -path "aba/.git*" -a \
-		! -path "aba/cli/*" -a \
-		! -path "aba/mirror/mirror-registry" -a \
-		! -path "aba/mirror/*.tar" \
-		! -path "aba/mirror/.installed" \
-		! -path "aba/mirror/.rpms" \
-		! -path "aba/mirror/.loaded" \
-		! -path "aba/*/iso-agent-based*")
 
 # Copy the file 'aba.tgz' to your internal bastion via your portable storage device.
 
@@ -144,7 +134,6 @@ tar czf /path/to/thumbdrive/aba.tgz $(find bin aba -type f \
 cd
 tar xzvf aba.tgz            # Extract the tar file. Ensure file timestamps are kept the same as on the external bastion.
 cd aba             
-make tidy
 ```
 
 Load the images from local storage to the internal mirror registry.
@@ -155,6 +144,7 @@ make load
 ```
 - This will (if required) install Quay (from the files and configuration that were tar-ed & copied above) and then load the images into Quay.
 - Note that the internal bastion will need to install RPMs from a suitable repository (for testing it's possible to configure 'dnf' to use a proxy).
+- If rpms are not readily available in your private network, the command 'make rpms' can help by downloading the needed rpms, which can then be copied to the internal bastion and installed with 'dnf localinstall rpms/*.rpm'
 
 Now continue with "Install OpenShift" below.
 
