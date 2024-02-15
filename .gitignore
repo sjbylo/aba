@@ -37,3 +37,5 @@ test/mirror-registry.tar.gz
 test/.ssh.conf
 test/test.log*
 vmware.conf
+rpms/*.rpm
+mirror/reg-uninstall.sh.provision
