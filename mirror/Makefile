@@ -107,7 +107,8 @@ uninstallclean:
 
 .PHONY: inc
 inc:   ## Create an incremental tar backup of the sync and/or save directories, after running 'make save' or 'make sync'
-	@scripts/inc-backup.sh $(out)
+	@make -s -C .. inc
+	#@scripts/inc-backup.sh $(out)
 
 .PHONY: tidy 
 tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 

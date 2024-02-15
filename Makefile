@@ -48,8 +48,12 @@ tidy:
 	make -C mirror tidy
 
 .PHONY: tar
-tar:  ## Archive the repo in order to move it to the internal network, e.g. make tar out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-repo.tgz
+tar:  ## Archive the whole repo in order to move it to the internal network, e.g. make tar out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-repo.tgz. Can also use out=-
 	@scripts/create-tarball.sh $(out)
+
+.PHONY: inc
+inc:  ## Create an incremental archive of the repo in order to move it to the internal network, e.g. make inc out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-repo.tgz. Can also use out=-
+	@scripts/inc-backup.sh $(out)
 
 load: ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	make -C mirror load

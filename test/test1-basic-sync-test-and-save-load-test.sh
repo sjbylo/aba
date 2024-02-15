@@ -1,11 +1,11 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 # This test is for a connected bastion.  It will install registry on remote bastion and then sync images and install clusters, 
 # ... then savd/load images and install clusters. 
 
 source scripts/include_all.sh
 cd `dirname $0`
 cd ..
-[ ! -v $targetiso ] && targetiso="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
+[ "$target_iso" ] && targetiso="target=iso" || targetiso=  # Default is to generate 'iso' only   # Default is to only create iso
 
 source test/include.sh
 
@@ -23,6 +23,7 @@ test-cmd 'make -C mirror distclean'
 test-cmd './aba --version 4.14.9 --vmw ~/.vmware.conf'
 #make -C cli clean 
 test-cmd 'make -C cli'
+sed -i "s/^ask=.*/ask=/g" aba.conf
 
 mylog Revert a snapshot and power on the internal bastion vm
 
@@ -38,10 +39,7 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 2
 ssh $(whoami)@registry2.example.com -- "date" || sleep 3
 ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 
-set -x
-
 source <(normalize-aba-conf)
-export ask=
 
 # Copy and edit mirror.conf 
 test-cmd 'scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf'
@@ -160,22 +158,8 @@ mylog "===> Test save/load complete "
 mylog Test use-case for not using VMware 
 
 > vmware.conf
-rm -rf compact 
-
-### mkdir compact 
-### ln -s ../templates/Makefile compact
-### scripts/j2 templates/cluster-compact.conf > compact/cluster.conf
-
-# This needs to be made manuually, since we only want to run "make iso"
-### source <(normalize-aba-conf)
-### export ask=
-
 rm -rf compact
-test-cmd make compact $targetiso
-#mkdir  compact
-#ln -s ../templates/Makefile compact/Makefile
-#scripts/j2 templates/cluster-compact.conf > compact/cluster.conf
-#make -C compact iso 
+test-cmd make compact target=iso # Since we're testing bare-metal, only create iso
 
 mylog "Test 'no vmware' complete"
 
