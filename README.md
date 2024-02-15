@@ -229,13 +229,13 @@ make help        # Help is available in all Makefiles (in aba/Makefile  aba/mirr
 
 ## Features that are not implemented yet
 
-- Make it easier to install Operators (ImageContentSourcePolicy and CatalogSource) once OpenShift has been installed.
+- Make it easier to install Operators (ImageContentSourcePolicy and CatalogSource) once OpenShift has been installed. (done)
 
-- Make it easier to integrate with vSphere, including storage. 
+- Make it easier to integrate with vSphere, including storage.  (done)
 
 - Configure htpasswd login, add users, disable kubeadmin.
 
-- Disable OperatorHub and configure the internal registry to serve images.
+- Disable OperatorHub and configure the internal registry to serve images. (done)
 
 - Use PXE boot as alternative to ISO upload.
 
