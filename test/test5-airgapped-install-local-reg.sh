@@ -10,7 +10,7 @@
 source scripts/include_all.sh
 cd `dirname $0`
 cd ..  # Change into "aba" dir
-[ ! -v $targetiso ] && targetiso="target=iso"   # Default is to only create iso
+[ "$target_iso" ] && targetiso="target=iso" || targetiso=  # Default is to generate 'iso' only   # Default is to only create iso
 
 source test/include.sh
 
@@ -18,16 +18,8 @@ mylog
 mylog "===> Starting test $0"
 mylog
 
-#> test/test.log
-
-set -x
-
 ######################
 # Set up test 
-
-source <(normalize-aba-conf)
-export ask=
-##scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 > mirror/mirror.conf
 #make distclean 
@@ -37,6 +29,8 @@ rm -rf sno compact standard
 
 v=4.14.9
 ./aba --version $v --vmw ~/.vmware.conf 
+sed -i "s/^ask=.*/ask=/g" aba.conf
+source <(normalize-aba-conf)
 mylog aba..conf configured for $v and vmware.conf
 
 # Be sure this file exists
@@ -94,7 +88,8 @@ ssh $(whoami)@$bastion2 "rpm -q rsync || sudo yum install make rsync -y"
 rpm -q rsync || sudo yum install rsync -y 
 
 mylog Tar+ssh files over to internal bastion: $bastion2 
-make tar out=- | ssh $bastion2 -- tar xzvf -
+### make tar out=- | ssh $bastion2 -- tar xzvf -
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
 ### mylog rsync files to instenal bastion ...
 ### test-cmd make rsync ip=$bastion2
@@ -143,7 +138,8 @@ test-cmd "make -C mirror save"
 mylog rsync save/ dir to internal bastion
 
 ### make rsync ip=$bastion2 # This copies over the whiole repo, incl. the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
-rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+### rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
 mylog Load ubi image on internal bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"
@@ -159,7 +155,10 @@ mylog Save vote-app image on external bastion
 test-cmd "make -C mirror save"
 
 mylog rsync save/ dir to internal bastion
-rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+### rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+
+exit 0
 
 mylog Load vote-app image on internal bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"

@@ -61,7 +61,7 @@ if [ "$reg_code" = "200" ]; then
 	echo
 	echo "Warning: Quay registry already exists at $reg_host:$reg_port. "
 	echo "         If you want to use this registry, copy this registry's pull secret file and (optionally) root CA file into 'mirror/regcreds/' and try again."
-	echo "         They must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
+	echo "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
 	echo "         See the README.md for further instructions."
 	echo 
 

@@ -5,6 +5,9 @@
 
 now=$(date "+%Y-%m-%d-%H-%M-%S")
 
+cd ..  # Assume 'kame inc' runs from aba's top level dir
+mkdir -p ~/.aba   # Store all time stamp files in here
+
 if [ "$dir" != "-" ]; then
 	dest=$dir/image-backup-$now.tgz
 
@@ -26,16 +29,42 @@ else
 	dest="-"
 fi
 
-if [ ! -f .backup.time.previous ]; then
-	rm -f .backup.time.*
-	# Do first full backup, exit if backup fails
-	tar czf $dest $(find s*/oc-mirror-workspace/ -type f) || exit 
-else
-	# Do inc. backup since the last backup, exit if backup fails
-	file_list=$(find s*/oc-mirror-workspace/ -type f -newer .backup.time.previous) 
-	[ ! "$file_list" ] && echo "No new files to backup" >&2 && exit 
-	tar czf $dest $file_list || exit
-fi
-time_stamp_file=.backup.time.$now
-touch $time_stamp_file && ln -fs $time_stamp_file .backup.time.previous
+[ ! -f ~/.aba/previous.backup ] && touch -t 7001010000 ~/.aba/previous.backup
+
+#find ~/.aba/backup* -type f ! -newer ~/.aba/previous.backup | xargs echo rm 
+
+file_list=$(find		\
+	bin			\
+	aba/aba			\
+	aba/aba.conf		\
+	aba/Makefile		\
+	aba/mirror		\
+	aba/others		\
+	aba/README.md		\
+	aba/README-OTHER.md	\
+	aba/scripts		\
+	aba/templates		\
+	aba/Troubleshooting.md	\
+	aba/vmware.conf		\
+-type f \
+	! -path "aba/.git*" -a \
+	! -path "aba/cli/*" -a \
+	! -path "aba/mirror/mirror-registry" -a \
+	! -path "aba/mirror/.initialized" \
+	! -path "aba/mirror/.rpms" \
+	! -path "aba/mirror/.installed" \
+	! -path "aba/mirror/.loaded" \
+	! -path "aba/mirror/execution-environment.tar" \
+	! -path "aba/mirror/image-archive.tar" \
+	! -path "aba/*/iso-agent-based*" \
+-newer ~/.aba/previous.backup \
+)
+
+[ ! "$file_list" ] && echo "No new files to backup" >&2 && exit 1
+echo Generating tar archive to $dest >&2
+tar czf $dest $file_list || exit 
+
+
+time_stamp_file=~/.aba/backup.time.$now
+touch $time_stamp_file && ln -fs $time_stamp_file ~/.aba/previous.backup
 

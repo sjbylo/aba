@@ -10,7 +10,7 @@
 source scripts/include_all.sh
 cd `dirname $0`
 cd ..  # Change into "aba" dir
-[ ! -v $targetiso ] && targetiso="target=iso"   # Default is to only create iso
+[ "$target_iso" ] && targetiso="target=iso" || targetiso=  # Default is to generate 'iso' only   # Default is to only create iso
 
 source test/include.sh
 
@@ -18,22 +18,19 @@ mylog
 mylog "===> Starting test $0"
 mylog
 
-#> test/test.log
-set -x
-
 ######################
 # Set up test 
 
 > mirror/mirror.conf
 #make distclean 
-test-cmd make -C mirror distclean 
+test-cmd "make -C mirror distclean"
 rm -rf sno compact standard 
 #make uninstall clean 
 
 test-cmd ./aba --version 4.14.9 --vmw ~/.vmware.conf 
 ### ver=$(cat ./target-ocp-version.conf)
+sed -i "s/^ask=.*/ask=/g" aba.conf
 source <(normalize-aba-conf)
-export ask=
 ### [ -s mirror/mirror.conf ] && touch mirror/mirror.conf
 
 # Be sure this file exists
