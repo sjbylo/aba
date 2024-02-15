@@ -5,33 +5,9 @@
 
 now=$(date "+%Y-%m-%d-%H-%M-%S")
 
-cd ..  # Assume 'kame inc' runs from aba's top level dir
-mkdir -p ~/.aba   # Store all time stamp files in here
+cd ..  # Assume this script is run via 'make inc', i.e. runs from aba's top level dir
 
-if [ "$dir" != "-" ]; then
-	dest=$dir/image-backup-$now.tgz
-
-	echo "Writing tar file"
-	echo
-	echo "After the tar file has been written, copy the tar file to your *internal bastion* and"
-	echo "extract it under your home directory with the command:"
-	echo "cd; tar xzvf /path/to/image-backup-<timestamp>.tgz"
-	echo
-	echo "Load (and install, if needeed) the registry"
-	echo "make load"
-	echo
-	echo "Create the iso and install a cluster"
-	echo "make cluster name=mycluster"
-	echo "cd mycluster; make help"
-	echo
-	echo "Writing tar file to $dest (use 'make tar out=/path/to/thumbdrive' to write to your portable storage device) ..."
-else
-	dest="-"
-fi
-
-[ ! -f ~/.aba/previous.backup ] && touch -t 7001010000 ~/.aba/previous.backup
-
-#find ~/.aba/backup* -type f ! -newer ~/.aba/previous.backup | xargs echo rm 
+[ ! -f ~/.aba.previous.backup ] && touch -t 7001010000 ~/.aba.previous.backup   # Set up for initial full backup 
 
 file_list=$(find		\
 	bin			\
@@ -47,28 +23,50 @@ file_list=$(find		\
 	aba/Troubleshooting.md	\
 	aba/vmware.conf		\
 -type f \
-	! -path "aba/.git*" -a \
-	! -path "aba/cli/*" -a \
-	! -path "aba/mirror/mirror-registry" -a \
-	! -path "aba/mirror/.initialized" \
-	! -path "aba/mirror/.rpms" \
-	! -path "aba/mirror/.installed" \
-	! -path "aba/mirror/.loaded" \
-	! -path "aba/mirror/execution-environment.tar" \
-	! -path "aba/mirror/image-archive.tar" \
-	! -path "aba/mirror/quay.tar" \
-	! -path "aba/mirror/pause.tar" \
-	! -path "aba/mirror/postgres.tar" \
-	! -path "aba/mirror/redis.tar" \
-	! -path "aba/*/iso-agent-based*" \
--newer ~/.aba/previous.backup \
+	! -path "aba/.git*" -a 				\
+	! -path "aba/cli/*" -a 				\
+	! -path "aba/mirror/mirror-registry" -a 	\
+	! -path "aba/mirror/.initialized" 		\
+	! -path "aba/mirror/.rpms" 			\
+	! -path "aba/mirror/.installed" 		\
+	! -path "aba/mirror/.loaded" 			\
+	! -path "aba/mirror/execution-environment.tar" 	\
+	! -path "aba/mirror/image-archive.tar" 		\
+	! -path "aba/mirror/quay.tar" 			\
+	! -path "aba/mirror/pause.tar" 			\
+	! -path "aba/mirror/postgres.tar" 		\
+	! -path "aba/mirror/redis.tar" 			\
+	! -path "aba/*/iso-agent-based*" 		\
+	\
+	-newer ~/.aba.previous.backup 			\
 )
 
-[ ! "$file_list" ] && echo "No new files to backup" >&2 && exit 1
+[ ! "$file_list" ] && echo "No new files to backup" >&2 && exit 0
+
+if [ "$dir" != "-" ]; then
+	dest=$dir/image-backup-$now.tgz
+
+	echo "Writing tar file to $dest"
+	echo
+	echo "After the tar file has been written, copy the tar file to your *internal bastion* and"
+	echo "extract it under your home directory with the command:"
+	echo "cd; tar xzvf /path/to/image-backup-$now.tgz"
+	echo
+	echo "Load (and install, if needeed) the registry"
+	echo "make load"
+	echo
+	echo "Then, create the iso file and install a cluster:"
+	echo "make cluster name=mycluster"
+	echo "cd mycluster; make or make help"
+	echo
+	echo "Writing tar file to $dest (note, run 'make help' for more options)"
+else
+	dest="-"
+fi
+
 echo Generating tar archive to $dest >&2
 tar czf $dest $file_list || exit 
 
-
-time_stamp_file=~/.aba/backup.time.$now
-touch $time_stamp_file && ln -fs $time_stamp_file ~/.aba/previous.backup
+# Upon success, make a note of the time
+touch ~/.aba.previous.backup
 
