@@ -56,6 +56,10 @@ file_list=$(find		\
 	! -path "aba/mirror/.loaded" \
 	! -path "aba/mirror/execution-environment.tar" \
 	! -path "aba/mirror/image-archive.tar" \
+	! -path "aba/mirror/quay.tar" \
+	! -path "aba/mirror/pause.tar" \
+	! -path "aba/mirror/postgres.tar" \
+	! -path "aba/mirror/redis.tar" \
 	! -path "aba/*/iso-agent-based*" \
 -newer ~/.aba/previous.backup \
 )
