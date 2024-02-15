@@ -33,7 +33,7 @@ if [ ! -f .backup.time.previous ]; then
 else
 	# Do inc. backup since the last backup, exit if backup fails
 	file_list=$(find s*/oc-mirror-workspace/ -type f -newer .backup.time.previous) 
-	[ ! "$file_list" ] && echo "No files newer than '.backup.time.previous' to backup" >&2 && exit 
+	[ ! "$file_list" ] && echo "No new files to backup" >&2 && exit 
 	tar czf $dest $file_list || exit
 fi
 time_stamp_file=.backup.time.$now
