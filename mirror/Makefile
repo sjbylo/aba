@@ -105,6 +105,10 @@ uninstall: init             mirror-registry .uninstalled     ## Uninstall any pr
 uninstallclean:
 	@rm -f .uninstalled
 
+.PHONY: inc
+inc:   ## Create an incremental tar backup of the sync and/or save directories, after running 'make save' or 'make sync'
+	@scripts/inc-backup.sh $(out)
+
 .PHONY: tidy 
 tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
 	rm -rf *.tar mirror-registry .rpms .installed .loaded .initialized
