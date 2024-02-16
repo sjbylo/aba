@@ -16,6 +16,8 @@ mylog
 mylog "===> Starting test $0"
 mylog
 
+rm -f ~/.aba.previous.backup
+
 #> test/test.log
 
 > mirror/mirror.conf
