@@ -13,7 +13,7 @@ cd ..  # Change into "aba" dir
 source scripts/include_all.sh
 source test/include.sh
 
-[ "$target_iso" ] && targetiso="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
+[ ! "$target_full" ] && targetiso=target=iso   # Default is to generate 'iso' only   # Default is to only create iso
 mylog targetiso=$targetiso
 
 mylog
