@@ -3,11 +3,14 @@
 # ... then savd/load images and install clusters. 
 
 source scripts/include_all.sh
+
 cd `dirname $0`
 cd ..
-[ "$target_iso" ] && targetiso="target=iso" || targetiso=  # Default is to generate 'iso' only   # Default is to only create iso
 
 source test/include.sh
+
+[ "$target_iso" ] && targetiso="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
+mylog targetiso=$targetiso
 
 mylog
 mylog "===> Starting test $0"

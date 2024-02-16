@@ -8,11 +8,14 @@
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
 source scripts/include_all.sh
+
 cd `dirname $0`
 cd ..  # Change into "aba" dir
-[ "$target_iso" ] && targetiso="target=iso" || targetiso=  # Default is to generate 'iso' only   # Default is to only create iso
 
 source test/include.sh
+
+[ "$target_iso" ] && targetiso="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
+mylog targetiso=$targetiso
 
 mylog
 mylog "===> Starting test $0"
@@ -28,7 +31,7 @@ rm -rf sno compact standard
 #make uninstall clean 
 
 v=4.14.9
-./aba --version $v --vmw ~/.vmware.conf 
+test-cmd ./aba --version $v --vmw ~/.vmware.conf 
 sed -i "s/^ask=.*/ask=/g" aba.conf
 source <(normalize-aba-conf)
 mylog aba..conf configured for $v and vmware.conf
@@ -157,8 +160,6 @@ test-cmd "make -C mirror save"
 mylog rsync save/ dir to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 ### rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
-
-exit 0
 
 mylog Load vote-app image on internal bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"
