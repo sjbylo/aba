@@ -12,7 +12,9 @@ source <(normalize-mirror-conf)
 
 export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 	
-# Add registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331
+echo
+echo "Add registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331"
+echo
 # "Service Mesh Jaeger and Prometheus can't start in disconnected environment"
 if [ -s regcreds/rootCA.pem ]; then
 	echo "Adding the trust CA of the registry ($reg_host) ..."
@@ -31,63 +33,85 @@ fi
 
 echo "############################"
 
-# Try to apply the imageContentSourcePolicy resource files that were created by oc-mirror!
+echo
+echo Applying the imageContentSourcePolicy resource files that were created by oc-mirror
+echo
 # If one should clash with an existing ICSP resource, change its name by incrementing the value (-x) and try to apply it again.
 # See this issue: https://github.com/openshift/oc-mirror/issues/597
-for f in $(find mirror/s*/oc-* | grep /imageContentSourcePolicy.yaml$)
-do
-	echo Applying file $f
-	oc create -f $f && continue   # If it can be created, move to the next file
-
-	# If it can't be created....
-	# If it's different, then apply the resource with a different name
-	v=$(cat $f | grep "^  name: .*" | head -1 | cut -d- -f2)
-	while ! oc diff -f $f
+file_list=$(find mirror/s*/oc-* -type f | grep /imageContentSourcePolicy.yaml$)
+if [ "$file_list" ]; then
+	for f in $file_list
 	do
-		# oc-mirror creates resources with names xxx-0 fetch the digit after the '-' and increment.
-		# head needed since soemtimes the files have more than one resource!
-		let v=$v+1
-		echo $v | grep -E "^[0-9]+$" || continue  # Check $v is an integer
+		echo "Running: oc create -f $f"
+		oc create -f $f && continue   # If it can be created, move to the next file
 
-		echo "Applying resource(s):" 
-		grep -E -o 'name: [^-]+' $f
+		# If it can't be created....
+		# If it's different, then apply the resource with a different name
+		v=$(cat $f | grep "^  name: .*" | head -1 | cut -d- -f2)
+		while ! oc diff -f $f > /dev/null
+		do
+			# oc-mirror creates resources with names xxx-0 fetch the digit after the '-' and increment.
+			# head needed since soemtimes the files have more than one resource!
+			let v=$v+1
+			echo $v | grep -E "^[0-9]+$" || continue  # Check $v is an integer
 
-		# Adjust the name in the file
-		sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
-		oc create -f $f
+			echo "Applying resource(s):" 
+			grep -E -o 'name: [^-]+' $f
+
+			# Adjust the name in the file
+			sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
+			echo "Running: oc create -f $f"
+			oc create -f $f
+		done
 	done
-done
+else
+	echo "No imageContentSourcePolicy.yaml files found under mirror/s*/oc-*"
+fi
+
 echo "############################"
 
-echo For disconnected environment, disable to online public catalog sources
+echo
+echo For disconnected environments, disable online public catalog sources
+echo
 ret=$(curl -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/ || true)
-[ "$ret" != "200" ] && \
+if [ "$ret" != "200" ]; then
 	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
-       		echo "Patched OperatorHub, disabled Red Hat public catalog sources"
+       	echo "Patched OperatorHub, disabled Red Hat public catalog sources"
+else
+	echo "Access to the Internet from this host is working, not disabling public catalog sources"
+fi
 
-# Install any CatalogSources
-list=$(find mirror/sync/oc-mirror-workspace/results-* mirror/save/oc-mirror-workspace/results-* -name catalogSource*.yaml 2>/dev/null || true)
+echo "############################"
+
+echo
+echo Install any CatalogSources
+echo
+list=$(find mirror/sync/oc-mirror-workspace/results-* mirror/save/oc-mirror-workspace/results-* -type f -name catalogSource*.yaml 2>/dev/null || true)
 if [ "$list" ]; then
 	cs_file=$(ls -tr $list | tail -1)
 	echo Looking for latest CatalogSource file:
 	echo "Running: oc apply -f $cs_file"
-	oc apply -f $cs_file
+	if oc create -f $cs_file; then
 
-	echo Waiting 60s ...
-	sleep 60
+		echo Waiting 60s ...
+		sleep 60
 
-	echo "Waiting for CatalogSource 'cs-redhat-operator-index' to become 'ready' ..."
-	i=2
-	time while ! oc get catalogsources.operators.coreos.com  cs-redhat-operator-index -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -i ^ready$
-	do
-		echo -n .
-		sleep $i
-		let i=$i+1
-		[ $i -gt 25 ] && echo "Giving up waiting ..." && break
-	done
+		echo "Waiting for CatalogSource 'cs-redhat-operator-index' to become 'ready' ..."
+		i=2
+		time while ! oc get catalogsources.operators.coreos.com  cs-redhat-operator-index -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -i ^ready$
+		do
+			echo -n .
+			sleep $i
+			let i=$i+1
+			[ $i -gt 25 ] && echo "Giving up waiting ..." && break
+		done
+	else
+		echo "The CatalogSource already exists.  Nothing more to do!"
+	fi
 else
-	echo "No CatalogSources found under mirror/save/oc-mirror-workspace.  You would need to load some Operators first by editing the mirror/save/imageset-config-save.yaml file. See the README for more."
+	echo "No CatalogSources found under mirror/{save,sync}/oc-mirror-workspace."
+	echo "You would need to load some Operators first by editing the mirror/save/imageset-config-save.yaml file. See the README for more."
 fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
