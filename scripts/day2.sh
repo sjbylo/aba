@@ -59,7 +59,7 @@ do
 done
 echo "############################"
 
-# For disconnected environment, disable to online public catalog sources
+echo For disconnected environment, disable to online public catalog sources
 ret=$(curl -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/ || true)
 [ "$ret" != "200" ] && \
 	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
@@ -70,23 +70,27 @@ ret=$(curl -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://r
 list=$(find mirror/sync/oc-mirror-workspace/results-* mirror/save/oc-mirror-workspace/results-* -name catalogSource*.yaml 2>/dev/null || true)
 if [ "$list" ]; then
 	cs_file=$(ls -tr $list | tail -1)
+	echo Looking for latest CatalogSource file:
 	echo "Running: oc apply -f $cs_file"
 	oc apply -f $cs_file
+
+	echo Waiting 60s ...
+	sleep 60
+
+	echo "Waiting for CatalogSource 'cs-redhat-operator-index' to become 'ready' ..."
+	i=2
+	time while ! oc get catalogsources.operators.coreos.com  cs-redhat-operator-index -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -i ^ready$
+	do
+		echo -n .
+		sleep $i
+		let i=$i+1
+		[ $i -gt 25 ] && echo "Giving up waiting ..." && break
+	done
+else
+	echo "No CatalogSources found under mirror/save/oc-mirror-workspace.  You would need to load some Operators first by editing the mirror/save/imageset-config-save.yaml file. See the README for more."
 fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
-
-sleep 60
-
-echo "Waiting for CatalogSource to become 'ready' ..."
-i=2
-time while ! oc get catalogsources.operators.coreos.com  cs-redhat-operator-index -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -i ^ready$
-do
-	echo -n .
-	sleep $i
-	let i=$i+1
-	[ $i -gt 25 ] && echo "Giving up waiting ..." && break
-done
 
 exit 0
 
