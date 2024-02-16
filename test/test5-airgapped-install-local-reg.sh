@@ -13,7 +13,7 @@ cd ..  # Change into "aba" dir
 source scripts/include_all.sh
 source test/include.sh
 
-[ "$target_iso" ] && targetiso="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
+[ ! "$target_full" ] && targetiso=target=iso   # Default is to generate 'iso' only   # Default is to only create iso
 mylog targetiso=$targetiso
 
 mylog
@@ -260,6 +260,8 @@ mylog "make -C aba/mirror uninstall"
 remote-test-cmd $bastion2 "make -C aba/mirror uninstall"
 
 mylog "===> Test $0 complete "
+
+rm -rf test/mesh 
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak
 

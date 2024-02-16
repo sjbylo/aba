@@ -1,6 +1,6 @@
 cd ~/aba
-#export target_iso=1   # Build only iso
-export target_iso=    # Build full sno
+#export target_full=1   # Build vm
+export target_full=    # Build only iso
 rm -f [0-5]
 (
 	> test/test.log
