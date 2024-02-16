@@ -22,6 +22,7 @@ file_list=$(find		\
 	aba/templates		\
 	aba/Troubleshooting.md	\
 	aba/vmware.conf		\
+	aba/test		\
 -type f \
 	! -path "aba/.git*" -a 				\
 	! -path "aba/cli/*" -a 				\

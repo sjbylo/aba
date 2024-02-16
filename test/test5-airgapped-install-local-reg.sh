@@ -7,11 +7,10 @@
 # Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses rsync to copy over the aba repo. 
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
-source scripts/include_all.sh
-
 cd `dirname $0`
 cd ..  # Change into "aba" dir
 
+source scripts/include_all.sh
 source test/include.sh
 
 [ "$target_iso" ] && targetiso="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
