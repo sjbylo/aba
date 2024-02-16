@@ -70,6 +70,10 @@ refresh: init  vmware.conf ## Delete and re-create the VMs
 create: vmware.conf  ## Create the VMs based on the agent-based config files
 	scripts/vmw-create.sh $(debug)
 
+.PHONEY: ls
+ls:  ## List VMs
+	@scripts/vmw-ls.sh
+
 .PHONEY: stop
 stop: vmware.conf ## Shut down the VM guest OS
 	scripts/vmw-stop.sh $(debug)
