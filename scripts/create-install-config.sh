@@ -31,9 +31,7 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 	echo Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at $reg_host
 
 	# If we pull from the local reg. then we define the image content sources
-	##[ -s templates/image-content-sources.yaml.j2 ] && \
-		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2) #|| \
-			# echo WARNING: No file templates/image-content-sources.yaml.j2
+	export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 
 	# ... we also, need a root CA...
 	if [ -s regcreds/rootCA.pem ]; then
@@ -49,7 +47,7 @@ else
 		export pull_secret=$(cat ~/.pull-secret.json)
 		echo Found pull secret file at ~/.pull-secret.json
 	else
-		echo "Error: No pull secrets found. Aborting!" 
+		echo "Error: No pull secrets found. Aborting!  See the README for more!" 
 		exit 1
 	fi
 fi
