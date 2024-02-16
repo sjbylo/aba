@@ -7,7 +7,7 @@ if [ ! -s vmware.conf ]; then
 	echo
 	echo "Do you want to install OpenShift onto vSphere or ESXi?"
 	#echo "Edit the 'govc' config file (vmware.conf) to enable access to vCenter or ESXi. "
-	echo -n "Hit Return to edit or 'n' to skip (y/n) [y]: " 
+	echo -n "Hit Return to edit the 'vmware.conf' file or 'n' to skip (y/n) [y]: " 
 	read yn
 	if [ "$yn" = "y" -o "$yn" = "" ]; then
 		if [ -s ~/.vmware.conf ]; then
