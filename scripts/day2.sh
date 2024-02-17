@@ -53,15 +53,15 @@ if [ "$file_list" ]; then
 			# oc-mirror creates resources with names xxx-0 fetch the digit after the '-' and increment.
 			# head needed since soemtimes the files have more than one resource!
 			let v=$v+1
-			echo $v | grep -E "^[0-9]+$" || continue  # Check $v is an integer
+			###echo $v | grep -E "^[0-9]+$" || continue  # Check $v is an integer
 
 			echo "Applying resource(s):" 
 			grep -E -o 'name: [^-]+' $f
 
-			# Adjust the name in the file
+			# Adjust the name: in the file
 			sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
 			echo "Running: oc create -f $f"
-			oc create -f $f
+			oc create -f $f || true
 		done
 	done
 else
