@@ -3,7 +3,7 @@ test-cmd() {
 	echo "$@" >> test/test.log
 	eval "$@"
 
-	echo done >> test/test.log
+	#echo done >> test/test.log
 }
 
 remote-test-cmd() {
@@ -13,7 +13,7 @@ remote-test-cmd() {
 	echo "$host: $@" >> test/test.log
 	ssh $host -- "$@"
 
-	echo done >> test/test.log
+	#echo done >> test/test.log
 }
 
 mylog() {
