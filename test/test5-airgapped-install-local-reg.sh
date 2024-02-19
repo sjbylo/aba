@@ -33,7 +33,8 @@ rm -rf sno compact standard
 
 v=4.14.9
 test-cmd ./aba --version $v --vmw ~/.vmware.conf 
-sed -i "s/^ask=.*/ask=/g" aba.conf
+#sed -i "s/^ask=.*/ask=/g" aba.conf
+sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
 source <(normalize-aba-conf)
 mylog aba..conf configured for $v and vmware.conf
 
@@ -158,7 +159,7 @@ END
 mylog Save vote-app image on external bastion
 test-cmd "make -C mirror save"
 
-mylog rsync save/ dir to internal bastion
+mylog Copy save/ dir to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 ### rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 
@@ -167,6 +168,8 @@ remote-test-cmd $bastion2 "make -C aba/mirror load"
 
 mylog Install the cluster proper now
 remote-test-cmd $bastion2 "make -C aba/sno"
+mylog List VMs
+remote-test-cmd $bastion2 "make -C aba/sno ls"
 
 ######################
 
@@ -210,7 +213,8 @@ mylog Save the mesh images on external bastion
 test-cmd "make -C mirror save"
 
 mylog rsync save/ dir to internal bastion
-rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+#rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 
 remote-test-cmd $bastion2 "make -C aba/mirror load"
 remote-test-cmd $bastion2 "make -C aba/sno day2"
@@ -234,11 +238,13 @@ mylog Download mesh demo into test/mesh, for use by deploy script
 ) 
 
 ### make rsync ip=$bastion2  # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
-mylog rsync save/ dir to internal bastion
+mylog Copy save/ dir to internal bastion
 pwd
-rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+#rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
-rsync --progress --partial --times -avz test   $bastion2:aba
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+#rsync --progress --partial --times -avz test   $bastion2:aba
 ### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 
 mylog Run make load on internal bastion
