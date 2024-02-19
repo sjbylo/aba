@@ -39,7 +39,8 @@ echo Ensure there is enough disk space under $reg_root.  This can take 5-20 mins
 
 # Set up script to help for manual re-sync
 # --continue-on-error  needed when mirroring operator images
-cmd="oc mirror --continue-on-error $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
+#cmd="oc mirror --continue-on-error $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
+cmd="oc mirror                     $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
 echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
 echo "Running: $cmd"
 ./load-mirror.sh

@@ -32,7 +32,8 @@ echo
 
 # Set up script to help for re-sync
 # --continue-on-error  needed when mirroring operator images
-cmd="oc mirror --continue-on-error --config=./imageset-config-save.yaml file://."
+#cmd="oc mirror --continue-on-error --config=./imageset-config-save.yaml file://."
+cmd="oc mirror                     --config=./imageset-config-save.yaml file://."
 echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 echo "Running $cmd"
 ./save-mirror.sh
