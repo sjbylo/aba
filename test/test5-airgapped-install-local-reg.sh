@@ -33,8 +33,8 @@ rm -rf sno compact standard
 
 #v=4.14.9
 v=4.13.32
+rm -f aba.conf  # Set it up next
 test-cmd ./aba --version $v --vmw ~/.vmware.conf 
-#sed -i "s/^ask=.*/ask=/g" aba.conf
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
 source <(normalize-aba-conf)
 mylog aba..conf configured for $v and vmware.conf
@@ -234,7 +234,7 @@ mylog Download mesh demo into test/mesh, for use by deploy script
 (
 	rm -rf test/mesh && mkdir test/mesh && cd test/mesh && git clone https://github.com/sjbylo/openshift-service-mesh-demo.git && \
 	cd openshift-service-mesh-demo && \
-	sed -i "s/quay\.io/$reg_host:$reg_port\/$reg_path/g" */*.yaml */*/*.yaml */*/*/*.yaml &&
+	sed -i "s#quay\.io#$reg_host:$reg_port/$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml &&
 	sed -i "s/source: .*/source: cs-redhat-operator-index/g" operators/* 
 ) 
 
@@ -251,9 +251,18 @@ make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 mylog Run make load on internal bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"
 
-test-cmd sleep 20
-remote-test-cmd $bastion2 "make -C aba/sno day2"   # Install CA cert and activate local op. hub
-test-cmd sleep 60
+test-cmd sleep 60    # For some reason, the cluster was not still not fully ready! 
+
+for i in 1 2 3 4 5 6
+do
+	# Sometimes the cluster is not fully ready... OCP API can fail, so re-run....
+	echo "Run 'day2' attempt number $i ..."
+	remote-test-cmd $bastion2 "make -C aba/sno day2" && break || true  # Install CA cert and activate local op. hub
+	echo Sleeping ...
+	sleep `expr $i \* 30`
+done
+# Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
+test-cmd sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
 remote-test-cmd $bastion2 "aba/test/deploy-mesh.sh"
 
 mylog "Test: 'operator' complete "

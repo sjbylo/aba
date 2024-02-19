@@ -150,6 +150,8 @@ Now continue with "Install OpenShift" below.
 
 Note that the above 'air-gapped workflow' can be repeated, for example to install Operators or to upgrade OpenShift by changing the 'save/imageset-save.yaml' file on the external bastion and running 'make save', copying the new 'tar' file(s) in the save/ directory over to your internal bastion and then loading them into the registry with 'make load'. 
 
+Generated image sets are sequential and must be pushed to the target mirror registry in order. You can derive the sequence number from the file name of the generated image set archive file.
+
 ## Install OpenShift 
 
 Edit the file 'templates/cluster-sno.conf' to match your environment. 
