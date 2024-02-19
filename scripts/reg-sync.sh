@@ -43,7 +43,7 @@ if [ "$reg_code" != "200" ]; then
 fi
 
 podman logout --all 
-echo -n "Checking registry access is working using 'podman login': "
+echo -n "Checking registry access is working using 'podman login' ... "
 podman login -u init -p $reg_password $reg_url 
 
 mkdir -p sync 

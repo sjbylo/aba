@@ -5,6 +5,8 @@ cd $dir
 
 source scripts/include_all.sh
 
+[ ! -f aba.conf ] && cp templates/aba.conf .
+
 while [ "$*" ] 
 do
 	if [ "$1" = "--debug" -o "$1" = "-d" ]; then
@@ -86,9 +88,7 @@ if [ ! "$auto_ver" ]; then
 		[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev
 	done
 
-	#sed -i "s/ocp_version=.*/ocp_version=$target_ver/g" aba.conf
 	sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
-	#echo "$target_ver" > target-ocp-version.conf # FIXME to delete
 
 fi
 

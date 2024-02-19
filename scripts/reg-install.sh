@@ -42,7 +42,7 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 	podman logout --all 
-	echo -n "Checking registry access is working using 'podman login': "
+	echo -n "Checking registry access is working using 'podman login' ... "
 	echo "Running: podman login $tls_verify_opts --authfile regcreds/pull-secret-mirror.json $reg_url"
 	podman login $tls_verify_opts --authfile regcreds/pull-secret-mirror.json $reg_url 
 
@@ -168,7 +168,7 @@ if [ "$reg_ssh" ]; then
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 	podman logout --all 
-	echo -n "Checking registry access is working using 'podman login': "
+	echo -n "Checking registry access is working using 'podman login' ... "
 	echo "Running: podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url"
 	podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url 
 
@@ -228,7 +228,7 @@ else
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 	podman logout --all 
-	echo -n "Checking registry access is working using 'podman login': "
+	echo -n "Checking registry access is working using 'podman login' ... "
 	echo "Running: podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url"
 	podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url 
 

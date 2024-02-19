@@ -14,7 +14,7 @@ source <(normalize-mirror-conf)
 export reg_url=https://$reg_host:$reg_port
 
 ### podman logout --all 
-### echo -n "Checking registry access to $reg_url is working using 'podman login': "
+### echo -n "Checking registry access to $reg_url is working using 'podman login' ... "
 ### ##podman login -u init -p $reg_password $reg_url 
 ### podman login --authfile regcreds/pull-secret-mirror.json $reg_url 
 

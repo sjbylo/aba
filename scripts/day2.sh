@@ -13,9 +13,10 @@ source <(normalize-mirror-conf)
 export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 	
 echo
-echo "Add registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331"
-echo
-# "Service Mesh Jaeger and Prometheus can't start in disconnected environment"
+echo "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
+echo "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image."
+echo "Add registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331 for more"
+echo "This problem with the CA could affect other applications in the cluster."
 if [ -s regcreds/rootCA.pem ]; then
 	echo "Adding the trust CA of the registry ($reg_host) ..."
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
@@ -27,6 +28,18 @@ if [ -s regcreds/rootCA.pem ]; then
 	echo "Running: oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
 	oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'
 
+	# The above workaround describes re-creating the is/oauth-proxy 
+	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
+		oc delete imagestream -n openshift oauth-proxy
+		sleep 30
+
+		# Assume once it's re-created then it's working
+		while ! oc get imagestream -n openshift oauth-proxy 
+		do
+			sleep 10
+		done
+	fi
+	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
 else	
 	echo "Warning: No file regcreds/rootCA.pem.  Assuming mirror registry is using http."
 fi
@@ -78,6 +91,7 @@ if [ "$ret" != "200" ]; then
 	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
        	echo "Patched OperatorHub, disabled Red Hat public catalog sources"
+
 else
 	echo "Access to the Internet from this host is working, not disabling public catalog sources"
 fi
@@ -93,10 +107,7 @@ if [ "$list" ]; then
 	echo Looking for latest CatalogSource file:
 	echo "Running: oc apply -f $cs_file"
 
-	oc create -f $cs_file && sleep 60 || true
-
-	#echo Waiting 60s ...
-	#sleep 60
+	oc create -f $cs_file && (echo Waiting 60s ...; sleep 60) || true
 
 	echo "Waiting for CatalogSource 'cs-redhat-operator-index' to become 'ready' ..."
 	i=2
