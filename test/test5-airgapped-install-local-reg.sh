@@ -31,7 +31,8 @@ test-cmd "make -C mirror distclean"
 rm -rf sno compact standard 
 #make uninstall clean 
 
-v=4.14.9
+#v=4.14.9
+v=4.13.32
 test-cmd ./aba --version $v --vmw ~/.vmware.conf 
 #sed -i "s/^ask=.*/ask=/g" aba.conf
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
@@ -208,16 +209,16 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 #        - name: release-2.9
 END
 
-mylog Save the mesh images on external bastion
+### mylog Save the mesh images on external bastion
 
-test-cmd "make -C mirror save"
+### test-cmd "make -C mirror save"
 
-mylog rsync save/ dir to internal bastion
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+### mylog rsync save/ dir to internal bastion
+### make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 #rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 
-remote-test-cmd $bastion2 "make -C aba/mirror load"
-remote-test-cmd $bastion2 "make -C aba/sno day2"
+### remote-test-cmd $bastion2 "make -C aba/mirror load"
+### remote-test-cmd $bastion2 "make -C aba/sno day2"
 
 cat >> mirror/save/imageset-config-save.yaml <<END
       - name: jaeger-product
@@ -240,10 +241,10 @@ mylog Download mesh demo into test/mesh, for use by deploy script
 ### make rsync ip=$bastion2  # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
 mylog Copy save/ dir to internal bastion
 pwd
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+### make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 #rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf - 
 #rsync --progress --partial --times -avz test   $bastion2:aba
 ### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 
