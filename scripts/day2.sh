@@ -92,23 +92,23 @@ if [ "$list" ]; then
 	cs_file=$(ls -tr $list | tail -1)
 	echo Looking for latest CatalogSource file:
 	echo "Running: oc apply -f $cs_file"
-	if oc create -f $cs_file; then
 
-		echo Waiting 60s ...
-		sleep 60
+	oc create -f $cs_file && sleep 60 || true
 
-		echo "Waiting for CatalogSource 'cs-redhat-operator-index' to become 'ready' ..."
-		i=2
-		time while ! oc get catalogsources.operators.coreos.com  cs-redhat-operator-index -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -i ^ready$
-		do
-			echo -n .
-			sleep $i
-			let i=$i+1
-			[ $i -gt 25 ] && echo "Giving up waiting ..." && break
-		done
-	else
-		echo "The CatalogSource already exists.  Nothing more to do!"
-	fi
+	#echo Waiting 60s ...
+	#sleep 60
+
+	echo "Waiting for CatalogSource 'cs-redhat-operator-index' to become 'ready' ..."
+	i=2
+	time while ! oc get catalogsources.operators.coreos.com  cs-redhat-operator-index -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$
+	do
+		echo -n .
+		sleep $i
+		let i=$i+1
+		[ $i -gt 25 ] && echo "Giving up waiting ..." && break
+	done
+
+	echo "The CatalogSource is 'ready'"
 else
 	echo "No CatalogSources found under mirror/{save,sync}/oc-mirror-workspace."
 	echo "You would need to load some Operators first by editing the mirror/save/imageset-config-save.yaml file. See the README for more."
