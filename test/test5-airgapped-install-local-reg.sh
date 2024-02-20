@@ -93,7 +93,7 @@ ssh $(whoami)@$bastion2 "rpm -q make  || sudo yum install make rsync -y"
 ssh $(whoami)@$bastion2 "rpm -q rsync || sudo yum install make rsync -y"
 
 # Install rsync on localhost
-rpm -q rsync || sudo yum install rsync -y 
+### rpm -q rsync || sudo yum install rsync -y 
 
 mylog Tar+ssh files over to internal bastion: $bastion2 
 ### make tar out=- | ssh $bastion2 -- tar xzvf -
@@ -143,10 +143,11 @@ END
 mylog Save ubi image on external bastion
 test-cmd "make -C mirror save"
 
-mylog rsync save/ dir to internal bastion
+#mylog rsync save/ dir to internal bastion
 
 ### make rsync ip=$bastion2 # This copies over the whiole repo, incl. the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
 ### rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+mylog tar+ssh repo to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
 mylog Load ubi image on internal bastion
@@ -162,7 +163,7 @@ END
 mylog Save vote-app image on external bastion
 test-cmd "make -C mirror save"
 
-mylog Copy save/ dir to internal bastion
+mylog Copy repo to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 ### rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 

@@ -91,15 +91,17 @@ remote-test-cmd $bastion2 "rpm -q make  || sudo yum install make rsync -y"
 remote-test-cmd $bastion2 "rpm -q rsync || sudo yum install make rsync -y"
 
 # Install rsync on localhost
-rpm -q rsync || sudo yum install rsync -y 
+### rpm -q rsync || sudo yum install rsync -y 
 
-mylog sync files
-# Sync files to instenal bastion
-test-cmd make rsync ip=$bastion2
+### test-cmd make rsync ip=$bastion2
 
+mylog Tar+ssh files over to internal bastion: $bastion2 
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 # Do not copy over '.rpms' since they also need to be installed on the internal bastion
 
 mylog "Install the reg creds, simulating a manual config" 
+### remote-test-cmd $bastion2 "make -C aba/mirror regcreds"  
+remote-test-cmd $bastion2 "make -C aba load" || true  # This user's action is expected to fail since there are no creds for the "existing reg.". But, regcreds/ is created!
 remote-test-cmd $bastion2 "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
 remote-test-cmd $bastion2 "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
 
@@ -140,8 +142,10 @@ END
 mylog make save
 test-cmd make -C mirror save 
 
-mylog make rsync
-test-cmd make rsync ip=$bastion2
+### mylog make rsync
+### test-cmd make rsync ip=$bastion2
+mylog Tar+ssh files over to internal bastion: $bastion2 
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
 mylog make load
 remote-test-cmd $bastion2 "make -C aba/mirror load"
@@ -177,8 +181,10 @@ mylog make save
 
 test-cmd make -C mirror save 
 
-mylog make rsync to bastion2
-test-cmd make rsync ip=$bastion2
+### mylog make rsync to bastion2
+### test-cmd make rsync ip=$bastion2
+mylog Tar+ssh files over to internal bastion: $bastion2 
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
 mylog make load
 remote-test-cmd $bastion2 "make -C aba/mirror load"
