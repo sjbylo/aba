@@ -39,6 +39,8 @@ sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
 source <(normalize-aba-conf)
 mylog aba..conf configured for $v and vmware.conf
 
+test-cmd 'make -C cli'
+
 # Be sure this file exists
 test-cmd "make -C test mirror-registry.tar.gz"
 
@@ -209,16 +211,17 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 #        - name: release-2.9
 END
 
-### mylog Save the mesh images on external bastion
+########
+mylog Save the mesh images on external bastion
+test-cmd "make -C mirror save"
 
-### test-cmd "make -C mirror save"
-
-### mylog rsync save/ dir to internal bastion
-### make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+mylog rsync save/ dir to internal bastion
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 #rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 
-### remote-test-cmd $bastion2 "make -C aba/mirror load"
-### remote-test-cmd $bastion2 "make -C aba/sno day2"
+remote-test-cmd $bastion2 "make -C aba/mirror load"
+remote-test-cmd $bastion2 "make -C aba/sno day2"
+########
 
 cat >> mirror/save/imageset-config-save.yaml <<END
       - name: jaeger-product
@@ -228,7 +231,6 @@ END
 
 mylog Save the jaeger-product images on external bastion
 test-cmd "make -C mirror save"
-
 
 mylog Download mesh demo into test/mesh, for use by deploy script
 (
@@ -240,7 +242,6 @@ mylog Download mesh demo into test/mesh, for use by deploy script
 
 ### make rsync ip=$bastion2  # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
 mylog Copy save/ dir to internal bastion
-pwd
 ### make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 #rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
@@ -251,7 +252,7 @@ make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 mylog Run make load on internal bastion
 remote-test-cmd $bastion2 "make -C aba/mirror load"
 
-test-cmd sleep 60    # For some reason, the cluster was not still not fully ready! 
+test-cmd sleep 60    # For some reason, the cluster was still not fully ready in tests!
 
 for i in 1 2 3 4 5 6
 do
@@ -265,7 +266,7 @@ done
 test-cmd sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
 remote-test-cmd $bastion2 "aba/test/deploy-mesh.sh"
 
-mylog "Test: 'operator' complete "
+mylog "Test: mesh 'operator' complete "
 
 remote-test-cmd $bastion2 "make -C aba/sno delete" 
 

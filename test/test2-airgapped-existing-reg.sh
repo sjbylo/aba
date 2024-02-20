@@ -37,6 +37,8 @@ sed -i "s/^ask=.*/ask=/g" aba.conf
 source <(normalize-aba-conf)
 mylog aba..conf configured for $v and vmware.conf
 
+test-cmd 'make -C cli'
+
 # Be sure this file exists
 test-cmd "make -C test mirror-registry.tar.gz"
 

@@ -118,6 +118,7 @@ tidy: ## Tidy large uncompressed files before copying the repo to the internal b
 clean: tidy ## Clean up files
 	rm -rf                  .??* 
 	rm -rf *.sh templates scripts ### oc-mirror-workspace
+	rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
 
 .PHONY: distclean
 #distclean: uninstall clean ## Clean up repo for distribution

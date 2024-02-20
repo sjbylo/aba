@@ -20,27 +20,27 @@ export additional_trust_bundle=
 export image_content_sources=
 
 # FIXME - add to makefile
+[ -d regcreds ] && echo FIXME: $PWD/regcreds already exists || true
 ln -fs ../mirror/regcreds 
 
 # Generate the needed iso-agent-based config files ...
 
 # Read in the needed files ...
 
-if [ -s regcreds/pull-secret-mirror.json ]; then
+if [ -s regcreds/pull-secret-full.json ]; then
+	export pull_secret=$(cat regcreds/pull-secret-full.json) 
+	echo Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at $reg_host
+
+	# If we pull from the local reg. then we define the image content sources
+	export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
+
+elif [ -s regcreds/pull-secret-mirror.json ]; then
 	export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
 	echo Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at $reg_host
 
 	# If we pull from the local reg. then we define the image content sources
 	export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 
-	# ... we also, need a root CA...
-	if [ -s regcreds/rootCA.pem ]; then
-		export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
-		echo "Using root CA file at regcreds/rootCA.pem"
-	else	
-		echo "Warning: No file rootCA.pem.  Assuming mirror registry is using http."
-		##  exit 1  # Will only work without a cert if the registry is using http
-	fi
 else
 	#echo WARNING: No mirror registry pull secret file found at regcreds/pull-secret-mirror.json.  Trying to use ./pull-secret.json.
 	if [ -s ~/.pull-secret.json ]; then
@@ -51,6 +51,16 @@ else
 		exit 1
 	fi
 fi
+
+# ... we also, need a root CA...
+if [ -s regcreds/rootCA.pem ]; then
+	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
+	echo "Using root CA file at regcreds/rootCA.pem"
+else
+	echo "Warning: No file 'regcreds/rootCA.pem' found.  Assuming unsecure mirror registry (http)."
+	##  exit 1  # Will only work without a cert if the registry is using http
+fi
+
 
 [ -s $ssh_key_file ] && \
 	export ssh_key_pub=$(cat $ssh_key_file) || \
