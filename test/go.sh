@@ -1,14 +1,15 @@
 cd ~/aba
 #export target_full=1   # Build vm
 export target_full=    # Build only iso
-rm -f [0-5]
+rm -f [0-9]-stage
 (
 	> test/test.log
-	touch 0
+	make distclean
+	touch test/0-stage
 	test/test1-basic-sync-test-and-save-load-test.sh && \
-	touch 1 && \
+	touch test/1-stage && \
 	test/test2-airgapped-existing-reg.sh && \
-	touch 2 && \
+	touch test/2-stage && \
 	test/test5-airgapped-install-local-reg.sh && \
-	touch 3
+	touch test/3-stage
 ) && echo SUCCESS | tee test/test.log || echo FAILED | tee test/test.log

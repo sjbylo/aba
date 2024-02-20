@@ -1,28 +1,33 @@
 ----------------------------------------------------------------------------------------------------------------
-Now, follow steps 1 and 2:
+Now, follow steps 1, 2 and 3:
 
-1) Edit the 'aba.conf' config file which contains settings that you need to change, e.g. your domain name, your network address etc.
-----------------------------------------------------------------------------------------------------------------
-Now run one of the two following options (A or B) to configure the registry and download the needed images/software.
+================================================================================================================
+1) Edit the 'aba.conf' file which contains settings you must change, e.g. domain name, network address etc.
 
-A) For a 'connected' installation:
+================================================================================================================
+2) Follow one of the two options (2A or 2B) to configure the registry and download the needed images/software.
 
-make sync                     # Run on a 'connected bastion' (or Fedora laptop), to load the registry directly from the Internet.
+2A) For a 'connected' (or partially connected) installation:
 
-B) For a dissconnected (or air-gapped) installation:
+make sync                     # Run on a 'connected bastion' (or Fedora laptop), to load the registry directly
+			      # from the Internet.
 
-make save                     # First, run on a 'connected bastion' (or Fedora laptop), to 'save' the images from the Internet to local disk. 
-make inc out=/path/to/drive   # Archive the *whole repo* to a thumb drive.  Extract the tarball onto the internal bastion. 
-make load                     # Run on a 'disconnected bastion' (RHEL) to load the saved images into a registry from the thumb drive.
+2B) For a disconnected (or air-gapped) installation:
+
+make save                     # First, run on a 'connected bastion' (or Fedora laptop), to 'save' the images
+			      # from the Internet to local disk. 
+make inc out=/path/to/drive   # Archive the *whole repo* to a thumb drive and then extract the tarball onto the
+			      # internal disconnected bastion. 
+make load                     # On the 'disconnected bastion' (RHEL), load the saved images into a registry.
 
 See the README file for more information.
 
+================================================================================================================
+3) After the mirror registry is working and loaded, run one of the following to install OpenShift: 
 ----------------------------------------------------------------------------------------------------------------
-2)
-After the mirror registry is working and loaded, run one of the following to install OpenShift: 
 
-make sno                      # Warning: first edit the template file templates/cluster-sno.conf to match your environment
-make compact                  # Warning: first edit the template file templates/cluster-compact.conf to match your environment
-make standard                 # Warning: first edit the template file templates/cluster-standard.conf to match your environment
-make cluster name=mycluster   # This will set up a standard cluster and allow you to edit the cluster.conf configuration file.
+make sno                      # Be sure to edit the file templates/cluster-sno.conf to match your environment
+make compact                  # Be sure to edit the file templates/cluster-compact.conf to match your env.
+make standard                 # Be sure to edit the file templates/cluster-standard.conf to match your env.
+make cluster name=mycluster   # Configure a standard cluster & allow you to edit the cluster.conf file.
 

@@ -24,10 +24,10 @@ mirror/.registry-creds.txt
 mirror/.rpms
 mirror/save
 mirror/scripts
+mirror/templates
 mirror/*.sh
 mirror/sync
 mirror/.synced
-mirror/templates
 mirror/.uninstalled
 sno
 *.ssh.conf

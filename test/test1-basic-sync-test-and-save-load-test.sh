@@ -26,8 +26,9 @@ test-cmd 'make -C mirror distclean'
 
 test-cmd './aba --version 4.14.9 --vmw ~/.vmware.conf'
 #make -C cli clean 
-test-cmd 'make -C cli'
 sed -i "s/^ask=.*/ask=/g" aba.conf
+
+test-cmd 'make -C cli'
 
 mylog Revert a snapshot and power on the internal bastion vm
 
