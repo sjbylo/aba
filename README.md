@@ -46,7 +46,7 @@ Use aba if you want to get OpenShift up and running quickly in an air-gapped env
    - a 'minimal install' of RHEL 9.3, RHEL 8.9 and Fedora 39 have been tested, other recent versions of RHEL/Fedora should work too.
       - Note that on Fedora 39, the mirror registry failed to install due to an [unexpected keyword argument 'cert_file'](https://github.com/quay/mirror-registry/issues/140) error, but remote installs (from Fedora) worked ok. 
 - **Git repo**
-   - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to your user's home directory on the bastion. 
+   - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to your user's *home directory* on the external bastion (or on a Fedora laptop). 
    - Ensure sudo is configured. 
 - **Pull Secret**
    - To install OpenShift, a secret is needed to allow access to, and pull images from, Red Hat's registry.  Copy your pull secret in JSON format to the file ~/.pull-secret.json (in your $HOME directory).
@@ -144,7 +144,7 @@ make load
 ```
 - This will (if required) install Quay (from the files and configuration that were tar-ed & copied above) and then load the images into Quay.
 - Note that the internal bastion will need to install RPMs from a suitable repository (for testing it's possible to configure 'dnf' to use a proxy).
-- If rpms are not readily available in your private network, the command 'make rpms' can help by downloading the needed rpms, which can then be copied to the internal bastion and installed with 'dnf localinstall rpms/*.rpm'
+- If rpms are not readily available in your private network, the command 'make rpms' can help by downloading the needed rpms, which can then be copied to the internal bastion and installed with 'dnf localinstall rpms/*.rpm'.  Note this will only work if your external and internal bastions are running the same version of RHEL. 
 
 Now continue with "Install OpenShift" below.
 
