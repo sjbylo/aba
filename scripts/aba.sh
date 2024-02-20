@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Start here, run this to get going!
 
 dir=$(dirname $0)
 cd $dir
@@ -40,7 +41,7 @@ if [ ! "$auto_ver" ]; then
 	echo -n "Looking up OpenShift release versions ..."
 
 	if ! curl -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
-		echo "Error: Cannot access mirror.openshift.com"
+		echo "Error: Cannot https://access mirror.openshift.com/"
 		exit 1
 	fi
 
@@ -49,9 +50,10 @@ if [ ! "$auto_ver" ]; then
 	default_ver=$stable_ver
 
 	# Extract the previous stable point version, e.g. 4.13.23
-	stable_ver_point=`expr $(echo $stable_ver | grep ^4 | cut -d\. -f2) - 1`
+	major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
+	stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
 	[ "$stable_ver_point" ] && \
-		stable_ver_prev=$(cat /tmp/.release.txt| grep -oE "4\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+		stable_ver_prev=$(cat /tmp/.release.txt| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
 
 	# Determine any already installed tool versions
 	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
@@ -83,16 +85,17 @@ if [ ! "$auto_ver" ]; then
 		echo -n "Enter version $or_s$or_p$or_ret(l/p/<version>/Enter) [$default_ver]: "
 
 		read target_ver
-		[ ! "$target_ver" ] && target_ver=$default_ver
-		[ "$target_ver" = "l" ] && target_ver=$stable_ver
-		[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev
+		[ ! "$target_ver" ] && target_ver=$default_ver          # use default
+		[ "$target_ver" = "l" ] && target_ver=$stable_ver       # latest
+		[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev  # previous latest
 	done
 
+	# Update the conf file
 	sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
 
 fi
 
-# make is needed below
+# make is needed below and in the next steps 
 rpm --quiet -q make || sudo dnf install make -y >/dev/null 2>&1
 
 ############
