@@ -118,7 +118,7 @@ mylog "Running 'make sno' on internal bastion"
 
 remote-test-cmd $bastion2 "rm -rf aba/sno" 
 
-mylog Create the cluster iso only 
+[ "$targetiso" ] && mylog Create the cluster iso only 
 remote-test-cmd $bastion2 "make -C aba sno $targetiso" 
 
 mylog Add vm memory

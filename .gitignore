@@ -41,3 +41,4 @@ rpms/*.rpm
 mirror/reg-uninstall.sh.provision
 aba.conf
 test/mesh
+test/?-stage
