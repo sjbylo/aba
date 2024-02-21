@@ -75,7 +75,7 @@ sudo mount -o remount,size=6G /tmp   # Needed for "make save" when Operators nee
 mylog "Install 'existing' reg on bastion2"
 test-cmd test/reg-test-install-remote.sh registry2.example.com
 
-mylog make save
+### mylog make save
 rm -rf mirror/save  
 test-cmd make save
 

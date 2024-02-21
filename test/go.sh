@@ -5,8 +5,8 @@ set -ex
 #cd aba-testing
 #git checkout dev
 cd ~/aba
-#export target_full=1   # Build vm
-export target_full=    # Build only iso
+export target_full=1   # Build vm
+#export target_full=    # Build only iso
 rm -f [0-9]-stage
 (
 	> test/test.log
