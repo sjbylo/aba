@@ -107,7 +107,14 @@ if [ "$list" ]; then
 	echo Looking for latest CatalogSource file:
 	echo "Running: oc apply -f $cs_file"
 
-	oc create -f $cs_file && (echo Waiting 60s ...; sleep 60) || true
+	if oc create -f $cs_file; then
+		echo "Patching registry poll interval for CatalogSource cs-redhat-operator-index"
+		oc patch CatalogSource cs-redhat-operator-index  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
+		echo Waiting 60s ...
+		sleep 60
+	else
+		:
+	fi
 
 	echo "Waiting for CatalogSource 'cs-redhat-operator-index' to become 'ready' ..."
 	i=2
