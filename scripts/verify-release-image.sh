@@ -11,6 +11,11 @@ source <(normalize-mirror-conf)
 release_sha=$(openshift-install version| grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
 release_ver=$(openshift-install version| grep "^openshift-install" | cut -d" " -f2)
 
+[ "$ocp_version" != "$release_ver" ] && \
+		echo "WARNING: The version in 'aba.conf' is not the same as the version of the 'openshift-install' CLI." && \
+			echo "Please run 'make -C cli clean' and try again." && exit 1
+
+
 [ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha >/dev/null; then

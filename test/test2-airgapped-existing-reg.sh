@@ -33,10 +33,11 @@ rm -rf sno compact standard
 
 v=4.14.9
 test-cmd ./aba --version $v --vmw ~/.vmware.conf 
-sed -i "s/^ask=.*/ask=/g" aba.conf
+sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
 source <(normalize-aba-conf)
 mylog aba..conf configured for $v and vmware.conf
 
+test-cmd 'make -C cli clean'
 test-cmd 'make -C cli'
 
 # Be sure this file exists
@@ -113,8 +114,15 @@ mylog make load
 remote-test-cmd $bastion2 "make -C aba load" 
 #ssh $(whoami)@$bastion2 -- "make -C aba/sno upload"   # Just test until iso upload
 mylog make sno $targetiso
+remote-test-cmd $bastion2 "rm -rf aba/compact" 
+remote-test-cmd $bastion2 "make -C aba compact $targetiso" 
+remote-test-cmd $bastion2 "make -C aba/compact delete" 
+### remote-test-cmd $bastion2 "rm -rf aba/standard" 
+### remote-test-cmd $bastion2 "make -C aba standard $targetiso" 
+### remote-test-cmd $bastion2 "make -C aba/standard delete" 
 remote-test-cmd $bastion2 "rm -rf aba/sno" 
 remote-test-cmd $bastion2 "make -C aba sno $targetiso" 
+
 
 #ssh $(whoami)@$bastion2 -- "make -C aba/sno cmd" 
 
