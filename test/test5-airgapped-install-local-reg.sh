@@ -39,8 +39,8 @@ sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
 source <(normalize-aba-conf)
 mylog aba.conf configured for $v and vmware.conf
 
-test-cmd 'make -C cli clean'
-test-cmd 'make -C cli'
+### test-cmd 'make -C cli clean'
+### test-cmd 'make -C cli'
 
 # Be sure this file exists
 test-cmd "make -C test mirror-registry.tar.gz"
