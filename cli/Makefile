@@ -17,21 +17,31 @@ help: ## Help
 ../aba.conf:
 	../aba
 
+# Be sure that the correct version is installed by creating .*installed flag file
 ########################################
-~/bin/oc: .init openshift-client-linux-$(ocp_version).tar.gz ## Install oc into ~/bin
-	tar -C ~/bin -xmzf openshift-client-linux-$(ocp_version).tar.gz oc
+#~/bin/oc: .init openshift-client-linux-$(ocp_version).tar.gz ## Install oc into ~/bin
+~/bin/oc: .init .$(ocp_version)-openshift-client-linux-installed  ## Install oc into ~/bin
+	tar -C ~/bin -xmzf openshift-client-linux-$(ocp_version).tar.gz oc kubectl
+
+.$(ocp_version)-openshift-client-linux-installed: openshift-client-linux-$(ocp_version).tar.gz
+	@rm -f .??*-openshift-client-linux-installed
+	@touch .$(ocp_version)-openshift-client-linux-installed 
 
 openshift-client-linux-$(ocp_version).tar.gz:  ## Downlaod oc tarball 
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/openshift-client-linux-$(ocp_version).tar.gz
 
 
+# Be sure that the correct version is installed by creating .*installed flag file
 ########################################
-~/bin/openshift-install: .init openshift-install-linux-$(ocp_version).tar.gz  ## Install openshift-install into ~/bin
+~/bin/openshift-install: .init .$(ocp_version)-openshift-install-linux-installed ## Install openshift-install into ~/bin
 	tar -C ~/bin -xmzf openshift-install-linux-$(ocp_version).tar.gz openshift-install
+
+.$(ocp_version)-openshift-install-linux-installed: openshift-install-linux-$(ocp_version).tar.gz
+	@rm -f .??*-openshift-install-linux-installed
+	@touch .$(ocp_version)-openshift-install-linux-installed 
 
 openshift-install-linux-$(ocp_version).tar.gz:  ## Download openshift-install tarball
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/openshift-install-linux-$(ocp_version).tar.gz
-
 
 ########################################
 ~/bin/oc-mirror: .init oc-mirror.tar.gz ~/bin/oc   ## Install oc-mirror into ~/bin
@@ -57,7 +67,7 @@ govc_Linux_x86_64.tar.gz:   ## Download govc tarball
 
 .PHONY: clean 
 clean: ## Clean up installed binaries
-	rm -f ~/bin/{oc,oc-mirror,openshift-install,govc} 
+	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc} .*installed
 
 .PHONY: distclean
 distclean: clean ## Clean up everything
