@@ -20,14 +20,19 @@ rm -f ~/.aba.previous.backup
 #> test/test.log
 
 > mirror/mirror.conf
-#make distclean 
-test-cmd 'make -C mirror distclean'
+make distclean 
+### test-cmd 'make -C mirror distclean'
 #make uninstall clean 
 
-test-cmd './aba --version 4.14.9 --vmw ~/.vmware.conf'
+v=4.14.9
+### test-cmd './aba --version 4.14.9 --vmw ~/.vmware.conf'
+test-cmd ./aba --version $v --vmw ~/.vmware.conf 
 #make -C cli clean 
-sed -i "s/^ask=.*/ask=/g" aba.conf
+sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
+source <(normalize-aba-conf)
+mylog aba.conf configured for $v and vmware.conf
 
+test-cmd 'make -C cli clean'
 test-cmd 'make -C cli'
 
 mylog Revert a snapshot and power on the internal bastion vm
@@ -43,8 +48,6 @@ mylog Revert a snapshot and power on the internal bastion vm
 ssh $(whoami)@registry2.example.com -- "date" || sleep 2
 ssh $(whoami)@registry2.example.com -- "date" || sleep 3
 ssh $(whoami)@registry2.example.com -- "date" || sleep 8
-
-source <(normalize-aba-conf)
 
 # Copy and edit mirror.conf 
 test-cmd 'scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf'

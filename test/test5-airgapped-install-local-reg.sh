@@ -32,13 +32,14 @@ rm -rf sno compact standard
 #make uninstall clean 
 
 #v=4.14.9
-v=4.13.32
+v=4.13.30
 rm -f aba.conf  # Set it up next
 test-cmd ./aba --version $v --vmw ~/.vmware.conf 
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
 source <(normalize-aba-conf)
-mylog aba..conf configured for $v and vmware.conf
+mylog aba.conf configured for $v and vmware.conf
 
+test-cmd 'make -C cli clean'
 test-cmd 'make -C cli'
 
 # Be sure this file exists
