@@ -1,6 +1,6 @@
 cli/.init
 cli/*tar.gz
-compact
+compact*
 *.md.bak
 mirror/aba.conf
 mirror.conf
@@ -29,9 +29,9 @@ mirror/*.sh
 mirror/sync
 mirror/.synced
 mirror/.uninstalled
-sno
+sno*
 *.ssh.conf
-standard
+standard*
 target-ocp-version.conf
 test/mirror-registry.tar.gz
 test/.ssh.conf
@@ -42,3 +42,4 @@ mirror/reg-uninstall.sh.provision
 aba.conf
 test/mesh
 test/?-stage
+cli/.*installed
