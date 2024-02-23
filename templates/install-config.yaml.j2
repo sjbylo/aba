@@ -53,5 +53,5 @@ sshKey: |
   {%- endif %}
 {%- if image_content_sources != '' %}
 imageContentSources:
-{{ image_content_sources }}
+  {{ image_content_sources|indent(2) }}
 {% endif %}
