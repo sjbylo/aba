@@ -16,10 +16,16 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`
 fi
 
-# List all VMs with power state
-for name in $CP_NAMES $WORKER_NAMES; do
-        power_state=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].runtime.powerState')
-        echo ${CLUSTER_NAME}-$name $power_state
-        #[ "$power_state" = "poweredOff" ] && echo $name OFF || echo $name RUNNING
-done
+# List all VMs with cpu, ram and power state
+(
+	echo Name CPU Memory State
+
+	for name in $CP_NAMES $WORKER_NAMES; do
+		power_state=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].runtime.powerState')
+		num_cpu=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].config.hardware.numCPU')
+		memory_mb=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].config.hardware.memoryMB')
+
+		echo ${CLUSTER_NAME}-$name ${num_cpu} $(expr $memory_mb / 1024)GB $power_state
+	done 
+) | column -t
 
