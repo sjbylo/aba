@@ -16,7 +16,10 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`
 fi
 
-#source <(normalize-aba-conf)  # Fetch the 'ask' param
-
-govc ls $FOLDER
+# List all VMs with power state
+for name in $CP_NAMES $WORKER_NAMES; do
+        power_state=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].runtime.powerState')
+        echo ${CLUSTER_NAME}-$name $power_state
+        #[ "$power_state" = "poweredOff" ] && echo $name OFF || echo $name RUNNING
+done
 
