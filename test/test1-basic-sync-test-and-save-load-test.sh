@@ -92,10 +92,10 @@ do
 
         rm -rf $cname
 
-        test-cmd -m "Create cluster.conf for $cname" "make $cname target=cluster.conf"
+        test-cmd -m "Creating cluster.conf for $cname cluster" "make $cname target=cluster.conf"
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # make sure all mac addr are the same, not random
-        test-cmd -m "Create install-config.yaml for $cname" "make -C $cname install-config.yaml"
-        test-cmd -m "Create agent-config.yaml for $cname" "make -C $cname agent-config.yaml"
+        test-cmd -m "Creating install-config.yaml for $cname cluster" "make -C $cname install-config.yaml"
+        test-cmd -m "Creating agent-config.yaml for $cname cluster" "make -C $cname agent-config.yaml"
 
 	# There are only run on the very first run to generate the valis files
 	# Note that the files test/{sno,compact,standrd}/{install,agent}-config.yaml.example have all been committed into git 
@@ -150,7 +150,7 @@ test-cmd -m "Uninstall mirror" make -C mirror uninstall
 #scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 #sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
 
-mylog "Confgure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
+mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 
 #sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
