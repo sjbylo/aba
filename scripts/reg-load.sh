@@ -43,5 +43,11 @@ echo Ensure there is enough disk space under $reg_root.  This can take 5-20 mins
 cmd="oc mirror                     $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
 echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
 echo "Running: $cmd"
-./load-mirror.sh
+while ! ./load-mirror.sh
+do
+	let c=$c+1
+	[ $c -gt 5 ] && echo Giving up ... && exit 1
+	echo "There was an error.  Pausing 20s before trying again.  Enter Ctrl-C to abort."
+	sleep 20
+done
 

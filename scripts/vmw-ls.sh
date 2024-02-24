@@ -16,16 +16,18 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`
 fi
 
+header="Name CPU Memory State"
+
+output=
 # List all VMs with cpu, ram and power state
-(
-	echo Name CPU Memory State
+for name in $CP_NAMES $WORKER_NAMES; do
+	power_state=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].runtime.powerState')
+	[ "$power_state" = "null" ] && continue
+	num_cpu=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].config.hardware.numCPU')
+	memory_mb=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].config.hardware.memoryMB')
 
-	for name in $CP_NAMES $WORKER_NAMES; do
-		power_state=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].runtime.powerState')
-		num_cpu=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].config.hardware.numCPU')
-		memory_mb=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].config.hardware.memoryMB')
+	output="$output\n${CLUSTER_NAME}-$name ${num_cpu} $(expr $memory_mb / 1024)GB $power_state"
+done 
 
-		echo ${CLUSTER_NAME}-$name ${num_cpu} $(expr $memory_mb / 1024)GB $power_state
-	done 
-) | column -t
+[ "$output" ] && echo -e "$header\n$output" | column -t || echo "No resources"
 

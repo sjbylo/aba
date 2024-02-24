@@ -78,6 +78,23 @@ ask() {
 	return 1
 }
 
+try_cmd() {
+	local pause=$1; shift
+	local interval=$1; shift
+	local total=$1; shift
+	local count=1
+	echo "Attempt $count/$total of command: \"$*\""
+	while ! eval $*
+	do
+		[ $count -ge $total ] && echo "Giving up!" && return 1
+		echo Pausing $pause seconds ...
+		sleep $pause
+		let pause=$pause+$interval
+		let count=$count+1
+		echo "Attempt $count/$total of command: \"$*\""
+	done
+}
+
 install_rpm() {
 	rpmlist=
 	for rpm in $@

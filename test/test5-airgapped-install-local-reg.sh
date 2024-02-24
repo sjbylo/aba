@@ -26,27 +26,22 @@ rm -f ~/.aba.previous.backup
 # Set up test 
 
 > mirror/mirror.conf
-#make distclean 
-test-cmd "make -C mirror distclean" 
+test-cmd -m "Cleaning up mirror" "make -C mirror distclean" 
 rm -rf sno compact standard 
-#make uninstall clean 
 
-#v=4.14.9
 v=4.13.30
 rm -f aba.conf  # Set it up next
-test-cmd ./aba --version $v --vmw ~/.vmware.conf 
-sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
-source <(normalize-aba-conf)
-mylog aba.conf configured for $v and vmware.conf
+test-cmd -m "Confiure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
 
-### test-cmd 'make -C cli clean'
-### test-cmd 'make -C cli'
+# Do not ask to delete things
+sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
+
+source <(normalize-aba-conf)
 
 # Be sure this file exists
-test-cmd "make -C test mirror-registry.tar.gz"
+test-cmd -m "Init test: download mirror-registry.tar.gz" "make -C test mirror-registry.tar.gz"
 
 bastion2=10.0.1.6
-p=22222
 
 #################################
 # Copy and edit mirror.conf 
@@ -57,12 +52,11 @@ mylog "Test the internal bastion (registry2.example.com) as mirror"
 
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf
-#
+
 
 #################################
 
-mylog Revert a snapshot and power on the internal bastion vm
-
+mylog Revert vm snapshot of the internal bastion vm and power on
 (
 	source <(normalize-vmware-conf)
 	govc snapshot.revert -vm bastion2-internal-rhel8 Latest
@@ -75,33 +69,20 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 2
 ssh $(whoami)@registry2.example.com -- "date" || sleep 3
 ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 
-mylog done
-
 source <(cd mirror && normalize-mirror-conf)
 
-test-cmd "make save"
+test-cmd -m "Saving images to local disk" "make save"
 
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
-mylog Configure internal bastion with rsync and make
-
 # If the VM snapshot is reverted, as above, no need to delete old files
-remote-test-cmd $bastion2 "rm -rf ~/bin/* ~/aba"
+remote-test-cmd -m "Clean up home dir on internal bastion" $bastion2 "rm -rf ~/bin/* ~/aba"
 
-mylog Configure bastion2 for testing, install make and rsync ...
-ssh $(whoami)@$bastion2 "rpm -q make  || sudo yum install make rsync -y"
-ssh $(whoami)@$bastion2 "rpm -q rsync || sudo yum install make rsync -y"
+ssh $(whoami)@$bastion2 "rpm -q make  || sudo yum install make -y"
 
-# Install rsync on localhost
-### rpm -q rsync || sudo yum install rsync -y 
-
-mylog Tar+ssh files over to internal bastion: $bastion2 
-### make tar out=- | ssh $bastion2 -- tar xzvf -
+mylog Copy tar+ssh archives to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
-
-### mylog rsync files to instenal bastion ...
-### test-cmd make rsync ip=$bastion2
 
 ### echo "Install the reg creds, simulating a manual config" 
 ### ssh $(whoami)@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
@@ -110,81 +91,60 @@ make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 ######################
 mylog Runtest: START - airgap
 
-mylog "Running 'make load' on internal bastion"
-
-remote-test-cmd $bastion2 "sudo dnf install make -y" 
-remote-test-cmd $bastion2 "make -C aba load" 
+remote-test-cmd -m "Loading cluster images into mirror on internal bastion" $bastion2 "make -C aba load" 
 
 mylog "Running 'make sno' on internal bastion"
 
-remote-test-cmd $bastion2 "rm -rf aba/sno" 
+remote-test-cmd -m "Tidying up internal bastion" $bastion2 "rm -rf aba/sno" 
 
-[ "$targetiso" ] && mylog Create the cluster iso only 
-remote-test-cmd $bastion2 "make -C aba sno $targetiso" 
+[ "$targetiso" ] && mylog Creating the cluster iso only 
+remote-test-cmd -m "Installing sno/iso $targetiso" $bastion2 "make -C aba sno $targetiso" 
 
-mylog Add vm memory
-remote-test-cmd $bastion2 "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
-
-#ssh $(whoami)@$bastion2 -- "make -C aba/sno cmd" 
-
-mylog "===> Test 'air gapped' complete "
+remote-test-cmd -m "Setting master memory to 24" $bastion2 "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
 
 ######################
-mylog Now simulate adding more images to the mirror registry
+mylog Now adding more images to the mirror registry
 ######################
 
 mylog Runtest: vote-app
 
+mylog 
 mylog Add ubi9 image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
 END
 
-mylog Save ubi image on external bastion
-test-cmd "make -C mirror save"
+mylog Saving ubi image on external bastion
+test-cmd -m "Saving UBI images to local disk" "make -C mirror save"
 
-#mylog rsync save/ dir to internal bastion
-
-### make rsync ip=$bastion2 # This copies over the whiole repo, incl. the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
-### rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
-mylog tar+ssh repo to internal bastion
+mylog Copy tar+ssh archives to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
-mylog Load ubi image on internal bastion
-remote-test-cmd $bastion2 "make -C aba/mirror load"
+remote-test-cmd -m "Loading UBI images into mirror" $bastion2 "make -C aba/mirror load"
 
-####################
-
+mylog 
 mylog Add vote-app image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-mylog Save vote-app image on external bastion
-test-cmd "make -C mirror save"
+test-cmd -m "Saving vote-app image to local disk" " make -C mirror save"
 
 mylog Copy repo to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
-### rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 
-mylog Load vote-app image on internal bastion
-remote-test-cmd $bastion2 "make -C aba/mirror load"
+remote-test-cmd -m "Loading vote-app image into mirror" $bastion2 "make -C aba/mirror load"
 
-mylog Install the cluster proper now
-remote-test-cmd $bastion2 "make -C aba/sno"
-mylog List VMs
-remote-test-cmd $bastion2 "make -C aba/sno ls"
+remote-test-cmd -m "Installing sno cluster, ready to deploy test app" $bastion2 "make -C aba/sno"
 
-######################
+remote-test-cmd -m "Listing VMs" $bastion2 "make -C aba/sno ls"
 
-remote-test-cmd $bastion2 "aba/test/deploy-test-app.sh"
+remote-test-cmd -m "Deploying test vote-app" $bastion2 "aba/test/deploy-test-app.sh"
 
-mylog "Test 'vote-app' complete"
 
-mylog Runtest: operator
-
-mylog Append operators to imageset conf
+mylog 
+mylog Append svc mesh and kiali operators to imageset conf
 
 cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/kiali/demo_travels_cars:v1
@@ -214,16 +174,17 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 ########
-mylog Save the mesh images on external bastion
-test-cmd "make -C mirror save"
+test-cmd -m "Saving mesh operators to local disk" "make -C mirror save"
 
-mylog rsync save/ dir to internal bastion
+mylog Copy tar+ssh archives to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
-#rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
 
-remote-test-cmd $bastion2 "make -C aba/mirror load"
-remote-test-cmd $bastion2 "make -C aba/sno day2"
-########
+remote-test-cmd -m "Loading images to mirror" $bastion2 "make -C aba/mirror load"
+
+remote-test-cmd -m "Configuring day2 ops" $bastion2 "make -C aba/sno day2"
+
+mylog 
+mylog Append jaeger operator to imageset conf
 
 cat >> mirror/save/imageset-config-save.yaml <<END
       - name: jaeger-product
@@ -231,54 +192,50 @@ cat >> mirror/save/imageset-config-save.yaml <<END
         - name: stable
 END
 
-mylog Save the jaeger-product images on external bastion
-test-cmd "make -C mirror save"
+test-cmd -m "Saving jaeger operator to local disk" "make -C mirror save"
 
-mylog Download mesh demo into test/mesh, for use by deploy script
+mylog Downloading the mesh demo into test/mesh, for use by deploy script
 (
 	rm -rf test/mesh && mkdir test/mesh && cd test/mesh && git clone https://github.com/sjbylo/openshift-service-mesh-demo.git && \
 	cd openshift-service-mesh-demo && \
+	# FIXME: so no need to make these changes
 	sed -i "s#quay\.io#$reg_host:$reg_port/$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml &&
 	sed -i "s/source: .*/source: cs-redhat-operator-index/g" operators/* 
 ) 
 
-### make rsync ip=$bastion2  # This copies over the mirror/.uninstalled flag file which causes workflow problems, e.g. make uninstall fails
-mylog Copy save/ dir to internal bastion
-### make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
-#rsync --progress --partial --times -avz mirror/save/ $bastion2:aba/mirror/save 
+mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf - 
-#rsync --progress --partial --times -avz test   $bastion2:aba
-### ssh $(whoami)@$bastion2 -- "make -C aba/mirror verify"
 
-mylog Run make load on internal bastion
-remote-test-cmd $bastion2 "make -C aba/mirror load"
+remote-test-cmd -m "Loading jaeger operator images to mirror" $bastion2 "make -C aba/mirror load"
 
-test-cmd sleep 60    # For some reason, the cluster was still not fully ready in tests!
+test-cmd -m "Pausing for 60s to let OCP to settle" sleep 60    # For some reason, the cluster was still not fully ready in tests!
 
 for i in 1 2 3 4 5 6
 do
-	# Sometimes the cluster is not fully ready... OCP API can fail, so re-run....
+	# Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
 	echo "Run 'day2' attempt number $i ..."
 	remote-test-cmd $bastion2 "make -C aba/sno day2" && break || true  # Install CA cert and activate local op. hub
 	echo Sleeping ...
 	sleep `expr $i \* 30`
 done
+
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
-test-cmd sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
-remote-test-cmd $bastion2 "aba/test/deploy-mesh.sh"
+test-cmd -m "Pausing for 30s to let OCP to settle" sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
 
-mylog "Test: mesh 'operator' complete "
+remote-test-cmd -m "Deploying service mesh with test app" $bastion2 "aba/test/deploy-mesh.sh"
 
-remote-test-cmd $bastion2 "make -C aba/sno delete" 
+sleep 30  # Slep in case need to check the cluster
+
+remote-test-cmd -m "Deleting sno cluster" $bastion2 "make -C aba/sno delete" 
 
 ######################
-mylog Cleanup test
 
-mylog "make -C aba/mirror uninstall"
-remote-test-cmd $bastion2 "make -C aba/mirror uninstall"
+remote-test-cmd -m "Uninstalling mirror registry on internal bastion" $bastion2 "make -C aba/mirror uninstall"
 
-mylog "===> Test $0 complete "
+mylog
+mylog "===> Completed test $0"
+mylog
 
 rm -rf test/mesh 
 

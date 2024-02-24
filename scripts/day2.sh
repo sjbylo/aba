@@ -14,9 +14,9 @@ export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 	
 echo
 echo "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
-echo "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image."
-echo "Add registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331 for more"
-echo "This problem with the CA could affect other applications in the cluster."
+echo "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image'."
+echo "Adding registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331 for more."
+echo "This CA problem might affect other applications in the cluster."
 if [ -s regcreds/rootCA.pem ]; then
 	echo "Adding the trust CA of the registry ($reg_host) ..."
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
@@ -26,11 +26,12 @@ if [ -s regcreds/rootCA.pem ]; then
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
 	echo "Running: oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
-	oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'
+	#try_cmd 5 5 10 oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'
+	try_cmd 5 5 10 "oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
 
 	# The above workaround describes re-creating the is/oauth-proxy 
 	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
-		oc delete imagestream -n openshift oauth-proxy
+		try_cmd 5 5 10 oc delete imagestream -n openshift oauth-proxy
 		sleep 30
 
 		# Assume once it's re-created then it's working

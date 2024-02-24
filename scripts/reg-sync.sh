@@ -83,5 +83,11 @@ echo
 cmd="oc mirror $tls_verify_opts                     --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
 echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 echo "Running: $cmd"
-./sync-mirror.sh 
+while ! ./sync-mirror.sh 
+do
+	let c=$c+1
+	[ $c -gt 5 ] && echo Giving up ... && exit 1
+	echo "There was an error.  Pausing 20s before trying again.  Enter Ctrl-C to abort."
+	sleep 20
+done
 

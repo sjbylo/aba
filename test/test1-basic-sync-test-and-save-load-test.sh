@@ -25,18 +25,17 @@ make distclean
 #make uninstall clean 
 
 v=4.14.9
-### test-cmd './aba --version 4.14.9 --vmw ~/.vmware.conf'
-test-cmd ./aba --version $v --vmw ~/.vmware.conf 
-#make -C cli clean 
+test-cmd -m "Configure aba.conf for version $v and vmware esxi" ./aba --version $v --vmw ~/.vmware.conf.esxi
+
+mylog "Setting 'ask='"
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
+
 source <(normalize-aba-conf)
-mylog aba.conf configured for $v and vmware.conf
 
 ### test-cmd 'make -C cli clean'
 ### test-cmd 'make -C cli'
 
-mylog Revert a snapshot and power on the internal bastion vm
-
+mylog Revert internal bastion vm to snapshot and powering on ...
 (
 	source <(normalize-vmware-conf)
 	govc snapshot.revert -vm bastion2-internal-rhel8 Latest
@@ -50,13 +49,9 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 3
 ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 
 # Copy and edit mirror.conf 
-test-cmd 'scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf'
+scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
-### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
-
-# Various mirror tests:
-
-mylog Confgure mirror to install on remote bastion2 
+mylog "Confgure mirror to install registry on internal (remote) bastion2"
 
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
 sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
@@ -68,18 +63,16 @@ sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote 
 ### sed -i "s#reg_port=.*#reg_pw=443             #g" ./mirror/mirror.conf	    	# test port change
 #sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
 
-mylog Install mirror 
-
-test-cmd 'make -C mirror install'
+test-cmd -m "Install mirror on internal bastion" "make -C mirror install"
 
 source <(cd mirror; normalize-mirror-conf)
 
 mylog "Mirror available at $reg_host:$reg_port"
 
 ######################
-test-cmd 'make -C mirror sync'   # This will install mirror and sync
+test-cmd -m "Synching cluster images to internal mirror" 'make -C mirror sync'   # This will install mirror and sync
 
-# Install yq!
+# Install yq for below test!
 which yq || (
 	mylog Install yq
 	curl -sSL -o - https://github.com/mikefarah/yq/releases/download/v4.41.1/yq_linux_amd64.tar.gz | tar -C ~/bin -xzf - ./yq_linux_amd64 && \
@@ -95,18 +88,19 @@ for cname in sno compact standard
 do
 	mkdir -p test/$cname
 
-        echo "Agent-config file generation test for cluster type '$cname'"
+        mylog "Agent-config file generation test for cluster type '$cname'"
 
         rm -rf $cname
 
-        test-cmd "make $cname target=cluster.conf"
+        test-cmd -m "Create cluster.conf for $cname" "make $cname target=cluster.conf"
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # make sure all mac addr are the same, not random
-        test-cmd "make -C $cname install-config.yaml"
-        test-cmd "make -C $cname agent-config.yaml"
+        test-cmd -m "Create install-config.yaml for $cname" "make -C $cname install-config.yaml"
+        test-cmd -m "Create agent-config.yaml for $cname" "make -C $cname agent-config.yaml"
 
 	# There are only run on the very first run to generate the valis files
-        [ ! -f test/$cname/install-config.yaml.example ] && cat $cname/install-config.yaml | yq 'del(.additionalTrustBundle,.platform.vsphere.vcenters,.pullSecret)' > test/$cname/install-config.yaml.example
-        [ ! -f test/$cname/agent-config.yaml.example ]   && cat $cname/agent-config.yaml   > test/$cname/agent-config.yaml.example
+	# Note that the files test/{sno,compact,standrd}/{install,agent}-config.yaml.example have all been committed into git 
+        ### NOT NEEDED [ ! -f test/$cname/install-config.yaml.example ] && cat $cname/install-config.yaml | yq 'del(.additionalTrustBundle,.platform.vsphere.vcenters,.pullSecret)' > test/$cname/install-config.yaml.example
+        ### NOT NEEDED [ ! -f test/$cname/agent-config.yaml.example ]   && cat $cname/agent-config.yaml   > test/$cname/agent-config.yaml.example
 
 	# Remove some of the params which either change or cannot be placed into git (FIXME: specify the VC password exactly) 
 	cat $cname/install-config.yaml | yq 'del(.additionalTrustBundle,.platform.vsphere.vcenters,.pullSecret)' > test/$cname/install-config.yaml
@@ -115,15 +109,17 @@ do
         # Check if the files DO NOT match (are different)
         if ! diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example; then
 		cp test/$cname/install-config.yaml test/$cname/install-config.yaml.failed
+		mylog "Config mismatch! See file test/$cname/install-config.yaml.failed"
                 exit 1
         fi
 
         if ! diff test/$cname/agent-config.yaml   test/$cname/agent-config.yaml.example; then
 		cp test/$cname/agent-config.yaml test/$cname/agent-config.yaml.failed
+		mylog "Config mismatch! See file test/$cname/agent-config.yaml.failed"
                 exit 1
         fi
 
-        test-cmd "make -C $cname iso"
+        test-cmd -m "Generate iso file for $cname" "make -C $cname iso"
         #test-cmd "make -C $cname delete"
 done
 
@@ -133,20 +129,19 @@ done
 
 ######################
 rm -rf sno
-test-cmd make sno $targetiso
-test-cmd make -C sno delete || true
+test-cmd -m "Installing sno cluster with target option [$targetiso]" make sno $targetiso
+test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || true
 
 #######################
-test-cmd "make -C mirror save load"  #  This will save, install then load
+test-cmd -m "Saving and then loading cluster images into mirror" "make -C mirror save load"  #  This will save, install then load
 
 rm -rf sno
-test-cmd make sno $targetiso
+test-cmd -m "Installing sno cluster with target option [$targetiso]" make sno $targetiso
 
-test-cmd make -C sno delete 
+test-cmd -m "Delete cluster (if needed)" make -C sno delete 
 
-test-cmd make -C mirror uninstall 
+test-cmd -m "Uninstall mirror" make -C mirror uninstall 
 
-########################
 ########################
 ########################
 
@@ -155,9 +150,7 @@ test-cmd make -C mirror uninstall
 #scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 #sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
 
-mylog Various mirror tests:
-
-mylog Confgure mirror to install on remote bastion2 in ~/my-quay-mirror, with random password to /my/path 
+mylog "Confgure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 
 #sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
@@ -167,7 +160,7 @@ sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test ran
 ### sed -i "s#tls_verify=true#tls_verify=            #g" ./mirror/mirror.conf  	# test tlsverify = false # sno install fails 
 sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
 
-test-cmd make -C mirror install 
+test-cmd -m "Installing mirror registry" make -C mirror install 
 
 ######
 # Remove all traces of CA files 
@@ -175,11 +168,9 @@ test-cmd make -C mirror install
 ### sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA*pem
 ### sudo update-ca-trust extract
 
-mylog "rm -rf mirror/save"
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
-######
 
-source <(cd mirror;normalize-mirror-conf)
+source <(cd mirror; normalize-mirror-conf)
 
 mylog "Mirror available at $reg_host:$reg_port"
 
@@ -187,32 +178,28 @@ mylog "Mirror available at $reg_host:$reg_port"
 test-cmd make -C mirror sync   # This will install and sync
 
 rm -rf sno
-#test-cmd make sno $targetiso
-test-cmd make sno
-#test-cmd make -C sno delete 
+test-cmd -m "Installing sno cluster" make sno
 
 #######################
 
-test-cmd make -C mirror save load   #  This will save, install then load
+test-cmd -m "Saving and loading images into mirror" make -C mirror save load   #  This will save, install then load
 
 rm -rf sno
-test-cmd make sno $targetiso
+test-cmd -m "Installing sno cluster" make sno $targetiso
 
-test-cmd make -C sno delete 
+test-cmd -m "Deleting cluster" make -C sno delete 
 
-mylog "===> Test save/load complete "
-
-mylog Test use-case for not using VMware 
+mylog Removing vmware config file
 
 > vmware.conf
 rm -rf compact
-test-cmd make compact target=iso # Since we're testing bare-metal, only create iso
+test-cmd -m "Creating compact iso file" make compact target=iso # Since we're testing bare-metal, only create iso
 
-mylog "Test 'no vmware' complete"
+test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
 
-test-cmd make -C mirror uninstall 
-
-mylog "Test $0 complete"
+mylog
+mylog "===> Completed test $0"
+mylog
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak
 
