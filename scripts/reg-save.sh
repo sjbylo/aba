@@ -36,5 +36,11 @@ echo
 cmd="oc mirror                     --config=./imageset-config-save.yaml file://."
 echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 echo "Running $cmd"
-./save-mirror.sh
+while ! ./save-mirror.sh
+do
+	let c=$c+1
+	[ $c -gt 5 ] && echo Giving up ... && exit 1
+	echo "There was an error.  Pausing 20s before trying again.  Enter Ctrl-C to abort."
+	sleep 20
+done
 
