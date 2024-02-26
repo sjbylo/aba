@@ -130,6 +130,8 @@ done
 ######################
 rm -rf sno
 test-cmd -m "Installing sno cluster with target option [$targetiso]" make sno $targetiso
+test-cmd -m "Setting NTP to be installed" make -C sno ntp
+test-cmd -m "Installing SNO cluster" make -C sno mon
 test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || true
 
 #######################

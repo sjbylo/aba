@@ -1,13 +1,16 @@
 #!/bin/bash -ex
 
-cd 
-rm -rf testing
-mkdir -p testing
-cd testing
-git clone https://github.com/sjbylo/aba.git 
-cd aba
-git checkout dev
-cd ~/aba
+if [ "" ]; then
+	# Used for testing from git
+	cd 
+	rm -rf testing
+	mkdir -p testing
+	cd testing
+	git clone https://github.com/sjbylo/aba.git 
+	cd aba
+	git checkout dev
+	cd ~/aba
+fi
 
 export target_full=1   # Build vm
 #export target_full=    # Build only iso

@@ -7,7 +7,7 @@ source scripts/include_all.sh
 umask 077
 
 source <(normalize-aba-conf)
-source <(normalize-mirror-conf)
+### source <(normalize-mirror-conf)
 
 mkdir -p save
 
