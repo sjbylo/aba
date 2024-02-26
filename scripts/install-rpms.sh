@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-rpms="podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl"
+rpms="podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl coreos-installer"
 
 for rpm in $rpms
 do
