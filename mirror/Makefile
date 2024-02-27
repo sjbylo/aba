@@ -17,8 +17,12 @@ init: .initialized .rpms regcreds                                mirror-registry
 	@touch .initialized
 	@echo Initialized `pwd`
 
+../vmware.conf:
+	make -C .. vmware.conf
+	##(cd ..;  scripts/install-vmware.conf.sh $(debug))
+
 .PHONY: sync
-sync: init ~/.pull-secret.json install     ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
+sync: init ~/.pull-secret.json install ../vmware.conf     ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
@@ -38,7 +42,7 @@ save: init             ~/.pull-secret.json ## Save images from the Internet to m
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: install ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
+load: install ../vmware.conf  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	###
 	### Load images from local disk to mirror registry
 	###
