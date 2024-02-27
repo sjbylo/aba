@@ -5,6 +5,7 @@
 #   make iso
 #   make ntp
 #   make mon
+# This solution was created from the idea posted here: https://github.com/openshift/installer/issues/7571 
 
 source scripts/include_all.sh
 
