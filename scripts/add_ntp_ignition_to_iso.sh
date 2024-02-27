@@ -12,7 +12,7 @@ source scripts/include_all.sh
 
 source <(normalize-aba-conf)
 
-[ ! "$ntp_server" ] && echo Not configuring NTP && exit 0
+[ ! "$ntp_server" ] && echo "Not configuring NTP because ntp_server not defined" && exit 0
 
 dir=iso-agent-based
 

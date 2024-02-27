@@ -46,7 +46,13 @@ iso: iso-agent-based/agent.x86_64.iso ## Build the agent-based iso file
 iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note that install-config.yaml can itself be dependent on vmware.conf params
 	scripts/generate-image.sh $(debug)
 
-.autopoweroff: iso-agent-based/agent.x86_64.iso ntp
+ntp: .ntp ## Add NTP configuration to OCP nodes.  Only needed if the underlying platform does not support NTP.
+.ntp: iso-agent-based/agent.x86_64.iso
+	scripts/add_ntp_ignition_to_iso.sh $(debug) 
+	@touch .ntp
+
+#.autopoweroff: iso-agent-based/agent.x86_64.iso ntp
+.autopoweroff:                                   ntp
 	scripts/vmw-kill.sh $(debug)
 	@touch .autopoweroff
 
@@ -113,10 +119,6 @@ ssh: ## Open ssh to the rendezvous host for troubleshooting
 .PHONEY: shell   
 shell:  ## Access to the installed cluster. Run '. <(make -s shell)'
 	@echo "export KUBECONFIG=$(PWD)/iso-agent-based/auth/kubeconfig"
-
-.PHONEY: ntp
-ntp: ## Add NTP configuration to OCP nodes.  Only needed if the underlying platform does not support NTP.
-	scripts/add_ntp_ignition_to_iso.sh $(debug) 
 
 .PHONEY:
 day2:
