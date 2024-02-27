@@ -34,6 +34,7 @@ v=4.14.12
 ### test-cmd ./aba --version $v --vmw ~/.vmware.conf 
 test-cmd -m "Configure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
+sed -i 's/^ntp_server=[^ \t]\{1,\}\([ \t]\{1,\}\)/ntp_server=10.0.1.8\1/g' aba.conf
 source <(normalize-aba-conf)
 
 ### test-cmd 'make -C cli clean'

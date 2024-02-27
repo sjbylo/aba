@@ -142,3 +142,15 @@ INFO openshift-install gather bootstrap --help
 ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadline exceeded 
 ```
 
+## Other Problems
+
+The actual installation of OCP might fail with an error similar to:
+
+```
+ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadline exceeded
+```
+
+In tests, it was found that repeated installation of OCP using the exact same mac addresses tends to cause the install to either fail or to take a long time to complete.
+When installing a fresh cluster, it is better not to run 'make refresh' but to run 'make clean' first and then run 'make'. This will cause the configuration to be refreshed with random mac addresses (as long as "xx" is in use within the 'mac_prefix' parameter in the 'cluster.conf' file).
+
+
