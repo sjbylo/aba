@@ -69,9 +69,17 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 
 sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
 
+# If the VM snapshot is reverted, as above, no need to delete old files
+mylog Prepare insternal bastion for testing, delete dirs and install make
+ssh $bastion2 "rm -rf ~/bin/* ~/aba"
+ssh $bastion2 "rpm -q make  || sudo yum install make rsync -y"
+ssh $bastion2 "rpm -q rsync || sudo yum install make rsync -y"
+
 mylog "Install 'existing' test mirror registry on internal bastion"
 test-cmd test/reg-test-install-remote.sh registry2.example.com
 
+
+################################
 ### mylog make save
 rm -rf mirror/save  
 test-cmd -m "Saving images to local disk" make save
@@ -79,23 +87,18 @@ test-cmd -m "Saving images to local disk" make save
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
-# If the VM snapshot is reverted, as above, no need to delete old files
-mylog Prepare insternal bastion for testing, delete dirs and install make
-ssh $bastion2 "rm -rf ~/bin/* ~/aba"
-ssh $bastion2 "rpm -q make  || sudo yum install make rsync -y"
-ssh $bastion2 "rpm -q rsync || sudo yum install make rsync -y"
-
 mylog Tar+ssh files over to internal bastion: $bastion2 
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
 mylog "Install the reg creds, simulating a manual config of 'existing' registry" 
-remote-test-cmd -m "Loading images into mirror registry" $bastion2 "make -C aba load" || true  # This user's action is expected to fail since there are no creds for the "existing reg.". But, regcreds/ is created!
+remote-test-cmd -m "Loading images into mirror registry" $bastion2 "make -C aba load" || true  # This user's action is expected to fail since there are no creds for the "existing reg."
+# But, now regcreds/ is created...
 ssh $bastion2 "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
 ssh $bastion2 "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
 
 ######################
 
-remote-test-cmd -m "Loading images into mirror" $bastion2 "make -C aba load" 
+remote-test-cmd -m "Loading images into mirror" $bastion2 "make -C aba load"  # Now, this works
 
 ssh $bastion2 "rm -rf aba/compact" 
 remote-test-cmd -m "Install compact cluster with targetiso[$targetiso]" $bastion2 "make -C aba compact $targetiso" 
@@ -138,6 +141,8 @@ remote-test-cmd -m "Verifying access to mirror registry" $bastion2 "make -C aba/
 
 remote-test-cmd -m "Loading images into mirror" $bastion2 "make -C aba/mirror load"
 
+# FIXME: Might need to run:
+# 'make -C mirror clean' here since we are installing another cluster *with the same mac addresses*! So, install might fail.
 remote-test-cmd -m "Installing sno cluster" $bastion2 "make -C aba/sno"
 
 remote-test-cmd -m "Checking cluster operator status on cluster sno" $bastion2 "make -C aba/sno cmd"
