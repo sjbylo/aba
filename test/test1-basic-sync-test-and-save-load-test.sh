@@ -2,6 +2,8 @@
 # This test is for a connected bastion.  It will install registry on remote bastion and then sync images and install clusters, 
 # ... then savd/load images and install clusters. 
 
+for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer         ; do sudo dnf remove $f -y || exit 1; done || true
+
 cd `dirname $0`
 cd ..
 
@@ -13,11 +15,16 @@ mylog targetiso=$targetiso
 
 mylog
 mylog "===> Starting test $0"
+mylog Test to install remote reg. on registry2.example.com and then sync and save/load images.  Install sno ocp.
 mylog
+
+ntp=10.0.1.8 # If available
 
 rm -f ~/.aba.previous.backup
 
 #> test/test.log
+
+which make || sudo dnf install make -y
 
 > mirror/mirror.conf
 make distclean 
@@ -25,11 +32,13 @@ make distclean
 #make uninstall clean 
 
 v=4.14.9
+rm -f aba.conf
 test-cmd -m "Configure aba.conf for version $v and vmware esxi" ./aba --version $v --vmw ~/.vmware.conf.esxi
 
 mylog "Setting 'ask='"
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
-sed -i 's/^ntp_server=[^ \t]\{1,\}\([ \t]\{1,\}\)/ntp_server=10.0.1.8\1/g' aba.conf
+### sed -i 's/^ntp_server=.*/ntp_server=10.0.1.8  /g' aba.conf
+[ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
 
 source <(normalize-aba-conf)
 
@@ -50,6 +59,7 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 3
 ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 
 # Copy and edit mirror.conf 
+sudo dnf install python3 python3-jinja2 -y
 scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Confgure mirror to install registry on internal (remote) bastion2"
@@ -131,8 +141,8 @@ done
 ######################
 rm -rf sno
 test-cmd -m "Installing sno cluster with target option [$targetiso]" make sno $targetiso
-test-cmd -m "Setting NTP to be installed" make -C sno ntp
-test-cmd -m "Installing SNO cluster" make -C sno mon
+## #test-cmd -m "Setting NTP to be installed" make -C sno ntp
+test-cmd -m "Installing SNO cluster" make -C sno 
 test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || true
 
 #######################
