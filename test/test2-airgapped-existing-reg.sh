@@ -101,21 +101,22 @@ test-cmd -m "Saving images to local disk on `hostname`" make save
 mylog Tar+ssh files over to internal bastion: $bastion2 
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
-mylog "Install the reg creds, simulating a manual config of 'existing' registry" 
 remote-test-cmd -m "Loading images into mirror registry (fails without regcreds)" $bastion2 "make -C aba load" || true  # This user's action is expected to fail since there are no creds for the "existing reg."
 
 # But, now regcreds/ is created...
-mylog "Installing registry creds into mirror/regcreds/ on host: $bastion2"
+mylog "Simulating a manual config of 'existing' registry creds into mirror/regcreds/ on host: $bastion2"
 ssh $bastion2 "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
 ssh $bastion2 "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
 
+remote-test-cmd -m "Loading images into mirror registry now succeeds" $bastion2 "make -C aba/mirror verify"
+
 ######################
 
-remote-test-cmd -m "Loading images into mirror" $bastion2 "make -C aba load"  # Now, this works
+remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba load"  # Now, this works
 
 ssh $bastion2 "rm -rf aba/compact" 
-remote-test-cmd -m "Install compact cluster with targetiso[$targetiso]" $bastion2 "make -C aba compact $targetiso" 
-remote-test-cmd $bastion2 "make -C aba/compact delete" 
+remote-test-cmd -m "Install compact cluster with targetiso=[$targetiso]" $bastion2 "make -C aba compact $targetiso" 
+remote-test-cmd -m "Deleting cluster (if it exists)" $bastion2 "make -C aba/compact delete" 
 
 ### remote-test-cmd $bastion2 "rm -rf aba/standard" 
 ### remote-test-cmd $bastion2 "make -C aba standard $targetiso" 
@@ -123,14 +124,14 @@ remote-test-cmd $bastion2 "make -C aba/compact delete"
 
 ssh $bastion2 "rm -rf aba/sno" 
 
-remote-test-cmd -m "Install sno cluster with targetiso[$targetiso]" $bastion2 "make -C aba sno $targetiso" 
+remote-test-cmd -m "Install sno cluster with targetiso=[$targetiso]" $bastion2 "make -C aba sno $targetiso" 
 
 
 ######################
 # Now simulate adding more images to the mirror registry
 ######################
 
-mylog Adding ubi images to imageset conf file 
+mylog Adding ubi images to imageset conf file on `hostname`
 
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
@@ -148,9 +149,9 @@ test-cmd -m "Saving ubi images to local disk" make -C mirror save
 mylog Tar+ssh files over to internal bastion: $bastion2 
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
-remote-test-cmd -m "Verifying access to mirror registry" $bastion2 "make -C aba/mirror verify"
+remote-test-cmd -m "Verifying access to mirror registry $reg_host:$reg_port" $bastion2 "make -C aba/mirror verify"
 
-remote-test-cmd -m "Loading images into mirror" $bastion2 "make -C aba/mirror load"
+remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba/mirror load"
 
 # FIXME: Might need to run:
 # 'make -C mirror clean' here since we are re-installing another cluster *with the same mac addresses*! So, install might fail.
@@ -162,7 +163,7 @@ remote-test-cmd -m "Checking cluster operator status on cluster sno" $bastion2 "
 
 remote-test-cmd -m "Deploying vote-app on cluster" $bastion2 aba/test/deploy-test-app.sh
 
-mylog Adding advanced-cluster-management operator iomages to imageset conf file
+mylog Adding advanced-cluster-management operator images to imageset conf file on `hostname`
 
 cat >> mirror/save/imageset-config-save.yaml <<END
   operators:
@@ -175,12 +176,12 @@ END
 
 test-cmd -m "Saving advanced-cluster-management images to local disk" make -C mirror save 
 
-mylog Tar+ssh files over to internal bastion: $bastion2 
+mylog Tar+ssh files from `hostname` over to internal bastion: $bastion2 
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
-remote-test-cmd -m "Loading images into mirror" $bastion2 "make -C aba/mirror load"
+remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba/mirror load"
 
-remote-test-cmd -m "Verifying miror registry access" $bastion2 "make -C aba/mirror verify"
+remote-test-cmd -m "Verifying mirror registry access $reg_host:$reg_port" $bastion2 "make -C aba/mirror verify"
 
 remote-test-cmd -m "Deleting sno cluster" $bastion2 "make -C aba/sno delete" 
 
