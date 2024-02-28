@@ -41,7 +41,8 @@ if [ ! "$auto_ver" ]; then
 	echo -n "Looking up OpenShift release versions ..."
 
 	if ! curl -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
-		echo "Error: Cannot https://access mirror.openshift.com/"
+		echo
+		echo "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
 		exit 1
 	fi
 
@@ -95,8 +96,9 @@ if [ ! "$auto_ver" ]; then
 
 fi
 
+# # FIXME: Asking about vmware platform is not really needed at this point in the workflow, consider removing.
 # make is needed below and in the next steps 
-rpm --quiet -q make || sudo dnf install make -y >/dev/null 2>&1
+which make >/dev/null 2>&1 || sudo dnf install make -y >/dev/null 2>&1
 
 ############
 # vmware.conf
@@ -105,6 +107,7 @@ if [ ! "$auto_vmw" ]; then
 		make vmware.conf
 	fi
 fi
+# # FIXME: Asking about vmware platform is not really needed at this point in the workflow, consider removing.
 
 # Set up the CLIs
 make -C cli 
