@@ -9,7 +9,8 @@ help: ## Help
 
 #init:             .rpms regcreds templates scripts mirror.conf mirror-registry .initialized
 #init: .initialized .rpms regcreds                    mirror.conf mirror-registry   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
-init: .initialized .rpms regcreds                                mirror-registry.tar.gz   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
+#init: .initialized .rpms regcreds                                mirror-registry.tar.gz   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
+init: .initialized       regcreds                                mirror-registry.tar.gz   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
 .initialized: 
 	@ln -fs $(TEMPLATES) 
 	@ln -fs $(SCRIPTS) 
@@ -22,7 +23,7 @@ init: .initialized .rpms regcreds                                mirror-registry
 	##(cd ..;  scripts/install-vmware.conf.sh $(debug))
 
 .PHONY: sync
-sync: init ~/.pull-secret.json install ../vmware.conf     ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
+sync: init .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
@@ -34,7 +35,7 @@ sync: init ~/.pull-secret.json install ../vmware.conf     ## Sync images from th
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: save
 #save: init mirror.conf ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
-save: init             ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
+save: init .rpmsext          ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
 	###
 	### Save images from the Internet to local disk 
 	###
@@ -42,7 +43,7 @@ save: init             ~/.pull-secret.json ## Save images from the Internet to m
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: install ../vmware.conf  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
+load: init .rpmsint install ../vmware.conf  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	###
 	### Load images from local disk to mirror registry
 	###
@@ -55,15 +56,19 @@ testload: save install load     # Test the save, install, load process on a conn
 ../aba.conf:
 	../aba
 
-rpms: .rpms
-.rpms:
-	scripts/install-rpms.sh
-	#@sudo dnf install podman make jq bind-utils nmstate net-tools skopeo python3 python3-jinja2 python3-pyyaml openssl -y >> .dnf-install.log 2>&1
-	#@echo "All required rpms are installed"
-	@touch .rpms
+rpms: .rpms  ## Install all rpms
+.rpms: .rpmsint .rpmsext
+
+.rpmsext: init
+	@scripts/install-rpms.sh external
+	@touch .rpmsext
+
+.rpmsint: init
+	@scripts/install-rpms.sh internal
+	@touch .rpmsint
 
 rpmsclean:
-	@rm -f .rpms
+	@rm -f .rpms*
 
 regcreds:
 	mkdir regcreds 
@@ -80,7 +85,7 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 mirror.conf:                                               ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
-install: init mirror.conf mirror-registry .installed   ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
+install: init .rpmsext mirror.conf mirror-registry .installed   ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 .installed: 
 	#@test ! -f .uninstalled && exit 0
 	$(SCRIPTS)/reg-install.sh $(debug) 
@@ -112,17 +117,17 @@ uninstallclean:
 .PHONY: inc
 inc:   ## Create an incremental tar backup of the sync and/or save directories, after running 'make save' or 'make sync'
 	@make -s -C .. inc
-	#@scripts/inc-backup.sh $(out)
 
 .PHONY: tidy 
 tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
-	rm -rf *.tar mirror-registry .rpms .installed .loaded .initialized
+	rm -rf *.tar mirror-registry .rpms* .installed .loaded .initialized
 
 .PHONY: clean
 clean: tidy ## Clean up files
 	rm -rf                  .??* 
 	rm -rf *.sh templates scripts ### oc-mirror-workspace
 	rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
+	rm -f mirror-registry.tar.gz
 
 .PHONY: distclean
 #distclean: uninstall clean ## Clean up repo for distribution

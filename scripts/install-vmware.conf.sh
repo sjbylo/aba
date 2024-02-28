@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+[ "$1" ] && set -x
+
 if [ ! -s vmware.conf ]; then
 	echo
 	echo "Do you want to install OpenShift onto vSphere or ESXi?"
@@ -19,6 +21,7 @@ if [ ! -s vmware.conf ]; then
 		fi
 		$editor vmware.conf 
 	else
+		> vmware.conf
 		exit 0
 	fi
 

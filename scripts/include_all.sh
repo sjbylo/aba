@@ -95,17 +95,18 @@ try_cmd() {
 	done
 }
 
-install_rpm() {
-	rpmlist=
-	for rpm in $@
-	do
-		rpm --quiet -q $rpm || rpmlist="$rpmlist $rpm"
-	done
-	[ "$rpmlist" ] && \
-		echo "Installing rpms: $rpmlist" && \
-			sudo dnf install -y $rpmlist >> .install.log 2>&1
-	return 0
-}
+# FIXME
+##install_rpm() {
+##	rpmlist=
+##	for rpm in $@
+##	do
+##		rpm --quiet -q $rpm || rpmlist="$rpmlist $rpm"
+##	done
+##	[ "$rpmlist" ] && \
+##		echo "Installing rpms: $rpmlist" && \
+##			sudo dnf install -y $rpmlist >> .install.log 2>&1
+##	return 0
+##}
 
 #install_pip() {
 	#install_rpm jq
