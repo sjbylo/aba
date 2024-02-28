@@ -29,6 +29,7 @@ mirror/*.sh
 mirror/sync
 mirror/.synced
 mirror/.uninstalled
+mirror/.*
 sno*
 *.ssh.conf
 standard*

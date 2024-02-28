@@ -53,12 +53,12 @@ ntp: .ntp ## Add NTP configuration to OCP nodes.  Only needed if the underlying 
 
 #.autopoweroff: iso-agent-based/agent.x86_64.iso ntp
 .autopoweroff:                                   ntp
-	scripts/vmw-kill.sh $(debug)
+	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || echo "VM(s) already powered off"
 	@touch .autopoweroff
 
-upload: .autoupload vmware.conf ## Upload the ISO to the VMW platform
+upload: vmware.conf .autoupload  ## Upload the ISO to the VMW platform
 .autoupload: .autopoweroff
-	scripts/vmw-up.sh || scripts/vmw-upload.sh $(debug) 
+	scripts/vmw-upload.sh $(debug) 
 	@touch .autoupload
 
 .autorefresh: .autoupload
@@ -69,7 +69,7 @@ upload: .autoupload vmware.conf ## Upload the ISO to the VMW platform
 # The following tagets are for interactive use only
 .PHONEY: refresh
 refresh: init  vmware.conf ## Delete and re-create the VMs
-	scripts/vmw-delete.sh $(debug)
+	scripts/vmw-exists.sh && scripts/vmw-delete.sh $(debug) || echo "No VMs"
 	scripts/vmw-create.sh --start $(debug) 
 
 .PHONEY: create
@@ -94,7 +94,7 @@ poweroff: vmware.conf ## Power off the VMs immediately
 
 .PHONEY: kill
 kill:  vmware.conf ## Kill or power off the VMs immediately
-	scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug)
+	scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || echo "No running VM(s)"
 
 .PHONEY: delete
 delete: vmware.conf ## Delete the VMs
