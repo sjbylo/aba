@@ -4,13 +4,18 @@
 
 # Required: 2 bastions (internal and external), for internal (no direct Internet) only yum works via a proxy. For external, the proxy is fully configured. 
 # I.e. Internal bastion has no access to the Internet.  External has full access. 
-# Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses rsync to copy over the aba repo. 
+# Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses tar+ssh to copy over the aba repo. 
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
+
+#for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer python3 ; do sudo dnf remove $f -y; done || true
+for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer         ; do sudo dnf remove $f -y || exit 1; done || true
 
 cd `dirname $0`
 cd ..  # Change into "aba" dir
 
-bastion2=10.0.1.6
+#bastion2=10.0.1.6
+bastion2=registry2.example.com
+ntp=10.0.1.8 # If available
 rm -f ~/.aba.previous.backup
 
 source scripts/include_all.sh
@@ -21,10 +26,13 @@ mylog targetiso=$targetiso
 
 mylog
 mylog "===> Starting test $0"
+mylog Test to integrate an existing reg. on registry2.example.com and save + copy + load images.  Install sno ocp and a test app. 
 mylog
 
 ######################
 # Set up test 
+
+which make || sudo dnf install make -y
 
 > mirror/mirror.conf
 test-cmd "make -C mirror distclean"
@@ -32,9 +40,11 @@ rm -rf sno compact standard
 
 v=4.14.12
 ### test-cmd ./aba --version $v --vmw ~/.vmware.conf 
+rm -f aba.conf
 test-cmd -m "Configure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
+
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
-sed -i 's/^ntp_server=[^ \t]\{1,\}\([ \t]\{1,\}\)/ntp_server=10.0.1.8\1/g' aba.conf
+[ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
 source <(normalize-aba-conf)
 
 ### test-cmd 'make -C cli clean'
@@ -46,6 +56,7 @@ test-cmd "make -C test mirror-registry.tar.gz"
 #################################
 # Copy and edit mirror.conf 
 #cp -f templates/mirror.conf mirror/
+sudo dnf install python3 python3-jinja2 -y
 scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 ### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
 
@@ -73,17 +84,16 @@ sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Op
 # If the VM snapshot is reverted, as above, no need to delete old files
 mylog Prepare insternal bastion for testing, delete dirs and install make
 ssh $bastion2 "rm -rf ~/bin/* ~/aba"
-ssh $bastion2 "rpm -q make  || sudo yum install make rsync -y"
-ssh $bastion2 "rpm -q rsync || sudo yum install make rsync -y"
+ssh $bastion2 "rpm -q make  || sudo yum install make -y"
 
-mylog "Install 'existing' test mirror registry on internal bastion"
+mylog "Install 'existing' test mirror registry on internal bastion: registry2.example.com"
 test-cmd test/reg-test-install-remote.sh registry2.example.com
 
 
 ################################
 ### mylog make save
 rm -rf mirror/save  
-test-cmd -m "Saving images to local disk" make save
+test-cmd -m "Saving images to local disk on `hostname`" make save
 
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
@@ -92,8 +102,10 @@ mylog Tar+ssh files over to internal bastion: $bastion2
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
 mylog "Install the reg creds, simulating a manual config of 'existing' registry" 
-remote-test-cmd -m "Loading images into mirror registry" $bastion2 "make -C aba load" || true  # This user's action is expected to fail since there are no creds for the "existing reg."
+remote-test-cmd -m "Loading images into mirror registry (fails without regcreds)" $bastion2 "make -C aba load" || true  # This user's action is expected to fail since there are no creds for the "existing reg."
+
 # But, now regcreds/ is created...
+mylog "Installing registry creds into mirror/regcreds/ on host: $bastion2"
 ssh $bastion2 "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
 ssh $bastion2 "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
 
@@ -133,8 +145,6 @@ END
 
 test-cmd -m "Saving ubi images to local disk" make -C mirror save 
 
-### mylog make rsync
-### test-cmd make rsync ip=$bastion2
 mylog Tar+ssh files over to internal bastion: $bastion2 
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
@@ -143,7 +153,7 @@ remote-test-cmd -m "Verifying access to mirror registry" $bastion2 "make -C aba/
 remote-test-cmd -m "Loading images into mirror" $bastion2 "make -C aba/mirror load"
 
 # FIXME: Might need to run:
-# 'make -C mirror clean' here since we are installing another cluster *with the same mac addresses*! So, install might fail.
+# 'make -C mirror clean' here since we are re-installing another cluster *with the same mac addresses*! So, install might fail.
 remote-test-cmd -m "Installing sno cluster" $bastion2 "make -C aba/sno"
 
 remote-test-cmd -m "Checking cluster operator status on cluster sno" $bastion2 "make -C aba/sno cmd"

@@ -7,6 +7,9 @@
 # Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses rsync to copy over the aba repo. 
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
+#for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer python3 ; do sudo dnf remove $f -y; done || true
+for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer         ; do sudo dnf remove $f -y || exit 1; done || true
+
 cd `dirname $0`
 cd ..  # Change into "aba" dir
 
@@ -18,12 +21,17 @@ mylog targetiso=$targetiso
 
 mylog
 mylog "===> Starting test $0"
+mylog Test to install a local reg. on registry2.example.com and save + copy + load images.  Install sno ocp and a test app and svc mesh.
 mylog
+
+ntp=10.0.1.8 # If available
 
 rm -f ~/.aba.previous.backup
 
 ######################
 # Set up test 
+
+which make || sudo dnf install make -y
 
 > mirror/mirror.conf
 test-cmd -m "Cleaning up mirror" "make -C mirror distclean" 
@@ -35,7 +43,8 @@ test-cmd -m "Confiure aba.conf for version $v and vmware vcenter" ./aba --versio
 
 # Do not ask to delete things
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
-sed -i 's/^ntp_server=[^ \t]\{1,\}\([ \t]\{1,\}\)/ntp_server=10.0.1.8\1/g' aba.conf
+
+[ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
 
 source <(normalize-aba-conf)
 
@@ -47,6 +56,7 @@ bastion2=10.0.1.6
 #################################
 # Copy and edit mirror.conf 
 
+sudo dnf install python3 python3-jinja2 -y
 scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Test the internal bastion (registry2.example.com) as mirror"
@@ -116,8 +126,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: registry.redhat.io/ubi9/ubi:latest
 END
 
-mylog Saving ubi image on external bastion
-test-cmd -m "Saving UBI images to local disk" "make -C mirror save"
+test-cmd -m "Saving ubi images to local disk on `hostname`" "make -C mirror save"
 
 mylog Copy tar+ssh archives to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
