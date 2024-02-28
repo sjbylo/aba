@@ -17,9 +17,10 @@ trap 'show_error' ERR
 
 # Detect editor.  Assume nano if available
 if which nano >/dev/null 2>&1; then
-	export editor=nano
+	# FIXME
+	[ ! "$editor" ] && export editor=nano
 else
-	export editor=vi
+	[ ! "$editor" ] && export editor=vi
 fi
 
 normalize-aba-conf() {
@@ -71,9 +72,9 @@ ask() {
 	[ "$1" = "-t" ] && shift && timer="-t $1" && shift
 
 	echo
-	echo -n "===> $@ (y/n) [y]: "
+	echo -n "===> $@ (Y/n): "
 	read $timer yn
-	[ ! "$yn" -o "$yn" = "y" ] && return 0
+	[ ! "$yn" -o "$yn" = "y" -o "$yn" = "Y" ] && return 0
 
 	return 1
 }
@@ -94,31 +95,4 @@ try_cmd() {
 		echo "Attempt $count/$total of command: \"$*\""
 	done
 }
-
-# FIXME
-##install_rpm() {
-##	rpmlist=
-##	for rpm in $@
-##	do
-##		rpm --quiet -q $rpm || rpmlist="$rpmlist $rpm"
-##	done
-##	[ "$rpmlist" ] && \
-##		echo "Installing rpms: $rpmlist" && \
-##			sudo dnf install -y $rpmlist >> .install.log 2>&1
-##	return 0
-##}
-
-#install_pip() {
-	#install_rpm jq
-	#piplist=
-	#for pip in $@
-	#do
-		#[ "$(pip3 list --format json| jq -r '.[].name | select(. == "'$pip'")')" ] || piplist="$piplist $pip"
-	#done
-	#[ "$piplist" ] && \
-		#echo "Installing pip3: $piplist" && \
-			##unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY && \
-			#pip3 install --user $piplist >> .install.log  2>&1 
-	#return 0
-#}
 
