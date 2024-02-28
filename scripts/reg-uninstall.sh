@@ -25,7 +25,6 @@ else
 	echo "         If you installed a registry and want to remove it, please uninstall it manually." 
 	echo
 	sleep 5
-	#read yn
 fi
 
 # Try to uninstall any existing registry

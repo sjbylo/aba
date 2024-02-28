@@ -58,7 +58,7 @@ ntp: .ntp ## Add NTP configuration to OCP nodes.  Only needed if the underlying 
 
 upload: .autoupload vmware.conf ## Upload the ISO to the VMW platform
 .autoupload: .autopoweroff
-	scripts/vmw-upload.sh $(debug) 
+	scripts/vmw-up.sh || scripts/vmw-upload.sh $(debug) 
 	@touch .autoupload
 
 .autorefresh: .autoupload
@@ -90,15 +90,15 @@ start: vmware.conf ## Start the VMs
 
 .PHONEY: poweroff
 poweroff: vmware.conf ## Power off the VMs immediately
-	scripts/vmw-kill.sh $(debug)
+	scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug)
 
 .PHONEY: kill
 kill:  vmware.conf ## Kill or power off the VMs immediately
-	scripts/vmw-kill.sh $(debug)
+	scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug)
 
 .PHONEY: delete
 delete: vmware.conf ## Delete the VMs
-	scripts/vmw-delete.sh $(debug)
+	scripts/vmw-exists.sh && scripts/vmw-delete.sh $(debug)
 
 .PHONEY: mon
 mon: ## Monitor the agent-based installation of OpenShift 
