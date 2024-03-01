@@ -91,6 +91,11 @@ install: .installed
 installclean:
 	@rm -f .installed
 
+.PHONEY: password pw
+password: pw
+pw: 
+	scripts/reg-existing-create-pull-secret.sh $(debug)
+
 .PHONY: verify
 verify: .initialized 
 	$(SCRIPTS)/reg-verify.sh $(debug)
