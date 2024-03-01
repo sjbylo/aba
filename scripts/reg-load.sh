@@ -31,7 +31,9 @@ fi
 [ "$reg_root" ] || reg_root=$HOME/quay-install  # Only needed for the below message
 echo 
 echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
-echo Ensure there is enough disk space under $reg_root.  This can take 5-20 mins to complete. 
+echo
+echo Ensure there is enough disk space under $reg_root.  This can take 5-20 or more mins to complete. 
+echo
 
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
