@@ -8,7 +8,6 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 read -p "Enter username [init]: " reg_user
-#read reg_user
 [ ! "$reg_user" ] && reg_user=init 
 
 read -sp "Enter password: " reg_pw
@@ -22,8 +21,6 @@ scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirro
 # Note that for https, the installation of OCP *will* require the registry's root certificate 
 podman logout --all >/dev/null
 podman login --tls-verify=false --authfile=regcreds/pull-secret-mirror.json  $reg_host:$reg_port
-podman logout --all >/dev/null
-podman login --tls-verify=false -u $reg_user -p $reg_pw $reg_host:$reg_port
 
-# Add flag so no mirror reg will be installed 
+# Add flag so 'make install' is complete
 touch .installed 

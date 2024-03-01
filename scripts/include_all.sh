@@ -30,6 +30,7 @@ normalize-aba-conf() {
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
 			sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" | \
+			sed -e "s/ask=1\b/ask=true/g" | \
 			sed -e "s/^/export /g";
 }
 
@@ -41,6 +42,7 @@ normalize-mirror-conf()
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
 			sed -e "s/tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
+			sed -e "s/tls_verify=1\b/tls_verify=true/g" | \
 			sed -e "s/^/export /g";
 }
 
@@ -51,9 +53,9 @@ normalize-cluster-conf()
 	cat cluster.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
-			sed -e "s/tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
 			sed -e "s/^/export /g";
 }
+###			sed -e "s/tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
 
 normalize-vmware-conf()
 {

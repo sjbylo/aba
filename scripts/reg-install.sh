@@ -7,8 +7,6 @@ source scripts/include_all.sh
 umask 077
 
 source <(normalize-aba-conf)
-#source <(cat aba.conf | sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g")
-source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 export reg_url=https://$reg_host:$reg_port
@@ -19,49 +17,13 @@ export reg_url=https://$reg_host:$reg_port
 # For existing registry, user must provide the 'regcreds/pull-secret-mirror.json' and the 'regcreds/rootCA.pem' files. 
 if [ -s regcreds/pull-secret-mirror.json ]; then
 
-	# FIXME: root cert of registry is required by OCP installer for https!
-	# Install cert, if available 
-	if [ -s regcreds/rootCA.pem ]; then
-		# Check if the cert needs to be updated
-		if ! sudo diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2; then
-			sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 
-			sudo update-ca-trust extract
-			echo "Cert 'regcreds/rootCA.pem' updated in system trust"
-		else
-			echo "regcreds/rootCA.pem already in system trust"
-		fi
-	else
-		echo
-		echo "WARNING: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' file found."
-		echo
-
-		if [ "$tls_verify" ]; then
-			echo "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again."
-			echo
-
-			exit 1
-		fi
-	fi
-
-	# Test registry access with podman 
-
-	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
-
-	podman logout --all >/dev/null 
-	echo -n "Checking registry access is working using 'podman login' ... "
-	cmd="podman login $tls_verify_opts --authfile regcreds/pull-secret-mirror.json $reg_url"
-	echo "Running: $cmd"
-	$cmd
-
-	echo
-	echo "Valid registry credential file(s) found in mirror/regcreds/.  Using existing registry $reg_url"
-
-	exit 0
+	scripts/reg-verify.sh
+	exit
 fi
 
+# Detect any existing mirror registry?
 
-# Detect mirror registry already installed?
-
+# Check for Quay...
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
@@ -70,13 +32,14 @@ if [ "$reg_code" = "200" ]; then
 	echo "Warning: Quay registry found at $reg_host:$reg_port."
 	echo "         To use this registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
 	echo "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
+	echo "         The pull secret file can also be created and verified using 'make password'"
 	echo "         See the README.md for further instructions."
 	echo 
 
 	exit 1
 fi
 
-# If the endpoint is not Quay....
+# Check for any endpoint ...
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/ || true)
 
 if [ "$reg_code" = "200" ]; then
@@ -84,12 +47,12 @@ if [ "$reg_code" = "200" ]; then
 	echo "Warning: Endpoint found at $reg_host:$reg_port."
 	echo "         If this is your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
 	echo "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
+	echo "         The pull secret file can also be created and verified using 'make password'"
 	echo "         See the README.md for further instructions."
 	echo 
 
 	exit 1
 fi
-
 
 # Has user defined a registry root dir?
 if [ "$reg_root" ]; then
