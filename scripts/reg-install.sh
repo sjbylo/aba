@@ -32,11 +32,11 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 		fi
 	else
 		echo
-		echo "WARNING: mirror registry pull secret found (regcreds/pull-secret-mirror.json) but no rootCA.pem"
+		echo "WARNING: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' file found."
 		echo
 
 		if [ "$tls_verify" ]; then
-			echo "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no regcreds/rootCA.pem file exists. Copy your registry's root CA file into 'regcreds/' and try again."
+			echo "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again."
 			echo
 
 			exit 1
@@ -53,6 +53,7 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 	echo "Running: $cmd"
 	$cmd
 
+	echo
 	echo "Valid registry credential file(s) found in mirror/regcreds/.  Using existing registry $reg_url"
 
 	exit 0
@@ -66,8 +67,8 @@ reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_p
 
 if [ "$reg_code" = "200" ]; then
 	echo
-	echo "Warning: Quay registry found at $reg_host:$reg_port. "
-	echo "         To use this registry, copy this registry's pull secret file and root CA file into 'mirror/regcreds/' and try again."
+	echo "Warning: Quay registry found at $reg_host:$reg_port."
+	echo "         To use this registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
 	echo "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
 	echo "         See the README.md for further instructions."
 	echo 
@@ -80,8 +81,8 @@ reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_p
 
 if [ "$reg_code" = "200" ]; then
 	echo
-	echo "Warning: The endpoint $reg_host:$reg_port exists. "
-	echo "         If this is the existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
+	echo "Warning: Endpoint found at $reg_host:$reg_port."
+	echo "         If this is your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
 	echo "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
 	echo "         See the README.md for further instructions."
 	echo 
