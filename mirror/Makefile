@@ -13,7 +13,7 @@ init: .initialized
 	@ln -fs $(SCRIPTS) 
 	@ln -fs ../aba.conf 
 	@touch .initialized
-	@mkdir regcreds
+	@mkdir -p regcreds
 	@echo Initialized `pwd`
 
 # If aba.conf does not exist, then run the script to create it

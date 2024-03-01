@@ -6,7 +6,7 @@ rpms_int=$(cat templates/rpms-internal.txt)
 
 # Rpms required for "external" bastion (or laptop) 
 rpms_ext="podman make jq python3 python3-jinja2 python3-pyyaml"
-rpms_ext="       make    python3 python3-jinja2               "
+rpms_ext="       make jq python3 python3-jinja2               "
 
 rpms=$rpms_ext
 [ "$1" = "internal" ] && rpms=$rpms_int

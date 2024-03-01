@@ -15,9 +15,9 @@ reg_host=registry.{{ domain }}		# Ensure a *DNS A record exists* that points to 
 
 reg_ssh=				# Optional: If a registry should be installed on a *remote host*, add the ssh
 					# key path here.    Example: ~/.ssh/id_rsa 
-					# The key must allow passwordless access to the remote host using the same user.
-					# If not defined (the default) then, if required, the registry will be installed on
-					# localhost. 
+					# The key must allow passwordless access to the remote host (defined by $reg_host)
+					# using the same user.  If not defined (the default) then, if required, the
+					# registry will be installed on localhost. 
 
 reg_ssh_user=				# Not implemented yet! Output of 'whoami' command is used.
 
