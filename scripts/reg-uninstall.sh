@@ -24,7 +24,7 @@ else
 	echo "Warning: No Quay installation detected."
 	echo "         If you installed a registry and want to remove it, please uninstall it manually." 
 	echo
-	sleep 5
+	sleep 2
 fi
 
 # Try to uninstall any existing registry
@@ -46,7 +46,7 @@ if [ "$reg_ssh" ] && ssh $(whoami)@$reg_host podman ps | grep -q registry; then
 		exit 1
 	fi
 elif podman ps | grep -q registry; then
-	if ask "Uninstall the mirror registry from localhost"; then
+	if ask "Uninstall the mirror registry on localhost"; then
 		cmd="./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 		echo "Running command: $cmd"
 		$cmd
