@@ -55,9 +55,6 @@ load: .initialized .rpmsint install ../vmware.conf  ## Load the saved images int
 .PHONY: testload
 testload: save install load     # Test the save, install, load process on a connected host
 
-rpms: .rpms  ## Install all rpms
-.rpms: .rpmsint .rpmsext
-
 .rpmsext: .initialized
 	@scripts/install-rpms.sh external
 	@touch .rpmsext
