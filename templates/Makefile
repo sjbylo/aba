@@ -69,7 +69,7 @@ upload: vmware.conf .autoupload  ## Upload the ISO to the VMW platform
 # The following tagets are for interactive use only
 .PHONEY: refresh
 refresh: init  vmware.conf ## Delete and re-create the VMs
-	scripts/vmw-exists.sh && scripts/vmw-delete.sh $(debug) || echo "No VMs"
+	scripts/vmw-exists.sh && scripts/vmw-delete.sh $(debug) || echo "No VM(s)"
 	scripts/vmw-create.sh --start $(debug) 
 
 .PHONEY: create
@@ -90,15 +90,15 @@ start: vmware.conf ## Start the VMs
 
 .PHONEY: poweroff
 poweroff: vmware.conf ## Power off the VMs immediately
-	scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug)
+	scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || echo "VM(s) already powered off"
 
 .PHONEY: kill
 kill:  vmware.conf ## Kill or power off the VMs immediately
-	scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || echo "No running VM(s)"
+	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || echo "No running VM(s)"
 
 .PHONEY: delete
 delete: vmware.conf ## Delete the VMs
-	scripts/vmw-exists.sh && scripts/vmw-delete.sh $(debug)
+	@scripts/vmw-exists.sh && scripts/vmw-delete.sh $(debug) || echo "No VM(s)"
 
 .PHONEY: mon
 mon: ## Monitor the agent-based installation of OpenShift 

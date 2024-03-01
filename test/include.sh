@@ -3,7 +3,7 @@ test-cmd() {
 	set +x
 
 	[ "$1" = "-m" ] && local msg="$2" && shift && shift 
-	[ "$msg" ] && echo "$msg from host `hostname`" >> test/test.log || echo "$@ from host `hostname`" >> test/test.log
+	[ "$msg" ] && echo "`hostname`: $msg" >> test/test.log || echo "`hostname`: $@" >> test/test.log
 	eval "$@"
 
 	set -x
@@ -16,7 +16,7 @@ remote-test-cmd() {
 
 	host=$1 && shift
 
-	[ "$msg" ] && echo "$msg from host $host" >> test/test.log || echo "$@ from host $host" >> test/test.log
+	[ "$msg" ] && echo "$host: $msg" >> test/test.log || echo "$host: $@" >> test/test.log
 	ssh $host -- "$@"
 
 	set -x

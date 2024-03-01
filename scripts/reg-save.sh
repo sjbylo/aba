@@ -17,7 +17,7 @@ if [ ! -s save/imageset-config-save.yaml ]; then
 	export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-	echo Generating save/imageset-config-save.yaml to save images to local disk for v$ocp_version and channel $ocp_channel ...
+	echo "Generating save/imageset-config-save.yaml to save images to local disk for OpenShift 'v$ocp_version' and channel '$ocp_channel' ..."
 	scripts/j2 ./templates/imageset-config-save.yaml.j2 > save/imageset-config-save.yaml 
 else
 	echo Using existing save/imageset-config-save.yaml
