@@ -12,7 +12,6 @@ init: .initialized regcreds
 	@ln -fs $(TEMPLATES) 
 	@ln -fs $(SCRIPTS) 
 	@ln -fs ../aba.conf 
-	### @make -C ../cli      # Just to be sure
 	@touch .initialized
 	@echo Initialized `pwd`
 
@@ -86,7 +85,6 @@ mirror.conf:                                               ## Configure the mirr
 
 install: init .rpmsext mirror.conf mirror-registry .installed   ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 .installed: 
-	#@test ! -f .uninstalled && exit 0
 	$(SCRIPTS)/reg-install.sh $(debug) 
 	@rm -f .uninstalled 
 	@touch .installed
@@ -104,7 +102,6 @@ verify: init
 #uninstall: init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
 uninstall: init             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
 .uninstalled: 
-	#@test ! -f .installed && exit 0
 	$(SCRIPTS)/reg-uninstall.sh  $(debug)
 	@rm -f .installed
 	@touch .uninstalled
