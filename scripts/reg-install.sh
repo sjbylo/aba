@@ -34,6 +34,14 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 		echo
 		echo "WARNING: mirror registry pull secret provided (regcreds/pull-secret-mirror.json) but no rootCA.pem"
 		echo
+
+		if [ "$tls_verify" ]; then
+			echo
+			echo "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no regcreds/rootCA.pem file exists."
+			echo
+
+			exit 1
+		fi
 	fi
 
 	# Test registry access with podman 
