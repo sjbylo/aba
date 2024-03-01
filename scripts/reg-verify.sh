@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Try to verify access to the registry, as defined in mirror.conf
 
 source scripts/include_all.sh
 
@@ -21,36 +22,44 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 			sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 
 			sudo update-ca-trust extract
 			echo "Cert 'regcreds/rootCA.pem' updated in system trust"
+		else
+			echo "regcreds/rootCA.pem already in system trust"
+		fi
+	else
+		echo
+		echo "WARNING: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' file found."
+		echo
+
+		if [ "$tls_verify" ]; then
+			echo "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again."
+			echo
+
+			exit 1
 		fi
 	fi
+
+	# Test registry access with podman 
 
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 	podman logout --all >/dev/null 
-	echo "Checking registry access is working:"
+	echo -n "Checking registry access is working using 'podman login' ... "
 	cmd="podman login $tls_verify_opts --authfile regcreds/pull-secret-mirror.json $reg_url"
 	echo "Running: $cmd"
 	$cmd
 
 	echo
-	echo "Valid registry credential files found in mirror/regcreds/.  Using existing registry $reg_url"
+	echo "Valid registry credential file(s) found in mirror/regcreds/.  Using existing registry $reg_url"
 
 	exit 0
 fi
 
-# Mirror registry already installed?
-[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
-reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/ || true)
-
-if [ "$reg_code" = "200" ]; then
-	echo "Quay registry found at $reg_url/"
-	echo
-	echo "Warning: If this registry is your existing registry, copy this registry's pull secret and root CA (if available) files into 'mirror/regcreds/'."
-	echo "See the README for instructions. "
-
-	exit 1
-fi
-
-#reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
+echo
+echo "Error:   No mirror registry credential files found in regcreds/"
+echo "         If you want to use your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
+echo "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
+echo "         See the README.md for further instructions."
+echo
 
 exit 1
+
