@@ -1,7 +1,7 @@
 #!/bin/bash -ex
 
 #if false; then
-if true; then
+if [ "" ]; then
 	# Used for testing from git
 	cd 
 	rm -rf testing
