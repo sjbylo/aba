@@ -27,9 +27,12 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 	podman logout --all >/dev/null 
-	echo -n "Checking registry access is working using 'podman login' ... "
-	podman login $tls_verify_opts --authfile regcreds/pull-secret-mirror.json $reg_url 
+	echo "Checking registry access is working:"
+	cmd="podman login $tls_verify_opts --authfile regcreds/pull-secret-mirror.json $reg_url"
+	echo "Running: $cmd"
+	$cmd
 
+	echo
 	echo "Valid registry credential files found in mirror/regcreds/.  Using existing registry $reg_url"
 
 	exit 0
