@@ -8,7 +8,6 @@
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
 sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
-for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer         ; do sudo dnf remove $f -y || exit 1; done || true
 
 cd `dirname $0`
 cd ..  # Change into "aba" dir

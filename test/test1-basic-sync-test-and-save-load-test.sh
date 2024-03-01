@@ -3,7 +3,6 @@
 # ... then savd/load images and install clusters. 
 
 sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
-for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer         ; do sudo dnf remove $f -y || exit 1; done || true
 
 cd `dirname $0`
 cd ..

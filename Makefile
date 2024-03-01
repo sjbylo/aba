@@ -10,7 +10,7 @@ out    ?= /tmp
 
 .PHONY: aba
 aba:
-	scripts/aba.sh 
+	./aba
 
 ##@ Help-related tasks
 .PHONY: help
