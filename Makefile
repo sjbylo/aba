@@ -90,7 +90,6 @@ rsync:  ## Copy (rsync) all required files to internal bastion for testing purpo
 
 .PHONY: clean
 clean: ## Clean up 
-	####rm -f vmware.conf # target-ocp-version.conf
 	make -C mirror clean 
 	make -C cli clean 
 
@@ -100,5 +99,4 @@ distclean: uninstall ## Clean up *everything*
 	make -C mirror distclean 
 	make -C cli distclean 
 	rm -rf sno compact standard 
-	#rm -f *.conf 
 

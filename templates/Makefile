@@ -31,8 +31,6 @@ vmware.conf: ## Use VMW vCenter or ESXi to create cluster
 
 cluster.conf:  ## Create and edit the cluster.conf file
 	scripts/create-cluster-conf.sh 
-	#cp templates/cluster.conf .
-	#$(EDITOR) cluster.conf
 
 # Note that install-config.yaml can be configured with vSphere params (vmware.conf)
 install-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file
