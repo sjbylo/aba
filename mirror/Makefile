@@ -29,10 +29,10 @@ sync: .initialized .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Syn
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
-	@$(SCRIPTS)/reg-sync.sh  $(debug)
+	$(SCRIPTS)/reg-sync.sh  $(debug)
 
 ~/.pull-secret.json:
-	@$(SCRIPTS)/install-pull-secret.sh
+	$(SCRIPTS)/install-pull-secret.sh
 
 # oc-mirror is idempotent so no need for 'dot' flag files here
 .PHONY: save
@@ -42,7 +42,7 @@ save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save i
 	###
 	### Save images from the Internet to local disk 
 	###
-	@$(SCRIPTS)/reg-save.sh  $(debug)
+	$(SCRIPTS)/reg-save.sh  $(debug)
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
@@ -50,17 +50,17 @@ load: .initialized .rpmsint install ../vmware.conf  ## Load the saved images int
 	###
 	### Load images from local disk to mirror registry
 	###
-	@$(SCRIPTS)/reg-load.sh  $(debug)
+	$(SCRIPTS)/reg-load.sh  $(debug)
 
 .PHONY: testload
 testload: save install load     # Test the save, install, load process on a connected host
 
 .rpmsext: .initialized
-	@scripts/install-rpms.sh external
+	scripts/install-rpms.sh external
 	@touch .rpmsext
 
 .rpmsint: .initialized
-	@scripts/install-rpms.sh internal
+	scripts/install-rpms.sh internal
 	@touch .rpmsint
 
 rpmsclean:
