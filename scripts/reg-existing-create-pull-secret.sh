@@ -19,3 +19,11 @@ export enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)
 # Inputs: enc_password, reg_host and reg_port 
 scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
 
+# Note that for https, the installation of OCP *will* require the registry's root certificate 
+podman logout --all
+podman login --tls-verify=false --authfile=regcreds/pull-secret-mirror.json  $reg_host:$reg_port
+podman logout --all
+podman login --tls-verify=false -u $reg_user -p $reg_pw $reg_host:$reg_port
+
+# Add flag so no mirror reg will be installed 
+touch .installed 

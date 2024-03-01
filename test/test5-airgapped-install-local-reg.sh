@@ -7,7 +7,7 @@
 # Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses rsync to copy over the aba repo. 
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
-#for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer python3 ; do sudo dnf remove $f -y; done || true
+sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
 for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer         ; do sudo dnf remove $f -y || exit 1; done || true
 
 cd `dirname $0`
@@ -34,16 +34,18 @@ rm -f ~/.aba.previous.backup
 which make || sudo dnf install make -y
 
 > mirror/mirror.conf
-test-cmd -m "Cleaning up mirror" "make -C mirror distclean" 
+test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean" 
 rm -rf sno compact standard 
 
 v=4.13.30
 rm -f aba.conf  # Set it up next
-test-cmd -m "Confiure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
+test-cmd -m "Configuring aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
 
 # Do not ask to delete things
+mylog "Setting ask="
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
 
+mylog "Setting ntp_server=$ntp" 
 [ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
 
 source <(normalize-aba-conf)
@@ -61,6 +63,7 @@ scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Test the internal bastion (registry2.example.com) as mirror"
 
+mylog "Setting reg_host=registry2.example.com"
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf
 

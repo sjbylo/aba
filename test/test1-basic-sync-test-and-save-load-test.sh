@@ -2,6 +2,7 @@
 # This test is for a connected bastion.  It will install registry on remote bastion and then sync images and install clusters, 
 # ... then savd/load images and install clusters. 
 
+sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
 for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer         ; do sudo dnf remove $f -y || exit 1; done || true
 
 cd `dirname $0`
@@ -37,7 +38,8 @@ test-cmd -m "Configure aba.conf for version $v and vmware esxi" ./aba --version 
 
 mylog "Setting 'ask='"
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
-### sed -i 's/^ntp_server=.*/ntp_server=10.0.1.8  /g' aba.conf
+
+mylog "Setting ntp_server=$ntp" 
 [ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
 
 source <(normalize-aba-conf)
@@ -64,7 +66,10 @@ scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Confgure mirror to install registry on internal (remote) bastion2"
 
+mylog "Setting reg_host to registry2.example.com"
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
+
+mylog "Setting reg_ssh=~/.ssh/id_rsa for remote installation" 
 sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
 
 #sed -i "s#channel=.*#channel=fast          #g" ./mirror/mirror.conf	    	# test channel
@@ -168,9 +173,14 @@ mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mi
 #sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
 
+mylog "Setting reg_root=~/my-quay-mirror"
 sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
+
+mylog "Setting reg_pw="
 sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test random password 
 ### sed -i "s#tls_verify=true#tls_verify=            #g" ./mirror/mirror.conf  	# test tlsverify = false # sno install fails 
+
+mylog "Setting reg_path=my/path"
 sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
 
 test-cmd -m "Installing mirror registry" make -C mirror install 

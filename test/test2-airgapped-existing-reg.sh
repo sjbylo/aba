@@ -8,6 +8,7 @@
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
 #for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer python3 ; do sudo dnf remove $f -y; done || true
+sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
 for f in make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer         ; do sudo dnf remove $f -y || exit 1; done || true
 
 cd `dirname $0`
@@ -43,7 +44,10 @@ v=4.14.12
 rm -f aba.conf
 test-cmd -m "Configure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
 
+mylog "Setting ask="
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
+
+mylog "Setting ntp_server=$ntp" 
 [ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
 source <(normalize-aba-conf)
 
@@ -61,6 +65,7 @@ scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 ### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
 
 ## test the internal bastion (registry2.example.com) as mirror
+mylog "Setting reg_host=registry2.example.com"
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf
 #################################
@@ -111,6 +116,8 @@ ssh $bastion2 "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-m
 remote-test-cmd -m "Loading images into mirror registry now succeeds" $bastion2 "make -C aba/mirror verify"
 
 ######################
+
+source <(cd mirror; normalize-mirror-conf)
 
 remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba load"  # Now, this works
 

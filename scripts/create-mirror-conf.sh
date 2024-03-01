@@ -13,8 +13,7 @@ if [ ! "$ocp_version" ]; then
 fi
 
 echo
-echo ==========================================================
-echo -n "Configure your private mirror registry? Hit ENTER to continue or Ctrl-C to abort: "
+echo -n "===> Configure your private mirror registry? Hit ENTER to continue or Ctrl-C to abort: "
 
 read yn
 

@@ -7,18 +7,22 @@ debug   ?=
 help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-#init: .initialized regcreds mirror-registry.tar.gz   # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
-init: .initialized regcreds                          # FIXME, need to add pull-secret.json here/for 'save' since it's a dependency 
+init: .initialized regcreds
 .initialized: 
 	@ln -fs $(TEMPLATES) 
 	@ln -fs $(SCRIPTS) 
 	@ln -fs ../aba.conf 
+	### @make -C ../cli      # Just to be sure
 	@touch .initialized
 	@echo Initialized `pwd`
 
+# If aba.conf does not exist, then run the script to create it
+../aba.conf:
+	../aba
+
+# If vmware.conf does not exist, then create it
 ../vmware.conf:
 	make -C .. vmware.conf
-	##(cd ..;  scripts/install-vmware.conf.sh $(debug))
 
 .PHONY: sync
 sync: init .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
@@ -30,10 +34,11 @@ sync: init .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images
 ~/.pull-secret.json:
 	$(SCRIPTS)/install-pull-secret.sh
 
-# oc-mirror is idempotent so no need for 'dot' flag files
+# oc-mirror is idempotent so no need for 'dot' flag files here
 .PHONY: save
-#save: init mirror.conf ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
-save: init .rpmsext          ~/.pull-secret.json ## Save images from the Internet to mirror/save. 
+# Note that for a connected laptop or bastion there is no need to install all the required packages (i.e. only 'rpmsext') 
+# mirror-registry.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
+save: init .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save images from the Internet to mirror/sav and download mirror-registry.tar.gz for installing mirror registry.
 	###
 	### Save images from the Internet to local disk 
 	###
@@ -49,10 +54,6 @@ load: init .rpmsint install ../vmware.conf  ## Load the saved images into a regi
 
 .PHONY: testload
 testload: save install load     # Test the save, install, load process on a connected host
-
-# FIXME
-../aba.conf:
-	../aba
 
 rpms: .rpms  ## Install all rpms
 .rpms: .rpmsint .rpmsext
