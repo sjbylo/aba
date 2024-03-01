@@ -31,7 +31,9 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 			echo "regcreds/rootCA.pem already in system trust"
 		fi
 	else
-		echo "Warning: mirror pull secret provided (regcreds/pull-secret-mirror.json) but no rootCA.pem"
+		echo
+		echo "WARNING: mirror registry pull secret provided (regcreds/pull-secret-mirror.json) but no rootCA.pem"
+		echo
 	fi
 
 	# Test registry access with podman 
