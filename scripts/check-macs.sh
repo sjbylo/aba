@@ -37,7 +37,7 @@ done
 if [ -s /tmp/.list_of_matching_arp_entries ]; then
 	for mac in `cat /tmp/.list_of_matching_arp_entries`
 	do
-		grep -q $mac /tmp/.all_arp_entries >> /tmp/.mac_list_filtered
+		grep $mac /tmp/.all_arp_entries >> /tmp/.mac_list_filtered
 	done
 
 	ips=$(cat /tmp/.mac_list_filtered | cut -d\( -f2 | cut -d\) -f1)
@@ -63,8 +63,13 @@ if [ -s /tmp/.list_of_matching_arp_entries ]; then
 				INUSE=1
 			fi
 		done
-		[ "$INUSE" ] && echo -e "WARNING: One or more mac addresses are currently in use ($P).\nConsider Changing 'mac_prefix' in cluster.conf and try again." && \
-				echo "If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" && exit 1
+		if [ "$INUSE" ]; then
+			echo "WARNING: One or more mac addresses are currently in use:$P" 
+			echo "Consider Changing 'mac_prefix' in cluster.conf and try again." 
+			echo "If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
+
+			exit 1
+		fi
 	fi
 fi
 

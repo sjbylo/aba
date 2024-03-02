@@ -29,10 +29,14 @@ else
 fi
 
 [ "$reg_root" ] || reg_root=$HOME/quay-install  # Only needed for the below message
+
 echo 
 echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
 echo
-echo Ensure there is enough disk space under $reg_root.  This can take 5-20 or more mins to complete. 
+# Check if aba installed Quay or it's an existing reg.
+if [ -s ./reg-uninstall.sh ]; then
+	echo "Ensure there is enough disk space under $reg_root.  This can take 5-20+ mins to complete."
+fi
 echo
 
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
@@ -40,16 +44,12 @@ echo
 [ ! -d save ] && echo "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first, on an Internet connected bastion/laptop" && exit 1
 
 # Set up script to help for manual re-sync
-# --continue-on-error  needed when mirroring operator images
-#cmd="oc mirror --continue-on-error $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
-cmd="oc mirror                     $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
+# --continue-on-error : do not use this option. In testing the registry became unusable! 
+cmd="oc mirror $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
 echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
-echo "Running: $cmd"
-while ! ./load-mirror.sh
-do
-	let c=$c+1
-	[ $c -gt 5 ] && echo Giving up ... && exit 1
-	echo "There was an error.  Pausing 20s before trying again.  Enter Ctrl-C to abort."
-	sleep 20
-done
-
+echo "Running: $(cat load-mirror.sh)"
+if ! ./load-mirror.sh; then
+       echo "Warning: an error has occurred! If this is due to a transient error, please try again!"
+       exit 1
+fi
+# If oc-mirror fails due to transient errors, the user should try again

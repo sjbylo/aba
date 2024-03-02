@@ -94,9 +94,9 @@ test-cmd test/reg-test-install-remote.sh registry2.example.com
 
 
 ################################
-### mylog make save
 rm -rf mirror/save  
-test-cmd -m "Saving images to local disk on `hostname`" make save
+test-cmd -m "Saving images to local disk on `hostname`" make save || \
+	test-cmd -m "Saving images to local disk on `hostname` (again, due to error)" make save
 
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
@@ -117,7 +117,9 @@ remote-test-cmd -m "Loading images into mirror registry now succeeds" $bastion2 
 
 source <(cd mirror; normalize-mirror-conf)
 
-remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba load"  # Now, this works
+# Now, this works
+remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba load" || \
+	remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port (again, due to error)" $bastion2 "make -C aba load"
 
 ssh $bastion2 "rm -rf aba/compact" 
 remote-test-cmd -m "Install compact cluster with targetiso=[$targetiso]" $bastion2 "make -C aba compact $targetiso" 
@@ -149,14 +151,16 @@ END
 ### scp $(whoami)@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
 ### make -C mirror verify 
 
-test-cmd -m "Saving ubi images to local disk" make -C mirror save 
+test-cmd -m "Saving ubi images to local disk" make -C mirror save || \
+	test-cmd -m "Saving ubi images to local disk (again, due to error)" make -C mirror save 
 
 mylog Tar+ssh files over to internal bastion: $bastion2 
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
 remote-test-cmd -m "Verifying access to mirror registry $reg_host:$reg_port" $bastion2 "make -C aba/mirror verify"
 
-remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba/mirror load"
+remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba/mirror load" || \
+	remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port (again, due to error)" $bastion2 "make -C aba/mirror load"
 
 # FIXME: Might need to run:
 # 'make -C mirror clean' here since we are re-installing another cluster *with the same mac addresses*! So, install might fail.
@@ -179,12 +183,14 @@ cat >> mirror/save/imageset-config-save.yaml <<END
         - name: release-2.9
 END
 
-test-cmd -m "Saving advanced-cluster-management images to local disk" make -C mirror save 
+test-cmd -m "Saving advanced-cluster-management images to local disk" make -C mirror save || \
+	test-cmd -m "Saving advanced-cluster-management images to local disk (again, due to error)" make -C mirror save 
 
 mylog Tar+ssh files from `hostname` over to internal bastion: $bastion2 
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
-remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba/mirror load"
+remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba/mirror load" || \
+	remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port (again, due to error)" $bastion2 "make -C aba/mirror load"
 
 remote-test-cmd -m "Verifying mirror registry access $reg_host:$reg_port" $bastion2 "make -C aba/mirror verify"
 
