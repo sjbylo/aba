@@ -29,8 +29,8 @@ do
 			echo 
 			tput setaf 1
 			echo "WARNING: The selected OpenShift version and/or channel defined in 'aba.conf' ($aba_ocp_ver/$ocp_channel) do not match existing oc-mirror configuration."
-			echo "         Settings in '$f': min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel"
-			echo "         Before images are mirrored, this must be fixed manually or cleaned up by deleting the file 'mirror/$f'."
+			echo "         Settings in '$f' are min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel"
+			echo "         Before images are mirrored, the file 'mirror/$f' must be fixed manually or cleaned up by deleting it."
 			echo "         Fix the mismatch and try again!" 
 			tput sgr0
 			echo
