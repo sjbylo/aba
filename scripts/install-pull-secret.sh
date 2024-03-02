@@ -11,10 +11,12 @@ if [ -s ~/.pull-secret.json ]; then
 	fi
 fi
 
+tput setaf 1
 echo
 echo "Error: To download images from Red Hat's registry, a pull secret is required."
 echo "       Please fetch your pull secret from https://console.redhat.com/openshift/downloads#tool-pull-secret"
 echo "       and save it to the file ~/.pull-secret.json in your home directory."
+tput sgr0
 echo
 
 exit 1

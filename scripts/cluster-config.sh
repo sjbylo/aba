@@ -48,6 +48,7 @@ echo export CP_MAC_ADDRESSES=\"$CP_MAC_ADDRESSES\"
 WORKER_REPLICAS=`cat $ICONF_TMP | jq -r .compute[0].replicas`
 echo export WORKER_REPLICAS=$WORKER_REPLICAS
 
+# FIXME: does $FOLDER really need to be created here? How about in normalize-vmware-conf()?
 # Check if using ESXi or vCenter 
 if [ "$VMW_FOLDER" ]; then
 	if [ "$VMW_FOLDER" == "/ha-datacenter/vm" ]; then
@@ -78,6 +79,7 @@ echo export WORKER_MAC_ADDRESSES=\"$WORKER_MAC_ADDRESSES\"
 rm -f $ICONF_TMP $ACONF_TMP
 
 # basic check
-[ ! "$CLUSTER_NAME" -o ! "$BASE_DOMAIN" -o ! "$RENDEZVOUSIP" -o ! "$CP_REPLICAS" -o ! "$CP_NAMES" -o ! "$CP_MAC_ADDRESSES" -o ! "$WORKER_REPLICAS" -o ! "$WORKER_NAMES" -o ! "$WORKER_MAC_ADDRESSES" -o ! "$VMW_FOLDER" ] && echo && echo "WARNING: The files install-config.yaml and/or agent-config.yaml chould not be parsed properly. " 
+[ ! "$CLUSTER_NAME" -o ! "$BASE_DOMAIN" -o ! "$RENDEZVOUSIP" -o ! "$CP_REPLICAS" -o ! "$CP_NAMES" -o ! "$CP_MAC_ADDRESSES" -o ! "$WORKER_REPLICAS" -o ! "$WORKER_NAMES" -o ! "$WORKER_MAC_ADDRESSES" -o ! "$VMW_FOLDER" ] && echo && \
+	echo "`tput setaf 1`WARNING: The files install-config.yaml and/or agent-config.yaml chould not be parsed properly.`tput sgr0`" 
 
 

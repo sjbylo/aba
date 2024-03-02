@@ -32,7 +32,7 @@ if [ ! -s vmware.conf ]; then
 	# Check access
 	if ! govc about; then
 		echo "Error: Cannot access vSphere or ESXi"
-		mv vmware.conf .vmware.conf    # remember this to edit next time
+		mv vmware.conf .vmware.conf    # remember this to edit next time (see above) 
 		exit 1
 	else
 		# Save working version for later
