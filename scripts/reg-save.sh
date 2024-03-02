@@ -20,27 +20,26 @@ if [ ! -s save/imageset-config-save.yaml ]; then
 	echo "Generating save/imageset-config-save.yaml to save images to local disk for OpenShift 'v$ocp_version' and channel '$ocp_channel' ..."
 	scripts/j2 ./templates/imageset-config-save.yaml.j2 > save/imageset-config-save.yaml 
 else
+	# FIXME: Check here for matching varsions values in imageset config file and, if they are different, ask to 'reset' them.
 	echo Using existing save/imageset-config-save.yaml
 	echo "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make save' again."
 fi
 
 echo 
-echo "Saving images from the external network (Internet) to mirror/save/."
+echo "Saving images from external network to mirror/save/ directory."
+echo
 echo "Ensure there is enough disk space under $PWD/save.  "
 echo "This can take 5-20+ mins to complete!"
 echo 
 
 # Set up script to help for re-sync
-# --continue-on-error  needed when mirroring operator images
-#cmd="oc mirror --continue-on-error --config=./imageset-config-save.yaml file://."
+# --continue-on-error : do not use this option. In testing the registry became unusable! 
 cmd="oc mirror                     --config=./imageset-config-save.yaml file://."
 echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
-echo "Running $cmd"
-while ! ./save-mirror.sh
-do
-	let c=$c+1
-	[ $c -gt 5 ] && echo Giving up ... && exit 1
-	echo "There was an error.  Pausing 20s before trying again.  Enter Ctrl-C to abort."
-	sleep 20
-done
+echo "Running $(cat save-mirror.sh)"
+if ! ./save-mirror.sh; then
+       echo "Warning: an error has occurred! If this is due to a transient error, please try again!"
+       exit 1
+fi
+# If oc-mirror fails due to transient errors, the user should try again
 

@@ -7,12 +7,15 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
+# Show warning if 'make save' has been used previously.
 if [ -s save/mirror_seq1_000000.tar ]; then
 	echo 
 	echo "WARNING: You already have images saved on local disk in $PWD/save."
 	echo "         Sure you don't want to 'make load' them into the mirror registry at $reg_host?"
-	echo -n "         Enter Return to continue (sync) or Ctl-C to abort: "
-	read yn
+	## echo -n "         Enter Return to continue (sync) or Ctl-C to abort: "
+	##read yn
+
+	ask "Continue with 'sync'" || exit 1
 fi
 
 # This is a pull secret for RH registry
@@ -42,9 +45,10 @@ if [ "$reg_code" != "200" ]; then
 	echo "Error: Registry at https://$reg_host:${reg_port}/ is not responding" && exit 1
 fi
 
-podman logout --all >/dev/null 
-echo -n "Checking registry access is working using 'podman login' ... "
-podman login -u init -p $reg_password $reg_url 
+# This is jot needed as 'make install' has already verified this
+### podman logout --all >/dev/null 
+### echo -n "Checking registry access is working using 'podman login' ... "
+### podman login -u init -p $reg_password $reg_url 
 
 mkdir -p sync 
 
@@ -54,11 +58,12 @@ if [ ! -s sync/imageset-config-sync.yaml ]; then
 	export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-	echo Generating oc-mirror sync/imageset-config-sync.yaml for v$ocp_version and channel $ocp_channel ...
+	echo "Generating initial oc-mirror 'sync/imageset-config-sync.yaml' for 'v$ocp_version' and channel '$ocp_channel' ..."
 
 	[ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
 	scripts/j2 ./templates/imageset-config-sync.yaml.j2 > sync/imageset-config-sync.yaml 
 else
+	# FIXME: Check here for matching varsions values in imageset config file and, if they are different, ask to 'reset' them.
 	echo Using existing sync/imageset-config-sync.yaml
 	echo "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make sync' again."
 fi
@@ -68,26 +73,26 @@ fi
 
 [ ! "$reg_root" ] && reg_root=$HOME/quay-install
 
-# FIXME: is this true for existing registry?!
 echo
 echo "Now mirroring the images."
+echo
 echo "Now loading the images to the registry $reg_host:$reg_port/$reg_path. "
-echo "Ensure there is enough disk space under $reg_root.  This can take 5-20+ mins to complete."
+# Check if aba installed Quay or it's an existing reg.
+if [ -s ./reg-uninstall.sh ]; then
+	echo "Ensure there is enough disk space under $reg_root.  This can take 5-20+ mins to complete."
+fi
 echo
 
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
 # Set up script to help for manual re-sync
-# --continue-on-error seems to be needed when mirroring operator images!
-#cmd="oc mirror $tls_verify_opts --continue-on-error --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
+# --continue-on-error : do not use this option. In testing the registry became unusable! 
 cmd="oc mirror $tls_verify_opts                     --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
 echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
-echo "Running: $cmd"
-while ! ./sync-mirror.sh 
-do
-	let c=$c+1
-	[ $c -gt 5 ] && echo Giving up ... && exit 1
-	echo "There was an error.  Pausing 20s before trying again.  Enter Ctrl-C to abort."
-	sleep 20
-done
+echo "Running: $(cat sync-mirror.sh)"
+if ! ./sync-mirror.sh; then
+       echo "Warning: an error has occurred! If this is due to a transient error, please try again!"
+       exit 1
+fi
+# If oc-mirror fails due to transient errors, the user should try again
 

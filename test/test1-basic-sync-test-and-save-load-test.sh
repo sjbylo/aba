@@ -78,14 +78,16 @@ sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote 
 ### sed -i "s#reg_port=.*#reg_pw=443             #g" ./mirror/mirror.conf	    	# test port change
 #sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
 
-test-cmd -m "Install mirror on internal bastion" "make -C mirror install"
+### test-cmd -m "Install mirror on internal bastion" "make -C mirror install"
 
 source <(cd mirror; normalize-mirror-conf)
 
 mylog "Mirror available at $reg_host:$reg_port"
 
 ######################
-test-cmd -m "Synching cluster images to internal mirror" 'make -C mirror sync'   # This will install mirror and sync
+# This will install mirror and sync
+test-cmd -m "Syncing images from external network to internal mirror registry" 'make -C mirror sync' || \
+	test-cmd -m "Syncing images from external network to internal mirror registry (again, due to error)" 'make -C mirror sync'
 
 # Install yq for below test!
 which yq || (
@@ -135,7 +137,6 @@ do
         fi
 
         test-cmd -m "Generate iso file for $cname" "make -C $cname iso"
-        #test-cmd "make -C $cname delete"
 done
 
 ######################
@@ -144,13 +145,16 @@ done
 
 ######################
 rm -rf sno
-test-cmd -m "Installing sno cluster with target option [$targetiso]" make sno $targetiso
-## #test-cmd -m "Setting NTP to be installed" make -C sno ntp
+test-cmd -m "Installing SNO cluster with target option [$targetiso]" make sno $targetiso
 test-cmd -m "Installing SNO cluster" make -C sno 
 test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || true
 
 #######################
-test-cmd -m "Saving and then loading cluster images into mirror" "make -C mirror save load"  #  This will save, install then load
+#  This will save, install then load
+test-cmd -m "Saving and then loading cluster images into mirror" "make -C mirror save load" || \
+	test-cmd -m "Saving and then loading cluster images into mirror (again, due to errors)" "make -C mirror save load" 
+
+wait # for above SNO cluster to be installed 
 
 rm -rf sno
 test-cmd -m "Installing sno cluster with target option [$targetiso]" make sno $targetiso
@@ -161,12 +165,6 @@ test-cmd -m "Uninstall mirror" make -C mirror uninstall
 
 ########################
 ########################
-
-# Copy and edit mirror.conf 
-#cp -f templates/mirror.conf mirror/
-#scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
-#sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
-
 mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 
 #sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
@@ -182,29 +180,31 @@ sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test ran
 mylog "Setting reg_path=my/path"
 sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
 
-test-cmd -m "Installing mirror registry" make -C mirror install 
+### FIXME: needed? # test-cmd -m "Installing mirror registry" make -C mirror install 
 
 ######
-# Remove all traces of CA files 
+# Remove all traces of CA files ?
 ### rm -f mirror/regcreds/*pem   # Test without CA file
-### sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA*pem
-### sudo update-ca-trust extract
 
+# FIXME: no need?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
 
 source <(cd mirror; normalize-mirror-conf)
 
-mylog "Mirror available at $reg_host:$reg_port"
+mylog "Using mirror registry at $reg_host:$reg_port"
 
 ######################
-test-cmd make -C mirror sync   # This will install and sync
+# This will install and sync
+test-cmd -m "Syncing images from external network to internal mirror registry" make -C mirror sync || \
+	test-cmd -m "Syncing images from external network to internal mirror registry (again, due to error)" make -C mirror sync
 
 rm -rf sno
 test-cmd -m "Installing sno cluster" make sno
 
 #######################
-
-test-cmd -m "Saving and loading images into mirror" make -C mirror save load   #  This will save, install then load
+#  This will save, install then load
+test-cmd -m "Saving and loading images into mirror" make -C mirror save load || \
+	test-cmd -m "Saving and loading images into mirror (again, due to errors)" make -C mirror save load 
 
 rm -rf sno
 test-cmd -m "Installing sno cluster" make sno $targetiso
