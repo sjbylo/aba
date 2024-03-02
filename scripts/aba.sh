@@ -115,8 +115,8 @@ fi
 # Set up the CLIs
 make -C cli 
 
-# Just in case, check the versions in aba.conf match any existing versions defined in oc-mirror imageset config files. 
-### (cd mirror && [ -x scripts/check-version-mismatch.sh ] && scripts/check-version-mismatch.sh || true)
+# Just in case, check the target ocp version in aba.conf match any existing versions defined in oc-mirror imageset config files. 
+(cd mirror && scripts/check-version-mismatch.sh) || exit 1
 
 if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then
 	############
