@@ -31,8 +31,10 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 		echo
 
 		if [ "$tls_verify" ]; then
+			tput setaf 1
 			echo "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again."
 			echo
+			tput sgr0
 
 			exit 1
 		fi

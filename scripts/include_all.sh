@@ -6,22 +6,25 @@ umask 077
 show_error() {
 	local exit_code=$?
 	echo 
+	tput setaf 1
 	echo Script error: 
 	echo "Error occurred in command: '$BASH_COMMAND'"
 	echo "Error code: $exit_code"
+	tput sgr0
+
 	exit $exit_code
 }
 
 # Set the trap to call the show_error function on ERR signal
 trap 'show_error' ERR
 
-# Detect editor.  Assume nano if available
-if which nano >/dev/null 2>&1; then
-	# FIXME
-	[ ! "$editor" ] && export editor=nano
-else
-	[ ! "$editor" ] && export editor=vi
-fi
+### # Detect editor.  Assume nano if available
+### if which nano >/dev/null 2>&1; then
+### 	# FIXME
+### 	[ ! "$editor" ] && export editor=nano
+### else
+### 	[ ! "$editor" ] && export editor=vi
+### fi
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
