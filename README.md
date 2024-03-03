@@ -18,7 +18,50 @@ Use aba if you want to get OpenShift up and running quickly in an air-gapped env
 
 For the impatient: clone this repo, install and run 'make'.  You will be guided through the process. 
 
+## Quick Guide
+
+For those who are impatient...
+
+```
+git clone https://github.com/sjbylo/aba.git
+cd aba
+./aba
+```
+- Clone the repo, install 'make' and configure high-level settings, e.g. target OCP version, your domain name etc.
+- Decide if you want to use VMware or ESXi or not. 
+
+```
+make install 
+```
+- Configure and connect to your existing container registry or install a new quay appliance registry.
+
+```
+make sync
+```
+- Copy the required images directly to the mirror registry (for connected environments).
+- Fully air-gapped, disconnected environments are also supported. 
+
+```
+make sno
+```
+- Create the Agent-based config files, generate the Agent-based iso file, create and boot the VMs.
+- Install Single Node OpenShift 
+
+```
+make mon
+```
+- Monitor the installation progress.
+
+```
+make help
+```
+- See what other helper commands are available. 
+
+Read more for all the details.
+
 ## Prerequisites
+
+The usual things you need to install OpenShift using the Agent-based installer. 
 
 - **DNS**
    - with A records for OpenShift API, Ingress and the internal mirror registry.
