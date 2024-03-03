@@ -28,7 +28,7 @@ fi
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
 if [ "$reg_code" = "200" ]; then
-	tput setaf 1
+	[ "$TERM" ] && tput setaf 1
 	echo
 	echo "Warning: Quay registry found at $reg_host:$reg_port."
 	echo "         To use this registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
@@ -36,7 +36,7 @@ if [ "$reg_code" = "200" ]; then
 	echo "         The pull secret file can also be created and verified using 'make password'"
 	echo "         See the README.md for further instructions."
 	echo 
-	tput sgr0
+	[ "$TERM" ] && tput sgr0
 
 	exit 1
 fi
@@ -45,7 +45,7 @@ fi
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/ || true)
 
 if [ "$reg_code" = "200" ]; then
-	tput setaf 1
+	[ "$TERM" ] && tput setaf 1
 	echo
 	echo "Warning: Endpoint found at $reg_host:$reg_port."
 	echo "         If this is your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
@@ -53,7 +53,7 @@ if [ "$reg_code" = "200" ]; then
 	echo "         The pull secret file can also be created and verified using 'make password'"
 	echo "         See the README.md for further instructions."
 	echo 
-	tput sgr0
+	[ "$TERM" ] && tput sgr0
 
 	exit 1
 fi
@@ -81,12 +81,12 @@ if [ "$reg_ssh" ]; then
 	echo "Installing Quay registry on to $reg_host ..."
 
 	if ! ssh -F .ssh.conf $(whoami)@$reg_host hostname; then
-		tput setaf 1
+		[ "$TERM" ] && tput setaf 1
 		echo
 		echo "Error: Can't ssh to $(whoami)@$reg_host"
 		echo "Configure passwordless ssh to $(whoami)@$reg_host and try again."
 		echo
-		tput sgr0
+		[ "$TERM" ] && tput sgr0
 
 		exit 1
 	else

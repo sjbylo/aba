@@ -64,11 +64,11 @@ if [ -s /tmp/.list_of_matching_arp_entries ]; then
 			fi
 		done
 		if [ "$INUSE" ]; then
-			tput setaf 1
+			[ "$TERM" ] && tput setaf 1
 			echo "WARNING: One or more mac addresses are currently in use:$P" 
 			echo "         Consider Changing 'mac_prefix' in cluster.conf and try again." 
 			echo "         If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
-			tput sgr0
+			[ "$TERM" ] && tput sgr0
 
 			exit 1
 		fi
