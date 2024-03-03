@@ -41,10 +41,10 @@ if [ ! "$auto_ver" ]; then
 	echo -n "Looking up OpenShift release versions ..."
 
 	if ! curl -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
-		tput setaf 1
+		[ "$TERM" ] && tput setaf 1
 		echo
 		echo "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
-		tput sgr0
+		[ "$TERM" ] && tput sgr0
 		exit 1
 	fi
 
@@ -64,8 +64,8 @@ if [ ! "$auto_ver" ]; then
 	# If openshift-install is already installed, then offer that version also
 	[ "$cur_ver" ] && or_ret="or currently installed version " && default_ver=$cur_ver
 
-	tput el1
-	tput cr
+	[ "$TERM" ] && tput el1
+	[ "$TERM" ] && tput cr
 	sleep 0.5
 
 	echo    "Which version of OpenShift do you want to install?"
@@ -116,7 +116,14 @@ fi
 make -C cli 
 
 # Just in case, check the target ocp version in aba.conf match any existing versions defined in oc-mirror imageset config files. 
-(cd mirror && scripts/check-version-mismatch.sh) || exit 1 
+# FIXME: Any better way to do this?!
+cd mirror
+if [ -x scripts/check-version-mismatch.sh ]; then
+	if [ -s sync/imageset-config-sync.yaml -o -s save/imageset-config-save.yaml ]; then
+		scripts/check-version-mismatch.sh
+	fi
+fi
+cd ..
 
 if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then
 	############

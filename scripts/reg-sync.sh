@@ -9,11 +9,11 @@ source <(normalize-mirror-conf)
 
 # Show warning if 'make save' has been used previously.
 if [ -s save/mirror_seq1_000000.tar ]; then
-	tput setaf 1 
+	[ "$TERM" ] && tput setaf 1 
 	echo 
 	echo "WARNING: You already have images saved on local disk in $PWD/save."
 	echo "         Sure you don't want to 'make load' them into the mirror registry at $reg_host?"
-	tput sgr0
+	[ "$TERM" ] && tput sgr0
 
 	ask "Continue with 'sync'" || exit 1
 fi

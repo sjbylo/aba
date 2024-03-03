@@ -79,7 +79,12 @@ echo export WORKER_MAC_ADDRESSES=\"$WORKER_MAC_ADDRESSES\"
 rm -f $ICONF_TMP $ACONF_TMP
 
 # basic check
-[ ! "$CLUSTER_NAME" -o ! "$BASE_DOMAIN" -o ! "$RENDEZVOUSIP" -o ! "$CP_REPLICAS" -o ! "$CP_NAMES" -o ! "$CP_MAC_ADDRESSES" -o ! "$WORKER_REPLICAS" -o ! "$WORKER_NAMES" -o ! "$WORKER_MAC_ADDRESSES" -o ! "$VMW_FOLDER" ] && echo && \
-	echo "`tput setaf 1`WARNING: The files install-config.yaml and/or agent-config.yaml chould not be parsed properly.`tput sgr0`" 
+if [ ! "$CLUSTER_NAME" -o ! "$BASE_DOMAIN" -o ! "$RENDEZVOUSIP" -o ! "$CP_REPLICAS" -o ! "$CP_NAMES" -o ! "$CP_MAC_ADDRESSES" -o ! "$WORKER_REPLICAS" -o ! "$WORKER_NAMES" -o ! "$WORKER_MAC_ADDRESSES" -o ! "$VMW_FOLDER" ]; then
+	echo
+	[ "$TERM" ] && tput setaf 1
+	echo "WARNING: The files 'install-config.yaml' and/or 'agent-config.yaml' chould not be parsed properly." 
+	echo
+	[ "$TERM" ] && tput sgr0
+fi
 
 
