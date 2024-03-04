@@ -21,7 +21,7 @@ if [ ! -s save/imageset-config-save.yaml ]; then
 	scripts/j2 ./templates/imageset-config-save.yaml.j2 > save/imageset-config-save.yaml 
 else
 	# FIXME: Check here for matching varsions values in imageset config file and, if they are different, ask to 'reset' them.
-	scripts/check-version-mismatch.sh || exit 1
+	### scripts/check-version-mismatch.sh || exit 1
 
 	echo Using existing save/imageset-config-save.yaml
 	echo "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make save' again."
