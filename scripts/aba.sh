@@ -117,7 +117,7 @@ make -C cli
 
 # Just in case, check the target ocp version in aba.conf match any existing versions defined in oc-mirror imageset config files. 
 # FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
-### (cd mirror; [ -x scripts/check-version-mismatch.sh ] && scripts/check-version-mismatch.sh) 
+(cd mirror; [ -x scripts/check-version-mismatch.sh ] && scripts/check-version-mismatch.sh) 
 
 if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then
 	############

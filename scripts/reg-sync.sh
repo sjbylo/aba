@@ -46,7 +46,7 @@ reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance 
 ### 	echo "Error: Registry at https://$reg_host:${reg_port}/ is not responding" && exit 1
 ### fi
 
-# FIXME: This is jot needed as 'make install' has already verified this
+# FIXME: This is not needed as 'make install' has already verified this
 ### podman logout --all >/dev/null 
 ### echo -n "Checking registry access is working using 'podman login' ... "
 ### podman login -u init -p $reg_password $reg_url 
@@ -66,7 +66,7 @@ if [ ! -s sync/imageset-config-sync.yaml ]; then
 	scripts/j2 ./templates/imageset-config-sync.yaml.j2 > sync/imageset-config-sync.yaml 
 else
 	# FIXME: Check here for matching varsions values in imageset config file and, if they are different, ask to 'reset' them.
-	scripts/check-version-mismatch.sh || exit 1
+	### scripts/check-version-mismatch.sh || exit 1
 
 	echo Using existing sync/imageset-config-sync.yaml
 	echo "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make sync' again."
