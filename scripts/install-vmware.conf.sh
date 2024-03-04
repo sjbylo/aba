@@ -5,6 +5,9 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
+# Needed for $editor
+source <(normalize-aba-conf)
+
 if [ ! -s vmware.conf ]; then
 	echo
 	echo "Do you want to install OpenShift onto vSphere or ESXi?"
