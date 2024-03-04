@@ -111,15 +111,15 @@ mylog "Simulating a manual config of 'existing' registry creds into mirror/regcr
 ssh $bastion2 "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
 ssh $bastion2 "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
 
-remote-test-cmd -m "Loading images into mirror registry now succeeds" $bastion2 "make -C aba/mirror verify"
+remote-test-cmd -m "Loading images into mirror registry $reg_host:$reg_port now succeeds" $bastion2 "make -C aba/mirror verify"
 
 ######################
 
 source <(cd mirror; normalize-mirror-conf)
 
 # Now, this works
-remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port" $bastion2 "make -C aba load" || \
-	remote-test-cmd -m "Loading images into mirror $reg_host:$reg_port (again, due to error)" $bastion2 "make -C aba load"
+remote-test-cmd -m "Loading images into mirror registry $reg_host:$reg_port" $bastion2 "make -C aba load" || \
+	remote-test-cmd -m "Loading images into mirror registry $reg_host:$reg_port (again, due to error)" $bastion2 "make -C aba load"
 
 ssh $bastion2 "rm -rf aba/compact" 
 remote-test-cmd -m "Install compact cluster with targetiso=[$targetiso]" $bastion2 "make -C aba compact $targetiso" 

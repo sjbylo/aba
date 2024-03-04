@@ -3,6 +3,11 @@
 
 source scripts/include_all.sh
 
+if [ ! -s sync/imageset-config-sync.yaml -a ! -s save/imageset-config-save.yaml ]; then
+	# Nothing to check
+	exit 0
+fi
+
 rpm -q python3-pyyaml >/dev/null || sudo dnf install python3 python3-jinja2 python3-pyyaml -y
 
 yaml2json()
