@@ -73,6 +73,7 @@ mirror-registry: mirror-registry.tar.gz ## Extract the mirror-registry binary
 	tar xmvzf mirror-registry.tar.gz
 
 mirror-registry.tar.gz: ## Download the mirror-registry tarball
+	# Downloading 'mirror-registry.tar.gz' for later installation.
 	curl --progress-bar -OL \
 	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
