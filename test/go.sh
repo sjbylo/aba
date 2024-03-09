@@ -1,7 +1,7 @@
 #!/bin/bash -ex
 
 #if false; then
-if [ "" ]; then
+if [ "1" ]; then
 	# Used for testing from git
 	cd 
 	rm -rf testing
@@ -14,8 +14,8 @@ if [ "" ]; then
 	cd ~/aba
 fi
 
-#export target_full=1   # Build vm
-export target_full=    # Build only iso
+export target_full=1   # Build vm
+#export target_full=    # Build only iso
 
 rm -f test/[0-9]-stage
 

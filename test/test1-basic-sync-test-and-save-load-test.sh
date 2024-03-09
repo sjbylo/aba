@@ -31,7 +31,7 @@ make distclean
 ### test-cmd 'make -C mirror distclean'
 #make uninstall clean 
 
-v=4.14.9
+v=4.15.0
 rm -f aba.conf
 test-cmd -m "Configure aba.conf for version $v and vmware esxi" ./aba --version $v --vmw ~/.vmware.conf.esxi
 
@@ -86,8 +86,7 @@ mylog "Mirror available at $reg_host:$reg_port"
 
 ######################
 # This will install mirror and sync
-test-cmd -m "Syncing images from external network to internal mirror registry" 'make -C mirror sync' || \
-	test-cmd -m "Syncing images from external network to internal mirror registry (again, due to error)" 'make -C mirror sync'
+test-cmd -r 5 2 -m "Syncing images from external network to internal mirror registry" 'make -C mirror sync' 
 
 # Install yq for below test!
 which yq || (
@@ -151,8 +150,7 @@ test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || tru
 
 #######################
 #  This will save, install then load
-test-cmd -m "Saving and then loading cluster images into mirror" "make -C mirror save load" || \
-	test-cmd -m "Saving and then loading cluster images into mirror (again, due to errors)" "make -C mirror save load" 
+test-cmd -r 5 2 -m "Saving and then loading cluster images into mirror" "make -C mirror save load" 
 
 wait # for above SNO cluster to be installed 
 
@@ -195,16 +193,14 @@ mylog "Using mirror registry at $reg_host:$reg_port"
 
 ######################
 # This will install and sync
-test-cmd -m "Syncing images from external network to internal mirror registry" make -C mirror sync || \
-	test-cmd -m "Syncing images from external network to internal mirror registry (again, due to error)" make -C mirror sync
+test-cmd -r 5 2 -m "Syncing images from external network to internal mirror registry" make -C mirror sync 
 
 rm -rf sno
 test-cmd -m "Installing sno cluster" make sno
 
 #######################
 #  This will save, install then load
-test-cmd -m "Saving and loading images into mirror" make -C mirror save load || \
-	test-cmd -m "Saving and loading images into mirror (again, due to errors)" make -C mirror save load 
+test-cmd -r 5 2 -m "Saving and loading images into mirror" make -C mirror save load 
 
 rm -rf sno
 test-cmd -m "Installing sno cluster" make sno $targetiso
