@@ -12,7 +12,7 @@ sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 pytho
 cd `dirname $0`
 cd ..  # Change into "aba" dir
 
-source scripts/include_all.sh
+source scripts/include_all.sh && trap - ERR
 source test/include.sh
 
 [ ! "$target_full" ] && targetiso=target=iso   # Default is to generate 'iso' only   # Default is to only create iso
@@ -187,7 +187,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 ########
-test-cmd -m "Saving mesh operators to local disk" "make -C mirror save"
+test-cmd -r 5 2 -m "Saving mesh operators to local disk" "make -C mirror save"
 
 mylog Copy tar+ssh archives to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
@@ -205,7 +205,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
         - name: stable
 END
 
-test-cmd -m "Saving jaeger operator to local disk" "make -C mirror save"
+test-cmd -r 5 2 -m "Saving jaeger operator to local disk" "make -C mirror save"
 
 mylog Downloading the mesh demo into test/mesh, for use by deploy script
 (

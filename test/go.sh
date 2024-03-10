@@ -1,7 +1,7 @@
 #!/bin/bash -ex
 
 #if false; then
-if [ "1" ]; then
+if [ "" ]; then
 	# Used for testing from git
 	cd 
 	rm -rf testing
@@ -9,13 +9,13 @@ if [ "1" ]; then
 	cd testing
 	git clone https://github.com/sjbylo/aba.git 
 	cd aba
-	#git checkout dev
-	git checkout main
+	git checkout dev
+	#git checkout main
 	cd ~/aba
 fi
 
 export target_full=1   # Build vm
-#export target_full=    # Build only iso
+export target_full=    # Build only iso
 
 rm -f test/[0-9]-stage
 

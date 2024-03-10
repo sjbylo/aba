@@ -4,28 +4,39 @@ test-cmd() {
 
 	local tot_cnt=1
 	local sleep_time=20
-	[ "$1" = "-r" ] && local tot_cnt="$2" && backoff=$3 && shift && shift && shift
 
-	[ "$1" = "-m" ] && local msg="$2" && shift && shift 
+	while echo $1 | grep -q ^-
+	do
+		[ "$1" = "-h" ] && local host="$2" && shift && shift 
 
-	[ "$msg" ] && echo "`hostname`: $msg" >> test/test.log || echo "`hostname`: $@" >> test/test.log
+		[ "$1" = "-r" ] && local tot_cnt="$2" && backoff=$3 && shift && shift && shift 
+
+		[ "$1" = "-m" ] && local msg="$2" && shift && shift 
+	done
+
+	[ "$msg" ] && echo "`hostname`: $msg" | tee -a test/test.log || echo "`hostname`: $@" | tee -a test/test.log
 
 	i=1
 	while true
 	do
+		echo "Running command: \"$@\""
+		set +e
 		eval "$@"
 		ret=$?
+		set -e
+
 		[ $ret -eq 0 ] && break
 
-		echo "Command failed: $@"
+		echo "Attempt ($i/$tot_cnt) failed with error $ret for command \"$@\""
 
 		let i=$i+1
-		[ $i -gt $tot_cnt ] && echo "Giving up!" && break
+		[ $i -gt $tot_cnt ] && echo "Giving up with command \"$@\"!" && break
 
+		echo "Next attempt will be ($i/$tot_cnt)"
 		echo "Sleeping $sleep_time seconds ..."
 		sleep $sleep_time
 		sleep_time=`expr $sleep_time \* $backoff`
-		echo "Attempting command again ($i/$tot_cnt)" | tee test/test.log
+		echo "Attempting command again ($i/$tot_cnt)" | tee -a test/test.log
 	done
 
 	set -x  # This was always returning 0, even if $@ command failed
@@ -43,24 +54,29 @@ remote-test-cmd() {
 
 	host=$1 && shift
 
-	[ "$msg" ] && echo "$host: $msg" >> test/test.log || echo "$host: $@" >> test/test.log
+	[ "$msg" ] && echo "$host: $msg" | tee -a test/test.log || echo "$host: $@" | tee -a test/test.log
 
 	i=1
 	while true
 	do
+		echo "Running command: \"$@\""
+		set +e
 		ssh $host -- "$@" 
 		ret=$?
+		set -e
+
 		[ $ret -eq 0 ] && break
 
-		echo "Command failed: $@"
+		echo "Attempt ($i/$tot_cnt) failed with error $ret for command \"$@\""
 
 		let i=$i+1
-		[ $i -gt $tot_cnt ] && echo "Giving up!" && break
+		[ $i -gt $tot_cnt ] && echo "Giving up with command \"$@\"!" && break
 
+		echo "Next attempt will be ($i/$tot_cnt)"
 		echo "Sleeping $sleep_time seconds ..."
 		sleep $sleep_time
 		sleep_time=`expr $sleep_time \* $backoff`
-		echo "Attempting command again ($i/$tot_cnt)" | tee test/test.log
+		echo "Attempting command again ($i/$tot_cnt)" | tee -a test/test.log
 	done
 
 	set -x  # This was always returning 0, even if $@ command failed
