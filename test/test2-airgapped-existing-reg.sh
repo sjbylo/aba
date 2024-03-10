@@ -17,7 +17,7 @@ bastion2=registry2.example.com
 ntp=10.0.1.8 # If available
 rm -f ~/.aba.previous.backup
 
-source scripts/include_all.sh
+source scripts/include_all.sh && trap - ERR
 source test/include.sh
 
 [ ! "$target_full" ] && targetiso=target=iso   # Default is to generate 'iso' only   # Default is to only create iso

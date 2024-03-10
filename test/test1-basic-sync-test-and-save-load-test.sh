@@ -7,7 +7,7 @@ sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 pytho
 cd `dirname $0`
 cd ..
 
-source scripts/include_all.sh
+source scripts/include_all.sh && trap - ERR # We don't want this trap during testing
 source test/include.sh
 
 [ ! "$target_full" ] && targetiso=target=iso   # Default is to generate 'iso' only   # Default is to only create iso
@@ -86,7 +86,7 @@ mylog "Mirror available at $reg_host:$reg_port"
 
 ######################
 # This will install mirror and sync
-test-cmd -r 5 2 -m "Syncing images from external network to internal mirror registry" 'make -C mirror sync' 
+test-cmd -r 5 2 -m "Syncing images from external network to internal mirror registry" make -C mirror sync
 
 # Install yq for below test!
 which yq || (

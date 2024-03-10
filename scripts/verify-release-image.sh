@@ -5,6 +5,15 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
+if [ ! -x ~/bin/openshift-install ]; then
+	[ "$TERM" ] && tput setaf 1
+	echo
+	echo "The ~/bin/openshift-install CLI is missing!  Please run ./aba first."
+	echo
+	[ "$TERM" ] && tput sgr0
+	exit 1
+fi
+
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 

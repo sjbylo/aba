@@ -13,6 +13,7 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 .PHONY: clean
 clean: ## Clean up files
 	rm -rf *.tar.gz
+	#rm -f test.log*   # don't clean up
 
 .PHONY: distclean
 distclean: clean ## Clean up repo for distribution

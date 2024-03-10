@@ -91,6 +91,7 @@ rsync:  ## Copy (rsync) all required files to internal bastion for testing purpo
 .PHONY: clean
 clean: ## Clean up 
 	make -C mirror clean 
+	make -C test clean 
 
 .PHONY: distclean
 distclean: uninstall ## Clean up *everything*
