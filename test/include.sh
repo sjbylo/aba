@@ -4,6 +4,7 @@ test-cmd() {
 
 	local tot_cnt=1
 	local sleep_time=20
+	local host=
 
 	while echo $1 | grep -q ^-
 	do
@@ -21,7 +22,7 @@ test-cmd() {
 	do
 		echo "Running command: \"$@\""
 		set +e
-		eval "$@"
+		[ "$host" ] && ssh $host -- "$@" || eval "$@"
 		ret=$?
 		set -e
 
@@ -43,6 +44,7 @@ test-cmd() {
 	return $ret
 }
 
+# FIXME:  This fn() not needed anymore 
 remote-test-cmd() {
 	set +x
 
