@@ -91,7 +91,7 @@ test-cmd -r 5 2 -m "Saving images to local disk" "make save"
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
 # If the VM snapshot is reverted, as above, no need to delete old files
-remote-test-cmd -m "Clean up home dir on internal bastion" "rm -rf ~/bin/* ~/aba"
+test-cmd -h $bastion2 -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/* ~/aba"
 
 ssh $(whoami)@$bastion2 "rpm -q make  || sudo yum install make -y"
 
@@ -105,16 +105,16 @@ make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 ######################
 mylog Runtest: START - airgap
 
-remote-test-cmd -r 5 2 -m "Loading cluster images into mirror on internal bastion" "make -C aba load" 
+test-cmd -h $bastion2 -r 5 2 -m  "Loading cluster images into mirror on internal bastion" "make -C aba load" 
 
 mylog "Running 'make sno' on internal bastion"
 
-remote-test-cmd -m "Tidying up internal bastion" "rm -rf aba/sno" 
+test-cmd -h $bastion2 -m  "Tidying up internal bastion" "rm -rf aba/sno" 
 
 [ "$targetiso" ] && mylog Creating the cluster iso only 
-remote-test-cmd -m "Installing sno/iso $targetiso" "make -C aba sno $targetiso" 
+test-cmd -h $bastion2 -m  "Installing sno/iso $targetiso" "make -C aba sno $targetiso" 
 
-remote-test-cmd -m "Setting master memory to 24" "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
+test-cmd -h $bastion2 -m  "Setting master memory to 24" "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
 
 ######################
 mylog Now adding more images to the mirror registry
@@ -134,7 +134,7 @@ test-cmd -r 5 2 -m "Saving ubi images to local disk on `hostname`" "make -C mirr
 mylog Copy tar+ssh archives to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
-remote-test-cmd -r 5 2 -m "Loading UBI images into mirror" "make -C aba/mirror load" 
+test-cmd -h $bastion2 -r 5 2 -m  "Loading UBI images into mirror" "make -C aba/mirror load" 
 
 mylog 
 mylog Add vote-app image to imageset conf file 
@@ -147,13 +147,13 @@ test-cmd -r 5 2 -m "Saving vote-app image to local disk" " make -C mirror save"
 mylog Copy repo to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
-remote-test-cmd -r 5 2 -m "Loading vote-app image into mirror" "make -C aba/mirror load" 
+test-cmd -h $bastion2 -r 5 2 -m  "Loading vote-app image into mirror" "make -C aba/mirror load" 
 
-remote-test-cmd -m "Installing sno cluster, ready to deploy test app" "make -C aba/sno"
+test-cmd -h $bastion2 -m  "Installing sno cluster, ready to deploy test app" "make -C aba/sno"
 
-remote-test-cmd -m "Listing VMs" "make -C aba/sno ls"
+test-cmd -h $bastion2 -m  "Listing VMs" "make -C aba/sno ls"
 
-remote-test-cmd -m "Deploying test vote-app" "aba/test/deploy-test-app.sh"
+test-cmd -h $bastion2 -m  "Deploying test vote-app" "aba/test/deploy-test-app.sh"
 
 
 mylog 
@@ -192,9 +192,9 @@ test-cmd -r 5 2 -m "Saving mesh operators to local disk" "make -C mirror save"
 mylog Copy tar+ssh archives to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
-remote-test-cmd -r 5 2 -m "Loading images to mirror" "make -C aba/mirror load" 
+test-cmd -h $bastion2 -r 5 2 -m  "Loading images to mirror" "make -C aba/mirror load" 
 
-remote-test-cmd -m "Configuring day2 ops" "make -C aba/sno day2"
+test-cmd -h $bastion2 -m  "Configuring day2 ops" "make -C aba/sno day2"
 
 mylog 
 mylog Append jaeger operator to imageset conf
@@ -220,31 +220,25 @@ mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf - 
 
-remote-test-cmd -r 5 2 -m "Loading jaeger operator images to mirror" "make -C aba/mirror load" 
+test-cmd -h $bastion2 -r 5 2 -m  "Loading jaeger operator images to mirror" "make -C aba/mirror load" 
 
 test-cmd -m "Pausing for 60s to let OCP to settle" sleep 60    # For some reason, the cluster was still not fully ready in tests!
 
-for i in 1 2 3 4 5 6
-do
-	# Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
-	echo "Run 'day2' attempt number $i ..."
-	remote-test-cmd $bastion2 "make -C aba/sno day2" && break || true  # Install CA cert and activate local op. hub
-	echo Sleeping ...
-	sleep `expr $i \* 30`
-done
+# Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
+test-cmd -h $bastion2 -r 3 2 -m "Run 'day2' attempt number $i ..." "make -C aba/sno day2" && break || true  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
 test-cmd -m "Pausing for 30s to let OCP to settle" sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
 
-remote-test-cmd -m "Deploying service mesh with test app" "aba/test/deploy-mesh.sh"
+test-cmd -h $bastion2 -m "Deploying service mesh with test app" "aba/test/deploy-mesh.sh"
 
 sleep 30  # Slep in case need to check the cluster
 
-remote-test-cmd -m "Deleting sno cluster" "make -C aba/sno delete" 
+test-cmd -h $bastion2 -m  "Deleting sno cluster" "make -C aba/sno delete" 
 
 ######################
 
-remote-test-cmd -m "Uninstalling mirror registry on internal bastion" "make -C aba/mirror uninstall"
+test-cmd -h $bastion2 -m  "Uninstalling mirror registry on internal bastion" "make -C aba/mirror uninstall"
 
 mylog
 mylog "===> Completed test $0"

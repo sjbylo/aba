@@ -118,22 +118,26 @@ uninstallclean:
 inc:   ## Create an incremental tar backup of the sync and/or save directories, after running 'make save' or 'make sync'
 	@make -s -C .. inc
 
-.PHONY: tidy 
-tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
-	@rm -rf *.tar mirror-registry .rpms* .installed .loaded .initialized
+### .PHONY: tidy 
+### tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
 
 .PHONY: clean
-clean: tidy ## Clean up files
-	@rm -rf .??* 
-	@rm -rf *.sh templates scripts ### oc-mirror-workspace
+clean:   ## Clean up files only, keeping configuration files image set and mirror.conf 
+	@rm -rf *.tar mirror-registry 
+	@rm -rf .initialized 
+	@rm -rf templates scripts
 	@rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
 	@rm -f mirror-registry.tar.gz
 
+# Note that reg-uninstall.sh script & regcreds/ will delete registry and reg-uninstall.sh itself
 .PHONY: distclean
-#distclean: uninstall clean ## Clean up repo for distribution
-distclean:            clean ## Clean up repo for distribution
+distclean: uninstall clean ## Clean up repo fully for distribution
 	@rm -rf *.tar.gz oc-mirror-workspace 
-	@rm -f .registry-creds.txt *.conf *.yaml 
-	@rm -rf save sync regcreds
-	@touch .uninstalled 
+	@rm -f *.conf *.yaml 
+	@rm -rf save sync 
+	@rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
+	@rm -f .dnf-install.log
+	@rm -f mirror.conf
+	@rm -f .ssh.conf
+	@rm -f .rpmsext .rpmsint
 

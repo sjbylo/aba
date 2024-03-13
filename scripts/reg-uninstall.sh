@@ -15,13 +15,15 @@ if [ -s reg-uninstall.sh ]; then
 		reg_delete
 		rm -f regcreds/*
 		rm -f ./reg-uninstall.sh
+		rm -f .installed 
+		touch .uninstalled
 
 		exit 0
 	fi
 	exit 1
 else
 	echo
-	echo "Warning: No Quay installation detected."
+	echo "Warning: No Quay installation detected that 'aba' installed."
 	echo "         If you installed a registry and want to remove it, please uninstall it manually." 
 	echo
 	sleep 2
@@ -37,21 +39,24 @@ else
 	reg_root=$HOME/quay-install
 fi
 
+
 if [ "$reg_ssh" ] && ssh $(whoami)@$reg_host podman ps | grep -q registry; then
-	if ask "Uninstall the mirror registry from host $reg_host"; then
+	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
 		cmd="./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) --autoApprove -k $reg_ssh $reg_root_opt"
 		echo "Running command: $cmd"
 		$cmd
+
+		###rm -f regcreds/*
 	else
 		exit 1
 	fi
 elif podman ps | grep -q registry; then
-	if ask "Uninstall the mirror registry on localhost"; then
+	if ask "Registry detected on localhost.  Uninstall this mirror registry"; then
 		cmd="./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 		echo "Running command: $cmd"
 		$cmd
 
-		rm -f regcreds/*
+		###rm -f regcreds/*
 	else
 		exit 1
 	fi
