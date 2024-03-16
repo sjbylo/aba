@@ -33,7 +33,7 @@ replace_hash_with_random_hex() {
     echo "$output_string"
 }
 
-# Replace any '#" chars with random hex values
+# Replace any 'x" chars with random hex values
 mac_prefix=$(replace_hash_with_random_hex "$mac_prefix")
 ####
 
@@ -41,14 +41,13 @@ mac_prefix=$(replace_hash_with_random_hex "$mac_prefix")
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
 export rendezvous_ip=$machine_ip_prefix$starting_ip_index
 
-##echo Validating the cluster configuraiton ...
-
 scripts/verify-config.sh || exit 1
 
 # Use j2cli to render the templates
 echo
 echo Generating Agent-based configuration file: $PWD/agent-config.yaml 
 echo
+# Note that machine_ip_prefix, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
 scripts/j2 templates/agent-config.yaml.j2 > agent-config.yaml
 
