@@ -16,6 +16,9 @@ reg_url=https://$reg_host:$reg_port
 #if [ -s regcreds/rootCA.pem -a -s regcreds/pull-secret-mirror.json ]; then
 if [ -s regcreds/pull-secret-mirror.json ]; then
 
+	# Ensure pull secrets in place. Only needed if the registry was installed *from a different host*, ie. ~/.containers/auth.json does not exist.
+	scripts/create-containers-auth.sh
+
 	if [ -s regcreds/rootCA.pem ]; then
 		# Check if the cert needs to be updated
 		if ! sudo diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2; then
