@@ -95,7 +95,7 @@ test-cmd test/reg-test-install-remote.sh registry2.example.com
 
 
 ################################
-rm -rf mirror/save    # Better to test with 'make clean'?
+rm -rf mirror/save    # Better to test with 'make -C mirror distclean'?
 test-cmd -r 5 2 -m "Saving images to local disk on `hostname`" make save 
 
 # Smoke test!
@@ -104,10 +104,10 @@ test-cmd -r 5 2 -m "Saving images to local disk on `hostname`" make save
 mylog Tar+ssh files over to internal bastion: $bastion2 
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 
-test-cmd -h $bastion2 -m  "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "make -C aba load" || true  # This user's action is expected to fail since there are no creds for the "existing reg."
+test-cmd -h $bastion2 -m  "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "make -C aba load" || true  # This user's action is expected to fail since there are no login credentials for the "existing reg."
 
 # But, now regcreds/ is created...
-mylog "Simulating a manual config of 'existing' registry creds into mirror/regcreds/ on host: $bastion2"
+mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $bastion2"
 ssh $bastion2 "ls -l ~/aba/mirror"  
 ### ssh $bastion2 "mkdir -p  ~/aba/mirror/regcreds"  
 ssh $bastion2 "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
