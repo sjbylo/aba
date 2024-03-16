@@ -127,7 +127,7 @@ clean:   ## Clean up files only, keeping configuration files image set and mirro
 	@rm -rf .initialized 
 	@rm -rf templates scripts
 	@rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
-	##@rm -f mirror-registry.tar.gz # This is neeeded in distclean!
+	##@rm -f mirror-registry.tar.gz # This is neeeded to 'uninstall' registry in distclean!
 
 # Note that reg-uninstall.sh script & regcreds/ will delete registry and reg-uninstall.sh itself
 .PHONY: distclean

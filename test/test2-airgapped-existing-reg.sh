@@ -86,7 +86,7 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
 
 # If the VM snapshot is reverted, as above, no need to delete old files
-mylog Prepare insternal bastion for testing, delete dirs and install make
+mylog Prepare internal bastion for testing, delete dirs and install make
 ssh $bastion2 "rm -rf ~/bin/* ~/aba"
 ssh $bastion2 "rpm -q make  || sudo yum install make -y"
 
@@ -95,7 +95,7 @@ test-cmd test/reg-test-install-remote.sh registry2.example.com
 
 
 ################################
-rm -rf mirror/save    # Better to test with 'make -C mirror distclean'?
+rm -rf mirror/save    # Better to test with 'make -C mirror clean'?
 test-cmd -r 5 2 -m "Saving images to local disk on `hostname`" make save 
 
 # Smoke test!
