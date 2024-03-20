@@ -38,7 +38,7 @@ sync: .initialized .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Syn
 .PHONY: save
 # Note that for a connected laptop or bastion there is no need to install all the required packages (i.e. only 'rpmsext') 
 # mirror-registry.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
-save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save images from the Internet to mirror/sav and download mirror-registry.tar.gz for installing mirror registry.
+save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save images from the Internet to mirror/save/ and download mirror-registry.tar.gz for installing mirror registry.
 	###
 	### Save images from the Internet to local disk 
 	###
@@ -114,8 +114,16 @@ uninstall: .initialized             mirror-registry .uninstalled     ## Uninstal
 uninstallclean:
 	@rm -f .uninstalled
 
+.PHONY: tar
+tar:   ## Create a full tar backup of ~/aba & ~/bin
+	@make -s -C .. tar
+
+.PHONY: tarrepo
+tarrepo:   ## Create a full tar backup of ~/aba & ~/bin
+	@make -s -C .. tarrepo
+
 .PHONY: inc
-inc:   ## Create an incremental tar backup of the sync and/or save directories, after running 'make save' or 'make sync'
+inc:   ## Create an incremental tar backup of ~/aba & ~/bin
 	@make -s -C .. inc
 
 ### .PHONY: tidy 
@@ -127,9 +135,10 @@ clean:   ## Clean up files only, keeping configuration files image set and mirro
 	@rm -rf .initialized 
 	@rm -rf templates scripts
 	@rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
+	rm -f ~/.aba.previous.backup
 	##@rm -f mirror-registry.tar.gz # This is neeeded to 'uninstall' registry in distclean!
 
-# Note that reg-uninstall.sh script & regcreds/ will delete registry and reg-uninstall.sh itself
+# Note that reg-uninstall.sh script will delete registry and reg-uninstall.sh $ regcreds/ itself
 .PHONY: distclean
 distclean: uninstall clean ## Clean up repo fully for distribution
 	@rm -rf *.tar.gz oc-mirror-workspace 

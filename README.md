@@ -173,7 +173,7 @@ make inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to externa
 
 # Then, on the internal bastion run:
 cd
-tar xzvf aba.tgz            # Extract the tar file. Ensure file timestamps are kept the same as on the external bastion.
+tar xvf aba.tgz            # Extract the tar file. Ensure file timestamps are kept the same as on the external bastion.
 cd aba             
 ```
 
@@ -295,6 +295,8 @@ make help        # Help is available in all Makefiles (in aba/Makefile  aba/mirr
 - ~~Disable OperatorHub and configure the internal registry to serve images.~~
 
 - Use PXE boot as alternative to ISO upload.
+
+- Make it easier to add the latest correct values into the imageset config file, i.e. fetch the values from the latest catalog. 
 
 
 ## Configuration files

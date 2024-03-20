@@ -12,6 +12,8 @@ sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 pytho
 cd `dirname $0`
 cd ..  # Change into "aba" dir
 
+rm -fr ~/.containers ~/.docker
+
 source scripts/include_all.sh && trap - ERR
 source test/include.sh
 
@@ -85,7 +87,7 @@ ssh $(whoami)@registry2.example.com -- "date" || sleep 8
 
 source <(cd mirror && normalize-mirror-conf)
 
-test-cmd -r 5 2 -m "Saving images to local disk" "make save" 
+test-cmd -r 99 3 -m "Saving images to local disk" "make save" 
 
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
@@ -96,7 +98,7 @@ test-cmd -h $bastion2 -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/
 ssh $(whoami)@$bastion2 "rpm -q make  || sudo yum install make -y"
 
 mylog Copy tar+ssh archives to internal bastion
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
 
 ### echo "Install the reg creds, simulating a manual config" 
 ### ssh $(whoami)@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
@@ -105,7 +107,7 @@ make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
 ######################
 mylog Runtest: START - airgap
 
-test-cmd -h $bastion2 -r 5 2 -m  "Loading cluster images into mirror on internal bastion" "make -C aba load" 
+test-cmd -h $bastion2 -r 99 3 -m  "Loading cluster images into mirror on internal bastion" "make -C aba load" 
 
 mylog "Running 'make sno' on internal bastion"
 
@@ -129,12 +131,12 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: registry.redhat.io/ubi9/ubi:latest
 END
 
-test-cmd -r 5 2 -m "Saving ubi images to local disk on `hostname`" "make -C mirror save" 
+test-cmd -r 99 3 -m "Saving ubi images to local disk on `hostname`" "make -C mirror save" 
 
 mylog Copy tar+ssh archives to internal bastion
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
 
-test-cmd -h $bastion2 -r 5 2 -m  "Loading UBI images into mirror" "make -C aba/mirror load" 
+test-cmd -h $bastion2 -r 99 3 -m  "Loading UBI images into mirror" "make -C aba/mirror load" 
 
 mylog 
 mylog Add vote-app image to imageset conf file 
@@ -142,12 +144,12 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-test-cmd -r 5 2 -m "Saving vote-app image to local disk" " make -C mirror save" 
+test-cmd -r 99 3 -m "Saving vote-app image to local disk" " make -C mirror save" 
 
 mylog Copy repo to internal bastion
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
 
-test-cmd -h $bastion2 -r 5 2 -m  "Loading vote-app image into mirror" "make -C aba/mirror load" 
+test-cmd -h $bastion2 -r 99 3 -m  "Loading vote-app image into mirror" "make -C aba/mirror load" 
 
 test-cmd -h $bastion2 -m  "Installing sno cluster, ready to deploy test app" "make -C aba/sno"
 
@@ -187,12 +189,12 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 ########
-test-cmd -r 5 2 -m "Saving mesh operators to local disk" "make -C mirror save"
+test-cmd -r 99 3 -m "Saving mesh operators to local disk" "make -C mirror save"
 
 mylog Copy tar+ssh archives to internal bastion
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
 
-test-cmd -h $bastion2 -r 5 2 -m  "Loading images to mirror" "make -C aba/mirror load" 
+test-cmd -h $bastion2 -r 99 3 -m  "Loading images to mirror" "make -C aba/mirror load" 
 
 test-cmd -h $bastion2 -m  "Configuring day2 ops" "make -C aba/sno day2"
 
@@ -205,7 +207,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
         - name: stable
 END
 
-test-cmd -r 5 2 -m "Saving jaeger operator to local disk" "make -C mirror save"
+test-cmd -r 99 3 -m "Saving jaeger operator to local disk" "make -C mirror save"
 
 mylog Downloading the mesh demo into test/mesh, for use by deploy script
 (
@@ -218,14 +220,14 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 
 mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf - 
+make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf - 
 
-test-cmd -h $bastion2 -r 5 2 -m  "Loading jaeger operator images to mirror" "make -C aba/mirror load" 
+test-cmd -h $bastion2 -r 99 3 -m  "Loading jaeger operator images to mirror" "make -C aba/mirror load" 
 
 test-cmd -m "Pausing for 60s to let OCP to settle" sleep 60    # For some reason, the cluster was still not fully ready in tests!
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
-test-cmd -h $bastion2 -r 3 2 -m "Run 'day2' attempt number $i ..." "make -C aba/sno day2" && break || true  # Install CA cert and activate local op. hub
+test-cmd -h $bastion2 -r 99 3 -m "Run 'day2' attempt number $i ..." "make -C aba/sno day2" && break || true  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
 test-cmd -m "Pausing for 30s to let OCP to settle" sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 

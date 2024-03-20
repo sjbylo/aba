@@ -27,6 +27,9 @@ else
 	echo "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make save' again."
 fi
 
+# Ensure the RH pull secrete files exist
+./scripts/create-containers-auth.sh
+
 echo 
 echo "Saving images from external network to mirror/save/ directory."
 echo
