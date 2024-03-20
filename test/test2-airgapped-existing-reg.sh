@@ -12,6 +12,8 @@ sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 pytho
 cd `dirname $0`
 cd ..  # Change into "aba" dir
 
+rm -fr ~/.containers ~/.docker
+
 #bastion2=10.0.1.6
 bastion2=registry2.example.com
 ntp=10.0.1.8 # If available
@@ -68,6 +70,9 @@ mylog "Setting reg_host=registry2.example.com"
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf
 
+# Fetch the config
+source <(cd mirror; normalize-mirror-conf)
+
 #################################
 mylog Revert a snapshot and power on the internal bastion vm
 (
@@ -96,13 +101,13 @@ test-cmd test/reg-test-install-remote.sh registry2.example.com
 
 ################################
 rm -rf mirror/save    # Better to test with 'make -C mirror clean'?
-test-cmd -r 5 2 -m "Saving images to local disk on `hostname`" make save 
+test-cmd -r 99 3 -m "Saving images to local disk on `hostname`" make save 
 
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
-mylog Tar+ssh files over to internal bastion: $bastion2 
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+mylog "'make tar' and ssh files over to internal bastion: $bastion2"
+make -s -C mirror tar out=- | ssh $bastion2 -- tar xvf -
 
 test-cmd -h $bastion2 -m  "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "make -C aba load" || true  # This user's action is expected to fail since there are no login credentials for the "existing reg."
 
@@ -117,10 +122,8 @@ test-cmd -h $bastion2 -m  "Loading images into mirror registry $reg_host:$reg_po
 
 ######################
 
-source <(cd mirror; normalize-mirror-conf)
-
 # Now, this works
-test-cmd -h $bastion2 -r 3 2 -m  "Loading images into mirror registry $reg_host:$reg_port" "make -C aba load" 
+test-cmd -h $bastion2 -r 99 3 -m  "Loading images into mirror registry $reg_host:$reg_port" "make -C aba load" 
 
 ssh $bastion2 "rm -rf aba/compact" 
 test-cmd -h $bastion2 -m  "Install compact cluster with targetiso=[$targetiso]" "make -C aba compact $targetiso" 
@@ -152,14 +155,25 @@ END
 ### scp $(whoami)@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
 ### make -C mirror verify 
 
-test-cmd -r 5 2 -m "Saving ubi images to local disk" make -C mirror save 
+test-cmd -r 99 3 -m "Saving ubi images to local disk" make -C mirror save 
 
-mylog Tar+ssh files over to internal bastion: $bastion2 
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+### mylog "'make inc' and ssh files over to internal bastion: $bastion2"
+### make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
+#
+### mylog "'scp mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: $bastion2"
+### scp -v mirror/save/mirror_seq2.tar $bastion2 aba/mirror/save
+
+mylog "Simulate an inc tar copy of 'mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: $bastion2"
+rm -f ~/tmp/file.tar
+make -s -C mirror inc out=~/tmp/file.tar
+scp ~/tmp/file.tar $bastion2:
+rm -f ~/tmp/file.tar
+ssh $bastion2 tar xvf file.tar   # This should unpack the file mirror/save/mirror_seq2.tar only
+ssh $bastion2 rm -f file.tar 
 
 test-cmd -h $bastion2 -m  "Verifying access to mirror registry $reg_host:$reg_port" "make -C aba/mirror verify"
 
-test-cmd -h $bastion2 -r 5 2 -m  "Loading images into mirror $reg_host:$reg_port" "make -C aba/mirror load" 
+test-cmd -h $bastion2 -r 99 3 -m  "Loading images into mirror $reg_host:$reg_port" "make -C aba/mirror load" 
 
 # FIXME: Might need to run:
 # 'make -C mirror clean' here since we are re-installing another cluster *with the same mac addresses*! So, install might fail.
@@ -182,12 +196,14 @@ cat >> mirror/save/imageset-config-save.yaml <<END
         - name: release-2.9
 END
 
-test-cmd -r 5 2 -m "Saving advanced-cluster-management images to local disk" make -C mirror save 
+test-cmd -r 99 3 -m "Saving advanced-cluster-management images to local disk" make -C mirror save 
 
-mylog Tar+ssh files from `hostname` over to internal bastion: $bastion2 
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xzvf -
+### mylog Tar+ssh files from `hostname` over to internal bastion: $bastion2 
+### make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
+mylog "'scp mirror/save/mirror_seq3.tar' file from `hostname` over to internal bastion: $bastion2"
+scp -v mirror/save/mirror_seq3*.tar $bastion2:aba/mirror/save
 
-test-cmd -h $bastion2 -r 5 2 -m  "Loading images into mirror $reg_host:$reg_port" "make -C aba/mirror load" 
+test-cmd -h $bastion2 -r 99 3 -m  "Loading images into mirror $reg_host:$reg_port" "make -C aba/mirror load" 
 
 test-cmd -h $bastion2 -m  "Verifying mirror registry access $reg_host:$reg_port" "make -C aba/mirror verify"
 

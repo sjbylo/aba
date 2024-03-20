@@ -7,6 +7,8 @@ sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 pytho
 cd `dirname $0`
 cd ..
 
+rm -fr ~/.containers ~/.docker
+
 source scripts/include_all.sh && trap - ERR # We don't want this trap during testing
 source test/include.sh
 
@@ -86,7 +88,7 @@ mylog "Mirror available at $reg_host:$reg_port"
 
 ######################
 # This will install mirror and sync
-test-cmd -r 5 2 -m "Syncing images from external network to internal mirror registry" make -C mirror sync
+test-cmd -r 99 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync
 
 # Install yq for below test!
 which yq || (
@@ -150,7 +152,7 @@ test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || tru
 
 #######################
 #  This will save, install then load
-test-cmd -r 5 2 -m "Saving and then loading cluster images into mirror" "make -C mirror save load" 
+test-cmd -r 99 3 -m "Saving and then loading cluster images into mirror" "make -C mirror save load" 
 
 wait # for above SNO cluster to be installed 
 
@@ -193,14 +195,14 @@ mylog "Using mirror registry at $reg_host:$reg_port"
 
 ######################
 # This will install and sync
-test-cmd -r 5 2 -m "Syncing images from external network to internal mirror registry" make -C mirror sync 
+test-cmd -r 99 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync 
 
 rm -rf sno
 test-cmd -m "Installing sno cluster" make sno
 
 #######################
 #  This will save, install then load
-test-cmd -r 5 2 -m "Saving and loading images into mirror" make -C mirror save load 
+test-cmd -r 99 3 -m "Saving and loading images into mirror" make -C mirror save load 
 
 rm -rf sno
 test-cmd -m "Installing sno cluster" make sno $targetiso

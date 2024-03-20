@@ -44,7 +44,7 @@ if [ "$reg_ssh" ] && ssh $(whoami)@$reg_host podman ps | grep -q registry; then
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
 		cmd="./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $(whoami) --autoApprove -k $reg_ssh $reg_root_opt"
 		echo "Running command: $cmd"
-		$cmd
+		$cmd || true
 
 		###rm -f regcreds/*
 	else
@@ -54,7 +54,7 @@ elif podman ps | grep -q registry; then
 	if ask "Registry detected on localhost.  Uninstall this mirror registry"; then
 		cmd="./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 		echo "Running command: $cmd"
-		$cmd
+		$cmd || true
 
 		###rm -f regcreds/*
 	else

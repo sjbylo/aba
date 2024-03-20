@@ -45,12 +45,20 @@ tidy:
 	make -C mirror tidy
 
 .PHONY: tar
-tar:  ## Archive the whole repo in order to move it to the internal network, e.g. make tar out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-repo.tgz. Can also use out=-
-	@scripts/create-tarball.sh $(out)
+tar:  ## Archive the full repo, e.g. make tar out=/dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use out=- to send tar output to stdout.
+	@scripts/backup.sh $(out)
+
+.PHONY: tarrepo
+tarrepo:  ## Archive the full repo *excluding* the mirror/mirror_seq*tar files. Works in the same way as 'make tar'.
+	@scripts/backup.sh --repo $(out)
 
 .PHONY: inc
-inc:  ## Create an incremental archive of the repo in order to move it to the internal network, e.g. make inc out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-repo.tgz. Can also use out=-
-	@scripts/inc-backup.sh $(out)
+inc:  ## Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'make tar'.
+	@scripts/backup.sh --inc $(out)
+
+## .PHONY: increpo
+## increpo:  ## Create an incremental archive of the repo, e.g. make inc out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-backup.tar. Can also use out=- to send tar data to stdout.  The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup
+## 	@scripts/backup.sh --inc --repo $(out)
 
 load: ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	make -C mirror load
@@ -92,6 +100,7 @@ rsync:  ## Copy (rsync) all required files to internal bastion for testing purpo
 clean: ## Clean up 
 	make -C mirror clean 
 	make -C test clean 
+	rm -f ~/.aba.previous.backup
 
 .PHONY: distclean
 distclean: uninstall ## Clean up *everything*
