@@ -193,7 +193,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
     packages:
       - name: advanced-cluster-management
         channels:
-        - name: release-2.9
+        - name: release-2.10
 END
 
 test-cmd -r 99 3 -m "Saving advanced-cluster-management images to local disk" make -C mirror save 
