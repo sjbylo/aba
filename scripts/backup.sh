@@ -44,6 +44,7 @@ file_list=$(find		\
 	aba/templates		\
 	aba/Troubleshooting.md	\
 	aba/vmware.conf		\
+	aba/rpms		\
 	aba/test		\
 -type f \
 	! -path "aba/.git*" -a 				\
@@ -60,6 +61,8 @@ file_list=$(find		\
 	! -path "aba/mirror/postgres.tar" 		\
 	! -path "aba/mirror/redis.tar" 			\
 	! -path "aba/*/iso-agent-based*" 		\
+	! -path "aba/mirror/sync/oc-mirror-workspace*" 	\
+	! -path "aba/mirror/save/oc-mirror-workspace*" 	\
 							\
 	-newer ~/.aba.previous.backup 			\
 )
@@ -102,7 +105,7 @@ else
 fi
 
 echo "Running: `pwd` tar cf $dest <files>" >&2
-echo file_list=$file_list >&2
+### echo file_list=$file_list >&2
 tar cf $dest $file_list || exit 
 
 # Upon success, make a note of the time
