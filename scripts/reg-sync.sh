@@ -64,6 +64,19 @@ if [ ! -s sync/imageset-config-sync.yaml ]; then
 
 	[ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
 	scripts/j2 ./templates/imageset-config-sync.yaml.j2 > sync/imageset-config-sync.yaml 
+
+	# Fetch latest operator catalog and defaqult channels and append to the imageset file
+	[ ! -s .redhat-operator-index-v$ocp_ver_major ] && \
+		oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major > .redhat-operator-index-v$ocp_ver_major
+
+	tail -n +2 .redhat-operator-index-v$ocp_ver_major | awk '{print $1,$NF}' | while read op_name op_default_channel
+	do
+		echo "\
+#      - name: $op_name
+#        channels:
+#        - name: $op_default_channel"
+	done >> sync/imageset-config-sync.yaml
+
 else
 	# FIXME: Check here for matching varsions values in imageset config file and, if they are different, ask to 'reset' them.
 	### scripts/check-version-mismatch.sh || exit 1
@@ -96,7 +109,9 @@ echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.s
 echo "Running: $(cat sync-mirror.sh)"
 echo
 if ! ./sync-mirror.sh; then
-       echo "Warning: an error has occurred! If this is due to a transient error, please try again!"
+	[ "$TERM" ] && tput setaf 1 
+	echo "Warning: an error has occurred! Long running processes are prone to failure. Please try again!"
+	[ "$TERM" ] && tput sgr0
        exit 1
 fi
 # If oc-mirror fails due to transient errors, the user should try again
