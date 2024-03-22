@@ -10,6 +10,9 @@ source <(normalize-aba-conf)
 
 mkdir -p save
 
+# Ensure the RH pull secrete files exist
+./scripts/create-containers-auth.sh
+
 # Generate first imageset-config file for saving images.  
 # Do not overwrite the file. Allow users to add images and operators to imageset-config-save.yaml and run "make save" again. 
 if [ ! -s save/imageset-config-save.yaml ]; then
@@ -39,9 +42,6 @@ else
 	echo Using existing save/imageset-config-save.yaml
 	echo "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make save' again."
 fi
-
-# Ensure the RH pull secrete files exist
-./scripts/create-containers-auth.sh
 
 echo 
 echo "Saving images from external network to mirror/save/ directory."
