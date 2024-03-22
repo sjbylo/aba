@@ -8,7 +8,9 @@ if [ ! -s sync/imageset-config-sync.yaml -a ! -s save/imageset-config-save.yaml 
 	exit 0
 fi
 
-rpm -q python3-pyyaml >/dev/null || sudo dnf install python3 python3-jinja2 python3-pyyaml -y
+### rpm -q python3-pyyaml >/dev/null || sudo dnf install python36 python3-jinja2 python3-pyyaml -y
+rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y >> .dnf-install.log 2>&1
+install_rpms python3-jinja2 python3-pyyaml
 
 yaml2json()
 {

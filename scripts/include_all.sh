@@ -69,6 +69,19 @@ normalize-vmware-conf()
 			sed -e "s/^/export /g";
 }
 
+install_rpms() {
+	for rpm in $@
+	do
+		rpm -q --quiet $rpm && continue   # If at least one rpm is not installed, install rpms
+
+		echo FAILED rpm: $rpm
+		exit 1
+		### sudo dnf install make jq python3-pyyaml -y >/dev/null 2>&1 
+		sudo dnf install $@ -y >> .dnf-install.log 2>&1
+		break
+	done
+}
+
 ask() {
 	source <(normalize-aba-conf)
 	[ ! "$ask" ] && return 0  # reply "yes"

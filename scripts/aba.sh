@@ -98,11 +98,22 @@ if [ ! "$auto_ver" ]; then
 
 fi
 
+# Ensure python3 is installed.  RHEL8 only installs "python36"
+rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y >> .dnf-install.log 2>&1
 
-# # FIXME: Asking about vmware platform is not really needed at this point in the workflow, consider removing.
-# make is needed below and in the next steps 
-which make >/dev/null 2>&1 || sudo dnf install make jq python3-yaml -y >/dev/null 2>&1  # jq needed below
+# make & jq are needed below and in the next steps 
+install_rpms make jq python3-pyyaml
 
+### for rpm in make jq python3-pyyaml
+### do
+### 	rpm -q --quiet $rpm && continue   # If at least one rpm is not installed, install rpms
+### 
+### 	sudo dnf install make jq python3-pyyaml -y >/dev/null 2>&1 
+### 	break
+### done
+### which make >/dev/null 2>&1 || sudo dnf install make jq python3-pyyaml -y >/dev/null 2>&1  # jq needed below
+
+# # FIXME: Asking about vmware access is not really needed at this point in the workflow, consider removing/moving.
 ############
 # vmware.conf
 if [ ! "$auto_vmw" ]; then
