@@ -35,6 +35,7 @@ mkdir -p ~/.docker ~/.containers
 # If the Red Hat creds are available merge them 
 if [ -s regcreds/pull-secret-mirror.json -a -s ~/.pull-secret.json ]; then
 	# Merge the two files
+	### install_rpms jq
 	jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json ~/.pull-secret.json > ./regcreds/pull-secret-full.json
 
 	cp ./regcreds/pull-secret-full.json ~/.docker/config.json

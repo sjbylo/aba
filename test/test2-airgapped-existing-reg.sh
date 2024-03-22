@@ -8,6 +8,8 @@
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
 sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
+sudo dnf install -y $(cat templates/rpms-internal.txt)
+sudo dnf install -y $(cat templates/rpms-external.txt)
 
 cd `dirname $0`
 cd ..  # Change into "aba" dir
@@ -43,7 +45,7 @@ v=4.14.12
 v=4.15.0
 ### test-cmd ./aba --version $v --vmw ~/.vmware.conf 
 rm -f aba.conf
-test-cmd -m "Configure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
+test-cmd -m "Configure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.esxi
 
 mylog "Setting ask="
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
@@ -61,7 +63,7 @@ test-cmd "make -C test mirror-registry.tar.gz"
 #################################
 # Copy and edit mirror.conf 
 #cp -f templates/mirror.conf mirror/
-sudo dnf install python3 python3-jinja2 -y
+sudo dnf install python36 python3-jinja2 -y
 scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 ### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
 
@@ -86,6 +88,7 @@ mylog Revert a snapshot and power on the internal bastion vm
 ssh $(whoami)@registry2.example.com -- "date" || sleep 2
 ssh $(whoami)@registry2.example.com -- "date" || sleep 3
 ssh $(whoami)@registry2.example.com -- "date" || sleep 8
+ssh $(whoami)@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 #################################
 
 sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!

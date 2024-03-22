@@ -8,6 +8,8 @@
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
 sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
+sudo dnf install -y $(cat templates/rpms-internal.txt)
+sudo dnf install -y $(cat templates/rpms-external.txt)
 
 cd `dirname $0`
 cd ..  # Change into "aba" dir
@@ -41,7 +43,7 @@ rm -rf sno compact standard
 v=4.13.30
 v=4.15.0
 rm -f aba.conf  # Set it up next
-test-cmd -m "Configuring aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
+test-cmd -m "Configuring aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.esxi
 
 # Do not ask to delete things
 mylog "Setting ask="
@@ -60,7 +62,7 @@ bastion2=10.0.1.6
 #################################
 # Copy and edit mirror.conf 
 
-sudo dnf install python3 python3-jinja2 -y
+sudo dnf install python36 python3-jinja2 -y
 scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Test the internal bastion (registry2.example.com) as mirror"
@@ -83,6 +85,7 @@ mylog Revert vm snapshot of the internal bastion vm and power on
 ssh $(whoami)@registry2.example.com -- "date" || sleep 2
 ssh $(whoami)@registry2.example.com -- "date" || sleep 3
 ssh $(whoami)@registry2.example.com -- "date" || sleep 8
+ssh $(whoami)@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 #################################
 
 source <(cd mirror && normalize-mirror-conf)
