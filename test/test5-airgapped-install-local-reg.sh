@@ -87,7 +87,7 @@ mylog Revert vm snapshot of the internal bastion vm and power on
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
-ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
+### ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 #################################
 
 source <(cd mirror && normalize-mirror-conf)

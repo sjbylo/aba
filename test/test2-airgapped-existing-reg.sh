@@ -90,7 +90,7 @@ mylog Revert a snapshot and power on the internal bastion vm
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
-ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
+### ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 #################################
 
 sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
