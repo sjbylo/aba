@@ -8,8 +8,10 @@
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
 sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
-sudo dnf install -y $(cat templates/rpms-internal.txt)
-sudo dnf install -y $(cat templates/rpms-external.txt)
+
+### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
+### sudo dnf install -y $(cat templates/rpms-internal.txt)
+### sudo dnf install -y $(cat templates/rpms-external.txt)
 
 cd `dirname $0`
 cd ..  # Change into "aba" dir
@@ -82,10 +84,10 @@ mylog Revert vm snapshot of the internal bastion vm and power on
 	sleep 5
 )
 # Wait for host to come up
-ssh $(whoami)@registry2.example.com -- "date" || sleep 2
-ssh $(whoami)@registry2.example.com -- "date" || sleep 3
-ssh $(whoami)@registry2.example.com -- "date" || sleep 8
-ssh $(whoami)@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
+ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
+ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
+ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
+ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 #################################
 
 source <(cd mirror && normalize-mirror-conf)
@@ -98,14 +100,14 @@ test-cmd -r 99 3 -m "Saving images to local disk" "make save"
 # If the VM snapshot is reverted, as above, no need to delete old files
 test-cmd -h $bastion2 -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/* ~/aba"
 
-ssh $(whoami)@$bastion2 "rpm -q make  || sudo yum install make -y"
+ssh $reg_ssh_user@$bastion2 "rpm -q make  || sudo yum install make -y"
 
 mylog Copy tar+ssh archives to internal bastion
 make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
 
 ### echo "Install the reg creds, simulating a manual config" 
-### ssh $(whoami)@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
-### ssh $(whoami)@$bastion2 -- "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
+### ssh $reg_ssh_user@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
+### ssh $reg_ssh_user@$bastion2 -- "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
 
 ######################
 mylog Runtest: START - airgap

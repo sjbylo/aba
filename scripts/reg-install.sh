@@ -73,6 +73,7 @@ UserKnownHostsFile=/dev/null
 ConnectTimeout=15
 END
 
+[ ! "$reg_ssh_user" ] && reg_ssh_user=$(whoami)
 
 # Install Quay mirror on remote host if ssh key defined 
 if [ "$reg_ssh" ]; then
@@ -80,11 +81,11 @@ if [ "$reg_ssh" ]; then
 
 	echo "Installing Quay registry on to $reg_host ..."
 
-	if ! ssh -F .ssh.conf $(whoami)@$reg_host hostname; then
+	if ! ssh -F .ssh.conf $reg_ssh_user@$reg_host hostname; then
 		[ "$TERM" ] && tput setaf 1
 		echo
-		echo "Error: Can't ssh to $(whoami)@$reg_host"
-		echo "Configure passwordless ssh to $(whoami)@$reg_host and try again."
+		echo "Error: Can't ssh to $reg_ssh_user@$reg_host"
+		echo "Configure passwordless ssh to $reg_ssh_user@$reg_host and try again."
 		echo
 		[ "$TERM" ] && tput sgr0
 
@@ -98,16 +99,16 @@ if [ "$reg_ssh" ]; then
 	# Check for known issue where images need to be loaded on the remote host first
 	# This will load the needed images and fix the problem 
 	# Only need to do this workaround once
-	ssh -F .ssh.conf $(whoami)@$reg_host "rpm -q podman || rpm -q jq || sudo dnf install podman jq -y"
-	ssh -F .ssh.conf $(whoami)@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause || \
+	ssh -F .ssh.conf $reg_ssh_user@$reg_host "rpm -q podman || rpm -q jq || sudo dnf install podman jq -y"
+	ssh -F .ssh.conf $reg_ssh_user@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause || \
 	(
 		echo "Implementing workaround to install Quay on remote host ... see https://access.redhat.com/solutions/7040517 for more."
-		ssh -F .ssh.conf $(whoami)@$reg_host mkdir -p .abatmp
-		scp -F .ssh.conf mirror-registry.tar.gz $(whoami)@$reg_host:.abatmp/
-		ssh -F .ssh.conf $(whoami)@$reg_host "cd .abatmp && tar xmzf mirror-registry.tar.gz"
-		ssh -F .ssh.conf $(whoami)@$reg_host "cd .abatmp && ./mirror-registry install"
-		ssh -F .ssh.conf $(whoami)@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
-		ssh -F .ssh.conf $(whoami)@$reg_host rm -rf .abatmp 
+		ssh -F .ssh.conf $reg_ssh_user@$reg_host mkdir -p .abatmp
+		scp -F .ssh.conf mirror-registry.tar.gz $reg_ssh_user@$reg_host:.abatmp/
+		ssh -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && tar xmzf mirror-registry.tar.gz"
+		ssh -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry install"
+		ssh -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
+		ssh -F .ssh.conf $reg_ssh_user@$reg_host rm -rf .abatmp 
 	)
 	# Workaround END ########
 			
@@ -117,27 +118,27 @@ if [ "$reg_ssh" ]; then
 
 	# Note that the mirror-registry installer does not open the port for us
 	echo Allowing firewall access to the registry at $reg_host/$reg_port ...
-	ssh -F .ssh.conf $(whoami)@$reg_host -- "sudo firewall-cmd --state && \
+	ssh -F .ssh.conf $reg_ssh_user@$reg_host -- "sudo firewall-cmd --state && \
 		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
 			sudo firewall-cmd --reload"
 
-	echo "Installing mirror registry on the host [$reg_host] with user $(whoami) ..."
+	echo "Installing mirror registry on the host [$reg_host] with user $reg_ssh_user ..."
 
 	if [ ! "$reg_pw" ]; then
 		reg_pw=$(openssl rand -base64 12)
 	fi
 
 	# Generate the script to be used to delete this registry
-	uninstall_cmd="./mirror-registry uninstall --targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh $reg_root_opt --autoApprove"
+	uninstall_cmd="./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh $reg_root_opt --autoApprove"
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh.provision
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh.provision
 
 	echo "Running command: \"./mirror-registry install --quayHostname $reg_host \
-		--targetUsername $(whoami) --targetHostname $reg_host -k $reg_ssh --initPassword <hidden> $reg_root_opt\""
+		--targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh --initPassword <hidden> $reg_root_opt\""
 
 	./mirror-registry install -v \
   		--quayHostname $reg_host \
-  		--targetUsername $(whoami) \
+  		--targetUsername $reg_ssh_user \
   		--targetHostname $reg_host \
   		-k $reg_ssh \
 		--initPassword $reg_pw $reg_root_opt
@@ -148,7 +149,7 @@ if [ "$reg_ssh" ]; then
 	rm -rf regcreds/*
 
 	# Fetch root CA from remote host 
-	scp -F .ssh.conf -p $(whoami)@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
+	scp -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
 
 	reg_user=init
 

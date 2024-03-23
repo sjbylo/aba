@@ -37,7 +37,7 @@ reg_port=8443
 echo Allowing firewall access to the registry at $reg_host/$reg_port ...
 sudo firewall-cmd --state && sudo firewall-cmd --add-port=$reg_port/tcp --permanent && sudo firewall-cmd --reload
 
-echo "Installing mirror registry on the host [$reg_host] with user $(whoami) ..."
+echo "Installing mirror registry on the host [$reg_host] with user $reg_ssh_user ..."
 
 ./mirror-registry install --quayHostname $reg_host --initPassword $reg_pw 
 
@@ -47,7 +47,7 @@ reg_user=init
 reg_url=https://$reg_host:$reg_port
 
 # Fetch root CA from remote host 
-#scp -F .ssh.conf -p $(whoami)@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
+#scp -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
 
 # Check if the cert needs to be updated
 sudo diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \

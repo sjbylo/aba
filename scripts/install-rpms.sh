@@ -10,6 +10,7 @@ rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y
 
 for rpm in $rpms
 do
+	# Check if each rpm is already installed.  Don't run dnf unless we have to.
 	rpm -q --quiet $rpm && continue
 
 	echo "Ensuring rpms installed: $rpms ..."

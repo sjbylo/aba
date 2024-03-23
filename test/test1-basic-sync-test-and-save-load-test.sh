@@ -2,12 +2,11 @@
 # This test is for a connected bastion.  It will install registry on remote bastion and then sync images and install clusters, 
 # ... then savd/load images and install clusters. 
 
-#### FIXME sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
-# FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
-sudo dnf install -y $(cat templates/rpms-internal.txt)
-sudo dnf install -y $(cat templates/rpms-external.txt)
-##touch mirror/.rpmsint
-##touch mirror/.rpmsext
+sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
+
+### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
+### sudo dnf install -y $(cat templates/rpms-internal.txt)
+### sudo dnf install -y $(cat templates/rpms-external.txt)
 
 cd `dirname $0`
 cd ..
@@ -62,10 +61,10 @@ mylog Revert internal bastion vm to snapshot and powering on ...
 	sleep 5
 )
 # Wait for host to come up
-ssh $(whoami)@registry2.example.com -- "date" || sleep 2
-ssh $(whoami)@registry2.example.com -- "date" || sleep 3
-ssh $(whoami)@registry2.example.com -- "date" || sleep 8
-ssh $(whoami)@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
+ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
+ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
+ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
+ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 
 # Copy and edit mirror.conf 
 sudo dnf install python36 python3-jinja2 -y
@@ -78,6 +77,9 @@ sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# I
 
 mylog "Setting reg_ssh=~/.ssh/id_rsa for remote installation" 
 sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
+
+mylog "Setting reg_ssh_user=steve for remote installation" 
+sed -i "s#reg_ssh_user=#reg_ssh_user=steve#g" ./mirror/mirror.conf	     	# If remote, set user
 
 #sed -i "s#channel=.*#channel=fast          #g" ./mirror/mirror.conf	    	# test channel
 #sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
