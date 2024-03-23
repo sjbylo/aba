@@ -2,6 +2,7 @@ cli/.init
 cli/*tar.gz
 compact*
 *.md.bak
+*.bak
 mirror/aba.conf
 mirror.conf
 mirror/.dnf-install.log

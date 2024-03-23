@@ -8,8 +8,10 @@
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
 sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
-sudo dnf install -y $(cat templates/rpms-internal.txt)
-sudo dnf install -y $(cat templates/rpms-external.txt)
+
+### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
+### sudo dnf install -y $(cat templates/rpms-internal.txt)
+### sudo dnf install -y $(cat templates/rpms-external.txt)
 
 cd `dirname $0`
 cd ..  # Change into "aba" dir
@@ -85,10 +87,10 @@ mylog Revert a snapshot and power on the internal bastion vm
 	sleep 5
 )
 # Wait for host to come up
-ssh $(whoami)@registry2.example.com -- "date" || sleep 2
-ssh $(whoami)@registry2.example.com -- "date" || sleep 3
-ssh $(whoami)@registry2.example.com -- "date" || sleep 8
-ssh $(whoami)@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
+ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
+ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
+ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
+ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 #################################
 
 sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
@@ -154,8 +156,8 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 ### echo "Install the reg creds on localhost, simulating a manual config" 
-### scp $(whoami)@$bastion2:quay-install/quay-rootCA/rootCA.pem mirror/regcreds
-### scp $(whoami)@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
+### scp $reg_ssh_user@$bastion2:quay-install/quay-rootCA/rootCA.pem mirror/regcreds
+### scp $reg_ssh_user@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
 ### make -C mirror verify 
 
 test-cmd -r 99 3 -m "Saving ubi images to local disk" make -C mirror save 
