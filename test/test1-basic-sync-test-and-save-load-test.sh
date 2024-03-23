@@ -70,7 +70,7 @@ ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
 
 # Create a test user on the remote host, with pw-less ssh access
 ### does not work pw=$(python3 -c "import crypt; print(crypt.crypt(\"foo\", \"\$6\$$(</dev/urandom tr -dc 'a-zA-Z0-9' | head -c 32)\$\"))")
-ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f"
+### ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f"
 ssh $reg_ssh_user@registry2.example.com -- "sudo useradd testy -p xxxxx"
 ssh $reg_ssh_user@registry2.example.com -- "sudo mkdir ~testy/.ssh && sudo chmod 700 ~testy/.ssh"
 ssh $reg_ssh_user@registry2.example.com -- "sudo cp -p ~steve/.pull-secret.json ~testy"   # Copy from anywhere!
