@@ -52,6 +52,8 @@ source <(normalize-aba-conf)
 ### test-cmd 'make -C cli clean'
 ### test-cmd 'make -C cli'
 
+reg_ssh_user=$(whoami)
+
 mylog Revert internal bastion vm to snapshot and powering on ...
 (
 	source <(normalize-vmware-conf)
@@ -64,7 +66,19 @@ mylog Revert internal bastion vm to snapshot and powering on ...
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
-ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
+### ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
+
+# Create a test user on the remote host, with pw-less ssh access
+### does not work pw=$(python3 -c "import crypt; print(crypt.crypt(\"foo\", \"\$6\$$(</dev/urandom tr -dc 'a-zA-Z0-9' | head -c 32)\$\"))")
+ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f"
+ssh $reg_ssh_user@registry2.example.com -- "sudo useradd testy -p xxxxx"
+ssh $reg_ssh_user@registry2.example.com -- "sudo mkdir ~testy/.ssh && sudo chmod 700 ~testy/.ssh"
+ssh $reg_ssh_user@registry2.example.com -- "sudo cp -p ~steve/.pull-secret.json ~testy"   # Copy from anywhere!
+cat ~/.ssh/id_rsa.pub | ssh $reg_ssh_user@registry2.example.com -- "sudo tee -a ~testy/.ssh/authorized_keys"
+ssh $reg_ssh_user@registry2.example.com -- "sudo chown -R testy.testy ~testy"
+ssh $reg_ssh_user@registry2.example.com -- "sudo chmod 600 ~testy/.ssh/authorized_keys"
+ssh testy@registry2.example.com whoami
+
 
 # Copy and edit mirror.conf 
 sudo dnf install python36 python3-jinja2 -y
@@ -78,8 +92,8 @@ sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# I
 mylog "Setting reg_ssh=~/.ssh/id_rsa for remote installation" 
 sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
 
-mylog "Setting reg_ssh_user=steve for remote installation" 
-sed -i "s#reg_ssh_user=#reg_ssh_user=steve#g" ./mirror/mirror.conf	     	# If remote, set user
+mylog "Setting reg_ssh_user=testy for remote installation" 
+sed -i "s#reg_ssh_user=#reg_ssh_user=testy#g" ./mirror/mirror.conf	     	# If remote, set user
 
 #sed -i "s#channel=.*#channel=fast          #g" ./mirror/mirror.conf	    	# test channel
 #sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
