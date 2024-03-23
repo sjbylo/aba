@@ -18,17 +18,9 @@ show_error() {
 # Set the trap to call the show_error function on ERR signal
 trap 'show_error' ERR
 
-### # Detect editor.  Assume nano if available
-### if which nano >/dev/null 2>&1; then
-### 	# FIXME
-### 	[ ! "$editor" ] && export editor=nano
-### else
-### 	[ ! "$editor" ] && export editor=vi
-### fi
-
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
-	grep -q ^export aba.conf && cat aba.conf && return 0
+	### grep -q ^export aba.conf && cat aba.conf && return 0
 	cat aba.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -39,8 +31,8 @@ normalize-aba-conf() {
 
 normalize-mirror-conf()
 {
-#	# Normalize or sanitize the config file
-	grep -q ^export mirror.conf && cat mirror.conf && return 0
+	# Normalize or sanitize the config file
+	### grep -q ^export mirror.conf && cat mirror.conf && return 0
 	cat mirror.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -51,18 +43,30 @@ normalize-mirror-conf()
 
 normalize-cluster-conf()
 {
-#	# Normalize or sanitize the config file
-	grep -q ^export cluster.conf && cat cluster.conf && return 0
+	# Normalize or sanitize the config file
+	### grep -q ^export cluster.conf && cat cluster.conf && return 0
 	cat cluster.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
 			sed -e "s/^/export /g";
 }
-###			sed -e "s/tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
 
 normalize-vmware-conf()
 {
-#	# Normalize or sanitize the config file
+        # Normalize or sanitize the config file
+        vars=$(cat vmware.conf | \
+                cut -d"#" -f1 | \
+                sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+                sed -e "s/^/export /g")
+	eval "$vars"
+	# Detect if ESXi is used and set the FOLDER that ESXi likes
+        govc about | grep -q "^API type:.*HostAgent$" && echo "$vars" | sed "s#VMW_FOLDER.*#VMW_FOLDER=/ha-datacenter/vm#g" || echo "$vars"
+
+}
+
+normalize-vmware-confOLD()
+{
+	# Normalize or sanitize the config file
 	cat vmware.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -72,6 +76,7 @@ normalize-vmware-conf()
 install_rpms() {
 	for rpm in $@
 	do
+		# Check if each rpm is already installed.  Don't run dnf unless we have to.
 		rpm -q --quiet $rpm && continue   # If at least one rpm is not installed, install rpms
 
 		sudo dnf install $@ -y >> .dnf-install.log 2>&1
