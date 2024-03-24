@@ -38,7 +38,7 @@ sync: .initialized .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Syn
 .PHONY: save
 # Note that for a connected laptop or bastion there is no need to install all the required packages (i.e. only 'rpmsext') 
 # mirror-registry.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
-save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save images from the Internet to mirror/save/ and download mirror-registry.tar.gz for installing mirror registry.
+save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save images from the Internet to mirror/save/ & download 'mirror-registry.tar.gz' for later installation into your private network.
 	###
 	### Save images from the Internet to local disk 
 	###
@@ -77,7 +77,7 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 	curl --progress-bar -OL \
 	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
 
-# mirror,.conf no longer depeneds on aba.conf 
+# mirror,.conf no longer depends on aba.conf 
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
 mirror.conf:                                               ## Configure the mirror.conf file.
 	@$(SCRIPTS)/create-mirror-conf.sh $(debug)
@@ -115,38 +115,39 @@ uninstallclean:
 	@rm -f .uninstalled
 
 .PHONY: tar
-tar:   ## Create a full tar backup of ~/aba & ~/bin
+tar:   ## Create a full tar backup of ~/aba & ~/bin, ready to be transported to your private network.
 	@make -s -C .. tar
 
 .PHONY: tarrepo
-tarrepo:   ## Create a full tar backup of ~/aba & ~/bin
+tarrepo:   ## Same as 'make tar' but excludes all 'mirror_seq*tar' files under mirror/save/.
 	@make -s -C .. tarrepo
 
 .PHONY: inc
-inc:   ## Create an incremental tar backup of ~/aba & ~/bin
+inc:   ## Same as 'make tar' except a timestamp file is used to only backup files that have changed since the last 'make inc' was run.
 	@make -s -C .. inc
 
 ### .PHONY: tidy 
 ### tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
 
+# Note that 'mirror-registry.tar.gz' is needed to 'uninstall' registry in distclean!
 .PHONY: clean
-clean:   ## Clean up files only, keeping configuration files image set and mirror.conf 
-	@rm -rf *.tar mirror-registry 
-	@rm -rf .initialized 
-	@rm -rf templates scripts
-	@rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
+clean:  ## Clean up only, keeping configuration files: image set and mirror.conf. It is recommended to backup your important files. 
+	rm -rf *.tar mirror-registry 
+	rm -rf .initialized 
+	rm -rf templates scripts
+	rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
 	rm -f ~/.aba.previous.backup
-	##@rm -f mirror-registry.tar.gz # This is neeeded to 'uninstall' registry in distclean!
 
 # Note that reg-uninstall.sh script will delete registry and reg-uninstall.sh $ regcreds/ itself
 .PHONY: distclean
-distclean: uninstall clean ## Clean up repo fully for distribution
-	@rm -rf *.tar.gz oc-mirror-workspace 
-	@rm -f *.conf *.yaml 
-	@rm -rf save sync 
-	@rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
-	@rm -f .dnf-install.log
-	@rm -f mirror.conf
-	@rm -f .ssh.conf
-	@rm -f .rpmsext .rpmsint
+distclean: uninstall  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
+	@scripts/ask.sh "Are you sure?"
+	rm -rf *.tar.gz oc-mirror-workspace 
+	rm -f *.conf *.yaml 
+	rm -rf save sync 
+	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
+	rm -f .dnf-install.log
+	rm -f mirror.conf
+	rm -f .ssh.conf
+	rm -f .rpmsext .rpmsint
 
