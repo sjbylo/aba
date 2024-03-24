@@ -29,6 +29,8 @@ else
 	sleep 2
 fi
 
+[ ! "$reg_ssh_user" ] && reg_ssh_user=$(whoami)
+
 # Try to uninstall any existing registry
 
 # Has user defined a registry root dir?
@@ -36,10 +38,8 @@ if [ "$reg_root" ]; then
 	reg_root_opt="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --pgStorage $reg_root/pg-data"
 else
 	# The default path
-	reg_root=$HOME/quay-install
+	reg_root=/home/$reg_ssh_user/quay-install   # Not used in thie script!
 fi
-
-[ ! "$reg_ssh_user" ] && reg_ssh_user=$(whoami)
 
 if [ "$reg_ssh" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registry; then
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then

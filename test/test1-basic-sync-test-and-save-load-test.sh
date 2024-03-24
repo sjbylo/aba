@@ -76,6 +76,7 @@ ssh $reg_ssh_user@registry2.example.com -- "sudo mkdir ~testy/.ssh && sudo chmod
 ssh $reg_ssh_user@registry2.example.com -- "sudo cp -p ~steve/.pull-secret.json ~testy"   # Copy from anywhere!
 cat ~/.ssh/id_rsa.pub | ssh $reg_ssh_user@registry2.example.com -- "sudo tee -a ~testy/.ssh/authorized_keys"
 ssh $reg_ssh_user@registry2.example.com -- "sudo chown -R testy.testy ~testy"
+ssh $reg_ssh_user@registry2.example.com -- "echo 'testy ALL=(ALL) NOPASSWD:ALL' | sudo tee -a /etc/sudoers.d/testy"
 ssh $reg_ssh_user@registry2.example.com -- "sudo chmod 600 ~testy/.ssh/authorized_keys"
 ssh testy@registry2.example.com whoami
 
@@ -93,7 +94,10 @@ mylog "Setting reg_ssh=~/.ssh/id_rsa for remote installation"
 sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
 
 mylog "Setting reg_ssh_user=testy for remote installation" 
-sed -i "s#reg_ssh_user=#reg_ssh_user=testy#g" ./mirror/mirror.conf	     	# If remote, set user
+sed -i "s#reg_ssh_user=.*#reg_ssh_user=testy#g" ./mirror/mirror.conf	     	# If remote, set user
+
+### mylog "Setting reg_root=~/my-quay-mirror"
+### sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
 
 #sed -i "s#channel=.*#channel=fast          #g" ./mirror/mirror.conf	    	# test channel
 #sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
@@ -106,10 +110,11 @@ sed -i "s#reg_ssh_user=#reg_ssh_user=testy#g" ./mirror/mirror.conf	     	# If re
 
 source <(cd mirror; normalize-mirror-conf)
 
-mylog "Mirror available at $reg_host:$reg_port"
+mylog "Using container mirror at $reg_host:$reg_port"
 
 ######################
 # This will install mirror and sync
+mylog "Installing Quay mirror registry at $reg_host:$reg_port and then ..."
 test-cmd -r 99 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync
 
 # Install yq for below test!

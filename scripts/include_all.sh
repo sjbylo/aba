@@ -32,12 +32,13 @@ normalize-aba-conf() {
 normalize-mirror-conf()
 {
 	# Normalize or sanitize the config file
-	### grep -q ^export mirror.conf && cat mirror.conf && return 0
+	# Ensure any ~/ is masked, e.g. \~/
 	cat mirror.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
 			sed -e "s/tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
 			sed -e "s/tls_verify=1\b/tls_verify=true/g" | \
+			sed -e 's/reg_root=~/reg_root=\\~/g' | \
 			sed -e "s/^/export /g";
 }
 
