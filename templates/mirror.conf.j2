@@ -26,8 +26,8 @@ reg_ssh_user=				# Optional: Username to use for *remote* install if Quay. Defau
 reg_pw=p4ssw0rd				# Registry password. Leave blank if a random password should be created e.g. reg_pw=
 					# The password must be at least 8 characters and contain no white-space.
 
-reg_root=				# Set the directory path where the Quay mirror registry storage should be installed. 
-					# Default is $HOME/quay-install. 
+reg_root=				# Set the directory absolute path where the Quay mirror registry storage should be installed. 
+					# Default is ~/quay-install.  Note that '~' can be used after the '='.
 					# Note: never deleted this storage without uninstalling the Quay registry first!
 
 # The below values do not need to be changed.
