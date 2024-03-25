@@ -33,13 +33,17 @@ normalize-mirror-conf()
 {
 	# Normalize or sanitize the config file
 	# Ensure any ~/ is masked, e.g. \~/
+	# Ensrue reg_ssh_user has a value
 	cat mirror.conf | \
 		cut -d"#" -f1 | \
-		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
-			sed -e "s/tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
-			sed -e "s/tls_verify=1\b/tls_verify=true/g" | \
-			sed -e 's/reg_root=~/reg_root=\\~/g' | \
-			sed -e "s/^/export /g";
+			sed -e "s/^reg_ssh_user=[ \t]/reg_ssh_user=$(whoami)   /g" | \
+			sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+			sed -e "s/^tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
+			sed -e "s/^tls_verify=1\b/tls_verify=true/g" | \
+			sed -e 's/^reg_root=~/reg_root=\\~/g' | \
+			sed -e "s/^/export /g"
+###	eval "$vars"
+###	[ "$reg_ssh_user" ] && echo "$vars" || echo "$vars" | sed "s/^reg_ssh_user=[ \t]*/reg_ssh_user=$(whoami) /g" 
 }
 
 normalize-cluster-conf()

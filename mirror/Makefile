@@ -9,11 +9,11 @@ help: ## Help
 
 init: .initialized 
 .initialized: 
-	@ln -fs $(TEMPLATES) 
-	@ln -fs $(SCRIPTS) 
-	@ln -fs ../aba.conf 
-	@touch .initialized
-	@mkdir -p regcreds
+	ln -fs $(TEMPLATES) 
+	ln -fs $(SCRIPTS) 
+	ln -fs ../aba.conf 
+	mkdir -p regcreds
+	touch .initialized
 	@echo Initialized `pwd`
 
 # If aba.conf does not exist, then run the script to create it

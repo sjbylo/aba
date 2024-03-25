@@ -90,11 +90,8 @@ mylog "Confgure mirror to install registry on internal (remote) bastion2"
 mylog "Setting reg_host to registry2.example.com"
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
 
-mylog "Setting reg_ssh=~/.ssh/id_rsa for remote installation" 
-sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
-
-mylog "Setting reg_ssh_user=testy for remote installation" 
-sed -i "s#reg_ssh_user=.*#reg_ssh_user=testy#g" ./mirror/mirror.conf	     	# If remote, set user
+mylog "Setting reg_ssh_key=~/.ssh/id_rsa for remote installation" 
+sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
 
 ### mylog "Setting reg_root=~/my-quay-mirror"
 ### sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
@@ -110,7 +107,7 @@ sed -i "s#reg_ssh_user=.*#reg_ssh_user=testy#g" ./mirror/mirror.conf	     	# If 
 
 source <(cd mirror; normalize-mirror-conf)
 
-mylog "Using container mirror at $reg_host:$reg_port"
+mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 ######################
 # This will install mirror and sync
@@ -174,20 +171,16 @@ done
 ######################
 rm -rf sno
 test-cmd -m "Installing SNO cluster with target option [$targetiso]" make sno $targetiso
-test-cmd -m "Installing SNO cluster" make -C sno 
+### test-cmd -m "Installing SNO cluster" make -C sno 
 test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || true
 
 #######################
 #  This will save, install then load
 test-cmd -r 99 3 -m "Saving and then loading cluster images into mirror" "make -C mirror save load" 
 
-wait # for above SNO cluster to be installed 
-
 rm -rf sno
 test-cmd -m "Installing sno cluster with target option [$targetiso]" make sno $targetiso
-
 test-cmd -m "Delete cluster (if needed)" make -C sno delete 
-
 test-cmd -m "Uninstall mirror" make -C mirror uninstall 
 
 ########################
@@ -195,7 +188,7 @@ test-cmd -m "Uninstall mirror" make -C mirror uninstall
 mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 
 #sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
-#sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
+#sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
 
 mylog "Setting reg_root=~/my-quay-mirror"
 sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
@@ -207,18 +200,21 @@ sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test ran
 mylog "Setting reg_path=my/path"
 sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
 
+mylog "Setting reg_ssh_user=testy for remote installation" 
+sed -i "s#reg_ssh_user=.*#reg_ssh_user=testy#g" ./mirror/mirror.conf	     	# If remote, set user
+
 ### FIXME: needed? # test-cmd -m "Installing mirror registry" make -C mirror install 
 
 ######
 # Remove all traces of CA files ?
 ### rm -f mirror/regcreds/*pem   # Test without CA file
 
-# FIXME: no need?
+# FIXME: no need? or use 'make clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
 
 source <(cd mirror; normalize-mirror-conf)
 
-mylog "Using mirror registry at $reg_host:$reg_port"
+mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 ######################
 # This will install and sync
