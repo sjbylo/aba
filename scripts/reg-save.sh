@@ -19,7 +19,7 @@ if [ ! -s save/imageset-config-save.yaml ]; then
 	rm -rf save/*
 
 	# Check disk space under save/. 
-	avail=$(df -m save | awk '{print $4}')
+	avail=$(df -m save | awk '{print $4}' | tail -1)
 
 	# If less than 20 GB, stop
 	if [ $avail -lt 20971520 ]; then
@@ -53,7 +53,7 @@ else
 	### scripts/check-version-mismatch.sh || exit 1
 	
 	# Check disk space under save/. 
-	avail=$(df -m save | awk '{print $4}')
+	avail=$(df -m save | awk '{print $4}' | tail -1)
 
 	# If less than 50 GB, give a warning only
 	if [ $avail -lt 52428800 ]; then
