@@ -71,7 +71,7 @@ mylog "Test the internal bastion (registry2.example.com) as mirror"
 
 mylog "Setting reg_host=registry2.example.com"
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
-#sed -i "s#reg_ssh=#reg_ssh=~/.ssh/id_rsa#g" ./mirror/mirror.conf
+#sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf
 
 
 #################################
@@ -84,13 +84,16 @@ mylog Revert vm snapshot of the internal bastion vm and power on
 	sleep 5
 )
 # Wait for host to come up
-ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
-ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
-ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
-### ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
+ssh steve@registry2.example.com -- "date" || sleep 2
+ssh steve@registry2.example.com -- "date" || sleep 3
+ssh steve@registry2.example.com -- "date" || sleep 8
+### ssh steve@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 #################################
 
 source <(cd mirror && normalize-mirror-conf)
+#### [ ! "$reg_ssh_user" ] && reg_ssh_user=$(whoami)
+
+mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 test-cmd -r 99 3 -m "Saving images to local disk" "make save" 
 
@@ -98,12 +101,12 @@ test-cmd -r 99 3 -m "Saving images to local disk" "make save"
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
 # If the VM snapshot is reverted, as above, no need to delete old files
-test-cmd -h $bastion2 -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/* ~/aba"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/* ~/aba"
 
 ssh $reg_ssh_user@$bastion2 "rpm -q make  || sudo yum install make -y"
 
 mylog Copy tar+ssh archives to internal bastion
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
+make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 
 ### echo "Install the reg creds, simulating a manual config" 
 ### ssh $reg_ssh_user@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
@@ -112,16 +115,16 @@ make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
 ######################
 mylog Runtest: START - airgap
 
-test-cmd -h $bastion2 -r 99 3 -m  "Loading cluster images into mirror on internal bastion" "make -C aba load" 
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading cluster images into mirror on internal bastion" "make -C aba load" 
 
 mylog "Running 'make sno' on internal bastion"
 
-test-cmd -h $bastion2 -m  "Tidying up internal bastion" "rm -rf aba/sno" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Tidying up internal bastion" "rm -rf aba/sno" 
 
 [ "$targetiso" ] && mylog Creating the cluster iso only 
-test-cmd -h $bastion2 -m  "Installing sno/iso $targetiso" "make -C aba sno $targetiso" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno/iso $targetiso" "make -C aba sno $targetiso" 
 
-test-cmd -h $bastion2 -m  "Setting master memory to 24" "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Setting master memory to 24" "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
 
 ######################
 mylog Now adding more images to the mirror registry
@@ -139,9 +142,9 @@ END
 test-cmd -r 99 3 -m "Saving ubi images to local disk on `hostname`" "make -C mirror save" 
 
 mylog Copy tar+ssh archives to internal bastion
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
+make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 
-test-cmd -h $bastion2 -r 99 3 -m  "Loading UBI images into mirror" "make -C aba/mirror load" 
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading UBI images into mirror" "make -C aba/mirror load" 
 
 mylog 
 mylog Add vote-app image to imageset conf file 
@@ -152,15 +155,15 @@ END
 test-cmd -r 99 3 -m "Saving vote-app image to local disk" " make -C mirror save" 
 
 mylog Copy repo to internal bastion
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
+make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 
-test-cmd -h $bastion2 -r 99 3 -m  "Loading vote-app image into mirror" "make -C aba/mirror load" 
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading vote-app image into mirror" "make -C aba/mirror load" 
 
-test-cmd -h $bastion2 -m  "Installing sno cluster, ready to deploy test app" "make -C aba/sno"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno cluster, ready to deploy test app" "make -C aba/sno"
 
-test-cmd -h $bastion2 -m  "Listing VMs" "make -C aba/sno ls"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Listing VMs" "make -C aba/sno ls"
 
-test-cmd -h $bastion2 -m  "Deploying test vote-app" "aba/test/deploy-test-app.sh"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Deploying test vote-app" "aba/test/deploy-test-app.sh"
 
 
 mylog 
@@ -197,11 +200,11 @@ END
 test-cmd -r 99 3 -m "Saving mesh operators to local disk" "make -C mirror save"
 
 mylog Copy tar+ssh archives to internal bastion
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf -
+make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 
-test-cmd -h $bastion2 -r 99 3 -m  "Loading images to mirror" "make -C aba/mirror load" 
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading images to mirror" "make -C aba/mirror load" 
 
-test-cmd -h $bastion2 -m  "Configuring day2 ops" "make -C aba/sno day2"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Configuring day2 ops" "make -C aba/sno day2"
 
 mylog 
 mylog Append jaeger operator to imageset conf
@@ -225,27 +228,27 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 
 mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
-make -s -C mirror inc out=- | ssh $bastion2 -- tar xvf - 
+make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf - 
 
-test-cmd -h $bastion2 -r 99 3 -m  "Loading jaeger operator images to mirror" "make -C aba/mirror load" 
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading jaeger operator images to mirror" "make -C aba/mirror load" 
 
 test-cmd -m "Pausing for 60s to let OCP to settle" sleep 60    # For some reason, the cluster was still not fully ready in tests!
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
-test-cmd -h $bastion2 -r 99 3 -m "Run 'day2' attempt number $i ..." "make -C aba/sno day2" && break || true  # Install CA cert and activate local op. hub
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m "Run 'day2' attempt number $i ..." "make -C aba/sno day2" && break || true  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
 test-cmd -m "Pausing for 30s to let OCP to settle" sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
 
-test-cmd -h $bastion2 -m "Deploying service mesh with test app" "aba/test/deploy-mesh.sh"
+test-cmd -h $reg_ssh_user@$bastion2 -m "Deploying service mesh with test app" "aba/test/deploy-mesh.sh"
 
 sleep 30  # Slep in case need to check the cluster
 
-test-cmd -h $bastion2 -m  "Deleting sno cluster" "make -C aba/sno delete" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting sno cluster" "make -C aba/sno delete" 
 
 ######################
 
-test-cmd -h $bastion2 -m  "Uninstalling mirror registry on internal bastion" "make -C aba/mirror uninstall"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Uninstalling mirror registry on internal bastion" "make -C aba/mirror uninstall"
 
 mylog
 mylog "===> Completed test $0"

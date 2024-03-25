@@ -6,7 +6,7 @@
 reg_host=registry.{{ domain }}		# FQDN of registry.  Can be for localhost or remote host.
 					# Ensure a *DNS A record exists* that points to the IP address of that host.
 					# For a remote host, be sure ssh if configured from this host to the remote host 
-					# and set 'reg_ssh' and 'reg_ssh_user' (below) appropriately.
+					# and set 'reg_ssh_key' and 'reg_ssh_user' (below) appropriately.
 
 reg_port=8443				# The port used by any *existing* mirror registry. 
 					# Note that Quay mirror registry appliance always uses 8443. 
@@ -16,7 +16,7 @@ reg_path=ocp4/openshift4		# This is the path where the OCP images will be stored
 
 # The below values are only needed if you want aba to install Quay for you.
 
-reg_ssh=				# Optional: Ssh key file to use for *remote* install of Quay.
+reg_ssh_key=				# Optional: Ssh key file to use for *remote* install of Quay.
 					# Example: ~/.ssh/id_rsa 
 					# The key must allow password-less access to the remote host (defined by reg_host).
 					# If undefined (the default) then the registry will be installed on localhost. 
@@ -28,7 +28,7 @@ reg_pw=p4ssw0rd				# Registry password. Leave blank if a random password should 
 
 reg_root=				# Set the directory absolute path where the Quay mirror registry storage should be installed. 
 					# Default is ~/quay-install.  Note that '~' can be used after the '='.
-					# Note: never deleted this storage without uninstalling the Quay registry first!
+					# Note: never delete this storage without uninstalling the Quay registry first!
 
 # The below values do not need to be changed.
 

@@ -41,9 +41,9 @@ else
 	reg_root=/home/$reg_ssh_user/quay-install   # Not used in thie script!
 fi
 
-if [ "$reg_ssh" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registry; then
+if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registry; then
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
-		cmd="./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k $reg_ssh $reg_root_opt"
+		cmd="./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k $reg_ssh_key $reg_root_opt"
 		echo "Running command: $cmd"
 		$cmd || true
 
