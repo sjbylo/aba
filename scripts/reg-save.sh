@@ -22,7 +22,7 @@ if [ ! -s save/imageset-config-save.yaml ]; then
 	avail=$(df -m save | awk '{print $4}' | tail -1)
 
 	# If less than 20 GB, stop
-	if [ $avail -lt 20971520 ]; then
+	if [ $avail -lt 20500 ]; then
 		[ "$TERM" ] && tput setaf 1 
 		echo "Error: Not enough disk space available under $PWD/save (only $avail MB). At least 20GB is required for the base OpenShift platform alone."
 		[ "$TERM" ] && tput sgr0
@@ -56,7 +56,7 @@ else
 	avail=$(df -m save | awk '{print $4}' | tail -1)
 
 	# If less than 50 GB, give a warning only
-	if [ $avail -lt 52428800 ]; then
+	if [ $avail -lt 51250 ]; then
 		[ "$TERM" ] && tput setaf 1 
 		echo "Warning: Not much disk space available under $PWD/save (only $avail MB). Operator images require between ~40 to ~400GB of disk space!"
 		[ "$TERM" ] && tput sgr0
