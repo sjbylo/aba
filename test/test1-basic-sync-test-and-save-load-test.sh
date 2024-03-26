@@ -2,16 +2,18 @@
 # This test is for a connected bastion.  It will install registry on remote bastion and then sync images and install clusters, 
 # ... then savd/load images and install clusters. 
 
-sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
-
+### TEST for clean start sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
 ### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
 ### sudo dnf install -y $(cat templates/rpms-internal.txt)
 ### sudo dnf install -y $(cat templates/rpms-external.txt)
+
+ls -la mirror  # FIXME
 
 cd `dirname $0`
 cd ..
 
 rm -fr ~/.containers ~/.docker
+rm -f ~/.aba.previous.backup
 
 source scripts/include_all.sh && trap - ERR # We don't want this trap during testing
 source test/include.sh
@@ -26,14 +28,15 @@ mylog
 
 ntp=10.0.1.8 # If available
 
-rm -f ~/.aba.previous.backup
-
-#> test/test.log
-
 which make || sudo dnf install make -y
+
+ls -la mirror  # FIXME
 
 > mirror/mirror.conf
 make distclean 
+
+ls -la mirror  # FIXME
+
 ### test-cmd 'make -C mirror distclean'
 #make uninstall clean 
 
@@ -83,7 +86,11 @@ ssh testy@registry2.example.com whoami
 
 # Copy and edit mirror.conf 
 sudo dnf install python36 python3-jinja2 -y
-scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
+
+ls -la mirror  # FIXME
+
+make -C mirror mirror.conf
+### scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Confgure mirror to install registry on internal (remote) bastion2"
 
