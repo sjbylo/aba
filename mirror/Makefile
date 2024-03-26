@@ -56,11 +56,11 @@ load: .initialized .rpmsint install ../vmware.conf  ## Load the saved images int
 testload: save install load     # Test the save, install, load process on a connected host
 
 .rpmsext: .initialized
-	scripts/install-rpms.sh external
+	$(SCRIPTS)/install-rpms.sh external
 	@touch .rpmsext
 
 .rpmsint: .initialized
-	scripts/install-rpms.sh internal
+	$(SCRIPTS)/install-rpms.sh internal
 	@touch .rpmsint
 
 rpmsclean:
@@ -79,7 +79,7 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 
 # mirror,.conf no longer depends on aba.conf 
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
-mirror.conf:                                               ## Configure the mirror.conf file.
+mirror.conf: .initialized                                               ## Configure the mirror.conf file.
 	@$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 install: .installed
@@ -95,7 +95,7 @@ installclean:
 .PHONEY: password pw
 password: pw
 pw: 
-	scripts/reg-existing-create-pull-secret.sh $(debug)
+	$(SCRIPTS)/reg-existing-create-pull-secret.sh $(debug)
 
 .PHONY: verify
 verify: .initialized 
@@ -144,8 +144,8 @@ clean:  ## Clean up only, keeping configuration files: image set and mirror.conf
 
 # Note that reg-uninstall.sh script will delete registry and reg-uninstall.sh $ regcreds/ itself
 .PHONY: distclean
-distclean: uninstall  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
-	@scripts/ask.sh "Are you sure?"
+distclean: uninstall clean  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
+	@$(SCRIPTS)/ask.sh "Are you sure?"
 	rm -rf *.tar.gz oc-mirror-workspace 
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
