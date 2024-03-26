@@ -16,8 +16,8 @@ export MANEFEST_DIR=iso-agent-based
 echo export MANEFEST_DIR=$MANEFEST_DIR
 echo export MANEFEST_SRC_DIR=$MANEFEST_SRC_DIR
 
-# This is only needed to know if the install is via vCenter or not (See VMW_FOLDER below)
-[ -s vmware.conf ] && source <(normalize-vmware-conf)            # This is needed for $VMW_FOLDER
+### # This is only needed to know if the install is via vCenter or not (See VMW_FOLDER below)
+### [ -s vmware.conf ] && source <(normalize-vmware-conf)          
 
 ICONF=$MANEFEST_SRC_DIR/install-config.yaml  
 ICONF_TMP=/tmp/.install-config.yaml  
@@ -32,20 +32,27 @@ cat $ICONF | yaml2json > $ICONF_TMP
 cat $ACONF | yaml2json > $ACONF_TMP
 
 CLUSTER_NAME=`cat $ICONF_TMP | jq -r .metadata.name`
+echo "$CLUSTER_NAME" | grep -q "null" && CLUSTER_NAME=
 echo export CLUSTER_NAME=$CLUSTER_NAME
+
 BASE_DOMAIN=`cat $ICONF_TMP | jq -r .baseDomain`
+echo "$BASE_DOMAIN" | grep -q "null" && BASE_DOMAIN=
 echo export BASE_DOMAIN=$BASE_DOMAIN
 
 CP_REPLICAS=`cat $ICONF_TMP | jq -r .controlPlane.replicas`
+echo "$CP_REPLICAS" | grep -q "null" && CP_REPLICAS=
 echo export CP_REPLICAS=$CP_REPLICAS
 
 CP_NAMES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "master" )| .hostname'`
+echo "$CP_NAMES" | grep -q "null" && CP_NAMES=
 echo export CP_NAMES=\"$CP_NAMES\"
 
 CP_MAC_ADDRESSES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "master" ) | .interfaces[0].macAddress'`
+echo "$CP_MAC_ADDRESSES" | grep -q "null" && CP_MAC_ADDRESSES=
 echo export CP_MAC_ADDRESSES=\"$CP_MAC_ADDRESSES\"
 
 WORKER_REPLICAS=`cat $ICONF_TMP | jq -r .compute[0].replicas`
+echo "$WORKER_REPLICAS" | grep -q "null" && WORKER_REPLICAS=
 echo export WORKER_REPLICAS=$WORKER_REPLICAS
 
 ### # FIXME: does $FOLDER really need to be created here? How about in normalize-vmware-conf()?
@@ -66,6 +73,7 @@ echo export WORKER_REPLICAS=$WORKER_REPLICAS
 ### echo export VMW_FOLDER=$VMW_FOLDER
 
 RENDEZVOUSIP=`cat $ACONF_TMP | jq -r '.rendezvousIP'`
+echo "$RENDEZVOUSIP" | grep -q "null" && RENDEZVOUSIP=
 echo export RENDEZVOUSIP=$RENDEZVOUSIP 
 
 err=
@@ -73,9 +81,11 @@ err=
 ### [ $WORKER_REPLICAS -eq 0 ] && rm -f $ICONF_TMP $ACONF_TMP && exit 0
 if [ $WORKER_REPLICAS -ne 0 ]; then
 	WORKER_NAMES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "worker" )| .hostname'`
+	echo "$WORKER_NAMES" | grep -q "null" && WORKER_NAMES=
 	echo export WORKER_NAMES=\"$WORKER_NAMES\"
 
 	WORKER_MAC_ADDRESSES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "worker" )| .interfaces[0].macAddress'`
+	echo "$WORKER_MAC_ADDRESSES" | grep -q "null" && WORKER_MAC_ADDRESSES=
 	echo export WORKER_MAC_ADDRESSES=\"$WORKER_MAC_ADDRESSES\"
 
 	# basic checks
@@ -101,5 +111,8 @@ if [ "$err" ]; then
 	echo "WARNING: The files 'install-config.yaml' and/or 'agent-config.yaml' chould not be parsed properly." 
 	echo
 	[ "$TERM" ] && tput sgr0
+
+	exit 1
 fi
 
+exit 0
