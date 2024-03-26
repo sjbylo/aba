@@ -7,11 +7,14 @@ source scripts/include_all.sh
 [ "$1" ] && set -x
 
 if [ -s vmware.conf ]; then
-	source <(normalize-vmware-conf)  # This is needed for $VMW_FOLDER
+	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
 	echo "vmware.conf file not defined. Run 'make vmw' to create it if needed"
 	exit 0
 fi
+
+#echo VC_FOLDER=$VC_FOLDER
+#echo VC=$VC
 
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
@@ -30,8 +33,8 @@ source <(normalize-cluster-conf)
 
 # If we are accessing vCenter (and not ESXi directly) 
 if [ "$VC" ]; then
-	echo Create folder: $FOLDER
-	govc folder.create $FOLDER 
+	echo Create folder: $VC_FOLDER
+	govc folder.create $VC_FOLDER 
 fi
 
 # Check and increase CPU count for SNO, if needed
@@ -41,7 +44,7 @@ i=1
 for name in $CP_NAMES ; do
 	a=`expr $i-1`
 
-	echo "Create master: [$name] VM with [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$FOLDER/${CLUSTER_NAME}-$name]"
+	echo "Create master: [$name] VM with [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
 	govc vm.create \
 		-g rhel8_64Guest \
 		-firmware=efi \
@@ -52,7 +55,7 @@ for name in $CP_NAMES ; do
 		-net.address="${CP_MAC_ADDRESSES_ARRAY[$a]}" \
 		-iso-datastore=$ISO_DATASTORE \
 		-iso="images/agent-${CLUSTER_NAME}.iso" \
-		-folder="$FOLDER" \
+		-folder="$VC_FOLDER" \
 		-on=false \
 		 ${CLUSTER_NAME}-$name
 
@@ -77,7 +80,7 @@ i=1
 for name in $WORKER_NAMES ; do
 	a=`expr $i-1`
 
-	echo "Create master: [$name] VM with [${WORKER_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$FOLDER/${CLUSTER_NAME}-$name]"
+	echo "Create master: [$name] VM with [${WORKER_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
 	govc vm.create \
 		-g rhel8_64Guest \
 		-firmware=efi \
@@ -88,7 +91,7 @@ for name in $WORKER_NAMES ; do
 		-net.address="${WORKER_MAC_ADDRESSES_ARRAY[$a]}" \
 		-iso-datastore=$ISO_DATASTORE \
 		-iso="images/agent-${CLUSTER_NAME}.iso" \
-		-folder="$FOLDER" \
+		-folder="$VC_FOLDER" \
 		-on=false \
 		 ${CLUSTER_NAME}-$name
 

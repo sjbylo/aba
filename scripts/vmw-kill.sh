@@ -5,7 +5,7 @@ source scripts/include_all.sh
 [ "$1" ] && set -x
 
 if [ -s vmware.conf ]; then
-	source <(normalize-vmware-conf)  # This is needed for $VMW_FOLDER
+	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
 	echo "vmware.conf file not defined. Run 'make vmw' to create it if needed"
 	exit 0
@@ -21,7 +21,7 @@ source <(normalize-aba-conf)  # Fetch the 'ask' param
 if [ "$ask" ]; then
 	echo
 	for name in $CP_NAMES $WORKER_NAMES; do
-		[ "$VC" ] && echo $FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+		[ "$VC" ] && echo $VC_FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
 	done
 
 	ask "Immediately power down the above virtual machine(s)" || exit 1
