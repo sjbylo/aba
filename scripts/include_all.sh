@@ -65,9 +65,9 @@ normalize-vmware-conf()
                 sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
                 sed -e "s/^/export /g")
 	eval "$vars"
-	# Detect if ESXi is used and set the FOLDER that ESXi likes
+	# Detect if ESXi is used and set the VC_FOLDER that ESXi likes
         if govc about | grep -q "^API type:.*HostAgent$"; then
-		echo "$vars" | sed "s#VMW_FOLDER.*#VMW_FOLDER=/ha-datacenter/vm#g"
+		echo "$vars" | sed "s#VC_FOLDER.*#VC_FOLDER=/ha-datacenter/vm#g"
 		echo export VC=
 	else
 		echo "$vars"

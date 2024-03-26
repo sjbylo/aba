@@ -7,7 +7,7 @@ scripts/install-govc.sh
 [ "$1" ] && set -x
 
 if [ -s vmware.conf ]; then
-	source <(normalize-vmware-conf)  # This is needed for $VMW_FOLDER variable
+	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER variable
 else
 	echo "vmware.conf file not defined. Run 'make vmw' to create it if needed"
 	exit 0
@@ -24,7 +24,7 @@ source <(normalize-aba-conf)  # Fetch the 'ask' param
 if [ "$ask" ]; then
 	echo
 	for name in $CP_NAMES $WORKER_NAMES; do
-		[ "$VC" ] && echo $FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+		[ "$VC" ] && echo $VC_FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
 	done
 
 	ask "Delete the above virtual machine(s)" || exit 1
@@ -36,7 +36,7 @@ for name in $CP_NAMES $WORKER_NAMES; do
 done
 
 if [ "$VC" ]; then
-	echo govc object.destroy $FOLDER
-	govc object.destroy $FOLDER || true
+	echo govc object.destroy $VC_FOLDER
+	govc object.destroy $VC_FOLDER || true
 fi
 

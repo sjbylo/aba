@@ -16,7 +16,7 @@ export MANEFEST_DIR=iso-agent-based
 echo export MANEFEST_DIR=$MANEFEST_DIR
 echo export MANEFEST_SRC_DIR=$MANEFEST_SRC_DIR
 
-### # This is only needed to know if the install is via vCenter or not (See VMW_FOLDER below)
+### # This is only needed to know if the install is via vCenter or not (See VC_FOLDER below)
 ### [ -s vmware.conf ] && source <(normalize-vmware-conf)          
 
 ICONF=$MANEFEST_SRC_DIR/install-config.yaml  
@@ -55,22 +55,22 @@ WORKER_REPLICAS=`cat $ICONF_TMP | jq -r .compute[0].replicas`
 echo "$WORKER_REPLICAS" | grep -q "null" && WORKER_REPLICAS=
 echo export WORKER_REPLICAS=$WORKER_REPLICAS
 
-### # FIXME: does $FOLDER really need to be created here? How about in normalize-vmware-conf()?
+### # FIXME: does $VC_FOLDER really need to be created here? How about in normalize-vmware-conf()?
 ### # Check if using ESXi or vCenter 
-### if [ "$VMW_FOLDER" ]; then
-	### if [ "$VMW_FOLDER" == "/ha-datacenter/vm" ]; then
+### if [ "$VC_FOLDER" ]; then
+	### if [ "$VC_FOLDER" == "/ha-datacenter/vm" ]; then
 		### # For ESXi
-		### export FOLDER=$VMW_FOLDER
+		### export VC_FOLDER=$VC_FOLDER
 	### else
 		### # For vCenter 
-		### export FOLDER=$VMW_FOLDER/$CLUSTER_NAME
+		### export VC_FOLDER=$VC_FOLDER/$CLUSTER_NAME
 		### export VC=1
 		### echo export VC=1
 	### fi
 ### fi
 
-### echo export FOLDER=$FOLDER
-### echo export VMW_FOLDER=$VMW_FOLDER
+### echo export VC_FOLDER=$VC_FOLDER
+### echo export VC_FOLDER=$VC_FOLDER
 
 RENDEZVOUSIP=`cat $ACONF_TMP | jq -r '.rendezvousIP'`
 echo "$RENDEZVOUSIP" | grep -q "null" && RENDEZVOUSIP=
@@ -103,7 +103,7 @@ rm -f $ICONF_TMP $ACONF_TMP
 [ ! "$CP_NAMES" ] && echo "Control Plane names .hosts[].role.master.hostname missing in $ACONF" >&2  && err=1
 [ ! "$CP_MAC_ADDRESSES" ] && echo "Control Plane mac addresses .hosts[].role.master.interfaces[0].macAddress missing in $ACONF" >&2  && err=1
 [ ! "$WORKER_REPLICAS" ] && echo "Worker replica count .compute[0].replicas missing in $ICONF" >&2  && err=1
-### [ ! "$FOLDER" ]  && echo "xxxx" >&2 
+### [ ! "$VC_FOLDER" ]  && echo "xxxx" >&2 
 
 if [ "$err" ]; then
 	echo
