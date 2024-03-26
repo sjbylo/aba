@@ -10,7 +10,10 @@ ACONF=$MANEFEST_SRC_DIR/agent-config.yaml
 
 # If one of the files is missing, stop!
 if [ ! -s $ICONF -o ! -s $ACONF ]; then
+	echo
 	echo "Cannot parse cluster configuration. 'install-config.yaml' and/or 'agent-config.yaml' do not exist."
+	echo
+
 	exit 1
 fi
 
