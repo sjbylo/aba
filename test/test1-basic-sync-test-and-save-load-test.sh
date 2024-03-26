@@ -37,7 +37,7 @@ make distclean
 ### test-cmd 'make -C mirror distclean'
 #make uninstall clean 
 
-v=4.15.0
+v=4.15.1
 rm -f aba.conf
 test-cmd -m "Configure aba.conf for version $v and vmware esxi" ./aba --version $v --vmw ~/.vmware.conf.esxi
 

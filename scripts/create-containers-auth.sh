@@ -45,10 +45,15 @@ if [ -s regcreds/pull-secret-mirror.json -a -s ~/.pull-secret.json ]; then
 elif [ -s regcreds/pull-secret-mirror.json ]; then
 	cp ./regcreds/pull-secret-mirror.json ~/.docker/config.json
 	cp ./regcreds/pull-secret-mirror.json ~/.containers/auth.json
-else
+elif [ -s ~/.pull-secret.json ]; then
 	# Just use the Red Hat pull secret file
 	echo Configuring ~/.docker/config.json and ~/.containers/auth.json with Red Hat pull secret ~/.pull-secret.json ...
 	cp ~/.pull-secret.json ~/.docker/config.json
 	cp ~/.pull-secret.json ~/.containers/auth.json  
+else
+	echo 
+	echo "Asserting pull secret files!"
+	echo "Aborting! Pull secret files missing, either '~/.pull-secret.json', 'regcreds/pull-secret-mirror.json' and/or 'regcreds/pull-secret-full.json'" 
+	exit 1
 fi
 
