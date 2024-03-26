@@ -130,13 +130,17 @@ inc:   ## Same as 'make tar' except a timestamp file is used to only backup file
 ### tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
 
 # Note that 'mirror-registry.tar.gz' is needed to 'uninstall' registry in distclean!
+# FIXME: Only delete the imageset conf file IF user has made changes, otherwise delete it?
 .PHONY: clean
 clean:  ## Clean up only, keeping configuration files: image set and mirror.conf. It is recommended to backup your important files. 
 	rm -rf *.tar mirror-registry 
-	rm -rf .initialized 
-	rm -rf templates scripts
+	rm -f  .initialized 
+	rm -f  templates scripts
 	rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
 	rm -f ~/.aba.previous.backup
+	rm -f aba.conf  # remove link
+	rm -f *.sh
+	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rfv save || true
 
 # Note that reg-uninstall.sh script will delete registry and reg-uninstall.sh $ regcreds/ itself
 .PHONY: distclean

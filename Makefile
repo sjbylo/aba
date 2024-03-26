@@ -34,9 +34,11 @@ install: ## Set up the registry as per the settings in mirror/mirror.conf. Place
 uninstall: ## Uninstall any previously installed mirror registry  
 	make -C mirror uninstall
 
+.PHONY: sync
 sync: ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	make -C mirror sync
 
+.PHONY: save
 save: ## Save images from the Internet to mirror/save. 
 	make -C mirror save 
 
@@ -60,6 +62,7 @@ inc:  ## Create an incremental archive of the repo. The incremental files to inc
 ## increpo:  ## Create an incremental archive of the repo, e.g. make inc out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-backup.tar. Can also use out=- to send tar data to stdout.  The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup
 ## 	@scripts/backup.sh --inc --repo $(out)
 
+.PHONY: load
 load: ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	make -C mirror load
 
@@ -103,7 +106,7 @@ clean: ## Clean up
 	rm -f ~/.aba.previous.backup
 
 .PHONY: distclean
-distclean: uninstall ## Clean up *everything*
+distclean: clean uninstall ## Clean up *everything*
 	rm -f vmware.conf
 	make -C mirror distclean 
 	make -C cli distclean 

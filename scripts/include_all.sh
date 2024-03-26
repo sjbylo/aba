@@ -21,6 +21,7 @@ trap 'show_error' ERR
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
 	### grep -q ^export aba.conf && cat aba.conf && return 0
+	[ ! -s aba.conf ] && echo "aba.conf missing!" && exit 1
 	cat aba.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -65,8 +66,13 @@ normalize-vmware-conf()
                 sed -e "s/^/export /g")
 	eval "$vars"
 	# Detect if ESXi is used and set the FOLDER that ESXi likes
-        govc about | grep -q "^API type:.*HostAgent$" && echo "$vars" | sed "s#VMW_FOLDER.*#VMW_FOLDER=/ha-datacenter/vm#g" || echo "$vars"
-
+        if govc about | grep -q "^API type:.*HostAgent$"; then
+		echo "$vars" | sed "s#VMW_FOLDER.*#VMW_FOLDER=/ha-datacenter/vm#g"
+		echo export VC=
+	else
+		echo "$vars"
+		echo export VC=1
+	fi
 }
 
 normalize-vmware-confOLD()
