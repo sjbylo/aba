@@ -35,9 +35,10 @@ normalize-mirror-conf()
 	# Normalize or sanitize the config file
 	# Ensure any ~/ is masked, e.g. \~/
 	# Ensrue reg_ssh_user has a value
+			### sed -e "s/^reg_ssh_user=[ \t]/reg_ssh_user=$(whoami)   /g" | \
 	cat mirror.conf | \
 		cut -d"#" -f1 | \
-			sed -e "s/^reg_ssh_user=[ \t]/reg_ssh_user=$(whoami)   /g" | \
+			sed -E "s/^reg_ssh_user=[[:space:]]+|reg_ssh_user=$/reg_ssh_user=$(whoami)/g" | \
 			sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
 			sed -e "s/^tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
 			sed -e "s/^tls_verify=1\b/tls_verify=true/g" | \

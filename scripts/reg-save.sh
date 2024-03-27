@@ -89,3 +89,4 @@ if ! ./save-mirror.sh; then
 fi
 # If oc-mirror fails due to transient errors, the user should try again
 
+echo Execution successful
