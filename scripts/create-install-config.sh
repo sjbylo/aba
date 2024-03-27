@@ -62,9 +62,9 @@ else
 fi
 
 
-[ -s $ssh_key_file ] && \
-	export ssh_key_pub=$(cat $ssh_key_file) || \
-		echo WARNING: No file $ssh_key_file ...
+[ -s $ssh_key_file.pub ] && \
+	export ssh_key_pub=$(cat $ssh_key_file.pub) || \
+		echo WARNING: No file $ssh_key_file.pub ...
 
 # Check the registry is defined if it's in use
 if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
