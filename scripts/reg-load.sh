@@ -30,18 +30,19 @@ fi
 
 [ "$reg_root" ] || reg_root=$HOME/quay-install  # Only needed for the below message
 
+[ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
+
+[ ! -d save ] && echo "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first, on an Internet connected bastion/laptop" && exit 1
+
 echo 
 echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
 echo
+
 # Check if aba installed Quay or it's an existing reg.
 if [ -s ./reg-uninstall.sh ]; then
 	echo "Ensure there is enough disk space under $reg_root.  This can take 5-20+ mins to complete."
 fi
 echo
-
-[ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
-
-[ ! -d save ] && echo "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first, on an Internet connected bastion/laptop" && exit 1
 
 # Set up script to help for manual re-sync
 # --continue-on-error : do not use this option. In testing the registry became unusable! 
