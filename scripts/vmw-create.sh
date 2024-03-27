@@ -44,7 +44,8 @@ i=1
 for name in $CP_NAMES ; do
 	a=`expr $i-1`
 
-	echo "Create master: [$name] VM with [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
+	###echo "Create CP node: [$name] VM with [$master_cpu_count/$master_mem] [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
+	echo "Create VM: $name with [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
 	govc vm.create \
 		-g rhel8_64Guest \
 		-firmware=efi \
@@ -80,7 +81,7 @@ i=1
 for name in $WORKER_NAMES ; do
 	a=`expr $i-1`
 
-	echo "Create master: [$name] VM with [${WKR_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
+	echo "Create VM: $name with [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [${WKR_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
 	govc vm.create \
 		-g rhel8_64Guest \
 		-firmware=efi \
