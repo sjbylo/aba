@@ -8,31 +8,36 @@ if [ ! "$CLUSTER_NAME" ]; then
 fi
 
 CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
-WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
+WKR_MAC_ADDRESSES_ARRAY=($WKR_MAC_ADDRESSES)
 
 # Need command 'arp' 
-
 
 # if arp cannot be installed, then skip this script
 which arp >/dev/null || exit 0
 
-##echo Checking mac addresses that could already in use ...
+# Checking mac addresses that could already be in use (in arp cache) ...
 arp -an > /tmp/.all_arp_entries 
-INUSE=
+IN_ARP_CACHE=
 > /tmp/.list_of_matching_arp_entries
-for mac in $CP_MAC_ADDRESSES $WORKER_MAC_ADDRESSES
+for mac in $CP_MAC_ADDRESSES $WKR_MAC_ADDRESSES
 do
-	##echo checking mac address: $mac ...
+	# checking mac address: $mac ...
 	if grep -q " $mac " /tmp/.all_arp_entries; then
-		echo "Warning: Mac address $mac might already be in use."
-		INUSE=1
+		echo "Warning: Mac address $mac might already be in use (found in system ARP cache)."
+		IN_ARP_CACHE=1
 		echo $mac >> /tmp/.list_of_matching_arp_entries
 	fi
 done
 
-#[ "$INUSE" ] && echo && echo "Consider changing 'mac_prefix' in cluster.conf and try again." && sleep 2 && echo 
+if [ "$IN_ARP_CACHE" ]; then
+	echo
+	echo "Warning: Mac address conflics may cause the OCP installation to fail!" && \
+	echo "         Consider changing 'mac_prefix' in cluster.conf and try again."
+	echo 
+	sleep 2
+fi
 
-##echo Checking ip and mac addresses currently in use ...
+# Checking ip and mac addresses *currently* in use by clearing the cache ...
 > /tmp/.mac_list_filtered
 if [ -s /tmp/.list_of_matching_arp_entries ]; then
 	for mac in `cat /tmp/.list_of_matching_arp_entries`
@@ -54,26 +59,29 @@ if [ -s /tmp/.list_of_matching_arp_entries ]; then
 
 		arp -an > /tmp/.all_arp_entries 
 		P=
-		INUSE=
-		for mac in $CP_MAC_ADDRESSES $WORKER_MAC_ADDRESSES
+		MAC_IN_USE=
+		for mac in $CP_MAC_ADDRESSES $WKR_MAC_ADDRESSES
 		do
-			#echo checking $mac ...
+			# checking $mac ...
 			if grep -q " $mac " /tmp/.all_arp_entries; then
 				P="$P $mac"
-				INUSE=1
+				MAC_IN_USE=1
 			fi
 		done
-		if [ "$INUSE" ]; then
+		if [ "$MAC_IN_USE" ]; then
 			[ "$TERM" ] && tput setaf 1
-			echo "WARNING: One or more mac addresses are currently in use:$P" 
-			echo "         Consider Changing 'mac_prefix' in cluster.conf and try again." 
-			echo "         If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
+			echo "ERROR: One or more mac addresses are *currently* in use:$P" 
+			echo "       Consider Changing 'mac_prefix' in cluster.conf and try again." 
+			echo "       If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
 			[ "$TERM" ] && tput sgr0
 
 			exit 1
 		fi
 	fi
 fi
+
+echo "After clearing the ARP cache & pinging IPs, no more mac address conflics detected!"
+echo
 
 exit 0
 

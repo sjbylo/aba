@@ -49,13 +49,12 @@ ntp: .ntp ## Add NTP configuration to OCP nodes.  Only required if the underlyin
 	scripts/add_ntp_ignition_to_iso.sh $(debug) 
 	@touch .ntp
 
-#.autopoweroff: iso-agent-based/agent.x86_64.iso ntp
-.autopoweroff:                                   ntp
+.autopoweroff: .ntp
 	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || echo "VM(s) already powered off"
 	@touch .autopoweroff
 
-upload: vmware.conf .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images/agent-<cluster-name>.iso
-.autoupload: .autopoweroff
+upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images/agent-<cluster-name>.iso
+.autoupload: vmware.conf .autopoweroff
 	scripts/vmw-upload.sh $(debug) 
 	@touch .autoupload
 
