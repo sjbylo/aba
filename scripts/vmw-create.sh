@@ -22,7 +22,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 fi
 
 CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
-WORKER_MAC_ADDRESSES_ARRAY=($WORKER_MAC_ADDRESSES)
+WKR_MAC_ADDRESSES_ARRAY=($WKR_MAC_ADDRESSES)
 
 scripts/check-macs.sh || exit 
 
@@ -80,7 +80,7 @@ i=1
 for name in $WORKER_NAMES ; do
 	a=`expr $i-1`
 
-	echo "Create master: [$name] VM with [${WORKER_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
+	echo "Create master: [$name] VM with [${WKR_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
 	govc vm.create \
 		-g rhel8_64Guest \
 		-firmware=efi \
@@ -88,7 +88,7 @@ for name in $WORKER_NAMES ; do
 		-m=`expr $worker_mem \* 1024` \
 		-net.adapter vmxnet3 \
 		-disk-datastore=$GOVC_DATASTORE \
-		-net.address="${WORKER_MAC_ADDRESSES_ARRAY[$a]}" \
+		-net.address="${WKR_MAC_ADDRESSES_ARRAY[$a]}" \
 		-iso-datastore=$ISO_DATASTORE \
 		-iso="images/agent-${CLUSTER_NAME}.iso" \
 		-folder="$VC_FOLDER" \

@@ -84,13 +84,13 @@ if [ $WORKER_REPLICAS -ne 0 ]; then
 	echo "$WORKER_NAMES" | grep -q "null" && WORKER_NAMES=
 	echo export WORKER_NAMES=\"$WORKER_NAMES\"
 
-	WORKER_MAC_ADDRESSES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "worker" )| .interfaces[0].macAddress'`
-	echo "$WORKER_MAC_ADDRESSES" | grep -q "null" && WORKER_MAC_ADDRESSES=
-	echo export WORKER_MAC_ADDRESSES=\"$WORKER_MAC_ADDRESSES\"
+	WKR_MAC_ADDRESSES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "worker" )| .interfaces[0].macAddress'`
+	echo "$WKR_MAC_ADDRESSES" | grep -q "null" && WKR_MAC_ADDRESSES=
+	echo export WKR_MAC_ADDRESSES=\"$WKR_MAC_ADDRESSES\"
 
 	# basic checks
 	[ ! "$WORKER_NAMES" ] && echo ".hosts[].role.worker.hostname missing in $ACONF" >&2 && err=1
-	[ ! "$WORKER_MAC_ADDRESSES" ] && echo ".hosts[].role.worker.interfaces[0].macAddress missing in $ACONF" >&2 && err=1
+	[ ! "$WKR_MAC_ADDRESSES" ] && echo ".hosts[].role.worker.interfaces[0].macAddress missing in $ACONF" >&2 && err=1
 fi
 
 rm -f $ICONF_TMP $ACONF_TMP
