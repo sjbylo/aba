@@ -159,7 +159,8 @@ if [ "$reg_ssh_key" ]; then
 	# Now, activate the uninstall script 
 	mv ./reg-uninstall.sh.provision reg-uninstall.sh
 
-	rm -rf regcreds/*
+	rm -rf regcreds
+	mkdir regcreds
 
 	# Fetch root CA from remote host 
 	scp -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
@@ -253,3 +254,4 @@ else
 	scripts/create-containers-auth.sh
 fi
 
+echo Execution successful

@@ -106,7 +106,7 @@ clean: ## Clean up
 	rm -f ~/.aba.previous.backup
 
 .PHONY: distclean
-distclean: clean uninstall ## Clean up *everything*
+distclean: clean ## Clean up *everything*
 	rm -f vmware.conf
 	make -C mirror distclean 
 	make -C cli distclean 

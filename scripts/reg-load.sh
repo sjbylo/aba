@@ -55,3 +55,5 @@ if ! ./load-mirror.sh; then
        exit 1
 fi
 # If oc-mirror fails due to transient errors, the user should try again
+
+echo Execution successful

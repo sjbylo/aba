@@ -144,7 +144,7 @@ clean:  ## Clean up only, keeping configuration files: image set and mirror.conf
 
 # Note that reg-uninstall.sh script will delete registry and reg-uninstall.sh $ regcreds/ itself
 .PHONY: distclean
-distclean: uninstall clean  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
+distclean: clean  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@$(SCRIPTS)/ask.sh "Are you sure?"
 	rm -rf *.tar.gz oc-mirror-workspace 
 	rm -f *.conf *.yaml 
@@ -154,4 +154,6 @@ distclean: uninstall clean  # Clean up all files. Only use if you know what you'
 	rm -f mirror.conf
 	rm -f .ssh.conf
 	rm -f .rpmsext .rpmsint
+	[ -d regcreds ] && rm -rf regcreds.bk && cp -rp regcreds regcreds.bk
+	rm -rf regcreds
 

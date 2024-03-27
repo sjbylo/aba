@@ -113,6 +113,9 @@ sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	#
 ### test-cmd -m "Install mirror on internal bastion" "make -C mirror install"
 
 source <(cd mirror; normalize-mirror-conf)
+echo mirror-conf:
+cd mirror; normalize-mirror-conf; cd ..
+
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
