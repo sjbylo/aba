@@ -2,12 +2,11 @@
 # This test is for a connected bastion.  It will install registry on remote bastion and then sync images and install clusters, 
 # ... then savd/load images and install clusters. 
 
-### TEST for clean start sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
+### TEST for clean start 
+sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
 ### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
 ### sudo dnf install -y $(cat templates/rpms-internal.txt)
 ### sudo dnf install -y $(cat templates/rpms-external.txt)
-
-ls -la mirror  # FIXME
 
 cd `dirname $0`
 cd ..
@@ -30,17 +29,10 @@ ntp=10.0.1.8 # If available
 
 which make || sudo dnf install make -y
 
-ls -la mirror  # FIXME
-
-> mirror/mirror.conf
+# clean up all, assuming reg. is not running (deleted)
 make distclean 
 
-ls -la mirror  # FIXME
-
-### test-cmd 'make -C mirror distclean'
-#make uninstall clean 
-
-v=4.15.1
+v=4.15.2
 rm -f aba.conf
 test-cmd -m "Configure aba.conf for version $v and vmware esxi" ./aba --version $v --vmw ~/.vmware.conf.esxi
 
@@ -51,9 +43,6 @@ mylog "Setting ntp_server=$ntp"
 [ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
 
 source <(normalize-aba-conf)
-
-### test-cmd 'make -C cli clean'
-### test-cmd 'make -C cli'
 
 reg_ssh_user=$(whoami)
 
@@ -72,8 +61,7 @@ ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
 ### ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 
 # Create a test user on the remote host, with pw-less ssh access
-### does not work pw=$(python3 -c "import crypt; print(crypt.crypt(\"foo\", \"\$6\$$(</dev/urandom tr -dc 'a-zA-Z0-9' | head -c 32)\$\"))")
-### ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f"
+ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f" || true
 ssh $reg_ssh_user@registry2.example.com -- "sudo useradd testy -p xxxxx"
 ssh $reg_ssh_user@registry2.example.com -- "sudo mkdir ~testy/.ssh && sudo chmod 700 ~testy/.ssh"
 ssh $reg_ssh_user@registry2.example.com -- "sudo cp -p ~steve/.pull-secret.json ~testy"   # Copy from anywhere!
@@ -84,11 +72,10 @@ ssh $reg_ssh_user@registry2.example.com -- "sudo chmod 600 ~testy/.ssh/authorize
 ssh testy@registry2.example.com whoami
 
 
-# Copy and edit mirror.conf 
-sudo dnf install python36 python3-jinja2 -y
+# FIXME needed?
+#### sudo dnf install python36 python3-jinja2 -y
 
-ls -la mirror  # FIXME
-
+# Create and edit mirror.conf 
 make -C mirror mirror.conf
 ### scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
@@ -110,11 +97,11 @@ sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	#
 ### sed -i "s#reg_port=.*#reg_pw=443             #g" ./mirror/mirror.conf	    	# test port change
 #sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
 
-### test-cmd -m "Install mirror on internal bastion" "make -C mirror install"
-
 source <(cd mirror; normalize-mirror-conf)
+
+echo
 echo mirror-conf:
-cd mirror; normalize-mirror-conf; cd ..
+(cd mirror; normalize-mirror-conf)
 
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
@@ -132,7 +119,6 @@ which yq || (
 		chmod 755 ~/bin/yq
 	)
 
-######################
 ######################
 # This test creates the ABI (agent-based installer) config files to check they are valid
 
@@ -175,8 +161,6 @@ do
 done
 
 ######################
-######################
-
 
 ######################
 rm -rf sno
@@ -213,12 +197,6 @@ sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    
 mylog "Setting reg_ssh_user=testy for remote installation" 
 sed -i "s#reg_ssh_user=.*#reg_ssh_user=testy#g" ./mirror/mirror.conf	     	# If remote, set user
 
-### FIXME: needed? # test-cmd -m "Installing mirror registry" make -C mirror install 
-
-######
-# Remove all traces of CA files ?
-### rm -f mirror/regcreds/*pem   # Test without CA file
-
 # FIXME: no need? or use 'make clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
 
@@ -245,8 +223,8 @@ test-cmd -m "Deleting cluster" make -C sno delete
 mylog Removing vmware config file
 
 > vmware.conf
-rm -rf compact
-test-cmd -m "Creating compact iso file" make compact target=iso # Since we're testing bare-metal, only create iso
+rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
+test-cmd -m "Creating standard iso file" make standard target=iso # Since we're testing bare-metal, only create iso
 
 test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
 

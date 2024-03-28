@@ -13,7 +13,7 @@ do
 	# Check if each rpm is already installed.  Don't run dnf unless we have to.
 	rpm -q --quiet $rpm && continue
 
-	echo "Ensuring rpms installed: $rpms ..."
+	echo "rpm '$rpm' missing. Ensuring all required rpms installed: $rpms ..."
 	sudo dnf install $rpms -y >> .dnf-install.log 2>&1
 
 	break 

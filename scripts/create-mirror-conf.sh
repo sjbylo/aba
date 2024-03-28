@@ -1,5 +1,7 @@
 #!/usr/bin/bash 
 
+[ -s mirror.conf ] && echo mirror.conf already exists && exit 0
+
 source scripts/include_all.sh
 
 [ "$1" ] && set -x
