@@ -7,7 +7,7 @@
 # Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses tar+ssh to copy over the aba repo. 
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
-sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
+### sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
 
 ### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
 ### sudo dnf install -y $(cat templates/rpms-internal.txt)
@@ -17,13 +17,15 @@ cd `dirname $0`
 cd ..  # Change into "aba" dir
 
 rm -fr ~/.containers ~/.docker
+rm -f ~/.aba.previous.backup
+
 
 #bastion2=10.0.1.6
 bastion2=registry2.example.com
 ntp=10.0.1.8 # If available
 rm -f ~/.aba.previous.backup
 
-source scripts/include_all.sh && trap - ERR
+source scripts/include_all.sh && trap - ERR  # Not wanted during testing?
 source test/include.sh
 
 [ ! "$target_full" ] && targetiso=target=iso   # Default is to generate 'iso' only   # Default is to only create iso
@@ -39,13 +41,11 @@ mylog
 
 which make || sudo dnf install make -y
 
-> mirror/mirror.conf
+# clean up all, assuming reg. is not running (deleted)
 test-cmd "make -C mirror distclean"
 rm -rf sno compact standard 
 
-v=4.14.12
-v=4.15.1
-### test-cmd ./aba --version $v --vmw ~/.vmware.conf 
+v=4.15.2
 rm -f aba.conf
 test-cmd -m "Configure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.esxi
 
@@ -56,9 +56,6 @@ mylog "Setting ntp_server=$ntp"
 [ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
 source <(normalize-aba-conf)
 
-### test-cmd 'make -C cli clean'
-### test-cmd 'make -C cli'
-
 # Be sure this file exists
 test-cmd "make -C test mirror-registry.tar.gz"
 
@@ -66,8 +63,8 @@ test-cmd "make -C test mirror-registry.tar.gz"
 # Copy and edit mirror.conf 
 #cp -f templates/mirror.conf mirror/
 sudo dnf install python36 python3-jinja2 -y
-scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
-### sed -i "s/ocp_target_ver=[0-9]\+\.[0-9]\+\.[0-9]\+/ocp_target_ver=$ocp_version/g" ./mirror/mirror.conf
+make -C mirror mirror.conf
+### scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 ## test the internal bastion (registry2.example.com) as mirror
 mylog "Setting reg_host=registry2.example.com"
@@ -88,19 +85,19 @@ mylog Revert a snapshot and power on the internal bastion vm
 	sleep 5
 )
 # Wait for host to come up
-ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
-ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
-ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
+ssh steve@registry2.example.com -- "date" || sleep 2
+ssh steve@registry2.example.com -- "date" || sleep 3
+ssh steve@registry2.example.com -- "date" || sleep 8
 ### TEST for when user installs all rpms in advance, should not call "dnf" as it may fail without network 
-### ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
+### ssh steve@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 #################################
 
 sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
 
 # If the VM snapshot is reverted, as above, no need to delete old files
 mylog Prepare internal bastion for testing, delete dirs and install make
-ssh $reg_ssh_user@$bastion2 "rm -rf ~/bin/* ~/aba"
-ssh $reg_ssh_user@$bastion2 "rpm -q make  || sudo yum install make -y"
+ssh steve@$bastion2 "rm -rf ~/bin/* ~/aba"
+ssh steve@$bastion2 "rpm -q make  || sudo yum install make -y"
 
 mylog "Install 'existing' test mirror registry on internal bastion: registry2.example.com"
 test-cmd test/reg-test-install-remote.sh registry2.example.com
@@ -108,41 +105,51 @@ test-cmd test/reg-test-install-remote.sh registry2.example.com
 
 ################################
 rm -rf mirror/save    # Better to test with 'make -C mirror clean'?
+test-cmd -m "Cleaning mirror dir" make -C mirror clean
 test-cmd -r 99 3 -m "Saving images to local disk on `hostname`" make save 
 
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
-mylog "'make tar' and ssh files over to internal bastion: $reg_ssh_user@$bastion2"
-make -s -C mirror tar out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+mylog "'make tar' and ssh files over to internal bastion: steve@$bastion2"
+make -s -C mirror tar out=- | ssh steve@$bastion2 -- tar xvf -
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "make -C aba load" || true  # This user's action is expected to fail since there are no login credentials for the "existing reg."
+ssh steve@$bastion2 "cat aba/mirror/mirror.conf | grep reg_host | grep registry2.example.com" # FIXME
+
+test-cmd -h steve@$bastion2 -m  "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "make -C aba load" || true  # This user's action is expected to fail since there are no login credentials for the "existing reg."
+
+ssh steve@$bastion2 "cat aba/mirror/mirror.conf | grep reg_host | grep registry2.example.com" # FIXME
 
 # But, now regcreds/ is created...
-mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $reg_ssh_user@$bastion2"
-ssh $reg_ssh_user@$bastion2 "ls -l ~/aba/mirror"  
-### ssh $reg_ssh_user@$bastion2 "mkdir -p  ~/aba/mirror/regcreds"  
-ssh $reg_ssh_user@$bastion2 "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
-ssh $reg_ssh_user@$bastion2 "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
+mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: steve@$bastion2"
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Loading images into mirror registry $reg_host:$reg_port now succeeds" "make -C aba/mirror verify"
+ssh steve@$bastion2 "cat aba/mirror/mirror.conf | grep reg_host | grep registry2.example.com" # FIXME
+
+ssh steve@$bastion2 "ls -l ~/aba/mirror"  
+### ssh steve@$bastion2 "mkdir -p  ~/aba/mirror/regcreds"  
+ssh steve@$bastion2 "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
+ssh steve@$bastion2 "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
+
+ssh steve@$bastion2 "cat aba/mirror/mirror.conf | grep reg_host | grep registry2.example.com" # FIXME
+
+test-cmd -h steve@$bastion2 -m  "Loading images into mirror registry $reg_host:$reg_port now succeeds" "make -C aba/mirror verify"
 
 ######################
 
 # Now, this works
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading images into mirror registry $reg_host:$reg_port" "make -C aba load" 
+test-cmd -h steve@$bastion2 -r 99 3 -m  "Loading images into mirror registry $reg_host:$reg_port" "make -C aba load" 
 
-ssh $reg_ssh_user@$bastion2 "rm -rf aba/compact" 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Install compact cluster with targetiso=[$targetiso]" "make -C aba compact $targetiso" 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting cluster (if it exists)" "make -C aba/compact delete" 
+ssh steve@$bastion2 "rm -rf aba/compact" 
+test-cmd -h steve@$bastion2 -m  "Install compact cluster with targetiso=[$targetiso]" "make -C aba compact $targetiso" 
+test-cmd -h steve@$bastion2 -m  "Deleting cluster (if it exists)" "make -C aba/compact delete" 
 
-### remote-test-cmd $reg_ssh_user@$bastion2 "rm -rf aba/standard" 
-### remote-test-cmd $reg_ssh_user@$bastion2 "make -C aba standard $targetiso" 
-### remote-test-cmd $reg_ssh_user@$bastion2 "make -C aba/standard delete" 
+### remote-test-cmd steve@$bastion2 "rm -rf aba/standard" 
+### remote-test-cmd steve@$bastion2 "make -C aba standard $targetiso" 
+### remote-test-cmd steve@$bastion2 "make -C aba/standard delete" 
 
-ssh $reg_ssh_user@$bastion2 "rm -rf aba/sno" 
+ssh steve@$bastion2 "rm -rf aba/sno" 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Install sno cluster with targetiso=[$targetiso]" "make -C aba sno $targetiso" 
+test-cmd -h steve@$bastion2 -m  "Install sno cluster with targetiso=[$targetiso]" "make -C aba sno $targetiso" 
 
 
 ######################
@@ -158,39 +165,39 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 ### echo "Install the reg creds on localhost, simulating a manual config" 
-### scp $reg_ssh_user@$reg_ssh_user@$bastion2:quay-install/quay-rootCA/rootCA.pem mirror/regcreds
-### scp $reg_ssh_user@$reg_ssh_user@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
+### scp steve@$bastion2:quay-install/quay-rootCA/rootCA.pem mirror/regcreds
+### scp steve@$bastion2:aba/mirror/regcreds/pull-secret-mirror.json mirror/regcreds
 ### make -C mirror verify 
 
 test-cmd -r 99 3 -m "Saving ubi images to local disk" make -C mirror save 
 
-### mylog "'make inc' and ssh files over to internal bastion: $reg_ssh_user@$bastion2"
-### make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+### mylog "'make inc' and ssh files over to internal bastion: steve@$bastion2"
+### make -s -C mirror inc out=- | ssh steve@$bastion2 -- tar xvf -
 #
-### mylog "'scp mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: $reg_ssh_user@$bastion2"
-### scp -v mirror/save/mirror_seq2.tar $reg_ssh_user@$bastion2 aba/mirror/save
+### mylog "'scp mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: steve@$bastion2"
+### scp -v mirror/save/mirror_seq2.tar steve@$bastion2 aba/mirror/save
 
-mylog "Simulate an inc tar copy of 'mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: $reg_ssh_user@$bastion2"
+mylog "Simulate an inc tar copy of 'mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: steve@$bastion2"
 rm -f ~/tmp/file.tar
 make -s -C mirror inc out=~/tmp/file.tar
-scp ~/tmp/file.tar $reg_ssh_user@$bastion2:
+scp ~/tmp/file.tar steve@$bastion2:
 rm -f ~/tmp/file.tar
-ssh $reg_ssh_user@$bastion2 tar xvf file.tar   # This should unpack the file mirror/save/mirror_seq2.tar only
-ssh $reg_ssh_user@$bastion2 rm -f file.tar 
+ssh steve@$bastion2 tar xvf file.tar   # This should unpack the file mirror/save/mirror_seq2.tar only
+ssh steve@$bastion2 rm -f file.tar 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Verifying access to mirror registry $reg_host:$reg_port" "make -C aba/mirror verify"
+test-cmd -h steve@$bastion2 -m  "Verifying access to mirror registry $reg_host:$reg_port" "make -C aba/mirror verify"
 
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading images into mirror $reg_host:$reg_port" "make -C aba/mirror load" 
+test-cmd -h steve@$bastion2 -r 99 3 -m  "Loading images into mirror $reg_host:$reg_port" "make -C aba/mirror load" 
 
 # FIXME: Might need to run:
 # 'make -C mirror clean' here since we are re-installing another cluster *with the same mac addresses*! So, install might fail.
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno cluster" "make -C aba/sno"
+test-cmd -h steve@$bastion2 -m  "Installing sno cluster" "make -C aba/sno"
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking cluster operator status on cluster sno" "make -C aba/sno cmd"
+test-cmd -h steve@$bastion2 -m  "Checking cluster operator status on cluster sno" "make -C aba/sno cmd"
 
 ######################
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Deploying vote-app on cluster" aba/test/deploy-test-app.sh
+test-cmd -h steve@$bastion2 -m  "Deploying vote-app on cluster" aba/test/deploy-test-app.sh
 
 mylog Adding advanced-cluster-management operator images to imageset conf file on `hostname`
 
@@ -205,16 +212,16 @@ END
 
 test-cmd -r 99 3 -m "Saving advanced-cluster-management images to local disk" make -C mirror save 
 
-### mylog Tar+ssh files from `hostname` over to internal bastion: $reg_ssh_user@$bastion2 
-### make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
-mylog "'scp mirror/save/mirror_seq3.tar' file from `hostname` over to internal bastion: $reg_ssh_user@$bastion2"
-scp -v mirror/save/mirror_seq3*.tar $reg_ssh_user@$bastion2:aba/mirror/save
+### mylog Tar+ssh files from `hostname` over to internal bastion: steve@$bastion2 
+### make -s -C mirror inc out=- | ssh steve@$bastion2 -- tar xvf -
+mylog "'scp mirror/save/mirror_seq3.tar' file from `hostname` over to internal bastion: steve@$bastion2"
+scp -v mirror/save/mirror_seq3*.tar steve@$bastion2:aba/mirror/save
 
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading images into mirror $reg_host:$reg_port" "make -C aba/mirror load" 
+test-cmd -h steve@$bastion2 -r 99 3 -m  "Loading images into mirror $reg_host:$reg_port" "make -C aba/mirror load" 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Verifying mirror registry access $reg_host:$reg_port" "make -C aba/mirror verify"
+test-cmd -h steve@$bastion2 -m  "Verifying mirror registry access $reg_host:$reg_port" "make -C aba/mirror verify"
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting sno cluster" "make -C aba/sno delete" 
+test-cmd -h steve@$bastion2 -m  "Deleting sno cluster" "make -C aba/sno delete" 
 
 ######################
 

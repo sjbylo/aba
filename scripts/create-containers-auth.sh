@@ -8,7 +8,7 @@ source scripts/include_all.sh
 umask 077
 
 source <(normalize-aba-conf)
-source <(normalize-mirror-conf)
+##### FIXME  required?    source <(normalize-mirror-conf)
 
 # This is the pull secret for RH registry
 #pull_secret_mirror_file=pull-secret-mirror.json

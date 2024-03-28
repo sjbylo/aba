@@ -43,7 +43,7 @@ test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean"
 rm -rf sno compact standard 
 
 v=4.13.30
-v=4.15.1
+v=4.15.2
 rm -f aba.conf  # Set it up next
 test-cmd -m "Configuring aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.esxi
 

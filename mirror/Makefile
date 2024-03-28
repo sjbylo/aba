@@ -13,6 +13,7 @@ init: .initialized
 	ln -fs $(SCRIPTS) 
 	ln -fs ../aba.conf 
 	mkdir -p regcreds
+	touch regcreds/.dummy  # Needed only so tar includes the regcreds dir
 	touch .initialized
 	@echo Initialized `pwd`
 

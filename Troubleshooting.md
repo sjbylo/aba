@@ -1,6 +1,6 @@
 # Troubleshooting 
 
-If you see the error "Cannot initialize user in a non-empty database" when trying to insall Quay, this usually means that Quay files - from a previous installation - still exist 
+If you see the error "Cannot initialize user in a non-empty database" when trying to install Quay, this usually means that Quay files - from a previous installation - still exist 
 and should be deleted.  Delete any old files from ~/quay-install and try again.
 
 Try these commands to discover any problems with the installation of OCP using the Agent-based method.
@@ -144,13 +144,19 @@ ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadl
 
 ## Other Problems
 
+Sometimes or-mirror runs out of space under /tmp for temporary files.  You can fix this by increasing the space under /tmp:
+
+```
+sudo mount -o remount,size=6G /tmp
+```
+
 The actual installation of OCP might fail with an error similar to:
 
 ```
 ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadline exceeded
 ```
 
-Use the fillowing command to access the node to see if there are any problems:
+Use the following command to access the node to see if there are any problems:
 ```
 make ssh
 ```
