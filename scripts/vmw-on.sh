@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Determine if at least one VM is powered on
 
 source scripts/include_all.sh
 

@@ -29,5 +29,5 @@ for name in $CP_NAMES $WORKER_NAMES; do
 	output="$output\n${CLUSTER_NAME}-$name ${num_cpu} $(expr $memory_mb / 1024)GB $power_state"
 done 
 
-[ "$output" ] && echo -e "$header\n$output" | column -t || echo "No resources"
+[ "$output" ] && echo -e "$header\n$output" | column -t ### || echo "No resources"
 

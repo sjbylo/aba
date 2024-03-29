@@ -80,7 +80,7 @@ if [ -s /tmp/.list_of_matching_arp_entries ]; then
 	fi
 fi
 
-echo "After clearing the ARP cache & pinging IPs, no more mac address conflics detected!"
+[ "$IN_ARP_CACHE" ] && echo "After clearing the ARP cache & pinging IPs, no more mac address conflics detected!"
 echo
 
 exit 0
