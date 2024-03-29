@@ -45,7 +45,7 @@ which make || sudo dnf install make -y
 test-cmd "make -C mirror distclean"
 rm -rf sno compact standard 
 
-v=4.15.2
+v=4.14.14
 rm -f aba.conf
 test-cmd -m "Configure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.esxi
 
@@ -62,7 +62,8 @@ test-cmd "make -C test mirror-registry.tar.gz"
 #################################
 # Copy and edit mirror.conf 
 #cp -f templates/mirror.conf mirror/
-sudo dnf install python36 python3-jinja2 -y
+### rpm -q python3 || rpm -q python36 || sudo dnf install python36 python3-jinja2 -y
+rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
 make -C mirror mirror.conf
 ### scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
@@ -92,7 +93,7 @@ ssh steve@registry2.example.com -- "date" || sleep 8
 ### ssh steve@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 #################################
 
-sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
+uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
 
 # If the VM snapshot is reverted, as above, no need to delete old files
 mylog Prepare internal bastion for testing, delete dirs and install make
@@ -178,6 +179,7 @@ test-cmd -r 99 3 -m "Saving ubi images to local disk" make -C mirror save
 ### scp -v mirror/save/mirror_seq2.tar steve@$bastion2 aba/mirror/save
 
 mylog "Simulate an inc tar copy of 'mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: steve@$bastion2"
+mkdir -p ~/tmp
 rm -f ~/tmp/file.tar
 make -s -C mirror inc out=~/tmp/file.tar
 scp ~/tmp/file.tar steve@$bastion2:
@@ -232,3 +234,5 @@ mylog "===> Completed test $0"
 mylog
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak
+
+echo SUCCESS 
