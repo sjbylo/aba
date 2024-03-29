@@ -148,6 +148,7 @@ Sometimes or-mirror runs out of space under /tmp for temporary files.  You can f
 
 ```
 sudo mount -o remount,size=6G /tmp
+# or see: https://access.redhat.com/solutions/2843 
 ```
 
 The actual installation of OCP might fail with an error similar to:
