@@ -3,7 +3,7 @@
 # ... then savd/load images and install clusters. 
 
 ### TEST for clean start 
-sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
+###sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
 ### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
 ### sudo dnf install -y $(cat templates/rpms-internal.txt)
 ### sudo dnf install -y $(cat templates/rpms-external.txt)
@@ -32,7 +32,7 @@ which make || sudo dnf install make -y
 # clean up all, assuming reg. is not running (deleted)
 make distclean 
 
-v=4.15.2
+v=4.14.14
 rm -f aba.conf
 test-cmd -m "Configure aba.conf for version $v and vmware esxi" ./aba --version $v --vmw ~/.vmware.conf.esxi
 
@@ -74,6 +74,7 @@ ssh testy@registry2.example.com whoami
 
 # FIXME needed?
 #### sudo dnf install python36 python3-jinja2 -y
+# rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
 
 # Create and edit mirror.conf 
 make -C mirror mirror.conf
@@ -234,3 +235,4 @@ mylog
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak
 
+echo SUCCESS 

@@ -7,7 +7,7 @@
 # Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses rsync to copy over the aba repo. 
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
-sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
+### sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
 
 ### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
 ### sudo dnf install -y $(cat templates/rpms-internal.txt)
@@ -42,8 +42,7 @@ which make || sudo dnf install make -y
 test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean" 
 rm -rf sno compact standard 
 
-v=4.13.30
-v=4.15.2
+v=4.14.14
 rm -f aba.conf  # Set it up next
 test-cmd -m "Configuring aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.esxi
 
@@ -64,7 +63,8 @@ bastion2=10.0.1.6
 #################################
 # Copy and edit mirror.conf 
 
-sudo dnf install python36 python3-jinja2 -y
+##sudo dnf install python36 python3-jinja2 -y
+rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
 scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Test the internal bastion (registry2.example.com) as mirror"
@@ -258,3 +258,4 @@ rm -rf test/mesh
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak
 
+echo SUCCESS 
