@@ -31,6 +31,7 @@ mirror/sync
 mirror/.synced
 mirror/.uninstalled
 mirror/.*
+mirror/regcreds.bk
 sno*
 *.ssh.conf
 standard*
