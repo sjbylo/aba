@@ -58,44 +58,45 @@ upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images
 	scripts/vmw-upload.sh $(debug) 
 	@touch .autoupload
 
-.autorefresh: .autoupload
-	scripts/vmw-delete.sh $(debug)
-	scripts/vmw-create.sh --start $(debug) 
-	@touch .autorefresh
+#.autorefresh: .autoupload
+	#scripts/vmw-delete.sh $(debug)
+	#scripts/vmw-create.sh --start $(debug) 
+	#@touch .autorefresh
 
 # The following targets are for interactive use only
 .PHONEY: refresh
-refresh: init  vmware.conf ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
-	scripts/vmw-exists.sh && scripts/vmw-delete.sh $(debug) || echo "No VM(s)"
-	scripts/vmw-create.sh --start $(debug) 
+refresh: .autorefresh ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
+.autorefresh: init  vmware.conf 
+	@scripts/vmw-delete.sh $(debug) || true
+	@scripts/vmw-create.sh --start $(debug) 
 
 .PHONEY: create
-create: vmware.conf  ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
+create: vmware.conf iso  ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
 	scripts/vmw-create.sh $(debug)
 
 .PHONEY: ls
 ls: vmware.conf  ## List VMs and their power state.
-	@scripts/vmw-ls.sh
+	@scripts/vmw-ls.sh || echo "No vm(s).  Try 'make create'."
 
 .PHONEY: stop
 stop: vmware.conf ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again!
-	scripts/vmw-stop.sh $(debug)
+	@scripts/vmw-stop.sh $(debug)
 
 .PHONEY: start
 start: vmware.conf ## Start all the VMs.
-	scripts/vmw-start.sh $(debug)
+	@scripts/vmw-start.sh $(debug) || echo "No vm(s) to start"
 
 .PHONEY: poweroff
 poweroff: vmware.conf ## Power off the VMs immediately.  This will stop the cluster abruptly. 
-	scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || echo "VM(s) already powered off"
+	scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || echo "vm(s) already powered off"
 
 .PHONEY: kill
 kill:  vmware.conf ## Kill or power off the VMs immediately.  This will stop the cluster abruptly. 
-	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || echo "No running VM(s)"
+	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONEY: delete
 delete: vmware.conf ## Delete the VMs. This will delete the cluster. 
-	@scripts/vmw-exists.sh && scripts/vmw-delete.sh $(debug) || echo "No VM(s)"
+	@scripts/vmw-delete.sh $(debug) || echo "No vm(s) to delete"
 
 .PHONEY: mon
 mon: ## Monitor the agent-based installation of OpenShift.

@@ -16,6 +16,19 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`
 fi
 
+source <(normalize-aba-conf)  # Fetch the 'ask' param
+
+# If at least one VM exists, then show vms.
+if scripts/vmw-vm-exists.sh; then
+	for name in $CP_NAMES $WORKER_NAMES; do
+		[ "$VC" ] && echo $VC_FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+	done
+
+	ask "Start the above virtual machine(s)" || exit 1
+else
+	exit 1
+fi
+
 for name in $WORKER_NAMES $CP_NAMES ; do
 	govc vm.power -on ${CLUSTER_NAME}-$name
 done

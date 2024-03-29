@@ -102,7 +102,7 @@ hosts:
           ipv4:
             enabled: true
             address:
-              - ip: 10.0.1.91
+              - ip: 10.0.1.84
                 prefix-length: 24
             dhcp: false
       dns-resolver:
@@ -129,7 +129,7 @@ hosts:
           ipv4:
             enabled: true
             address:
-              - ip: 10.0.1.92
+              - ip: 10.0.1.85
                 prefix-length: 24
             dhcp: false
       dns-resolver:

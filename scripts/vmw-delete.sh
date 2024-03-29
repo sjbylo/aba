@@ -1,8 +1,9 @@
 #!/bin/bash 
+# Delete all VMs in the cluster 
 
 source scripts/include_all.sh
 
-scripts/install-govc.sh
+### scripts/install-govc.sh
 
 [ "$1" ] && set -x
 
@@ -21,14 +22,20 @@ fi
 
 source <(normalize-aba-conf)  # Fetch the 'ask' param
 
-if [ "$ask" ]; then
-	echo
-	for name in $CP_NAMES $WORKER_NAMES; do
-		[ "$VC" ] && echo $VC_FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
-	done
-
-	ask "Delete the above virtual machine(s)" || exit 1
+# If at least one VM exists, then show vms.
+if scripts/vmw-vm-exists.sh; then
+	# Only show list of existing vms if ask=1
+	if [ "$ask" ]; then
+		for name in $CP_NAMES $WORKER_NAMES; do
+			[ "$VC" ] && echo $VC_FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+		done
+	fi
+else
+	# No VMs
+	exit 1
 fi
+
+ask "Delete the above virtual machine(s)" || exit 1
 
 for name in $CP_NAMES $WORKER_NAMES; do
 	echo Destroy VM ${CLUSTER_NAME}-$name
