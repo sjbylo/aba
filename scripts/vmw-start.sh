@@ -19,7 +19,7 @@ fi
 source <(normalize-aba-conf)  # Fetch the 'ask' param
 
 # If at least one VM exists, then show vms.
-if scripts/vmw-vm-exists.sh; then
+if scripts/vmw-exists.sh; then
 	for name in $CP_NAMES $WORKER_NAMES; do
 		[ "$VC" ] && echo $VC_FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
 	done
