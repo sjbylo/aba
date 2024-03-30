@@ -202,8 +202,6 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 
 ## Install OpenShift 
 
-For example, to install Single Node OpenShift (SNO), edit the file 'templates/cluster-sno.conf' to match your environment. 
-
 ```
 make sno
 ```
