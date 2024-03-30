@@ -20,13 +20,15 @@ trap 'show_error' ERR
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
-	### grep -q ^export aba.conf && cat aba.conf && return 0
+	# Extract the machine_network and the prefix_length from the CIDR notation
+	# Prepend "export "
 	[ ! -s aba.conf ] && echo "aba.conf missing!" && exit 1
 	cat aba.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
 			sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" | \
 			sed -e "s/ask=1\b/ask=true/g" | \
+			sed -e "s#\(.*\)/#\1\nprefix_length=#g" | \
 			sed -e "s/^/export /g";
 }
 
@@ -35,7 +37,7 @@ normalize-mirror-conf()
 	# Normalize or sanitize the config file
 	# Ensure any ~/ is masked, e.g. \~/
 	# Ensrue reg_ssh_user has a value
-			### sed -e "s/^reg_ssh_user=[ \t]/reg_ssh_user=$(whoami)   /g" | \
+	# Prepend "export "
 	cat mirror.conf | \
 		cut -d"#" -f1 | \
 			sed -E "s/^reg_ssh_user=[[:space:]]+|reg_ssh_user=$/reg_ssh_user=$(whoami)/g" | \
@@ -44,14 +46,12 @@ normalize-mirror-conf()
 			sed -e "s/^tls_verify=1\b/tls_verify=true/g" | \
 			sed -e 's/^reg_root=~/reg_root=\\~/g' | \
 			sed -e "s/^/export /g"
-###	eval "$vars"
-###	[ "$reg_ssh_user" ] && echo "$vars" || echo "$vars" | sed "s/^reg_ssh_user=[ \t]*/reg_ssh_user=$(whoami) /g" 
 }
 
 normalize-cluster-conf()
 {
 	# Normalize or sanitize the config file
-	### grep -q ^export cluster.conf && cat cluster.conf && return 0
+	# Prepend "export "
 	cat cluster.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -61,6 +61,8 @@ normalize-cluster-conf()
 normalize-vmware-conf()
 {
         # Normalize or sanitize the config file
+	# Determine if ESXi or vCenter
+	# Prepend "export "
         vars=$(cat vmware.conf | \
                 cut -d"#" -f1 | \
                 sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -76,14 +78,15 @@ normalize-vmware-conf()
 	fi
 }
 
-normalize-vmware-confOLD()
-{
-	# Normalize or sanitize the config file
-	cat vmware.conf | \
-		cut -d"#" -f1 | \
-		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
-			sed -e "s/^/export /g";
-}
+###normalize-vmware-confOLD()
+#{
+	## Normalize or sanitize the config file
+	## Prepend "export "
+	#cat vmware.conf | \
+		#cut -d"#" -f1 | \
+		#sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+			#sed -e "s/^/export /g";
+#}
 
 install_rpms() {
 	for rpm in $@

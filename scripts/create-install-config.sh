@@ -12,7 +12,7 @@ source <(normalize-mirror-conf)
 
 # Set the rendezvous_ip to the the first master's ip
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
-export rendezvous_ip=$machine_ip_prefix$starting_ip_index
+export rendezvous_ip=$machine_ip_prefix$starting_ip
 
 export pull_secret=
 export ssh_key_pub=

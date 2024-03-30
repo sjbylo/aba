@@ -66,34 +66,21 @@ inc:  ## Create an incremental archive of the repo. The incremental files to inc
 load: ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	make -C mirror load
 
-
 .PHONY: sno
-sno:  ## Install Single Node OpenShift
-	@mkdir sno || ( echo "Directory 'sno' already exists!" && exit 1 )
-	@ln -fs ../$(TEMPLATES)/Makefile sno/Makefile
-	@make -C sno init
-	scripts/create-cluster-conf.sh sno
-	@make -C sno $(target)
+sno:  ## Install a standard 3+2-node OpenShift cluster 
+	@scripts/create-cluster-conf.sh $@
 
 .PHONY: compact
-compact:  ## Install a compact 3-node OpenShift cluster 
-	@mkdir compact || ( echo "Directory 'compact' already exists!" && exit 1 )
-	@ln -fs ../$(TEMPLATES)/Makefile compact/Makefile
-	@make -C compact init
-	@scripts/create-cluster-conf.sh compact
-	@make -C compact $(target)
+compact:  ## Install a standard 3+2-node OpenShift cluster 
+	@scripts/create-cluster-conf.sh $@
 
 .PHONY: standard
 standard:  ## Install a standard 3+2-node OpenShift cluster 
-	@mkdir standard || ( echo "Directory 'standard' already exists!" && exit 1 )
-	@ln -fs ../$(TEMPLATES)/Makefile standard/Makefile
-	@make -C standard init
-	@scripts/create-cluster-conf.sh standard
-	@make -C standard $(target)
+	@scripts/create-cluster-conf.sh $@
 
 .PHONY: cluster
 cluster: ## Install an OpenShift cluster with your choice of topology, e.g. make cluster name=mycluster 
-	scripts/setup-cluster.sh $(name) 
+	@scripts/create-cluster-conf.sh $(name)
 
 .PHONY: rsync
 rsync:  ## Copy (rsync) all required files to internal bastion for testing purposes only.  ip=hostname is required. 
