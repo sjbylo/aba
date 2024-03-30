@@ -113,6 +113,11 @@ install_rpms make jq python3-pyyaml
 ### done
 ### which make >/dev/null 2>&1 || sudo dnf install make jq python3-pyyaml -y >/dev/null 2>&1  # jq needed below
 
+if [ ! "$auto_vmw" ]; then
+	ask "Edit the main aba config file (aba.conf)?"
+	$editor aba.conf
+fi
+
 # # FIXME: Asking about vmware access is not really needed at this point in the workflow, consider removing/moving.
 ############
 # vmware.conf

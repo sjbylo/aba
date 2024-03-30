@@ -8,7 +8,14 @@ source <(normalize-aba-conf)   # Fetch the domain name
 
 mkdir $1   # If dir exists, exit
 ln -fs ../templates/Makefile $1/Makefile
-scripts/j2 templates/cluster-standard.conf > $1/cluster.conf
+export cluster_name=standard
+export starting_ip=$standard_starting_ip
+# export prefix_leangth is from aba.conf
+export mac_prefix=00:50:56:0x:xx:
+export num_masters=3
+export num_workers=2
+####scripts/j2 templates/cluster-standard.conf > $1/cluster.conf
+scripts/j2 templates/cluster.conf > $1/cluster.conf
 echo -n "Edit the config file $1/cluster.conf, hit RETURN "
 read yn
 $editor $1/cluster.conf

@@ -9,7 +9,7 @@ source <(normalize-mirror-conf)
 
 # Set the rendezvous_ip to the the first master's ip
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
-export rendezvous_ip=$machine_ip_prefix$starting_ip_index
+export rendezvous_ip=$machine_ip_prefix$starting_ip
 
 SNO=
 [ $num_masters -eq 1 -a $num_workers -eq 0 ] && SNO=1 && echo "Configuration is for Single Node Openshift (SNO) ..."

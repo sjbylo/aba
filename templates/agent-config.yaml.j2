@@ -23,7 +23,7 @@ hosts:
           ipv4:
             enabled: true
             address:
-              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip_index|int - 1 ) }}
+              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int - 1 ) }}
                 prefix-length: {{ prefix_length }}
             dhcp: false
       dns-resolver:
@@ -51,7 +51,7 @@ hosts:
           ipv4:
             enabled: true
             address:
-              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip_index|int + 2) }}
+              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int + 2) }}
                 prefix-length: {{ prefix_length }}
             dhcp: false
       dns-resolver:
