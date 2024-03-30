@@ -51,15 +51,15 @@ tidy:
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. make tar out=/dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use out=- to send tar output to stdout.
-	@scripts/backup.sh $(out)
+	scripts/backup.sh $(out)
 
 .PHONY: tarrepo
 tarrepo:  ## Archive the full repo *excluding* the mirror/mirror_seq*tar files. Works in the same way as 'make tar'.
-	@scripts/backup.sh --repo $(out)
+	scripts/backup.sh --repo $(out)
 
 .PHONY: inc
 inc:  ## Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'make tar'.
-	@scripts/backup.sh --inc $(out)
+	scripts/backup.sh --inc $(out)
 
 ## .PHONY: increpo
 ## increpo:  ## Create an incremental archive of the repo, e.g. make inc out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-backup.tar. Can also use out=- to send tar data to stdout.  The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup
@@ -70,24 +70,35 @@ load: ## Load the saved images into a registry on the internal bastion (as defin
 	make -C mirror load
 
 .PHONY: sno
-sno: aba.conf  ## Install a standard 3+2-node OpenShift cluster 
-	@scripts/create-cluster-conf.sh $@
+sno: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make sno target=iso' to make that target.
+	scripts/setup-cluster.sh $@ $@ $(target) || exit 0
 
 .PHONY: compact
-compact: aba.conf  ## Install a standard 3+2-node OpenShift cluster 
-	@scripts/create-cluster-conf.sh $@
+compact: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make compact target=iso' to make that target.
+	@scripts/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: standard
-standard: aba.conf  ## Install a standard 3+2-node OpenShift cluster 
-	@scripts/create-cluster-conf.sh $@
+standard: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make standard target=iso' to make that target.
+	@scripts/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: cluster
 cluster:  aba.conf  ## Install an OpenShift cluster with your choice of topology, e.g. make cluster name=mycluster 
-	@scripts/create-cluster-conf.sh $(name)
+	@#scripts/create-cluster-conf.sh $(name)
+	scripts/setup-cluster.sh $(name) $(type)
 
 .PHONY: rsync
 rsync:  ## Copy (rsync) all required files to internal bastion for testing purposes only.  ip=hostname is required. 
 	scripts/test-airgapped.sh $(ip)
+
+.PHONY: ask
+ask:
+	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=true/g" aba.conf
+	@echo ask set to true in aba.conf
+
+.PHONY: noask
+noask:
+	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf
+	@echo ask set to false in aba.conf
 
 .PHONY: clean
 clean: ## Clean up 

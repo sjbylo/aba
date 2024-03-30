@@ -6,18 +6,32 @@ source scripts/include_all.sh
 
 source <(normalize-aba-conf)   # Fetch the domain name
 
-mkdir $1   # If dir exists, exit
-ln -fs ../templates/Makefile $1/Makefile
-export cluster_name=standard
-export starting_ip=$standard_starting_ip
-# export prefix_leangth is from aba.conf
-export mac_prefix=00:50:56:0x:xx:
-export num_masters=3
-export num_workers=2
-####scripts/j2 templates/cluster-standard.conf > $1/cluster.conf
-scripts/j2 templates/cluster.conf > $1/cluster.conf
-echo -n "Edit the config file $1/cluster.conf, hit RETURN "
-read yn
-$editor $1/cluster.conf
-make -C $1
+name=standard
+type=standard
+[ "$1" ] && name=$1 && shift
+[ "$1" ] && type=$1 && shift
+[ "$1" ] && target=$1
+
+if [ ! -d $name ]; then
+	mkdir $name
+	cd $name
+	ln -fs ../templates/Makefile 
+	make init
+else
+	cd $name 
+	make clean init
+fi
+
+pwd
+#make cluster.conf name=$name
+
+echo "Creating '$name/cluster.conf' file for cluster type [$type]."
+scripts/create-cluster-conf.sh $name $type
+
+ask "Trigger the cluster with 'make $target'?" || exit 1
+make $target
+
+#echo 
+#echo "Now, cd into the directory '$name' and run 'make'.  Example: cd $name && make"
+#echo
 

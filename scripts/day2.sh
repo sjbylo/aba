@@ -1,4 +1,10 @@
 #!/bin/bash -e
+# Run some day 2 changes
+# Set up cluster trust CA with the internal registry's Root CA
+# Configure OperatorHub using the internal mirror registry. 
+# Apply the imageContentSourcePolicy resource files that were created by oc-mirror
+# For disconnected environments, disable online public catalog sources
+# Install any CatalogSources
 
 source scripts/include_all.sh
 
@@ -17,6 +23,8 @@ echo "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certif
 echo "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image'."
 echo "Adding registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331 for more."
 echo "This CA problem might affect other applications in the cluster."
+echo
+
 if [ -s regcreds/rootCA.pem ]; then
 	echo "Adding the trust CA of the registry ($reg_host) ..."
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
@@ -50,6 +58,7 @@ echo "############################"
 echo
 echo Applying the imageContentSourcePolicy resource files that were created by oc-mirror
 echo
+
 # If one should clash with an existing ICSP resource, change its name by incrementing the value (-x) and try to apply it again.
 # See this issue: https://github.com/openshift/oc-mirror/issues/597
 file_list=$(find mirror/s*/oc-* -type f | grep /imageContentSourcePolicy.yaml$)
@@ -87,6 +96,7 @@ echo "############################"
 echo
 echo For disconnected environments, disable online public catalog sources
 echo
+
 ret=$(curl -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/ || true)
 if [ "$ret" != "200" ]; then
 	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
