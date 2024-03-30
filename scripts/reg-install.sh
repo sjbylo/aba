@@ -84,7 +84,7 @@ END
 
 # Install Quay mirror on remote host if ssh key defined 
 if [ "$reg_ssh_key" ]; then
-	ask "Install Quay mirror registry appliance onto $reg_host?" || exit 1
+	ask "Install Quay mirror registry appliance onto remote host=$reg_host?" || exit 1
 
 	echo "Installing Quay registry on to $reg_host ..."
 
@@ -189,7 +189,7 @@ if [ "$reg_ssh_key" ]; then
 
 	scripts/create-containers-auth.sh
 else
-	ask "Install Quay mirror registry appliance onto localhost `hostname`?" || exit 1
+	ask "Install Quay mirror registry appliance onto local host=`hostname`?" || exit 1
 
 	echo "Installing Quay registry on localhost ..."
 

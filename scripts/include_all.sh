@@ -22,7 +22,7 @@ normalize-aba-conf() {
 	# Normalize or sanitize the config file
 	# Extract the machine_network and the prefix_length from the CIDR notation
 	# Prepend "export "
-	[ ! -s aba.conf ] && echo "aba.conf missing!" && exit 1
+	[ ! -s aba.conf ] && echo "aba/aba.conf missing! run: cd aba && ./aba" && exit 1
 	cat aba.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
