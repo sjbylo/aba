@@ -131,7 +131,7 @@ do
 
         rm -rf $cname
 
-        test-cmd -m "Creating cluster.conf for $cname cluster" "make $cname target=cluster.conf"
+	test-cmd -m "Creating cluster.conf for $cname cluster wth 'make $cname target=cluster.conf'" "make $cname target=cluster.conf"
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # make sure all mac addr are the same, not random
         test-cmd -m "Creating install-config.yaml for $cname cluster" "make -C $cname install-config.yaml"
         test-cmd -m "Creating agent-config.yaml for $cname cluster" "make -C $cname agent-config.yaml"
@@ -165,7 +165,7 @@ done
 
 ######################
 rm -rf sno
-test-cmd -m "Installing SNO cluster with target option [$targetiso]" make sno $targetiso
+test-cmd -m "Installing SNO cluster with 'make sno $targetiso'" make sno $targetiso
 ### test-cmd -m "Installing SNO cluster" make -C sno 
 test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || true
 
@@ -174,7 +174,7 @@ test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || tru
 test-cmd -r 99 3 -m "Saving and then loading cluster images into mirror" "make -C mirror save load" 
 
 rm -rf sno
-test-cmd -m "Installing sno cluster with target option [$targetiso]" make sno $targetiso
+test-cmd -m "Installing sno cluster with 'make sno $targetiso'" make sno $targetiso
 test-cmd -m "Delete cluster (if needed)" make -C sno delete 
 test-cmd -m "Uninstall mirror" make -C mirror uninstall 
 
@@ -217,7 +217,7 @@ test-cmd -m "Installing sno cluster" make sno
 test-cmd -r 99 3 -m "Saving and loading images into mirror" make -C mirror save load 
 
 rm -rf sno
-test-cmd -m "Installing sno cluster" make sno $targetiso
+test-cmd -m "Installing sno cluster with 'make sno $targetiso'" make sno $targetiso
 
 test-cmd -m "Deleting cluster" make -C sno delete 
 
@@ -225,7 +225,7 @@ mylog Removing vmware config file
 
 > vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
-test-cmd -m "Creating standard iso file" make standard target=iso # Since we're testing bare-metal, only create iso
+test-cmd -m "Creating standard iso file with 'make standard target=iso'" make standard target=iso # Since we're testing bare-metal, only create iso
 
 test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
 
