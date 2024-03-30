@@ -122,7 +122,7 @@ mylog "Running 'make sno' on internal bastion"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Tidying up internal bastion" "rm -rf aba/sno" 
 
 [ "$targetiso" ] && mylog Creating the cluster iso only 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno/iso $targetiso" "make -C aba sno $targetiso" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno/iso with 'make -C aba sno $targetiso'" "make -C aba sno $targetiso" 
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Setting master memory to 24" "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
 
@@ -242,10 +242,23 @@ test-cmd -m "Pausing for 30s to let OCP to settle" sleep 30  # And wait for http
 
 test-cmd -h $reg_ssh_user@$bastion2 -m "Deploying service mesh with test app" "aba/test/deploy-mesh.sh"
 
-sleep 30  # Slep in case need to check the cluster
+sleep 30  # Sleep in case need to check the cluster
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting sno cluster" "make -C aba/sno delete" 
 
+rm -rf test/mesh 
+
+######################
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting cluster dirs, aba/sno aba/compact aba/standard" "rm -rf  aba/sno aba/compact aba/standard" 
+
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating standard cluster" "make -C aba standard" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting standard cluster" "make -C aba/standard delete" 
+
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating compact cluster" "make -C aba compact" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting compact cluster" "make -C aba/compact delete" 
+
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating sno cluster with 'make -C aba cluster name=sno type=sno'" "make -C aba cluster name=sno type=sno" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting sno cluster" "make -C aba/sno delete" 
 ######################
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Uninstalling mirror registry on internal bastion" "make -C aba/mirror uninstall"
@@ -253,8 +266,6 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Uninstalling mirror registry on interna
 mylog
 mylog "===> Completed test $0"
 mylog
-
-rm -rf test/mesh 
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak
 
