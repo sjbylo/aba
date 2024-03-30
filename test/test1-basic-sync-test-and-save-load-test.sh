@@ -14,7 +14,7 @@ cd ..
 rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
-source scripts/include_all.sh && trap - ERR # We don't want this trap during testing
+source scripts/include_all.sh && trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 source test/include.sh
 
 [ ! "$target_full" ] && targetiso=target=iso   # Default is to generate 'iso' only   # Default is to only create iso

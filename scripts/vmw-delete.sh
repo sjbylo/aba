@@ -23,7 +23,7 @@ fi
 source <(normalize-aba-conf)  # Fetch the 'ask' param
 
 # If at least one VM exists, then show vms.
-if scripts/vmw-vm-exists.sh; then
+if scripts/vmw-exists.sh; then
 	# Only show list of existing vms if ask=1
 	if [ "$ask" ]; then
 		for name in $CP_NAMES $WORKER_NAMES; do

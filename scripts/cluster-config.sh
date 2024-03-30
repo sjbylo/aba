@@ -3,6 +3,17 @@
 
 source scripts/include_all.sh
 
+unset CLUSTER_NAME
+unset BASE_DOMAIN
+unset RENDEZVOUSIP
+unset CP_REPLICAS
+unset CP_NAMES
+unset CP_MAC_ADDRESSES
+unset WORKER_REPLICAS
+
+unset WORKER_NAMES
+unset WKR_MAC_ADDRESSES
+
 #[ ! "$1" ] && echo "Usage: `basename $0` <directory>" && exit 1
 
 yaml2json()
