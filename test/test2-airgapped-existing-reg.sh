@@ -150,7 +150,7 @@ test-cmd -h steve@$bastion2 -m  "Deleting cluster (if it exists)" "make -C aba/c
 
 ssh steve@$bastion2 "rm -rf aba/sno" 
 
-test-cmd -h steve@$bastion2 -m  "Install sno cluster with targetiso=[$targetiso]" "make -C aba sno $targetiso" 
+test-cmd -h steve@$bastion2 -m  "Install sno cluster with 'make -C aba sno $targetiso'" "make -C aba sno $targetiso" 
 
 
 ######################

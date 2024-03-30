@@ -158,7 +158,7 @@ do
                 exit 1
         fi
 
-        test-cmd -m "Generate iso file for $cname" "make -C $cname iso"
+        test-cmd -m "Generate iso file for cluster type '$cname'" "make -C $cname iso"
 done
 
 ######################
