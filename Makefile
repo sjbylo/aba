@@ -12,6 +12,9 @@ out    ?= /tmp
 aba:
 	./aba
 
+aba.conf:
+	./aba
+
 ##@ Help-related tasks
 .PHONY: help
 help: ## Help
@@ -67,19 +70,19 @@ load: ## Load the saved images into a registry on the internal bastion (as defin
 	make -C mirror load
 
 .PHONY: sno
-sno:  ## Install a standard 3+2-node OpenShift cluster 
+sno: aba.conf  ## Install a standard 3+2-node OpenShift cluster 
 	@scripts/create-cluster-conf.sh $@
 
 .PHONY: compact
-compact:  ## Install a standard 3+2-node OpenShift cluster 
+compact: aba.conf  ## Install a standard 3+2-node OpenShift cluster 
 	@scripts/create-cluster-conf.sh $@
 
 .PHONY: standard
-standard:  ## Install a standard 3+2-node OpenShift cluster 
+standard: aba.conf  ## Install a standard 3+2-node OpenShift cluster 
 	@scripts/create-cluster-conf.sh $@
 
 .PHONY: cluster
-cluster: ## Install an OpenShift cluster with your choice of topology, e.g. make cluster name=mycluster 
+cluster:  aba.conf  ## Install an OpenShift cluster with your choice of topology, e.g. make cluster name=mycluster 
 	@scripts/create-cluster-conf.sh $(name)
 
 .PHONY: rsync

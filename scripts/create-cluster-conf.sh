@@ -34,8 +34,7 @@ if [ "$1" ]; then
 		export mac_prefix=00:50:56:1x:xx:
 		export num_masters=3
 		export num_workers=0
-	# else, if 'standard' or 'name=mycluster'
-	else
+	else # 'name=mycluster'
 		export cluster_name=$1
 		export api_vip=$standard_api_vip
 		export ingress_vip=$standard_ingress_vip
@@ -50,20 +49,19 @@ if [ "$1" ]; then
 	##[ "$1" = "sno" ] && sed -i -e "/^api_vip=.*$/d" -e "/^ingress_vip=.*$/d" cluster.conf
 	[ "$1" = "sno" ] && sed -i -e "s/^api_vip=/#api_vip=/g" -e "s/^ingress_vip=/#ingress_vip=/g" cluster.conf
 
-	$editor cluster.conf
-#else
-	#export cluster_name=$1
-##	###export prefix_length is from aba.conf
-	#export api_vip=$standard_api_vip
-	#export ingress_vip=$standard_ingress_vip
-	#export starting_ip=$standard_starting_ip
-	#export mac_prefix=00:50:56:0x:xx:
-	#export num_masters=3
-	#export num_workers=2
-#
-	#scripts/j2 templates/cluster.conf > cluster.conf 
-	#$editor cluster.conf
+	##$editor cluster.conf
+	[ "$ask" ] && $editor cluster.conf
+	cd $1 && make  ## FIXME: should we do this? or ask user to do this manually (as below)? e.g. cd <dir> && make
+	exit 0
+else
+	echo "Usage: $(basename $0) <cluster name>"
+
+	exit 1
 fi
+
+echo 
+echo "Now, cd into the directory '$1' and run 'make'.  Example: cd $1 && make"
+echo
 
 exit 0
 
