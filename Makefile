@@ -83,7 +83,6 @@ standard: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make
 
 .PHONY: cluster
 cluster:  aba.conf  ## Install an OpenShift cluster with your choice of topology, e.g. make cluster name=mycluster 
-	@#scripts/create-cluster-conf.sh $(name)
 	scripts/setup-cluster.sh $(name) $(type)
 
 .PHONY: rsync

@@ -29,14 +29,6 @@ do
 	fi
 done
 
-if [ "$IN_ARP_CACHE" ]; then
-	echo
-	echo "Warning: Mac address conflics may cause the OCP installation to fail!" && \
-	echo "         Consider changing 'mac_prefix' in cluster.conf and try again."
-	echo 
-	sleep 2
-fi
-
 # Checking ip and mac addresses *currently* in use by clearing the cache ...
 > /tmp/.mac_list_filtered
 if [ -s /tmp/.list_of_matching_arp_entries ]; then
@@ -80,7 +72,12 @@ if [ -s /tmp/.list_of_matching_arp_entries ]; then
 	fi
 fi
 
-[ "$IN_ARP_CACHE" ] && echo "After clearing the ARP cache & pinging IPs, no more mac address conflics detected!"
+if [ "$IN_ARP_CACHE" ]; then
+	echo "Warning: Mac address conflics may cause the OCP installation to fail!" 
+	echo "         Consider changing 'mac_prefix' in cluster.conf and try again."
+	echo "         After clearing the ARP cache & pinging IPs, no more mac address conflics detected!"
+fi
+
 echo
 
 exit 0
