@@ -1,34 +1,32 @@
 ----------------------------------------------------------------------------------------------------------------
-Now, follow steps 1, 2 and 3:
+Now, follow steps 1 and 2:
 
 ================================================================================================================
-1) Edit the 'aba.conf' file which contains settings you must change, e.g. domain name, private net address etc.
+1) Follow one of the two options (1A or 1B) to configure the registry and download the needed images/software.
 
-================================================================================================================
-2) Follow one of the two options (2A or 2B) to configure the registry and download the needed images/software.
-
-2A) For a 'connected' (or partially connected) installation:
+1A) For a 'connected' (or partially connected) installation:
 
 make sync                     # Run on a 'connected bastion' (or Fedora laptop), to load the registry directly
-			      # from the Internet.  This will also configure the mirror registry, if needed. 
+			      # from the Internet.  This will also install/configure the mirror registry.
 
-2B) For a disconnected (or air-gapped) installation:
+2B) For a fully disconnected (or air-gapped) installation:
 
 make save                     # First, run on a 'connected bastion' (or Fedora laptop), to 'save' the images
 			      # from the Internet to local disk. 
 make inc out=/path/to/drive   # Archive the *whole repo* to a thumb drive and then extract the tarball onto the
-			      # internal disconnected bastion. 
+			      # internal disconnected bastion. If the tarball cannot be written directly to a
+			      # thumbdrive see the README.md for help.
 make load                     # On the 'disconnected bastion' (RHEL), load the saved images into a registry.
-			      # This will also configure the mirror registry, if needed.
+			      # This will also install/configure the mirror registry, if needed.
 
 See the README file for more information.
 
 ================================================================================================================
-3) After the mirror registry is working and loaded, run one of the following to install OpenShift: 
+2) After the mirror registry is working and loaded, run one of the following to install OpenShift: 
 ----------------------------------------------------------------------------------------------------------------
 
-make sno                      # Be sure to edit the file 'templates/cluster-sno.conf' to match your environment
-make compact                  # Be sure to edit the file 'templates/cluster-compact.conf' to match your env.
-make standard                 # Be sure to edit the file 'templates/cluster-standard.conf' to match your env.
-make cluster name=mycluster   # Configure a standard cluster & allow you to edit the 'cluster.conf' file.
+make sno
+make compact
+make standard
+make cluster name=mycluster [type=sno|compact|standard] 
 
