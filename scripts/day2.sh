@@ -34,12 +34,14 @@ if [ -s regcreds/rootCA.pem ]; then
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
 	echo "Running: oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
-	#try_cmd 5 5 10 oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'
 	try_cmd 5 5 10 "oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
 
 	# The above workaround describes re-creating the is/oauth-proxy 
 	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
 		try_cmd 5 5 10 oc delete imagestream -n openshift oauth-proxy
+
+		echo Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 1-2 mins.
+
 		sleep 30
 
 		# Assume once it's re-created then it's working

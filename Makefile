@@ -90,12 +90,12 @@ rsync:  ## Copy (rsync) all required files to internal bastion for testing purpo
 	scripts/test-airgapped.sh $(ip)
 
 .PHONY: ask
-ask:
+ask: ## Set 'ask' in aba.conf to 'true'
 	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=true/g" aba.conf
 	@echo ask set to true in aba.conf
 
 .PHONY: noask
-noask:
+noask:  ## Set 'ask' in aba.conf to 'false'
 	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf
 	@echo ask set to false in aba.conf
 
