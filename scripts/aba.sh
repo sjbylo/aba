@@ -62,7 +62,7 @@ if [ ! "$auto_ver" ]; then
 	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
 
 	# If openshift-install is already installed, then offer that version also
-	[ "$cur_ver" ] && or_ret="or currently installed version " && default_ver=$cur_ver
+	[ "$cur_ver" ] && or_ret="or [current version] " && default_ver=$cur_ver
 
 	[ "$TERM" ] && tput el1
 	[ "$TERM" ] && tput cr
