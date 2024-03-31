@@ -5,7 +5,7 @@ SCRIPTS   = ../scripts
 debug    ?= 		# Set debug=1 for some commands 
 
 # The default target will build a cluster from scratch 
-all: iso .autopoweroff .autoupload .autorefresh .finished show
+all: iso .autopoweroff .autoupload .autorefresh .finished login
 
 ##@ Help-related tasks
 .PHONY: help
@@ -115,8 +115,8 @@ mon:  ## Monitor the agent-based installation of OpenShift.
 	@touch .finished
 
 .PHONY: mon
-show: .finished 
-	@scripts/show-cluster-creds.sh
+login: .finished 
+	@scripts/show-cluster-login.sh
 
 .PHONY: getco
 getco: ## Run 'oc get co' command on the cluster.
