@@ -118,6 +118,8 @@ The usual things you need to install OpenShift using the Agent-based installer.
    - run the ./aba command to initialize the installation process (see 'Getting Started' below).
 
 
+![Air-gapped data transfer](images/air-gapped.jpg "Air-gapped data transfer")
+
 ## Getting Started with aba
 
 To set the version of OpenShift to install and, if needed, to download identical versions of oc, oc-mirror and openshift-install, run:
