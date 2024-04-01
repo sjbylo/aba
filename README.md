@@ -277,17 +277,22 @@ make iso
 
 If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme. 
 
-Other examples of commands, when working with VMware/ESXi:
+Other examples of commands (make targets), when working with VMware/ESXi:
 
 cd mycluster     # change to the directory with the agent-based install files, using 'mycluster' as an example.
 
 | Target | Description |
 | :----- | :---------- |
 | make ls          | Show list of VMs and their state. |
-| make stop        | Shut down the guest OS (CoreOS) of all VMs in the 'mycluster' cluster. |
-| make start       | Power on all VMs in the 'mycluster' cluster.  |
-| make refresh     | Delete the VMs and re-create them causing the cluster to be re-installed. |
-| make delete      | Delete all the VMs in the 'mycluster' cluster.  |
+| make start       | Power on all VMs |
+| make stop        | Gracefully shut down all VMs |
+| make powerdown   | Power down all VMs immediatelly |
+| make kill        | Same as 'powerdown' |
+| make delete      | Delete all VMs  |
+| make refresh     | Delete & re-create the VMs causing the cluster to be re-installed. |
+| make delete      | Delete all the VMs  |
+| make login       | Display the 'oc login' command for the cluster.  Use: . <(make login)  |
+| make shell       | Display the command to access the cluster using the kubeconfig file.  Use: . <(make shell) |
 | make help        | Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/<mycluster>/Makefile)  |
 
 
