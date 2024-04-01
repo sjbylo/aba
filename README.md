@@ -316,6 +316,12 @@ make help        # Help is available in all Makefiles (in aba/Makefile  aba/mirr
 - *aba/mirror/mirror.conf* describes your private/internal mirror registry (either existing or to-be-installed) 
 - *aba/`cluster name`/cluster.conf* describes how to build an OpenShift cluster, e.g. number of master and worker nodes, ingress IPs etc
 
+| Config file | Description |
+| ----------- | ----------- |
+| *aba/aba.conf* | is the 'global' config file, used to set the target version of OpenShift, your domain name, private network address, DNS IP, choice of editor etc |
+| *aba/mirror/mirror.conf* | describes your private/internal mirror registry (either existing or to-be-installed)  |
+| *aba/`cluster name`/cluster.conf* | describes how to build an OpenShift cluster, e.g. number of master and worker nodes, ingress IPs etc |
+
 ## Customizing agent-config.yaml and/or openshift-install.yaml files
 
 - Once a cluster config directory has been created (e.g. 'compact') and Agent-based configuration has been created, some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed. 'make' can be run again to re-create the ISO and the VMs etc (if required).  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.  
