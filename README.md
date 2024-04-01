@@ -281,15 +281,15 @@ Other examples of commands, when working with VMware/ESXi:
 ```
 cd mycluster     # change to the directory with the agent-based install files, using 'mycluster' as an example.
 
-make refresh     # Delete the VMs and re-create them causing the cluster to be re-installed.
+make ls          # Show list of VMs and their state.
 
 make stop        # Shut down the guest OS (CoreOS) of all VMs in the 'mycluster' cluster.
 
 make start       # Power on all VMs in the 'mycluster' cluster. 
 
-make delete      # Delete all the VMs in the 'mycluster' cluster. 
+make refresh     # Delete the VMs and re-create them causing the cluster to be re-installed.
 
-make ls          # Show list of VMs and their state.
+make delete      # Delete all the VMs in the 'mycluster' cluster. 
 
 make help        # Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/<mycluster>/Makefile) 
 ```
@@ -312,7 +312,7 @@ make help        # Help is available in all Makefiles (in aba/Makefile  aba/mirr
 
 ## Configuration files
 
-- aba/aba.conf is the 'global' config file, used to set the target version of OpenShift, your domain name, private network address, DNS IP, choice of editor etc
+- *aba/aba.conf* is the 'global' config file, used to set the target version of OpenShift, your domain name, private network address, DNS IP, choice of editor etc
 - aba/mirror/mirror.conf describes your private/internal mirror registry (either existing or to-be-installed) 
 - aba/`cluster name`/cluster.conf describes how to build an OpenShift cluster, e.g. number of master and worker nodes, ingress IPs etc
 
