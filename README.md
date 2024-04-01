@@ -12,7 +12,7 @@ Aba automatically completes the following:
 1. Allows for adding more images (e.g. Operators) as a day 1 or 2 operation.
 1. Configures the OperatorHub integration with the internal container registry. 
 1. Executes several workarounds for some typical issues with disconnected environments.
-1. Enables the integration with vSphere as a day 2 operation (day 1 comming with OCP v4.15+)
+1. Enables the integration with vSphere as a day 2 operation (day 1 coming with OCP v4.15+)
 
 Use aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail. 
 
@@ -94,7 +94,7 @@ The usual things you need to install OpenShift using the Agent-based installer.
       - Note that only RHEL 9 is supported for OCP v4.15+ as the latest version of oc-mirror only works on RHEL 9.
 - **Git repo**
    - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to your *home directory* on the connected bastion (e.g. on a Fedora/RHEL laptop). 
-   - Ensure sudo is configured. Passwordless sudo is preferable. 
+   - Ensure sudo is configured. Password-less sudo is preferable. 
 - **Pull Secret**
    - To install OpenShift, a secret is needed to allow access to and pull images from, Red Hat's registry.  Copy your pull secret in JSON format to the file '~/.pull-secret.json' (in your $HOME directory).
       - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
@@ -158,7 +158,7 @@ make save
 
 - This will pull the images from the Internet and save them to the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators)!
 
-Then, using 'make inc', copy the whole aba/ directory and sub-directories to your internal bastion host in your private subnet via a portable storage device, e.g. a thumb drive. 
+Then, using 'make inc' (incremental backup), copy the whole aba/ repo (including images, CLIs & RPMs) to your internal bastion (in your private network) via a portable storage device, e.g. a thumb drive. 
 
 Example:
 
@@ -180,14 +180,14 @@ tar xvf aba.tgz                                   # Extract the tar file. Ensure
 cd aba             
 ```
 
-For such cases where it is not possible to use a portable storage device, e.g. due to restrictions, an alternative command can be used.
+For such cases where it is not possible to write directly to a portable storage device, e.g. due to restrictions, an alternative command can be used.
 
 Example:
 
 ```
 make tarrepo out=/dev/path/to/drive/aba.tgz       # Write archive 'aba.tgz' to the device mounted at /dev/path/to/drive, EXCEPT for the 'seq#' tar files under save/
 ```
-- The 'seq#' tar files under the save directory and the repo tarball 'aba.tgz' can be copied seperatly to a non-portable storage device, e.g. S3. 
+- The 'seq#' tar files in the save/ directory and the repo tarball 'aba.tgz' can be copied separately to a non-portable storage device, e.g. S3 or other.
 
 
 Load or download the tar files from storage to the internal mirror registry.
