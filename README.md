@@ -279,21 +279,16 @@ If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) rea
 
 Other examples of commands, when working with VMware/ESXi:
 
-```
 cd mycluster     # change to the directory with the agent-based install files, using 'mycluster' as an example.
 
-make ls          # Show list of VMs and their state.
-
-make stop        # Shut down the guest OS (CoreOS) of all VMs in the 'mycluster' cluster.
-
-make start       # Power on all VMs in the 'mycluster' cluster. 
-
-make refresh     # Delete the VMs and re-create them causing the cluster to be re-installed.
-
-make delete      # Delete all the VMs in the 'mycluster' cluster. 
-
-make help        # Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/<mycluster>/Makefile) 
-```
+| Target | |
+| :---- | --- |
+| make ls          | Show list of VMs and their state. |
+| make stop        | Shut down the guest OS (CoreOS) of all VMs in the 'mycluster' cluster. |
+| make start       | Power on all VMs in the 'mycluster' cluster.  |
+| make refresh     | Delete the VMs and re-create them causing the cluster to be re-installed. |
+| make delete      | Delete all the VMs in the 'mycluster' cluster.  |
+| make help        | Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/<mycluster>/Makefile)  |
 
 
 ## Features that are not implemented yet
