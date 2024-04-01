@@ -378,8 +378,7 @@ scripts/monitor-install.sh
 - Govc is used to create and manage VMs on ESXi or vSphere.
   - https://github.com/vmware/govmomi/tree/main/govc
 
-Be sure to set the correct (govc) values to access vCenter in the vmware.conf file.  
-Note that ESXi will also work by changing the folder path (see the comments in the vmware.conf file).
+Be sure to set the correct (govc) values to access vCenter in the vmware.conf file.  Note that ESXi will also work.
 
 Why 'make' was chosen to build Aba?
 
