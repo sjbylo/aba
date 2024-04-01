@@ -10,45 +10,46 @@ Aba automatically completes the following:
 1. Optionally creates the required VMs in ESXi or vSphere.
 1. Monitors the installation progress. 
 1. Allows for adding more images (e.g. Operators) as a day 1 or 2 operation.
-1. Helps to configure the OperatorHub using the internal registry. 
-1. Helps by executing several workarounds for some typical issues with disconnected environments.
+1. Configures the OperatorHub integration with the internal container registry. 
+1. Executes several workarounds for some typical issues with disconnected environments.
 1. Enables the integration with vSphere as a day 2 operation (day 1 comming with OCP v4.15+)
 
 Use aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail. 
 
-For the impatient: clone this repo, install and run 'make'.  You will be guided through the process. 
+For the very impatient: clone this repo onto a connected RHEL VM, install and run 'make'.  You will be guided through the process. 
 
 ## Quick Guide
 
-For those who are impatient...
+For those who are less impatient...
 
 ```
 git clone https://github.com/sjbylo/aba.git
 cd aba
 ./aba
 ```
-- Clone the repo, install 'make' and configure high-level settings, e.g. target OCP version, your domain name etc.
-- Decide if you want to use VMware or ESXi or not. 
+- Clone the repo, install 'make' and configure high-level settings, e.g. target OCP version, your domain name, machine network CIDR etc.
+- Decide if you want to use VMware/ESXi or not. 
 
 ```
 make install 
 ```
-- Configure and connect to your existing container registry or install a new quay appliance registry.
+- Configure and connect to your existing container registry or install a fresh quay appliance registry.
 
 ```
 make sync
 ```
-- Copy the required images directly to the mirror registry (for connected environments).
-- Fully air-gapped, disconnected environments are also supported. 
+- Copy the required images directly to the mirror registry (for partially disconnected environments).
+- Fully disconnected (air-gapped) environments are also supported with 'make save' (see below).
 
 ```
 make sno
 ```
-- Create the Agent-based config files, generate the Agent-based iso file, create and boot the VMs.
-- Install Single Node OpenShift 
+- Create a directory 'sno'. Create the Agent-based config files, generate the Agent-based iso file, create and boot the VMs.
+- Install Single Node OpenShift.  Others are 'make compact', 'make standard' or 'make cluster name=mycluster'
 
 ```
-make mon
+cd sno
+make
 ```
 - Monitor the installation progress.
 
@@ -58,6 +59,7 @@ make help
 - See what other helper commands are available. 
 
 Read more for all the details.
+
 
 ## Prerequisites
 
@@ -69,29 +71,30 @@ The usual things you need to install OpenShift using the Agent-based installer.
    - OpenShift requires that NTP be available. Installation is possible without an NTP server. However, asynchronous server clocks will cause errors, which NTP server prevents.
 - **Private subnet** (optional)
 - **One or two Bastion hosts**
-  - Connected mode: A RHEL VM with connectivity to both the external and the internal network. 
-  - Disconnected mode: A RHEL VM in the private network and another RHEL VM (or a Fedora laptop) in the internet facing network. 
+  - Disconnected mode: A RHEL VM with connectivity to both the external (internet facing) and the internal networks.
+  - Fully disconnected mode (air-gapped): A RHEL VM in the private network and another RHEL VM (or a Fedora/RHEL laptop) in the internet facing network. 
   - A user account with sudo configured (i.e. with root access). 
-  - 40GB or more of disk space.  Much more space is required if Operators will be installed (400+ GB).
-  - Internet access from your connected bastion (or laptop) to download the container images and RPMs. 
-     - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift.   See 'Connected mode' below.
-     - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported.  For this, 2 bastions are required.  See 'Disconnected mode' below.
+  - 30 GB or more of disk space for the base OCP platform.  Much more space is required if Operators will be installed (400+ GB).
+  - Internet access from your connected bastion (or laptop) to download the container images, CLI tools and RPMs. 
+     - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift.   See 'Disconnected mode' below.
+     - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported.  For this, two bastions (connected & internal) are required .  See 'Fully disconnected mode' below.
 - **Platform** (optional)
    - vCenter or ESXi API access. 
-      - Ensure enough privileges to vCenter. If you don't want to provide 'admin' privileges see the [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) documentation for more.
+      - Ensure enough privileges to vCenter. If you 'admin' privileges cannot be provided, see the [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) documentation for more.
    - Bare-metal
-      - Note that bare-metal nodes can be booted manually using the generated ISO. Mac addresses can be set in the 'install-config.yaml' file.
+      - Note that bare-metal nodes can be booted manually using the generated ISO. Mac addresses can be set in the 'install-config.yaml' file after running 'make install-config.yaml'.
 
 
 ## Initial Steps
 
 - **Bastion**
-   - First, install a bastion host with a fresh version of RHEL. Fedora can also be used except Quay mirror fails to install on it. 
+   - First, install a bastion with a fresh version of RHEL. Fedora can also be used except Quay mirror fails to install on it. 
    - a 'minimal install' of RHEL 9.3, RHEL 8.9 and Fedora 39 have been tested, other recent versions of RHEL/Fedora should work too.
       - Note that on Fedora 39, the mirror registry failed to install due to an [unexpected keyword argument 'cert_file'](https://github.com/quay/mirror-registry/issues/140) error, but remote installs of the Quay appliance (from Fedora) worked ok. 
+      - Note that only RHEL 9 is supported for OCP v4.15+ as the latest version of oc-mirror only works on RHEL 9.
 - **Git repo**
-   - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to your user's *home directory* on the external bastion (or on a Fedora laptop). 
-   - Ensure sudo is configured. 
+   - Clone or copy this git repository (https://github.com/sjbylo/aba.git) to your *home directory* on the connected bastion (e.g. on a Fedora/RHEL laptop). 
+   - Ensure sudo is configured. Passwordless sudo is preferable. 
 - **Pull Secret**
    - To install OpenShift, a secret is needed to allow access to and pull images from, Red Hat's registry.  Copy your pull secret in JSON format to the file '~/.pull-secret.json' (in your $HOME directory).
       - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
@@ -125,29 +128,29 @@ To set the version of OpenShift to install and, if needed, to download identical
 
 Note that this command will create the 'aba.conf' file which contains some values that you will *want to change*, e.g. your domain name, your network address etc.
 
-Now, continue with either 'Connected mode' or 'Disconnected mode' below. 
+Now, continue with either 'Disconnected mode' or 'Fully disconnected (air-gapped) mode' below. 
 
 
-## Connected mode 
+## Disconnected mode 
 
-In this mode, the bastion has access to both the Internet and the private subnet (but not necessarily at the same time).
+In this mode, the connected bastion has access to both the Internet and the private subnet (but not necessarily at the same time).
 
 ```
 make sync
 ```
 This command will:
   - for an existing registry, check the connection is available and working (be sure to set up your registry credentials first! See above for more).
-  - or, installs Quay registry on the bastion (or remote bastion) and copies the generated pull secret and certificate into the 'mirror/regcreds' directory for later use.
+  - or, installs Quay registry on the internal bastion (or remote internal bastion) and copies the generated pull secret and certificate into the 'mirror/regcreds' directory for later use.
   - pull images from the Internet and store them in the registry.
 
 Now continue with "Install OpenShift" below.
 
-Note that the above 'connected mode workflow' can be repeated, for example to install Operators or to upgrade OpenShift, by changing the 'sync/imageset-sync.yaml' file and running 'make sync' again.
+Note that the above 'disconnected mode' can be repeated, for example to install Operators or to upgrade OpenShift, by updating the 'sync/imageset-sync.yaml' file and running 'make sync' again.
 
-## Disconnected mode (air-gapped / fully disconnected) 
+## Fully disconnected (air-gapped) mode
 
-In this mode, your external bastion has access to the Internet but no access to the private network.
-There is also an internal bastion host in a private subnet.
+In this mode, your connected bastion has access to the Internet but no access to the private network.
+There is also an internal bastion in a private subnet.
 
 ```
 make save
@@ -160,24 +163,34 @@ Then, using 'make inc', copy the whole aba/ directory and sub-directories to you
 Example:
 
 ```
-# On the external bastion:
+# On the connected bastion:
 # Mount your thumb drive and:
 
 make inc                                          # Write tar archive to /tmp
 or
-make inc out=/dev/path/to/thumbdrive              # Write archive to the device mounted at /dev/path/to/thumbdrive
+make inc out=/dev/path/to/drive/aba.tgz           # Write archive 'aba.tgz' to the device mounted at /dev/path/to/drive
 or
-make inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to external host
+make inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to internal host (if possible).
 
 # Copy the file 'aba.tgz' to your internal bastion via your portable storage device.
 
 # Then, on the internal bastion run:
 cd
-tar xvf aba.tgz            # Extract the tar file. Ensure file timestamps are kept the same as on the external bastion.
+tar xvf aba.tgz                                   # Extract the tar file. Ensure file timestamps are kept the same as on the connected bastion.
 cd aba             
 ```
 
-Load the images from local storage to the internal mirror registry.
+For such cases where it is not possible to use a portable storage device, e.g. due to restrictions, an alternative command can be used.
+
+Example:
+
+```
+make tarrepo out=/dev/path/to/drive/aba.tgz       # Write archive 'aba.tgz' to the device mounted at /dev/path/to/drive, EXCEPT for the 'seq#' tar files under save/
+```
+- The 'seq#' tar files under the save directory and the repo tarball 'aba.tgz' can be copied seperatly to a non-portable storage device, e.g. S3. 
+
+
+Load or download the tar files from storage to the internal mirror registry.
 
 ```
 sudo dnf install make -y 
@@ -192,7 +205,7 @@ Now continue with "Install OpenShift" below.
 Note that the above 'air-gapped workflow' can be repeated in the *exact same way*, for example to install Operators or to upgrade OpenShift.
 
 For example, by:
-- editing the 'save/imageset-save.yaml' file on the external bastion (or laptop) to add more images or to fetch the latest images
+- editing the 'save/imageset-save.yaml' file on the connected bastion to add more images or to fetch the latest images
 - running 'make save'
 - running 'make inc' to create an incremental tar archive (see above)
 - unpacking the tar archive on the internal bastion
