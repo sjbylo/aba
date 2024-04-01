@@ -281,8 +281,8 @@ Other examples of commands, when working with VMware/ESXi:
 
 cd mycluster     # change to the directory with the agent-based install files, using 'mycluster' as an example.
 
-| Target | |
-| :---- | --- |
+| Target | Description |
+| :----- | :---------- |
 | make ls          | Show list of VMs and their state. |
 | make stop        | Shut down the guest OS (CoreOS) of all VMs in the 'mycluster' cluster. |
 | make start       | Power on all VMs in the 'mycluster' cluster.  |
