@@ -289,6 +289,7 @@ cd mycluster     # change to the directory with the agent-based install files, u
 | make powerdown   | Power down all VMs immediatelly |
 | make kill        | Same as 'powerdown' |
 | make delete      | Delete all VMs  |
+| make create      | Create all VMs  |
 | make refresh     | Delete & re-create the VMs causing the cluster to be re-installed. |
 | make delete      | Delete all the VMs  |
 | make login       | Display the 'oc login' command for the cluster.  Use: . <(make login)  |
