@@ -316,7 +316,7 @@ make help        # Help is available in all Makefiles (in aba/Makefile  aba/mirr
 | ----------- | ----------- |
 | *aba/aba.conf* | the 'global' config, used to set the target version of OpenShift, your domain name, private network address, DNS IP, choice of editor etc |
 | *aba/mirror/mirror.conf* | describes your private/internal mirror registry (either existing or to-be-installed)  |
-| *aba/`cluster name`/cluster.conf* | describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs etc |
+| *aba/`cluster-name`/cluster.conf* | describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs etc |
 
 ## Customizing agent-config.yaml and/or openshift-install.yaml files
 
