@@ -28,7 +28,7 @@ platform:
     vcenters:
     - datacenters:
       - Datacenter
-      password: 'hdhdhHHJGHG^&%6755'
+      password: 'xxxxxxxxxxx'
       port: 443
       server: vcenter.lan
       user: 
