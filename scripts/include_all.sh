@@ -78,16 +78,6 @@ normalize-vmware-conf()
 	fi
 }
 
-###normalize-vmware-confOLD()
-#{
-	## Normalize or sanitize the config file
-	## Prepend "export "
-	#cat vmware.conf | \
-		#cut -d"#" -f1 | \
-		#sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
-			#sed -e "s/^/export /g";
-#}
-
 install_rpms() {
 	for rpm in $@
 	do
@@ -112,6 +102,21 @@ ask() {
 	[ ! "$yn" -o "$yn" = "y" -o "$yn" = "Y" ] && return 0
 
 	return 1
+}
+
+edit_file() {
+	conf_file=$1
+	shift
+	msg="$*"
+	if [ ! "$editor" -o "$editor" == "none" ]; then
+		echo
+		echo "The file '$conf_file' has been created.  Please edit it and run the same command again."
+
+		exit 1
+	else
+		ask "$msg?" || return 1
+		$editor $conf_file
+	fi
 }
 
 try_cmd() {

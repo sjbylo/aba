@@ -3,8 +3,8 @@
 
 source scripts/include_all.sh
 
-source <(normalize-cluster-conf)
 source <(normalize-aba-conf)
+source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
 
 # Set the rendezvous_ip to the the first master's ip
