@@ -12,12 +12,17 @@ source scripts/include_all.sh
 
 umask 077
 
-#source <(normalize-aba-conf)
-#source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 	
+echo "What this 'day2' script does:"
+echo "Set up cluster trust CA with the internal registry's Root CA."
+echo "Configure OperatorHub to integrate with the internal mirror registry. "
+echo "Apply any imageContentSourcePolicy resource files that were created by oc-mirror."
+echo "For fully disconnected environments, disable online public catalog sources."
+echo "Install any CatalogSources."
+
 echo
 echo "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
 echo "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image'."
@@ -53,6 +58,8 @@ if [ -s regcreds/rootCA.pem ]; then
 		do
 			sleep 10
 		done
+	else
+		echo "'unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
 	fi
 	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
 else	
