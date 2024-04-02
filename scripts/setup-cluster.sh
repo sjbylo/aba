@@ -7,9 +7,9 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)   # Fetch the domain name
 
 name=standard
-type=standard
+cluster_type=standard
 [ "$1" ] && name=$1 && shift
-[ "$1" ] && type=$1 && shift
+[ "$1" ] && cluster_type=$1 && shift
 [ "$1" ] && target=$1
 
 if [ ! -d $name ]; then
@@ -25,13 +25,16 @@ fi
 pwd
 #make cluster.conf name=$name
 
-echo "Creating '$name/cluster.conf' file for cluster type [$type]."
-scripts/create-cluster-conf.sh $name $type
+echo "Creating '$name/cluster.conf' file for cluster type [$cluster_type]."
+scripts/create-cluster-conf.sh $name $cluster_type
 
-ask "Trigger the cluster with 'make $target'?" || exit 1
-make $target
+if ask "Trigger the cluster with 'make $target'?"; then
+	make $target
 
-#echo 
-#echo "Now, cd into the directory '$name' and run 'make'.  Example: cd $name && make"
-#echo
+	echo "Now cd into the directory '$name'. Example: cd $name && make help"
+else
+	echo 
+	echo "Now, cd into the directory '$name' and run 'make'.  Example: cd $name && make or cd $name && make help"
+	echo
+fi
 
