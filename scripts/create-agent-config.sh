@@ -7,8 +7,8 @@ source scripts/include_all.sh
 #[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$1" ] && set -x 
 
-source <(normalize-cluster-conf)
 source <(normalize-aba-conf)
+source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
 
 ####
