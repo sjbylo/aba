@@ -210,6 +210,14 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 test-cmd -r 99 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync 
 
 rm -rf sno
+### test-cmd -m "Installing sno cluster" make sno
+mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 202"
+test-cmd -m "Configuring SNO cluster with 'make sno target=cluster.conf" make sno target=cluster.conf
+mylog "Setting CIDR 10.0.1.128/25"
+sed -i "s/^machine_network=.*/machine_network=10.0.1.128/g" sno/cluster.conf
+sed -i "s/^prefix_length=.*/prefix_length=25/g" sno/cluster.conf
+mylog "Setting starting_ip=202"
+sed -i "s/^starting_ip=.*/starting_ip=202/g" sno/cluster.conf
 test-cmd -m "Installing sno cluster" make sno
 
 #######################
