@@ -120,7 +120,7 @@ The usual things you need to install OpenShift using the Agent-based installer.
 
 ## Getting Started with aba
 
-To set the version of OpenShift to install and, if needed, to download identical versions of oc, oc-mirror and openshift-install, run:
+To set the version of OpenShift to install and to download identical versions of oc, oc-mirror and openshift-install, run:
 
 ```
 ./aba 
