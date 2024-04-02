@@ -117,6 +117,7 @@ The usual things you need to install OpenShift using the Agent-based installer.
 - **Finally**
    - run the ./aba command to initialize the installation process (see 'Getting Started' below).
 
+![Air-gapped data transfer](images/air-gapped.jpg "Air-gapped data transfer")
 
 ## Getting Started with aba
 
@@ -130,11 +131,11 @@ Note that this command will create the 'aba.conf' file which contains some value
 
 Now, continue with either 'Disconnected mode' or 'Fully disconnected (air-gapped) mode' below. 
 
-![Air-gapped data transfer](images/air-gapped.jpg "Air-gapped data transfer")
-
 ## Disconnected mode 
 
 In this mode, the connected bastion has access to both the Internet and the private subnet (but not necessarily at the same time).
+
+![Disconnected and Air-gapped mode](images/make-sync.jpg "Disconnected and Air-gapped mode")
 
 ```
 make sync
@@ -214,7 +215,11 @@ For example, by:
 
 Note that generated 'image sets' are sequential and must be pushed to the target mirror registry in order. You can derive the sequence number from the file name of the generated image set archive file in the save/ directory. 
 
+![Connecting to or creating Mirror Registry](images/make-install.jpg "Connecting to or creating Mirror Registry")
+
 ## Install OpenShift 
+
+![Installing OpenShift](images/make-cluster.jpg "Installing OpenShift")
 
 ```
 make sno
