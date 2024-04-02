@@ -5,8 +5,8 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
-source <(normalize-cluster-conf)
 source <(normalize-aba-conf)
+source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
 [ -s vmware.conf ] && source <(normalize-vmware-conf)
 
