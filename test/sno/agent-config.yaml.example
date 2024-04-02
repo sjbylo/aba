@@ -2,7 +2,7 @@ apiVersion: v1alpha1
 kind: AgentConfig
 metadata:
   name: sno
-rendezvousIP: 10.0.1.101
+rendezvousIP: 10.0.1.201
 hosts:
   - hostname: sno
     role: master
@@ -18,7 +18,7 @@ hosts:
           ipv4:
             enabled: true
             address:
-              - ip: 10.0.1.101
+              - ip: 10.0.1.201
                 prefix-length: 24
             dhcp: false
       dns-resolver:
