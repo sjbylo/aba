@@ -72,6 +72,10 @@ ssh $reg_ssh_user@registry2.example.com -- "sudo chmod 600 ~testy/.ssh/authorize
 ssh testy@registry2.example.com whoami
 
 
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
+
 # FIXME needed?
 #### sudo dnf install python36 python3-jinja2 -y
 # rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
@@ -98,6 +102,10 @@ sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	#
 ### sed -i "s#reg_port=.*#reg_pw=443             #g" ./mirror/mirror.conf	    	# test port change
 #sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
 
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
+
 source <(cd mirror; normalize-mirror-conf)
 
 echo
@@ -119,6 +127,10 @@ which yq || (
 		mv ~/bin/yq_linux_amd64 ~/bin/yq && \
 		chmod 755 ~/bin/yq
 	)
+
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
 
 ######################
 # This test creates the ABI (agent-based installer) config files to check they are valid
@@ -161,7 +173,9 @@ do
         test-cmd -m "Generate iso file for cluster type '$cname'" "make -C $cname iso"
 done
 
-######################
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
 
 ######################
 rm -rf sno
@@ -178,8 +192,10 @@ test-cmd -m "Installing sno cluster with 'make sno $targetiso'" make sno $target
 test-cmd -m "Delete cluster (if needed)" make -C sno delete 
 test-cmd -m "Uninstall mirror" make -C mirror uninstall 
 
-########################
-########################
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
+
 mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 
 #sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
@@ -201,6 +217,10 @@ sed -i "s#reg_ssh_user=.*#reg_ssh_user=testy#g" ./mirror/mirror.conf	     	# If 
 # FIXME: no need? or use 'make clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
 
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
+
 source <(cd mirror; normalize-mirror-conf)
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
@@ -209,16 +229,23 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 # This will install and sync
 test-cmd -r 99 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync 
 
-rm -rf sno
+###rm -rf sno
+###rm sno/cluster.conf   # This should 100% reset the cluster and make should start from scratch next time
+make -C sno clean # This should clean up the cluster and make should start from scratch next time
+rm sno/cluster.conf   # This should 100% reset the cluster and make should start from scratch next time
 ### test-cmd -m "Installing sno cluster" make sno
-mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 202"
+mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 201"
 test-cmd -m "Configuring SNO cluster with 'make sno target=cluster.conf" make sno target=cluster.conf
 mylog "Setting CIDR 10.0.1.128/25"
 sed -i "s/^machine_network=.*/machine_network=10.0.1.128/g" sno/cluster.conf
 sed -i "s/^prefix_length=.*/prefix_length=25/g" sno/cluster.conf
-mylog "Setting starting_ip=202"
-sed -i "s/^starting_ip=.*/starting_ip=202/g" sno/cluster.conf
+mylog "Setting starting_ip=201"
+sed -i "s/^starting_ip=.*/starting_ip=201/g" sno/cluster.conf
 test-cmd -m "Installing sno cluster" make sno
+
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
 
 #######################
 #  This will save, install then load
@@ -236,6 +263,10 @@ rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation i
 test-cmd -m "Creating standard iso file with 'make standard target=iso'" make standard target=iso # Since we're testing bare-metal, only create iso
 
 test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
+
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
 
 mylog
 mylog "===> Completed test $0"
