@@ -105,7 +105,7 @@ kill:  vmware.conf ## Kill or power off the VMs immediately.  This will stop the
 delete: vmware.conf ## Delete the VMs. This will delete the cluster. 
 	@scripts/vmw-delete.sh $(debug) || exit 0
 
-.finished: 
+finished: .autorefresh
 	@scripts/monitor-install.sh $(debug)
 	@touch .finished
 
