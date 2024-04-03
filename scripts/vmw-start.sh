@@ -18,10 +18,12 @@ fi
 
 source <(normalize-aba-conf)  # Fetch the 'ask' param
 
+cluster_folder=$VC_FOLDER/$CLUSTER_NAME
+
 # If at least one VM exists, then show vms.
 if scripts/vmw-exists.sh; then
 	for name in $CP_NAMES $WORKER_NAMES; do
-		[ "$VC" ] && echo $VC_FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+		[ "$VC" ] && echo $cluster_folder/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
 	done
 
 	ask "Start the above virtual machine(s)" || exit 1

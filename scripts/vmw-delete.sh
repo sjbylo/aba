@@ -23,12 +23,14 @@ fi
 
 source <(normalize-aba-conf)  # Fetch the 'ask' param
 
+cluster_folder=$VC_FOLDER/$CLUSTER_NAME
+
 # If at least one VM exists, then show vms.
 if scripts/vmw-exists.sh; then
 	# Only show list of existing vms if ask=1
 	if [ "$ask" ]; then
 		for name in $CP_NAMES $WORKER_NAMES; do
-			[ "$VC" ] && echo $VC_FOLDER/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+			[ "$VC" ] && echo $cluster_folder/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
 		done
 	fi
 else
@@ -44,7 +46,7 @@ for name in $CP_NAMES $WORKER_NAMES; do
 done
 
 if [ "$VC" ]; then
-	echo govc object.destroy $VC_FOLDER
-	govc object.destroy $VC_FOLDER || true
+	echo govc object.destroy $cluster_folder
+	govc object.destroy $cluster_folder || true
 fi
 

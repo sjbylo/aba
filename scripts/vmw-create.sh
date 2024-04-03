@@ -26,8 +26,8 @@ WKR_MAC_ADDRESSES_ARRAY=($WKR_MAC_ADDRESSES)
 
 # FIXME: Check if folder $VC_FOLDER already exists or not.  Should we create it but never delete it.
 # Only the cluster folder shouod be created and deleted by aba
-# FIXME cluster_folder=$VC_FOLDER/$CLUSTER_NAME
-cluster_folder=$VC_FOLDER  # FIXME - this should be folder/cluster-name
+#cluster_folder=$VC_FOLDER  # FIXME - this should be folder/cluster-name
+cluster_folder=$VC_FOLDER/$CLUSTER_NAME
 
 if [ ! "$NO_MAC" ]; then
 	scripts/check-macs.sh || exit 
@@ -53,7 +53,7 @@ for name in $CP_NAMES ; do
 
 	vm_name=${CLUSTER_NAME}-$name
 
-	echo "Create VM: $vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder/$vm_name]"
+	echo "Create VM: $vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 	govc vm.create \
 		-version vmx-15 \
 		-g rhel8_64Guest \
@@ -92,7 +92,7 @@ for name in $WORKER_NAMES ; do
 
 	vm_name=${CLUSTER_NAME}-$name
 
-	echo "Create VM: $vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [${WKR_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder/$vm_name]"
+	echo "Create VM: $vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [${WKR_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 	govc vm.create \
 		-version vmx-15 \
 		-g rhel8_64Guest \
