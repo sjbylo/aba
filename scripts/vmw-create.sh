@@ -16,9 +16,6 @@ else
 	exit 0
 fi
 
-#echo VC_FOLDER=$VC_FOLDER
-#echo VC=$VC
-
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
 	eval `scripts/cluster-config.sh || exit 1`
@@ -26,6 +23,11 @@ fi
 
 CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
 WKR_MAC_ADDRESSES_ARRAY=($WKR_MAC_ADDRESSES)
+
+# FIXME: Check if folder $VC_FOLDER already exists or not.  Should we create it but never delete it.
+# Only the cluster folder shouod be created and deleted by aba
+# FIXME cluster_folder=$VC_FOLDER/$CLUSTER_NAME
+cluster_folder=$VC_FOLDER  # FIXME - this should be folder/cluster-name
 
 if [ ! "$NO_MAC" ]; then
 	scripts/check-macs.sh || exit 
@@ -38,8 +40,8 @@ source <(normalize-cluster-conf)
 
 # If we are accessing vCenter (and not ESXi directly) 
 if [ "$VC" ]; then
-	echo Create folder: $VC_FOLDER
-	govc folder.create $VC_FOLDER 
+	echo Create folder: $cluster_folder
+	govc folder.create $cluster_folder 
 fi
 
 # Check and increase CPU count for SNO, if needed
@@ -49,7 +51,9 @@ i=1
 for name in $CP_NAMES ; do
 	a=`expr $i-1`
 
-	echo "Create VM: ${CLUSTER_NAME}-$name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
+	vm_name=${CLUSTER_NAME}-$name
+
+	echo "Create VM: $vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder/$vm_name]"
 	govc vm.create \
 		-version vmx-15 \
 		-g rhel8_64Guest \
@@ -61,23 +65,23 @@ for name in $CP_NAMES ; do
 		-net.address="${CP_MAC_ADDRESSES_ARRAY[$a]}" \
 		-iso-datastore=$ISO_DATASTORE \
 		-iso="images/agent-${CLUSTER_NAME}.iso" \
-		-folder="$VC_FOLDER" \
+		-folder="$cluster_folder" \
 		-on=false \
-		 ${CLUSTER_NAME}-$name
+		 $vm_name
 
-	govc device.boot -secure -vm ${CLUSTER_NAME}-$name
+	govc device.boot -secure -vm $vm_name
 
-	govc vm.change -vm ${CLUSTER_NAME}-$name -e disk.enableUUID=TRUE
+	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE
 
 	echo "Create and attach disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
-		-vm ${CLUSTER_NAME}-$name \
-		-name ${CLUSTER_NAME}-$name/${CLUSTER_NAME}-$name \
+		-vm $vm_name \
+		-name $vm_name/$vm_name \
 		-size 120GB \
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
-	[ "$START_VM" ] && govc vm.power -on ${CLUSTER_NAME}-$name
+	[ "$START_VM" ] && govc vm.power -on $vm_name
 
 	let i=$i+1
 done
@@ -86,7 +90,9 @@ i=1
 for name in $WORKER_NAMES ; do
 	a=`expr $i-1`
 
-	echo "Create VM: ${CLUSTER_NAME}-$name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [${WKR_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$VC_FOLDER/${CLUSTER_NAME}-$name]"
+	vm_name=${CLUSTER_NAME}-$name
+
+	echo "Create VM: $vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [${WKR_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder/$vm_name]"
 	govc vm.create \
 		-version vmx-15 \
 		-g rhel8_64Guest \
@@ -98,23 +104,23 @@ for name in $WORKER_NAMES ; do
 		-net.address="${WKR_MAC_ADDRESSES_ARRAY[$a]}" \
 		-iso-datastore=$ISO_DATASTORE \
 		-iso="images/agent-${CLUSTER_NAME}.iso" \
-		-folder="$VC_FOLDER" \
+		-folder="$cluster_folder" \
 		-on=false \
-		 ${CLUSTER_NAME}-$name
+		 $vm_name
 
-	govc device.boot -secure -vm ${CLUSTER_NAME}-$name
+	govc device.boot -secure -vm $vm_name
 
-	govc vm.change -vm ${CLUSTER_NAME}-$name -e disk.enableUUID=TRUE
+	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE
 
 	echo "Create and attach disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
-		-vm ${CLUSTER_NAME}-$name \
-		-name ${CLUSTER_NAME}-$name/${CLUSTER_NAME}-$name \
+		-vm $vm_name \
+		-name $vm_name/$vm_name \
 		-size 120GB \
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
-	[ "$START_VM" ] && govc vm.power -on ${CLUSTER_NAME}-$name
+	[ "$START_VM" ] && govc vm.power -on $vm_name
 
 	let i=$i+1
 done
