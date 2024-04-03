@@ -2,7 +2,10 @@
 
 source scripts/include_all.sh
 
+START_VM=
+NO_MAC=
 [ "$1" = "--start" ] && START_VM=1 && shift
+[ "$1" = "--nomac" ] && NO_MAC=1 && shift
 
 [ "$1" ] && set -x
 
@@ -24,7 +27,9 @@ fi
 CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
 WKR_MAC_ADDRESSES_ARRAY=($WKR_MAC_ADDRESSES)
 
-scripts/check-macs.sh || exit 
+if [ ! "$NO_MAC" ]; then
+	scripts/check-macs.sh || exit 
+fi
 
 # Read in the cpu and mem values 
 source <(normalize-cluster-conf) 

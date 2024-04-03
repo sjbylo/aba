@@ -65,17 +65,15 @@ upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images
 # This target is a duplicate of .autorefresh below, except for the touch command.  It's for interactive use. 
 .PHONY: refresh
 refresh:  ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
-	# Refreshing VMs
-	@scripts/vmw-delete.sh $(debug) || true
-	# Createing VMs
-	@scripts/vmw-create.sh --start $(debug) 
+	scripts/vmw-refresh.sh
 
 .autorefresh: .initialized .autoupload vmware.conf 
-	# Refreshing VMs
-	@scripts/vmw-delete.sh $(debug) || true
-	# Createing VMs
-	@scripts/vmw-create.sh --start $(debug) 
+	scripts/vmw-refresh.sh
 	@touch .autorefresh
+
+#	@scripts/vmw-delete.sh $(debug) || true
+#	# Createing VMs
+#	@scripts/vmw-create.sh --start $(debug) 
 
 .PHONY: create
 create: vmware.conf iso  ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
