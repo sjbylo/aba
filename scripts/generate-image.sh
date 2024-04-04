@@ -11,7 +11,7 @@ scripts/cluster-config.sh | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$
 echo ==================================================================	
 eval `scripts/cluster-config.sh || exit 1`
 
-echo Generating the ISO image for $CLUSTER_NAME.$BASE_DOMAIN ...
+echo Generating the ISO boot image for cluster: $CLUSTER_NAME.$BASE_DOMAIN ...
 
 rm -rf iso-agent-based 
 mkdir -p iso-agent-based

@@ -10,10 +10,11 @@ source <(normalize-aba-conf)
 
 if [ ! -s vmware.conf ]; then
 	echo
-	echo "Do you want to install OpenShift onto vSphere or ESXi?"
-	#echo "Edit the 'govc' config file (vmware.conf) to enable access to vCenter or ESXi. "
-	echo -n "Hit Return to edit the 'vmware.conf' file or 'n' to skip (y/n) [y]: " 
+	echo "Install OpenShift onto vSphere or ESXi (access from the private network is required!)?"
+	echo -n "Hit Return to edit the 'vmware.conf' file or 'n' to skip (Y/n): " 
+
 	read yn
+
 	if [ "$yn" = "y" -o "$yn" = "" ]; then
 		if [ -s ~/.vmware.conf ]; then
 			cp ~/.vmware.conf vmware.conf   # The working user edited file, if any
@@ -24,6 +25,7 @@ if [ ! -s vmware.conf ]; then
 		fi
 		$editor vmware.conf 
 	else
+		echo "Creating empty 'vmware.conf' file.  To use vSphere or ESXi, delete the file and run 'make vmw'."
 		> vmware.conf
 		exit 0
 	fi

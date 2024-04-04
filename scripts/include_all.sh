@@ -63,6 +63,7 @@ normalize-vmware-conf()
         # Normalize or sanitize the config file
 	# Determine if ESXi or vCenter
 	# Prepend "export "
+	[ ! -f vmware.conf ] && return 0
         vars=$(cat vmware.conf | \
                 cut -d"#" -f1 | \
                 sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
