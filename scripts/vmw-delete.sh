@@ -46,7 +46,7 @@ for name in $CP_NAMES $WORKER_NAMES; do
 done
 
 if [ "$VC" ]; then
-	echo govc object.destroy $cluster_folder
+	echo Deleting cluster folder $cluster_folder
 	govc object.destroy $cluster_folder || true
 fi
 
