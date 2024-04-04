@@ -22,7 +22,7 @@ trap 'show_error' ERR
 
 
 test-cmd() {
-	set +x
+	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
 	local tot_cnt=1
 	local sleep_time=20
@@ -65,21 +65,22 @@ test-cmd() {
 		echo "Sleeping $sleep_time seconds ..."
 		sleep $sleep_time
 		sleep_time=`expr $sleep_time \* $backoff`
-		echo "Attempting command again ($i/$tot_cnt)" | tee -a test/test.log
+		echo "Attempting command again ($i/$tot_cnt) - $@" | tee -a test/test.log
 	done
 
-	set -x  # This was always returning 0, even if $@ command failed
-	return $ret
+	[ "$reset_xtrace" ] && set -x
+
+	return $ret  # 'set' was always returning 0, even if $@ command failed
 }
 
 mylog() {
-	set +x
+	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
 	echo "- TEST --------------------------------------------------------------------------------"
 	echo $@
 	echo $@ >> test/test.log
 	echo "---------------------------------------------------------------------------------------"
 
-	set -x
+	[ "$reset_xtrace" ] && set -x
 }
 

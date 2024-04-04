@@ -44,7 +44,7 @@ rm -rf sno compact standard
 
 v=4.14.14
 rm -f aba.conf  # Set it up next
-test-cmd -m "Configuring aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.esxi
+test-cmd -m "Configuring aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
 
 # Do not ask to delete things
 mylog "Setting ask="
