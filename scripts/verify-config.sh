@@ -45,23 +45,23 @@ ip_of_apps=$(dig +time=8 +short x.apps.$cluster_name.$base_domain)
 if [ ! "$SNO" ]; then
 	# Ensure api DNS exists and points to correct ip
 	[ "$ip_of_api" != "$api_vip" ] && echo "ERROR: DNS record [api.$cluster_name.$base_domain] does not resolve to [$api_vip]" && exit 1
-	echo "DNS record for api (api.$cluster_name.$base_domain) is valid [$ip_of_api]"
+	echo "DNS record for OCP api (api.$cluster_name.$base_domain) is valid [$ip_of_api]"
 
 	# Ensure apps DNS exists and points to correct ip
 	[ "$ip_of_apps" != "$ingress_vip" ] && echo "ERROR: DNS record [\*.apps.$cluster_name.$base_domain] does not resolve to [$ingress_vip]" && exit 1
-	echo "DNS record for ingress (*.apps.$cluster_name.$base_domain) is valid [$ip_of_apps]"
+	echo "DNS record for apps ingress (*.apps.$cluster_name.$base_domain) is valid [$ip_of_apps]"
 else
 	# For SNO...
 	# Check values are both pointing to "rendezvous_ip"
 	# Ensure api DNS exists 
 	[ "$ip_of_api" != "$rendezvous_ip" ] && \
 		echo "ERROR: DNS record [api.$cluster_name.$base_domain] does not resolve to the rendezvous ip [$rendezvous_ip]" && exit 1
-	echo "DNS record for api (SNO) is valid [$ip_of_api]"
+	echo "DNS record for OCP api (SNO) is valid [$ip_of_api]"
 
 	# Ensure apps DNS exists 
 	[ "$ip_of_apps" != "$rendezvous_ip" ] && \
 		echo "ERROR: DNS record [\*.apps.$cluster_name.$base_domain] does not resolve to the rendezvous ip [$rendezvous_ip]" && exit 1
-	echo "DNS record for ingress (SNO) is valid [$ip_of_apps]"
+	echo "DNS record for apps ingress (SNO) is valid [$ip_of_apps]"
 fi
 
 exit 0
