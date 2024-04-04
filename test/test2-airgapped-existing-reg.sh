@@ -47,7 +47,7 @@ rm -rf sno compact standard
 
 v=4.14.14
 rm -f aba.conf
-test-cmd -m "Configure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.esxi
+test-cmd -m "Configure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
 
 mylog "Setting ask="
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf

@@ -1,7 +1,7 @@
 #!/bin/bash -ex
 
-#if false; then
-if [ "" ]; then
+if false; then
+#if [ "1" ]; then
 	# Used for testing from git
 	cd 
 	rm -rf testing
