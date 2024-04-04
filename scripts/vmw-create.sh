@@ -40,8 +40,9 @@ source <(normalize-cluster-conf)
 
 # If we are accessing vCenter (and not ESXi directly) 
 if [ "$VC" ]; then
-	echo Create folder: $cluster_folder
-	govc folder.create $cluster_folder 
+	###echo Create folder: $cluster_folder
+	scripts/vmw-create-folder.sh $cluster_folder  # This will create a folder hirerachy, if needed
+	####govc folder.create $cluster_folder 
 fi
 
 # Check and increase CPU count for SNO, if needed
