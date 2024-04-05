@@ -8,14 +8,14 @@ d        ?=
 DEBUG     = $d
 out    ?= /tmp
 
+.PHONY: aba
+aba:  ## Run the ./aba script to sert up 'aba.conf'
+	./aba
+
 aba.conf:
 	./aba
 
 ##@ Help-related tasks
-
-.PHONY: aba
-aba:  ## Run the ./aba script to sert up 'aba.conf'
-	./aba
 
 .PHONY: help
 help: ## Help
@@ -25,8 +25,10 @@ init: aba .init
 .init: 
 	make -C mirror rpms
 
-vmw: vmware.conf  ## Configure and use vSphere or ESXi to install OpenShift
-vmware.conf:
+###vmw: vmware.conf  ## Configure and use vSphere or ESXi to install OpenShift
+###vmware.conf:
+.PHONY: vmw
+vmw:
 	scripts/install-vmware.conf.sh
 
 cli:  ## Download and install the CLI binaries into ~/bin
@@ -109,6 +111,7 @@ clean: ## Clean up
 .PHONY: distclean
 distclean: clean ## Clean up *everything*
 	rm -f vmware.conf
+	rm -f aba.conf ~/.aba.conf*
 	make -C mirror distclean 
 	make -C cli distclean 
 	rm -rf sno compact standard 

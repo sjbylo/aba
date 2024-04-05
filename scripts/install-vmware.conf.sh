@@ -8,7 +8,7 @@ source scripts/include_all.sh
 # Needed for $editor
 source <(normalize-aba-conf)
 
-if [ ! -s vmware.conf ]; then
+##if [ ! -s vmware.conf ]; then
 	echo
 	echo "Install OpenShift onto vSphere or ESXi (access from the private network is required!)?"
 	echo -n "Hit Return to edit the 'vmware.conf' file or 'n' to skip (Y/n): " 
@@ -17,10 +17,10 @@ if [ ! -s vmware.conf ]; then
 
 	if [ "$yn" = "y" -o "$yn" = "" ]; then
 		if [ -s ~/.vmware.conf ]; then
+			echo "Creating 'vmware.conf' from '~/.vmware.conf'"
 			cp ~/.vmware.conf vmware.conf   # The working user edited file, if any
-		elif [ -s .vmware.conf ]; then
-			cp .vmware.conf vmware.conf  # The user edited file, if any
 		else
+			echo "Creating 'vmware.conf' from 'templates/vmware.conf'"
 			cp templates/vmware.conf .  # The default template 
 		fi
 		$editor vmware.conf 
@@ -36,14 +36,13 @@ if [ ! -s vmware.conf ]; then
 
 	# Check access
 	if ! govc about; then
-		echo "Error: Cannot access vSphere or ESXi"
-		mv vmware.conf .vmware.conf    # remember this to edit next time (see above) 
+		echo "Error: Cannot access vSphere or ESXi.  Please try again!"
 		exit 1
 	else
-		# Save working version for later
+		echo "Saving working version of 'vmware.conf' to '~/.vmware.conf'."
 		[ ! -s ~/.vmware.conf ] && cp vmware.conf ~/.vmware.conf
 	fi
-fi
+##fi
 
 exit 0
 

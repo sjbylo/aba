@@ -157,11 +157,10 @@ fi
 #if [ "$auto_vmw" != "" -a "$interactive_mode" ]; then
 ###if [ "$interactive_mode" ]; then
 
-edit_file aba.conf "Edit the config file 'aba.conf' to set your domain name, network CIDR and others" || true
-###	echo "The file 'aba.conf' has been created.  Please edit it and run the same command again."
-###fi
-
-echo 
+if [ ! -f ~/.aba.conf.created -o ~/.aba.conf.created -nt aba.conf ]; then
+	touch ~/.aba.conf.created
+	edit_file aba.conf "Edit the config file 'aba.conf' to set your domain name, network CIDR and others" || exit 0
+fi
 
 domain_reachable() {
 	curl -IL $1 >/dev/null 2>&1 && return 0
@@ -174,25 +173,31 @@ ip_reachable() {
 
 source <(normalize-aba-conf)
 
-domain_reachable quay.io && net_pub=1
+echo 
+echo =============================
+echo Checking network connectivity
+echo =============================
+echo 
+
+domain_reachable registry.redhat.io && net_pub=1
 ip_reachable $next_hop_address && net_priv=1
 
 if [ "$net_pub" -a "$net_priv" ]; then
-	echo "Access to Internet:                               Yes"
+	echo "Access to Internet (registry.redhat.io):          Yes"
 	echo "Access to Private network ($next_hop_address):    Yes"
 	echo "Access to both the Internet and your private network has been detected."
-	echo "You might consider following 1a below (make sync)."
+	echo "You might consider following 1a) below (make sync)."
 
 elif [ "$net_pub" -a ! "$net_priv" ]; then
-	echo "Access to Internet:                               Yes"
+	echo "Access to Internet (registry.redhat.io):          Yes"
 	echo "Access to Private network ($next_hop_address):    No"
 	echo "Only access to the Internet has been detected. No access to your private network ($next_hop_address) has been detected."
-	echo "You might consider following 1b. (make save & make inc) below."
+	echo "You might consider following 1b) below (make save & make inc)."
 elif [ ! "$net_pub" -a "$net_priv" ]; then
-	echo "Access to Internet:                               No"
+	echo "Access to Internet (registry.redhat.io):          No "
 	echo "Access to Private network ($next_hop_address):    Yes"
 	echo "Access to your private network ($next_hop_address) has been detected.  No access to the Internet has been detected."
-	echo "You might consider following 1c. (make load) below"
+	echo "You might consider following 1c) below (make load)."
 else
 	echo "No acecss to any required networks!"
 	echo "Get access to the Internet and/or your target private network and try again!"
