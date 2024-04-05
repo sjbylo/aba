@@ -74,6 +74,7 @@ mylog "Setting reg_host=registry2.example.com"
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf
 
+make -C cli
 source <(normalize-vmware-conf)
 scripts/vmw-create-folder.sh /Datacenter/vm/test
 

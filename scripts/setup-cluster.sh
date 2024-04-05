@@ -32,11 +32,11 @@ if ask "Trigger the cluster with 'make $target'?"; then
 	make $target
 
 	echo 
-	[ "$target" ] && echo "If you want to finish building this cluster, cd into the directory '$name'. Example: 'cd $name && make help'"
+	[ "$target" ] && echo "If you want to continue working on this cluster, cd into the directory '$name'. Example: 'cd $name && make help'"
 	echo
 else
 	echo 
-	echo "If you want to finish building this cluster, cd into the directory '$name' and run 'make'.  Example: 'cd $name && make' or 'cd $name && make help'"
+	echo "If you want to continue working on this cluster, cd into the directory '$name' and run 'make'.  Example: 'cd $name && make' or 'cd $name && make help'"
 	echo
 fi
 

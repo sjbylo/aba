@@ -47,6 +47,7 @@ source <(normalize-aba-conf)
 
 reg_ssh_user=$(whoami)
 
+make -C cli
 source <(normalize-vmware-conf)
 scripts/vmw-create-folder.sh /Datacenter/vm/test
 

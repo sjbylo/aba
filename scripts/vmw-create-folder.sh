@@ -4,6 +4,8 @@
 
 folder_list=
 vc_folder=$1
+shift
+[ "$1" ] && set -x
 
 if ! echo $vc_folder | grep -q ^/; then
 	echo "vsphere folder must start with a '/'" 
