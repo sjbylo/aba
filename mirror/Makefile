@@ -141,7 +141,7 @@ clean:  ## Clean up only, keeping configuration files: image set and mirror.conf
 	rm -f ~/.aba.previous.backup
 	rm -f aba.conf  # remove link
 	rm -f *.sh
-	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rfv save || true
+	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rfv save || true  # Delete only if not edited
 
 # Note that reg-uninstall.sh script will delete registry and reg-uninstall.sh $ regcreds/ itself
 .PHONY: distclean
