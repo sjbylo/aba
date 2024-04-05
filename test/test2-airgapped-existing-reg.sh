@@ -47,7 +47,8 @@ rm -rf sno compact standard
 
 v=4.14.14
 rm -f aba.conf
-test-cmd -m "Configure aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
+vf=~/.vmware.conf.vc
+test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v --vmw $vf
 
 mylog "Setting ask="
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
@@ -76,10 +77,12 @@ sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
+source <(normalize-vmware-conf)
+scripts/vmw-create-folder.sh /Datacenter/vm/test
+
 #################################
 mylog Revert a snapshot and power on the internal bastion vm
 (
-	source <(normalize-vmware-conf)
 	govc snapshot.revert -vm bastion2-internal-rhel8 Latest
 	sleep 8
 	govc vm.power -on bastion2-internal-rhel8
@@ -133,7 +136,7 @@ ssh steve@$bastion2 "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-se
 
 ssh steve@$bastion2 "cat aba/mirror/mirror.conf | grep reg_host | grep registry2.example.com" # FIXME
 
-test-cmd -h steve@$bastion2 -m  "Loading images into mirror registry $reg_host:$reg_port now succeeds" "make -C aba/mirror verify"
+test-cmd -h steve@$bastion2 -m  "Verifying access to the mirror registry $reg_host:$reg_port now succeeds" "make -C aba/mirror verify"
 
 ######################
 

@@ -44,7 +44,8 @@ rm -rf sno compact standard
 
 v=4.14.14
 rm -f aba.conf  # Set it up next
-test-cmd -m "Configuring aba.conf for version $v and vmware vcenter" ./aba --version $v --vmw ~/.vmware.conf.vc
+vf=~/.vmware.conf.vc
+test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v --vmw $vf
 
 # Do not ask to delete things
 mylog "Setting ask="
@@ -73,11 +74,12 @@ mylog "Setting reg_host=registry2.example.com"
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf
 
+source <(normalize-vmware-conf)
+scripts/vmw-create-folder.sh /Datacenter/vm/test
 
 #################################
 mylog Revert vm snapshot of the internal bastion vm and power on
 (
-	source <(normalize-vmware-conf)
 	govc snapshot.revert -vm bastion2-internal-rhel8 Latest
 	sleep 8
 	govc vm.power -on bastion2-internal-rhel8

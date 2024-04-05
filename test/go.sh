@@ -15,7 +15,7 @@ if false; then
 fi
 
 export target_full=1   # Build vm
-export target_full=    # Build only iso
+#export target_full=    # Build only iso
 
 rm -f test/[0-9]-stage
 

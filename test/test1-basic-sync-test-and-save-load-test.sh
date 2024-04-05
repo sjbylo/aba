@@ -34,7 +34,8 @@ make distclean
 
 v=4.14.14
 rm -f aba.conf
-test-cmd -m "Configure aba.conf for version $v and vmware esxi" ./aba --version $v --vmw ~/.vmware.conf.vc
+vf=~/.vmware.conf.vc
+test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v --vmw $vf
 
 mylog "Setting 'ask='"
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
@@ -46,9 +47,11 @@ source <(normalize-aba-conf)
 
 reg_ssh_user=$(whoami)
 
+source <(normalize-vmware-conf)
+scripts/vmw-create-folder.sh /Datacenter/vm/test
+
 mylog Revert internal bastion vm to snapshot and powering on ...
 (
-	source <(normalize-vmware-conf)
 	govc snapshot.revert -vm bastion2-internal-rhel8 Latest
 	sleep 8
 	govc vm.power -on bastion2-internal-rhel8
