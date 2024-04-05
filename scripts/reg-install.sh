@@ -254,4 +254,5 @@ else
 	scripts/create-containers-auth.sh
 fi
 
-echo Execution successful
+echo
+echo "==> Execution successful"

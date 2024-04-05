@@ -6,7 +6,14 @@ cd $dir
 
 source scripts/include_all.sh
 
-[ ! -f aba.conf ] && cp templates/aba.conf .
+interactive_mode=1
+
+if [ ! -f aba.conf ]; then
+	cp templates/aba.conf .
+fi
+source <(normalize-aba-conf)
+
+#FIXME: delete ~/.vmware.conf here?
 
 while [ "$*" ] 
 do
@@ -21,18 +28,24 @@ do
 		target_ver=$ver
 		shift 
 		auto_ver=1
+		interactive_mode=
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
 		shift 
 		[ -s $1 ] && cp $1 vmware.conf
 		auto_vmw=1
 		shift 
+		interactive_mode=
 	fi
 done
+
+[ "$interactive_mode" ] || exit 0
+
+# From now on it's all considered interactive
 
 # Include aba bin path and common scripts
 export PATH=$PWD/bin:$PATH
 
-if [ ! "$auto_ver" ]; then
+##if [ ! "$auto_ver" ]; then
 	cat others/message.txt
 
 	############
@@ -96,13 +109,16 @@ if [ ! "$auto_ver" ]; then
 	# Update the conf file
 	sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
 
-fi
+#fi
 
 # Ensure python3 is installed.  RHEL8 only installs "python36"
-rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y >> .dnf-install.log 2>&1
+##### FIXME needed?  #  rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y >> .dnf-install.log 2>&1
 
 # make & jq are needed below and in the next steps 
 install_rpms make jq python3-pyyaml
+
+# Set up the CLIs
+make -C cli 
 
 ### for rpm in make jq python3-pyyaml
 ### do
@@ -113,23 +129,87 @@ install_rpms make jq python3-pyyaml
 ### done
 ### which make >/dev/null 2>&1 || sudo dnf install make jq python3-pyyaml -y >/dev/null 2>&1  # jq needed below
 
-if [ ! "$auto_vmw" ]; then
-	ask "Edit the main aba config file (aba.conf)?"
-	$editor aba.conf
+##if [ "$interactive_mode" ]; then
+
+if [ ! "$editor" ]; then
+	echo
+	echo -n "Aba uses an editor to aid in the workflow.  Which editor do you prefer (vi, nano or none)? [vi]: "
+	read new_editor
+
+	[ ! "$new_editor" ] && new_editor=vi
+
+	if [ "$new_editor" != "none" ]; then
+		if ! which $new_editor >/dev/null 2>&1; then
+			echo "Editor '$new_editor' not found! Install it and try again!"
+
+			exit 1
+		fi
+	fi
+
+	sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
+	export editor=$new_editor
+fi
+##fi
+
+
+### echo "auto_vmw=[$auto_vmw] interactive_mode=[$interactive_mode]"
+
+#if [ "$auto_vmw" != "" -a "$interactive_mode" ]; then
+###if [ "$interactive_mode" ]; then
+
+edit_file aba.conf "Edit the config file 'aba.conf' to set your domain name, network CIDR and others" || true
+###	echo "The file 'aba.conf' has been created.  Please edit it and run the same command again."
+###fi
+
+echo 
+
+domain_reachable() {
+	curl -IL $1 >/dev/null 2>&1 && return 0
+	return 1
+}
+ip_reachable() {
+	ping -w3 -c10 -A $1 >/dev/null 2>&1 && return 0
+	return 1
+}
+
+source <(normalize-aba-conf)
+
+domain_reachable quay.io && net_pub=1
+ip_reachable $next_hop_address && net_priv=1
+
+if [ "$net_pub" -a "$net_priv" ]; then
+	echo "Access to Internet:                               Yes"
+	echo "Access to Private network ($next_hop_address):    Yes"
+	echo "Access to both the Internet and your private network has been detected."
+	echo "You might consider following 1a below (make sync)."
+
+elif [ "$net_pub" -a ! "$net_priv" ]; then
+	echo "Access to Internet:                               Yes"
+	echo "Access to Private network ($next_hop_address):    No"
+	echo "Only access to the Internet has been detected. No access to your private network ($next_hop_address) has been detected."
+	echo "You might consider following 1b. (make save & make inc) below."
+elif [ ! "$net_pub" -a "$net_priv" ]; then
+	echo "Access to Internet:                               No"
+	echo "Access to Private network ($next_hop_address):    Yes"
+	echo "Access to your private network ($next_hop_address) has been detected.  No access to the Internet has been detected."
+	echo "You might consider following 1c. (make load) below"
+else
+	echo "No acecss to any required networks!"
+	echo "Get access to the Internet and/or your target private network and try again!"
+
+	exit 1
 fi
 
 # # FIXME: Asking about vmware access is not really needed at this point in the workflow, consider removing/moving.
 ############
 # vmware.conf
-if [ ! "$auto_vmw" ]; then
-	if [ ! -s vmware.conf ]; then
-		make vmware.conf
-	fi
-fi
+###if [ ! "$auto_vmw" ]; then
+##	if [ ! -s vmware.conf ]; then
+##		make vmware.conf
+##	fi
+##fi
 # # FIXME: Asking about vmware platform is not really needed at this point in the workflow, consider removing.
 
-# Set up the CLIs
-make -C cli 
 
 # Just in case, check the target ocp version in aba.conf match any existing versions defined in oc-mirror imageset config files. 
 # FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
@@ -140,10 +220,10 @@ make -C cli
 	fi
 )
 
-if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then
+##if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then
 	############
 	# Offer next steps
 	echo
 	cat others/message-next-steps.txt
-fi
+##fi
 

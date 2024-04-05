@@ -31,10 +31,12 @@ scripts/create-cluster-conf.sh $name $cluster_type
 if ask "Trigger the cluster with 'make $target'?"; then
 	make $target
 
-	echo "Now cd into the directory '$name'. Example: cd $name && make help"
+	echo 
+	[ "$target" ] && echo "If you want to finish building this cluster, cd into the directory '$name'. Example: 'cd $name && make help'"
+	echo
 else
 	echo 
-	echo "Now, cd into the directory '$name' and run 'make'.  Example: cd $name && make or cd $name && make help"
+	echo "If you want to finish building this cluster, cd into the directory '$name' and run 'make'.  Example: 'cd $name && make' or 'cd $name && make help'"
 	echo
 fi
 
