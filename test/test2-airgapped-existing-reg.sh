@@ -77,6 +77,7 @@ sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
+make -C cli
 source <(normalize-vmware-conf)
 scripts/vmw-create-folder.sh /Datacenter/vm/test
 

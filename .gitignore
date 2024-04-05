@@ -33,6 +33,7 @@ mirror/.uninstalled
 mirror/.*
 mirror/regcreds.bk
 sno*
+*/cluster.conf
 *.ssh.conf
 standard*
 target-ocp-version.conf

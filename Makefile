@@ -111,7 +111,7 @@ clean: ## Clean up
 .PHONY: distclean
 distclean: clean ## Clean up *everything*
 	rm -f vmware.conf
-	rm -f aba.conf ~/.aba.conf*
+	@####rm -f aba.conf ~/.aba.conf*
 	make -C mirror distclean 
 	make -C cli distclean 
 	rm -rf sno compact standard 
