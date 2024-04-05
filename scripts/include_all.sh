@@ -63,10 +63,12 @@ normalize-vmware-conf()
         # Normalize or sanitize the config file
 	# Determine if ESXi or vCenter
 	# Prepend "export "
+	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
 	[ ! -f vmware.conf ] && return 0
         vars=$(cat vmware.conf | \
                 cut -d"#" -f1 | \
                 sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+		sed -e "s/^VMW_FOLDER=/VC_FOLDER=/g" | \
                 sed -e "s/^/export /g")
 	eval "$vars"
 	# Detect if ESXi is used and set the VC_FOLDER that ESXi likes
