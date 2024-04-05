@@ -115,7 +115,7 @@ edit_file() {
 		echo
 		echo "The file '$conf_file' has been created.  Please edit it and run the same command again."
 
-		exit 1
+		return 1
 	else
 		ask "$msg?" || return 1
 		$editor $conf_file
