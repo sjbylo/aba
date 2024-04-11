@@ -107,6 +107,7 @@ clean: ## Clean up
 	make -C mirror clean 
 	make -C test clean 
 	rm -f ~/.aba.previous.backup
+	rm -f ~/.aba.conf.created
 
 .PHONY: distclean
 distclean: clean ## Clean up *everything*

@@ -29,16 +29,16 @@ do
 		shift 
 		auto_ver=1
 		interactive_mode=
-	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
-		shift 
-		[ -s $1 ] && cp $1 vmware.conf
-		auto_vmw=1
-		shift 
-		interactive_mode=
+#	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
+#		shift 
+#		[ -s $1 ] && cp $1 vmware.conf
+#		auto_vmw=1
+#		shift 
+#		interactive_mode=
 	fi
 done
 
-[ "$interactive_mode" ] || exit 0
+[ ! "$interactive_mode" ] && exit 0
 
 # From now on it's all considered interactive
 
@@ -159,6 +159,24 @@ fi
 
 if [ ! -f ~/.aba.conf.created -o ~/.aba.conf.created -nt aba.conf ]; then
 	touch ~/.aba.conf.created
+
+	echo
+	echo -n "Aba uses an editor to aid in the workflow.  Which editor do you prefer (vi, nano or none)? [vi]: "
+	read new_editor
+
+	[ ! "$new_editor" ] && new_editor=vi
+
+	if [ "$new_editor" != "none" ]; then
+		if ! which $new_editor >/dev/null 2>&1; then
+			echo "Editor '$new_editor' not found! Install it and try again!"
+
+			exit 1
+		fi
+	fi
+
+	sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
+	export editor=$new_editor
+
 	edit_file aba.conf "Edit the config file 'aba.conf' to set your domain name, network CIDR and others" || exit 0
 fi
 
