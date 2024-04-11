@@ -158,5 +158,13 @@ fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
 
+# Now add any signatures
+echo "Applying any signatures:"
+for f in mirror/s*/oc-mirror-workspace/results-*/release-signatures/signature-sha256*json
+do
+	oc apply -f $f
+	echo $f
+done
+
 exit 0
 
