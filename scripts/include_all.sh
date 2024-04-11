@@ -139,3 +139,15 @@ try_cmd() {
 	done
 }
 
+# Function to check if a version is greater than another version
+is_version_greater() {
+    local version1=$1
+    local version2=$2
+
+    # Sort the versions
+    local sorted_versions=$(printf "%s\n%s" "$version1" "$version2" | sort -V | tr "\n" "|")
+
+    # Check if version1 is the last one in the sorted list
+     [[ "$sorted_versions" != "$version1|$version2|" ]]
+}
+
