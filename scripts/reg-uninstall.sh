@@ -66,4 +66,4 @@ else
 fi
 
 echo
-echo "==> Execution successful"
+echo "==> Registry uninstall successful"

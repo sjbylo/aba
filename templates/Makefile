@@ -19,6 +19,7 @@ init: .initialized
 	@ln -fs ../scripts
 	@ln -fs ../mirror
 	@ln -fs ../aba.conf
+	make -C ../cli
 	@touch .initialized
 	@echo Initialized `pwd` successfully
 

@@ -1,5 +1,6 @@
 #!/bin/bash 
 # Install and edit the vmware (govc) conf file
+# This script should really only be run on the internal bastion (with access to vCenter) 
 
 source scripts/include_all.sh
 
@@ -8,9 +9,9 @@ source scripts/include_all.sh
 # Needed for $editor
 source <(normalize-aba-conf)
 
-##if [ ! -s vmware.conf ]; then
-echo
-if ask "Install OpenShift onto vSphere or ESXi (access from the private network is required!)?"; then
+if [ ! -s vmware.conf ]; then
+	echo
+	if ask "Install OpenShift onto vSphere or ESXi (access from the private network is required!)?"; then
 
 	#echo "Install OpenShift onto vSphere or ESXi (access from the private network is required!)?"
 #	echo -n "Hit Return to edit the 'vmware.conf' file or 'n' to skip (Y/n): " 
@@ -26,10 +27,11 @@ if ask "Install OpenShift onto vSphere or ESXi (access from the private network 
 			cp templates/vmware.conf .  # The default template 
 		fi
 		[ "$ask" ] && $editor vmware.conf 
-else
-	echo "Creating empty 'vmware.conf' file.  To use vSphere or ESXi, delete the file and run 'make vmw'."
-	> vmware.conf
-	exit 0
+	else
+		echo "Creating empty 'vmware.conf' file.  To use vSphere or ESXi, delete the file and run 'make vmw'."
+		> vmware.conf
+		exit 0
+	fi
 fi
 
 source <(normalize-vmware-conf)

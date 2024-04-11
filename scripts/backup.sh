@@ -1,5 +1,5 @@
 #!/bin/bash -e
-# Tar backup script for full and incremental backups.  Used to only backup (and copy) the changes since the last backup.
+# Tar backup script for full OR incremental backups.  Used to only backup (and copy) the changes since the last backup.
 # Usage: backup.sh [--inc] [--repo] [file]
 #                   --inc	incremental backup based on the ~/.aba.previous.backup flag file's timestamp
 #                   --repo	exclude all */mirror_seq*tar files from the archive.  Copy them separately, if needed.
@@ -10,7 +10,7 @@ repo_only=			# Also include the save/mirror_seq*.tar files (for some use-cases i
 
 while echo "$1" | grep -q ^--[a-z]
 do
-	[ "$1" = "--repo" ] && repo_only=1 && shift		# Set to NOT include any mirror_seq*.tar files
+	[ "$1" = "--repo" ] && repo_only=1 && shift		# Set to NOT include any mirror_seq*.tar files, which can be copied separately. 
 	[ "$1" = "--inc" ] && inc=1 && shift    		# Set optional backup type to "incremental".  Full is default. 
 done
 
@@ -31,9 +31,11 @@ cd ..
 # If this is the first run OR is doing a full backup ... Set up for full backup 
 [ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup && echo "Resetting timestamp file: ~/.aba.previous.backup" >&2
 
+	###bin			\
+	# Remove bin in favour of cli/
 file_list=$(find		\
-	bin			\
 	aba/aba			\
+	aba/cli			\
 	aba/aba.conf		\
 	aba/Makefile		\
 	aba/mirror		\
@@ -48,7 +50,7 @@ file_list=$(find		\
 	aba/test		\
 -type f \
 	! -path "aba/.git*" -a 				\
-	! -path "aba/cli/*" -a 				\
+	! -path "aba/cli/.init" -a 			\
 	! -path "aba/mirror/mirror-registry" -a 	\
 	! -path "aba/mirror/.initialized" 		\
 	! -path "aba/mirror/.rpms" 			\
@@ -66,6 +68,8 @@ file_list=$(find		\
 							\
 	-newer ~/.aba.previous.backup 			\
 )
+	# Remove bin in favour of cli/
+	###! -path "aba/cli/*" -a 				\
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
 [ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_seq.*.tar$") || true  # 'true' needed!
@@ -104,7 +108,7 @@ else
 	echo "Writing 'full' tar archive to $dest" >&2
 fi
 
-echo "Running: `pwd` tar cf $dest <files>" >&2
+echo "Running: 'tar cf $dest <files>' from $PWD" >&2
 ### echo file_list=$file_list >&2
 tar cf $dest $file_list || exit 
 

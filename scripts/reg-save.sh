@@ -90,4 +90,4 @@ fi
 # If oc-mirror fails due to transient errors, the user should try again
 
 echo
-echo "==> Execution successful"
+echo "==> Image saving successful"
