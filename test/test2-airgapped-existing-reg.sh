@@ -9,6 +9,7 @@
 
 ### sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
 
+### TEST for when user installs all rpms in advance, should not call "dnf" as it may fail without network access
 ### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
 ### sudo dnf install -y $(cat templates/rpms-internal.txt)
 ### sudo dnf install -y $(cat templates/rpms-external.txt)
@@ -48,7 +49,7 @@ rm -rf sno compact standard
 v=4.14.14
 rm -f aba.conf
 vf=~/.vmware.conf.vc
-test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v --vmw $vf
+test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
 
 mylog "Setting ask="
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
@@ -93,9 +94,11 @@ mylog Revert a snapshot and power on the internal bastion vm
 ssh steve@registry2.example.com -- "date" || sleep 2
 ssh steve@registry2.example.com -- "date" || sleep 3
 ssh steve@registry2.example.com -- "date" || sleep 8
-### TEST for when user installs all rpms in advance, should not call "dnf" as it may fail without network 
-### ssh steve@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 #################################
+
+# Just be sure a valid govc config file exists
+scp ~/.vmware.conf steve@registry2.example.com: 
+## scp ~/.vmware.conf testy@registry2.example.com: 
 
 uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
 

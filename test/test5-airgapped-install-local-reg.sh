@@ -90,7 +90,10 @@ mylog Revert vm snapshot of the internal bastion vm and power on
 ssh steve@registry2.example.com -- "date" || sleep 2
 ssh steve@registry2.example.com -- "date" || sleep 3
 ssh steve@registry2.example.com -- "date" || sleep 8
-### ssh steve@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
+
+# Just be sure a valid govc config file exists
+scp ~/.vmware.conf steve@registry2.example.com: 
+
 #################################
 
 source <(cd mirror && normalize-mirror-conf)
