@@ -128,6 +128,10 @@ tarrepo:   ## Same as 'make tar' but excludes all 'mirror_seq*tar' files under m
 inc:   ## Same as 'make tar' except a timestamp file is used to only backup files that have changed since the last 'make inc' was run.
 	@make -s -C .. inc
 
+.PHONY: catalog
+catalog:
+	scripts/fetch-operator-catalog.sh
+
 ### .PHONY: tidy 
 ### tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
 
