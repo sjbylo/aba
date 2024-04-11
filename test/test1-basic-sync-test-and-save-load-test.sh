@@ -1,6 +1,7 @@
 #!/bin/bash -ex
 # This test is for a connected bastion.  It will install registry on remote bastion and then sync images and install clusters, 
 # ... then savd/load images and install clusters. 
+# This test required a valid ~/.vmware.conf file
 
 ### TEST for clean start 
 ###sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
@@ -35,7 +36,10 @@ make distclean
 v=4.14.14
 rm -f aba.conf
 vf=~/.vmware.conf.vc
-test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v --vmw $vf
+test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ### --vmw $vf
+
+# Set up govc 
+cp $vf vmware.conf 
 
 mylog "Setting 'ask='"
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
@@ -260,11 +264,11 @@ test-cmd -m "Installing sno cluster with 'make sno $targetiso'" make sno $target
 
 test-cmd -m "Deleting cluster" make -C sno delete 
 
-mylog Removing vmware config file
+mylog "Removing vmware config file to simulate 'bare metal'"
 
 > vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
-test-cmd -m "Creating standard iso file with 'make standard target=iso'" make standard target=iso # Since we're testing bare-metal, only create iso
+test-cmd -m "Creating standard iso file with 'make standard target=iso'" make standard target=iso # Since we're simulating bare-metal, only create iso
 
 test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
 

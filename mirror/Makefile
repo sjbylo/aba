@@ -129,7 +129,7 @@ inc:   ## Same as 'make tar' except a timestamp file is used to only backup file
 	@make -s -C .. inc
 
 .PHONY: catalog
-catalog:
+catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
 	scripts/fetch-operator-catalog.sh
 
 ### .PHONY: tidy 
