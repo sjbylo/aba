@@ -50,6 +50,8 @@ v=4.14.14
 rm -f aba.conf
 vf=~/.vmware.conf.vc
 test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
+# Set up govc 
+cp $vf vmware.conf 
 
 mylog "Setting ask="
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
