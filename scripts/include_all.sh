@@ -38,6 +38,7 @@ normalize-mirror-conf()
 	# Ensure any ~/ is masked, e.g. \~/
 	# Ensrue reg_ssh_user has a value
 	# Prepend "export "
+	[ ! -s mirror.conf ] && echo "Warning: no 'mirror.conf' file defined in $PWD" && return 0
 	cat mirror.conf | \
 		cut -d"#" -f1 | \
 			sed -E "s/^reg_ssh_user=[[:space:]]+|reg_ssh_user=$/reg_ssh_user=$(whoami)/g" | \

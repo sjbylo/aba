@@ -30,6 +30,7 @@ mirror.conf: .initialized ## Set up the mirror.conf file.
 
 vmware.conf: ## Use VMW vCenter or ESXi to create cluster.
 	@make -C .. vmw
+	@make -C ../cli ~/bin/govc
 	@test -f ../vmware.conf && ln -fs ../vmware.conf || true
 
 cluster.conf:  ## Set up the cluster.conf file.
