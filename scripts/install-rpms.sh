@@ -8,15 +8,16 @@ rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y
 
 [ "$1" = "internal" ] && rpms=$(cat templates/rpms-internal.txt) || rpms=$(cat templates/rpms-external.txt)
 
+rpms_to_install=
+
 for rpm in $rpms
 do
 	# Check if each rpm is already installed.  Don't run dnf unless we have to.
-	rpm -q --quiet $rpm && continue
-
-	echo "rpm '$rpm' missing. Ensuring all required rpms installed: $rpms ..."
-	sudo dnf install $rpms -y >> .dnf-install.log 2>&1
-
-	break 
+###	rpm -q --quiet $rpm && continue
+	rpm -q --quiet $rpm || rpms_to_install="$rpms_to_install $rpm" 
 done
+
+echo "Rpms not installed:$rpms_to_install"
+sudo dnf install $rpms -y >> .dnf-install.log 2>&1
 
 exit 0
