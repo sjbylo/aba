@@ -35,6 +35,9 @@ do
 #		auto_vmw=1
 #		shift 
 #		interactive_mode=
+	else
+		echo "Unknown option: $1"
+		shift 
 	fi
 done
 
