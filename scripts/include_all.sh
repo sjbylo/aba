@@ -53,6 +53,7 @@ normalize-cluster-conf()
 {
 	# Normalize or sanitize the config file
 	# Prepend "export "
+	[ ! -s cluster.conf ] && echo "Warning: no 'cluster.conf' file defined in $PWD" && return 0
 	cat cluster.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -65,7 +66,7 @@ normalize-vmware-conf()
 	# Determine if ESXi or vCenter
 	# Prepend "export "
 	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
-	[ ! -f vmware.conf ] && return 0
+	[ ! -f vmware.conf ] && echo "Warning: no 'vmware.conf' file defined in $PWD" && return 0  # vmware.conf can be empty
         vars=$(cat vmware.conf | \
                 cut -d"#" -f1 | \
                 sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -83,14 +84,20 @@ normalize-vmware-conf()
 }
 
 install_rpms() {
+	local rpms_to_install=
+
 	for rpm in $@
 	do
 		# Check if each rpm is already installed.  Don't run dnf unless we have to.
-		rpm -q --quiet $rpm && continue   # If at least one rpm is not installed, install rpms
+		###rpm -q --quiet $rpm && continue   # If at least one rpm is not installed, install rpms
+		rpm -q --quiet $rpm || rpms_to_install="$rpms_to_install $rpm" 
 
-		sudo dnf install $@ -y >> .dnf-install.log 2>&1
-		break
+		##sudo dnf install $@ -y >> .dnf-install.log 2>&1
+		##break
 	done
+
+	echo "Rpms not installed:$rpms_to_install"
+	[ "$rpms_to_install" ] && sudo dnf install $@ -y >> .dnf-install.log 2>&1
 }
 
 ask() {
