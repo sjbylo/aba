@@ -152,6 +152,7 @@ clean:  ## Clean up only, keeping configuration files: image set and mirror.conf
 .PHONY: distclean
 distclean: clean  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@##$(SCRIPTS)/ask.sh "Are you sure?" # FIXME: test and fix
+	[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk || true
 	rm -rf *.tar.gz oc-mirror-workspace 
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
@@ -160,6 +161,5 @@ distclean: clean  # Clean up all files. Only use if you know what you're doing! 
 	rm -f mirror.conf
 	rm -f .ssh.conf
 	rm -f .rpmsext .rpmsint
-	[ -d regcreds ] && rm -rf regcreds.bk && cp -rp regcreds regcreds.bk || true
 	rm -rf regcreds
 
