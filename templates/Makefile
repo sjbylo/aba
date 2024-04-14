@@ -164,12 +164,8 @@ cleanall: clean  ## Really clean all files, including configuration files, e.g. 
 
 .PHONY: distclean
 distclean: # Clean up all files.  Only use if you know what you're doing! Only used to re-distribute the repository.
-	@scripts/ask.sh "Are you sure you want to clean up everything?" && exit 1 || echo Cleaning all files ...
+	@scripts/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
 	@make clean
 	rm -rf ~/.cache/agent 
 	rm -f cluster.conf mirror.conf vmware.conf
-
-.PHONY: test
-test: # test target!
-	@scripts/ask.sh "Are you sure?" && exit 1 || echo y
 

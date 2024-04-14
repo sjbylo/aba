@@ -9,15 +9,11 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 
 if [ ! "$ocp_version" ]; then
-	echo "Please run ./aba first!"
+	echo "Please run ./aba first!"  # Should never need to reach here
 	exit 1
 fi
 
-##echo
-##echo -n "===> Configure your private mirror registry? Hit ENTER to continue or Ctrl-C to abort: "
-ask "===> Configure your private mirror registry? "
-
-##read yn
+ask "Configure your private mirror registry? "
 
 scripts/j2 templates/mirror.conf.j2 > mirror.conf
 

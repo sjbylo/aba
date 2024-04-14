@@ -38,7 +38,7 @@ normalize-mirror-conf()
 	# Ensure any ~/ is masked, e.g. \~/
 	# Ensrue reg_ssh_user has a value
 	# Prepend "export "
-	[ ! -s mirror.conf ] && echo "Warning: no 'mirror.conf' file defined in $PWD" && return 0
+	[ ! -s mirror.conf ] && echo "Warning: no 'mirror.conf' file defined in $PWD" >&2 && return 0
 	cat mirror.conf | \
 		cut -d"#" -f1 | \
 			sed -E "s/^reg_ssh_user=[[:space:]]+|reg_ssh_user=$/reg_ssh_user=$(whoami)/g" | \
@@ -53,7 +53,7 @@ normalize-cluster-conf()
 {
 	# Normalize or sanitize the config file
 	# Prepend "export "
-	[ ! -s cluster.conf ] && echo "Warning: no 'cluster.conf' file defined in $PWD" && return 0
+	[ ! -s cluster.conf ] && echo "Warning: no 'cluster.conf' file defined in $PWD" >&2 && return 0
 	cat cluster.conf | \
 		cut -d"#" -f1 | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -66,7 +66,7 @@ normalize-vmware-conf()
 	# Determine if ESXi or vCenter
 	# Prepend "export "
 	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
-	[ ! -f vmware.conf ] && echo "Warning: no 'vmware.conf' file defined in $PWD" && return 0  # vmware.conf can be empty
+	[ ! -f vmware.conf ] && echo "Warning: no 'vmware.conf' file defined in $PWD" >&2 && return 0  # vmware.conf can be empty
         vars=$(cat vmware.conf | \
                 cut -d"#" -f1 | \
                 sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -102,16 +102,29 @@ install_rpms() {
 
 ask() {
 	source <(normalize-aba-conf)
-	[ ! "$ask" ] && return 0  # reply "yes"
+	[ ! "$ask" ] && return 0  # reply "default reply"
 
+	# Defqult reply is 'yes' and return 0
+	yn_text="(Y/n)"
+	def_val=y
+	[ "$1" = "-n" ] && def_val=n && yn_text="(y/N)" && shift
+	[ "$1" = "-y" ] && def_val=y && yn_text="(Y/n)" && shift
 	timer=
-	[ "$1" = "-t" ] && shift && timer="-t $1" && shift
+	[ "$1" = "-t" ] && timer="-t $1" && shift && shift 
 
 	echo
-	echo -n "===> $@ (Y/n): "
+	echo -n "===> $@ $yn_text: "
 	read $timer yn
-	[ ! "$yn" -o "$yn" = "y" -o "$yn" = "Y" ] && return 0
 
+	if [ "$def_val" == "y" ]; then
+		[ ! "$yn" -o "$yn" = "y" -o "$yn" = "Y" ] && return 0
+	else
+		[ ! "$yn" ] && return 0
+		[ "$yn" == "n" -o "$yn" == "N" ] && return 0 
+		[ "$yn" != "y" -a "$yn" != "Y" ] && return 0
+	fi
+
+	# return "non-default" responce 
 	return 1
 }
 
