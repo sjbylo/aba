@@ -1,7 +1,7 @@
 #!/bin/bash -ex
 
-if false; then
-#if [ "1" ]; then
+#if false; then
+if [ "1" ]; then
 	# Used for testing from git
 	cd 
 	rm -rf testing
@@ -11,7 +11,7 @@ if false; then
 	cd aba
 	git checkout dev
 	#git checkout main
-	cd ~/aba
+	#cd ~/testing/aba
 fi
 
 export target_full=1   # Build vm
