@@ -43,7 +43,8 @@ mylog
 which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
-test-cmd "make -C mirror distclean ask="
+#test-cmd "make -C mirror distclean ask="
+test-cmd "make -C mirror clean"
 rm -rf sno compact standard 
 
 v=4.14.14

@@ -39,7 +39,8 @@ rm -f ~/.aba.previous.backup
 which make || sudo dnf install make -y
 
 > mirror/mirror.conf
-test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask=" 
+#test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask=" 
+test-cmd -m "Cleaning up mirror - clean" "make -C mirror clean" 
 rm -rf sno compact standard 
 
 v=4.14.14
