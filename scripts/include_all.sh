@@ -96,8 +96,10 @@ install_rpms() {
 		##break
 	done
 
-	echo "Rpms not installed:$rpms_to_install"
-	[ "$rpms_to_install" ] && sudo dnf install $@ -y >> .dnf-install.log 2>&1
+	if [ "$rpms_to_install" ]; then
+		echo "Rpms not installed:$rpms_to_install"
+		[ "$rpms_to_install" ] && sudo dnf install $@ -y >> .dnf-install.log 2>&1
+	fi
 }
 
 ask() {
