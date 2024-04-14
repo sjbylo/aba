@@ -221,7 +221,8 @@ else
 	# Now, activate the uninstall script 
 	mv ./reg-uninstall.sh.provision reg-uninstall.sh
 
-	rm -rf regcreds/*
+	rm -rf regcreds
+	mkdir regcreds
 
 	# Fetch root CA from localhost 
 	cp $reg_root/quay-rootCA/rootCA.pem regcreds/

@@ -103,7 +103,7 @@ noask:  ## Set 'ask' in aba.conf to 'false'
 	@echo ask set to false in aba.conf
 
 .PHONY: clean
-clean: ## Clean up 
+clean: ## Clean up all temporary files.
 	make -C mirror clean 
 	make -C test clean 
 	rm -f ~/.aba.previous.backup

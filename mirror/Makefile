@@ -22,12 +22,13 @@ init: .initialized
 ../aba.conf:
 	../aba
 
-# If vmware.conf does not exist, then create it
-../vmware.conf:
-	@make -C .. vmware.conf
+## If vmware.conf does not exist, then create it
+#../vmware.conf:
+#	@make -C .. vmware.conf
 
 .PHONY: sync
-sync: .initialized .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
+#sync: .initialized .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
+sync: .initialized .rpmsint ~/.pull-secret.json install                   ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
@@ -135,14 +136,15 @@ uninstall: .initialized             mirror-registry .uninstalled     ## Uninstal
 # Note that 'mirror-registry.tar.gz' is needed to 'uninstall' registry in distclean!
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 .PHONY: clean
-clean:  ## Clean up only, keeping configuration files: image set and mirror.conf. It is recommended to backup your important files. 
+clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
 	@echo "Note: to uninstall the registry, run 'make uninstall'" 
 	rm -rf *.tar mirror-registry 
 	rm -f  .initialized 
-	@#rm -f  templates scripts
+	rm -f  templates scripts
 	rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
 	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
-	@#rm -f aba.conf  # remove link only
+	rm -f aba.conf  # remove link only
+	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh # Only clean up the created scripts, not the script needed to uninstall the reg.
 	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 
 	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rfv save || true  # Delete only if not edited
 
@@ -154,12 +156,12 @@ distclean: .initialized  # Clean up all files. Only use if you know what you're 
 	@make clean
 	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true
 	@#rm -rf regcreds
+	@#rm -f mirror.conf
 	rm -rf *.tar.gz oc-mirror-workspace 
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f .dnf-install.log
-	rm -f mirror.conf
 	rm -f .ssh.conf
 	rm -f .rpmsext .rpmsint
 
