@@ -110,7 +110,9 @@ clean: ## Clean up
 	rm -f ~/.aba.conf.created
 
 .PHONY: distclean
-distclean: clean ## Clean up *everything*
+distclean: ## Clean up *everything*
+	@scripts/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
+	@make clean
 	rm -f vmware.conf
 	@####rm -f aba.conf ~/.aba.conf*
 	make -C mirror distclean 
