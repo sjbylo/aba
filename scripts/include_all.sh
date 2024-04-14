@@ -102,9 +102,9 @@ install_rpms() {
 
 ask() {
 	source <(normalize-aba-conf)
-	if [ ! -t 0 ]; then   # If no stdin bytes
-		[ ! "$ask" ] && return 0  # reply "default reply"
-	fi
+	#if [ ! -t 0 ]; then   # If no stdin bytes
+	[ ! "$ask" ] && return 0  # reply "default reply"
+	#fi
 
 	# Defqult reply is 'yes' and return 0
 	yn_text="(Y/n)"

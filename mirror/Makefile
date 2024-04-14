@@ -153,7 +153,7 @@ clean:  ## Clean up only, keeping configuration files: image set and mirror.conf
 .PHONY: distclean
 distclean: .initialized  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@echo "Note: to uninstall the registry, run 'make uninstall'" 
-	@$(SCRIPTS)/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
+	@test "$(ask)" && $(SCRIPTS)/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
 	@make clean
 	[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true
 	rm -rf *.tar.gz oc-mirror-workspace 
