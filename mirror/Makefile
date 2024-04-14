@@ -26,6 +26,7 @@ init: .initialized
 #../vmware.conf:
 #	@make -C .. vmware.conf
 
+# FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
 #sync: .initialized .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 sync: .initialized .rpmsint ~/.pull-secret.json install                   ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
@@ -47,6 +48,7 @@ save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save i
 	###
 	$(SCRIPTS)/reg-save.sh  $(debug)
 
+# FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
 #load: .initialized .rpmsint install ../vmware.conf  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
@@ -83,7 +85,7 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 
 # mirror,.conf no longer depends on aba.conf 
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
-mirror.conf: .initialized                                               ## Configure the mirror.conf file.
+mirror.conf: .initialized                     ../aba.conf               ## Configure the mirror.conf file.
 	@$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 install: .installed
