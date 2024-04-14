@@ -5,12 +5,18 @@ SCRIPTS   = ../scripts
 debug    ?= 		# Set debug=1 for some commands 
 
 # The default target will build a cluster from scratch 
-all: iso .autopoweroff .autoupload .autorefresh .finished login
+all: ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished login
 
 ##@ Help-related tasks
 .PHONY: help
 help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[\.a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+../aba.conf:
+	make -C .. aba.conf
+
+../mirror/mirror.conf:
+	@echo "Before installing an OpenShift cluster, please install or configure a mirror registry. See the aba/README file." && exit 1
 
 ###.PHONY: init
 init: .initialized
@@ -99,7 +105,7 @@ kill:  vmware.conf ## Kill or power off the VMs immediately.  This will stop the
 	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: delete
-delete: vmware.conf ## Delete the VMs. This will delete the cluster. 
+delete: .initialized vmware.conf ## Delete the VMs. This will delete the cluster. 
 	@scripts/vmw-delete.sh $(debug) || exit 0
 
 .finished: .autorefresh

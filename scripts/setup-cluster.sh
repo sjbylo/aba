@@ -28,7 +28,10 @@ pwd
 echo "Creating '$name/cluster.conf' file for cluster type [$cluster_type]."
 scripts/create-cluster-conf.sh $name $cluster_type
 
-if ask "Trigger the cluster with 'make $target'?"; then
+msg="Install the cluster with 'make'?"
+[ "$target" ] && msg="Trigger the cluster with 'make $target'?"
+
+if ask $msg; then
 	make $target
 
 	echo 
