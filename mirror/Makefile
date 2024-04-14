@@ -49,7 +49,8 @@ save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save i
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: .initialized .rpmsint install ../vmware.conf  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
+#load: .initialized .rpmsint install ../vmware.conf  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
+load: .initialized .rpmsint install                 ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	###
 	### Load images from local disk to mirror registry
 	###
