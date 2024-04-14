@@ -82,7 +82,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 make -C cli
 source <(normalize-vmware-conf)
-scripts/vmw-create-folder.sh /Datacenter/vm/test
+##scripts/vmw-create-folder.sh /Datacenter/vm/test
 
 #################################
 mylog Revert a snapshot and power on the internal bastion vm
