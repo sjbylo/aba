@@ -35,39 +35,41 @@ cd ..
 	# Remove bin in favour of cli/
 file_list=$(find		\
 	aba/aba			\
-	aba/cli			\
 	aba/aba.conf		\
-	aba/Makefile		\
+	aba/cli			\
+	aba/rpms		\
 	aba/mirror		\
 	aba/others		\
-	aba/README.md		\
-	aba/README-OTHER.md	\
 	aba/scripts		\
 	aba/templates		\
+	aba/Makefile		\
+	aba/README.md		\
+	aba/README-OTHER.md	\
 	aba/Troubleshooting.md	\
 	aba/vmware.conf		\
-	aba/rpms		\
 	aba/test		\
 -type f \
-	! -path "aba/.git*" -a 				\
-	! -path "aba/cli/.init" -a 			\
-	! -path "aba/mirror/mirror-registry" -a 	\
-	! -path "aba/mirror/.initialized" 		\
-	! -path "aba/mirror/.rpms" 			\
-	! -path "aba/mirror/.installed" 		\
-	! -path "aba/mirror/.loaded" 			\
-	! -path "aba/mirror/execution-environment.tar" 	\
-	! -path "aba/mirror/image-archive.tar" 		\
-	! -path "aba/mirror/quay.tar" 			\
-	! -path "aba/mirror/pause.tar" 			\
-	! -path "aba/mirror/postgres.tar" 		\
-	! -path "aba/mirror/redis.tar" 			\
-	! -path "aba/*/iso-agent-based*" 		\
-	! -path "aba/mirror/sync/oc-mirror-workspace*" 	\
-	! -path "aba/mirror/save/oc-mirror-workspace*" 	\
-							\
-	-newer ~/.aba.previous.backup 			\
+	! -path "aba/.git*" -a 					\
+	! -path "aba/cli/.init" -a 				\
+	! -path "aba/mirror/.initialized" -a 			\
+	! -path "aba/mirror/.rpms" -a 				\
+	! -path "aba/mirror/.installed" -a 			\
+	! -path "aba/mirror/.loaded" -a				\
+	! -path "aba/mirror/mirror-registry" -a 		\
+	! -path "aba/mirror/execution-environment.tar" -a 	\
+	! -path "aba/mirror/image-archive.tar" -a 		\
+	! -path "aba/mirror/quay.tar" -a 			\
+	! -path "aba/mirror/pause.tar" -a 			\
+	! -path "aba/mirror/postgres.tar" -a 			\
+	! -path "aba/mirror/redis.tar" -a 			\
+	! -path "aba/*/iso-agent-based*" -a 			\
+	! -path "aba/mirror/sync/oc-mirror-workspace*" -a 	\
+	! -path "aba/mirror/save/oc-mirror-workspace*"		\
+								\
+	-newer ~/.aba.previous.backup 				\
 )
+# Note, don't copy over any of the ".initialized", ".installed", ".rpms" flag files etc, since these components are needed on the internal bastion
+# Don't copy those very large 'tar' files since we have them compressed already.
 	# Remove bin in favour of cli/
 	###! -path "aba/cli/*" -a 				\
 

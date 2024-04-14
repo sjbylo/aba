@@ -13,7 +13,7 @@ if [ -s reg-uninstall.sh ]; then
 	if ask "Uninstall the mirror registry from host $reg_host_to_del"; then
 		#echo Uninstalling mirror registry from host $reg_host ...
 		reg_delete
-		rm -f regcreds/*
+		rm -rf regcreds/*
 		rm -f ./reg-uninstall.sh
 		rm -f .installed 
 		touch .uninstalled
