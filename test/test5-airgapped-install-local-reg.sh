@@ -78,7 +78,7 @@ sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
 
 make -C cli
 source <(normalize-vmware-conf)
-scripts/vmw-create-folder.sh /Datacenter/vm/test
+##scripts/vmw-create-folder.sh /Datacenter/vm/test
 
 #################################
 mylog Revert vm snapshot of the internal bastion vm and power on
