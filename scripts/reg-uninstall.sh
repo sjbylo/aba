@@ -46,8 +46,6 @@ if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registr
 		cmd="./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k $reg_ssh_key $reg_root_opt"
 		echo "Running command: $cmd"
 		$cmd || true
-
-		###rm -f regcreds/*
 	else
 		exit 1
 	fi
@@ -56,8 +54,6 @@ elif podman ps | grep -q registry; then
 		cmd="./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 		echo "Running command: $cmd"
 		$cmd || true
-
-		###rm -f regcreds/*
 	else
 		exit 1
 	fi

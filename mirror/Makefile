@@ -100,17 +100,10 @@ pw:
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh $(debug)
 
 .PHONY: verify
-verify: .initialized 
+verify: .initialized ## Using the credential files in 'mirror/regcreds' dir and the values in 'mirror/mirror.conf', verify access to the registry. 
 	$(SCRIPTS)/reg-verify.sh $(debug)
 	@rm -f .uninstalled 
 	@touch .installed
-
-#uninstall: .initialized mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
-uninstall: .initialized             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
-.uninstalled: 
-	$(SCRIPTS)/reg-uninstall.sh  $(debug)
-	@rm -f .installed
-	@touch .uninstalled
 
 .PHONY: uninstallclean
 uninstallclean:
@@ -132,11 +125,15 @@ inc:   ## Same as 'make tar' except a timestamp file is used to only backup file
 catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
 	scripts/fetch-operator-catalog.sh
 
-### .PHONY: tidy 
-### tidy: ## Tidy large uncompressed files before copying the repo to the internal bastion 
+#uninstall: .initialized mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
+uninstall: .initialized             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
+.uninstalled: 
+	$(SCRIPTS)/reg-uninstall.sh  $(debug)
+	@rm -f .installed
+	@touch .uninstalled
 
 # Note that 'mirror-registry.tar.gz' is needed to 'uninstall' registry in distclean!
-# FIXME: Only delete the imageset conf file IF user has made changes, otherwise delete it?
+# Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 .PHONY: clean
 clean:  ## Clean up only, keeping configuration files: image set and mirror.conf. It is recommended to backup your important files. 
 	@echo "Note: to uninstall the registry, run 'make uninstall'" 
@@ -144,32 +141,30 @@ clean:  ## Clean up only, keeping configuration files: image set and mirror.conf
 	rm -f  .initialized 
 	@#rm -f  templates scripts
 	rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
-	rm -f ~/.aba.previous.backup
+	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
 	@#rm -f aba.conf  # remove link only
-	rm -f *.sh
+	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 
 	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rfv save || true  # Delete only if not edited
 
-# Note that reg-uninstall.sh script will delete registry and reg-uninstall.sh $ regcreds/ itself
+# Note that reg-uninstall.sh script will delete registry and regcreds/ dir.
 .PHONY: distclean
 distclean: .initialized  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@echo "Note: to uninstall the registry, run 'make uninstall'" 
 	@test "$(ask)" && $(SCRIPTS)/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
 	@make clean
-	[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true
+	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true
+	@#rm -rf regcreds
 	rm -rf *.tar.gz oc-mirror-workspace 
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f .dnf-install.log
 	rm -f mirror.conf
-	rm -rf regcreds
 	rm -f .ssh.conf
 	rm -f .rpmsext .rpmsint
 
-
-.PHONY: testy
-testy:
-	@$(SCRIPTS)/ask.sh -n "Are you sure?" && echo "Stoppping" && exit 1 || true
-	@echo run make clean
-
+.PHONY: testask
+testask:
+	@test "$(ask)" && $(SCRIPTS)/ask.sh -n "Are you sure?" && echo "stop..." && exit 1 || true
+	@echo cont...
 
