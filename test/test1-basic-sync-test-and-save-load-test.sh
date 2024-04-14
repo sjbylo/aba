@@ -31,7 +31,8 @@ ntp=10.0.1.8 # If available
 which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
-make distclean ask=
+#make distclean ask=
+make clean
 
 v=4.14.14
 rm -f aba.conf
