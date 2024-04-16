@@ -201,7 +201,7 @@ test-cmd -h steve@$bastion2 -m "Verifying access to mirror registry $reg_host:$r
 test-cmd -h steve@$bastion2 -r 99 3 -m "Loading images into mirror $reg_host:$reg_port" "make -C $subdir/aba/mirror load" 
 
 # Is the cluster can be reached ... use existing cluster
-if test-cmd -h steve@$bastion2 -m "Checking if sno cluster up" "make -C $subdir/aba/sno cmd cmd='oc get clusterversion'"  
+if test-cmd -h steve@$bastion2 -m "Checking if sno cluster up" "make -C $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
 	mylog "Using existing sno cluster"
 else
 	mylog "Creating the sno cluster"
