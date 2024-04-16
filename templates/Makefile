@@ -71,11 +71,12 @@ upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images
 
 # The following targets are meant for interactive use only
 
-# This target is a duplicate of .autorefresh below, except for the touch command.  It's for interactive use. 
+# This target is a duplicate of .autorefresh below, except for the touch command.  'make refresh' is for interactive use and should always run.
 .PHONY: refresh
 refresh:  ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
 	scripts/vmw-refresh.sh
 
+# This target, the same as 'refresh' should only run once.
 .autorefresh: .initialized .autoupload vmware.conf 
 	scripts/vmw-refresh.sh
 	@touch .autorefresh
@@ -86,7 +87,7 @@ create: vmware.conf iso  ## Create the VMs based on the 'agent-based' config fil
 
 .PHONY: ls
 ls: vmware.conf  ## List VMs and their power state.
-	@scripts/vmw-ls.sh || echo "No vm(s).  Try 'make create' or 'make create start'."
+	@scripts/vmw-ls.sh || echo "No vm(s).  Try running 'make' or 'make refresh'."
 
 .PHONY: stop
 stop: vmware.conf ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again!
