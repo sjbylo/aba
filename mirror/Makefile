@@ -115,15 +115,15 @@ uninstallclean:
 
 .PHONY: tar
 tar:   ## Create a full tar backup of ~/aba & ~/bin, ready to be transported to your private network.
-	@make -s -C .. tar
+	@make -s -C .. tar $(out)
 
 .PHONY: tarrepo
 tarrepo:   ## Same as 'make tar' but excludes all 'mirror_seq*tar' files under mirror/save/.
-	@make -s -C .. tarrepo
+	@make -s -C .. tarrepo $(out)
 
 .PHONY: inc
 inc:   ## Same as 'make tar' except a timestamp file is used to only backup files that have changed since the last 'make inc' was run.
-	@make -s -C .. inc
+	@make -s -C .. inc $(out)
 
 .PHONY: catalog
 catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 

@@ -1,6 +1,6 @@
 #!/usr/bin/bash 
 
-[ -s mirror.conf ] && echo mirror.conf already exists && exit 0
+[ -s mirror.conf ] && echo Using existing mirror.conf && exit 0
 
 source scripts/include_all.sh
 

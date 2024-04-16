@@ -1,12 +1,7 @@
-# No file exists to check timestamps
-###.PHONY: all clean install sync sno save load test
-
-TEMPLATES = templates
-SCRIPTS   = scripts
-ocp_target_ver   ?= 4.13.19
-d        ?= 
-DEBUG     = $d
-out    ?= /tmp
+##ocp_target_ver   ?= 4.13.19
+##d        ?= 
+##DEBUG     = $d
+##out    ?= /tmp
 
 .PHONY: aba
 aba:  ## Run the ./aba script to sert up 'aba.conf'
@@ -47,10 +42,6 @@ sync: ## Sync images from the Internet directly to an internal registry (as defi
 .PHONY: save
 save: ## Save images from the Internet to mirror/save. 
 	make -C mirror save 
-
-.PHONY: tidy
-tidy:
-	make -C mirror tidy
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. make tar out=/dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use out=- to send tar output to stdout.
@@ -110,7 +101,7 @@ clean: ## Clean up all temporary files.
 	rm -f ~/.aba.conf.created
 
 .PHONY: distclean
-distclean: ## Clean up *everything*
+distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this dies not run 'make uninstall' (uninstall the reg.)
 	@test "$(ask)" && scripts/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
 	@make clean
 	rm -f vmware.conf
