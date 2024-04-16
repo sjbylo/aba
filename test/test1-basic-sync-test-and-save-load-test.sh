@@ -3,11 +3,16 @@
 # ... then savd/load images and install clusters. 
 # This test required a valid ~/.vmware.conf file
 
-### TEST for clean start 
-###sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
-### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
-### sudo dnf install -y $(cat templates/rpms-internal.txt)
-### sudo dnf install -y $(cat templates/rpms-external.txt)
+### TEST for clean start with or without the rpms.  
+if false; then
+	# Assuming user will NOT install all rpms in advance and aba will install them.
+	sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
+else
+	# FIXME: test for pre-existing rpms!  In this case we don't want yum to run *at all* as it may error out
+	# Assuming user will install all rpms in advance.
+	sudo dnf install -y $(cat templates/rpms-internal.txt)
+	sudo dnf install -y $(cat templates/rpms-external.txt)
+fi
 
 cd `dirname $0`
 cd ..
@@ -31,8 +36,8 @@ ntp=10.0.1.8 # If available
 which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
-#make distclean ask=
-make clean
+make distclean ask=
+#make clean
 
 v=4.14.14
 rm -f aba.conf
@@ -71,7 +76,7 @@ ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
 
 # Create a test user on the remote host, with pw-less ssh access
 ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f" || true
-ssh $reg_ssh_user@registry2.example.com -- "sudo useradd testy -p xxxxx"
+ssh $reg_ssh_user@registry2.example.com -- "sudo useradd testy -p no-used"
 ssh $reg_ssh_user@registry2.example.com -- "sudo mkdir ~testy/.ssh && sudo chmod 700 ~testy/.ssh"
 ssh $reg_ssh_user@registry2.example.com -- "sudo cp -p ~steve/.pull-secret.json ~testy"   # Copy from anywhere!
 cat ~/.ssh/id_rsa.pub | ssh $reg_ssh_user@registry2.example.com -- "sudo tee -a ~testy/.ssh/authorized_keys"
@@ -85,13 +90,8 @@ ssh testy@registry2.example.com whoami
 #####################################################################################################################
 #####################################################################################################################
 
-# FIXME needed?
-#### sudo dnf install python36 python3-jinja2 -y
-# rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
-
 # Create and edit mirror.conf 
 make -C mirror mirror.conf
-### scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Confgure mirror to install registry on internal (remote) bastion2"
 
@@ -120,16 +120,16 @@ source <(cd mirror; normalize-mirror-conf)
 echo
 echo mirror-conf:
 (cd mirror; normalize-mirror-conf)
-
+echo
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 ######################
-# This will install mirror and sync
+# This will install mirror and sync images
 mylog "Installing Quay mirror registry at $reg_host:$reg_port and then ..."
 test-cmd -r 99 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync
 
-# Install yq for below test!
+# Install yq for below test only!
 which yq || (
 	mylog Install yq
 	curl -sSL -o - https://github.com/mikefarah/yq/releases/download/v4.41.1/yq_linux_amd64.tar.gz | tar -C ~/bin -xzf - ./yq_linux_amd64 && \
@@ -189,11 +189,10 @@ done
 ######################
 rm -rf sno
 test-cmd -m "Installing SNO cluster with 'make sno $targetiso'" make sno $targetiso
-### test-cmd -m "Installing SNO cluster" make -C sno 
 test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || true
 
 #######################
-#  This will save, install then load
+#  This will save the images, install (the reg.) then load the images
 test-cmd -r 99 3 -m "Saving and then loading cluster images into mirror" "make -C mirror save load" 
 
 rm -rf sno
@@ -235,19 +234,18 @@ source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 ######################
-# This will install and sync
+# This will install the reg. and sync the images
 test-cmd -r 99 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync 
 
-###rm -rf sno
-###rm sno/cluster.conf   # This should 100% reset the cluster and make should start from scratch next time
-make -C sno clean # This should clean up the cluster and make should start from scratch next time
+make -C sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and make should start from scratch next time
-### test-cmd -m "Installing sno cluster" make sno
+
 mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 201"
 test-cmd -m "Configuring SNO cluster with 'make sno target=cluster.conf" make sno target=cluster.conf
 mylog "Setting CIDR 10.0.1.128/25"
 sed -i "s/^machine_network=.*/machine_network=10.0.1.128/g" sno/cluster.conf
 sed -i "s/^prefix_length=.*/prefix_length=25/g" sno/cluster.conf
+
 mylog "Setting starting_ip=201"
 sed -i "s/^starting_ip=.*/starting_ip=201/g" sno/cluster.conf
 test-cmd -m "Installing sno cluster" make sno
@@ -257,15 +255,15 @@ test-cmd -m "Installing sno cluster" make sno
 #####################################################################################################################
 
 #######################
-#  This will save, install then load
+#  This will save the images, install (the reg.) then load the images
 test-cmd -r 99 3 -m "Saving and loading images into mirror" make -C mirror save load 
 
-rm -rf sno
+make -C sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'make sno $targetiso'" make sno $targetiso
 
 test-cmd -m "Deleting cluster" make -C sno delete 
 
-mylog "Removing vmware config file to simulate 'bare metal'"
+mylog "Removing vmware config file to simulate 'bare metal' and iso creation"
 
 > vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology

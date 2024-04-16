@@ -7,11 +7,16 @@
 # Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses rsync to copy over the aba repo. 
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
-### sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
-
-### # FIXME: test for pre-existing rpms!  we don't want yum to run at all as it may error out
-### sudo dnf install -y $(cat templates/rpms-internal.txt)
-### sudo dnf install -y $(cat templates/rpms-external.txt)
+### TEST for clean start with or without the rpms.  
+if false; then
+	# Assuming user will NOT install all rpms in advance and aba will install them.
+	sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
+else
+	# FIXME: test for pre-existing rpms!  In this case we don't want yum to run *at all* as it may error out
+	# Assuming user will install all rpms in advance.
+	sudo dnf install -y $(cat templates/rpms-internal.txt)
+	sudo dnf install -y $(cat templates/rpms-external.txt)
+fi
 
 cd `dirname $0`
 cd ..  # Change into "aba" dir
@@ -39,8 +44,8 @@ rm -f ~/.aba.previous.backup
 which make || sudo dnf install make -y
 
 > mirror/mirror.conf
-#test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask=" 
-test-cmd -m "Cleaning up mirror - clean" "make -C mirror clean" 
+test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask=" 
+#test-cmd -m "Cleaning up mirror - clean" "make -C mirror clean" 
 rm -rf sno compact standard 
 
 v=4.14.14
@@ -172,7 +177,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno cluster, ready to deploy
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Listing VMs" "make -C aba/sno ls"
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Deploying test vote-app" "aba/test/deploy-test-app.sh"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Deploying test vote-app" aba/test/deploy-test-app.sh $subdir
 
 
 mylog 

@@ -32,10 +32,10 @@ echo
 
 if [ -s regcreds/rootCA.pem ]; then
 	echo "Adding the trust CA of the registry ($reg_host) ..."
+	echo "To fix https://access.redhat.com/solutions/5514331 and solve 'image pull errors in disconnected environment'."
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
 	echo "Using root CA file at regcreds/rootCA.pem"
 
-	# To fix https://access.redhat.com/solutions/5514331
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
 	echo "Running: oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"

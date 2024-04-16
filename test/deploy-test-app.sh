@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+[ "$1" ] && cd $1  # This is the "$subdir"
+
 source aba/scripts/include_all.sh
 
 source <(cd aba/mirror && normalize-mirror-conf)

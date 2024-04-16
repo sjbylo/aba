@@ -25,7 +25,7 @@ if [ "$dest" != "-" ]; then
 fi
 
 
-# Assume this script is run via 'cd aba; make inc', i.e. runs from aba's top level dir
+# Assume this script is run from aba's top level dir
 cd ..  
 
 # If this is the first run OR is doing a full backup ... Set up for full backup 
@@ -33,6 +33,7 @@ cd ..
 
 	###bin			\
 	# Remove bin in favour of cli/
+
 file_list=$(find		\
 	aba/aba			\
 	aba/aba.conf		\
@@ -49,27 +50,29 @@ file_list=$(find		\
 	aba/vmware.conf		\
 	aba/test		\
 -type f \
-	! -path "aba/.git*" -a 					\
-	! -path "aba/cli/.init" -a 				\
-	! -path "aba/mirror/.initialized" -a 			\
-	! -path "aba/mirror/.rpms" -a 				\
-	! -path "aba/mirror/.installed" -a 			\
-	! -path "aba/mirror/.loaded" -a				\
-	! -path "aba/mirror/mirror-registry" -a 		\
-	! -path "aba/mirror/execution-environment.tar" -a 	\
-	! -path "aba/mirror/image-archive.tar" -a 		\
-	! -path "aba/mirror/quay.tar" -a 			\
-	! -path "aba/mirror/pause.tar" -a 			\
-	! -path "aba/mirror/postgres.tar" -a 			\
-	! -path "aba/mirror/redis.tar" -a 			\
-	! -path "aba/*/iso-agent-based*" -a 			\
-	! -path "aba/mirror/sync/oc-mirror-workspace*" -a 	\
+	! -path "aba/.git*"  					\
+	! -path "aba/cli/.init"  				\
+	! -path "aba/cli/.??*"	  				\
+	! -path "aba/mirror/.initialized"  			\
+	! -path "aba/mirror/.rpms"  				\
+	! -path "aba/mirror/.installed"  			\
+	! -path "aba/mirror/.loaded" 				\
+	! -path "aba/mirror/mirror-registry"  			\
+	! -path "aba/mirror/execution-environment.tar"  	\
+	! -path "aba/mirror/image-archive.tar"  		\
+	! -path "aba/mirror/quay.tar"  				\
+	! -path "aba/mirror/pause.tar"  			\
+	! -path "aba/mirror/postgres.tar"  			\
+	! -path "aba/mirror/redis.tar"  			\
+	! -path "aba/*/iso-agent-based*"  			\
+	! -path "aba/mirror/sync/oc-mirror-workspace*"  	\
 	! -path "aba/mirror/save/oc-mirror-workspace*"		\
 								\
 	-newer ~/.aba.previous.backup 				\
 )
 # Note, don't copy over any of the ".initialized", ".installed", ".rpms" flag files etc, since these components are needed on the internal bastion
 # Don't copy those very large 'tar' files since we have them compressed already.
+
 	# Remove bin in favour of cli/
 	###! -path "aba/cli/*" -a 				\
 
@@ -77,11 +80,11 @@ file_list=$(find		\
 [ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_seq.*.tar$") || true  # 'true' needed!
 
 # Clean up file_list
-file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  "
+file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " white space
 
 [ ! "$file_list" ] && echo "No new files to backup!" >&2 && exit 0
 
-[ "$repo_only" ] && echo "Warning: Not archiving any mirror/*/mirror_seq*.tar files! You will need to copy them into mirror/save/." >&2
+[ "$repo_only" ] && echo "Warning: Not archiving any mirror/*/mirror_seq*.tar files! You will need to copy them into mirror/save/ yourself." >&2
 
 if [ "$dest" != "-" ]; then
 	### now=$(date "+%Y-%m-%d-%H-%M-%S")
@@ -105,9 +108,9 @@ if [ "$dest" != "-" ]; then
 fi
 
 if [ "$inc" ]; then
-	echo "Writing 'incremental' tar archive to $dest" >&2
+	echo "Writing 'incremental' tar archive of repo to $dest" >&2
 else
-	echo "Writing 'full' tar archive to $dest" >&2
+	echo "Writing 'full' tar archive of repo to $dest" >&2
 fi
 
 echo "Running: 'tar cf $dest <files>' from $PWD" >&2

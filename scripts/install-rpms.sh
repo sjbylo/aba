@@ -12,13 +12,11 @@ rpms_to_install=
 
 for rpm in $rpms
 do
-	# Check if each rpm is already installed.  Don't run dnf unless we have to.
-###	rpm -q --quiet $rpm && continue
 	rpm -q --quiet $rpm || rpms_to_install="$rpms_to_install $rpm" 
 done
 
 if [ "$rpms_to_install" ]; then
-	echo "Rpms not installed:$rpms_to_install"
+	echo "Installing missing rpms:$rpms_to_install (logging to .dnf-install.log)"
 	sudo dnf install $rpms -y >> .dnf-install.log 2>&1
 fi
 
