@@ -48,6 +48,9 @@ test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask="
 #test-cmd -m "Cleaning up mirror - clean" "make -C mirror clean" 
 rm -rf sno compact standard 
 
+subdir=~/
+#subdir=~/subdir
+
 v=4.14.14
 rm -f aba.conf  # Set it up next
 vf=~/.vmware.conf.vc
@@ -177,7 +180,11 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno cluster, ready to deploy
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Listing VMs" "make -C aba/sno ls"
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Deploying test vote-app" aba/test/deploy-test-app.sh $subdir
+####test-cmd -h $reg_ssh_user@$bastion2 -m  "Deploying test vote-app" aba/test/deploy-test-app.sh $subdir
+test-cmd -h steve@$bastion2 -m "Create project 'demo'" "make -C $subdir/aba/sno cmd cmd='oc new-project demo'" || true
+test-cmd -h steve@$bastion2 -m "Launch vote-app" "make -C $subdir/aba/sno cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'" || true
+test-cmd -h steve@$bastion2 -m "Wait for vote-app rollout" "make -C $subdir/aba/sno cmd cmd='oc rollout status deployment vote-app -n demo'"
+
 
 
 mylog 

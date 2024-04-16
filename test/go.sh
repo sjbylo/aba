@@ -1,13 +1,10 @@
 #!/bin/bash -ex
 
-if false; then
-#if [ "1" ]; then
+#if false; then
+if [ "1" ]; then
 	# Used for testing from git
-	cd ~/aba/mirror && make clean # Need more space on disk!
-	cd 
-	rm -rf testing
-	mkdir -p testing
-	cd testing
+	make -C mirror distclean yes=1 # Remove old big tar files. Need all space on disk!
+	rm -rf ~/testing && mkdir -p ~/testing && cd ~/testing
 	git clone https://github.com/sjbylo/aba.git 
 	cd aba
 	git checkout dev
