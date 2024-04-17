@@ -2,7 +2,7 @@
 # Run some day 2 changes
 # Set up cluster trust CA with the internal registry's Root CA
 # Configure OperatorHub using the internal mirror registry. 
-# Apply the imageContentSourcePolicy resource files that were created by oc-mirror
+# Apply the imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)
 # For disconnected environments, disable online public catalog sources
 # Install any CatalogSources
 
@@ -19,7 +19,7 @@ export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 echo "What this 'day2' script does:"
 echo "Set up cluster trust CA with the internal registry's Root CA."
 echo "Configure OperatorHub to integrate with the internal mirror registry. "
-echo "Apply any imageContentSourcePolicy resource files that were created by oc-mirror."
+echo "Apply any imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)."
 echo "For fully disconnected environments, disable online public catalog sources."
 echo "Install any CatalogSources."
 
@@ -49,7 +49,7 @@ if [ -s regcreds/rootCA.pem ]; then
 	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
 		try_cmd 5 5 10 oc delete imagestream -n openshift oauth-proxy
 
-		echo Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 1-2 mins.
+		echo Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 2-3 mins.
 
 		sleep 30
 
@@ -69,7 +69,7 @@ fi
 echo "############################"
 
 echo
-echo Applying the imageContentSourcePolicy resource files that were created by oc-mirror
+echo "Applying the imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)"
 echo
 
 # If one should clash with an existing ICSP resource, change its name by incrementing the value (-x) and try to apply it again.
