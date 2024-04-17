@@ -122,8 +122,10 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Clean up home dir on internal bastion" 
 
 ssh $reg_ssh_user@$bastion2 "rpm -q make  || sudo yum install make -y"
 
-mylog Copy tar+ssh archives to internal bastion
-make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+mylog "Use 'make tarrepo' to copy tar+ssh archive plus seq1 tar file to internal bastion"
+###make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+scp -v mirror/save/mirror_seq1_000000.tar $reg_ssh_user@$bastion2:aba/mirror/save
 
 ### echo "Install the reg creds, simulating a manual config" 
 ### ssh $reg_ssh_user@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
@@ -159,7 +161,9 @@ END
 test-cmd -r 99 3 -m "Saving ubi images to local disk on `hostname`" "make -C mirror save" 
 
 mylog Copy tar+ssh archives to internal bastion
-make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+## make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+scp -v mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$bastion2:aba/mirror/save
 
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading UBI images into mirror" "make -C aba/mirror load" 
 
@@ -172,7 +176,9 @@ END
 test-cmd -r 99 3 -m "Saving vote-app image to local disk" " make -C mirror save" 
 
 mylog Copy repo to internal bastion
-make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+##make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+scp -v mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$bastion2:aba/mirror/save
 
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading vote-app image into mirror" "make -C aba/mirror load" 
 
@@ -265,7 +271,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -m "Deploying service mesh with test app" "a
 
 sleep 30  # Sleep in case need to check the cluster
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting sno cluster" "make -C aba/sno delete" 
+##  KEEP  # test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting sno cluster" "make -C aba/sno delete" 
 
 rm -rf test/mesh 
 
@@ -278,8 +284,8 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting standard cluster" "make -C aba
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating compact cluster" "make -C aba compact" 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting compact cluster" "make -C aba/compact delete" 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating sno cluster with 'make -C aba cluster name=sno type=sno'" "make -C aba cluster name=sno type=sno" 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting sno cluster" "make -C aba/sno delete" 
+## KEEP test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating sno cluster with 'make -C aba cluster name=sno type=sno'" "make -C aba cluster name=sno type=sno" 
+## KEEP test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting sno cluster" "make -C aba/sno delete" 
 ######################
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Uninstalling mirror registry on internal bastion" "make -C aba/mirror uninstall"
