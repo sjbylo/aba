@@ -176,3 +176,9 @@ is_version_greater() {
      [[ "$sorted_versions" != "$version1|$version2|" ]]
 }
 
+output_error() {
+	[ "$TERM" ] && tput setaf 1
+	echo "$@"
+	[ "$TERM" ] && tput sgr0
+}
+
