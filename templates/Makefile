@@ -85,8 +85,9 @@ refresh:  ## Delete & create the VMs. This will automatically start the cluster 
 create: vmware.conf iso  ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
 	@scripts/vmw-exists.sh || scripts/vmw-create.sh $(debug) && exit 0
 
+###ls: vmware.conf  ## List VMs and their power state.
 .PHONY: ls
-ls: vmware.conf  ## List VMs and their power state.
+ls: .initialized vmware.conf install-config.yaml agent-config.yaml ## List VMs and their power state.
 	@scripts/vmw-ls.sh || echo "No vm(s).  Try running 'make' or 'make refresh'."
 
 .PHONY: stop
