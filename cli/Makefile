@@ -20,7 +20,7 @@ help: ## Help
 .PHONY: vercheck
 vercheck:
 	ifeq ($(ocp_version),)
-		$(error ocp_version is empty. Please set ocp_version in aba.conf before continuing.)
+		$(error "ocp_version is empty. Please set ocp_version in aba.conf before continuing.")
 	endif
 
 # Be sure that the correct version is installed by creating .*installed flag file
