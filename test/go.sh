@@ -1,7 +1,6 @@
 #!/bin/bash -ex
 
-if false; then
-#if [ "1" ]; then
+if [ "$1" ]; then
 	# Used for testing from git
 	make -C mirror distclean yes=1 # Remove old big tar files. Need all space on disk!
 	rm -rf ~/testing && mkdir -p ~/testing
