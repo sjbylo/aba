@@ -36,13 +36,12 @@ ntp=10.0.1.8 # If available
 which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
-echo ocp_version=4.14.14 > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
+v=4.14.14
+echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
 make distclean ask=
 #make clean
 
-exit 
-
-v=4.14.14
+# Set up aba.conf properly
 rm -f aba.conf
 vf=~/.vmware.conf.vc
 test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ### --vmw $vf
