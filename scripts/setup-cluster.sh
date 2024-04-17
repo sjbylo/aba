@@ -28,18 +28,18 @@ pwd
 echo "Creating '$name/cluster.conf' file for cluster type [$cluster_type]."
 scripts/create-cluster-conf.sh $name $cluster_type
 
-msg="Install the cluster with 'make'?"
-[ "$target" ] && msg="Trigger the cluster with 'make $target'?"
+msg="Install the cluster with 'cd $name; make'?"
+[ "$target" ] && msg="Trigger the cluster with 'cd $name; make $target'?"
 
 if ask $msg; then
 	make $target
 
 	echo 
-	[ "$target" ] && echo "If you want to continue working on this cluster, cd into the directory '$name'. Example: 'cd $name && make help'"
+	[ "$target" ] && echo "If you want to continue working on this cluster, change into the directory '$name'. Example: 'cd $name && make help'"
 	echo
 else
 	echo 
-	echo "If you want to continue working on this cluster, cd into the directory '$name' and run 'make'.  Example: 'cd $name && make' or 'cd $name && make help'"
+	echo "If you want to continue working on this cluster, change into the directory '$name' and run 'make'.  Example: 'cd $name && make' or 'cd $name && make help'"
 	echo
 fi
 
