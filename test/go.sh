@@ -1,10 +1,11 @@
 #!/bin/bash -ex
 
-#if false; then
-if [ "1" ]; then
+if false; then
+#if [ "1" ]; then
 	# Used for testing from git
 	make -C mirror distclean yes=1 # Remove old big tar files. Need all space on disk!
-	rm -rf ~/testing && mkdir -p ~/testing && cd ~/testing
+	rm -rf ~/testing && mkdir -p ~/testing
+	cd ~/testing
 	git clone https://github.com/sjbylo/aba.git 
 	cd aba
 	git checkout dev
@@ -19,7 +20,7 @@ time (
 	> test/test.log
 	test/test1-basic-sync-test-and-save-load-test.sh && \
 	test/test2-airgapped-existing-reg.sh && \
-	test/test5-airgapped-install-local-reg.sh && \
+	test/test5-airgapped-install-local-reg.sh 
 ) && ( echo SUCCESS  || echo FAILED ) | tee test/test.log
 date 
 
