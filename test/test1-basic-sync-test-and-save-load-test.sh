@@ -36,7 +36,7 @@ ntp=10.0.1.8 # If available
 which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
-> aba.conf  # needed to distclean works without calling ../aba
+> aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf created below. 
 make distclean ask=
 #make clean
 
