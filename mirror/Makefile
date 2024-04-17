@@ -14,13 +14,14 @@ init: .initialized
 	ln -fs ../aba.conf 
 	mkdir -p regcreds
 	touch regcreds/.dummy  # Needed only so tar includes the *empty* regcreds dir
-	make -C ../cli 
+	@#make -C ../cli   # moved below, after ../aba
 	touch .initialized
 	@echo Initialized `pwd`
 
 # If aba.conf does not exist, then run the script to create it
 ../aba.conf:
 	../aba
+	make -C ../cli 
 
 ## If vmware.conf does not exist, then create it
 #../vmware.conf:
@@ -156,7 +157,7 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 distclean: .initialized  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@echo "Note: to uninstall the registry, run 'make uninstall'" 
 	@test "$(ask)" && $(SCRIPTS)/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
-	@make clean
+	make clean
 	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true
 	@#rm -rf regcreds
 	@#rm -f mirror.conf
