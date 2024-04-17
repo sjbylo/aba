@@ -47,9 +47,10 @@ save: ## Save images from the Internet to mirror/save.
 tar:  ## Archive the full repo, e.g. make tar out=/dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use out=- to send tar output to stdout.
 	scripts/backup.sh $(out)
 
+# Note, the '@' is required for valid tar format output!
 .PHONY: tarrepo
 tarrepo:  ## Archive the full repo *excluding* the mirror/mirror_seq*tar files. Works in the same way as 'make tar'.
-	scripts/backup.sh --repo $(out)
+	@scripts/backup.sh --repo $(out)
 
 .PHONY: inc
 inc:  ## Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'make tar'.
