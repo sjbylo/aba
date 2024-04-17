@@ -28,11 +28,11 @@ else
 	echo "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 
 fi
 
-[ "$reg_root" ] || reg_root=$HOME/quay-install  # Only needed for the below message
+[ "$reg_root" ] || reg_root=$HOME/quay-install  # $reg_root is needed for the below message
 
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
-[ ! -d save ] && echo "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first, on an Internet connected bastion/laptop" && exit 1
+[ ! -d save ] && echo "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first on an external (Internet connected) bastion/laptop" && exit 1
 
 echo 
 echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
@@ -46,6 +46,7 @@ echo
 
 # Set up script to help for manual re-sync
 # --continue-on-error : do not use this option. In testing the registry became unusable! 
+# Note: If 'make save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
 cmd="oc mirror $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
 echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
 echo "Running: $(cat load-mirror.sh)"
