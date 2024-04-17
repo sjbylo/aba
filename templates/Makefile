@@ -60,7 +60,7 @@ ntp: .ntp ## Use NTP time sync during early installation. Required only if under
 	@touch .ntp
 
 .autopoweroff: .ntp
-	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || $(error "VM(s) already powered off")
+	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || true 
 	@touch .autopoweroff
 
 upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images/agent-<cluster-name>.iso
