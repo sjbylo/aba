@@ -17,11 +17,13 @@ help: ## Help
 ../aba.conf:
 	../aba
 
+ifeq ($(ocp_version),)
+	$(error "ocp_version is empty. Please set ocp_version in aba.conf before continuing.")
+endif
+
 .PHONY: vercheck
 vercheck:
-	ifeq ($(ocp_version),)
-		$(error "ocp_version is empty. Please set ocp_version in aba.conf before continuing.")
-	endif
+	@echo "ocp_version set to '$(ocp_version)'"
 
 # Be sure that the correct version is installed by creating .*installed flag file
 ########################################
