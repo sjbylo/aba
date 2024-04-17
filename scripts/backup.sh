@@ -21,7 +21,7 @@ if [ "$dest" != "-" ]; then
 	echo "$dest" | grep -q \.tar$ || dest="$dest.tar"
 
 	# If the destination file already exists...
-	[ -s $dest ] && echo "Warning: File $dest already exists" && exit 1
+	[ -s $dest ] && echo "Warning: File $dest already exists" >&2 && exit 1
 fi
 
 
@@ -33,6 +33,8 @@ cd ..
 
 	###bin			\
 	# Remove bin in favour of cli/
+	#aba/vmware.conf		\
+	# vmware only on "internal" bastion
 
 file_list=$(find		\
 	aba/aba			\
@@ -47,7 +49,6 @@ file_list=$(find		\
 	aba/README.md		\
 	aba/README-OTHER.md	\
 	aba/Troubleshooting.md	\
-	aba/vmware.conf		\
 	aba/test		\
 -type f \
 	! -path "aba/.git*"  					\
@@ -113,7 +114,8 @@ else
 	echo "Writing 'full' tar archive of repo to $dest" >&2
 fi
 
-echo "Running: 'tar cf $dest <files>' from $PWD" >&2
+out_file_list=$(echo $file_list | cut -c-90)
+echo "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
 ### echo file_list=$file_list >&2
 tar cf $dest $file_list || exit 
 
