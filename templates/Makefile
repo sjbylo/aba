@@ -91,23 +91,23 @@ ls: .initialized vmware.conf install-config.yaml agent-config.yaml ## List VMs a
 	@scripts/vmw-ls.sh || echo "No vm(s).  Try running 'make' or 'make refresh'."
 
 .PHONY: stop
-stop: vmware.conf ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again!
+stop: .initialized vmware.conf install-config.yaml agent-config.yaml ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again!
 	@scripts/vmw-on.sh && scripts/vmw-stop.sh $(debug) || exit 0
 
 .PHONY: start
-start: vmware.conf ## Start all the VMs.
+start: .initialized vmware.conf install-config.yaml agent-config.yaml ## Start all the VMs.
 	@scripts/vmw-on.sh || scripts/vmw-start.sh $(debug) || exit 0
 
 .PHONY: poweroff
-poweroff: vmware.conf ## Power off the VMs immediately.  This will stop the cluster abruptly. 
+poweroff: .initialized vmware.conf install-config.yaml agent-config.yaml ## Power off the VMs immediately.  This will stop the cluster abruptly. 
 	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: kill
-kill:  vmware.conf ## Kill or power off the VMs immediately.  This will stop the cluster abruptly. 
+kill:  .initialized vmware.conf install-config.yaml agent-config.yaml ## Kill or power off the VMs immediately.  This will stop the cluster abruptly. 
 	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: delete
-delete: .initialized vmware.conf ## Delete the VMs. This will delete the cluster. 
+delete: .initialized vmware.conf install-config.yaml agent-config.yaml ## Delete the VMs. This will delete the cluster. 
 	@scripts/vmw-delete.sh $(debug) || exit 0
 
 .finished: .autorefresh
