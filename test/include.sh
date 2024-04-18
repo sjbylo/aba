@@ -37,9 +37,9 @@ test-cmd() {
 		[ "$1" = "-m" ] && local msg="$2" && shift && shift 
 	done
 
-	echo "- TEST --------------------------------------------------------------------------------"
+	echo "---------------------------------------------------------------------------------------"
 	if [ "$msg" ]; then
-		echo "`hostname`: $msg" | tee -a test/test.log
+		echo "`hostname`: $msg ($@)" | tee -a test/test.log
 	else
 		echo "`hostname`: $@" | tee -a test/test.log
 	fi
@@ -48,9 +48,14 @@ test-cmd() {
 	i=1
 	while true
 	do
-		echo "Running command: \"$@\""
 		set +e
-		[ "$host" ] && ssh $host -- "$@" || eval "$@"
+		if [ "$host" ]; then
+			echo "Running command: \"$@\" on host $host"
+			ssh $host -- "$@"
+		else
+			echo "Running command: \"$@\" on localhost"
+			eval "$@"
+		fi
 		ret=$?
 		set -e
 
