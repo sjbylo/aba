@@ -17,11 +17,12 @@ source <(normalize-mirror-conf)
 export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 	
 echo "What this 'day2' script does:"
-echo "Set up cluster trust CA with the internal registry's Root CA."
-echo "Configure OperatorHub to integrate with the internal mirror registry. "
-echo "Apply any imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)."
-echo "For fully disconnected environments, disable online public catalog sources."
-echo "Install any CatalogSources."
+echo "- Add the internal mirror registry's Root CA to the cluster trust store."
+echo "- Configure OperatorHub to integrate with the internal mirror registry."
+echo "- Apply any imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)."
+echo "- For fully disconnected environments, disable online public catalog sources."
+echo "- Install any CatalogSources."
+echo "- Apply any signatures."
 
 echo
 echo "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
