@@ -1,7 +1,7 @@
 #!/bin/bash -ex
 # This test is for a connected bastion.  It will install registry on remote bastion and then sync images and install clusters, 
 # ... then savd/load images and install clusters. 
-# This test required a valid ~/.vmware.conf file
+# This test requires a valid ~/.vmware.conf file.
 
 ### TEST for clean start with or without the rpms.  
 if false; then
@@ -28,7 +28,7 @@ mylog targetiso=$targetiso
 
 mylog
 mylog "===> Starting test $0"
-mylog Test to install remote reg. on registry2.example.com and then sync and save/load images.  Install sno ocp.
+mylog "Test to install remote reg. on registry2.example.com and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
 ntp=10.0.1.8 # If available
@@ -74,7 +74,6 @@ mylog Revert internal bastion vm to snapshot and powering on ...
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
-### ssh $reg_ssh_user@registry2.example.com -- "sudo dnf install podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer -y"
 
 # Create a test user on the remote host, with pw-less ssh access
 ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f" || true
@@ -92,15 +91,15 @@ ssh testy@registry2.example.com whoami
 #####################################################################################################################
 #####################################################################################################################
 
+mylog "Confgure mirror to install registry on internal (remote) bastion2"
+
 # Create and edit mirror.conf 
 make -C mirror mirror.conf
 
-mylog "Confgure mirror to install registry on internal (remote) bastion2"
-
-mylog "Setting reg_host to registry2.example.com"
+mylog "Setting 'reg_host' to 'registry2.example.com' in file 'mirror/mirror.conf'"
 sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
 
-mylog "Setting reg_ssh_key=~/.ssh/id_rsa for remote installation" 
+mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
 sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
 
 ### mylog "Setting reg_root=~/my-quay-mirror"
