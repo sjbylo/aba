@@ -12,8 +12,10 @@ if [ "$1" ]; then
 	cd aba
 	git checkout $1
 	#####git checkout 2fc137962da8c643724b09dca02a8e493c362f3c
-	cd ~/testing/aba
 fi
+
+# Check no syntax errors in any scripts!
+for f in */*.sh; do bash -n $f; done
 
 export target_full=1   # Build vm+cluster
 export target_full=    # Build only iso

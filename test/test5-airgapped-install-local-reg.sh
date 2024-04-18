@@ -4,7 +4,7 @@
 
 # Required: 2 bastions (internal and external), for internal (no direct Internet) only yum works via a proxy. For external, the proxy is fully configured. 
 # I.e. Internal bastion has no access to the Internet.  External has full access. 
-# Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). Script uses rsync to copy over the aba repo. 
+# Ensure passwordless ssh access from bastion1 (external) to bastion2 (internal). 
 # Be sure no mirror registries are installed on either bastion before running.  Internal bastion2 can be a fresh "minimal install" of RHEL8/9.
 
 ### TEST for clean start with or without the rpms.  
@@ -48,7 +48,7 @@ test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask="
 #test-cmd -m "Cleaning up mirror - clean" "make -C mirror clean" 
 rm -rf sno compact standard 
 
-subdir=~/
+subdir=~
 #subdir=~/subdir
 
 v=4.14.14
@@ -118,32 +118,32 @@ test-cmd -r 99 3 -m "Saving images to local disk" "make save"
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
 # If the VM snapshot is reverted, as above, no need to delete old files
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/* ~/aba"
+####test-cmd -h $reg_ssh_user@$bastion2 -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/* $subdir/aba"
 
 ssh $reg_ssh_user@$bastion2 "rpm -q make  || sudo yum install make -y"
 
 mylog "Use 'make tarrepo' to copy tar+ssh archive plus seq1 tar file to internal bastion"
 ###make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
-scp -v mirror/save/mirror_seq1_000000.tar $reg_ssh_user@$bastion2:aba/mirror/save
+scp -v mirror/save/mirror_seq1_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
 
 ### echo "Install the reg creds, simulating a manual config" 
-### ssh $reg_ssh_user@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"  
-### ssh $reg_ssh_user@$bastion2 -- "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
+### ssh $reg_ssh_user@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
+### ssh $reg_ssh_user@$bastion2 -- "cp -v ~/.containers/auth.json $subdir/aba/mirror/regcreds/pull-secret-mirror.json"
 
 ######################
 mylog Runtest: START - airgap
 
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading cluster images into mirror on internal bastion" "make -C aba load" 
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading cluster images into mirror on internal bastion" "make -C $subdir/aba load" 
+
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Tidying up internal bastion" "rm -rf $subdir/aba/sno" 
 
 mylog "Running 'make sno' on internal bastion"
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Tidying up internal bastion" "rm -rf aba/sno" 
+[ "$targetiso" ] && mylog "Creating the cluster with target=$targetiso only"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno/iso with 'make -C $subdir/aba sno $targetiso'" "make -C $subdir/aba sno $targetiso" 
 
-[ "$targetiso" ] && mylog Creating the cluster iso only 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno/iso with 'make -C aba sno $targetiso'" "make -C aba sno $targetiso" 
-
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Setting master memory to 24" "sed -i 's/^master_mem=.*/master_mem=24/g' aba/sno/cluster.conf"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"
 
 ######################
 mylog Now adding more images to the mirror registry
@@ -151,7 +151,6 @@ mylog Now adding more images to the mirror registry
 
 mylog Runtest: vote-app
 
-mylog 
 mylog Add ubi9 image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
@@ -163,9 +162,9 @@ test-cmd -r 99 3 -m "Saving ubi images to local disk on `hostname`" "make -C mir
 mylog Copy tar+ssh archives to internal bastion
 ## make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
-scp -v mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$bastion2:aba/mirror/save
+scp -v mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
 
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading UBI images into mirror" "make -C aba/mirror load" 
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading UBI images into mirror" "make -C $subdir/aba/mirror load" 
 
 mylog 
 mylog Add vote-app image to imageset conf file 
@@ -178,20 +177,20 @@ test-cmd -r 99 3 -m "Saving vote-app image to local disk" " make -C mirror save"
 mylog Copy repo to internal bastion
 ##make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
-scp -v mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$bastion2:aba/mirror/save
+scp -v mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
 
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading vote-app image into mirror" "make -C aba/mirror load" 
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading vote-app image into mirror" "make -C $subdir/aba/mirror load" 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno cluster, ready to deploy test app" "make -C aba/sno"
+cluster_type=standard  # Choose either sno, compact or standard
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Listing VMs" "make -C aba/sno ls"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing $cluster_type cluster, ready to deploy test app" "make -C $subdir/aba $cluster_type"
 
-####test-cmd -h $reg_ssh_user@$bastion2 -m  "Deploying test vote-app" aba/test/deploy-test-app.sh $subdir
-test-cmd -h steve@$bastion2 -m "Create project 'demo'" "make -C $subdir/aba/sno cmd cmd='oc new-project demo'" || true
-test-cmd -h steve@$bastion2 -m "Launch vote-app" "make -C $subdir/aba/sno cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'" || true
-test-cmd -h steve@$bastion2 -m "Wait for vote-app rollout" "make -C $subdir/aba/sno cmd cmd='oc rollout status deployment vote-app -n demo'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Listing VMs" "make -C $subdir/aba/$cluster_type ls"
 
-
+#### DEL? test-cmd -h $reg_ssh_user@$bastion2 -m  "Deploying test vote-app" $subdir/aba/test/deploy-test-app.sh $subdir
+test-cmd -h steve@$bastion2 -m "Create project 'demo'" "make -C $subdir/aba/$cluster_type cmd cmd='oc new-project demo'" || true
+test-cmd -h steve@$bastion2 -m "Launch vote-app" "make -C $subdir/aba/$cluster_type cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'" || true
+test-cmd -h steve@$bastion2 -m "Wait for vote-app rollout" "make -C $subdir/aba/$cluster_type cmd cmd='oc rollout status deployment vote-app -n demo'"
 
 mylog 
 mylog Append svc mesh and kiali operators to imageset conf
@@ -229,9 +228,9 @@ test-cmd -r 99 3 -m "Saving mesh operators to local disk" "make -C mirror save"
 mylog Copy tar+ssh archives to internal bastion
 make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading images to mirror" "make -C aba/mirror load" 
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading images to mirror" "make -C $subdir/aba/mirror load" 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Configuring day2 ops" "make -C aba/sno day2"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Configuring day2 ops" "make -C $subdir/aba/$cluster_type day2"
 
 mylog 
 mylog Append jaeger operator to imageset conf
@@ -248,47 +247,49 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 (
 	rm -rf test/mesh && mkdir test/mesh && cd test/mesh && git clone https://github.com/sjbylo/openshift-service-mesh-demo.git && \
 	cd openshift-service-mesh-demo && \
-	# FIXME: so no need to make these changes
-	sed -i "s#quay\.io#$reg_host:$reg_port/$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml &&
+
+	sed -i "s#quay\.io#$reg_host:$reg_port/$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml &&  # required since other methods are messy
 	sed -i "s/source: .*/source: cs-redhat-operator-index/g" operators/* 
 ) 
 
 mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
-make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf - 
+###make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf - 
+mylog "Copy latest tar file $(ls -1tr mirror/save/mirror_seq*tar | tail -1)"
+scp $(ls -1tr mirror/save/mirror_seq*tar | tail -1) $reg_ssh_user@$bastion2:$subdir/aba/mirror/save 
 
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading jaeger operator images to mirror" "make -C aba/mirror load" 
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading jaeger operator images to mirror" "make -C $subdir/aba/mirror load" 
 
 test-cmd -m "Pausing for 60s to let OCP to settle" sleep 60    # For some reason, the cluster was still not fully ready in tests!
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m "Run 'day2' attempt number $i ..." "make -C aba/sno day2" && break || true  # Install CA cert and activate local op. hub
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m "Run 'day2' attempt number $i ..." "make -C $subdir/aba/sno day2" && break || true  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
 test-cmd -m "Pausing for 30s to let OCP to settle" sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m "Deploying service mesh with test app" "aba/test/deploy-mesh.sh"
+test-cmd -h $reg_ssh_user@$bastion2 -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
 
 sleep 30  # Sleep in case need to check the cluster
 
-##  KEEP  # test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting sno cluster" "make -C aba/sno delete" 
+##  KEEP SNO  # test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting sno cluster" "make -C $subdir/aba/sno delete" 
 
 rm -rf test/mesh 
 
 ######################
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting cluster dirs, aba/sno aba/compact aba/standard" "rm -rf  aba/sno aba/compact aba/standard" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting cluster dirs, $subdir/aba/sno $subdir/aba/compact $subdir/aba/standard" "rm -rf  $subdir/aba/sno $subdir/aba/compact $subdir/aba/standard" 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating standard cluster" "make -C aba standard" 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting standard cluster" "make -C aba/standard delete" 
+## KEEP standard test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating standard cluster" "make -C $subdir/aba standard" 
+## KEEP standard test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting standard cluster" "make -C $subdir/aba/standard delete" 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating compact cluster" "make -C aba compact" 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting compact cluster" "make -C aba/compact delete" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating compact cluster" "make -C $subdir/aba compact" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting compact cluster" "make -C $subdir/aba/compact delete" 
 
-## KEEP test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating sno cluster with 'make -C aba cluster name=sno type=sno'" "make -C aba cluster name=sno type=sno" 
-## KEEP test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting sno cluster" "make -C aba/sno delete" 
+## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating sno cluster with 'make -C $subdir/aba cluster name=sno type=sno'" "make -C $subdir/aba cluster name=sno type=sno" 
+## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting sno cluster" "make -C $subdir/aba/sno delete" 
 ######################
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Uninstalling mirror registry on internal bastion" "make -C aba/mirror uninstall"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Uninstalling mirror registry on internal bastion" "make -C $subdir/aba/mirror uninstall"
 
 mylog
 mylog "===> Completed test $0"

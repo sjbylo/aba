@@ -75,16 +75,32 @@ ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
 ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
 
-# Create a test user on the remote host, with pw-less ssh access
-ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f" || true
-ssh $reg_ssh_user@registry2.example.com -- "sudo useradd testy -p no-used"
-ssh $reg_ssh_user@registry2.example.com -- "sudo mkdir ~testy/.ssh && sudo chmod 700 ~testy/.ssh"
-ssh $reg_ssh_user@registry2.example.com -- "sudo cp -p ~steve/.pull-secret.json ~testy"   # Copy from anywhere!
-cat ~/.ssh/id_rsa.pub | ssh $reg_ssh_user@registry2.example.com -- "sudo tee -a ~testy/.ssh/authorized_keys"
-ssh $reg_ssh_user@registry2.example.com -- "sudo chown -R testy.testy ~testy"
-ssh $reg_ssh_user@registry2.example.com -- "echo 'testy ALL=(ALL) NOPASSWD:ALL' | sudo tee -a /etc/sudoers.d/testy"
-ssh $reg_ssh_user@registry2.example.com -- "sudo chmod 600 ~testy/.ssh/authorized_keys"
-ssh testy@registry2.example.com whoami
+
+pub_key=$(cat ~/.ssh/id_rsa.pub)
+u=testy
+cat << END  | ssh registry2.example.com -- sudo bash 
+set -x
+userdel $u -r -f || true
+useradd $u -p not-used
+mkdir ~$u/.ssh 
+chmod 700 ~$u/.ssh
+cp -p ~steve/.pull-secret.json ~$u 
+echo $pub_key > ~$u/.ssh/authorized_keys
+echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
+chmod 600 ~$u/.ssh/authorized_keys
+chown -R $u.$u ~$u
+END
+
+## # Create a test user on the remote host, with pw-less ssh access
+## ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f" || true
+## ssh $reg_ssh_user@registry2.example.com -- "sudo useradd testy -p no-used"
+## ssh $reg_ssh_user@registry2.example.com -- "sudo mkdir ~testy/.ssh && sudo chmod 700 ~testy/.ssh"
+## ssh $reg_ssh_user@registry2.example.com -- "sudo cp -p ~steve/.pull-secret.json ~testy"   # Copy from anywhere!
+## cat ~/.ssh/id_rsa.pub | ssh $reg_ssh_user@registry2.example.com -- "sudo tee -a ~testy/.ssh/authorized_keys"
+## ssh $reg_ssh_user@registry2.example.com -- "sudo chown -R testy.testy ~testy"
+## ssh $reg_ssh_user@registry2.example.com -- "echo 'testy ALL=(ALL) NOPASSWD:ALL' | sudo tee -a /etc/sudoers.d/testy"
+## ssh $reg_ssh_user@registry2.example.com -- "sudo chmod 600 ~testy/.ssh/authorized_keys"
+## ssh testy@registry2.example.com whoami
 
 
 #####################################################################################################################
@@ -153,7 +169,7 @@ do
 
         rm -rf $cname
 
-	test-cmd -m "Creating cluster.conf for $cname cluster wth 'make $cname target=cluster.conf'" "make $cname target=cluster.conf"
+	test-cmd -m "Creating cluster.conf for $cname cluster with 'make $cname target=cluster.conf'" "make $cname target=cluster.conf"
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # make sure all mac addr are the same, not random
         test-cmd -m "Creating install-config.yaml for $cname cluster" "make -C $cname install-config.yaml"
         test-cmd -m "Creating agent-config.yaml for $cname cluster" "make -C $cname agent-config.yaml"
