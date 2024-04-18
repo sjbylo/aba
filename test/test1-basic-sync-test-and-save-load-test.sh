@@ -65,7 +65,7 @@ source <(normalize-vmware-conf)
 
 mylog Revert internal bastion vm to snapshot and powering on ...
 (
-	govc snapshot.revert -vm bastion2-internal-rhel8 Latest
+	govc snapshot.revert -vm bastion2-internal-rhel8 aba-test
 	sleep 8
 	govc vm.power -on bastion2-internal-rhel8
 	sleep 5
