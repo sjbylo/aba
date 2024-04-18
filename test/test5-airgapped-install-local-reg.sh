@@ -92,7 +92,7 @@ source <(normalize-vmware-conf)
 #################################
 mylog Revert vm snapshot of the internal bastion vm and power on
 (
-	govc snapshot.revert -vm bastion2-internal-rhel8 Latest
+	govc snapshot.revert -vm bastion2-internal-rhel8 aba-test
 	sleep 8
 	govc vm.power -on bastion2-internal-rhel8
 	sleep 5
@@ -125,7 +125,7 @@ ssh $reg_ssh_user@$bastion2 "rpm -q make  || sudo yum install make -y"
 mylog "Use 'make tarrepo' to copy tar+ssh archive plus seq1 tar file to internal bastion"
 ###make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
-scp -v mirror/save/mirror_seq1_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
+scp mirror/save/mirror_seq1_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
 
 ### echo "Install the reg creds, simulating a manual config" 
 ### ssh $reg_ssh_user@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
@@ -162,7 +162,7 @@ test-cmd -r 99 3 -m "Saving ubi images to local disk on `hostname`" "make -C mir
 mylog Copy tar+ssh archives to internal bastion
 ## make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
-scp -v mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
+scp mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
 
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading UBI images into mirror" "make -C $subdir/aba/mirror load" 
 
@@ -177,7 +177,7 @@ test-cmd -r 99 3 -m "Saving vote-app image to local disk" " make -C mirror save"
 mylog Copy repo to internal bastion
 ##make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
 make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
-scp -v mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
+scp mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
 
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading vote-app image into mirror" "make -C $subdir/aba/mirror load" 
 

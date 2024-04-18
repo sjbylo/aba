@@ -92,7 +92,7 @@ if [ ! "$1" ]; then
 
 	mylog Revert a snapshot and power on the internal bastion vm
 	(
-		govc snapshot.revert -vm bastion2-internal-rhel8 Latest
+		govc snapshot.revert -vm bastion2-internal-rhel8 aba-test
 		sleep 8
 		govc vm.power -on bastion2-internal-rhel8
 		sleep 5
@@ -183,7 +183,7 @@ test-cmd -r 99 3 -m "Saving ubi images to local disk" "make -C mirror save"
 ### make -s -C mirror inc out=- | ssh steve@$bastion2 -- tar xvf -
 #
 ### mylog "'scp mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: steve@$bastion2"
-### scp -v mirror/save/mirror_seq2.tar steve@$bastion2 $subdir/aba/mirror/save
+### scp mirror/save/mirror_seq2.tar steve@$bastion2 $subdir/aba/mirror/save
 
 mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: steve@$bastion2"
 mkdir -p ~/tmp
@@ -237,7 +237,7 @@ test-cmd -r 99 3 -m "Saving advanced-cluster-management images to local disk" "m
 ### mylog Tar+ssh files from `hostname` over to internal bastion: steve@$bastion2 
 ### make -s -C mirror inc out=- | ssh steve@$bastion2 -- tar xvf -
 mylog "'scp mirror/save/mirror_seq3.tar' file from `hostname` over to internal bastion: steve@$bastion2"
-scp -v mirror/save/mirror_seq3*.tar steve@$bastion2:$subdir/aba/mirror/save
+scp mirror/save/mirror_seq3*.tar steve@$bastion2:$subdir/aba/mirror/save
 
 test-cmd -h steve@$bastion2 -m "Verifying mirror registry access $reg_host:$reg_port" "make -C $subdir/aba/mirror verify"
 
