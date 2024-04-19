@@ -90,6 +90,7 @@ echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
 chmod 600 ~$u/.ssh/authorized_keys
 chown -R $u.$u ~$u
 END
+ssh testy@registry2.example.com whoami
 
 ## # Create a test user on the remote host, with pw-less ssh access
 ## ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f" || true
