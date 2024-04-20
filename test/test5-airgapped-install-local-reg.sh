@@ -29,9 +29,10 @@ source test/include.sh
 [ ! "$target_full" ] && targetiso=target=iso   # Default is to generate 'iso' only   # Default is to only create iso
 mylog targetiso=$targetiso
 
-mylog
-mylog "===> Starting test $0"
-mylog Test to install a local reg. on registry2.example.com and save + copy + load images.  Install sno ocp and a test app and svc mesh.
+mylog ============================================================
+mylog Starting test $(basename $0)
+mylog ============================================================
+mylog "Test to install a local reg. on registry2.example.com and save + copy + load images.  Install sno ocp and a test app and svc mesh."
 mylog
 
 ntp=10.0.1.8 # If available
@@ -181,11 +182,11 @@ scp mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirro
 
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading vote-app image into mirror" "make -C $subdir/aba/mirror load" 
 
-cluster_type=standard  # Choose either sno, compact or standard
+cluster_type=sno  # Choose either sno, compact or standard
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing $cluster_type cluster, ready to deploy test app" "make -C $subdir/aba $cluster_type"
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Listing VMs" "make -C $subdir/aba/$cluster_type ls"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Listing VMs (should show 24G memory)" "make -C $subdir/aba/$cluster_type ls"
 
 #### DEL? test-cmd -h $reg_ssh_user@$bastion2 -m  "Deploying test vote-app" $subdir/aba/test/deploy-test-app.sh $subdir
 test-cmd -h steve@$bastion2 -m "Create project 'demo'" "make -C $subdir/aba/$cluster_type cmd cmd='oc new-project demo'" || true
@@ -254,16 +255,16 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 
 mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
-###make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf - 
-mylog "Copy latest tar file $(ls -1tr mirror/save/mirror_seq*tar | tail -1)"
-scp $(ls -1tr mirror/save/mirror_seq*tar | tail -1) $reg_ssh_user@$bastion2:$subdir/aba/mirror/save 
+make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf - 
+##mylog "Copy latest tar file $(ls -1tr mirror/save/mirror_seq*tar | tail -1)"   # THIS FAILS: DOES NOT COPY THE MESH FILES "openshift-service-mesh-demo"
+##scp $(ls -1tr mirror/save/mirror_seq*tar | tail -1) $reg_ssh_user@$bastion2:$subdir/aba/mirror/save 
 
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading jaeger operator images to mirror" "make -C $subdir/aba/mirror load" 
 
 test-cmd -m "Pausing for 60s to let OCP to settle" sleep 60    # For some reason, the cluster was still not fully ready in tests!
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m "Run 'day2' attempt number $i ..." "make -C $subdir/aba/sno day2" && break || true  # Install CA cert and activate local op. hub
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m "Run 'day2' attempt number $i ..." "make -C $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
 test-cmd -m "Pausing for 30s to let OCP to settle" sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
@@ -277,13 +278,13 @@ sleep 30  # Sleep in case need to check the cluster
 rm -rf test/mesh 
 
 ######################
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting cluster dirs, $subdir/aba/sno $subdir/aba/compact $subdir/aba/standard" "rm -rf  $subdir/aba/sno $subdir/aba/compact $subdir/aba/standard" 
+### test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting cluster dirs, $subdir/aba/sno $subdir/aba/compact $subdir/aba/standard" "rm -rf  $subdir/aba/sno $subdir/aba/compact $subdir/aba/standard" 
 
 ## KEEP standard test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating standard cluster" "make -C $subdir/aba standard" 
 ## KEEP standard test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting standard cluster" "make -C $subdir/aba/standard delete" 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating compact cluster" "make -C $subdir/aba compact" 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting compact cluster" "make -C $subdir/aba/compact delete" 
+##test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating compact cluster" "make -C $subdir/aba compact" 
+##test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting compact cluster" "make -C $subdir/aba/compact delete" 
 
 ## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating sno cluster with 'make -C $subdir/aba cluster name=sno type=sno'" "make -C $subdir/aba cluster name=sno type=sno" 
 ## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting sno cluster" "make -C $subdir/aba/sno delete" 

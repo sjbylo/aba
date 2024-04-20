@@ -21,9 +21,9 @@ export target_full=1   # Build vm+cluster
 export target_full=    # Build only iso
 
 time (
-	echo "==========="  > test/test.log
-	echo "START TESTS" >> test/test.log
-	echo "===========" >> test/test.log
+	echo "=========================================================================="  	 > test/test.log
+	echo "START TESTS @ $(date)" 								>> test/test.log
+	echo "==========================================================================" 	>> test/test.log
 	test/test1-basic-sync-test-and-save-load-test.sh
 	test/test2-airgapped-existing-reg.sh
 	test/test5-airgapped-install-local-reg.sh

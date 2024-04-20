@@ -125,9 +125,11 @@ else
 	echo
 fi
 
-mylog ============================
+mylog ============================================================
 mylog Starting test $(basename $0)
-mylog ============================
+mylog ============================================================
+mylog "Test to integrate with existing reg. on registry2.example.com and then sync and save/load images."
+mylog
 
 # Fetch the config
 source <(cd mirror; normalize-mirror-conf)

@@ -26,8 +26,9 @@ source test/include.sh
 [ ! "$target_full" ] && targetiso=target=iso   # Default is to generate 'iso' only   # Default is to only create iso
 mylog targetiso=$targetiso
 
-mylog
-mylog "===> Starting test $0"
+mylog ============================================================
+mylog Starting test $(basename $0)
+mylog ============================================================
 mylog "Test to install remote reg. on registry2.example.com and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
@@ -79,7 +80,7 @@ ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
 pub_key=$(cat ~/.ssh/id_rsa.pub)
 u=testy
 cat << END  | ssh registry2.example.com -- sudo bash 
-set -x
+set -ex
 userdel $u -r -f || true
 useradd $u -p not-used
 mkdir ~$u/.ssh 
