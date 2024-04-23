@@ -20,6 +20,9 @@ cd ..
 rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
+bastion2=registry.example.com
+bastion_vm=bastion-internal-rhel9
+
 source scripts/include_all.sh && trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 source test/include.sh
 
@@ -29,7 +32,7 @@ mylog targetiso=$targetiso
 mylog ============================================================
 mylog Starting test $(basename $0)
 mylog ============================================================
-mylog "Test to install remote reg. on registry2.example.com and then sync and save/load images.  Install sno ocp + test app."
+mylog "Test to install remote reg. on $bastion2 and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
 ntp=10.0.1.8 # If available
@@ -37,7 +40,7 @@ ntp=10.0.1.8 # If available
 which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
-v=4.14.14
+v=4.15.8
 echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
 make distclean ask=
 #make clean
@@ -66,20 +69,20 @@ source <(normalize-vmware-conf)
 
 mylog Revert internal bastion vm to snapshot and powering on ...
 (
-	govc snapshot.revert -vm bastion2-internal-rhel8 aba-test
+	govc snapshot.revert -vm $bastion_vm aba-test
 	sleep 8
-	govc vm.power -on bastion2-internal-rhel8
+	govc vm.power -on $bastion_vm
 	sleep 5
 )
 # Wait for host to come up
-ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 2
-ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 3
-ssh $reg_ssh_user@registry2.example.com -- "date" || sleep 8
+ssh $reg_ssh_user@$bastion2 -- "date" || sleep 2
+ssh $reg_ssh_user@$bastion2 -- "date" || sleep 3
+ssh $reg_ssh_user@$bastion2 -- "date" || sleep 8
 
 
 pub_key=$(cat ~/.ssh/id_rsa.pub)
 u=testy
-cat << END  | ssh registry2.example.com -- sudo bash 
+cat << END  | ssh $bastion2 -- sudo bash 
 set -ex
 userdel $u -r -f || true
 useradd $u -p not-used
@@ -91,31 +94,20 @@ echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
 chmod 600 ~$u/.ssh/authorized_keys
 chown -R $u.$u ~$u
 END
-ssh testy@registry2.example.com whoami
-
-## # Create a test user on the remote host, with pw-less ssh access
-## ssh $reg_ssh_user@registry2.example.com -- "sudo userdel testy -r -f" || true
-## ssh $reg_ssh_user@registry2.example.com -- "sudo useradd testy -p no-used"
-## ssh $reg_ssh_user@registry2.example.com -- "sudo mkdir ~testy/.ssh && sudo chmod 700 ~testy/.ssh"
-## ssh $reg_ssh_user@registry2.example.com -- "sudo cp -p ~steve/.pull-secret.json ~testy"   # Copy from anywhere!
-## cat ~/.ssh/id_rsa.pub | ssh $reg_ssh_user@registry2.example.com -- "sudo tee -a ~testy/.ssh/authorized_keys"
-## ssh $reg_ssh_user@registry2.example.com -- "sudo chown -R testy.testy ~testy"
-## ssh $reg_ssh_user@registry2.example.com -- "echo 'testy ALL=(ALL) NOPASSWD:ALL' | sudo tee -a /etc/sudoers.d/testy"
-## ssh $reg_ssh_user@registry2.example.com -- "sudo chmod 600 ~testy/.ssh/authorized_keys"
-## ssh testy@registry2.example.com whoami
+ssh testy@$bastion2 whoami
 
 
 #####################################################################################################################
 #####################################################################################################################
 #####################################################################################################################
 
-mylog "Confgure mirror to install registry on internal (remote) bastion2"
+mylog "Confgure mirror to install registry on internal (remote) $bastion2"
 
 # Create and edit mirror.conf 
 make -C mirror mirror.conf
 
-mylog "Setting 'reg_host' to 'registry2.example.com' in file 'mirror/mirror.conf'"
-sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
+mylog "Setting 'reg_host' to '$bastion2' in file 'mirror/mirror.conf'"
+sed -i "s/registry.example.com/$bastion2/g" ./mirror/mirror.conf	# Install on registry2 
 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
 sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
@@ -225,7 +217,7 @@ test-cmd -m "Uninstall mirror" make -C mirror uninstall
 
 mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 
-#sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf	# Install on registry2 
+#sed -i "s/registry.example.com/$bastion2/g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
 
 mylog "Setting reg_root=~/my-quay-mirror"
