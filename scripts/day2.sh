@@ -133,6 +133,10 @@ if [ "$list" ]; then
 	echo "Running: oc apply -f $cs_file"
 
 	if oc create -f $cs_file; then
+		# Setting: displayName: Private Catalog (registry.example.com)
+		echo "Patching registry display name: 'Private Catalog ($reg_host)' for CatalogSource cs-redhat-operator-index"
+		oc patch CatalogSource cs-redhat-operator-index  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "Private Catalog ('$reg_host')"}}'
+
 		echo "Patching registry poll interval for CatalogSource cs-redhat-operator-index"
 		oc patch CatalogSource cs-redhat-operator-index  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
 		echo Waiting 60s ...
@@ -153,8 +157,8 @@ if [ "$list" ]; then
 
 	echo "The CatalogSource is 'ready'"
 else
-	echo "No CatalogSources found under mirror/{save,sync}/oc-mirror-workspace."
-	echo "You would need to load some Operators first by editing the mirror/save/imageset-config-save.yaml file. See the README for more."
+	echo "No Operator CatalogSources found under mirror/{save,sync}/oc-mirror-workspace."
+	echo "Operator images would need to be loaded into the mirror registry first by a) editing the mirror/save/imageset-config-save.yaml file and b) running 'make save/load'. See the README for more."
 fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
