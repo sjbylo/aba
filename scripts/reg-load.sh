@@ -52,7 +52,7 @@ echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.
 echo "Running: $(cat load-mirror.sh)"
 if ! ./load-mirror.sh; then
 	[ "$TERM" ] && tput setaf 1 
-	echo "Warning: an error has occurred! Long running processes are prone to failure. Please try again!"
+	echo "Warning: an error has occurred! Long running processes are prone to failure. If the error looks transient please try again!"
 	[ "$TERM" ] && tput sgr0
        exit 1
 fi
