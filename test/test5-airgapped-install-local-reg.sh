@@ -32,7 +32,7 @@ mylog targetiso=$targetiso
 mylog ============================================================
 mylog Starting test $(basename $0)
 mylog ============================================================
-mylog "Test to install a local reg. on registry2.example.com and save + copy + load images.  Install sno ocp and a test app and svc mesh."
+mylog "Test to install a local reg. on $bastion2 and save + copy + load images.  Install sno ocp and a test app and svc mesh."
 mylog
 
 ntp=10.0.1.8 # If available
@@ -49,10 +49,12 @@ test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask="
 #test-cmd -m "Cleaning up mirror - clean" "make -C mirror clean" 
 rm -rf sno compact standard 
 
+bastion2=registry.example.com
+bastion_vm=bastion-internal-rhel9
 subdir=~
 #subdir=~/subdir
 
-v=4.14.14
+v=4.15.8
 rm -f aba.conf  # Set it up next
 vf=~/.vmware.conf.vc
 test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
@@ -71,8 +73,6 @@ source <(normalize-aba-conf)
 # Be sure this file exists
 test-cmd -m "Init test: download mirror-registry.tar.gz" "make -C test mirror-registry.tar.gz"
 
-bastion2=10.0.1.6
-
 #################################
 # Copy and edit mirror.conf 
 
@@ -80,10 +80,10 @@ bastion2=10.0.1.6
 rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
 scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
-mylog "Test the internal bastion (registry2.example.com) as mirror"
+mylog "Test the internal bastion ($bastion2) as mirror"
 
-mylog "Setting reg_host=registry2.example.com"
-sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
+mylog "Setting reg_host=$bastion2"
+sed -i "s/registry.example.com/$bastion2/g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf
 
 make -C cli
@@ -93,18 +93,18 @@ source <(normalize-vmware-conf)
 #################################
 mylog Revert vm snapshot of the internal bastion vm and power on
 (
-	govc snapshot.revert -vm bastion2-internal-rhel8 aba-test
+	govc snapshot.revert -vm $bastion_vm aba-test
 	sleep 8
-	govc vm.power -on bastion2-internal-rhel8
+	govc vm.power -on $bastion_vm
 	sleep 5
 )
 # Wait for host to come up
-ssh steve@registry2.example.com -- "date" || sleep 2
-ssh steve@registry2.example.com -- "date" || sleep 3
-ssh steve@registry2.example.com -- "date" || sleep 8
+ssh steve@$bastion2 -- "date" || sleep 2
+ssh steve@$bastion2 -- "date" || sleep 3
+ssh steve@$bastion2 -- "date" || sleep 8
 
 # Just be sure a valid govc config file exists
-scp ~/.vmware.conf steve@registry2.example.com: 
+scp ~/.vmware.conf steve@$bastion2: 
 
 #################################
 

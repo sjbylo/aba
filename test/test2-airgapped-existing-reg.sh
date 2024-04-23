@@ -24,7 +24,8 @@ cd ..  # Change into "aba" dir
 rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
-bastion2=registry2.example.com
+bastion2=registry.example.com
+bastion_vm=bastion-internal-rhel9
 ntp=10.0.1.8 # If available
 
 source scripts/include_all.sh && trap - ERR  # Trap not wanted during testing?
@@ -35,7 +36,7 @@ mylog targetiso=$targetiso
 
 mylog
 mylog "===> Starting test $0"
-mylog "Test to integrate an existing reg. on registry2.example.com and save + copy + load images.  Install sno ocp and a test app."
+mylog "Test to integrate an existing reg. on $bastion2 and save + copy + load images.  Install sno ocp and a test app."
 mylog
 
 ######################
@@ -45,7 +46,7 @@ mylog
 subdir=~/subdir   # Unpack repo tar into this dir on internal bastion
 
 # Exec script with any arg to skip reg. install and load
-##if [ ! "$1" ] && ! ssh steve@registry2.example.com -- make -C $subdir/aba/mirror verify; then
+##if [ ! "$1" ] && ! ssh steve@$bastion2 -- make -C $subdir/aba/mirror verify; then
 if [ ! "$1" ]; then
 	echo
 	echo Setting up test $(basename $0)
@@ -58,7 +59,7 @@ if [ ! "$1" ]; then
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
 
-	v=4.14.14
+	v=4.15.8
 	rm -f aba.conf
 	vf=~/.vmware.conf.vc
 	test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
@@ -80,9 +81,9 @@ if [ ! "$1" ]; then
 
 	make -C mirror mirror.conf
 
-	## test the internal bastion (registry2.example.com) as mirror
-	mylog "Setting reg_host=registry2.example.com"
-	sed -i "s/registry.example.com/registry2.example.com/g" ./mirror/mirror.conf
+	## test the internal bastion ($bastion2) as mirror
+	mylog "Setting reg_host=$bastion2"
+	sed -i "s/registry.example.com/$bastion2/g" ./mirror/mirror.conf
 	#sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf
 
 	make -C cli
@@ -92,27 +93,27 @@ if [ ! "$1" ]; then
 
 	mylog Revert a snapshot and power on the internal bastion vm
 	(
-		govc snapshot.revert -vm bastion2-internal-rhel8 aba-test
+		govc snapshot.revert -vm $bastion_vm aba-test
 		sleep 8
-		govc vm.power -on bastion2-internal-rhel8
+		govc vm.power -on $bastion_vm
 		sleep 5
 	)
 	# Wait for host to come up
-	ssh steve@registry2.example.com -- "date" || sleep 2
-	ssh steve@registry2.example.com -- "date" || sleep 3
-	ssh steve@registry2.example.com -- "date" || sleep 8
+	ssh steve@$bastion2 -- "date" || sleep 2
+	ssh steve@$bastion2 -- "date" || sleep 3
+	ssh steve@$bastion2 -- "date" || sleep 8
 	#################################
 
 	# Just be sure a valid govc config file exists on internal bastion
-	scp ~/.vmware.conf steve@registry2.example.com: 
-	##scp ~/.vmware.conf testy@registry2.example.com: 
+	scp ~/.vmware.conf steve@$bastion2: 
+	##scp ~/.vmware.conf testy@$bastion2: 
 
 	uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
 
 	ssh steve@$bastion2 "rpm -q make  || sudo yum install make -y"
 
-	mylog "Install 'existing' test mirror registry on internal bastion: registry2.example.com"
-	test-cmd test/reg-test-install-remote.sh registry2.example.com
+	mylog "Install 'existing' test mirror registry on internal bastion: $bastion2"
+	test-cmd test/reg-test-install-remote.sh $bastion2
 
 	################################
 
@@ -128,7 +129,7 @@ fi
 mylog ============================================================
 mylog Starting test $(basename $0)
 mylog ============================================================
-mylog "Test to integrate with existing reg. on registry2.example.com and then sync and save/load images."
+mylog "Test to integrate with existing reg. on $bastion2 and then sync and save/load images."
 mylog
 
 # Fetch the config
