@@ -115,7 +115,7 @@ if [ "$reg_ssh_key" ]; then
 		ssh -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && tar xmzf mirror-registry.tar.gz"
 		ssh -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry install"
 		ssh -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
-		ssh -F .ssh.conf $reg_ssh_user@$reg_host rm -rf .abatmp 
+		ssh -F .ssh.conf $reg_ssh_user@$reg_host rm -rf .abatmp/*
 	)
 	# Workaround END ########
 			
