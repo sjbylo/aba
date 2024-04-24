@@ -7,7 +7,7 @@ UserKnownHostsFile=/dev/null
 ConnectTimeout=15
 END
 
-reg_host=10.0.1.6
+reg_host=$1
 
 reg_ssh_user=steve
 

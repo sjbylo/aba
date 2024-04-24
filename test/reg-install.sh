@@ -30,7 +30,7 @@ fi
 
 reg_root=~/quay-install
 reg_pw=p4ssw0rd
-[ "$1" ] && reg_host=$1 || reg_host=registry2.example.com
+[ "$1" ] && reg_host=$1 || reg_host=registry.example.com   #FIXME: needs to be param
 reg_port=8443
 
 # mirror-registry installer does not open the port for us

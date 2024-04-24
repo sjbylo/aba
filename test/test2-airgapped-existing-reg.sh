@@ -31,8 +31,8 @@ ntp=10.0.1.8 # If available
 source scripts/include_all.sh && trap - ERR  # Trap not wanted during testing?
 source test/include.sh
 
-[ ! "$target_full" ] && targetiso="target=iso"   # Default is to generate 'iso' only on some tests
-mylog targetiso=$targetiso
+[ ! "$target_full" ] && default_target="target=iso"   # Default is to generate 'iso' only on some tests
+mylog default_target=$default_target
 
 mylog
 mylog "===> Starting test $0"
@@ -161,12 +161,12 @@ test-cmd -h steve@$bastion2 -m "Verifying access to the mirror registry $reg_hos
 test-cmd -h steve@$bastion2 -r 99 3 -m "Loading images into mirror registry $reg_host:$reg_port" "make -C $subdir/aba load" 
 
 ssh steve@$bastion2 "rm -rf $subdir/aba/compact" 
-test-cmd -h steve@$bastion2 -m "Install compact cluster with targetiso=[$targetiso]" "make -C $subdir/aba compact $targetiso" 
+test-cmd -h steve@$bastion2 -m "Install compact cluster with default_target=[$default_target]" "make -C $subdir/aba compact $default_target" 
 test-cmd -h steve@$bastion2 -m "Deleting cluster (if it exists)" "make -C $subdir/aba/compact delete" 
 
 ssh steve@$bastion2 "rm -rf $subdir/aba/sno" 
 
-test-cmd -h steve@$bastion2 -m "Install sno cluster with 'make -C $subdir/aba sno $targetiso'" "make -C $subdir/aba sno $targetiso" 
+test-cmd -h steve@$bastion2 -m "Install sno cluster with 'make -C $subdir/aba sno $default_target'" "make -C $subdir/aba sno $default_target" 
 
 ######################
 # Now simulate adding more images to the mirror registry
@@ -256,7 +256,7 @@ test-cmd -h steve@$bastion2 -m "Deleting sno cluster" "make -C $subdir/aba/sno d
 
 ######################
 
-test-cmd -m "Clean up 'existing' mirror registry on internal bastion" test/reg-test-uninstall-remote.sh
+test-cmd -m "Clean up 'existing' mirror registry on internal bastion" test/reg-test-uninstall-remote.sh $bastion2
 
 mylog
 mylog "===> Completed test $0"
