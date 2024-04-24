@@ -26,8 +26,8 @@ rm -fr ~/.containers ~/.docker
 source scripts/include_all.sh && trap - ERR
 source test/include.sh
 
-[ ! "$target_full" ] && targetiso=target=iso   # Default is to generate 'iso' only   # Default is to only create iso
-mylog targetiso=$targetiso
+[ ! "$target_full" ] && default_target="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
+mylog default_target=$default_target
 
 mylog ============================================================
 mylog Starting test $(basename $0)
@@ -141,8 +141,8 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Tidying up internal bastion" "rm -rf $s
 
 mylog "Running 'make sno' on internal bastion"
 
-[ "$targetiso" ] && mylog "Creating the cluster with target=$targetiso only"
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno/iso with 'make -C $subdir/aba sno $targetiso'" "make -C $subdir/aba sno $targetiso" 
+[ "$default_target" ] && mylog "Creating the cluster with target=$default_target only"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno/iso with 'make -C $subdir/aba sno $default_target'" "make -C $subdir/aba sno $default_target" 
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"
 
