@@ -290,7 +290,7 @@ rm -rf test/mesh
 ## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting sno cluster" "make -C $subdir/aba/sno delete" 
 ######################
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Uninstalling mirror registry on internal bastion" "make -C $subdir/aba/mirror uninstall"
+### KEEP test-cmd -h $reg_ssh_user@$bastion2 -m  "Uninstalling mirror registry on internal bastion" "make -C $subdir/aba/mirror uninstall"
 
 mylog
 mylog "===> Completed test $0"
