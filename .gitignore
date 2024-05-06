@@ -32,6 +32,7 @@ mirror/.synced
 mirror/.uninstalled
 mirror/.*
 mirror/regcreds.bk
+mirror/mirror.conf.bk
 sno*
 */cluster.conf
 *.ssh.conf
@@ -47,3 +48,4 @@ aba.conf
 test/mesh
 test/?-stage
 cli/.*installed
+.??*.log
