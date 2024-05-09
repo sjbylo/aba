@@ -44,7 +44,10 @@ rm -f ~/.aba.previous.backup
 
 which make || sudo dnf install make -y
 
+v=4.15.8
+
 > mirror/mirror.conf
+echo "ocp_version=$v" >> aba.conf  # Only to fix error, missing "ocp_version"
 test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask=" 
 #test-cmd -m "Cleaning up mirror - clean" "make -C mirror clean" 
 rm -rf sno compact standard 
@@ -54,7 +57,6 @@ bastion_vm=bastion-internal-rhel9
 subdir=~
 subdir=~/subdir
 
-v=4.15.8
 rm -f aba.conf  # Set it up next
 vf=~/.vmware.conf.vc
 test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
