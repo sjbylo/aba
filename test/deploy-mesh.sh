@@ -1,12 +1,13 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 # This test script is run on the remote internal bastion only
 
-export KUBECONFIG=$PWD/aba/sno/iso-agent-based/auth/kubeconfig
+cd $(dirname $0)
+cd ..
+pwd
 
-cd ~/aba/test/mesh/openshift-service-mesh-demo
+. <(cd sno; make shell)
 
-# Use this simple method.   The "redirect methods" are problematic.
-sed -i "s/quay\.io/$reg_host:$reg_port/g" */*.yaml */*/*.yaml */*/*/*.yaml
+cd test/mesh/openshift-service-mesh-demo
 
 echo "y" | ./00-install-all.sh
 
