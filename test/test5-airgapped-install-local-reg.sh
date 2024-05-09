@@ -52,7 +52,7 @@ rm -rf sno compact standard
 bastion2=registry.example.com
 bastion_vm=bastion-internal-rhel9
 subdir=~
-#subdir=~/subdir
+subdir=~/subdir
 
 v=4.15.8
 rm -f aba.conf  # Set it up next
@@ -123,9 +123,11 @@ test-cmd -r 99 3 -m "Saving images to local disk" "make save"
 
 ssh $reg_ssh_user@$bastion2 "rpm -q make  || sudo yum install make -y"
 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
+
 mylog "Use 'make tarrepo' to copy tar+ssh archive plus seq1 tar file to internal bastion"
-###make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
-make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+###make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir - xvf -
+make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir -xvf -
 scp mirror/save/mirror_seq1_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
 
 ### echo "Install the reg creds, simulating a manual config" 
@@ -161,8 +163,8 @@ END
 test-cmd -r 99 3 -m "Saving ubi images to local disk on `hostname`" "make -C mirror save" 
 
 mylog Copy tar+ssh archives to internal bastion
-## make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
-make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+## make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir - xvf -
+make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir -xvf -
 scp mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
 
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading UBI images into mirror" "make -C $subdir/aba/mirror load" 
@@ -176,8 +178,8 @@ END
 test-cmd -r 99 3 -m "Saving vote-app image to local disk" " make -C mirror save" 
 
 mylog Copy repo to internal bastion
-##make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
-make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+##make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir - xvf -
+make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir -xvf -
 scp mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
 
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading vote-app image into mirror" "make -C $subdir/aba/mirror load" 
@@ -227,7 +229,7 @@ END
 test-cmd -r 99 3 -m "Saving mesh operators to local disk" "make -C mirror save"
 
 mylog Copy tar+ssh archives to internal bastion
-make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf -
+make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir -xvf -
 
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading images to mirror" "make -C $subdir/aba/mirror load" 
 
@@ -255,7 +257,7 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 
 mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
-make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar xvf - 
+make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir -xvf - 
 ##mylog "Copy latest tar file $(ls -1tr mirror/save/mirror_seq*tar | tail -1)"   # THIS FAILS: DOES NOT COPY THE MESH FILES "openshift-service-mesh-demo"
 ##scp $(ls -1tr mirror/save/mirror_seq*tar | tail -1) $reg_ssh_user@$bastion2:$subdir/aba/mirror/save 
 
