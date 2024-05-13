@@ -54,7 +54,7 @@ test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $
 cp $vf vmware.conf 
 
 mylog "Setting 'ask='"
-sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
+sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
 
 mylog "Setting ntp_server=$ntp" 
 [ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
@@ -107,16 +107,16 @@ mylog "Confgure mirror to install registry on internal (remote) $bastion2"
 make -C mirror mirror.conf
 
 mylog "Setting 'reg_host' to '$bastion2' in file 'mirror/mirror.conf'"
-sed -i "s/registry.example.com/$bastion2/g" ./mirror/mirror.conf	# Install on registry2 
+sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf	# Install on registry2 
 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
-sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
+sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 ##mylog "Setting reg_root=~/my-quay-mirror"
-##sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
+##sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
 
 #sed -i "s#channel=.*#channel=fast          #g" ./mirror/mirror.conf	    	# test channel
-#sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
+#sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
 #sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test random password 
 ### sed -i "s#tls_verify=true#tls_verify=            #g" ./mirror/mirror.conf  	# test tlsverify = false # sno install fails 
 ### sed -i "s#reg_port=.*#reg_pw=443             #g" ./mirror/mirror.conf	    	# test port change
@@ -218,11 +218,11 @@ test-cmd -m "Uninstall mirror" make -C mirror uninstall
 ## FIXME INSTALL FAILURE mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 mylog "Configure mirror to install on internal (remote) bastion in default dir, with random password to '/my/path'"
 
-#sed -i "s/registry.example.com/$bastion2/g" ./mirror/mirror.conf	# Install on registry2 
-#sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
+#sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf	# Install on registry2 
+#sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 ## FIXME INSTALL FAILURE mylog "Setting reg_root=~/my-quay-mirror"
-## FIXME INSTALL FAILURE sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
+## FIXME INSTALL FAILURE sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
 
 mylog "Setting reg_pw="
 sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test random password 
@@ -232,7 +232,7 @@ mylog "Setting reg_path=my/path"
 sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
 
 mylog "Setting reg_ssh_user=testy for remote installation" 
-sed -i "s#reg_ssh_user=.*#reg_ssh_user=testy#g" ./mirror/mirror.conf	     	# If remote, set user
+sed -i "s#reg_ssh_user=[^ \t]*#reg_ssh_user=testy   #g" ./mirror/mirror.conf	     	# If remote, set user
 
 # FIXME: no need? or use 'make clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
@@ -255,11 +255,11 @@ rm sno/cluster.conf   # This should 100% reset the cluster and make should start
 mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 201"
 test-cmd -m "Configuring SNO cluster with 'make sno target=cluster.conf" make sno target=cluster.conf
 mylog "Setting CIDR 10.0.1.128/25"
-sed -i "s/^machine_network=.*/machine_network=10.0.1.128/g" sno/cluster.conf
-sed -i "s/^prefix_length=.*/prefix_length=25/g" sno/cluster.conf
+sed -i "s/^machine_network=[^ \t]*/machine_network=10.0.1.128 /g" sno/cluster.conf
+sed -i "s/^prefix_length=[^ \t]*/prefix_length=25 /g" sno/cluster.conf
 
 mylog "Setting starting_ip=201"
-sed -i "s/^starting_ip=.*/starting_ip=201/g" sno/cluster.conf
+sed -i "s/^starting_ip=[^ \t]*/starting_ip=201 /g" sno/cluster.conf
 test-cmd -m "Installing sno cluster" make sno
 
 #####################################################################################################################
