@@ -5,12 +5,17 @@ SCRIPTS   = ../scripts
 debug    ?= 		# Set debug=1 for some commands 
 
 # The default target will build a cluster from scratch 
-all: ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished login
+all: check ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished login
 
 ##@ Help-related tasks
 .PHONY: help
 help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[\.a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+.PHONY: check
+check:
+	[ -f .finished ] && $(error Warning: This cluster was already deployed.  Run 'make clean' first or remove the '.finished' flag file and try again)
+	#@scripts/check-already-deployed.sh || $(error aborting)
 
 ../aba.conf:
 	make -C .. aba.conf
@@ -119,8 +124,8 @@ mon:  ## Monitor the agent-based installation of OpenShift.
 	@scripts/monitor-install.sh $(debug)
 	@touch .finished
 
-.PHONY: mon
-login: .finished 
+.PHONY: login
+login: #.finished 
 	@scripts/show-cluster-login.sh
 
 .PHONY: getco
