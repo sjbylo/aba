@@ -23,13 +23,15 @@ normalize-aba-conf() {
 	# Extract the machine_network and the prefix_length from the CIDR notation
 	# Prepend "export "
 	[ ! -s aba.conf ] && echo "aba/aba.conf missing! run: cd aba && ./aba" && exit 1
+		#cut -d"#" -f1 | \
 	cat aba.conf | \
-		cut -d"#" -f1 | \
+		sed -E "s/^\s*#.*//g" | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
 			sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" | \
 			sed -e "s/ask=1\b/ask=true/g" | \
-			sed -e "s#\(.*\)/#\1\nprefix_length=#g" | \
+			sed -e "s#\(^machine_network=[0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\)/#\1\nprefix_length=#g" | \
 			sed -e "s/^/export /g";
+
 }
 
 normalize-mirror-conf()
@@ -39,12 +41,14 @@ normalize-mirror-conf()
 	# Ensrue reg_ssh_user has a value
 	# Prepend "export "
 	[ ! -s mirror.conf ] && echo "Warning: no 'mirror.conf' file defined in $PWD" >&2 && return 0
+		#cut -d"#" -f1 | \
+			#sed -E "s/^reg_ssh_user=[[:space:]]+|reg_ssh_user=$/reg_ssh_user=$(whoami) /g" | \
 	cat mirror.conf | \
-		cut -d"#" -f1 | \
-			sed -E "s/^reg_ssh_user=[[:space:]]+|reg_ssh_user=$/reg_ssh_user=$(whoami)/g" | \
+		sed -E "s/^\s*#.*//g" | \
+			sed -E "s/^reg_ssh_user=[[:space:]]+/reg_ssh_user=$(whoami) /g" | \
 			sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
-			sed -e "s/^tls_verify=0\b/tls_verify=/g" -e "s/tls_verify=false/tls_verify=/g" | \
-			sed -e "s/^tls_verify=1\b/tls_verify=true/g" | \
+			sed -e "s/^tls_verify=0\b/tls_verify= /g" -e "s/tls_verify=false/tls_verify= /g" | \
+			sed -e "s/^tls_verify=1\b/tls_verify=true /g" | \
 			sed -e 's/^reg_root=~/reg_root=\\~/g' | \
 			sed -e "s/^/export /g"
 }
@@ -54,8 +58,9 @@ normalize-cluster-conf()
 	# Normalize or sanitize the config file
 	# Prepend "export "
 	[ ! -s cluster.conf ] && echo "Warning: no 'cluster.conf' file defined in $PWD" >&2 && return 0
+		##cut -d"#" -f1 | \
 	cat cluster.conf | \
-		cut -d"#" -f1 | \
+		sed -E "s/^\s*#.*//g" | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
 			sed -e "s/^/export /g";
 }
@@ -67,8 +72,10 @@ normalize-vmware-conf()
 	# Prepend "export "
 	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
 	[ ! -f vmware.conf ] && echo "Warning: no 'vmware.conf' file defined in $PWD" >&2 && return 0  # vmware.conf can be empty
+                #cut -d"#" -f1 | \  # Can't use this since passwords can contain '#' char(s)!
+		#sed -E "s/\s+# [[:print:]]+$//g" | \
         vars=$(cat vmware.conf | \
-                cut -d"#" -f1 | \
+		sed -E "s/^\s*#.*//g" | \
                 sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
 		sed -e "s/^VMW_FOLDER=/VC_FOLDER=/g" | \
                 sed -e "s/^/export /g")
