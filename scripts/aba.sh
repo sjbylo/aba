@@ -1,6 +1,8 @@
 #!/bin/bash 
 # Start here, run this to get going!
 
+uname -o | grep -q "^Darwin$" && echo "Please run 'aba' on RHEL or Fedora. Most tested is RHEL 9." && exit 1
+
 dir=$(dirname $0)
 cd $dir
 
