@@ -17,11 +17,6 @@ check:
 help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[\.a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-.PHONY: check
-check:
-	[ -f .finished ] && $(error Warning: This cluster was already deployed.  Run 'make clean' first or remove the '.finished' flag file and try again)
-	#@scripts/check-already-deployed.sh || $(error aborting)
-
 ../aba.conf:
 	make -C .. aba.conf
 
