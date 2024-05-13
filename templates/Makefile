@@ -7,6 +7,11 @@ debug    ?= 		# Set debug=1 for some commands
 # The default target will build a cluster from scratch 
 all: check ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished login
 
+# Check cluster has been installed already
+.PHONY: check
+check:
+	@../scripts/check-cluster-installed.sh
+
 ##@ Help-related tasks
 .PHONY: help
 help: ## Help
