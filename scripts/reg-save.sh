@@ -59,7 +59,7 @@ else
 	# If less than 50 GB, give a warning only
 	if [ $avail -lt 51250 ]; then
 		[ "$TERM" ] && tput setaf 1 
-		echo "Warning: Not much disk space available under $PWD/save (only $avail MB). Operator images require between ~40 to ~400GB of disk space!"
+		echo "Warning: Less than 50GB of space available under $PWD/save (only $avail MB). Operator images require between ~40 to ~400GB of disk space!"
 		[ "$TERM" ] && tput sgr0
 	fi
 
