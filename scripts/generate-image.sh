@@ -27,6 +27,9 @@ cp install-config.yaml agent-config.yaml $MANEFEST_DIR
 echo "openshift-install agent create image --dir $MANEFEST_DIR "
 openshift-install agent create image --dir $MANEFEST_DIR 
 
+echo "Making backup of '$MANEFEST_DIR/auth' to '$MANEFEST_DIR/auth.backup'"
+cp -rp $MANEFEST_DIR/auth $MANEFEST_DIR/auth.backup
+
 echo 
 echo "The agent based ISO has been created in the '$MANEFEST_DIR' directory"
 echo

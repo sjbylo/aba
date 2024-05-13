@@ -44,7 +44,8 @@ if ! govc about; then
 	exit 1
 else
 	echo "Saving working version of 'vmware.conf' to '~/.vmware.conf'."
-	[ ! -s ~/.vmware.conf ] && cp vmware.conf ~/.vmware.conf
+	##[ ! -s ~/.vmware.conf ] && cp vmware.conf ~/.vmware.conf
+	[ -s vmware.conf ] && cp vmware.conf ~/.vmware.conf
 fi
 ##fi
 
