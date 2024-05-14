@@ -24,6 +24,8 @@ export target_full=    # Build only iso
 time (
 	echo "=========================================================================="  	>> test/test.log
 	echo "=========================================================================="  	>> test/test.log
+	echo "Running: $0 $*                                                            "  	>> test/test.log
+	echo "=========================================================================="  	>> test/test.log
 	echo "START TESTS @ $(date)" 								>> test/test.log
 	echo "==========================================================================" 	>> test/test.log
 	time test/test1-basic-sync-test-and-save-load-test.sh && \
