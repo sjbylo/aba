@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Output the oc cluster login command
 
 [ ! -d iso-agent-based ] && echo "Cluster not installed.  Run 'make' to install the cluster or 'make iso' to create the iso boot image." && exit 1
 

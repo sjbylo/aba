@@ -23,6 +23,11 @@ openshift-install agent wait-for install-complete --dir $MANEFEST_DIR    # --log
 
 if [ $? -eq 0 ]; then
 	echo 
-	echo "Now the cluster has been installed, run 'source <(make -s shell)' and then 'oc whoami' to access the cluster"
+	echo "The cluster has been successfully installed."
+	echo "Run '. <(make shell)' to access the cluster using the kubeconfig file (x509 cert), or"
+	echo "Run '. <(make login)' to log into the cluster using the 'kubeadmin' password. "
+else
+	echo 
+	echo "Something went wrong with the installation.  Fix the problem and try again!"
 fi
 
