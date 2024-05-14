@@ -4,10 +4,26 @@ SCRIPTS   = ../scripts
 #cmd      ?= "get co"    # The default command
 debug    ?= 		# Set debug=1 for some commands 
 
-# The default target will build a cluster from scratch 
-all: check ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished login
+include ../aba.conf
+platform := $(strip $(shell echo $(platform)))
 
-# Check cluster has been installed already
+ifneq ($(platform),vmw)
+   # Only create the agent based config files
+   TARGET_DEPENDENCIES = check ../aba.conf ../mirror/mirror.conf agentconf .bm-message iso .bm-nextstep
+else
+   # Create the agent based config files and the matching VMs
+   TARGET_DEPENDENCIES = check ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished
+endif
+
+# The default target will build a cluster from scratch 
+all: $(TARGET_DEPENDENCIES)
+
+## OLD version => all: check ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished login
+
+# vmw: all: check ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished 
+# bm:  all: check ../aba.conf ../mirror/mirror.conf agentconf .bm-message iso .bm-nextstep
+
+# Check cluster has been installed already and abort if it has
 .PHONY: check
 check:
 	@../scripts/check-cluster-installed.sh
@@ -47,6 +63,8 @@ vmware.conf: ## Use VMW vCenter or ESXi to create cluster.
 cluster.conf:  ## Set up the cluster.conf file.
 	scripts/create-cluster-conf.sh $(name) $(type)
 
+agentconf: install-config.yaml agent-config.yaml
+
 # Note that install-config.yaml can be configured with vSphere params (vmware.conf)
 install-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
 	scripts/create-install-config.sh $(debug)
@@ -54,15 +72,25 @@ install-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Creat
 agent-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
 	scripts/create-agent-config.sh $(debug)
 
+.bm-message:
+	@echo "Now, edit the install-config.yaml and agent-config.yaml files, e.g. to add your barte-metal mac addresses and run 'make iso'"
+	@echo "make will not abort ..."
+	@touch .bm-message
+	@exit 1
+
 # The following "auto" targets are meant just for the full end-to-end automation, to build a cluster
 iso: iso-agent-based/agent.x86_64.iso ## Build the agent-based iso file.
-iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note that install-config.yaml can itself be dependent on vmware.conf params
+iso-agent-based/agent.x86_64.iso: agentconf   # Note that install-config.yaml can itself be dependent on vmware.conf params
 	scripts/generate-image.sh $(debug)
 
 ntp: .ntp ## Use NTP time sync during early installation. Required only if underlying platform/hardware does not support time sync.
 .ntp: iso-agent-based/agent.x86_64.iso
 	@scripts/add_ntp_ignition_to_iso.sh $(debug) 
 	@touch .ntp
+
+.bm-nextstep:
+	@echo "Edit the agent 'install-config.yaml' and 'agent-config.yaml' files, e.g. to add the actual mac addresses and optionally add disk & nic hints, run 'make' again to create the ISO file, boot your hosts and then run 'make' again to monitor the installation progress."
+	@exit 0
 
 .autopoweroff: .ntp
 	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || true 
@@ -92,27 +120,27 @@ create: vmware.conf iso  ## Create the VMs based on the 'agent-based' config fil
 
 ###ls: vmware.conf  ## List VMs and their power state.
 .PHONY: ls
-ls: .initialized vmware.conf install-config.yaml agent-config.yaml ## List VMs and their power state.
+ls: .initialized vmware.conf agentconf ## List VMs and their power state.
 	@scripts/vmw-ls.sh || echo "No vm(s).  Try running 'make' or 'make refresh'."
 
 .PHONY: stop
-stop: .initialized vmware.conf install-config.yaml agent-config.yaml ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again!
+stop: .initialized vmware.conf agentconf ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again!
 	@scripts/vmw-on.sh && scripts/vmw-stop.sh $(debug) || exit 0
 
 .PHONY: start
-start: .initialized vmware.conf install-config.yaml agent-config.yaml ## Start all the VMs.
+start: .initialized vmware.conf agentconf ## Start all the VMs.
 	@scripts/vmw-on.sh || scripts/vmw-start.sh $(debug) || exit 0
 
 .PHONY: poweroff
-poweroff: .initialized vmware.conf install-config.yaml agent-config.yaml ## Power off the VMs immediately.  This will stop the cluster abruptly. 
+poweroff: .initialized vmware.conf agentconf ## Power off the VMs immediately.  This will stop the cluster abruptly. 
 	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: kill
-kill:  .initialized vmware.conf install-config.yaml agent-config.yaml ## Kill or power off the VMs immediately.  This will stop the cluster abruptly. 
+kill:  .initialized vmware.conf agentconf ## Kill or power off the VMs immediately.  This will stop the cluster abruptly. 
 	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: delete
-delete: .initialized vmware.conf install-config.yaml agent-config.yaml ## Delete the VMs. This will delete the cluster. 
+delete: .initialized vmware.conf agentconf ## Delete the VMs. This will delete the cluster. 
 	@scripts/vmw-delete.sh $(debug) || exit 0
 
 .finished: .autorefresh
