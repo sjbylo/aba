@@ -73,8 +73,7 @@ agent-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create 
 	scripts/create-agent-config.sh $(debug)
 
 .bm-message:
-	@echo "Now, edit the install-config.yaml and agent-config.yaml files, e.g. to add your barte-metal mac addresses and run 'make iso'"
-	@echo "make will not abort ..."
+	@echo "Edit the agent 'install-config.yaml' and 'agent-config.yaml' files, e.g. to add the actual mac addresses and optionally add disk & nic hints, run 'make' again to create the ISO file, boot your hosts and then run 'make' again to monitor the installation progress."
 	@touch .bm-message
 	@exit 1
 
@@ -89,7 +88,8 @@ ntp: .ntp ## Use NTP time sync during early installation. Required only if under
 	@touch .ntp
 
 .bm-nextstep:
-	@echo "Edit the agent 'install-config.yaml' and 'agent-config.yaml' files, e.g. to add the actual mac addresses and optionally add disk & nic hints, run 'make' again to create the ISO file, boot your hosts and then run 'make' again to monitor the installation progress."
+	@echo "Boot your hosts with the ISO file and then run 'make mon' to monitor the installation progress."
+	@touch .bm-nextstep
 	@exit 0
 
 .autopoweroff: .ntp
