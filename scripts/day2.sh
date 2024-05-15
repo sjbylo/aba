@@ -3,6 +3,7 @@
 # Set up cluster trust CA with the internal registry's Root CA
 # Configure OperatorHub using the internal mirror registry. 
 # Apply the imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)
+## This script also solves the problem that multiple sync/save runs do not containing all ICSPs. See: https://github.com/openshift/oc-mirror/issues/597 
 # For disconnected environments, disable online public catalog sources
 # Install any CatalogSources
 
@@ -19,7 +20,7 @@ export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 echo "What this 'day2' script does:"
 echo "- Add the internal mirror registry's Root CA to the cluster trust store."
 echo "- Configure OperatorHub to integrate with the internal mirror registry."
-echo "- Apply any imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)."
+echo "- Apply any/all imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)."
 echo "- For fully disconnected environments, disable online public catalog sources."
 echo "- Install any CatalogSources."
 echo "- Apply any signatures."
