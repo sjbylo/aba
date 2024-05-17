@@ -140,21 +140,14 @@ if [ "$reg_ssh_key" ]; then
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh.provision
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh.provision
 
+	#cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
+  	#	-k $reg_ssh_key --initPassword $reg_pw $reg_root_opt"
 	cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
-  		-k $reg_ssh_key --initPassword $reg_pw $reg_root_opt"
+  		-k $reg_ssh_key $reg_root_opt"
 
-	#echo "Running command: \"./mirror-registry install -v --quayHostname $reg_host \
-#		--targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key --initPassword <hidden> $reg_root_opt\""
+	echo "Running command: \"$cmd --initPassword <hidden>\""
 
-	echo "Running command: \"$cmd\""
-
-	$cmd
-	##./mirror-registry install -v \
-  		##--quayHostname $reg_host \
-  		##--targetUsername $reg_ssh_user \
-  		##--targetHostname $reg_host \
-  		##-k $reg_ssh_key \
-		##--initPassword $reg_pw $reg_root_opt
+	$cmd --initPassword $reg_pw
 
 	# Now, activate the uninstall script 
 	mv ./reg-uninstall.sh.provision reg-uninstall.sh
@@ -208,15 +201,12 @@ else
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh.provision
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh.provision
 
-	cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opt"
+	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opt"
+	cmd="./mirror-registry install -v --quayHostname $reg_host $reg_root_opt"
 
-	echo "Running command: \"$cmd\""
+	echo "Running command: \"$cmd --initPassword <hidden>\""
 
-	$cmd
-
-	##./mirror-registry install -v \
-  		##--quayHostname $reg_host \
-		##--initPassword $reg_pw $reg_root_opt
+	$cmd --initPassword $reg_pw
 
 	# Now, activate the uninstall script 
 	mv ./reg-uninstall.sh.provision reg-uninstall.sh
