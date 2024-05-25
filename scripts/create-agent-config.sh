@@ -43,6 +43,22 @@ export rendezvous_ip=$machine_ip_prefix$starting_ip
 
 scripts/verify-config.sh || exit 1
 
+# Generate the mac addresses or get them from 'macs.conf'
+# Goal is to allow user to BYO mac addresses for bare-metal use-case. So, we generate the addresses in advance into an array "arr_". scripts/j2 will create a python list.
+if [ -s macs.conf ]; then
+	grep -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' macs.conf > .macs.conf
+else
+	# Since the jinja2 template now uses a simple list, we can also auto-generate the addresses in a similar way for VMs. 
+	for host in $(seq 1 $num_masters); do
+		printf "%s%02d\n" $mac_prefix $host
+	done > .macs.conf
+	for host in $(seq 1 $num_workers); do
+		printf "%s%02d\n" $mac_prefix $(expr $host + 3)
+	done >> .macs.conf
+fi
+export arr_macs=$(cat .macs.conf | tr "\n" " " | tr -s "[:space:]")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
+rm -f .macs.conf
+
 # Use j2cli to render the templates
 echo
 echo Generating Agent-based configuration file: $PWD/agent-config.yaml 

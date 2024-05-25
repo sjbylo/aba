@@ -4,7 +4,7 @@ metadata:
   name: {{ cluster_name }}
 rendezvousIP: {{ rendezvous_ip }}
 hosts:
-  {%- for host in range(num_masters|int) %}
+  {%- for hostcnt in range(num_masters|int) %}
   {%- if num_workers == '0' and num_masters == '1' %}
   - hostname: {{ cluster_name }}
   {%- else %}
@@ -13,13 +13,13 @@ hosts:
     role: master
     interfaces:
      - name: ens160
-       macAddress: "{{ mac_prefix + '%02d' % loop.index }}"
+       macAddress: {{ arr_macs[hostcnt] }}
     networkConfig:
       interfaces:
         - name: ens160
           type: ethernet
           state: up
-          mac-address: "{{ mac_prefix + '%02d' % loop.index }}"
+          mac-address: {{ arr_macs[hostcnt] }}
           ipv4:
             enabled: true
             address:
@@ -36,18 +36,18 @@ hosts:
             next-hop-address: {{ next_hop_address }}
             next-hop-interface: ens160
   {% endfor %}
-  {%- for host in range(num_workers|int) %}
+  {%- for hostcnt in range(num_workers|int) %}
   - hostname: {{ worker_prefix }}{{ loop.index }}
     role: worker
     interfaces:
      - name: ens160
-       macAddress: {{ mac_prefix + '%02d' % (loop.index + 9 ) }}
+       macAddress: {{ arr_macs[hostcnt + 3] }}
     networkConfig:
       interfaces:
         - name: ens160
           type: ethernet
           state: up
-          mac-address: {{ mac_prefix + '%02d' % (loop.index + 9 ) }}
+          mac-address: {{ arr_macs[hostcnt + 3] }}
           ipv4:
             enabled: true
             address:

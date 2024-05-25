@@ -290,6 +290,19 @@ rm -rf test/mesh
 ##test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating compact cluster" "make -C $subdir/aba compact" 
 ##test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting compact cluster" "make -C $subdir/aba/compact delete" 
 
+# Test BM with BYO macs
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating standard cluster dir" "cd $subdir/aba; rm -rf standard; mkdir -p standard; ln -s ../templates/Makefile standard; make -C standard init" 
+echo "00:50:56:1d:9e:01
+00:50:56:1d:9e:02
+00:50:56:1d:9e:03
+00:50:56:1d:9e:04
+00:50:56:1d:9e:05
+" > macs.conf
+scp macs.conf $reg_ssh_user@$bastion2:$subdir/aba/standard
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating cluster.conf" "cd $subdir/aba/standard; scripts/create-cluster-conf.sh standard standard"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating cluster.conf" "make -C $subdir/aba/standard iso"
+##test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -C $subdir/aba/sno delete" 
+
 ## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating sno cluster with 'make -C $subdir/aba cluster name=sno type=sno'" "make -C $subdir/aba cluster name=sno type=sno" 
 ## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting sno cluster" "make -C $subdir/aba/sno delete" 
 ######################

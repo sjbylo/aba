@@ -29,7 +29,17 @@ def main():
     template = env.from_string(template_content)
 
     # Retrieve all values from environment variables
-    data = {key: value for key, value in os.environ.items()}
+    ## FIXME delete: data = {key: value for key, value in os.environ.items()}
+    # Turn all "arr_" key values into lists.  Used for mac addresses.
+    data = {}
+    for key, value in os.environ.items():
+        # Check if the value contains spaces
+        if key.startswith("arr_"):
+            # Split the value into a list of strings
+            data[key] = value.split()
+        else:
+            # Keep the value as is
+            data[key] = value
 
     # Render the template with the retrieved data
     output = template.render(data)
