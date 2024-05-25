@@ -1,0 +1,42 @@
+#!/usr/bin/python3
+
+import sys
+import os
+from jinja2 import Environment, FileSystemLoader
+
+def main():
+    # Ensure at least one command-line argument is provided
+    if len(sys.argv) < 2:
+        print("Usage: python render_template.py <template_filename>")
+        sys.exit(1)
+
+    # Extract the template filename from the command-line arguments
+    template_filename = sys.argv[1]
+
+    # Ensure the specified file exists
+    if not os.path.isfile(template_filename):
+        print(f"Error: Template file '{template_filename}' not found.")
+        sys.exit(1)
+
+    # Read the template content from the specified file
+    with open(template_filename, 'r') as template_file:
+        template_content = template_file.read()
+
+    # Create the Jinja2 environment
+    env = Environment(loader=FileSystemLoader(os.path.dirname(template_filename)))
+
+    # Load the template from the provided content
+    template = env.from_string(template_content)
+
+    # Retrieve all values from environment variables
+    data = {key: value for key, value in os.environ.items()}
+
+    # Render the template with the retrieved data
+    output = template.render(data)
+
+    # Output the rendered content
+    print(output)
+
+if __name__ == "__main__":
+    main()
+
