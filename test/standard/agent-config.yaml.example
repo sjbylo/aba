@@ -92,13 +92,13 @@ hosts:
     role: worker
     interfaces:
      - name: ens160
-       macAddress: 88:88:88:88:88:10
+       macAddress: 88:88:88:88:88:04
     networkConfig:
       interfaces:
         - name: ens160
           type: ethernet
           state: up
-          mac-address: 88:88:88:88:88:10
+          mac-address: 88:88:88:88:88:04
           ipv4:
             enabled: true
             address:
@@ -119,13 +119,13 @@ hosts:
     role: worker
     interfaces:
      - name: ens160
-       macAddress: 88:88:88:88:88:11
+       macAddress: 88:88:88:88:88:05
     networkConfig:
       interfaces:
         - name: ens160
           type: ethernet
           state: up
-          mac-address: 88:88:88:88:88:11
+          mac-address: 88:88:88:88:88:05
           ipv4:
             enabled: true
             address:
