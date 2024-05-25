@@ -9,13 +9,13 @@ hosts:
     role: master
     interfaces:
      - name: ens160
-       macAddress: "88:88:88:88:88:01"
+       macAddress: 88:88:88:88:88:01
     networkConfig:
       interfaces:
         - name: ens160
           type: ethernet
           state: up
-          mac-address: "88:88:88:88:88:01"
+          mac-address: 88:88:88:88:88:01
           ipv4:
             enabled: true
             address:
@@ -37,13 +37,13 @@ hosts:
     role: master
     interfaces:
      - name: ens160
-       macAddress: "88:88:88:88:88:02"
+       macAddress: 88:88:88:88:88:02
     networkConfig:
       interfaces:
         - name: ens160
           type: ethernet
           state: up
-          mac-address: "88:88:88:88:88:02"
+          mac-address: 88:88:88:88:88:02
           ipv4:
             enabled: true
             address:
@@ -65,13 +65,13 @@ hosts:
     role: master
     interfaces:
      - name: ens160
-       macAddress: "88:88:88:88:88:03"
+       macAddress: 88:88:88:88:88:03
     networkConfig:
       interfaces:
         - name: ens160
           type: ethernet
           state: up
-          mac-address: "88:88:88:88:88:03"
+          mac-address: 88:88:88:88:88:03
           ipv4:
             enabled: true
             address:
