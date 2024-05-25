@@ -10,9 +10,11 @@ source <(normalize-aba-conf)
 
 [ ! "$ntp_server" ] && echo "Define 'ntp_server' in 'aba.conf' to configure NTP" && exit 0
 
+export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
+
 cat > /tmp/99-master-chrony-conf-override.bu <<END
 variant: openshift
-version: $ocp_version
+version: $ocp_ver_major.0
 metadata:
   name: 99-master-chrony-conf-override
   labels:
@@ -55,7 +57,7 @@ END
 
 cat > /tmp/99-worker-chrony-conf-override.bu <<END
 variant: openshift
-version: $ocp_version
+version: $ocp_ver_major.0
 metadata:
   name: 99-worker-chrony-conf-override
   labels:
