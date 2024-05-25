@@ -101,6 +101,8 @@ END
 butane /tmp/99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
 butane /tmp/99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
+export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
+
 oc apply -f 99-master-chrony-conf-override.yaml
 oc apply -f 99-worker-chrony-conf-override.yaml
 
