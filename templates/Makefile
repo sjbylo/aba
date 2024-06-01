@@ -14,22 +14,22 @@ ifneq ($(platform),vmw)   # if platform is not 'vmw', i.e. bare-metal is assumed
 	ifeq ($(wildcard .bm-message),)
 		# if .bm-message DOES NOT exists
    		# Only create the agent based config files and show next steps
-		TARGET_DEPENDENCIES = check ../aba.conf ../mirror/mirror.conf install-config.yaml agent-config.yaml .bm-message
+		TARGET_DEPENDENCIES = check ../aba.conf install-config.yaml agent-config.yaml .bm-message
 	else
 		#.bm-message exists
 		ifeq ($(wildcard .bm-nextstep),)
 			# if .bm-nextstep DOES NOT exists
    			# Only create the iso file and show next steps
-			TARGET_DEPENDENCIES = check ../aba.conf ../mirror/mirror.conf install-config.yaml agent-config.yaml             iso .bm-nextstep
+			TARGET_DEPENDENCIES = check ../aba.conf install-config.yaml agent-config.yaml             iso .bm-nextstep
 		else
 			# .bm-nextstep exists
    			# Do all steps, including mon
-			TARGET_DEPENDENCIES = check ../aba.conf ../mirror/mirror.conf install-config.yaml agent-config.yaml             iso              mon
+			TARGET_DEPENDENCIES = check ../aba.conf install-config.yaml agent-config.yaml             iso              mon
 		endif
 	endif
 else  # If platform is 'vmw', all steps can be automated 
 	# Create the agent based config files and the matching VMs
-	TARGET_DEPENDENCIES = check ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished
+	TARGET_DEPENDENCIES = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .finished
 endif
 
 # DEBUG # $(info TARGET_DEPENDENCIES = $(TARGET_DEPENDENCIES))
@@ -37,10 +37,10 @@ endif
 # The default target will build a cluster from scratch (for 'vmw' platform but not for bare-metal!) 
 all: $(TARGET_DEPENDENCIES)
 
-## OLD version => all: check ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished login
+## OLD version => all: check ../aba.conf iso .autopoweroff .autoupload .autorefresh .finished login
 
-# vmw: all: check ../aba.conf ../mirror/mirror.conf iso .autopoweroff .autoupload .autorefresh .finished 
-# bm:  all: check ../aba.conf ../mirror/mirror.conf install-config.yaml agent-config.yaml .bm-message iso .bm-nextstep
+# vmw: all: check ../aba.conf iso .autopoweroff .autoupload .autorefresh .finished 
+# bm:  all: check ../aba.conf install-config.yaml agent-config.yaml .bm-message iso .bm-nextstep
 
 # Check cluster has been installed already and abort if it has
 .PHONY: check
@@ -55,8 +55,8 @@ help: ## Help
 ../aba.conf:
 	make -C .. aba.conf
 
-../mirror/mirror.conf:
-	@echo "Before installing an OpenShift cluster, please install or configure a mirror registry. See the aba/README file." && exit 1
+#../mirror/mirror.conf:
+#	@echo "Before installing an OpenShift cluster, please install or configure a mirror registry. See the aba/README file." && exit 1
 
 ###.PHONY: init
 init: .initialized
