@@ -82,6 +82,14 @@ for name in $CP_NAMES ; do
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
+	echo "Create and attach a 2nd data disk on [$GOVC_DATASTORE]"
+	govc vm.disk.create \
+		-vm $vm_name \
+		-name $vm_name/${vm_name}_data \
+		-size 500GB \
+		-thick=false \
+		-ds=$GOVC_DATASTORE
+
 	[ "$START_VM" ] && govc vm.power -on $vm_name
 
 	let i=$i+1
@@ -118,6 +126,14 @@ for name in $WORKER_NAMES ; do
 		-vm $vm_name \
 		-name $vm_name/$vm_name \
 		-size 120GB \
+		-thick=false \
+		-ds=$GOVC_DATASTORE
+
+	echo "Create and attach a 2nd data disk on [$GOVC_DATASTORE]"
+	govc vm.disk.create \
+		-vm $vm_name \
+		-name $vm_name/${vm_name}_data \
+		-size 500GB \
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
