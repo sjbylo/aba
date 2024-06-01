@@ -72,7 +72,7 @@ for name in $CP_NAMES ; do
 
 	govc device.boot -secure -vm $vm_name
 
-	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE
+	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true
 
 	echo "Create and attach disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
@@ -119,7 +119,7 @@ for name in $WORKER_NAMES ; do
 
 	govc device.boot -secure -vm $vm_name
 
-	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE
+	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true
 
 	echo "Create and attach disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
