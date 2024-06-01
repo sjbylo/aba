@@ -199,8 +199,8 @@ source <(normalize-vmware-conf)
 
 ######################
 rm -rf sno
-test-cmd -m "Installing SNO cluster from public registry with 'make sno" make sno
-test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete 
+test-cmd -m "Installing SNO cluster from public registry with 'make sno" make sno $default_target
+test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || true
 
 ### NOT NEEDED#######################
 ### NOT NEEDED#  This will save the images, install (the reg.) then load the images
