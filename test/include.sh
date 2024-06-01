@@ -70,7 +70,7 @@ test-cmd() {
 		echo "Sleeping $sleep_time seconds ..."
 		sleep $sleep_time
 		sleep_time=`expr $sleep_time \* $backoff`
-		echo "Attempting command again ($i/$tot_cnt) - $@" | tee -a test/test.log
+		echo "Attempting command again ($i/$tot_cnt) - ($@)" | tee -a test/test.log
 	done
 
 	[ "$reset_xtrace" ] && set -x

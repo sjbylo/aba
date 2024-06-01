@@ -43,13 +43,13 @@ platform:
   {%- endif %}
 pullSecret: |
   {{ pull_secret|indent(2) }}
-  {%- if additional_trust_bundle != '' %}
-additionalTrustBundle: |
-  {{ additional_trust_bundle|indent(2) }}
-  {%- endif %}
   {%- if ssh_key_pub != '' %}
 sshKey: |
   {{ ssh_key_pub|indent(2) }}
+  {%- endif %}
+  {%- if additional_trust_bundle != '' %}
+additionalTrustBundle: |
+  {{ additional_trust_bundle|indent(2) }}
   {%- endif %}
 {%- if image_content_sources != '' %}
 imageContentSources:

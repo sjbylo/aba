@@ -57,7 +57,8 @@ if [ -s regcreds/rootCA.pem ]; then
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
 	echo "Using root CA file at regcreds/rootCA.pem"
 else
-	echo "Warning: No file 'regcreds/rootCA.pem' found.  Assuming unsecure mirror registry (http)."
+	#echo "Warning: No file 'regcreds/rootCA.pem' found.  Assuming unsecure mirror registry (http)."
+	echo "Warning: No file 'regcreds/rootCA.pem' found."
 	##  exit 1  # Will only work without a cert if the registry is using http
 fi
 
@@ -71,8 +72,10 @@ if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
 	[ ! "$reg_host" ] && echo && echo "Error: registry host is not defined!" && exit 1
 fi
 
-# Check that the release image is available in the reg.
-scripts/verify-release-image.sh
+# Check that the release image is available in the private registry
+if [ "$additional_trust_bundle" -a "$image_content_sources" ]; then
+	scripts/verify-release-image.sh
+fi
 
 echo
 echo Generating Agent-based configuration file: $PWD/install-config.yaml 
