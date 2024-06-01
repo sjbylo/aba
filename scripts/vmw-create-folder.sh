@@ -8,7 +8,7 @@ shift
 [ "$1" ] && set -x
 
 if ! echo $vc_folder | grep -q ^/; then
-	echo "vsphere folder must start with a '/'" 
+	echo "The vsphere folder must start with a '/' char!" 
 	exit 1
 fi
 
@@ -20,16 +20,16 @@ do
        	folder_list="$vc_folder $folder_list"
        	vc_folder=$(dirname $vc_folder)
 
-	[ "$vc_folder" == "/" ] && echo "Invalid folder" && exit 1
+	[ "$vc_folder" == "/" ] && echo "Invalid folder name: '$vc_folder'" && exit 1
 
 	if govc folder.create $vc_folder >/dev/null 2>&1; then
 		for f in $folder_list
 		do
-			[ "$f" == "/" ] && echo "Invalid folder" && exit 1
+			[ "$f" == "/" ] && echo "Invalid folder name: '$vc_folder'" && exit 1
 			#govc folder.create $f >/dev/null 2>&1
 			govc folder.create $f
 		done
-		[ $? -eq 0 ] && echo "Folder $f created!" || echo Cannot create folder $f
+		[ $? -eq 0 ] && echo "Folder $f created!" || echo "Cannot create: '$f'"
 		break
 	fi
 done
