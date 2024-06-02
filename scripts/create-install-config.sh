@@ -20,8 +20,8 @@ export additional_trust_bundle=
 export image_content_sources=
 
 # FIXME - add to makefile
-[ -d regcreds ] && echo FIXME: $PWD/regcreds already exists || true
-ln -fs ../mirror/regcreds 
+### [ -d regcreds ] && echo FIXME: $PWD/regcreds already exists || true
+### ln -fs ../mirror/regcreds 
 
 # Generate the needed iso-agent-based config files ...
 
@@ -63,11 +63,17 @@ else
 fi
 
 
-[ -s $ssh_key_file.pub ] && \
-	export ssh_key_pub=$(cat $ssh_key_file.pub) || \
-		echo WARNING: No file $ssh_key_file.pub ...
+# Check for ssh key files 
+if [ -s $ssh_key_file.pub ]; then
+	echo Using existing ssh key files: $ssh_key_file ... 
+else
+	echo Creating ssh key files for $ssh_key_file ... 
+	ssh-keygen -t rsa -f $ssh_key_file -N ''
+fi
+export ssh_key_pub=$(cat $ssh_key_file.pub) 
 
-# Check the registry is defined if it's in use
+
+# Check the private registry is defined, if it's in use
 if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
 	[ ! "$reg_host" ] && echo && echo "Error: registry host is not defined!" && exit 1
 fi

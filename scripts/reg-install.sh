@@ -27,7 +27,7 @@ fi
 
 # Check for Quay...
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
-reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
+reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
 if [ "$reg_code" = "200" ]; then
 	[ "$TERM" ] && tput setaf 1
@@ -44,7 +44,7 @@ if [ "$reg_code" = "200" ]; then
 fi
 
 # Check for any endpoint ...
-reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/ || true)
+reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/ || true)
 
 if [ "$reg_code" = "200" ]; then
 	[ "$TERM" ] && tput setaf 1

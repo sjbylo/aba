@@ -64,6 +64,7 @@ init: .initialized
 	@ln -fs ../templates
 	@ln -fs ../scripts
 	@ln -fs ../mirror
+	@ln -fs ../mirror/regcreds 
 	@ln -fs ../aba.conf
 	make -C ../cli
 	@touch .initialized
@@ -153,6 +154,14 @@ stop: .initialized vmware.conf install-config.yaml agent-config.yaml ## Shut dow
 .PHONY: start
 start: .initialized vmware.conf install-config.yaml agent-config.yaml ## Start all the VMs.
 	@scripts/vmw-on.sh || scripts/vmw-start.sh $(debug) || exit 0
+
+.PHONY: shutdown 
+shutdown:
+	@scripts/cluster-graceful-shutdown.sh 
+
+.PHONY: startup
+startup:
+	@scripts/cluster-startup.sh 
 
 .PHONY: poweroff
 poweroff: .initialized vmware.conf install-config.yaml agent-config.yaml ## Power off the VMs immediately.  This will stop the cluster abruptly. 
