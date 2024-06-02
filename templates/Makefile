@@ -147,21 +147,21 @@ create: vmware.conf iso  ## Create the VMs based on the 'agent-based' config fil
 ls: .initialized vmware.conf install-config.yaml agent-config.yaml ## List VMs and their power state.
 	@scripts/vmw-ls.sh || echo "No vm(s).  Try running 'make' or 'make refresh'."
 
+.PHONY: shutdown 
+shutdown: ## Graceful cluster shutdown by draining all pods. 
+	@scripts/cluster-graceful-shutdown.sh 
+
+.PHONY: startup
+startup: ## Start all VMs and allow all pods to start.
+	@scripts/cluster-startup.sh 
+
 .PHONY: stop
-stop: .initialized vmware.conf install-config.yaml agent-config.yaml ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again!
+stop: .initialized vmware.conf install-config.yaml agent-config.yaml ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again! Try using 'make shutdown' for graceful cluster shutdown.
 	@scripts/vmw-on.sh && scripts/vmw-stop.sh $(debug) || exit 0
 
 .PHONY: start
 start: .initialized vmware.conf install-config.yaml agent-config.yaml ## Start all the VMs.
 	@scripts/vmw-on.sh || scripts/vmw-start.sh $(debug) || exit 0
-
-.PHONY: shutdown 
-shutdown:
-	@scripts/cluster-graceful-shutdown.sh 
-
-.PHONY: startup
-startup:
-	@scripts/cluster-startup.sh 
 
 .PHONY: poweroff
 poweroff: .initialized vmware.conf install-config.yaml agent-config.yaml ## Power off the VMs immediately.  This will stop the cluster abruptly. 
