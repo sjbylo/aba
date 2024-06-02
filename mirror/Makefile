@@ -91,9 +91,9 @@ mirror.conf: .initialized                     ../aba.conf               ## Confi
 
 install: .installed
 .installed: .initialized .rpmsext mirror.conf mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
-	$(SCRIPTS)/reg-install.sh $(debug) 
 	@rm -f .uninstalled 
 	@touch .installed
+	$(SCRIPTS)/reg-install.sh $(debug) 
 
 .PHONY: installclean
 installclean:
