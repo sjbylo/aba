@@ -12,7 +12,7 @@ source <(normalize-aba-conf)
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-cat > /tmp/99-master-chrony-conf-override.bu <<END
+[ ! -s 99-master-chrony-conf-override.bu ] && cat > 99-master-chrony-conf-override.bu <<END
 variant: openshift
 version: $ocp_ver_major.0
 metadata:
@@ -55,7 +55,7 @@ storage:
           local stratum 3 orphan
 END
 
-cat > /tmp/99-worker-chrony-conf-override.bu <<END
+[ ! -s 99-worker-chrony-conf-override.bu ] && cat > 99-worker-chrony-conf-override.bu <<END
 variant: openshift
 version: $ocp_ver_major.0
 metadata:
@@ -98,8 +98,8 @@ storage:
           local stratum 3 orphan
 END
 
-butane /tmp/99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
-butane /tmp/99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
+butane 99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
+butane 99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
 export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 
