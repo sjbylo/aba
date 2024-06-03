@@ -148,11 +148,11 @@ ls: .initialized vmware.conf install-config.yaml agent-config.yaml ## List VMs a
 	@scripts/vmw-ls.sh || echo "No vm(s).  Try running 'make' or 'make refresh'."
 
 .PHONY: shutdown 
-shutdown: ## Graceful cluster shutdown by draining all pods. 
+shutdown: ## Trigger the cluster to gracefully shut itself down by draining all the nodes of pods. 
 	@scripts/cluster-graceful-shutdown.sh 
 
 .PHONY: startup
-startup: ## Start all VMs and allow all pods to start.
+startup: ## Start all VMs and allow all pods to start (uncorden)
 	@scripts/cluster-startup.sh 
 
 .PHONY: stop

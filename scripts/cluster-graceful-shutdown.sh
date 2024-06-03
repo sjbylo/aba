@@ -1,6 +1,10 @@
 #!/bin/bash -e
 # Attenpt a cluster graceful shutdown by terminating all pods on all nodes
 
+echo Checking access to cluster ...
+# Use one of the methods to access the cluster
+oc whoami || . <(make shell) || . <(make login) || exit 1
+
 cluster_id=$(oc whoami --show-server | awk -F[/:] '{print $4}') || exit 1
 echo Cluster $cluster_id nodes:
 echo
