@@ -26,7 +26,7 @@ test-cmd() {
 
 	local tot_cnt=1
 	local sleep_time=20
-	local host=
+	local host=localhost
 
 	while echo $1 | grep -q ^-
 	do
@@ -39,9 +39,9 @@ test-cmd() {
 
 	echo "---------------------------------------------------------------------------------------"
 	if [ "$msg" ]; then
-		echo "`hostname`: $msg ($@)" | tee -a test/test.log
+		echo "$host: $msg ($@)" | tee -a test/test.log
 	else
-		echo "`hostname`: $@" | tee -a test/test.log
+		echo "$host: $@" | tee -a test/test.log
 	fi
 	echo "---------------------------------------------------------------------------------------"
 
@@ -49,7 +49,7 @@ test-cmd() {
 	while true
 	do
 		set +e
-		if [ "$host" ]; then
+		if [ "$host" != "localhost" ]; then
 			echo "Running command: \"$@\" on host $host"
 			ssh $host -- "$@"
 		else

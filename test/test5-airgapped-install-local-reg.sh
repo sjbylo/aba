@@ -301,6 +301,7 @@ echo "00:50:56:1d:9e:01
 scp macs.conf $reg_ssh_user@$bastion2:$subdir/aba/standard
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating cluster.conf" "cd $subdir/aba/standard; scripts/create-cluster-conf.sh standard standard"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating cluster.conf" "make -C $subdir/aba/standard iso"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating cluster" "make -C $subdir/aba/standard"
 ##test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -C $subdir/aba/sno delete" 
 
 ## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating sno cluster with 'make -C $subdir/aba cluster name=sno type=sno'" "make -C $subdir/aba cluster name=sno type=sno" 
