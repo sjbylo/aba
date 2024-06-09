@@ -1,9 +1,10 @@
 #!/bin/bash -e
 # Start up the cluster.  Need to uncordon to allow pods to run again.
 
+echo Starting cluster ...
 make start 
 
-oc whoami >/dev/null 2>&1 || sleep 30
+oc whoami >/dev/null 2>&1 || (echo Waiting for cluster startup; sleep 40) 
 
 # Use one of the methods to access the cluster
 while ! oc whoami >/dev/null 2>&1; do
@@ -11,7 +12,7 @@ while ! oc whoami >/dev/null 2>&1; do
 	. <(make login) || true
 done
 
-if ! oc whoami >/dev/null >&1; then
+if ! oc whoami >/dev/null 2>&1; then
 	echo -n Waiting for cluster to start ...
 	sleep 60
 	until oc whoami >/dev/null 2>&1 >/dev/null
@@ -30,10 +31,8 @@ echo
 
 echo "Make all nodes schedulable (uncordon):"
 for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm uncordon ${node} ; done
-sleep 2
+sleep 10
 oc get nodes
-#sleep 10
-#for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm uncordon ${node} ; done
 
 echo
 echo "Note the certificate expiration date of this cluster ($cluster_id):"
