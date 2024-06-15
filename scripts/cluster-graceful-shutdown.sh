@@ -40,17 +40,19 @@ echo "Makeing all nodes unschedulable (corden):"
 for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm cordon ${node} & done 
 wait
 
-echo "Draining all pods (waiting max 90s):"
+echo "Draining all pods from all nodes (waiting max 120s):"
 sleep 1
-for node in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=90s & done
+for node in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=120s & done
 wait
 
 ###for node in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --force --disable-eviction --timeout=20s; done || true
  
 echo Stopping all nodes:
-make stop
+##make stop
 
 ##set -x
-## Shut down all of the nodes
+# Shut down all of the nodes
 #for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc --request-timeout=20s debug node/${node} -- chroot /host shutdown -h 1; done || make stop
+for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc --request-timeout=20s debug node/${node} -- chroot /host shutdown -h 1; done
+
 
