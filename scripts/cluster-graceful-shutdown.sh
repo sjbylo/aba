@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash 
 # Attenpt a cluster graceful shutdown by terminating all pods on all nodes
 
 echo Checking access to cluster ...
