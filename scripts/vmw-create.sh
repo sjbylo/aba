@@ -48,6 +48,11 @@ fi
 # Check and increase CPU count for SNO, if needed
 [ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 16 ] && master_cpu_count=16 && echo Increasing cpu count to 16 for SNO ...
 
+# Enable hardware virt on the workers only (or also masters for 'scheduling enabled')
+master_nested_hv=false
+[ $WORKER_REPLICAS -eq 0 ] && master_nested_hv=true && echo Setting hardware virt on master nodes ...
+worker_nested_hv=true
+
 i=1
 for name in $CP_NAMES ; do
 	a=`expr $i-1`
@@ -72,7 +77,7 @@ for name in $CP_NAMES ; do
 
 	govc device.boot -secure -vm $vm_name
 
-	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true
+	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true -nested-hv-enabled=$master_nested_hv
 
 	echo "Create and attach disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
@@ -119,7 +124,7 @@ for name in $WORKER_NAMES ; do
 
 	govc device.boot -secure -vm $vm_name
 
-	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true
+	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true -nested-hv-enabled=$worker_nested_hv
 
 	echo "Create and attach disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
