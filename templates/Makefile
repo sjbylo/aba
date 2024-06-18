@@ -83,7 +83,7 @@ vmware.conf: ## Use VMW vCenter or ESXi to create cluster.
 cluster.conf:  ## Set up the cluster.conf file.
 	scripts/create-cluster-conf.sh $(name) $(type)
 
-#agentconf: install-config.yaml agent-config.yaml
+agentconf: install-config.yaml agent-config.yaml  ## Convenient target to only build the agent config files.
 
 # Note that install-config.yaml can be configured with vSphere params (vmware.conf)
 install-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
