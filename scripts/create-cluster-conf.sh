@@ -11,6 +11,9 @@ if [ ! "$ocp_version" ]; then
 	exit 1
 fi
 
+# jinja2 module is needed
+scripts/install-rpms.sh internal
+
 name=standard
 type=standard
 [ "$1" ] && name=$1 && shift
@@ -44,9 +47,8 @@ if [ ! -s cluster.conf ]; then
 		export num_workers=2
 	fi
 
-	###scripts/j2 templates/cluster-$name.conf > cluster.conf 
 	scripts/j2 templates/cluster.conf > cluster.conf 
-	##[ "$type" = "sno" ] && sed -i -e "/^api_vip=.*$/d" -e "/^ingress_vip=.*$/d" cluster.conf
+
 	[ "$type" = "sno" ] && sed -i -e "s/^api_vip=/#api_vip=/g" -e "s/^ingress_vip=/#ingress_vip=/g" cluster.conf
 fi
 
