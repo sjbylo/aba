@@ -284,7 +284,7 @@ sed -s "s/^platform=.*/platform=blah/g" aba.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
 ####test-cmd -m "Creating standard iso file with 'make standard target=iso'" make standard target=iso # Since we're simulating bare-metal, only create iso
 test-cmd -m "Creating agent config files" make standard   		# Since we're simulating bare-metal, this will only create agent configs
-test-cmd -m "Creating iso file" make -C standard  || true		# Since we're simulating bare-metal, only create iso
+test-cmd -m "Creating iso file" make -C standard iso || true		# Since we're simulating bare-metal, only create iso
 
 test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
 
