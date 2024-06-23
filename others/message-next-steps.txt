@@ -1,5 +1,5 @@
 ================================================================================================================
-To install a private container image registry, follow step 1). 
+To install, or re-use, a private container image registry, follow step 1). 
 
 ----------------------------------------------------------------------------------------------------------------
 1) Follow one of the two options (1a or 1b/c) to configure the registry and download the needed images/software.
