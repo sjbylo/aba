@@ -206,38 +206,31 @@ domain_reachable registry.redhat.io && net_pub=1
 ip_reachable $next_hop_address && net_priv=1
 
 if [ "$net_pub" -a "$net_priv" ]; then
-	echo "Access to Internet (registry.redhat.io):          Yes"
-	echo "Access to Private network ($next_hop_address):    Yes"
+	echo "Access to Internet (registry.redhat.io):		Yes"
+	echo "Access to Private network ($next_hop_address):	Yes"
+	echo
 	echo "Access to both the Internet and your private network has been detected."
-	echo "You might consider following 1a) below (make sync)."
+	echo "Note that installing a private registry is *optional* since there is access to both the Internet and your private network. Assuming fully connected env."
+	echo "If you want to install, or re-use, a private registry, follow step 1) below."
 
 elif [ "$net_pub" -a ! "$net_priv" ]; then
-	echo "Access to Internet (registry.redhat.io):          Yes"
-	echo "Access to Private network ($next_hop_address):    No"
-	echo "Only access to the Internet has been detected. No access to your private network ($next_hop_address) has been detected."
-	echo "You might consider following 1b) below (make save & make inc)."
+	echo "Access to Internet (registry.redhat.io):		Yes"
+	echo "Access to Private network ($next_hop_address):	No"
+	echo
+	echo "Only access to the Internet has been detected. No access to your private network has been detected.  Assuming air-gapped env."
+	echo "You need to follow 1b) below (make save & make inc)."
 elif [ ! "$net_pub" -a "$net_priv" ]; then
-	echo "Access to Internet (registry.redhat.io):          No "
-	echo "Access to Private network ($next_hop_address):    Yes"
-	echo "Access to your private network ($next_hop_address) has been detected.  No access to the Internet has been detected."
-	echo "You might consider following 1c) below (make load)."
+	echo "Access to Internet (registry.redhat.io):		No "
+	echo "Access to Private network ($next_hop_address):	Yes"
+	echo
+	echo "Access to your private network has been detected.  No access to the Internet has been detected."
+	echo "You need to following 1c) below (make load), assuming you have already synched the files over after 'make save' on a connected env. Assuming air-gapped env."
 else
 	echo "No acecss to any required networks!"
 	echo "Get access to the Internet and/or your target private network and try again!"
 
 	exit 1
 fi
-
-# # FIXME: Asking about vmware access is not really needed at this point in the workflow, consider removing/moving.
-############
-# vmware.conf
-###if [ ! "$auto_vmw" ]; then
-##	if [ ! -s vmware.conf ]; then
-##		make vmware.conf
-##	fi
-##fi
-# # FIXME: Asking about vmware platform is not really needed at this point in the workflow, consider removing.
-
 
 # Just in case, check the target ocp version in aba.conf match any existing versions defined in oc-mirror imageset config files. 
 # FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
@@ -248,10 +241,7 @@ fi
 	fi
 )
 
-##if [ ! "$auto_ver" -a ! "$auto_vmw" ]; then
-	############
-	# Offer next steps
-	echo
-	cat others/message-next-steps.txt
-##fi
+# Offer next steps
+echo
+cat others/message-next-steps.txt
 
