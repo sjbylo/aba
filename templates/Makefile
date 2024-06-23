@@ -89,7 +89,8 @@ agentconf: install-config.yaml agent-config.yaml  ## Convenient target to only b
 install-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
 	scripts/create-install-config.sh $(debug)
 
-agent-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
+#agent-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
+agent-config.yaml: .initialized             cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
 	scripts/create-agent-config.sh $(debug)
 
 .bm-message:
