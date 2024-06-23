@@ -9,7 +9,7 @@ source scripts/include_all.sh
 # Needed for $editor
 source <(normalize-aba-conf)
 
-[ "$platform" != "vmw" ] && echo "Platform var not set to 'vmw'. Not configuring 'vmware.conf'." && > vmware.conf && exit 0
+[ "$platform" != "vmw" ] && echo "Platform var not set to 'vmw' in 'aba.conf'. Not configuring 'vmware.conf'." && > vmware.conf && exit 0
 
 if [ ! -s vmware.conf ]; then
 	echo
