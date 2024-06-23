@@ -1,34 +1,31 @@
 ================================================================================================================
-Now, follow steps 1 and 2 below:
+To install a private container image registry, follow step 1). 
 
 ----------------------------------------------------------------------------------------------------------------
 1) Follow one of the two options (1a or 1b/c) to configure the registry and download the needed images/software.
 
-1a) For a 'disconnected' (or partially connected) installation:
+  1a) For a 'disconnected' (or partially connected) installation:
 
-make sync                     # Run on a 'connected bastion' (or laptop), to load the registry directly
-			      # from the Internet.  This will also install/configure the mirror registry.
+  make sync                     # Run on a 'connected bastion' (or laptop), to load the registry directly
+			        # from the Internet.  This will also install/configure the mirror registry.
 
-For a fully disconnected (or air-gapped) installation:
+  For a fully disconnected (or air-gapped) installation:
 
-1b)
-make save                     # First, run on a 'connected bastion' (or laptop), to 'save' the images
-			      # from the Internet to local disk. 
-make inc out=/path/to/drive   # Archive the *whole repo* to a thumb drive and then extract the tarball onto the
-			      # internal disconnected bastion. If the tarball cannot be written directly to a
-			      # thumbdrive see the README.md for help.
-1c)
-make load                     # On the 'disconnected bastion' (RHEL), load the saved images into a registry.
-			      # This will also install/configure the mirror registry, if needed.
+  1b)
+  make save                     # First, run on a 'connected bastion' (or laptop), to 'save' the images
+			        # from the Internet to local disk. 
+  make inc out=/path/to/drive   # Archive the *whole repo* to a thumb drive and then extract the tarball onto the
+			        # internal disconnected bastion. If the tarball cannot be written directly to a
+			        # thumbdrive see the README.md for help.
+  1c)
+  make load                     # On the 'disconnected bastion' (RHEL), load the saved images into a registry.
+			        # This will also install/configure the mirror registry, if needed.
 
 See the README file for more information.
 
 ----------------------------------------------------------------------------------------------------------------
-2) After the mirror registry is working and loaded, run one of the following to install OpenShift: 
+2) Run the following command to install OpenShift: 
 ----------------------------------------------------------------------------------------------------------------
 
-make sno		     # Install Single Node OpenShift.
-make compact		     # Install a compact 3-node cluster.
-make standard		     # Install a 3-master/n-worker cluster. 
 make cluster name=mycluster [type=sno|compact|standard] 
 
