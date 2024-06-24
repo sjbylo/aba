@@ -42,10 +42,9 @@ elif [ -s regcreds/pull-secret-mirror.json ]; then
 	export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 
 else
-	#echo WARNING: No mirror registry pull secret file found at regcreds/pull-secret-mirror.json.  Trying to use ./pull-secret.json.
-	if [ -s ~/.pull-secret.json ]; then
-		export pull_secret=$(cat ~/.pull-secret.json)
-		echo Found pull secret file at ~/.pull-secret.json
+	if [ -s $pull_secret_file ]; then
+		export pull_secret=$(cat $pull_secret_file)
+		echo Found pull secret file at $pull_secret_file
 	else
 		echo "Error: No pull secrets found. Aborting!  See the README for more!" 
 		exit 1
