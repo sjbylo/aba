@@ -1,5 +1,5 @@
 #!/bin/bash
-# Verify the CLI versions match the mirror images
+# Verify the correct/matching release image exists in the registry
 
 source scripts/include_all.sh
 

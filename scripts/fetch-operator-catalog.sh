@@ -1,4 +1,5 @@
 #!/bin/bash
+# Convenience script to download the latest operator catalog and convert to image set format ready for use!
 
 source scripts/include_all.sh
 

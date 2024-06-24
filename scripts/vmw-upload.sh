@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Upload iso image 
 
 source scripts/include_all.sh
 

@@ -1,17 +1,14 @@
 #!/bin/bash 
-# Script to generate the agent-config.yaml file
+# Script to generate the agent-config.yaml file.  macs.conf file can be used to hold a list of addresses.
 
 source scripts/include_all.sh
 
-
-#[ ! "$1" ] && echo Usage: `basename $0` --dir directory && exit 1
 [ "$1" ] && set -x 
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
 
-####
 # Function to generate a random HEX digit
 generate_random_hex() {
     printf "%x" $((RANDOM%16))
@@ -35,7 +32,7 @@ replace_hash_with_random_hex() {
 
 # Replace any 'x" chars with random hex values
 mac_prefix=$(replace_hash_with_random_hex "$mac_prefix")
-####
+
 
 # Set the rendezvous_ip to the the first master's ip
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
@@ -63,8 +60,10 @@ rm -f .macs.conf
 echo
 echo Generating Agent-based configuration file: $PWD/agent-config.yaml 
 echo
+
 # Note that machine_ip_prefix, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
 scripts/j2 templates/agent-config.yaml.j2 > agent-config.yaml
 
 echo "agent-config.yaml generated successfully"
+

@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Load the registry with images from the local disk
 
 source scripts/include_all.sh
 
@@ -12,11 +13,6 @@ source <(normalize-mirror-conf)
 ### res_remote=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
 export reg_url=https://$reg_host:$reg_port
-
-### podman logout --all >/dev/null 
-### echo -n "Checking registry access to $reg_url is working using 'podman login' ... "
-### ##podman login -u init -p $reg_password $reg_url 
-### podman login --authfile regcreds/pull-secret-mirror.json $reg_url 
 
 # Check if the cert needs to be updated
 if [ -s regcreds/rootCA.pem ]; then

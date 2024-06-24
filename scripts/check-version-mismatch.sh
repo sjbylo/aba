@@ -8,7 +8,7 @@ if [ ! -s sync/imageset-config-sync.yaml -a ! -s save/imageset-config-save.yaml 
 	exit 0
 fi
 
-### rpm -q python3-pyyaml >/dev/null || sudo dnf install python36 python3-jinja2 python3-pyyaml -y
+# python rpm package is diffeent on RHEL8 vs RHEL9!
 rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y >> .dnf-install.log 2>&1
 install_rpms python3-jinja2 python3-pyyaml
 
@@ -37,7 +37,6 @@ do
 		if is_version_greater "$om_ocp_min_ver" "$aba_ocp_ver" || is_version_greater $aba_ocp_ver "$om_ocp_max_ver" || [ "$om_ocp_channel" != "$aba_ocp_channel" ]; then
 			echo 
 			[ "$TERM" ] && tput setaf 1
-			### echo "WARNING: The selected OpenShift version and/or channel defined in 'aba.conf' ($aba_ocp_ver/$ocp_channel) do not match existing oc-mirror configuration."
 			echo "WARNING: The version of the 'openshift-install' CLI ($aba_ocp_ver) no longer matches the version defined in the imageset-config file."
 			echo "         Settings in 'mirror/$f' are currently min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel"
 			echo "         Before syncing or saving images (again), the mismatch in the file 'mirror/$f' must be corrected."

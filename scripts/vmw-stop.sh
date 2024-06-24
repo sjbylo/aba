@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Stop the VMs gracefully 
 
 source scripts/include_all.sh
 

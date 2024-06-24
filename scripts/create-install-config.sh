@@ -19,10 +19,6 @@ export ssh_key_pub=
 export additional_trust_bundle=
 export image_content_sources=
 
-# FIXME - add to makefile
-### [ -d regcreds ] && echo FIXME: $PWD/regcreds already exists || true
-### ln -fs ../mirror/regcreds 
-
 # Generate the needed iso-agent-based config files ...
 
 # Read in the needed files ...
@@ -90,3 +86,4 @@ echo
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
 echo "install-config.yaml generated successfully"
+

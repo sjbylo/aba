@@ -15,8 +15,6 @@ if [ ! -f aba.conf ]; then
 fi
 source <(normalize-aba-conf)
 
-#FIXME: delete ~/.vmware.conf here?
-
 while [ "$*" ] 
 do
 	if [ "$1" = "--debug" -o "$1" = "-d" ]; then
@@ -50,91 +48,74 @@ done
 # Include aba bin path and common scripts
 export PATH=$PWD/bin:$PATH
 
-##if [ ! "$auto_ver" ]; then
-	cat others/message.txt
+cat others/message.txt
 
-	############
-	# Determine OCP version 
+############
+# Determine OCP version 
 
-	echo -n "Looking up OpenShift release versions ..."
+echo -n "Looking up OpenShift release versions ..."
 
-	if ! curl -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
-		[ "$TERM" ] && tput setaf 1
-		echo
-		echo "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
-		[ "$TERM" ] && tput sgr0
-		exit 1
+if ! curl -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
+	[ "$TERM" ] && tput setaf 1
+	echo
+	echo "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
+	[ "$TERM" ] && tput sgr0
+	exit 1
+fi
+
+## Get the latest stable OCP version number, e.g. 4.14.6
+stable_ver=$(cat /tmp/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+default_ver=$stable_ver
+
+# Extract the previous stable point version, e.g. 4.13.23
+major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
+stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
+[ "$stable_ver_point" ] && \
+	stable_ver_prev=$(cat /tmp/.release.txt| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+
+# Determine any already installed tool versions
+which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
+
+# If openshift-install is already installed, then offer that version also
+[ "$cur_ver" ] && or_ret="or [current version] " && default_ver=$cur_ver
+
+[ "$TERM" ] && tput el1
+[ "$TERM" ] && tput cr
+sleep 0.5
+
+echo    "Which version of OpenShift do you want to install?"
+
+target_ver=
+while true
+do
+	# Exit loop if release version exists
+	if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
+		if curl -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
+			break
+		else
+			echo "Error: Failed to find release $target_ver"
+		fi
 	fi
 
-	## Get the latest stable OCP version number, e.g. 4.14.6
-	stable_ver=$(cat /tmp/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
-	default_ver=$stable_ver
+	[ "$stable_ver" ] && or_s="or $stable_ver (latest) "
+	[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (previous) "
 
-	# Extract the previous stable point version, e.g. 4.13.23
-	major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
-	stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
-	[ "$stable_ver_point" ] && \
-		stable_ver_prev=$(cat /tmp/.release.txt| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+	echo -n "Enter version $or_s$or_p$or_ret(l/p/<version>/Enter) [$default_ver]: "
 
-	# Determine any already installed tool versions
-	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
+	read target_ver
+	[ ! "$target_ver" ] && target_ver=$default_ver          # use default
+	[ "$target_ver" = "l" ] && target_ver=$stable_ver       # latest
+	[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev  # previous latest
+done
 
-	# If openshift-install is already installed, then offer that version also
-	[ "$cur_ver" ] && or_ret="or [current version] " && default_ver=$cur_ver
-
-	[ "$TERM" ] && tput el1
-	[ "$TERM" ] && tput cr
-	sleep 0.5
-
-	echo    "Which version of OpenShift do you want to install?"
-
-	target_ver=
-	while true
-	do
-		# Exit loop if release version exists
-		if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-			if curl -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
-				break
-			else
-				echo "Error: Failed to find release $target_ver"
-			fi
-		fi
-
-		[ "$stable_ver" ] && or_s="or $stable_ver (latest) "
-		[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (previous) "
-
-		echo -n "Enter version $or_s$or_p$or_ret(l/p/<version>/Enter) [$default_ver]: "
-
-		read target_ver
-		[ ! "$target_ver" ] && target_ver=$default_ver          # use default
-		[ "$target_ver" = "l" ] && target_ver=$stable_ver       # latest
-		[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev  # previous latest
-	done
-
-	# Update the conf file
-	sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
-
-#fi
-
-# Ensure python3 is installed.  RHEL8 only installs "python36"
-##### FIXME needed?  #  rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y >> .dnf-install.log 2>&1
+# Update the conf file
+sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
 
 # make & jq are needed below and in the next steps 
 install_rpms make jq python3-pyyaml
 
 # Set up the CLIs
 make -C cli 
-
-### for rpm in make jq python3-pyyaml
-### do
-### 	rpm -q --quiet $rpm && continue   # If at least one rpm is not installed, install rpms
-### 
-### 	sudo dnf install make jq python3-pyyaml -y >/dev/null 2>&1 
-### 	break
-### done
-### which make >/dev/null 2>&1 || sudo dnf install make jq python3-pyyaml -y >/dev/null 2>&1  # jq needed below
-
-##if [ "$interactive_mode" ]; then
 
 if [ ! "$editor" ]; then
 	echo
@@ -154,13 +135,6 @@ if [ ! "$editor" ]; then
 	sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
 	export editor=$new_editor
 fi
-##fi
-
-
-### echo "auto_vmw=[$auto_vmw] interactive_mode=[$interactive_mode]"
-
-#if [ "$auto_vmw" != "" -a "$interactive_mode" ]; then
-###if [ "$interactive_mode" ]; then
 
 if [ ! -f ~/.aba.conf.created -o ~/.aba.conf.created -nt aba.conf ]; then
 	touch ~/.aba.conf.created
@@ -206,22 +180,22 @@ domain_reachable registry.redhat.io && net_pub=1
 ip_reachable $next_hop_address && net_priv=1
 
 if [ "$net_pub" -a "$net_priv" ]; then
-	echo "Access to Internet (registry.redhat.io):		Yes"
-	echo "Access to Private network ($next_hop_address):	Yes"
+	echo "Access to Internet (registry.redhat.io): Yes"
+	echo "Access to Private network ($next_hop_address): Yes"
 	echo
 	echo "Access to both the Internet and your private network has been detected."
 	echo "Note that installing a private registry is *optional* since there is access to both the Internet and your private network. Assuming fully connected env."
 	echo "If you want to install, or re-use, a private registry, follow step 1) below."
 
 elif [ "$net_pub" -a ! "$net_priv" ]; then
-	echo "Access to Internet (registry.redhat.io):		Yes"
-	echo "Access to Private network ($next_hop_address):	No"
+	echo "Access to Internet (registry.redhat.io): Yes"
+	echo "Access to Private network ($next_hop_address): No"
 	echo
 	echo "Only access to the Internet has been detected. No access to your private network has been detected.  Assuming air-gapped env."
 	echo "You need to follow 1b) below (make save & make inc)."
 elif [ ! "$net_pub" -a "$net_priv" ]; then
-	echo "Access to Internet (registry.redhat.io):		No "
-	echo "Access to Private network ($next_hop_address):	Yes"
+	echo "Access to Internet (registry.redhat.io): No "
+	echo "Access to Private network ($next_hop_address): Yes"
 	echo
 	echo "Access to your private network has been detected.  No access to the Internet has been detected."
 	echo "You need to following 1c) below (make load), assuming you have already synched the files over after 'make save' on a connected env. Assuming air-gapped env."
@@ -244,4 +218,5 @@ fi
 # Offer next steps
 echo
 cat others/message-next-steps.txt
+
 

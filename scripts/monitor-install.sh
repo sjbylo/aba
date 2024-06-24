@@ -1,4 +1,5 @@
 #!/bin/bash 
+# This will run the 'wait-for' command and output next steps after ocp installation
 
 source scripts/include_all.sh
 

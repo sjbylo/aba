@@ -1,4 +1,5 @@
 #!/bin/bash -e
+# Script not used
 
 source scripts/include_all.sh
 
@@ -7,7 +8,6 @@ source scripts/include_all.sh
 umask 077
 
 source <(normalize-aba-conf)
-#source <(normalize-mirror-conf)
 
 ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 

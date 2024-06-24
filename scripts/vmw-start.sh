@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Start the VMs
 
 source scripts/include_all.sh
 

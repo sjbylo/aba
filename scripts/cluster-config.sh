@@ -14,8 +14,6 @@ unset WORKER_REPLICAS
 unset WORKER_NAMES
 unset WKR_MAC_ADDRESSES
 
-#[ ! "$1" ] && echo "Usage: `basename $0` <directory>" && exit 1
-
 yaml2json()
 {
 	python3 -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'
@@ -66,30 +64,12 @@ WORKER_REPLICAS=`cat $ICONF_TMP | jq -r .compute[0].replicas`
 echo "$WORKER_REPLICAS" | grep -q "null" && WORKER_REPLICAS=
 echo export WORKER_REPLICAS=$WORKER_REPLICAS
 
-### # FIXME: does $VC_FOLDER really need to be created here? How about in normalize-vmware-conf()?
-### # Check if using ESXi or vCenter 
-### if [ "$VC_FOLDER" ]; then
-	### if [ "$VC_FOLDER" == "/ha-datacenter/vm" ]; then
-		### # For ESXi
-		### export VC_FOLDER=$VC_FOLDER
-	### else
-		### # For vCenter 
-		### export VC_FOLDER=$VC_FOLDER/$CLUSTER_NAME
-		### export VC=1
-		### echo export VC=1
-	### fi
-### fi
-
-### echo export VC_FOLDER=$VC_FOLDER
-### echo export VC_FOLDER=$VC_FOLDER
-
 RENDEZVOUSIP=`cat $ACONF_TMP | jq -r '.rendezvousIP'`
 echo "$RENDEZVOUSIP" | grep -q "null" && RENDEZVOUSIP=
 echo export RENDEZVOUSIP=$RENDEZVOUSIP 
 
 err=
 
-### [ $WORKER_REPLICAS -eq 0 ] && rm -f $ICONF_TMP $ACONF_TMP && exit 0
 if [ $WORKER_REPLICAS -ne 0 ]; then
 	WORKER_NAMES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "worker" )| .hostname'`
 	echo "$WORKER_NAMES" | grep -q "null" && WORKER_NAMES=
@@ -114,7 +94,6 @@ rm -f $ICONF_TMP $ACONF_TMP
 [ ! "$CP_NAMES" ] && echo "Control Plane names .hosts[].role.master.hostname missing in $ACONF" >&2  && err=1
 [ ! "$CP_MAC_ADDRESSES" ] && echo "Control Plane mac addresses .hosts[].role.master.interfaces[0].macAddress missing in $ACONF" >&2  && err=1
 [ ! "$WORKER_REPLICAS" ] && echo "Worker replica count .compute[0].replicas missing in $ICONF" >&2  && err=1
-### [ ! "$VC_FOLDER" ]  && echo "xxxx" >&2 
 
 if [ "$err" ]; then
 	echo
