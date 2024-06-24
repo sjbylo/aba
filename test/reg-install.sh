@@ -1,24 +1,7 @@
 #!/bin/bash -ex
+# Basic script to install registry for testing only
 
 cd `dirname $0`
-
-##reg_host=host
-##reg_port=999
-##enc_password=xyz
-##mkdir -p ~/.containers ~/.docker
-##cat << END >  ~/.docker/config.json
-##{
-  ##"auths": {
-    ##"$reg_host:$reg_port": { 
-      ##"auth": "$enc_password"
-    ##}
-  ##}
-##}
-##END
-##echo DONE
-##exit
-
-##cp ~/.docker/config.json ~/.containers/auth.json 
 
 curl -ILsk -o /dev/null https://localhost:8443/health/instance && echo "Mirror registry already installed on `hostname`" && exit 0
 
@@ -60,14 +43,6 @@ podman login -u init -p $reg_pw $reg_url
 
 reg_creds="$reg_user:$reg_pw"
 enc_password=$(echo -n "$reg_creds" | base64 -w0)
-
-# Inputs: enc_password, reg_host and reg_port 
-#scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
-
-# Merge the two files
-#jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json $pull_secret_file > ./regcreds/pull-secret-full.json
-#cp ./regcreds/pull-secret-full.json ~/.docker/config.json
-#cp ./regcreds/pull-secret-full.json ~/.containers/auth.json
 
 mkdir -p ~/.containers ~/.docker
 cat << END >  ~/.docker/config.json

@@ -21,14 +21,14 @@ fi
 # This is a pull secret for RH registry
 pull_secret_mirror_file=pull-secret-mirror.json
 
-echo pull_secret_file=~/.pull-secret.json
+###echo pull_secret_file=$pull_secret_file
 
 if [ -s $pull_secret_mirror_file ]; then
 	echo Using $pull_secret_mirror_file ...
-elif [ -s ~/.pull-secret.json ]; then
+elif [ -s $pull_secret_file ]; then
 	:
 else
-	echo "Error: The pull secret file '~/.pull-secret.json' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
+	echo "Error: The pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 fi
 
 export reg_url=https://$reg_host:$reg_port

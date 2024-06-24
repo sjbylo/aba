@@ -14,7 +14,7 @@ reg_port=8443				# The port used by any *existing* mirror registry.
 reg_path=ocp4/openshift4		# This is the path where the OCP images will be stored,
 					# e.g. https://registry.example.com:8443/ocp4/openshift4/...
 
-# The below values are only needed if you want aba to install Quay for you.
+# Important: The below values are only needed if you want aba to install Quay for you
 
 reg_ssh_key=				# Optional: Ssh key file to use for *remote* install of Quay.
 					# Example: ~/.ssh/id_rsa 
@@ -30,13 +30,9 @@ reg_root=				# Set the directory absolute path where the Quay mirror registry st
 					# Default is ~/quay-install.  Note that '~' can be used after the '='.
 					# Note: never delete this storage without uninstalling the Quay registry first!
 
-# The below values do not need to be changed.
+# The below parameters are for advanced use and do not need to be changed.
 
 tls_verify=true				# If TLS should be verified for all registries. Default is 'true'.
 					# Note that the installation of OpenShift *requires* an existing, trusted certificate
 					# authority, or a self-signed certificate to access a *secured* mirror registry. 
 
-pull_secret_file=~/.pull-secret.json	# NOT USED! Write your Red Hat registry pull secret to this file under $HOME.
-					# Download it from:
-					# https://console.redhat.com/openshift/downloads#tool-pull-secret
-					# Be sure to make it user read-only, e.g. chmod 600 ~/.pull-secret.json
