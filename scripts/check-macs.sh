@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Chekc if mac addresses are already in use and warn if they are
 
 source scripts/include_all.sh
 

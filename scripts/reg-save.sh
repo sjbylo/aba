@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Save images from RH reg. to disk 
 
 source scripts/include_all.sh
 
@@ -36,23 +37,7 @@ if [ ! -s save/imageset-config-save.yaml ]; then
 	echo "Generating save/imageset-config-save.yaml to save images to local disk for OpenShift 'v$ocp_version' and channel '$ocp_channel' ..."
 	scripts/j2 ./templates/imageset-config-save.yaml.j2 > save/imageset-config-save.yaml 
 	touch save/.created
-
-	# Fetch latest operator catalog and defaqult channels and append to the imageset file
-###	[ ! -s .redhat-operator-index-v$ocp_ver_major ] && \
-###		oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major > .redhat-operator-index-v$ocp_ver_major
-
-###	tail -n +2 .redhat-operator-index-v$ocp_ver_major | awk '{print $1,$NF}' | while read op_name op_default_channel
-###	do
-###		echo "\
-####      - name: $op_name
-####        channels:
-####        - name: $op_default_channel"
-###	done >> save/imageset-config-save.yaml
-
 else
-	# FIXME: Check here for matching varsions values in imageset config file and, if they are different, ask to 'reset' them.
-	### scripts/check-version-mismatch.sh || exit 1
-	
 	# Check disk space under save/. 
 	avail=$(df -m save | awk '{print $4}' | tail -1)
 

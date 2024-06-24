@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Create the vmware folder if it does not exist
 
 [ ! "$1" ] && echo "Usage: $(basename $0) <vsphere folder>" && exit 1
 

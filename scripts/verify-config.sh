@@ -14,8 +14,6 @@ export rendezvous_ip=$machine_ip_prefix$starting_ip
 SNO=
 [ $num_masters -eq 1 -a $num_workers -eq 0 ] && SNO=1 && echo "Configuration is for Single Node Openshift (SNO) ..."
 
-##echo Validating the cluster configuraiton ...
-
 [ $num_masters -ne 1 -a $num_masters -ne 3 ] && echo "Error: number of masters can only be '1' or '3'" && exit 1
 echo "Master count is valid [$num_masters]"
 
@@ -28,7 +26,6 @@ fi
 echo "Master [$num_masters] and worker counts [$num_workers] are valid."
 
 # If not SNO, then ensure api_vip and ingress_vip are defined 
-#echo Checking api_vip and ingress_vip are defined ...
 if [ ! "$SNO" ]; then
 	[ ! "$api_vip" -o ! "$ingress_vip" ] && echo "Error: 'api_vip' and 'ingress_vip' must be defined for this configuration" && exit 1
 	echo "'api_vip' and 'ingress_vip' are defined [$api_vip] [$ingress_vip]"

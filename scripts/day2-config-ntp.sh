@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Run this script for day 2 config of NTP
 
 source scripts/include_all.sh
 

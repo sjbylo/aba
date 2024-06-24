@@ -1,10 +1,7 @@
 #!/bin/bash -e
 # Use this only if your underlying platform does not support NTP.  E.g., simple servers with no baseboard management that supports NTP. 
 # Platforms that do not require this script are e.g. vSphere/ESXi and server hardware with baseboard management interfaces that support NTP.
-# To use this script, run:
-#   make iso
-#   make ntp
-#   make mon
+# To use this script, set the ntp param in 'aba.conf'
 # This solution was created from the idea posted here: https://github.com/openshift/installer/issues/7571 
 
 source scripts/include_all.sh
@@ -13,7 +10,7 @@ source scripts/include_all.sh
 
 source <(normalize-aba-conf)
 
-[ ! "$ntp_server" ] && echo "Not configuring NTP in early bootstrap node because ntp_server not defined in aba.conf." && exit 0
+[ ! "$ntp_server" ] && echo "Not configuring NTP in early bootstrap node because 'ntp_server' not defined in aba.conf." && exit 0
 
 dir=iso-agent-based
 

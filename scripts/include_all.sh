@@ -18,6 +18,7 @@ show_error() {
 # Set the trap to call the show_error function on ERR signal
 trap 'show_error' ERR
 
+
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
 	# Extract the machine_network and the prefix_length from the CIDR notation
@@ -96,11 +97,7 @@ install_rpms() {
 	for rpm in $@
 	do
 		# Check if each rpm is already installed.  Don't run dnf unless we have to.
-		###rpm -q --quiet $rpm && continue   # If at least one rpm is not installed, install rpms
 		rpm -q --quiet $rpm || rpms_to_install="$rpms_to_install $rpm" 
-
-		##sudo dnf install $@ -y >> .dnf-install.log 2>&1
-		##break
 	done
 
 	if [ "$rpms_to_install" ]; then

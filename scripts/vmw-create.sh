@@ -1,4 +1,5 @@
 #!/bin/bash -e
+# Create the VMs for the cluster
 
 source scripts/include_all.sh
 

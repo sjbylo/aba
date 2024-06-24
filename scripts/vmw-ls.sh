@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Disply the VMs and their state
 
 source scripts/include_all.sh
 

@@ -1,5 +1,5 @@
 #!/bin/bash 
-# Delete all VMs in the cluster 
+# Delete all VMs in the cluster, as defined by agent config files
 
 source scripts/include_all.sh
 

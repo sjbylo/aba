@@ -71,13 +71,11 @@ file_list=$(find		\
 								\
 	-newer ~/.aba.previous.backup 				\
 )
+
 #
 # Note, don't copy over any of the ".initialized", ".installed", ".rpms" flag files etc, since these components are needed on the internal bastion
 # Don't copy those very large 'tar' files since we have them compressed already.
 # Don't need to copy over the oc-mirror-workspace dirs.  The needed yaml files for 'make day2' are created at 'make load'.
-
-	# Remove bin in favour of cli/
-	###! -path "aba/cli/*" -a 				\
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
 [ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_seq.*.tar$") || true  # 'true' needed!

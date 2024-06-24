@@ -1,4 +1,5 @@
 #!/usr/bin/bash 
+# Generate the mirror.conf file
 
 [ -s mirror.conf ] && echo Using existing mirror.conf && exit 0
 
@@ -10,6 +11,7 @@ source <(normalize-aba-conf)
 
 if [ ! "$ocp_version" ]; then
 	echo "Please run ./aba first!"  # Should never need to reach here
+
 	exit 1
 fi
 

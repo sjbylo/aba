@@ -1,4 +1,5 @@
 #!/bin/bash 
+# ssh into rendezvous server (node0)
 
 source scripts/include_all.sh 
 

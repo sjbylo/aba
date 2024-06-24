@@ -1,4 +1,5 @@
 #!/bin/bash 
+# Power off the VMs immediatelly 
 
 source scripts/include_all.sh
 

@@ -1,4 +1,5 @@
 #!/bin/bash 
+# CHeck of all VMs for the cluster exist
 
 source scripts/include_all.sh
 
