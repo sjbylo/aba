@@ -30,9 +30,11 @@ reg_root=				# Set the directory absolute path where the Quay mirror registry st
 					# Default is ~/quay-install.  Note that '~' can be used after the '='.
 					# Note: never delete this storage without uninstalling the Quay registry first!
 
-# The below parameters are for advanced use and do not need to be changed.
+
+# The below parameters are for advanced use and must not be changed.
 
 tls_verify=true				# If TLS should be verified for all registries. Default is 'true'.
 					# Note that the installation of OpenShift *requires* an existing, trusted certificate
 					# authority, or a self-signed certificate to access a *secured* mirror registry. 
-
+					# Unencrypted HTTP as well as TLS connections with untrusted certificates will be allowed
+					# during mirror sync/load only but not during OCP installation.
