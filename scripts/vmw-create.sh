@@ -59,8 +59,9 @@ for name in $CP_NAMES ; do
 	a=`expr $i-1`
 
 	vm_name=${CLUSTER_NAME}-$name
+	mac=${CP_MAC_ADDRESSES_ARRAY[$a]}
 
-	echo "Create VM: $vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [${CP_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
+	echo "Create VM: $vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder] [$GOVC_NETWORK]"
 	govc vm.create \
 		-version vmx-15 \
 		-g rhel8_64Guest \
@@ -69,7 +70,7 @@ for name in $CP_NAMES ; do
 		-m=`expr $master_mem \* 1024` \
 		-disk-datastore=$GOVC_DATASTORE \
 		-net.adapter vmxnet3 \
-		-net.address="${CP_MAC_ADDRESSES_ARRAY[$a]}" \
+		-net.address="$mac" \
 		-iso-datastore=$ISO_DATASTORE \
 		-iso="images/agent-${CLUSTER_NAME}.iso" \
 		-folder="$cluster_folder" \
@@ -80,7 +81,7 @@ for name in $CP_NAMES ; do
 
 	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true -nested-hv-enabled=$master_nested_hv
 
-	echo "Create and attach disk on [$GOVC_DATASTORE]"
+	echo "Create and attach thin OS disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
 		-vm $vm_name \
 		-name $vm_name/$vm_name \
@@ -88,7 +89,7 @@ for name in $CP_NAMES ; do
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
-	echo "Create and attach a 2nd data disk on [$GOVC_DATASTORE]"
+	echo "Create and attach a 2nd thin data disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
 		-vm $vm_name \
 		-name $vm_name/${vm_name}_data \
@@ -106,8 +107,9 @@ for name in $WORKER_NAMES ; do
 	a=`expr $i-1`
 
 	vm_name=${CLUSTER_NAME}-$name
+	mac=${WKR_MAC_ADDRESSES_ARRAY[$a]}
 
-	echo "Create VM: $vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [${WKR_MAC_ADDRESSES_ARRAY[$a]}] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
+	echo "Create VM: $vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder] [$GOVC_NETWORK]"
 	govc vm.create \
 		-version vmx-15 \
 		-g rhel8_64Guest \
@@ -116,7 +118,7 @@ for name in $WORKER_NAMES ; do
 		-m=`expr $worker_mem \* 1024` \
 		-net.adapter vmxnet3 \
 		-disk-datastore=$GOVC_DATASTORE \
-		-net.address="${WKR_MAC_ADDRESSES_ARRAY[$a]}" \
+		-net.address="$mac" \
 		-iso-datastore=$ISO_DATASTORE \
 		-iso="images/agent-${CLUSTER_NAME}.iso" \
 		-folder="$cluster_folder" \
@@ -127,7 +129,7 @@ for name in $WORKER_NAMES ; do
 
 	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true -nested-hv-enabled=$worker_nested_hv
 
-	echo "Create and attach disk on [$GOVC_DATASTORE]"
+	echo "Create and attach thin OS disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
 		-vm $vm_name \
 		-name $vm_name/$vm_name \
@@ -135,7 +137,7 @@ for name in $WORKER_NAMES ; do
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
-	echo "Create and attach a 2nd data disk on [$GOVC_DATASTORE]"
+	echo "Create and attach a 2nd thin data disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
 		-vm $vm_name \
 		-name $vm_name/${vm_name}_data \

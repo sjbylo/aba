@@ -48,5 +48,5 @@ if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/open
 	exit 1
 fi
 
-echo "Release image for version $release_ver is available in $reg_host:$reg_port"
+echo "Release image for version $release_ver is available at $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha"
 
