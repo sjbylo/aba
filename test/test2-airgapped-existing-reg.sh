@@ -203,6 +203,12 @@ test-cmd -h steve@$bastion2 -m "Verifying access to mirror registry $reg_host:$r
 
 test-cmd -h steve@$bastion2 -r 99 3 -m "Loading images into mirror $reg_host:$reg_port" "make -C $subdir/aba/mirror load" 
 
+#### TESTING ACM + MCH 
+# Adjust size of cluster 
+test-cmd -h steve@$bastion2 -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/master_mem=40/g' $subdir/aba/sno/cluster.conf"
+test-cmd -h steve@$bastion2 -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
+#### TESTING ACM + MCH 
+
 # Is the cluster can be reached ... use existing cluster
 if test-cmd -h steve@$bastion2 -m "Checking if sno cluster up" "make -C $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
 	mylog "Using existing sno cluster"
@@ -223,6 +229,7 @@ test-cmd -h steve@$bastion2 -m "Checking cluster operator status on cluster sno"
 test-cmd -h steve@$bastion2 -m "Create project 'demo'" "make -C $subdir/aba/sno cmd cmd='oc new-project demo'" || true
 test-cmd -h steve@$bastion2 -m "Launch vote-app" "make -C $subdir/aba/sno cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'" || true
 test-cmd -h steve@$bastion2 -m "Wait for vote-app rollout" "make -C $subdir/aba/sno cmd cmd='oc rollout status deployment vote-app -n demo'"
+test-cmd -h steve@$bastion2 -m "Deleting vote-app" "make -C $subdir/aba/sno cmd cmd='oc delete project demo'"
 
 mylog "Adding advanced-cluster-management operator images to mirror/save/imageset-config-save.yaml file on `hostname`"
 
@@ -233,6 +240,9 @@ cat >> mirror/save/imageset-config-save.yaml <<END
       - name: advanced-cluster-management
         channels:
         - name: release-2.10
+      - name: multicluster-engine
+        channels:
+        - name: stable-2.5
 END
 
 test-cmd -r 99 3 -m "Saving advanced-cluster-management images to local disk" "make -C mirror save"
@@ -251,6 +261,20 @@ test-cmd -h steve@$bastion2 -r 99 3 -m "Run 'day2' on sno cluster" "make -C $sub
 test-cmd -m "Pausing 30s" sleep 30
 
 test-cmd -h steve@$bastion2 -r 99 3 -m "Checking available Operators on sno cluster" "make -C $subdir/aba/sno cmd cmd='oc get packagemanifests -n openshift-marketplace'" | grep advanced-cluster-management
+
+#### TESTING ACM + MCH 
+# 30 attempts, always waiting 20 (fixed value) secs between attempts
+test-cmd -h steve@$bastion2 -r 30 1 -m "Install ACM Operator" "make -C $subdir/aba/sno cmd cmd='oc apply -f ../test/acm-subs.yaml'"
+sleep 30
+test-cmd -h steve@$bastion2 -r 30 1 -m "Install Multiclusterhub" "make -C $subdir/aba/sno cmd cmd='oc apply -f ../test/acm-mch.yaml'"
+sleep 120
+#test-cmd -h steve@$bastion2 -r 30 1 -m "Check Multiclusterhub status is 'Running'" "make -C $subdir/aba/sno cmd cmd='oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
+test-cmd -h steve@$bastion2 -r 30 1 -m "Check hub status is 'running'" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
+#### TESTING ACM + MCH 
+
+#### TESTING ACM + MCH 
+exit 0
+#### TESTING ACM + MCH 
 
 test-cmd -h steve@$bastion2 -m "Deleting sno cluster" "make -C $subdir/aba/sno delete" 
 
