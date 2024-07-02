@@ -156,7 +156,8 @@ if [ ! -f ~/.aba.conf.created -o ~/.aba.conf.created -nt aba.conf ]; then
 	sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
 	export editor=$new_editor
 
-	edit_file aba.conf "Edit the config file 'aba.conf' to set your domain name, network CIDR and others" || exit 0
+	edit_file aba.conf "Edit the config file 'aba.conf' to set your domain name, network CIDR, DNS and more" || \
+		( echo "Reminder: Don't forget to edit the file 'aba.conf' before creating a cluster!"; sleep 3 )
 fi
 
 domain_reachable() {
