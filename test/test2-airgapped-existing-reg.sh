@@ -204,7 +204,7 @@ test-cmd -h steve@$bastion2 -m "Verifying access to mirror registry $reg_host:$r
 test-cmd -h steve@$bastion2 -r 99 3 -m "Loading images into mirror $reg_host:$reg_port" "make -C $subdir/aba/mirror load" 
 
 #### TESTING ACM + MCH 
-# Adjust size of cluster 
+# Adjust size of SNO cluster for ACM install 
 test-cmd -h steve@$bastion2 -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/master_mem=40/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h steve@$bastion2 -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
 #### TESTING ACM + MCH 
@@ -263,17 +263,13 @@ test-cmd -m "Pausing 30s" sleep 30
 test-cmd -h steve@$bastion2 -r 99 3 -m "Checking available Operators on sno cluster" "make -C $subdir/aba/sno cmd cmd='oc get packagemanifests -n openshift-marketplace'" | grep advanced-cluster-management
 
 #### TESTING ACM + MCH 
-# 30 attempts, always waiting 20 (fixed value) secs between attempts
+# 30 attempts, always waiting 20s (fixed value) secs between attempts
 test-cmd -h steve@$bastion2 -r 30 1 -m "Install ACM Operator" "make -C $subdir/aba/sno cmd cmd='oc apply -f ../test/acm-subs.yaml'"
 sleep 30
 test-cmd -h steve@$bastion2 -r 30 1 -m "Install Multiclusterhub" "make -C $subdir/aba/sno cmd cmd='oc apply -f ../test/acm-mch.yaml'"
 sleep 120
-#test-cmd -h steve@$bastion2 -r 30 1 -m "Check Multiclusterhub status is 'Running'" "make -C $subdir/aba/sno cmd cmd='oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
+# THIS TEST ALWAYS EXIT 0 # test-cmd -h steve@$bastion2 -r 30 1 -m "Check Multiclusterhub status is 'Running'" "make -C $subdir/aba/sno cmd cmd='oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
 test-cmd -h steve@$bastion2 -r 30 1 -m "Check hub status is 'running'" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
-#### TESTING ACM + MCH 
-
-#### TESTING ACM + MCH 
-exit 0
 #### TESTING ACM + MCH 
 
 test-cmd -h steve@$bastion2 -m "Deleting sno cluster" "make -C $subdir/aba/sno delete" 
