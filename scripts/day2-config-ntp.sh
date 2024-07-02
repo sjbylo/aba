@@ -99,6 +99,21 @@ storage:
           local stratum 3 orphan
 END
 
+# Check and install butane package
+if ! which butane >/dev/null 2>&1; then
+	# No rpm available for RHEL8
+	if ! sudo dnf install butane -y; then
+		if curl -s https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane; then
+			sudo mv butane /usr/local/bin
+		else
+			echo "Please install 'butane' command and try again!"
+			echo "E.g. run: 'curl https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane'"
+
+			exit 1
+		fi
+	fi
+fi
+
 butane 99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
 butane 99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
