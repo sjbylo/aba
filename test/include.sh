@@ -21,6 +21,9 @@ show_error() {
 trap 'show_error' ERR
 
 
+# -h remote <host or ip> to run the test on (optional)
+# -r <count> <backoff>  (optional)
+# -m "Description of test"
 test-cmd() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
