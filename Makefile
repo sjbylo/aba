@@ -106,7 +106,8 @@ distclean: # Clean up *everything*.  Only use if you know what you are doing! No
 	@test "$(ask)" && scripts/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
 	@make clean
 	rm -f vmware.conf
-	@####rm -f aba.conf ~/.aba.conf*
+	test -f aba.conf && mv aba.conf aba.conf.bk || true
+	rm -f aba.conf ~/.aba.conf*
 	make -C mirror distclean 
 	make -C cli distclean 
 	rm -rf sno compact standard 
