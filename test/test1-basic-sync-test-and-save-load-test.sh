@@ -93,7 +93,7 @@ userdel $u -r -f || true
 useradd $u -p not-used
 mkdir ~$u/.ssh 
 chmod 700 ~$u/.ssh
-cp -p ~steve/.pull-secret.json ~$u 
+#cp -p ~steve/.pull-secret.json ~$u 
 echo $pub_key > ~$u/.ssh/authorized_keys
 echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
 chmod 600 ~$u/.ssh/authorized_keys
@@ -281,15 +281,15 @@ test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $d
 test-cmd -m "Deleting cluster" make -C sno delete 
 
 ### FIXME mylog "Removing vmware config file to simulate 'bare metal' and iso creation"
-mylog "Changing 'platform' to vmware in aba.conf file to simulate 'bare metal' and iso creation"
+mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' file to simulate 'bare metal' and iso creation"
 
 # FIXME
-sed -s "s/^platform=.*/platform=blah/g" aba.conf
+sed -i "s/^platform=.*/platform=blah/g" aba.conf
 ####> vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
 ####test-cmd -m "Creating standard iso file with 'make standard target=iso'" make standard target=iso # Since we're simulating bare-metal, only create iso
-test-cmd -m "Creating agent config files" make standard   		# Since we're simulating bare-metal, this will only create agent configs
-test-cmd -m "Creating iso file" make -C standard iso || true		# Since we're simulating bare-metal, only create iso
+test-cmd -m "Bare-metal simulation: Creating agent config files" make standard   		# Since we're simulating bare-metal, this will only create agent configs
+test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso || true		# Since we're simulating bare-metal, only create iso
 
 test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
 

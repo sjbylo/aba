@@ -19,7 +19,7 @@ fi
 for f in */*.sh; do bash -n $f; done
 
 export target_full=1   # Build vm+cluster
-#export target_full=    # Build only iso
+export target_full=    # Build only iso
 
 time (
 	echo "=========================================================================="  	>> test/test.log
