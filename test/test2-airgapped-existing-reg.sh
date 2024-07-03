@@ -265,9 +265,9 @@ test-cmd -h steve@$bastion2 -r 99 3 -m "Checking available Operators on sno clus
 #### TESTING ACM + MCH 
 # 30 attempts, always waiting 20s (fixed value) secs between attempts
 test-cmd -h steve@$bastion2 -r 30 1 -m "Install ACM Operator" "make -C $subdir/aba/sno cmd cmd='oc apply -f ../test/acm-subs.yaml'"
-sleep 30
+sleep 60
 test-cmd -h steve@$bastion2 -r 30 1 -m "Install Multiclusterhub" "make -C $subdir/aba/sno cmd cmd='oc apply -f ../test/acm-mch.yaml'"
-sleep 120
+sleep 300
 # THIS TEST ALWAYS EXIT 0 # test-cmd -h steve@$bastion2 -r 30 1 -m "Check Multiclusterhub status is 'Running'" "make -C $subdir/aba/sno cmd cmd='oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
 test-cmd -h steve@$bastion2 -r 30 1 -m "Check hub status is 'running'" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 #### TESTING ACM + MCH 
