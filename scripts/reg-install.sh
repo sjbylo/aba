@@ -180,7 +180,7 @@ if [ "$reg_ssh_key" ]; then
 	# Inputs: enc_password, reg_host and reg_port 
 	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
 
-	scripts/create-containers-auth.sh
+	#### TESTING WITHOUT - Added to reg-load/save/sync # scripts/create-containers-auth.sh
 else
 	ask "Install Quay mirror registry appliance onto local host=`hostname`?" || exit 1
 
@@ -242,7 +242,7 @@ else
 	# Inputs: enc_password, reg_host and reg_port 
 	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
 
-	scripts/create-containers-auth.sh
+	#### TESTING WITHOUT - Added to reg-load/save/sync # scripts/create-containers-auth.sh
 fi
 
 echo

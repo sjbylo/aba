@@ -72,7 +72,7 @@ else
 fi
 
 # This is needed since sometimes an existing registry may already be available
-./scripts/create-containers-auth.sh
+scripts/create-containers-auth.sh
 
 [ ! "$reg_root" ] && reg_root=$HOME/quay-install
 

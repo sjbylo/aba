@@ -3,14 +3,17 @@
 
 source scripts/include_all.sh
 
+public_pull_secret_file_needed=1  # Only needed for 'save' and 'sync'
+[ "$1" = "--load" ] && public_pull_secret_file_needed= && shift
 [ "$1" ] && set -x
 
 umask 077
 
 source <(normalize-aba-conf)
 
-if [ ! -s $pull_secret_file ]; then
-	echo "Error: Your pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
+if [ ! -s $pull_secret_file -a "$public_pull_secret_file_needed" ]; then
+	echo "Error: Your pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret"
+	exit 1
 fi
 
 mkdir -p ~/.docker ~/.containers

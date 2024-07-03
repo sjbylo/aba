@@ -77,6 +77,8 @@ ssh $reg_ssh_user@$int_bastion -- "date" || sleep 2
 ssh $reg_ssh_user@$int_bastion -- "date" || sleep 3
 ssh $reg_ssh_user@$int_bastion -- "date" || sleep 8
 
+# This file is not needed in a fully air-gapped env. 
+ssh $reg_ssh_user@$bastion2 -- "rm -f ~/.pull-secret.json"
 
 pub_key=$(cat ~/.ssh/id_rsa.pub)
 u=testy
