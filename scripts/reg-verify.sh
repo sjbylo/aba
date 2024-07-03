@@ -17,7 +17,8 @@ reg_url=https://$reg_host:$reg_port
 if [ -s regcreds/pull-secret-mirror.json ]; then
 
 	# Ensure pull secrets in place. Only needed if the registry was installed *from a different host*, ie. ~/.containers/auth.json does not exist.
-	scripts/create-containers-auth.sh
+	### TEST WITHOUT THIS HERE # scripts/create-containers-auth.sh
+	# Should already be created!
 
 	if [ -s regcreds/rootCA.pem ]; then
 		# Check if the cert needs to be updated
