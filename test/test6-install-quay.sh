@@ -88,7 +88,7 @@ userdel $u -r -f || true
 useradd $u -p not-used
 mkdir ~$u/.ssh 
 chmod 700 ~$u/.ssh
-cp -p ~steve/.pull-secret.json ~$u 
+#cp -p ~steve/.pull-secret.json ~$u 
 echo $pub_key > ~$u/.ssh/authorized_keys
 echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
 chmod 600 ~$u/.ssh/authorized_keys

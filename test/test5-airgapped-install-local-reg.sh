@@ -106,7 +106,7 @@ ssh steve@$bastion2 -- "date" || sleep 3
 ssh steve@$bastion2 -- "date" || sleep 8
 
 # This file is not needed in a fully air-gapped env. 
-ssh $reg_ssh_user@$bastion2 -- "rm -fv ~/.pull-secret.json"
+ssh steve@$bastion2 -- "rm -fv ~/.pull-secret.json"
 
 # Just be sure a valid govc config file exists
 scp ~/.vmware.conf steve@$bastion2: 
