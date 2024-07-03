@@ -30,7 +30,7 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 		fi
 	else
 		echo
-		echo "WARNING: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' file found."
+		echo "WARNING: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' cert file found."
 		echo
 
 		if [ "$tls_verify" ]; then
@@ -60,7 +60,7 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 fi
 
 echo
-echo "Error:   No mirror registry credential files found in regcreds/"
+echo "Error:   No mirror registry credential file found in 'regcreds/pull-secret-mirror.json'"
 echo "         If you want to use your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
 echo "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
 echo "         See the README.md for further instructions."

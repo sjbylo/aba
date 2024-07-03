@@ -12,7 +12,7 @@ source <(normalize-aba-conf)
 mkdir -p save
 
 # Ensure the RH pull secrete files exist
-./scripts/create-containers-auth.sh
+scripts/create-containers-auth.sh
 
 # Generate first imageset-config file for saving images.  
 # Do not overwrite the file. Allow users to add images and operators to imageset-config-save.yaml and run "make save" again. 

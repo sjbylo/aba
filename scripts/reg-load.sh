@@ -14,6 +14,8 @@ source <(normalize-mirror-conf)
 
 export reg_url=https://$reg_host:$reg_port
 
+scripts/create-containers-auth.sh --load   # --load option indicates that the public pull secret is NOT needed.
+
 # Check if the cert needs to be updated
 if [ -s regcreds/rootCA.pem ]; then
 	if diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2; then
@@ -28,7 +30,9 @@ fi
 
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
-[ ! -d save ] && echo "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first on an external (Internet connected) bastion/laptop" && exit 1
+[ ! -d save ] && \
+	echo "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first on an external (Internet connected) bastion/laptop" && \
+	exit 1
 
 echo 
 echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
