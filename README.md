@@ -194,18 +194,21 @@ Example:
 ```
 make tarrepo out=/dev/path/to/drive/aba.tgz       # Write archive 'aba.tgz' to the device mounted at /dev/path/to/drive, EXCEPT for the 'seq#' tar files under save/
 ```
-- The 'seq#' tar files in the save/ directory and the repo tarball 'aba.tgz' can be copied separately to a non-portable storage device, e.g. S3 or other.
+- The 'seq#' tar file(s) in the "mirror/save" directory and the repo tarball 'aba.tgz' can be copied separately to a non-portable remote storage device, e.g. S3 or other.
 
 
-Load or download the tar files from storage to the internal mirror registry.
+Copy the "aba.tgz" file to the internal bastion and unpack the archive. Note the dir "aba/mirror/save".
+Copy the "seq" tar file(s), as is, from the "mirror/save" directory to the internal bastion, into the "mirror/save" directory. 
 
 ```
 sudo dnf install make -y 
 make load
 ```
 - This will (if required) install Quay (from the files and configuration that were archived & copied above) and then load the images into Quay.
-- Note that the internal bastion will need to install RPMs from a suitable repository (for testing it's possible to configure 'dnf' to use a proxy).
-- If rpms are not readily available in your private network, the command 'make rpms' can help by downloading the needed rpms, which can then be copied to the internal bastion and installed with 'dnf localinstall rpms/*.rpm'.  Note this will only work if your external and internal bastions are running the same version of RHEL. 
+- Required RPMs:
+  - Note that the internal bastion will need to install RPMs from a suitable repository (for testing it's possible to configure 'dnf' to use a proxy). 
+  - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD.
+  - If rpms are not readily available in your private network, the command 'make rpms' can help by downloading the needed rpms, which can then be copied to the internal bastion and installed with 'dnf localinstall rpms/*.rpm'.  Note this will only work if your external and internal bastions are running the exact same version of RHEL. 
 
 Now continue with "Install OpenShift" below.
 
@@ -227,6 +230,7 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 ![Installing OpenShift](images/make-cluster.jpg "Installing OpenShift")
 
 ```
+cd aba
 make cluster name=mycluster [type=sno|compact|standard] 
 ```
 - This command will create a directory 'mycluster', copy the Makefile into it and then run 'make'.
