@@ -1,9 +1,9 @@
 # Aba is tooling, wrapped around the agent-based installer for OpenShift.
 
 Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a fully or partially disconnected environment, either onto vSphere, ESXi or bare-metal. 
-Because Aba uses the [Agent-based installer](https://docs.openshift.com/container-platform/4.15/installing/installing_vsphere/installing-vsphere-agent-based-installer.html) there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
+Because Aba uses the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
 
-Aba automatically completes the following:
+Aba automatically completes the following for you:
 1. Makes use of any existing container registry or installs the Quay mirror registry appliance for you. 
 1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
 1. Triggers the generation of the agent-based boot ISO. 
@@ -12,11 +12,11 @@ Aba automatically completes the following:
 1. Allows for adding more images (e.g. Operators) as a day 1 or 2 operation.
 1. Configures the OperatorHub integration with the internal container registry. 
 1. Executes several workarounds for some typical issues with disconnected environments.
-1. Enables the integration with vSphere as a day 2 operation (day 1 coming with OCP v4.15+)
+1. Enables the integration with vSphere as a day 2 operation.
 
-Use aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail. 
+Use aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail.  It also works with connected environments.  
 
-For the very impatient: clone this repo onto a connected RHEL VM, install and run 'make'.  You will be guided through the process. 
+For the very impatient: clone this repo onto a RHEL VM with an internet connection, install and run 'make'.  You will be guided through the process.  Fedora has also been tested as the 'connected' VM to download the needed images and other content. 
 
 ## Quick Guide
 
@@ -28,7 +28,7 @@ cd aba
 ./aba
 ```
 - Clone the repo, install 'make' and configure high-level settings, e.g. target OCP version, your domain name, machine network CIDR etc.
-- Decide if you want to use VMware/ESXi or not. 
+- Decide if you want to use VMware/ESXi or install onto bare-metal. 
 
 ```
 make install 
@@ -42,21 +42,26 @@ make sync
 - Fully disconnected (air-gapped) environments are also supported with 'make save' (see below).
 
 ```
-make sno
+make cluster name=sno type=sno
 ```
-- Create a directory 'sno'. Create the Agent-based config files, generate the Agent-based iso file, create and boot the VMs.
-- Install Single Node OpenShift.  Others are 'make compact', 'make standard' or 'make cluster name=mycluster'
+- Create a directory 'sno' (for Single Node OpenShift) and the file snow/cluster.conf which needs to be edited. 
 
 ```
 cd sno
 make
 ```
+- Create the Agent-based config files, generate the Agent-based iso file, create and boot the VMs.
 - Monitor the installation progress.
+
+```
+make day2
+```
+- Configure the internal registry for Operator Hub, ready to install Operators. 
 
 ```
 make help
 ```
-- See what other helper commands are available. 
+- See what other commands are available. 
 
 Read more for all the details.
 
@@ -222,23 +227,10 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 ![Installing OpenShift](images/make-cluster.jpg "Installing OpenShift")
 
 ```
-make sno
-```
-- This will create a directory 'sno' and then install SNO OpenShift using the Agent-based installer.  If you are using VMware it will create the VMs for you.
-- Be sure to go through *all* the values in 'aba/vmware.conf' and 'sno/cluster.conf'.
-- Be sure to set up your DNS entries in advance. See above on Prerequisites. 
-- Aba will show you the installation progress.  You can also run 'make ssh' to log into the rendezvous server to troubleshoot. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands are idempotent.
-
-```
-make compact    # for a 3 node cluster topology
-make standard   # for a 3+2 topology
-```
-- Run this to create a compact cluster (works in a similar way to the above). 
-
-```
-make ocp name=mycluster
+make cluster name=mycluster [type=sno|compact|standard] 
 ```
 - This command will create a directory 'mycluster', copy the Makefile into it and then run 'make'.
+- Note, *all* parameters in 'aba.conf' must be completed for the optional "type" parameter to have any affect. 
 
 If needed, the following command can be used to monitor the progress of the Agent-based installer. For example: 
 
@@ -247,9 +239,24 @@ cd <cluster dir>   # e.g. cd sno
 make mon
 ```
 
+```
+make sno
+```
+- This will create a directory 'sno' and then install SNO OpenShift using the Agent-based installer (note, *all* parameters in 'aba.conf' must be completed for this to work).  If you are using VMware it will create the VMs for you.
+- Be sure to go through *all* the values in 'aba/vmware.conf' and 'sno/cluster.conf'.
+- Be sure to set up your DNS entries in advance. See above on Prerequisites. 
+- Aba will show you the installation progress.  You can also run 'make ssh' to log into the rendezvous server to troubleshoot. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands are idempotent.
+
+```
+make compact    # for a 3 node cluster topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
+make standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
+```
+- Run this to create a compact cluster (works in a similar way to the above). 
+
+
 Get help from a Makefile using 'make help'.
 
-After OpenShift has been installed you will see the following:
+After OpenShift has been installed you will see the following output:
 
 ```
 INFO Install complete!                            
@@ -258,10 +265,15 @@ INFO     export KUBECONFIG=/home/steve/aba/compact/iso-agent-based/auth/kubeconf
 INFO Access the OpenShift web-console here: https://console-openshift-console.apps.compact.example.com 
 INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ" 
 ```
-You can get access to the cluster using the command:
+You can get access to the cluster using one of the commands:
 
 ```
 . <(make shell) 
+oc whoami
+```
+
+```
+. <(make login) 
 oc whoami
 ```
 
@@ -275,14 +287,16 @@ If you only want to create the agent-based iso file, e.g. to boot bare-metal nod
 
 ```
 cd sno
-# then manually edit the 'agent-config.yaml' file to set the appropriate Mac addresses matching your bare-metal nodes
+make agentconf
+# then manually edit the 'agent-config.yaml' file to set the appropriate Mac addresses matching your bare-metal nodes.
 make iso
 # boot the bare-metal node(s) with the generated ISO file.
+make mon
 ```
 
 If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme. 
 
-Other examples of commands (make targets), when working with VMware/ESXi:
+Other examples of commands (make <targets>), when working with VMware/ESXi:
 
 cd mycluster     # change to the directory with the agent-based install files, using 'mycluster' as an example.
 
@@ -291,7 +305,7 @@ cd mycluster     # change to the directory with the agent-based install files, u
 | make ls          | Show list of VMs and their state. |
 | make start       | Power on all VMs |
 | make stop        | Gracefully shut down all VMs |
-| make powerdown   | Power down all VMs immediatelly |
+| make powerdown   | Power down all VMs immediately |
 | make kill        | Same as 'powerdown' |
 | make delete      | Delete all VMs  |
 | make create      | Create all VMs  |
@@ -314,7 +328,7 @@ cd mycluster     # change to the directory with the agent-based install files, u
 
 - Use PXE boot as alternative to ISO upload.
 
-- Make it easier to add the latest correct values into the imageset config file, i.e. fetch the values from the latest catalog. 
+- ~~Make it easier to add the latest correct values into the imageset config file, i.e. fetch the values from the latest catalog.~~
 
 
 ## Configuration files
