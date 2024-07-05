@@ -49,3 +49,4 @@ test/mesh
 test/?-stage
 cli/.*installed
 .??*.log
+aba.conf.bk
