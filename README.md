@@ -233,8 +233,8 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 cd aba
 make cluster name=mycluster [type=sno|compact|standard] 
 ```
-- This command will create a directory 'mycluster', copy the Makefile into it and then run 'make'.
-- Note, *all* parameters in 'aba.conf' must be completed for the optional "type" parameter to have any affect. 
+- This command will create a directory 'mycluster', copy the Makefile into it and then run 'make' inside the directory.
+- Note, *all* advanced parameters in the 'aba.conf' configuration file must be completed for the optional "type" parameter to have any affect. 
 
 If needed, the following command can be used to monitor the progress of the Agent-based installer. For example: 
 
