@@ -59,7 +59,7 @@ if [ ! "$1" ]; then
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
 
-	v=4.15.8
+	v=4.16.0
 	rm -f aba.conf
 	vf=~/.vmware.conf.vc
 	test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
@@ -238,7 +238,7 @@ mylog "Adding advanced-cluster-management operator images to mirror/save/imagese
 
 cat >> mirror/save/imageset-config-save.yaml <<END
   operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.14
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.16
     packages:
       - name: advanced-cluster-management
         channels:
