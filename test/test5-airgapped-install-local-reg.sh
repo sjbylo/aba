@@ -44,7 +44,7 @@ rm -f ~/.aba.previous.backup
 
 which make || sudo dnf install make -y
 
-v=4.15.8
+v=4.16.0
 
 > mirror/mirror.conf
 echo "ocp_version=$v" >> aba.conf  # Only to fix error, missing "ocp_version"
@@ -214,7 +214,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/kiali/demo_travels_portal:v1
   - name: quay.io/kiali/demo_travels_travels:v1
   operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.14
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.16
     packages:
       - name: servicemeshoperator
         channels:
@@ -288,6 +288,18 @@ rm -rf test/mesh
 ### test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting cluster dirs, $subdir/aba/sno $subdir/aba/compact $subdir/aba/standard" "rm -rf  $subdir/aba/sno $subdir/aba/compact $subdir/aba/standard" 
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating standard cluster" "make -C $subdir/aba standard" 
+# Restart cluster test 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Log into cluster" ". <(make -s -C $subdir/aba/standard login)"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully (1/2)" "yes | make -C $subdir/aba/standard shutdown"
+test-cmd -m "Wait for cluster to power down" sleep 300
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Start cluster gracefully" "yes | make -C $subdir/aba/standard startup"
+test-cmd -m "Wait for cluster to settle" sleep 600
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='whoami'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='version'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='get po -A | grep -v -e Running -e Complete'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd"
+# Restart cluster test end 
+
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -C $subdir/aba/standard delete" 
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating compact cluster" "make -C $subdir/aba compact" 
@@ -305,6 +317,20 @@ scp macs.conf $reg_ssh_user@$bastion2:$subdir/aba/standard
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating cluster.conf" "cd $subdir/aba/standard; scripts/create-cluster-conf.sh standard standard"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Making iso" "make -C $subdir/aba/standard iso"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating standard cluster" "make -C $subdir/aba/standard"
+
+# Restart cluster test 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Log into cluster" ". <(make -s -C $subdir/aba/standard login)"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully (2/2)" "yes | make -C $subdir/aba/standard shutdown"
+test-cmd -m "Wait for cluster to power down" sleep 300
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Start cluster gracefully" "yes | make -C $subdir/aba/standard startup"
+test-cmd -m "Wait for cluster to settle" sleep 600
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='get nodes'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='whoami'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='version'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='get po -A | grep -v -e Running -e Complete'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd"
+# Restart cluster test end 
+
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -C $subdir/aba/standard delete" 
 
 ## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating sno cluster with 'make -C $subdir/aba cluster name=sno type=sno'" "make -C $subdir/aba cluster name=sno type=sno" 

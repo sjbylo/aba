@@ -40,7 +40,7 @@ ntp=10.0.1.8 # If available
 which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
-v=4.15.8
+v=4.16.0
 echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
 make distclean ask=
 #make clean
