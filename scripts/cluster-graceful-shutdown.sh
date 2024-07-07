@@ -1,9 +1,14 @@
 #!/bin/bash 
-# Attenpt a cluster graceful shutdown by terminating all pods on all nodes
+# Attempt a cluster graceful shutdown by terminating all pods on all workers and then shutting down all nodes
 
 echo Checking access to cluster ...
 # Use one of the methods to access the cluster
-oc whoami || . <(make shell) || . <(make login) || exit 1
+oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null || . <(make -s login)
+oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null || . <(make -s shell)
+if ! oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null; then
+	echo "Failed to log into cluster.  Please log into the cluster and try again."
+	exit 1
+fi
 
 cluster_id=$(oc whoami --show-server | awk -F[/:] '{print $4}') || exit 1
 echo Cluster $cluster_id nodes:
@@ -40,7 +45,7 @@ echo "Makeing all nodes unschedulable (corden):"
 for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm cordon ${node} & done 
 wait
 
-echo "Draining all pods from all nodes (waiting max 120s):"
+echo "Draining all pods from all worker nodes (waiting max 120s):"
 sleep 1
 for node in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=120s & done
 wait
