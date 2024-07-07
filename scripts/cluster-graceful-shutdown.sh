@@ -1,6 +1,12 @@
 #!/bin/bash 
 # Attempt a cluster graceful shutdown by terminating all pods on all workers and then shutting down all nodes
 
+source scripts/include_all.sh
+
+[ "$1" ] && set -x
+
+source <(normalize-cluster-conf)
+
 echo Checking access to cluster ...
 # Use one of the methods to access the cluster
 oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null || . <(make -s login)
@@ -37,27 +43,28 @@ echo -n "Shutdown the cluster? (Y/n): "
 read yn
 [ "$yn" = "n" ] && exit 1
 
-###echo Enabling debug for all nodes:
-###for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc debug node/${node} -- chroot /host whoami & done 
-###wait
-
-echo "Makeing all nodes unschedulable (corden):"
-for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm cordon ${node} & done 
+echo Enabling debug pods for all nodes:
+for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc debug node/${node} -- chroot /host whoami & done 
 wait
 
-echo "Draining all pods from all worker nodes (waiting max 120s):"
-sleep 1
-for node in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=120s & done
-wait
+# If not SNO ...
+if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
+	echo "Makeing all nodes unschedulable (corden):"
+	for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm cordon ${node} & done 
+	wait
 
-###for node in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --force --disable-eviction --timeout=20s; done || true
- 
-echo Stopping all nodes:
-##make stop
+	echo "Draining all pods from all worker nodes (waiting max 120s):"
+	sleep 1
+	for node in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); 
+	do
+		echo ${node} ; oc adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=120s &
+	done
+	wait
+fi
 
-##set -x
-# Shut down all of the nodes
-#for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc --request-timeout=20s debug node/${node} -- chroot /host shutdown -h 1; done || make stop
-for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc --request-timeout=20s debug node/${node} -- chroot /host shutdown -h 1; done
-
+echo Shutting down all nodes:
+for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}');
+do
+	oc --request-timeout=20s debug node/${node} -- chroot /host shutdown -h 1
+done
 
