@@ -1,6 +1,12 @@
 #!/bin/bash -e
 # Start up the cluster.  Need to uncordon to allow pods to run again.
 
+source scripts/include_all.sh
+
+[ "$1" ] && set -x
+
+source <(normalize-cluster-conf)
+
 echo Starting cluster ...
 make start 
 
@@ -8,8 +14,8 @@ oc whoami >/dev/null 2>&1 || (echo Waiting for cluster startup; sleep 40)
 
 # Use one of the methods to access the cluster
 while ! oc whoami >/dev/null 2>&1; do
-	. <(make shell) || true
-	. <(make login) || true
+	. <(make -s shell) || true
+	. <(make -s login) || true
 done
 
 if ! oc whoami >/dev/null 2>&1; then
