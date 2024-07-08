@@ -268,19 +268,36 @@ make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir -xvf
 
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading jaeger operator images to mirror" "make -C $subdir/aba/mirror load" 
 
-test-cmd -m "Pausing for 60s to let OCP to settle" sleep 60    # For some reason, the cluster was still not fully ready in tests!
+test-cmd -m "Pausing for 60s to let OCP settle" sleep 60    # For some reason, the cluster was still not fully ready in tests!
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m "Run 'day2' attempt number $i ..." "make -C $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
-test-cmd -m "Pausing for 30s to let OCP to settle" sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
+test-cmd -m "Pausing for 30s to let OCP settle" sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
 
 test-cmd -h $reg_ssh_user@$bastion2 -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
 
 sleep 30  # Sleep in case need to check the cluster
 
-##  KEEP SNO  # test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting sno cluster" "make -C $subdir/aba/sno delete" 
+# Restart cluster test 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Log into cluster" ". <(make -s -C $subdir/aba/sno login)"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/sno ls"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully (2/2)" "yes | make -C $subdir/aba/sno shutdown"
+test-cmd -m "Wait for cluster to power down" sleep 300
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/sno ls"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Start cluster gracefully" "yes | make -C $subdir/aba/sno startup"
+test-cmd -m "Wait for cluster to settle" sleep 600
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/sno cmd cmd='get nodes'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/sno cmd cmd='whoami'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/sno cmd cmd='version'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/sno cmd cmd='get po -A | grep -v -e Running -e Complete'"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/sno cmd"
+# Restart cluster test end 
+
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/sno cmd cmd='get po -A | grep ^travel-'"
+
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting sno cluster" "make -C $subdir/aba/sno delete" 
 
 rm -rf test/mesh 
 
