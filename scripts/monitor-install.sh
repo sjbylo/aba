@@ -14,7 +14,14 @@ echo
 echo =================================================================================
 echo Running wait-for command ...
 echo "openshift-install agent wait-for bootstrap-complete --dir $MANEFEST_DIR"
-openshift-install agent wait-for bootstrap-complete --dir $MANEFEST_DIR  # --log-level=debug
+openshift-install agent wait-for bootstrap-complete --dir $MANEFEST_DIR 
+
+if [ $? -ne 0 ]; then
+	echo 
+	echo "Something went wrong with the installation.  Fix the problem and try again!"
+
+	exit $?
+fi
 
 echo
 echo =================================================================================
@@ -22,13 +29,15 @@ echo Running wait-for command ...
 echo "openshift-install agent wait-for install-complete --dir $MANEFEST_DIR"
 openshift-install agent wait-for install-complete --dir $MANEFEST_DIR    # --log-level=debug
 
-if [ $? -eq 0 ]; then
+if [ $? -ne 0 ]; then
+	echo 
+	echo "Something went wrong with the installation.  Fix the problem and try again!"
+
+	exit $?
+else
 	echo 
 	echo "The cluster has been successfully installed."
 	echo "Run '. <(make shell)' to access the cluster using the kubeconfig file (x509 cert), or"
 	echo "Run '. <(make login)' to log into the cluster using the 'kubeadmin' password. "
-else
-	echo 
-	echo "Something went wrong with the installation.  Fix the problem and try again!"
 fi
 

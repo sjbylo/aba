@@ -40,14 +40,14 @@ ntp=10.0.1.8 # If available
 which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
-v=4.16.0
+v=4.16.3
 echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
 make distclean ask=
 #make clean
 
 # Set up aba.conf properly
 rm -f aba.conf
-vf=~/.vmware.conf.vc
+vf=~/.vmware.conf
 test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ### --vmw $vf
 
 # Set up govc 
@@ -65,6 +65,13 @@ reg_ssh_user=$(whoami)
 
 make -C cli
 source <(normalize-vmware-conf)
+echo GOVC_URL=$GOVC_URL
+echo GOVC_DATASTORE=$GOVC_DATASTORE
+echo GOVC_NETWORK=$GOVC_NETWORK
+echo GOVC_DATACENTER=$GOVC_DATACENTER
+echo GOVC_CLUSTER=$GOVC_CLUSTER
+echo VC_FOLDER=$VC_FOLDER
+
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
 
 mylog Revert internal bastion vm to snapshot and powering on ...
@@ -81,9 +88,13 @@ ssh $reg_ssh_user@$bastion2 -- "date" || sleep 8
 
 # This file is not needed in a fully air-gapped env. 
 ssh $reg_ssh_user@$bastion2 -- "rm -fv ~/.pull-secret.json"
+# Want to test fully disconnected 
+ssh $reg_ssh_user@$bastion2 -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
+# Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
+ssh steve@$bastion2 -- "rm -rfv ~/*"
 
 # Just be sure a valid govc config file exists on internal bastion
-scp ~/.vmware.conf steve@$bastion2: 
+scp $vf steve@$bastion2: 
 
 pub_key=$(cat ~/.ssh/id_rsa.pub)
 u=testy

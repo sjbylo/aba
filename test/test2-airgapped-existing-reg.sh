@@ -59,9 +59,9 @@ if [ ! "$1" ]; then
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
 
-	v=4.16.0
+	v=4.16.3
 	rm -f aba.conf
-	vf=~/.vmware.conf.vc
+	vf=~/.vmware.conf
 	test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
 	# Set up govc 
 	cp $vf vmware.conf 
@@ -106,9 +106,13 @@ if [ ! "$1" ]; then
 
 	# This file is not needed in a fully air-gapped env. 
 	ssh steve@$bastion2 -- "rm -fv ~/.pull-secret.json"
+	# Want to test fully disconnected 
+	ssh steve@$bastion2 -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
+	# Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
+	ssh steve@$bastion2 -- "rm -rfv ~/*"
 
 	# Just be sure a valid govc config file exists on internal bastion
-	scp ~/.vmware.conf steve@$bastion2: 
+	scp $vf steve@$bastion2: 
 	##scp ~/.vmware.conf testy@$bastion2: 
 
 	uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
@@ -221,7 +225,7 @@ else
 	# Run 'make -C mirror clean' here since we (might be) are re-installing another cluster *with the same mac addresses*! So, install might fail.
 	test-cmd -h steve@$bastion2 -m "Cleaning sno dir" "make -C $subdir/aba/sno clean"  # This does not remove the cluster.conf file, so cluster can be re-installed 
 
-	test-cmd -h steve@$bastion2 -m "Installing sno cluster" "make -C $subdir/aba/sno"  
+test-cmd -h steve@$bastion2 -m "Installing sno cluster" "make -C $subdir/aba/sno"  
 fi
 
 test-cmd -h steve@$bastion2 -m "Checking cluster operator status on cluster sno" "make -C $subdir/aba/sno cmd"

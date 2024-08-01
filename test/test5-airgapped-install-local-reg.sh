@@ -29,12 +29,6 @@ source test/include.sh
 [ ! "$target_full" ] && default_target="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
 mylog default_target=$default_target
 
-mylog ============================================================
-mylog Starting test $(basename $0)
-mylog ============================================================
-mylog "Test to install a local reg. on $bastion2 and save + copy + load images.  Install sno ocp and a test app and svc mesh."
-mylog
-
 ntp=10.0.1.8 # If available
 
 rm -f ~/.aba.previous.backup
@@ -44,7 +38,7 @@ rm -f ~/.aba.previous.backup
 
 which make || sudo dnf install make -y
 
-v=4.16.0
+v=4.16.3
 
 > mirror/mirror.conf
 echo "ocp_version=$v" >> aba.conf  # Only to fix error, missing "ocp_version"
@@ -53,12 +47,18 @@ test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask="
 rm -rf sno compact standard 
 
 bastion2=registry.example.com
-bastion_vm=bastion-internal-rhel9
+bastion_vm=bastion-internal-rhel9-30
 subdir=~
 subdir=~/subdir
 
+mylog ============================================================
+mylog Starting test $(basename $0)
+mylog ============================================================
+mylog "Test to install a local reg. on $bastion2 and save + copy + load images.  Install sno ocp and a test app and svc mesh."
+mylog
+
 rm -f aba.conf  # Set it up next
-vf=~/.vmware.conf.vc
+vf=~/.vmware.conf
 test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
 # Set up govc 
 cp $vf vmware.conf 
@@ -107,9 +107,13 @@ ssh steve@$bastion2 -- "date" || sleep 8
 
 # This file is not needed in a fully air-gapped env. 
 ssh steve@$bastion2 -- "rm -fv ~/.pull-secret.json"
+# Want to test fully disconnected 
+ssh steve@$bastion2 -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
+# Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
+ssh steve@$bastion2 -- "rm -rfv ~/*"
 
 # Just be sure a valid govc config file exists
-scp ~/.vmware.conf steve@$bastion2: 
+scp $vf steve@$bastion2: 
 
 #################################
 

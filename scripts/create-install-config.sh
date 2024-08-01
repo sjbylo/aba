@@ -38,16 +38,17 @@ elif [ -s regcreds/pull-secret-mirror.json ]; then
 	export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 
 else
+	# This means we will do an ONLINE install, using the public RH registry. 
 	if [ -s $pull_secret_file ]; then
 		export pull_secret=$(cat $pull_secret_file)
-		echo Found pull secret file at $pull_secret_file
+		echo Found pull secret file at $pull_secret_file.  Assuming online installation using public RH registry.
 	else
-		echo "Error: No pull secrets found. Aborting!  See the README for more!" 
+		echo "Error: No pull secrets found. Aborting!  See the README for help!" 
 		exit 1
 	fi
 fi
 
-# ... we also, need a root CA...
+# ... we also, need a root CA... if using our own registry.
 if [ -s regcreds/rootCA.pem ]; then
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
 	echo "Using root CA file at regcreds/rootCA.pem"
