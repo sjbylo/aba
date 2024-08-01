@@ -106,7 +106,10 @@ if [ "$reg_ssh_key" ]; then
 	# Check for known issue where images need to be loaded on the remote host first
 	# This will load the needed images and fix the problem 
 	# Only need to do this workaround once
-	ssh -F .ssh.conf $reg_ssh_user@$reg_host "rpm -q podman || rpm -q jq || sudo dnf install podman jq -y"
+	ssh -F .ssh.conf $reg_ssh_user@$reg_host "ip a"
+	ssh -F .ssh.conf $reg_ssh_user@$reg_host "rpm -q podman || sudo dnf install podman jq -y" || exit 1
+	ssh -F .ssh.conf $reg_ssh_user@$reg_host "rpm -q jq 	|| sudo dnf install podman jq -y" || exit 1
+	ssh -F .ssh.conf $reg_ssh_user@$reg_host "podman images" || exit 1
 	ssh -F .ssh.conf $reg_ssh_user@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause || \
 	(
 		echo "Implementing workaround to install Quay on remote host ... see https://access.redhat.com/solutions/7040517 for more."

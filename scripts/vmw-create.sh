@@ -28,7 +28,14 @@ WKR_MAC_ADDRESSES_ARRAY=($WKR_MAC_ADDRESSES)
 # FIXME: Check if folder $VC_FOLDER already exists or not.  Should we create it but never delete it.
 # Only the cluster folder shouod be created and deleted by aba
 #cluster_folder=$VC_FOLDER  # FIXME - this should be folder/cluster-name
-cluster_folder=$VC_FOLDER/$CLUSTER_NAME
+#if [ "$VC_FOLDER" != "/ha-datacenter/vm" ]; then
+# If we are accessing vCenter (and not ESXi directly) 
+if [ "$VC" ]; then
+	cluster_folder=$VC_FOLDER/$CLUSTER_NAME
+	scripts/vmw-create-folder.sh $cluster_folder  # This will create a folder hirerachy, if needed
+else
+	cluster_folder=$VC_FOLDER
+fi
 
 if [ ! "$NO_MAC" ]; then
 	scripts/check-macs.sh || exit 
@@ -39,15 +46,14 @@ source <(normalize-cluster-conf)
 
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
 
-# If we are accessing vCenter (and not ESXi directly) 
-if [ "$VC" ]; then
+#if [ "$VC" ]; then
 	###echo Create folder: $cluster_folder
-	scripts/vmw-create-folder.sh $cluster_folder  # This will create a folder hirerachy, if needed
+	###scripts/vmw-create-folder.sh $cluster_folder  # This will create a folder hirerachy, if needed
 	####govc folder.create $cluster_folder 
-fi
+#fi
 
 # Check and increase CPU count for SNO, if needed
-[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 16 ] && master_cpu_count=16 && echo Increasing cpu count to 16 for SNO ...
+### TESTING ESXI [ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 16 ] && master_cpu_count=16 && echo Increasing cpu count to 16 for SNO ...
 
 # Enable hardware virt on the workers only (or also masters for 'scheduling enabled')
 master_nested_hv=false

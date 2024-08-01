@@ -21,7 +21,7 @@ rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
 bastion2=registry.example.com
-bastion_vm=bastion-internal-rhel9
+bastion_vm=bastion-internal-rhel9-30
 
 source scripts/include_all.sh && trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 source test/include.sh
@@ -40,14 +40,14 @@ ntp=10.0.1.8 # If available
 which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
-v=4.16.0
+v=4.16.3
 echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
 make distclean ask=
 #make clean
 
 # Set up aba.conf properly
 rm -f aba.conf
-vf=~/.vmware.conf.vc
+vf=~/.vmware.conf
 test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ### --vmw $vf
 
 # Set up govc 

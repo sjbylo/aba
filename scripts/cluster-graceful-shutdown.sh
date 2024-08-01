@@ -68,5 +68,3 @@ do
 	oc --request-timeout=20s debug node/${node} -- chroot /host shutdown -h 1
 done
 
-echo "The cluster will complete shutdown in a short while!"
-
