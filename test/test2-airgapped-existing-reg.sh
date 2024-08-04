@@ -60,6 +60,7 @@ if [ ! "$1" ]; then
 	rm -rf sno compact standard 
 
 	v=4.16.3
+	#v=4.15.22
 	rm -f aba.conf
 	vf=~/.vmware.conf
 	test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf

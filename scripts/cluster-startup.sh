@@ -2,26 +2,32 @@
 # Start up the cluster.  Need to uncordon to allow pods to run again.
 
 echo Starting cluster ...
-make -s start 
+make -s start || exit 1
 
-oc whoami >/dev/null 2>&1 || (echo Waiting for cluster startup; sleep 40) 
+#oc whoami >/dev/null 2>&1 || (echo Waiting for cluster startup; sleep 40) 
+echo Waiting for cluster startup ...
+sleep 40
 
 # Use one of the methods to access the cluster
-while ! oc whoami >/dev/null 2>&1; do
-	. <(make -s shell) || true
+echo Attempting to log into the cluster ...
+until oc whoami >/dev/null 2>&1; do
+	#. <(make -s shell) || true
 	. <(make -s login) || true
+	sleep 2
 done
 
-if ! oc whoami >/dev/null 2>&1; then
-	echo -n Waiting for cluster to start ...
-	sleep 60
-	until oc whoami >/dev/null 2>&1 >/dev/null
-	do
-		echo -n .
-		sleep 10
-	done
-	sleep 20
-fi
+sleep 5
+
+#if ! oc whoami >/dev/null 2>&1; then
+#	echo -n Waiting for the cluster to start ...
+#	sleep 60
+#	until oc whoami >/dev/null 2>&1 >/dev/null
+#	do
+#		echo -n .
+#		sleep 10
+#	done
+#	sleep 20
+#fi
 
 cluster_id=$(oc whoami --show-server | awk -F[/:] '{print $4}')
 echo Cluster $cluster_id nodes:
@@ -30,7 +36,7 @@ oc get nodes
 echo
 
 echo "Make all nodes schedulable (uncordon):"
-for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm uncordon ${node} ; done
+for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc adm uncordon ${node} ; done
 sleep 10
 oc get nodes
 

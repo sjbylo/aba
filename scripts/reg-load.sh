@@ -40,7 +40,7 @@ echo
 
 # Check if aba installed Quay or it's an existing reg.
 if [ -s ./reg-uninstall.sh ]; then
-	echo "Ensure there is enough disk space under $reg_root.  This can take 5-20+ mins to complete."
+	echo "Warning: Ensure there is enough disk space under $reg_root.  This can take 5-20+ mins to complete or even longer if Operator images are being loaded!"
 fi
 echo
 

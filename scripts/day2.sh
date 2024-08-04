@@ -153,10 +153,14 @@ if [ "$list" ]; then
 		echo -n .
 		sleep $i
 		let i=$i+1
-		[ $i -gt 25 ] && echo "Giving up waiting ..." && break
+		[ $i -gt 25 ] && echo "Warning: Giving up waiting ..." && break
 	done
 
 	echo "The CatalogSource is 'ready'"
+
+	# Force all default sources to be disabled, since we use the internal mirror.
+	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" 
+	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' 
 else
 	echo "No Operator CatalogSources found under mirror/{save,sync}/oc-mirror-workspace."
 	echo "Operator images would need to be loaded into the mirror registry first by a) editing the mirror/save/imageset-config-save.yaml file and b) running 'make save/load'. See the README for more."
