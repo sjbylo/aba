@@ -53,7 +53,8 @@ source <(normalize-cluster-conf)
 #fi
 
 # Check and increase CPU count for SNO, if needed
-### TESTING ESXI [ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 16 ] && master_cpu_count=16 && echo Increasing cpu count to 16 for SNO ...
+##[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 4 ] && master_cpu_count=4 && echo Increasing cpu count to 4 for SNO ...
+[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 4 ] && echo "Warning: CPU count for SNO should be set to 4 (cores) for full support."
 
 # Enable hardware virt on the workers only (or also masters for 'scheduling enabled')
 master_nested_hv=false
