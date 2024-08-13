@@ -5,6 +5,8 @@ ocp_version := $(strip $(shell echo $(ocp_version)))
 
 all: ../aba.conf ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc
 
+download: openshift-client-linux-$(ocp_version).tar.gz openshift-install-linux-$(ocp_version).tar.gz oc-mirror.tar.gz
+
 ##@ Help-related tasks
 .PHONY: help
 help: ## Help
