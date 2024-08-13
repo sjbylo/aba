@@ -18,6 +18,7 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 
 	# Ensure pull secrets in place. Only needed if the registry was installed *from a different host*, ie. ~/.containers/auth.json does not exist.
 	### TEST WITHOUT THIS HERE # scripts/create-containers-auth.sh
+	scripts/create-containers-auth.sh  # These files need refreshing when switching to a different registry.
 	# Should already be created!
 
 	if [ -s regcreds/rootCA.pem ]; then
