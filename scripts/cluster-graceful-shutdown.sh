@@ -7,6 +7,15 @@ source scripts/include_all.sh
 
 source <(normalize-cluster-conf)
 
+echo Attempting to log into the cluster ...
+until oc whoami >/dev/null 2>&1; do
+	#. <(make -s shell) || true
+	. <(make -s login) || true
+	sleep 2
+done
+
+sleep 5
+
 echo Checking access to cluster ...
 # Use one of the methods to access the cluster
 oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null || . <(make -s login)
