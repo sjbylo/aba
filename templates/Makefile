@@ -96,6 +96,7 @@ agent-config.yaml: .initialized             cluster.conf mirror.conf  ## Create 
 .bm-message:
 	@echo
 	@echo "Next steps:"
+	@echo "  cd <cluster dir>
 	@echo "  Edit the agent 'install-config.yaml' & 'agent-config.yaml' files, e.g. to add the actual mac addresses and"
 	@echo "  optionally add disk & nic hints, run 'make iso' to create the ISO file. Boot your hosts with the ISO and then"
 	@echo "  run 'make mon' to monitor the installation progress."
