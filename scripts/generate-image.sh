@@ -10,29 +10,29 @@ scripts/cluster-config.sh | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$
 echo ==================================================================	
 eval `scripts/cluster-config.sh || exit 1`
 
-if [ -d $MANEFEST_DIR ]; then
-	echo "Backup up previous $MANEFEST_DIR' dir to '$MANEFEST_DIR.backup':"
+if [ -d $MANIFEST_DIR ]; then
+	echo "Backup up previous $MANIFEST_DIR' dir to '$MANIFEST_DIR.backup':"
 
-	rm -rf $MANEFEST_DIR.backup
-	cp -rp $MANEFEST_DIR $MANEFEST_DIR.backup
+	rm -rf $MANIFEST_DIR.backup
+	cp -rp $MANIFEST_DIR $MANIFEST_DIR.backup
 fi
 
 echo Generating the ISO boot image for cluster: $CLUSTER_NAME.$BASE_DOMAIN ...
 
-rm -rf $MANEFEST_DIR 
-mkdir -p $MANEFEST_DIR
+rm -rf $MANIFEST_DIR 
+mkdir -p $MANIFEST_DIR
 
-cp install-config.yaml agent-config.yaml $MANEFEST_DIR 
+cp install-config.yaml agent-config.yaml $MANIFEST_DIR 
 
-echo "openshift-install agent create image --dir $MANEFEST_DIR "
-openshift-install agent create image --dir $MANEFEST_DIR 
+echo "openshift-install agent create image --dir $MANIFEST_DIR "
+openshift-install agent create image --dir $MANIFEST_DIR 
 
 # FIXME: to implement PXE 
-#openshift-install agent create pxe-files --dir $MANEFEST_DIR
+#openshift-install agent create pxe-files --dir $MANIFEST_DIR
 
-echo "Making backup of '$MANEFEST_DIR/auth' to '$MANEFEST_DIR/auth.backup'"
-cp -rp $MANEFEST_DIR/auth $MANEFEST_DIR/auth.backup
+echo "Making backup of '$MANIFEST_DIR/auth' to '$MANIFEST_DIR/auth.backup'"
+cp -rp $MANIFEST_DIR/auth $MANIFEST_DIR/auth.backup
 
 echo 
-echo "The agent based ISO has been created in the '$MANEFEST_DIR' directory"
+echo "The agent based ISO has been created in the '$MANIFEST_DIR' directory"
 echo

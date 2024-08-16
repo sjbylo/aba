@@ -21,19 +21,19 @@ yaml2json()
 	python3 -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'
 }
 
-export MANEFEST_SRC_DIR=.
-export MANEFEST_DIR=iso-agent-based
+export MANIFEST_SRC_DIR=.
+export MANIFEST_DIR=iso-agent-based
 
-echo export MANEFEST_DIR=$MANEFEST_DIR
-echo export MANEFEST_SRC_DIR=$MANEFEST_SRC_DIR
+echo export MANIFEST_DIR=$MANIFEST_DIR
+echo export MANIFEST_SRC_DIR=$MANIFEST_SRC_DIR
 
 ### # This is only needed to know if the install is via vCenter or not (See VC_FOLDER below)
 ### [ -s vmware.conf ] && source <(normalize-vmware-conf)          
 
-ICONF=$MANEFEST_SRC_DIR/install-config.yaml  
+ICONF=$MANIFEST_SRC_DIR/install-config.yaml  
 ICONF_TMP=/tmp/.install-config.yaml  
 
-ACONF=$MANEFEST_SRC_DIR/agent-config.yaml  
+ACONF=$MANIFEST_SRC_DIR/agent-config.yaml  
 ACONF_TMP=/tmp/.agent-config.yaml  
 
 # If the files don't exist, nothing to do!
@@ -49,6 +49,10 @@ echo export CLUSTER_NAME=$CLUSTER_NAME
 BASE_DOMAIN=`cat $ICONF_TMP | jq -r .baseDomain`
 echo "$BASE_DOMAIN" | grep -q "null" && BASE_DOMAIN=
 echo export BASE_DOMAIN=$BASE_DOMAIN
+
+RENDEZVOUSIP=`cat $ACONF_TMP | jq -r '.rendezvousIP'`
+echo "$RENDEZVOUSIP" | grep -q "null" && RENDEZVOUSIP=
+echo export RENDEZVOUSIP=$RENDEZVOUSIP 
 
 CP_REPLICAS=`cat $ICONF_TMP | jq -r .controlPlane.replicas`
 echo "$CP_REPLICAS" | grep -q "null" && CP_REPLICAS=
@@ -69,10 +73,6 @@ echo export CP_IP_ADDRESSES=\"$CP_IP_ADDRESSES\"
 WORKER_REPLICAS=`cat $ICONF_TMP | jq -r .compute[0].replicas`
 echo "$WORKER_REPLICAS" | grep -q "null" && WORKER_REPLICAS=
 echo export WORKER_REPLICAS=$WORKER_REPLICAS
-
-RENDEZVOUSIP=`cat $ACONF_TMP | jq -r '.rendezvousIP'`
-echo "$RENDEZVOUSIP" | grep -q "null" && RENDEZVOUSIP=
-echo export RENDEZVOUSIP=$RENDEZVOUSIP 
 
 err=
 

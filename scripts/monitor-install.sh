@@ -13,8 +13,8 @@ fi
 echo 
 echo =================================================================================
 echo Running wait-for command ...
-echo "openshift-install agent wait-for bootstrap-complete --dir $MANEFEST_DIR"
-openshift-install agent wait-for bootstrap-complete --dir $MANEFEST_DIR 
+echo "openshift-install agent wait-for bootstrap-complete --dir $MANIFEST_DIR"
+openshift-install agent wait-for bootstrap-complete --dir $MANIFEST_DIR 
 
 if [ $? -ne 0 ]; then
 	echo 
@@ -26,8 +26,8 @@ fi
 echo
 echo =================================================================================
 echo Running wait-for command ...
-echo "openshift-install agent wait-for install-complete --dir $MANEFEST_DIR"
-openshift-install agent wait-for install-complete --dir $MANEFEST_DIR    # --log-level=debug
+echo "openshift-install agent wait-for install-complete --dir $MANIFEST_DIR"
+openshift-install agent wait-for install-complete --dir $MANIFEST_DIR    # --log-level=debug
 
 if [ $? -ne 0 ]; then
 	echo 
