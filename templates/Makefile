@@ -96,8 +96,8 @@ agent-config.yaml: .initialized             cluster.conf mirror.conf  ## Create 
 .bm-message:
 	@echo
 	@echo "Next steps:"
-	@echo "1 cd <cluster dir>"
-	@echo "2  Check & edit the agent configuration files: "
+	@echo "1 cd <cluster name>"
+	@echo "2 Check & edit the agent configuration files: "
 	@echo "   - install-config.yaml:"
 	@echo "       Add proxy values, in case you want to use them."
 	@echo "   - agent-config.yaml:"
