@@ -96,10 +96,17 @@ agent-config.yaml: .initialized             cluster.conf mirror.conf  ## Create 
 .bm-message:
 	@echo
 	@echo "Next steps:"
-	@echo "  cd <cluster dir>"
-	@echo "  Edit the agent 'install-config.yaml' & 'agent-config.yaml' files, e.g. to add the actual mac addresses and"
-	@echo "  optionally add disk & nic hints, run 'make iso' to create the ISO file. Boot your hosts with the ISO and then"
-	@echo "  run 'make mon' to monitor the installation progress."
+	@echo "1 cd <cluster dir>"
+	@echo "2  Check & edit the agent configuration files: "
+	@echo "   - install-config.yaml:"
+	@echo "       Add proxy values, in case you want to use them."
+	@echo "   - agent-config.yaml:"
+	@echo "       Modify the mac addresses to match your hosts net interfaces."
+	@echo "       Optionally add drive & NIC hints, vlan tag and any other network configuration, if needed."
+	@echo "3 Run 'make iso' to create the ISO file."
+	@echo "4 Boot all your hosts with the ISO file."
+	@echo "5 Run 'make mon' to monitor the installation progress."
+	@echo 
 	@touch .bm-message
 
 # The following "auto" targets are meant just for the full end-to-end automation, to build a cluster
