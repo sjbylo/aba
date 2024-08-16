@@ -9,10 +9,12 @@ unset RENDEZVOUSIP
 unset CP_REPLICAS
 unset CP_NAMES
 unset CP_MAC_ADDRESSES
+unset CP_IP_ADDRESSES
 unset WORKER_REPLICAS
 
 unset WORKER_NAMES
 unset WKR_MAC_ADDRESSES
+unset WKR_IP_ADDRESSES
 
 yaml2json()
 {
@@ -60,6 +62,10 @@ CP_MAC_ADDRESSES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "master" )
 echo "$CP_MAC_ADDRESSES" | grep -q "null" && CP_MAC_ADDRESSES=
 echo export CP_MAC_ADDRESSES=\"$CP_MAC_ADDRESSES\"
 
+CP_IP_ADDRESSES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "master" ) | .networkConfig.interfaces[0].ipv4.address[0].ip'`
+echo "$CP_IP_ADDRESSES" | grep -q "null" && CP_IP_ADDRESSES=
+echo export CP_IP_ADDRESSES=\"$CP_IP_ADDRESSES\"
+
 WORKER_REPLICAS=`cat $ICONF_TMP | jq -r .compute[0].replicas`
 echo "$WORKER_REPLICAS" | grep -q "null" && WORKER_REPLICAS=
 echo export WORKER_REPLICAS=$WORKER_REPLICAS
@@ -79,9 +85,14 @@ if [ $WORKER_REPLICAS -ne 0 ]; then
 	echo "$WKR_MAC_ADDRESSES" | grep -q "null" && WKR_MAC_ADDRESSES=
 	echo export WKR_MAC_ADDRESSES=\"$WKR_MAC_ADDRESSES\"
 
+	WKR_IP_ADDRESSES=`cat $ACONF_TMP | jq -r '.hosts[] | select( .role == "worker" ) | .networkConfig.interfaces[0].ipv4.address[0].ip'`
+	echo "$WKR_IP_ADDRESSES" | grep -q "null" && WKR_IP_ADDRESSES=
+	echo export WKR_IP_ADDRESSES=\"$WKR_IP_ADDRESSES\"
+
 	# basic checks
 	[ ! "$WORKER_NAMES" ] && echo ".hosts[].role.worker.hostname missing in $ACONF" >&2 && err=1
 	[ ! "$WKR_MAC_ADDRESSES" ] && echo ".hosts[].role.worker.interfaces[0].macAddress missing in $ACONF" >&2 && err=1
+	[ ! "$WKR_IP_ADDRESSES" ] && echo ".hosts[].role.worker.networkConfig.interfaces[0].ipv4.address[0].ip missing in $ACONF" >&2 && err=1
 fi
 
 rm -f $ICONF_TMP $ACONF_TMP
@@ -93,6 +104,7 @@ rm -f $ICONF_TMP $ACONF_TMP
 [ ! "$CP_REPLICAS" ] && echo "Control Plane replica count .controlPlane.replicas missing in $ICONF" >&2  && err=1
 [ ! "$CP_NAMES" ] && echo "Control Plane names .hosts[].role.master.hostname missing in $ACONF" >&2  && err=1
 [ ! "$CP_MAC_ADDRESSES" ] && echo "Control Plane mac addresses .hosts[].role.master.interfaces[0].macAddress missing in $ACONF" >&2  && err=1
+[ ! "$CP_IP_ADDRESSES" ] && echo "Control Plane ip addresses .hosts[].role.master.networkConfig.interfaces[0].ipv4.address[0].ip missing in $ACONF" >&2  && err=1
 [ ! "$WORKER_REPLICAS" ] && echo "Worker replica count .compute[0].replicas missing in $ICONF" >&2  && err=1
 
 if [ "$err" ]; then
