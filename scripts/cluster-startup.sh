@@ -17,21 +17,29 @@ done
 # Use one of the methods to access the cluster
 echo Attempting to log into the cluster ...
 until oc whoami >/dev/null 2>&1; do
-	#. <(make -s shell) || true
 	. <(make -s login) || true
-	sleep 2
+	sleep 4
 done
 
 sleep 5
+
+# Be sure we're logged in!  Sometimes the 2nd login can fail and "oc get nodes" (below) fails!
+until oc whoami >/dev/null 2>&1; do
+	. <(make -s login) || true
+	sleep 4
+done
 
 cluster_id=$(oc whoami --show-server | awk -F[/:] '{print $4}')
 echo
 echo Cluster $cluster_id nodes:
 echo
-oc get nodes
+if ! oc get nodes; then
+	echo "Failed to log into cluster!  Please log into the cluster and try again."
+	exit 1
+fi
 echo
 
-echo "Make all nodes schedulable (uncordon):"
+echo "Makeing all nodes schedulable (uncordon):"
 for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc adm uncordon ${node} ; done
 sleep 10
 oc get nodes
@@ -41,3 +49,4 @@ echo "Note the certificate expiration date of this cluster ($cluster_id):"
 oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}'
 echo 
 echo "The cluster will complete startup in a short while!"
+
