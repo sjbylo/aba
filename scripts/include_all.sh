@@ -112,7 +112,7 @@ ask() {
 	[ ! "$ask" ] && return 0  # reply "default reply"
 	#fi
 
-	# Defqult reply is 'yes' and return 0
+	# Default reply is 'yes' and return 0
 	yn_text="(Y/n)"
 	def_val=y
 	[ "$1" = "-n" ] && def_val=n && yn_text="(y/N)" && shift
