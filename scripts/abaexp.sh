@@ -78,6 +78,7 @@ if [ ! -f .bundle ]; then
 	##############################################################################################################################
 	# Determine OCP version 
 
+	if [ ! "$ocp_version" ]; then
 	echo -n "Looking up OpenShift release versions ..."
 
 	if ! curl --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
@@ -135,6 +136,8 @@ if [ ! -f .bundle ]; then
 
 	# Update the conf file
 	sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
+
+	fi
 
 	##############################################################################################################################
 	# Determine editor
