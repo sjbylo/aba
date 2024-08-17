@@ -3,10 +3,10 @@
 
 source scripts/include_all.sh
 
-export MANEFEST_SRC_DIR=.
+export MANIFEST_SRC_DIR=.
 
-ICONF=$MANEFEST_SRC_DIR/install-config.yaml  
-ACONF=$MANEFEST_SRC_DIR/agent-config.yaml  
+ICONF=$MANIFEST_SRC_DIR/install-config.yaml  
+ACONF=$MANIFEST_SRC_DIR/agent-config.yaml  
 
 # If one of the files is missing, stop!
 if [ ! -s $ICONF -o ! -s $ACONF ]; then
