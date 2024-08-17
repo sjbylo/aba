@@ -4,6 +4,8 @@
 #                   --inc	incremental backup based on the ~/.aba.previous.backup flag file's timestamp
 #                   --repo	exclude all */mirror_seq*tar files from the archive.  Copy them separately, if needed.
 
+source scripts/include_all.sh
+
 dest=/tmp/aba-backup.tar	# Default file to write to
 inc= 				# Full backup by default
 repo_only=			# Also include the save/mirror_seq*.tar files (for some use-cases it's more efficient to keep them seperate) 
@@ -24,20 +26,26 @@ if [ "$dest" != "-" ]; then
 	[ -s $dest ] && echo "Warning: File $dest already exists" >&2 && exit 1
 fi
 
-
-# Assume this script is run from aba's top level dir
+# Assume this script is run via 'make ...' from aba's top level dir
 cd ..  
 
 # If this is the first run OR is doing a full backup ... Set up for full backup 
-[ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup && echo "Resetting timestamp file: ~/.aba.previous.backup" >&2
+#[ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup && echo "Resetting timestamp file: ~/.aba.previous.backup" >&2
+[ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup ### && echo "Resetting timestamp file: ~/.aba.previous.backup" >&2
 
 	###bin			\
 	# Remove bin in favour of cli/
 	#aba/vmware.conf		\
 	# vmware only on "internal" bastion
 
+
+# Add the flag file so when aba is run again it knows it's a bundle!
+touch aba/.bundle
+
 file_list=$(find		\
 	aba/aba			\
+	aba/abaguide		\
+	aba/.bundle		\
 	aba/aba.conf		\
 	aba/cli			\
 	aba/rpms		\
@@ -50,7 +58,7 @@ file_list=$(find		\
 	aba/README-OTHER.md	\
 	aba/Troubleshooting.md	\
 	aba/test		\
--type f \
+-type f -o -type l		\
 	! -path "aba/.git*"  					\
 	! -path "aba/cli/.init"  				\
 	! -path "aba/cli/.??*"	  				\
@@ -90,36 +98,52 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 if [ "$dest" != "-" ]; then
 	### now=$(date "+%Y-%m-%d-%H-%M-%S")
 
-	echo "Writing tar file to $dest"
 	echo
-	echo "After the tar file has been written, copy the tar file to your *internal bastion* and"
-	echo "extract it under your home directory with the command:"
-	echo "cd; rm -rf aba; tar xvf $dest"
+	echo_white "Writing tar file (bundle archive) to $dest"
 	echo
-	echo "Install (or connect) and load the registry:"
-	echo "make install"
-	echo "make load"
+	echo_white "After the bundle has been written, copy it to your *internal bastion*"
+	echo_white "Remember to copy over the large tar file(s) too, e.g. with the command:"
+	echo_white " cp mirror/save/mirror_seq*.tar $(dirname $dest)"
+	echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
+	echo_white "Extract the bundle tar file under your home directory in your internal network, e.g. with the command:"
+	echo_white "  tar xvf $dest"
+	echo_white "  cp mirror_seq*.tar aba/mirror/save"
+	echo_white "  cd aba"
+	echo_white "  ./abaguide"
 	echo
-	echo "Then, create the iso file and install a cluster:"
-	echo "make cluster name=mycluster"
-	echo "cd mycluster; make or make help"
-	echo
-	echo "Writing tar file to $dest (use 'make tar out=/path/to/thumbdrive' to write to your portable storage device) ..."
-	echo "Run 'make help' for more options."
+#	echo "Install (or connect) and load the registry:"
+#	echo "make install"
+#	echo "make load"
+#	echo
+#	echo "Then, create the iso file and install a cluster:"
+#	echo "make cluster name=mycluster"
+#	echo "cd mycluster; make or make help"
+#	echo
+#	echo "Writing tar file to $dest (use 'make tar out=/path/to/thumbdrive' to write to your portable storage device) ..."
+	echo_white "Run 'make help' for more options."
 fi
 
 if [ "$inc" ]; then
-	echo "Writing 'incremental' tar archive of repo to $dest" >&2
+	echo_blue "Writing 'incremental' tar archive of repo to $dest" >&2
 else
-	echo "Writing 'full' tar archive of repo to $dest" >&2
+	echo_blue "Writing 'full' tar archive of repo to $dest" >&2
 fi
 
 out_file_list=$(echo $file_list | cut -c-90)
-echo "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
+echo
+echo_blue "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
+echo
 ### echo file_list=$file_list >&2
-tar cf $dest $file_list || exit 
+if ! tar cf $dest $file_list; then
+	rm -f aba/.bundle
+	exit
+fi
 
-# Upon success, make a note of the time
-echo "Touching file ~/.aba.previous.backup" >&2
-touch ~/.aba.previous.backup
+rm -f aba/.bundle
+
+if [ "$inc" ]; then
+	# Upon success, make a note of the time
+	echo_blue "Touching file ~/.aba.previous.backup" >&2
+	touch ~/.aba.previous.backup
+fi
 
