@@ -120,7 +120,7 @@ ask() {
 	timer=
 	[ "$1" = "-t" ] && timer="-t $1" && shift && shift 
 
-	echo
+	## echo
 	echo -n "===> $@ $yn_text: "
 	read $timer yn
 
