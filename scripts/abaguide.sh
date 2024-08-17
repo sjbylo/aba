@@ -12,6 +12,8 @@ interactive_mode=1
 
 if [ ! -f aba.conf ]; then
 	cp templates/aba.conf .
+	sed -i "s/^ocp_version=[^ \t]*/ocp_version=			/g" aba.conf
+	sed -i "s/^editor=[^ \t]*/editor=			/g" aba.conf
 fi
 source <(normalize-aba-conf)
 
@@ -44,23 +46,13 @@ done
 [ ! "$interactive_mode" ] && exit 0
 # From now on it's all considered interactive
 
+tick="\u2713"
+
 # Include aba bin path and common scripts
 export PATH=$PWD/bin:$PATH
 
 cat others/message.txt
 
-############# SHOULD THIS GO HERE? ############
-source <(normalize-aba-conf)
-
-# Just in case, check the target ocp version in aba.conf match any existing versions defined in oc-mirror imageset config files. 
-# FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
-(
-	cd mirror
-	if [ -x scripts/check-version-mismatch.sh ]; then
-		scripts/check-version-mismatch.sh
-	fi
-)
-############# SHOULD THIS GO HERE? ############
 
 ##############################################################################################################################
 # Determine if this is an "aba bundle" or just a clone from GitHub
@@ -78,7 +70,10 @@ if [ ! -f .bundle ]; then
 	##############################################################################################################################
 	# Determine OCP version 
 
-	if [ ! "$ocp_version" ]; then
+	if [ "$ocp_version" ]; then
+		echo_blue "$tick OpenShift version is defined as '$ocp_version'."
+	else
+
 	echo -n "Looking up OpenShift release versions ..."
 
 	if ! curl --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
@@ -136,37 +131,56 @@ if [ ! -f .bundle ]; then
 
 	# Update the conf file
 	sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
+	echo_blue "'ocp_version' set to '$target_ver' in aba.conf"
+	sleep 1
 
 	fi
+
+	# FIXME ############# SHOULD THIS GO HERE? ############
+	# Just in case, check the target ocp version in aba.conf match any existing versions defined in oc-mirror imageset config files. 
+	# FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
+	(
+		cd mirror
+		if [ -x scripts/check-version-mismatch.sh ]; then
+			scripts/check-version-mismatch.sh
+		fi
+	)
+	############# SHOULD THIS GO HERE? ############
 
 	##############################################################################################################################
 	# Determine editor
 
 	if [ ! "$editor" ]; then
 		echo
-		echo -n "Aba can use an editor to aid in the workflow.  Enter preferred editor command (vi, nano etc or none)? [vi]: "
+		echo -n "Aba can use an editor to aid in the workflow.  Enter preferred editor command ('vi', 'nano' etc or 'none')? [vi]: "
 		read new_editor
 
 		[ ! "$new_editor" ] && new_editor=vi  # default
 
 		if [ "$new_editor" != "none" ]; then
 			if ! which $new_editor >/dev/null 2>&1; then
-				echo "Editor '$new_editor' command not found! Please install your preferred editor and try again!"
+				echo_red "Editor '$new_editor' command not found! Please install your preferred editor and try again!"
 				exit 1
 			fi
 		fi
 
 		sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
 		export editor=$new_editor
+		echo_blue "'editor' set to '$new_editor' in aba.conf"
+		sleep 1
 	fi
 
 	##############################################################################################################################
 	# Determine pull secret
 
 	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
-		echo "Pull secret found at '$pull_secret_file'."
+		echo_blue "$tick Pull secret found at '$pull_secret_file'."
+		sleep 1
 	else
-		echo "Please download your Red Hat pull secret and store is in the file '$pull_secret_file' and try again!  Note that the file location can be configured in 'aba.conf'."
+		echo
+		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!"
+		echo_white "To allow access to the Red Hat image registry, please download your Red Hat pull secret and store is in the file '$pull_secret_file' and try again!"
+		echo_white "Note that the location of your pull secret file can be changed in 'aba.conf'."
 		exit 1
 	fi
 
@@ -174,13 +188,14 @@ if [ ! -f .bundle ]; then
 	install_rpms make jq python3-pyyaml
 
 	##############################################################################################################################
-	# Determine pull secret
+	# Determine air-gapped
 
+	echo
 	echo "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, 'aba' will download all required software"
 	echo "(mirror registry install files, container images and CLI install files) and create a 'bundle' archive for you to transfer into the disconnected environment."
 	echo
-	if ask "Do you intend to install OpenShift into a fully disconnected network environment? (Y/n): "; then
-		echo "Run: make save && make repo ...."
+	if ask "Install OpenShift into a fully disconnected network environment? (Y/n): "; then
+		echo "Run: make bundle      # to save all images to local disk and create the bundle, follow the instructions."
 		exit 0
 	fi
 	
@@ -188,14 +203,17 @@ if [ ! -f .bundle ]; then
 	# Determine online installation (e.g. with a proxy)
 
 	echo "OpenShift can be installed directly from external software and container image repositories, e.g. via a proxy."
-	if ask "Do you intend to install OpenShift directly from the Internet (Y/n): "; then
+	if ask "Install OpenShift directly from the Internet (Y/n): "; then
 		echo "Run: make cluster name=myclustername"
 		exit 1
 	fi
 
 	echo "You have the choice to install the Quay appliance or re-use an existing mirror registry for container images."
-	read yn
-	make install sync
+	echo "Run:"
+	echo "  make install       # to configure and/or install Quay, follow the instructions."
+	echo "  make sync          # to sychnonize all container images into your registry, follow the instructions."
+	echo "Or run:"
+	echo "  make install sync  # to complete both actions at."
 
 	exit 0
 
@@ -203,7 +221,7 @@ else
 	# make & jq are needed below and in the next steps 
 	install_rpms make jq python3-pyyaml
 
-	echo "Aba bundle detected!  This aba repo has been prepared on an external worksation,  Assuming we're running on an internal bastion."
+	echo_blue "Aba bundle detected!  This aba repo has been prepared on an external worksation,  Assuming we're running on an internal bastion."
 	
 	make install load
 	touch .bundle 

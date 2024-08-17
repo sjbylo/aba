@@ -181,8 +181,19 @@ is_version_greater() {
 }
 
 output_error() {
-	[ "$TERM" ] && tput setaf 1
-	echo "$@"
-	[ "$TERM" ] && tput sgr0
+	echo_red "$@"
 }
 
+echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_green()	{ [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_blue()	{ [ "$TERM" ] && tput setaf 4; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+
+# 0: Black
+# 1: Red
+# 2: Green
+# 3: Yellow
+# 4: Blue
+# 5: Magenta
+# 6: Cyan
+# 7: White

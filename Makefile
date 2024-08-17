@@ -29,6 +29,9 @@ vmw:
 cli:  ## Download and install the CLI binaries into ~/bin
 	make -C cli
 
+download:  ## Download all required CLI install files without installing. 
+	make -C cli download
+
 install: ## Set up the registry as per the settings in mirror/mirror.conf. Place credential file(s) into mirror/regcreds/ for existing registry.  See README.md.
 	make -C mirror install
 
@@ -38,6 +41,9 @@ uninstall: ## Uninstall any previously installed mirror registry
 .PHONY: sync
 sync: ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	make -C mirror sync
+
+.PHONY: bundle
+bundle: download save tarrepo out=/tmp/bundle.tar
 
 .PHONY: save
 save: ## Save images from the Internet to mirror/save. 
