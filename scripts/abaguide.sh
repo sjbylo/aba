@@ -58,7 +58,7 @@ cat others/message.txt
 # Determine if this is an "aba bundle" or just a clone from GitHub
 
 if [ ! -f .bundle ]; then
-	echo "Aba fresh GitHub clone detected!"
+	echo "Fresh GitHub clone of 'aba' repo detected!"
 
 	##############################################################################################################################
 	# Check if online
@@ -191,10 +191,10 @@ if [ ! -f .bundle ]; then
 	# Determine air-gapped
 
 	echo
-	echo "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, 'aba' will download all required software"
-	echo "(mirror registry install files, container images and CLI install files) and create a 'bundle' archive for you to transfer into the disconnected environment."
-	echo
+	echo_white "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, 'aba' can download all required software"
+	echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'bundle archive' for you to transfer into the disconnected environment."
 	if ask "Install OpenShift into a fully disconnected network environment? (Y/n): "; then
+		echo
 		echo "Run: make bundle      # to save all images to local disk and create the bundle, follow the instructions."
 		exit 0
 	fi
@@ -202,30 +202,48 @@ if [ ! -f .bundle ]; then
 	##############################################################################################################################
 	# Determine online installation (e.g. with a proxy)
 
-	echo "OpenShift can be installed directly from external software and container image repositories, e.g. via a proxy."
+	echo
+	echo_white "OpenShift can be installed directly from external software and container image repositories, e.g. via a proxy."
 	if ask "Install OpenShift directly from the Internet (Y/n): "; then
 		echo "Run: make cluster name=myclustername"
 		exit 1
 	fi
 
+	echo 
+	echo "STEP: Set up the mirror registry and then sync it with the required container images."
+	echo
 	echo "You have the choice to install the Quay appliance or re-use an existing mirror registry for container images."
 	echo "Run:"
 	echo "  make install       # to configure and/or install Quay, follow the instructions."
 	echo "  make sync          # to sychnonize all container images into your registry, follow the instructions."
 	echo "Or run:"
-	echo "  make install sync  # to complete both actions at."
-
-	exit 0
+	echo "  make install sync  # to complete both actions."
 
 else
+	# aba is running on the internal bastion, in 'bundle' mode.
+
 	# make & jq are needed below and in the next steps 
 	install_rpms make jq python3-pyyaml
 
-	echo_blue "Aba bundle detected!  This aba repo has been prepared on an external worksation,  Assuming we're running on an internal bastion."
+	echo_blue "Aba bundle detected!  This aba bundle is ready to install OpenShift version $ocp_version.  Assuming we're running on an internal bastion!"
 	
-	make install load
-	touch .bundle 
+	echo 
+	echo "STEP: Set up the mirror registry and then load it from disk with the required container images."
+	echo
+	echo "Run:"
+	echo "  make install       # to configure and/or install Quay, follow the instructions."
+	echo "  make load          # to set up the mirror registry (configure or install quay) and load it, follow the instructions."
+	echo "Or run:"
+	echo "  make install load  # to complete both actions."
+
+	touch .bundle   # FIXME: only add the flag file to the actual bundle archive
 fi
+
+echo 
+echo "Once the registry is configured and loaded with images, run the following command to install OpenShift:"
+echo "Run:"
+echo
+echo "  make cluster name=mycluster    # and follow the instructions.  As usual, run 'make help' for help."
 
 # Set up the CLIs
 #make -C cli 
