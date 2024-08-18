@@ -42,6 +42,7 @@ cd ..
 # Add the flag file so when aba is run again it knows it's a bundle!
 touch aba/.bundle
 
+# All 'find expr' below are by default "and"
 file_list=$(find		\
 	aba/aba			\
 	aba/abaguide		\
@@ -58,7 +59,6 @@ file_list=$(find		\
 	aba/README-OTHER.md	\
 	aba/Troubleshooting.md	\
 	aba/test		\
--type f -o -type l		\
 	! -path "aba/.git*"  					\
 	! -path "aba/cli/.init"  				\
 	! -path "aba/cli/.??*"	  				\
@@ -76,6 +76,8 @@ file_list=$(find		\
 	! -path "aba/*/iso-agent-based*"  			\
 	! -path "aba/mirror/sync/oc-mirror-workspace*"  	\
 	! -path "aba/mirror/save/oc-mirror-workspace*"		\
+								\
+	\( -type f -o -type l \)				\
 								\
 	-newer ~/.aba.previous.backup 				\
 )
@@ -106,7 +108,7 @@ if [ "$dest" != "-" ]; then
 	echo_white " cp mirror/save/mirror_seq*.tar $(dirname $dest)"
 	echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
 	echo_white "Extract the bundle tar file under your home directory in your internal network, e.g. with the command:"
-	echo_white "  tar xvf $dest"
+	echo_white "  tar xvf $(basename $dest)"
 	echo_white "  cp mirror_seq*.tar aba/mirror/save"
 	echo_white "  cd aba"
 	echo_white "  ./abaguide"
@@ -130,9 +132,9 @@ else
 fi
 
 out_file_list=$(echo $file_list | cut -c-90)
-echo
+echo >&2
 echo_blue "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
-echo
+echo >&2
 ### echo file_list=$file_list >&2
 if ! tar cf $dest $file_list; then
 	rm -f aba/.bundle
