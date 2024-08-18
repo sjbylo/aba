@@ -143,8 +143,8 @@ uninstall: .initialized             mirror-registry .uninstalled     ## Uninstal
 clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
 	@echo "Note: to uninstall the registry, run 'make uninstall'" 
 	rm -rf *.tar mirror-registry 
-	rm -f  .initialized 
-	rm -f  templates scripts
+	rm -f .initialized 
+	rm -f templates scripts
 	rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
 	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
 	rm -f aba.conf  # remove link only
@@ -154,9 +154,10 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 
 # Note that reg-uninstall.sh script will delete registry and regcreds/ dir.
 .PHONY: distclean
-distclean: .initialized  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
+#distclean: .initialized  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
+distclean:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@echo "Note: to uninstall the registry, run 'make uninstall'" 
-	@test "$(ask)" && $(SCRIPTS)/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
+#	@test "$(ask)" && $(SCRIPTS)/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
 	make clean
 	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true
 	@#rm -rf regcreds
@@ -168,6 +169,7 @@ distclean: .initialized  # Clean up all files. Only use if you know what you're 
 	rm -f .dnf-install.log
 	rm -f .ssh.conf
 	rm -f .rpmsext .rpmsint
+	rm -f .initialized 
 
 .PHONY: testask
 testask:
