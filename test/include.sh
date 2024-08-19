@@ -54,7 +54,7 @@ test-cmd() {
 		set +e
 		if [ "$host" != "localhost" ]; then
 			echo "Running command: \"$@\" on host $host"
-			ssh $host -- "$@"
+			ssh $host -- "TERM=xterm $@"    # TERM set just for testing purposes
 		else
 			echo "Running command: \"$@\" on localhost"
 			eval "$@"
