@@ -103,9 +103,9 @@ fi
 # If oc-mirror fails due to transient errors, the user should try again
 
 echo
-echo_green "==> Image synchronization successful"
+echo "==> Image synchronization successful"
 echo 
-echo_white "OpenShift can now be installed with the command:"
-echo_white "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."
+echo "OpenShift can now be installed with the command:"
+echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."
 
 exit 0
