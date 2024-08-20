@@ -203,7 +203,7 @@ if [ ! -f .bundle ]; then
 	# Determine online installation (e.g. with a proxy)
 
 	echo
-	echo_white "OpenShift can be installed directly from external software and container image repositories, e.g. via a proxy."
+	echo_white "OpenShift can be installed directly from the Internet, e.g. via a proxy."
 	if ask "Install OpenShift directly from the Internet (Y/n): "; then
 		echo "Run: make cluster name=myclustername"
 		exit 1
@@ -240,10 +240,11 @@ else
 fi
 
 echo 
-echo "Once the registry is configured and loaded with images, run the following command to install OpenShift:"
-echo "Run:"
-echo
-echo "  make cluster name=mycluster    # and follow the instructions.  As usual, run 'make help' for help."
+echo "Once 'make sync' has completed follow the instructions."
+#echo "Once the registry is configured and loaded with images, run the following command to install OpenShift:"
+#echo "Run:"
+#echo
+#echo "  make cluster name=mycluster    # and follow the instructions.  As usual, run 'make help' for help."
 
 # Set up the CLIs
 #make -C cli 
