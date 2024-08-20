@@ -39,7 +39,7 @@ if ! oc get nodes; then
 fi
 echo
 
-echo "Makeing all nodes schedulable (uncordon):"
+echo "Making all nodes schedulable (uncordon):"
 for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc adm uncordon ${node} ; done
 sleep 10
 oc get nodes
