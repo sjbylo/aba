@@ -96,7 +96,10 @@ ssh steve@$bastion2 -- "rm -rfv ~/*"
 # Just be sure a valid govc config file exists on internal bastion
 scp $vf steve@$bastion2: 
 
-pub_key=$(cat ~/.ssh/id_rsa.pub)
+# Test with other use
+rm -f ~/.ssh/testy_rsa*
+ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N ''
+pub_key=$(cat ~/.ssh/testy_rsa.pub)   # This must be different key
 u=testy
 cat << END  | ssh $bastion2 -- sudo bash 
 set -ex
@@ -110,7 +113,7 @@ echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
 chmod 600 ~$u/.ssh/authorized_keys
 chown -R $u.$u ~$u
 END
-ssh testy@$bastion2 whoami
+ssh -i ~/.ssh/testy_rsa testy@$bastion2 whoami
 
 
 #####################################################################################################################
@@ -249,6 +252,9 @@ sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    
 
 mylog "Setting reg_ssh_user=testy for remote installation" 
 sed -i "s#reg_ssh_user=[^ \t]*#reg_ssh_user=testy   #g" ./mirror/mirror.conf	     	# If remote, set user
+
+mylog "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" 
+sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/testy_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 # FIXME: no need? or use 'make clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
