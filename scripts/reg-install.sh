@@ -88,7 +88,7 @@ if [ "$reg_ssh_key" ]; then
 
 	echo "Installing Quay registry on to $reg_host ..."
 
-	if ! ssh -F .ssh.conf $reg_ssh_user@$reg_host hostname; then
+	if ! ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host hostname; then
 		[ "$TERM" ] && tput setaf 1
 		echo
 		echo "Error: Can't ssh to $reg_ssh_user@$reg_host"
@@ -106,19 +106,19 @@ if [ "$reg_ssh_key" ]; then
 	# Check for known issue where images need to be loaded on the remote host first
 	# This will load the needed images and fix the problem 
 	# Only need to do this workaround once
-	ssh -F .ssh.conf $reg_ssh_user@$reg_host "ip a"
-	ssh -F .ssh.conf $reg_ssh_user@$reg_host "rpm -q podman || sudo dnf install podman jq -y" || exit 1
-	ssh -F .ssh.conf $reg_ssh_user@$reg_host "rpm -q jq 	|| sudo dnf install podman jq -y" || exit 1
-	ssh -F .ssh.conf $reg_ssh_user@$reg_host "podman images" || exit 1
-	ssh -F .ssh.conf $reg_ssh_user@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause || \
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "ip a"
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "rpm -q podman || sudo dnf install podman jq -y" || exit 1
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "rpm -q jq 	|| sudo dnf install podman jq -y" || exit 1
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "podman images" || exit 1
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause || \
 	(
 		echo "Implementing workaround to install Quay on remote host ... see https://access.redhat.com/solutions/7040517 for more."
-		ssh -F .ssh.conf $reg_ssh_user@$reg_host mkdir -p .abatmp
+		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host mkdir -p .abatmp
 		scp -F .ssh.conf mirror-registry.tar.gz $reg_ssh_user@$reg_host:.abatmp/
-		ssh -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && tar xmzf mirror-registry.tar.gz"
-		ssh -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry install"
-		ssh -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
-		ssh -F .ssh.conf $reg_ssh_user@$reg_host rm -rf .abatmp/*
+		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && tar xmzf mirror-registry.tar.gz"
+		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry install"
+		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
+		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host rm -rf .abatmp/*
 	)
 	# Workaround END ########
 			
@@ -128,7 +128,7 @@ if [ "$reg_ssh_key" ]; then
 
 	# Note that the mirror-registry installer does not open the port for us
 	echo Allowing firewall access to the registry at $reg_host/$reg_port ...
-	ssh -F .ssh.conf $reg_ssh_user@$reg_host -- "sudo firewall-cmd --state && \
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host -- "sudo firewall-cmd --state && \
 		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
 			sudo firewall-cmd --reload"
 
