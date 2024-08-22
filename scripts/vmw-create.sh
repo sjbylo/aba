@@ -96,13 +96,15 @@ for name in $CP_NAMES ; do
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
-	echo "Create and attach a 2nd thin data disk on [$GOVC_DATASTORE]"
-	govc vm.disk.create \
-		-vm $vm_name \
-		-name $vm_name/${vm_name}_data \
-		-size 500GB \
-		-thick=false \
-		-ds=$GOVC_DATASTORE
+	if [ "$data_disk" ]; then
+		echo "Create and attach a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
+		govc vm.disk.create \
+			-vm $vm_name \
+			-name $vm_name/${vm_name}_data \
+			-size ${data_disk}GB \
+			-thick=false \
+			-ds=$GOVC_DATASTORE
+	fi
 
 	[ "$START_VM" ] && govc vm.power -on $vm_name
 
@@ -144,13 +146,15 @@ for name in $WORKER_NAMES ; do
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
-	echo "Create and attach a 2nd thin data disk on [$GOVC_DATASTORE]"
-	govc vm.disk.create \
-		-vm $vm_name \
-		-name $vm_name/${vm_name}_data \
-		-size 500GB \
-		-thick=false \
-		-ds=$GOVC_DATASTORE
+	if [ "$data_disk" ]; then
+		echo "Create and attach a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
+		govc vm.disk.create \
+			-vm $vm_name \
+			-name $vm_name/${vm_name}_data \
+			-size ${data_disk}GB \
+			-thick=false \
+			-ds=$GOVC_DATASTORE
+	fi
 
 	[ "$START_VM" ] && govc vm.power -on $vm_name
 
