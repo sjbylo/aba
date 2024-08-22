@@ -15,7 +15,8 @@ export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 [ ! -s 99-master-chrony-conf-override.bu ] && cat > 99-master-chrony-conf-override.bu <<END
 variant: openshift
-version: $ocp_ver_major.0
+#version: $ocp_ver_major.0
+version: 4.12.0
 metadata:
   name: 99-master-chrony-conf-override
   labels:
@@ -58,7 +59,7 @@ END
 
 [ ! -s 99-worker-chrony-conf-override.bu ] && cat > 99-worker-chrony-conf-override.bu <<END
 variant: openshift
-version: $ocp_ver_major.0
+version: 4.12.0
 metadata:
   name: 99-worker-chrony-conf-override
   labels:
