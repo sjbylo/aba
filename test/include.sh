@@ -54,7 +54,7 @@ test-cmd() {
 		set +e
 		if [ "$host" != "localhost" ]; then
 			echo "Running command: \"$@\" on host $host"
-			ssh $host -- "TERM=xterm $@"    # TERM set just for testing purposes
+			ssh $host -- "export TERM=xterm; $@"    # TERM set just for testing purposes
 		else
 			echo "Running command: \"$@\" on localhost"
 			eval "$@"
@@ -72,7 +72,8 @@ test-cmd() {
 		echo "Next attempt will be ($i/$tot_cnt)"
 		echo "Sleeping $sleep_time seconds ..."
 		sleep $sleep_time
-		sleep_time=`expr $sleep_time \* $backoff`
+		#sleep_time=`expr $sleep_time \* $backoff`
+		sleep_time=`expr $sleep_time + $backoff \* 10`
 		echo "Attempting command again ($i/$tot_cnt) - ($@)" | tee -a test/test.log
 	done
 
