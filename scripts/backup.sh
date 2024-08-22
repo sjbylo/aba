@@ -73,6 +73,7 @@ file_list=$(find		\
 	! -path "aba/mirror/pause.tar"  			\
 	! -path "aba/mirror/postgres.tar"  			\
 	! -path "aba/mirror/redis.tar"  			\
+	! -path "aba/mirror/regcreds/*"	  			\
 	! -path "aba/*/iso-agent-based*"  			\
 	! -path "aba/mirror/sync/oc-mirror-workspace*"  	\
 	! -path "aba/mirror/save/oc-mirror-workspace*"		\
