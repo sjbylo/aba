@@ -91,7 +91,7 @@ if [ "$reg_ssh_key" ]; then
 	if ! ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host hostname; then
 		[ "$TERM" ] && tput setaf 1
 		echo
-		echo "Error: Can't ssh to $reg_ssh_user@$reg_host using key '$reg_ssh_key'""
+		echo "Error: Can't ssh to $reg_ssh_user@$reg_host using key '$reg_ssh_key'"
 		echo "Configure passwordless ssh to $reg_ssh_user@$reg_host and try again."
 		echo
 		[ "$TERM" ] && tput sgr0
