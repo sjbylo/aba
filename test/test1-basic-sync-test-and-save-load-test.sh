@@ -254,7 +254,7 @@ mylog "Setting reg_ssh_user=testy for remote installation"
 sed -i "s#reg_ssh_user=[^ \t]*#reg_ssh_user=testy   #g" ./mirror/mirror.conf	     	# If remote, set user
 
 mylog "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" 
-sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/testy_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
+sed -i "s#reg_ssh_key=.*#reg_ssh_key=~/.ssh/testy_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 # FIXME: no need? or use 'make clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
