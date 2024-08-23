@@ -91,7 +91,7 @@ if [ "$reg_ssh_key" ]; then
 	if ! ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host hostname; then
 		[ "$TERM" ] && tput setaf 1
 		echo
-		echo "Error: Can't ssh to $reg_ssh_user@$reg_host"
+		echo "Error: Can't ssh to $reg_ssh_user@$reg_host using key '$reg_ssh_key'""
 		echo "Configure passwordless ssh to $reg_ssh_user@$reg_host and try again."
 		echo
 		[ "$TERM" ] && tput sgr0
@@ -114,7 +114,7 @@ if [ "$reg_ssh_key" ]; then
 	(
 		echo "Implementing workaround to install Quay on remote host ... see https://access.redhat.com/solutions/7040517 for more."
 		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host mkdir -p .abatmp
-		scp -F .ssh.conf mirror-registry.tar.gz $reg_ssh_user@$reg_host:.abatmp/
+		scp -i $reg_ssh_key -F .ssh.conf mirror-registry.tar.gz $reg_ssh_user@$reg_host:.abatmp/
 		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && tar xmzf mirror-registry.tar.gz"
 		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry install"
 		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
@@ -159,7 +159,7 @@ if [ "$reg_ssh_key" ]; then
 	mkdir regcreds
 
 	# Fetch root CA from remote host 
-	scp -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
+	scp -i $reg_ssh_key -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
 
 	reg_user=init
 
