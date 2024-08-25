@@ -105,6 +105,18 @@ ssh steve@$bastion2 -- "date" || sleep 2
 ssh steve@$bastion2 -- "date" || sleep 3
 ssh steve@$bastion2 -- "date" || sleep 8
 
+cat <<END | ssh steve@$bastion2 -- sudo bash
+set -ex
+timedatectl
+chronyc sources -v
+chronyc add server 10.0.1.8 iburst
+timedatectl set-timezone Asia/Singapore
+chronyc -a makestep
+sleep 3
+timedatectl
+chronyc sources -v
+END
+
 # This file is not needed in a fully air-gapped env. 
 ssh steve@$bastion2 -- "rm -fv ~/.pull-secret.json"
 # Want to test fully disconnected 
@@ -124,14 +136,17 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 test-cmd -r 99 3 -m "Saving images to local disk" "make save" 
 
+# Existing regcreds/pull-secret files issue.  E.g. if aba has been used already to install a reg. .. then 'make save' is run!
 # Set up bad creds and be sure they do not get copied to internal bastion!
-if [ ! -d mirror/regcreds ]; then
-	echo "No mirror/regcreds dir found, as expected!  Creating invalid regcreds dir!"
-else
-	echo "Warning: mirror/regcreds dir should not exist!"
-	rm -rf mirror/regcreds
-fi
-cp -rf test/mirror/regcreds mirror
+#if [ ! -d mirror/regcreds ]; then
+#	echo "No mirror/regcreds dir found, as expected!  Creating invalid regcreds dir!"
+#else
+#	echo "Warning: mirror/regcreds dir should not exist!"
+#	ls -al mirror/regcreds
+#	cat mirror/regcreds/*
+#	rm -rf mirror/regcreds
+#fi
+#cp -rf test/mirror/regcreds mirror
 #tar xf test/regcreds-invalid.tar
 
 # Smoke test!
@@ -148,6 +163,8 @@ mylog "Use 'make tarrepo' to copy tar+ssh archive plus seq1 tar file to internal
 ###make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir - xvf -
 make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir -xvf -
 scp mirror/save/mirror_seq1_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
+
+### test-cmd -h $reg_ssh_user@$bastion2 -r 5 3 -m "Checking regcreds/ does not exist on $bastion2" "test ! -d $subdir/aba/mirror/regcreds | exit 1" 
 
 ### echo "Install the reg creds, simulating a manual config" 
 ### ssh $reg_ssh_user@$bastion2 -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
@@ -178,6 +195,13 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
 END
+
+echo = TEST =
+echo ~/.docker/*
+cat ~/.docker/*
+echo ~/.containers/*
+cat ~/.containers/*
+echo = TEST =
 
 test-cmd -r 99 3 -m "Saving ubi images to local disk on `hostname`" "make -C mirror save" 
 
