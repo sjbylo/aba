@@ -3,11 +3,19 @@
 
 source scripts/include_all.sh
 
-echo ==================================================================	
+config=$(scripts/cluster-config.sh) 
+output=$(echo "$config" | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t --output-separator " | ")
+len=$(echo "$output" | longest_line)
+printf '=%.0s' $(seq 1 "$len")
+echo
 echo Cluster configuration
-echo =====================
-scripts/cluster-config.sh | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t --output-separator " | "
-echo ==================================================================	
+printf '=%.0s' $(seq 1 "$len")
+echo
+echo "$output"
+printf '=%.0s' $(seq 1 "$len")
+echo
+
+# FIXME: Use $config above? ###
 eval `scripts/cluster-config.sh || exit 1`
 
 if [ -d $MANIFEST_DIR ]; then
