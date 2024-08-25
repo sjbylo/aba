@@ -52,9 +52,8 @@ source <(normalize-cluster-conf)
 	####govc folder.create $cluster_folder 
 #fi
 
-# Check and increase CPU count for SNO, if needed
-##[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 4 ] && master_cpu_count=4 && echo Increasing cpu count to 4 for SNO ...
-[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 4 ] && echo "Warning: CPU count for SNO should be set to 4 (cores) for full support."
+# Check and warn about CPU count for SNO
+[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 16 ] && echo_red "Warning: CPU count for SNO should be set to 16 (cores) for full support."
 
 # Enable hardware virt on the workers only (or also masters for 'scheduling enabled')
 master_nested_hv=false
@@ -96,13 +95,15 @@ for name in $CP_NAMES ; do
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
-	echo "Create and attach a 2nd thin data disk on [$GOVC_DATASTORE]"
-	govc vm.disk.create \
-		-vm $vm_name \
-		-name $vm_name/${vm_name}_data \
-		-size 500GB \
-		-thick=false \
-		-ds=$GOVC_DATASTORE
+	if [ "$data_disk" ]; then
+		echo "Create and attach a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
+		govc vm.disk.create \
+			-vm $vm_name \
+			-name $vm_name/${vm_name}_data \
+			-size ${data_disk}GB \
+			-thick=false \
+			-ds=$GOVC_DATASTORE
+	fi
 
 	[ "$START_VM" ] && govc vm.power -on $vm_name
 
@@ -116,7 +117,7 @@ for name in $WORKER_NAMES ; do
 	vm_name=${CLUSTER_NAME}-$name
 	mac=${WKR_MAC_ADDRESSES_ARRAY[$a]}
 
-	echo "Create VM: $vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder] [$GOVC_NETWORK]"
+	echo "Create VM: $vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder] [$GOVC_NETWORK]"
 	govc vm.create \
 		-version vmx-15 \
 		-g rhel8_64Guest \
@@ -144,13 +145,15 @@ for name in $WORKER_NAMES ; do
 		-thick=false \
 		-ds=$GOVC_DATASTORE
 
-	echo "Create and attach a 2nd thin data disk on [$GOVC_DATASTORE]"
-	govc vm.disk.create \
-		-vm $vm_name \
-		-name $vm_name/${vm_name}_data \
-		-size 500GB \
-		-thick=false \
-		-ds=$GOVC_DATASTORE
+	if [ "$data_disk" ]; then
+		echo "Create and attach a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
+		govc vm.disk.create \
+			-vm $vm_name \
+			-name $vm_name/${vm_name}_data \
+			-size ${data_disk}GB \
+			-thick=false \
+			-ds=$GOVC_DATASTORE
+	fi
 
 	[ "$START_VM" ] && govc vm.power -on $vm_name
 

@@ -76,3 +76,4 @@ fi
 
 echo
 echo "==> Image saving successful"
+echo 

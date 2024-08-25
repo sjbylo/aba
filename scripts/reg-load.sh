@@ -60,3 +60,8 @@ fi
 
 echo
 echo "==> Image loading successful"
+echo 
+echo_blue "OpenShift can now be installed with the command:"
+echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."
+
+exit 0

@@ -13,12 +13,12 @@ fi
 echo 
 echo =================================================================================
 echo Running wait-for command ...
-echo "openshift-install agent wait-for bootstrap-complete --dir $MANEFEST_DIR"
-openshift-install agent wait-for bootstrap-complete --dir $MANEFEST_DIR 
+echo "openshift-install agent wait-for bootstrap-complete --dir $MANIFEST_DIR"
+openshift-install agent wait-for bootstrap-complete --dir $MANIFEST_DIR 
 
 if [ $? -ne 0 ]; then
 	echo 
-	echo "Something went wrong with the installation.  Fix the problem and try again!"
+	echo_red "Something went wrong with the installation.  Fix the problem and try again!"
 
 	exit $?
 fi
@@ -26,18 +26,18 @@ fi
 echo
 echo =================================================================================
 echo Running wait-for command ...
-echo "openshift-install agent wait-for install-complete --dir $MANEFEST_DIR"
-openshift-install agent wait-for install-complete --dir $MANEFEST_DIR    # --log-level=debug
+echo "openshift-install agent wait-for install-complete --dir $MANIFEST_DIR"
+openshift-install agent wait-for install-complete --dir $MANIFEST_DIR    # --log-level=debug
 
 if [ $? -ne 0 ]; then
 	echo 
-	echo "Something went wrong with the installation.  Fix the problem and try again!"
+	echo_red "Something went wrong with the installation.  Fix the problem and try again!"
 
 	exit $?
 else
 	echo 
-	echo "The cluster has been successfully installed."
-	echo "Run '. <(make shell)' to access the cluster using the kubeconfig file (x509 cert), or"
-	echo "Run '. <(make login)' to log into the cluster using the 'kubeadmin' password. "
+	echo_green "The cluster has been successfully installed."
+	echo_green "Run '. <(make shell)' to access the cluster using the kubeconfig file (x509 cert), or"
+	echo_green "Run '. <(make login)' to log into the cluster using the 'kubeadmin' password. "
 fi
 

@@ -7,10 +7,31 @@ source scripts/include_all.sh
 
 source <(normalize-cluster-conf)
 
-echo Checking access to cluster ...
-# Use one of the methods to access the cluster
-oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null || . <(make -s login)
-oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null || . <(make -s shell)
+[ ! -d iso-agent-based ] && echo "Cluster not installed!" && exit 1
+server_url=$(cat iso-agent-based/auth/kubeconfig | grep server | awk '{print $NF}' | head -1)
+
+echo Checking cluster ...
+# Or use: timeout 3 bash -c "</dev/tcp/host/6443"
+if ! curl --retry 2 -skI $server_url >/dev/null; then
+	echo "Cluster not reachable at $server_url"
+	exit
+fi
+
+echo Attempting to log into the cluster ...
+until oc whoami >/dev/null 2>&1; do
+	#. <(make -s shell) || true
+	. <(make -s login) || true
+	sleep 2
+done
+
+sleep 5
+
+# Be sure we're logged in!  Sometimes the 2nd login can fail and "oc ..." (below) fails!
+until oc whoami >/dev/null 2>&1; do
+	. <(make -s login) || true
+	sleep 4
+done
+
 if ! oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null; then
 	echo "Failed to log into cluster.  Please log into the cluster and try again."
 	exit 1
@@ -68,3 +89,5 @@ do
 	oc --request-timeout=20s debug node/${node} -- chroot /host shutdown -h 1
 done
 
+echo 
+echo "The cluster will complete shutdown and power off in a short while!"
