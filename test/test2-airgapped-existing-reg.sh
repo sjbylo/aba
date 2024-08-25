@@ -54,13 +54,16 @@ if [ ! "$1" ]; then
 
 	which make || sudo dnf install make -y
 
+	v=4.16.3
+	#v=4.15.22
+
 	# clean up all, assuming reg. is not running (deleted)
-	test-cmd "make -C mirror distclean ask="
+	test-cmd "echo ocp_version=$v > aba.conf"
+	#test-cmd "make -C mirror distclean ask="
+	test-cmd "make distclean ask="
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
 
-	v=4.16.3
-	#v=4.15.22
 	rm -f aba.conf
 	vf=~/.vmware.conf
 	test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf

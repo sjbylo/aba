@@ -112,7 +112,7 @@ ask() {
 	[ ! "$ask" ] && return 0  # reply "default reply"
 	#fi
 
-	# Defqult reply is 'yes' and return 0
+	# Default reply is 'yes' and return 0
 	yn_text="(Y/n)"
 	def_val=y
 	[ "$1" = "-n" ] && def_val=n && yn_text="(y/N)" && shift
@@ -120,7 +120,7 @@ ask() {
 	timer=
 	[ "$1" = "-t" ] && timer="-t $1" && shift && shift 
 
-	echo
+	## echo
 	echo -n "===> $@ $yn_text: "
 	read $timer yn
 
@@ -180,9 +180,21 @@ is_version_greater() {
      [[ "$sorted_versions" != "$version1|$version2|" ]]
 }
 
-output_error() {
-	[ "$TERM" ] && tput setaf 1
-	echo "$@"
-	[ "$TERM" ] && tput sgr0
-}
+output_error() { echo_red "$@"; }
 
+echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_green()	{ [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_yellow()	{ [ "$TERM" ] && tput setaf 3; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_blue()	{ [ "$TERM" ] && tput setaf 4; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_magenta()	{ [ "$TERM" ] && tput setaf 5; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_cyan()	{ [ "$TERM" ] && tput setaf 6; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+
+# 0: Black
+# 1: Red
+# 2: Green
+# 3: Yellow
+# 4: Blue
+# 5: Magenta
+# 6: Cyan
+# 7: White

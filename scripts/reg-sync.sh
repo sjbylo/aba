@@ -104,3 +104,8 @@ fi
 
 echo
 echo "==> Image synchronization successful"
+echo 
+echo "OpenShift can now be installed with the command:"
+echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."
+
+exit 0

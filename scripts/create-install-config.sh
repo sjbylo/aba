@@ -43,7 +43,7 @@ else
 		export pull_secret=$(cat $pull_secret_file)
 		echo Found pull secret file at $pull_secret_file.  Assuming online installation using public RH registry.
 	else
-		echo "Error: No pull secrets found. Aborting!  See the README for help!" 
+		echo_red "Error: No pull secrets found. Aborting!  See the README for help!" 
 		exit 1
 	fi
 fi
@@ -53,9 +53,7 @@ if [ -s regcreds/rootCA.pem ]; then
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
 	echo "Using root CA file at regcreds/rootCA.pem"
 else
-	#echo "Warning: No file 'regcreds/rootCA.pem' found.  Assuming unsecure mirror registry (http)."
-	echo "Warning: No file 'regcreds/rootCA.pem' found."
-	##  exit 1  # Will only work without a cert if the registry is using http
+	echo_red "Warning: No file 'regcreds/rootCA.pem' found."
 fi
 
 
@@ -71,12 +69,37 @@ export ssh_key_pub=$(cat $ssh_key_file.pub)
 
 # Check the private registry is defined, if it's in use
 if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
-	[ ! "$reg_host" ] && echo && echo "Error: registry host is not defined!" && exit 1
+	[ ! "$reg_host" ] && echo && echo_red "Error: registry host is not defined!" && exit 1
 fi
 
 # Check that the release image is available in the private registry
 if [ "$additional_trust_bundle" -a "$image_content_sources" ]; then
 	scripts/verify-release-image.sh
+fi
+
+# See if the cluster wide proxy should be added
+if [ "$set_http_proxy" -a "$set_https_proxy" -a "$set_no_proxy" ]; then
+	export http_proxy=$set_http_proxy
+	export https_proxy=$set_https_proxy
+	export no_proxy=$set_no_proxy
+
+	echo_blue "Configuring 'cluster wide proxy' (from values in 'config.conf') as:"
+	echo_blue "  'http_proxy=$http_proxy', 'https_proxy=$https_proxy' & 'no_proxy=$no_proxy'."
+
+	export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
+elif [ "$proxy" = "auto" ]; then
+	if [ "$http_proxy" -a "$https_proxy" -a "$no_proxy" ]; then
+		echo_blue "Configuring 'cluster wide proxy' (from env. vars) as:"
+		echo_blue "  'http_proxy=$http_proxy', 'https_proxy=$https_proxy' & 'no_proxy=$no_proxy'."
+
+		export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
+	else
+		echo_red "Warning: proxy set to 'auto' but not all env proxy vars set. Ignoring."
+		echo_red "If you want to configure the cluster wide proxy, either set 'proxy=auto' in 'cluster.conf' or"
+		echo_red "set the '*_proxy' values in 'cluster.conf'"
+	fi
+else
+	echo_blue "Not configuring 'cluster wide proxy' since no proxy values are defined in 'cluster.conf'."
 fi
 
 echo
@@ -86,5 +109,5 @@ echo
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
-echo "install-config.yaml generated successfully"
+echo_green "install-config.yaml generated successfully"
 

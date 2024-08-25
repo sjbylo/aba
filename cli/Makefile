@@ -12,7 +12,8 @@ download: openshift-client-linux-$(ocp_version).tar.gz openshift-install-linux-$
 help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[\$\.\(\)\~\/a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-.init: 
+# Keep this like it is, otherwise the deps don't work!
+.init:
 	mkdir -p ~/bin
 	touch .init
 
@@ -65,7 +66,6 @@ oc-mirror.tar.gz: ## Download oc-mirror tarball ver 4.14.9 or higher
 
 govc_Linux_x86_64.tar.gz:   ## Download govc tarball
 	curl -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz"
-
 
 .PHONY: clean 
 clean: ## Clean up installed binaries
