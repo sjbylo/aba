@@ -198,3 +198,16 @@ echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sg
 # 5: Magenta
 # 6: Cyan
 # 7: White
+
+longest_line() {
+    # Calculate the longest line from stdin
+    awk '{
+        if (length($0) > max) {
+            max = length($0)
+            longest = $0
+        }
+    } END {
+        print max
+    }'
+}
+
