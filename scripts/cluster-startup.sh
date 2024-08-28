@@ -16,9 +16,12 @@ done
 
 # Use one of the methods to access the cluster
 echo Attempting to log into the cluster ...
+cnt=0
 until oc whoami >/dev/null 2>&1; do
 	. <(make -s login) || true
-	sleep 4
+	let cnt=$cnt+1
+	[ $cnt -gt 30 ] && echo "Cannot log into the cluster.  Try to run 'make rescue' to fix the cluster." && exit 1
+	sleep 5
 done
 
 sleep 5
