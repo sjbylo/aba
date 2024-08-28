@@ -165,9 +165,14 @@ shutdown: ## Trigger the cluster to gracefully shut itself down by draining all 
 startup: ## Start all VMs and allow all pods to start (uncorden)
 	@scripts/cluster-startup.sh 
 
+.PHONY: rescue
+rescue: ## If a cluster does not start, rescue the cluster using ssh, if available. 
+	@scripts/cluster-rescue.sh 
+
 .PHONY: stop
 stop: .initialized vmware.conf                     agent-config.yaml ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again! Try using 'make shutdown' for graceful cluster shutdown.
-	@scripts/vmw-on.sh && scripts/vmw-stop.sh $(debug) || exit 0
+#	@scripts/vmw-on.sh && scripts/vmw-stop.sh $(debug) || exit 0
+	scripts/vmw-stop.sh $(debug)
 
 .PHONY: start
 start: .initialized vmware.conf                     agent-config.yaml ## Start all the VMs.

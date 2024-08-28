@@ -38,3 +38,5 @@ for name in $WORKER_NAMES $CP_NAMES; do
 	
 done
 
+exit 0
+
