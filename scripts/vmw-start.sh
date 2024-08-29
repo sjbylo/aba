@@ -33,6 +33,8 @@ else
 fi
 
 for name in $WORKER_NAMES $CP_NAMES ; do
-	govc vm.power -on ${CLUSTER_NAME}-$name
+	govc vm.power -on ${CLUSTER_NAME}-$name || true
 done
+
+exit 0 
 

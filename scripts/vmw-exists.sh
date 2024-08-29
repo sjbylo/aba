@@ -1,5 +1,5 @@
 #!/bin/bash 
-# CHeck of all VMs for the cluster exist
+# Check if at least one VMs exists
 
 source scripts/include_all.sh
 

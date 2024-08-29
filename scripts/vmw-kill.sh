@@ -31,6 +31,7 @@ if [ "$ask" ]; then
 fi
 
 for name in $CP_NAMES $WORKER_NAMES; do
-	govc vm.power -off ${CLUSTER_NAME}-$name || true
+	govc vm.power -off ${CLUSTER_NAME}-$name || true 
 done
 
+exit 0
