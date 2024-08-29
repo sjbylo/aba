@@ -34,6 +34,7 @@ done
 
 if ! oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null; then
 	echo "Failed to log into cluster.  Please log into the cluster and try again."
+
 	exit 1
 fi
 
@@ -64,21 +65,22 @@ echo -n "Shutdown the cluster? (Y/n): "
 read yn
 [ "$yn" = "n" ] && exit 1
 
-echo Enabling debug pods for all nodes:
-for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc debug node/${node} -- chroot /host whoami & done 
+echo "Priming debug pods for all nodes (ensure all nodes are reachable):"
+for node in $(oc --request-timeout=20s get nodes -o jsonpath='{.items[*].metadata.name}'); do oc --request-timeout=20s debug -q --preserve-pod node/${node} -- chroot /host whoami > .$cluster_id.shutdown.log 2>&1 & done 
 wait
 
 # If not SNO ...
 if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
-	echo "Makeing all nodes unschedulable (corden):"
-	for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do echo ${node} ; oc adm cordon ${node} & done 
+	echo "Making all nodes unschedulable (corden):"
+	for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do echo Uncorden ${node} ; oc adm cordon ${node} > .$cluster_id.shutdown.log 2>&1 & done 
 	wait
 
-	echo "Draining all pods from all worker nodes (waiting max 120s):"
+	echo "Draining all pods from all worker nodes (logging to .$cluster_id.shutdown.log):"
 	sleep 1
 	for node in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); 
 	do
-		echo ${node} ; oc adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=120s &
+		echo Drain ${node}
+		oc adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=120s >> .$cluster_id.shutdown.log 2>&1 &
 	done
 	wait
 fi

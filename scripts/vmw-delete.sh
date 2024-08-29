@@ -50,3 +50,5 @@ if [ "$VC" ]; then
 	govc object.destroy $cluster_folder || true
 fi
 
+exit 0
+

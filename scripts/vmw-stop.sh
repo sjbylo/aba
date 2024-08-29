@@ -34,9 +34,8 @@ fi
 
 for name in $WORKER_NAMES $CP_NAMES; do
 	# Shut down guest if vmware tools exist
-	govc vm.power -s ${CLUSTER_NAME}-$name  
+	govc vm.power -s ${CLUSTER_NAME}-$name || true
 	
 done
 
 exit 0
-

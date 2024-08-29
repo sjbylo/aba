@@ -126,7 +126,7 @@ ntp: .ntp ## Use NTP time sync during early installation. Required only if under
 	@exit 0
 
 .autopoweroff: .ntp
-	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || true 
+	scripts/vmw-kill.sh $(debug) || true 
 	@touch .autopoweroff
 
 upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images/agent-<cluster-name>.iso
@@ -171,20 +171,19 @@ rescue: ## If a cluster does not start, rescue the cluster using ssh, if availab
 
 .PHONY: stop
 stop: .initialized vmware.conf                     agent-config.yaml ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again! Try using 'make shutdown' for graceful cluster shutdown.
-#	@scripts/vmw-on.sh && scripts/vmw-stop.sh $(debug) || exit 0
 	scripts/vmw-stop.sh $(debug)
 
 .PHONY: start
 start: .initialized vmware.conf                     agent-config.yaml ## Start all the VMs.
-	@scripts/vmw-on.sh || scripts/vmw-start.sh $(debug) || exit 0
+	@scripts/vmw-start.sh $(debug) || exit 0
 
 .PHONY: poweroff
 poweroff: .initialized vmware.conf                     agent-config.yaml ## Power off the VMs immediately.  This will stop the cluster abruptly. 
-	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || exit 0
+	scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: kill
 kill:  .initialized vmware.conf                     agent-config.yaml ## Kill or power off the VMs immediately.  This will stop the cluster abruptly. 
-	@scripts/vmw-on.sh && scripts/vmw-kill.sh $(debug) || exit 0
+	scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: delete
 delete: .initialized vmware.conf                     agent-config.yaml ## Delete the VMs. This will delete the cluster. 

@@ -65,7 +65,8 @@ cp $vf vmware.conf
 
 # Do not ask to delete things
 mylog "Setting ask="
-sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
+make noask
+#sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
 
 mylog "Setting ntp_server=$ntp" 
 [ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
@@ -80,6 +81,8 @@ test-cmd -m "Init test: download mirror-registry.tar.gz" "make -C test mirror-re
 
 ##sudo dnf install python36 python3-jinja2 -y
 rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
+
+# Simulate creation and edit of mirror.conf file
 scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Test the internal bastion ($bastion2) as mirror"
@@ -88,7 +91,9 @@ mylog "Setting reg_host=$bastion2"
 sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
 
+# FIXME: Why is this needed? 
 make -C cli
+
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
 
@@ -123,7 +128,6 @@ ssh steve@$bastion2 -- "rm -fv ~/.pull-secret.json"
 ssh steve@$bastion2 -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
 # Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
 ssh steve@$bastion2 -- "rm -rfv ~/*"
-
 # Just be sure a valid govc config file exists
 scp $vf steve@$bastion2: 
 
@@ -150,7 +154,8 @@ test-cmd -r 99 3 -m "Saving images to local disk" "make save"
 #tar xf test/regcreds-invalid.tar
 
 # Smoke test!
-[ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
+##[ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
+test-cmd -m  "Verifying existance of file 'mirror/save/mirror_seq1_000000.tar'" "ls -lh mirror/save/mirror_seq1_000000.tar" 
 
 # If the VM snapshot is reverted, as above, no need to delete old files
 ####test-cmd -h $reg_ssh_user@$bastion2 -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/* $subdir/aba"
@@ -311,7 +316,7 @@ test-cmd -m "Pausing for 60s to let OCP settle" sleep 60    # For some reason, t
 
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
-test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m "Run 'day2' attempt number $i ..." "make -C $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
+test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m "Run 'day2'" "make -C $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
 test-cmd -m "Pausing for 30s to let OCP settle" sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
@@ -355,7 +360,8 @@ build_test_cluster() {
 	cluster_name=$1
 	cnt=$2  # Number of nodes to check/validate in the cluster
 
-	test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -C $subdir/aba $cluster_name" 
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -C $subdir/aba $cluster_name" || true
+	test-cmd -h $reg_ssh_user@$bastion2 -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "make -C $subdir/aba/$cluster_name mon" 
 	
 	# Restart cluster test 
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Log into cluster" ". <(make -s -C $subdir/aba/$cluster_name login)"
@@ -388,6 +394,7 @@ do
 	[ "$c" = "compact" ] && cnt=3
 	[ "$c" = "standard" ] && cnt=5
 	build_test_cluster $c $cnt
+
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting '$c' cluster" "make -C $subdir/aba/$c delete" 
 done
 
