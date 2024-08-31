@@ -149,6 +149,7 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
 	rm -f aba.conf  # remove link only
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh # Only clean up the created scripts, not the script needed to uninstall the reg.
+	rm -f .redhat-operator-index*
 	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 
 	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rfv save || true  # Delete only if not edited
 
