@@ -24,5 +24,5 @@ do
       - name: $op_default_channel"
 done > imageset-config-operator-catalog.yaml
 
-echo See file: imageset-config-operator-catalog.yaml and copy the required Operators to your imageset config file. 
+echo_blue "See file: imageset-config-operator-catalog.yaml and copy the required Operators to your imageset config file."
 

@@ -95,10 +95,8 @@ echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.s
 echo "Running: $(cat sync-mirror.sh)"
 echo
 if ! ./sync-mirror.sh; then
-	[ "$TERM" ] && tput setaf 1 
-	echo "Warning: an error has occurred! Long running processes are prone to failure. If the error looks transient please try again!"
-	[ "$TERM" ] && tput sgr0
-       exit 1
+	echo_red "Mirroring failed. Long-running processes can fail. If the issue seems temporary, retry; otherwise, fix it and try again."
+	exit 1
 fi
 # If oc-mirror fails due to transient errors, the user should try again
 

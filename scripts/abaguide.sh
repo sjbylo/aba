@@ -175,6 +175,10 @@ if [ ! -f .bundle ]; then
 
 	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 		echo_blue "$tick Pull secret found at '$pull_secret_file'."
+
+		# Configure default pull-secret locations, e.g. ~/.docker/config.json and ~/.containers/auth.json
+		scripts/create-containers-auth.sh
+
 		sleep 1
 	else
 		echo

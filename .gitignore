@@ -33,6 +33,7 @@ mirror/.uninstalled
 mirror/.*
 mirror/regcreds.bk
 mirror/mirror.conf.bk
+mirror/.redhat-operator-index*
 sno*
 */cluster.conf
 *.ssh.conf
