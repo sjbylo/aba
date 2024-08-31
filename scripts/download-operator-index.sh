@@ -49,3 +49,4 @@ done > imageset-config-operator-catalog-v${ocp_ver_major}.yaml
 
 echo "Download operator index for v$ocp_ver_major successfuly" 
 
+
