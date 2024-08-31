@@ -46,3 +46,6 @@ else
 	exit 1
 fi
 
+# Fetch the operator index for this ocp version in the background.  Index used later to build the image set file. 
+( [ -d mirror ] && cd mirror; scripts/download-operator-index.sh & ) & 
+
