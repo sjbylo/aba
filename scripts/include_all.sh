@@ -108,24 +108,22 @@ install_rpms() {
 
 ask() {
 	source <(normalize-aba-conf)
-	#if [ ! -t 0 ]; then   # If no stdin bytes
 	[ ! "$ask" ] && return 0  # reply "default reply"
-	#fi
 
-	# Default reply is 'yes' and return 0
-	yn_text="(Y/n)"
+	# Default reply is 'yes' (or 'no') and return 0
+	yn_opts="(Y/n)"
 	def_val=y
-	[ "$1" = "-n" ] && def_val=n && yn_text="(y/N)" && shift
-	[ "$1" = "-y" ] && def_val=y && yn_text="(Y/n)" && shift
+	[ "$1" == "-n" ] && def_val=n && yn_opts="(y/N)" && shift
+	[ "$1" == "-y" ] && def_val=y && yn_opts="(Y/n)" && shift
 	timer=
-	[ "$1" = "-t" ] && timer="-t $1" && shift && shift 
+	[ "$1" == "-t" ] && timer="-t $1" && shift && shift 
 
 	## echo
-	echo -n "===> $@ $yn_text: "
+	echo -n "===> $@ $yn_opts: "
 	read $timer yn
 
 	if [ "$def_val" == "y" ]; then
-		[ ! "$yn" -o "$yn" = "y" -o "$yn" = "Y" ] && return 0
+		[ ! "$yn" -o "$yn" == "y" -o "$yn" == "Y" ] && return 0
 	else
 		[ ! "$yn" ] && return 0
 		[ "$yn" == "n" -o "$yn" == "N" ] && return 0 
