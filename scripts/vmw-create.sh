@@ -67,7 +67,7 @@ for name in $CP_NAMES ; do
 	vm_name=${CLUSTER_NAME}-$name
 	mac=${CP_MAC_ADDRESSES_ARRAY[$a]}
 
-	echo "Create VM: $vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder] [$GOVC_NETWORK]"
+	echo "Create VM: $vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [$mac] [$GOVC_NETWORK] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 	govc vm.create \
 		-version vmx-15 \
 		-g rhel8_64Guest \
@@ -117,7 +117,7 @@ for name in $WORKER_NAMES ; do
 	vm_name=${CLUSTER_NAME}-$name
 	mac=${WKR_MAC_ADDRESSES_ARRAY[$a]}
 
-	echo "Create VM: $vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder] [$GOVC_NETWORK]"
+	echo "Create VM: $vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 	govc vm.create \
 		-version vmx-15 \
 		-g rhel8_64Guest \
