@@ -177,6 +177,8 @@ if [ ! -f .bundle ]; then
 		echo_blue "$tick Pull secret found at '$pull_secret_file'."
 
 		# Configure default pull-secret locations, e.g. ~/.docker/config.json and ~/.containers/auth.json
+		ln -sf ../scripts mirror/scripts
+		ln -sf ../aba.conf mirror
 		scripts/create-containers-auth.sh
 
 		sleep 1
