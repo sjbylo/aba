@@ -23,12 +23,15 @@ if [ -s regcreds/pull-secret-mirror.json -a -s $pull_secret_file ]; then
 	# Merge the two files
 	jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json $pull_secret_file > ./regcreds/pull-secret-full.json
 
+	echo Configuring ~/.docker/config.json and ~/.containers/auth.json with the all needed pull secrets ...
+
 	# Copy into place 
 	cp ./regcreds/pull-secret-full.json ~/.docker/config.json
 	cp ./regcreds/pull-secret-full.json ~/.containers/auth.json
 
 # If the mirror creds are available add them also
 elif [ -s regcreds/pull-secret-mirror.json ]; then
+	echo Configuring ~/.docker/config.json and ~/.containers/auth.json with the private mirror secret ...
 	cp ./regcreds/pull-secret-mirror.json ~/.docker/config.json
 	cp ./regcreds/pull-secret-mirror.json ~/.containers/auth.json
 
@@ -47,5 +50,5 @@ else
 fi
 
 # Fetch the operator index for this ocp version in the background.  Index used later to build the image set file. 
-( [ -d mirror ] && cd mirror; scripts/download-operator-index.sh & ) & 
+( [ -d mirror ] && cd mirror; ../scripts/download-operator-index.sh & ) & 
 
