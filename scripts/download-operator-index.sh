@@ -25,10 +25,6 @@ index_file=.redhat-operator-index-v$ocp_ver_major
 lock_file=.redhat-operator-index-v$ocp_ver_major.lock
 log_file=.redhat-operator-index-v$ocp_ver_major.log
 
-# FIXME
-#exec >> $log_file
-#exec 2>> $log_file
-
 # See if the index is already downloading (using 'ln') 
 [ ! -f $index_file ] && touch $index_file
 if ! ln $index_file $lock_file >/dev/null 2>&1; then
@@ -38,11 +34,14 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 	exit 0
 fi
 
+exec >> $log_file
+exec 2>> $log_file
+
 echo Downloading the operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major in the background ...
 
 # Fetch latest operator catalog and default channels
 if ! oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major > $index_file; then
-	echo "$(date): Error: oc-mirror returned $? whilst downloading operator index." >> $log_file
+	echo "$(date): Error: oc-mirror returned $? whilst downloading operator index."
 	rm -f $lock_file
 
 	exit 1
@@ -57,5 +56,5 @@ do
 done > imageset-config-operator-catalog-v${ocp_ver_major}.yaml
 
 # Adding this to log file sincxe it will run in the background
-echo "$(date): Downloaded operator index for v$ocp_ver_major successfuly" >> $log_file
+echo "$(date): Downloaded operator index for v$ocp_ver_major successfuly"
 
