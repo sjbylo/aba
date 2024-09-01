@@ -46,7 +46,7 @@ done
 [ ! "$interactive_mode" ] && exit 0
 # From now on it's all considered interactive
 
-tick="\u2713"
+###tick="\u2713"
 
 # Include aba bin path and common scripts
 export PATH=$PWD/bin:$PATH
@@ -71,7 +71,7 @@ if [ ! -f .bundle ]; then
 	# Determine OCP version 
 
 	if [ "$ocp_version" ]; then
-		echo_blue "$tick OpenShift version is defined as '$ocp_version'."
+		echo_blue "OpenShift version is defined as '$ocp_version'."
 	else
 
 	echo -n "Looking up OpenShift release versions ..."
@@ -174,7 +174,7 @@ if [ ! -f .bundle ]; then
 	# Determine pull secret
 
 	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
-		echo_blue "$tick Pull secret found at '$pull_secret_file'."
+		echo_blue "Pull secret found at '$pull_secret_file'."
 
 		# Now we have the required ocp version, we can fetch the operator index in the background. 
 		( make -s -C mirror index & ) & 
