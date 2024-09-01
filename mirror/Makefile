@@ -14,7 +14,7 @@ init: .initialized
 	ln -fs ../aba.conf 
 	mkdir -p regcreds
 	touch regcreds/.dummy  # Needed only so tar includes the *empty* regcreds dir
-	@make -C ../cli   #  needed so 'make load' works on internal bastion
+	@####make -C ../cli   #  needed so 'make load' works on internal bastion
 	touch .initialized
 	@echo Initialized `pwd`
 
@@ -30,7 +30,7 @@ init: .initialized
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
 #sync: .initialized .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
-sync: .initialized .rpmsint ~/.pull-secret.json install                   ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
+sync: .initialized .rpmsint ~/.pull-secret.json index install                   ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
@@ -49,11 +49,16 @@ save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save i
 	###
 	$(SCRIPTS)/reg-save.sh  $(debug)
 
+# Only needed for 'make load'. 
+.PHONY: cli
+cli:
+	make -C ../cli
+
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
 #load: .initialized .rpmsint install ../vmware.conf  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
-load: .initialized .rpmsint install                 ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
+load: .initialized cli .rpmsint index install                 ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	###
 	### Load images from local disk to mirror registry
 	###
@@ -126,9 +131,12 @@ tarrepo:   ## Same as 'make tar' but excludes all 'mirror_seq*tar' files under m
 inc:   ## Same as 'make tar' except a timestamp file is used to only backup files that have changed since the last 'make inc' was run.
 	@make -s -C .. inc $(out)
 
+.PHONY: index
+index: init catalog
 .PHONY: catalog
 catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
-	scripts/fetch-operator-catalog.sh
+	@#scripts/fetch-operator-catalog.sh
+	scripts/download-operator-index.sh
 
 #uninstall: .initialized mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
 uninstall: .initialized             mirror-registry .uninstalled     ## Uninstall any previously installed registry  

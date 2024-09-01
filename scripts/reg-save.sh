@@ -36,6 +36,7 @@ if [ ! -s save/imageset-config-save.yaml ]; then
 
 	echo "Generating save/imageset-config-save.yaml to save images to local disk for OpenShift 'v$ocp_version' and channel '$ocp_channel' ..."
 	scripts/j2 ./templates/imageset-config-save.yaml.j2 > save/imageset-config-save.yaml 
+	scripts/add-operators-to-imageset.sh >> save/imageset-config-save.yaml 
 	touch save/.created
 else
 	# Check disk space under save/. 
