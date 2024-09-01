@@ -65,6 +65,7 @@ if [ ! -s sync/imageset-config-sync.yaml ]; then
 
 	[ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
 	scripts/j2 ./templates/imageset-config-sync.yaml.j2 > sync/imageset-config-sync.yaml 
+	scripts/add-operators-to-imageset.sh >> sync/imageset-config-sync.yaml
 
 else
 	echo Using existing sync/imageset-config-sync.yaml

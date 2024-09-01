@@ -11,19 +11,30 @@ source <(normalize-mirror-conf)
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
+# Wait for the index to be generated 
+[ ! -s .redhat-operator-index-v$ocp_ver_major ] && echo "Waiting for the operator index to be generated ..." >&2
+until [ -s .redhat-operator-index-v$ocp_ver_major ]
+do
+	sleep 5
+done
+
 add_op() {
 	line=$(grep "^$1 " .redhat-operator-index-v$ocp_ver_major | awk '{print $1,$NF}')
 	op_name=$(echo $line | awk '{print $1}')
 	op_default_channel=$(echo $line | awk '{print $2}')
 
-	if [ "$op_default_channel" ]; then
+	if [ "$op_name" ]; then
+		if [ "$op_default_channel" ]; then
 		echo "\
     - name: $op_name
       channels:
       - name: $op_default_channel"
-	else
+		else
 		echo "\
     - name: $op_name"
+		fi
+	else
+		echo_red "Operator name '$1' not found in index file mirror/.redhat-operator-index-v$ocp_ver_major" >&2
 	fi
 }
 
@@ -51,7 +62,7 @@ do
 			add_op $op
 		done
 	else
-		echo_red "No such file 'templates/operator-set-$set'" >&2
+		echo_red "No such file 'templates/operator-set-$set' for operator set" >&2
 	fi
 done
 
