@@ -10,11 +10,9 @@ source <(normalize-mirror-conf)
 
 # Show warning if 'make save' has been used previously.
 if [ -s save/mirror_seq1_000000.tar ]; then
-	[ "$TERM" ] && tput setaf 1 
 	echo 
-	echo "WARNING: You already have images saved on local disk in $PWD/save."
-	echo "         Sure you don't want to 'make load' them into the mirror registry at $reg_host?"
-	[ "$TERM" ] && tput sgr0
+	echo_red "Warning: You already have images saved on local disk in $PWD/save."
+	echo_red "         Are you sure you don't want to 'make load' them into the mirror registry at $reg_host?"
 
 	ask "Continue with 'sync'" || exit 1
 fi
@@ -22,14 +20,12 @@ fi
 # This is a pull secret for RH registry
 pull_secret_mirror_file=pull-secret-mirror.json
 
-###echo pull_secret_file=$pull_secret_file
-
 if [ -s $pull_secret_mirror_file ]; then
 	echo Using $pull_secret_mirror_file ...
 elif [ -s $pull_secret_file ]; then
 	:
 else
-	echo "Error: The pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
+	echo_red "Error: The pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 fi
 
 export reg_url=https://$reg_host:$reg_port
@@ -102,7 +98,7 @@ fi
 # If oc-mirror fails due to transient errors, the user should try again
 
 echo
-echo "==> Image synchronization successful"
+echo_green "==> Image synchronization successful"
 echo 
 echo "OpenShift can now be installed with the command:"
 echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."

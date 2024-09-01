@@ -30,9 +30,11 @@ fi
 
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
-[ ! -d save ] && \
-	echo "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first on an external (Internet connected) bastion/laptop" && \
+if [ ! -d save ]; then
+	echo_red "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first on an external (Internet connected) bastion/laptop"
+
 	exit 1
+fi
 
 echo 
 echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
@@ -59,9 +61,9 @@ fi
 # If oc-mirror fails due to transient errors, the user should try again
 
 echo
-echo "==> Image loading successful"
+echo_green "==> Image loading successful"
 echo 
-echo_blue "OpenShift can now be installed with the command:"
+echo "OpenShift can now be installed with the command:"
 echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."
 
 exit 0
