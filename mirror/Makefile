@@ -52,7 +52,7 @@ save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save i
 # Only needed for 'make load'. 
 .PHONY: cli
 cli:
-	make -C ../cli
+	make -C ../cli ~/bin/oc-mirror
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 # oc-mirror is idempotent so no need for 'dot' flag files
@@ -136,6 +136,7 @@ index: init catalog
 .PHONY: catalog
 catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
 	@#scripts/fetch-operator-catalog.sh
+	@make -s -C ../cli ~/bin/oc-mirror 2>/dev/null >&2
 	scripts/download-operator-index.sh
 
 #uninstall: .initialized mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
