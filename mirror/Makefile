@@ -50,15 +50,15 @@ save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save i
 	$(SCRIPTS)/reg-save.sh  $(debug)
 
 # Only needed for 'make load'. 
-.PHONY: cli
-cli:
+.PHONY: cli-oc-mirror
+cli-oc-mirror:
 	make -C ../cli ~/bin/oc-mirror
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
 #load: .initialized .rpmsint install ../vmware.conf  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
-load: .initialized cli .rpmsint index install                 ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
+load: .initialized cli-oc-mirror .rpmsint index install                 ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	###
 	### Load images from local disk to mirror registry
 	###
@@ -134,9 +134,10 @@ inc:   ## Same as 'make tar' except a timestamp file is used to only backup file
 .PHONY: index
 index: init catalog
 .PHONY: catalog
+# -s needed here 'cos the download runs in the background (called by aba)
 catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
 	@#scripts/fetch-operator-catalog.sh
-	@make -s -C ../cli ~/bin/oc-mirror 2>/dev/null >&2
+	make -s -C ../cli ~/bin/oc-mirror
 	scripts/download-operator-index.sh
 
 #uninstall: .initialized mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  

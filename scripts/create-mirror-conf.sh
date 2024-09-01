@@ -1,7 +1,8 @@
 #!/usr/bin/bash 
 # Generate the mirror.conf file
 
-[ -s mirror.conf ] && echo Using existing mirror.conf && exit 0
+##[ -s mirror.conf ] && echo Using existing mirror.conf && exit 0
+[ -s mirror.conf ] && exit 0
 
 source scripts/include_all.sh
 
@@ -15,7 +16,7 @@ if [ ! "$ocp_version" ]; then
 	exit 1
 fi
 
-ask "Configure your private mirror registry? "
+ask "Configure your private mirror registry (mirror.conf)? "
 
 scripts/j2 templates/mirror.conf.j2 > mirror.conf
 
