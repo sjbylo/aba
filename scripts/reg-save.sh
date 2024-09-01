@@ -24,9 +24,7 @@ if [ ! -s save/imageset-config-save.yaml ]; then
 
 	# If less than 20 GB, stop
 	if [ $avail -lt 20500 ]; then
-		[ "$TERM" ] && tput setaf 1 
-		echo "Error: Not enough disk space available under $PWD/save (only $avail MB). At least 20GB is required for the base OpenShift platform alone."
-		[ "$TERM" ] && tput sgr0
+		echo_red "Error: Not enough disk space available under $PWD/save (only $avail MB). At least 20GB is required for the base OpenShift platform alone."
 
 		exit 1
 	fi
@@ -73,5 +71,5 @@ fi
 # If oc-mirror fails due to transient errors, the user should try again
 
 echo
-echo "==> Image saving successful"
+echo_green "==> Image saving successful"
 echo 

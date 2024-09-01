@@ -30,15 +30,13 @@ fi
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
 if [ "$reg_code" = "200" ]; then
-	[ "$TERM" ] && tput setaf 1
 	echo
-	echo "Warning: Quay registry found at $reg_host:$reg_port."
-	echo "         To use this registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
-	echo "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
-	echo "         The pull secret file can also be created and verified using 'make password'"
-	echo "         See the README.md for further instructions."
+	echo_red "Warning: Quay registry found at $reg_host:$reg_port."
+	echo_red "         To use this registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
+	echo_red "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
+	echo_red "         The pull secret file can also be created and verified using 'make password'"
+	echo_red "         See the README.md for further instructions."
 	echo 
-	[ "$TERM" ] && tput sgr0
 
 	exit 1
 fi
@@ -47,15 +45,13 @@ fi
 reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/ || true)
 
 if [ "$reg_code" = "200" ]; then
-	[ "$TERM" ] && tput setaf 1
 	echo
-	echo "Warning: Endpoint found at $reg_host:$reg_port."
-	echo "         If this is your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
-	echo "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
-	echo "         The pull secret file can also be created and verified using 'make password'"
-	echo "         See the README.md for further instructions."
+	echo_red "Warning: Endpoint found at $reg_host:$reg_port."
+	echo_red "         If this is your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
+	echo_red "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
+	echo_red "         The pull secret file can also be created and verified using 'make password'"
+	echo_red "         See the README.md for further instructions."
 	echo 
-	[ "$TERM" ] && tput sgr0
 
 	exit 1
 fi
@@ -67,12 +63,12 @@ if [ "$reg_root" ]; then
 		reg_root=$(echo "$reg_root" | sed "s#~#/home/$reg_ssh_user#g")
 	fi
 
-	echo "Using registry root dir: $reg_root"
+	echo_blue "Using registry root dir: $reg_root"
 	reg_root_opt="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --pgStorage $reg_root/pg-data"
 else
 	# The default path
 	reg_root=/home/$reg_ssh_user/quay-install  # This must be the path *where Quay will be installed*
-	echo "Using default registry root dir: $reg_root"
+	echo_blue "Using default registry root dir: $reg_root"
 fi
 
 
@@ -89,12 +85,10 @@ if [ "$reg_ssh_key" ]; then
 	echo "Installing Quay registry on to $reg_host ..."
 
 	if ! ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host hostname; then
-		[ "$TERM" ] && tput setaf 1
 		echo
-		echo "Error: Can't ssh to $reg_ssh_user@$reg_host using key '$reg_ssh_key'"
-		echo "Configure passwordless ssh to $reg_ssh_user@$reg_host and try again."
+		echo_red "Error: Can't ssh to $reg_ssh_user@$reg_host using key '$reg_ssh_key'"
+		echo_red "Configure passwordless ssh to $reg_ssh_user@$reg_host and try again."
 		echo
-		[ "$TERM" ] && tput sgr0
 
 		exit 1
 	else
@@ -148,7 +142,7 @@ if [ "$reg_ssh_key" ]; then
 	cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
   		-k $reg_ssh_key $reg_root_opt"
 
-	echo "Running command: \"$cmd --initPassword <hidden>\""
+	echo_blue "Running command: \"$cmd --initPassword <hidden>\""
 
 	$cmd --initPassword $reg_pw
 
@@ -207,7 +201,7 @@ else
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opt"
 	cmd="./mirror-registry install -v --quayHostname $reg_host $reg_root_opt"
 
-	echo "Running command: \"$cmd --initPassword <hidden>\""
+	echo_blue "Running command: \"$cmd --initPassword <hidden>\""
 
 	$cmd --initPassword $reg_pw
 
@@ -249,4 +243,4 @@ else
 fi
 
 echo
-echo "==> Registry installation successful"
+echo_green "==> Registry installation successful"

@@ -37,7 +37,7 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 
 		if [ "$tls_verify" ]; then
 			[ "$TERM" ] && tput setaf 1
-			echo "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again."
+			echo_red "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again."
 			echo
 			[ "$TERM" ] && tput sgr0
 
@@ -62,10 +62,10 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 fi
 
 echo
-echo "Error:   No mirror registry credential file found in 'regcreds/pull-secret-mirror.json'"
-echo "         If you want to use your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
-echo "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
-echo "         See the README.md for further instructions."
+echo_red "Error:   No mirror registry credential file found in 'regcreds/pull-secret-mirror.json'"
+echo_red "         If you want to use your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
+echo_red "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
+echo_red "         See the README.md for further instructions."
 echo
 
 exit 1
