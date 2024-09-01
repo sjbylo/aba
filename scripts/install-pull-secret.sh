@@ -1,5 +1,14 @@
 #!/bin/bash
 
+source scripts/include_all.sh
+
+[ "$1" ] && set -x
+
+umask 077
+
+source <(normalize-aba-conf)
+###source <(normalize-mirror-conf)
+
 if [ -s $pull_secret_file ]; then
 	if ! grep -q registry.redhat.io $pull_secret_file; then
 		echo "Was expecting to see the string 'registry.redhat.io' in your pull secret."
