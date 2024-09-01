@@ -19,7 +19,7 @@ if ! curl -kIL http://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_
 fi
 
 # FIXME this is a hack. Better implement as dep in make
-make -s -C ../cli ~/bin/oc-mirror 2>/dev/null >&2
+#make -s -C ../cli ~/bin/oc-mirror 2>/dev/null >&2
 
 index_file=.redhat-operator-index-v$ocp_ver_major
 lock_file=.redhat-operator-index-v$ocp_ver_major.lock
