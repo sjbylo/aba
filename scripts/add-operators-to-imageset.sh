@@ -11,13 +11,6 @@ source <(normalize-mirror-conf)
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-# Wait for the index to be generated 
-[ ! -s .redhat-operator-index-v$ocp_ver_major ] && echo "Waiting for the operator index to be generated ..." >&2
-until [ -s .redhat-operator-index-v$ocp_ver_major ]
-do
-	sleep 5
-done
-
 add_op() {
 	line=$(grep "^$1 " .redhat-operator-index-v$ocp_ver_major | awk '{print $1,$NF}')
 	op_name=$(echo $line | awk '{print $1}')
@@ -50,6 +43,22 @@ cat <<END
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
     packages:
 END
+else
+	echo "No operators defined in 'mirror/mirror.conf'.  Not adding any operators to image set config file." >&2
+
+	exit 0
+fi
+
+echo "As defined in 'mirror/mirror.conf', addding opperators to the image set conf file ..." >&2
+
+# Wait for the index to be generated?
+if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
+	echo "Waiting 1-2 mins for the operator index to be generated ..." >&2
+	until [ -s .redhat-operator-index-v$ocp_ver_major ]
+	do
+		sleep 3
+	done
+	sleep 1
 fi
 
 for set in $op_sets
