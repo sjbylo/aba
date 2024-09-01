@@ -16,7 +16,7 @@ init: .initialized
 	touch regcreds/.dummy  # Needed only so tar includes the *empty* regcreds dir
 	@####make -C ../cli   #  needed so 'make load' works on internal bastion
 	touch .initialized
-	@echo Initialized `pwd`
+	@##echo Initialized `pwd`
 
 # If aba.conf does not exist, then run the script to create it
 ../aba.conf:
