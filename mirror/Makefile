@@ -43,7 +43,7 @@ sync: .initialized .rpmsint ~/.pull-secret.json index install                   
 .PHONY: save
 # Note that for a connected laptop or bastion there is no need to install all the required packages (i.e. only 'rpmsext') 
 # mirror-registry.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
-save: .initialized .rpmsext ~/.pull-secret.json mirror-registry.tar.gz ## Save images from the Internet to mirror/save/ & download 'mirror-registry.tar.gz' for later installation into your private network.
+save: .initialized .rpmsext ~/.pull-secret.json index mirror-registry.tar.gz ## Save images from the Internet to mirror/save/ & download 'mirror-registry.tar.gz' for later installation into your private network.
 	###
 	### Save images from the Internet to local disk 
 	###
@@ -58,7 +58,7 @@ cli-oc-mirror:
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
 #load: .initialized .rpmsint install ../vmware.conf  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
-load: .initialized cli-oc-mirror .rpmsint index install                 ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
+load: .initialized cli-oc-mirror .rpmsint install                 ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	###
 	### Load images from local disk to mirror registry
 	###
