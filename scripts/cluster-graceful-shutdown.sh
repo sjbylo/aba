@@ -65,7 +65,7 @@ echo -n "Shutdown the cluster? (Y/n): "
 read yn
 [ "$yn" = "n" ] && exit 1
 
-echo "Priming debug pods for all nodes (ensure all nodes are reachable):"
+echo "Priming debug pods for all nodes (ensure all nodes are 'Ready'):"
 for node in $(oc --request-timeout=20s get nodes -o jsonpath='{.items[*].metadata.name}'); do oc --request-timeout=20s debug -q --preserve-pod node/${node} -- chroot /host whoami > .$cluster_id.shutdown.log 2>&1 & done 
 wait
 

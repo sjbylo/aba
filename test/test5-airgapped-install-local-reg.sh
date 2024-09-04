@@ -44,6 +44,7 @@ v=4.16.3
 echo "ocp_version=$v" >> aba.conf  # Only to fix error, missing "ocp_version"
 test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask=" 
 #test-cmd -m "Cleaning up mirror - clean" "make -C mirror clean" 
+
 rm -rf sno compact standard 
 
 bastion2=registry.example.com
@@ -91,6 +92,10 @@ mylog "Setting reg_host=$bastion2"
 sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
 
+mylog "Setting op_sets=test"
+sed -i "s/^op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
+echo kiali-ossm > templates/operator-set-abatest 
+
 # FIXME: Why is this needed? 
 make -C cli
 
@@ -122,6 +127,8 @@ timedatectl
 chronyc sources -v
 END
 
+# Delete images
+ssh steve@$bastion2 -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all"
 # This file is not needed in a fully air-gapped env. 
 ssh steve@$bastion2 -- "rm -fv ~/.pull-secret.json"
 # Want to test fully disconnected 

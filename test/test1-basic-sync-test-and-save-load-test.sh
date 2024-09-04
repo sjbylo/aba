@@ -86,6 +86,8 @@ ssh $reg_ssh_user@$bastion2 -- "date" || sleep 2
 ssh $reg_ssh_user@$bastion2 -- "date" || sleep 3
 ssh $reg_ssh_user@$bastion2 -- "date" || sleep 8
 
+# Delete images
+ssh $reg_ssh_user@$bastion2 -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all"
 # This file is not needed in a fully air-gapped env. 
 ssh $reg_ssh_user@$bastion2 -- "rm -fv ~/.pull-secret.json"
 # Want to test fully disconnected 
@@ -130,6 +132,11 @@ sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf	# Install on r
 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
 sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
+
+mylog "Setting op_sets=test"
+sed -i "s/^op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
+echo kiali-ossm > templates/operator-set-abatest 
+
 
 ##mylog "Setting reg_root=~/my-quay-mirror"
 ##sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
@@ -229,6 +236,7 @@ rm -rf sno
 test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
 test-cmd -m "Delete cluster (if needed)" make -C sno delete 
 test-cmd -m "Uninstall mirror" make -C mirror uninstall 
+test-cmd -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all"
 
 #####################################################################################################################
 #####################################################################################################################
@@ -309,6 +317,7 @@ test-cmd -m "Bare-metal simulation: Creating agent config files" make standard  
 test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso || true		# Since we're simulating bare-metal, only create iso
 
 test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
+test-cmd -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all"
 
 #####################################################################################################################
 #####################################################################################################################

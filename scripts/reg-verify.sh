@@ -56,7 +56,7 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 	$cmd
 
 	echo
-	echo "Valid registry credential file(s) found in mirror/regcreds/.  Using existing registry $reg_url"
+	echo_green "Valid registry credential file(s) found in mirror/regcreds/.  Using existing registry $reg_url"
 
 	exit 0
 fi

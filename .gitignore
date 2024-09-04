@@ -51,3 +51,4 @@ test/?-stage
 cli/.*installed
 .??*.log
 aba.conf.bk
+templates/operator-set-abatest

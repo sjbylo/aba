@@ -19,7 +19,7 @@ echo
 eval `scripts/cluster-config.sh || exit 1`
 
 if [ -d $MANIFEST_DIR ]; then
-	echo "Backup up previous $MANIFEST_DIR' dir to '$MANIFEST_DIR.backup':"
+	echo "Backing up previous $MANIFEST_DIR' dir to '$MANIFEST_DIR.backup':"
 
 	rm -rf $MANIFEST_DIR.backup
 	cp -rp $MANIFEST_DIR $MANIFEST_DIR.backup
