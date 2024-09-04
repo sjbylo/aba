@@ -110,9 +110,9 @@ if [ "$dest" != "-" ]; then
 	echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
 	echo_white "Extract the bundle tar file under your home directory in your internal network, e.g. with the command:"
 	echo_white "  tar xvf $(basename $dest)"
-	echo_white "  cp mirror_seq*.tar aba/mirror/save"
+	echo_white "  mv mirror_seq*.tar aba/mirror/save"
 	echo_white "  cd aba"
-	echo_white "  ./abaguide"
+	echo_white "  ./aba"
 	echo
 #	echo "Install (or connect) and load the registry:"
 #	echo "make install"

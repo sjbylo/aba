@@ -199,7 +199,7 @@ if [ ! -f .bundle ]; then
 	echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'bundle archive' for you to transfer into the disconnected environment."
 	if ask "Install OpenShift into a fully disconnected network environment? (Y/n): "; then
 		echo
-		echo "Run: make bundle      # to save all images to local disk and create the bundle, follow the instructions."
+		echo "Run: make bundle out=/path/to/bundle/filename   # to save all images to local disk & create the bundle archive, follow the instructions."
 
 		exit 0
 	fi
