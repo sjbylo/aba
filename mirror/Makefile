@@ -147,6 +147,10 @@ uninstall: .initialized             mirror-registry .uninstalled     ## Uninstal
 	@rm -f .installed
 	@touch .uninstalled
 
+.PHONY: checkversion
+checkversion: init
+	@scripts/check-version-mismatch.sh
+
 # Note that 'mirror-registry.tar.gz' is needed to 'uninstall' registry in distclean!
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 .PHONY: clean

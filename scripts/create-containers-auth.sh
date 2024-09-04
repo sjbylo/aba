@@ -23,7 +23,7 @@ if [ -s regcreds/pull-secret-mirror.json -a -s $pull_secret_file ]; then
 	# Merge the two files
 	jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json $pull_secret_file > ./regcreds/pull-secret-full.json
 
-	echo Configuring ~/.docker/config.json and ~/.containers/auth.json with the pull secrets regcreds/pull-secret-mirror.json and regcreds/pull-secret-full.json ...
+	echo Configuring ~/.docker/config.json with the pull secrets regcreds/pull-secret-mirror.json and regcreds/pull-secret-full.json ...
 
 	# Copy into place 
 	cp ./regcreds/pull-secret-full.json ~/.docker/config.json
@@ -31,13 +31,13 @@ if [ -s regcreds/pull-secret-mirror.json -a -s $pull_secret_file ]; then
 
 # If the mirror creds are available add them also
 elif [ -s regcreds/pull-secret-mirror.json ]; then
-	echo Configuring ~/.docker/config.json and ~/.containers/auth.json with the private mirror pull secret: regcreds/pull-secret-mirror.json ...
+	echo Configuring ~/.docker/config.json with the private mirror pull secret: regcreds/pull-secret-mirror.json ...
 	cp ./regcreds/pull-secret-mirror.json ~/.docker/config.json
 	cp ./regcreds/pull-secret-mirror.json ~/.containers/auth.json
 
 # Only use the Red Hat pull secret file
 elif [ -s $pull_secret_file ]; then
-	echo Configuring ~/.docker/config.json and ~/.containers/auth.json with Red Hat pull secret $pull_secret_file ...
+	echo Configuring ~/.docker/config.json with Red Hat pull secret $pull_secret_file ...
 	cp $pull_secret_file ~/.docker/config.json
 	cp $pull_secret_file ~/.containers/auth.json  
 

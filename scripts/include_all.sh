@@ -41,7 +41,8 @@ normalize-mirror-conf()
 	# Ensure any ~/ is masked, e.g. \~/
 	# Ensrue reg_ssh_user has a value
 	# Prepend "export "
-	[ ! -s mirror.conf ] && echo "Warning: no 'mirror.conf' file defined in $PWD" >&2 && return 0
+	#[ ! -s mirror.conf ] && echo "Warning: no 'mirror.conf' file defined in $PWD" >&2 && return 0
+	[ ! -s mirror.conf ] &&                                                              return 0
 		#cut -d"#" -f1 | \
 			#sed -E "s/^reg_ssh_user=[[:space:]]+|reg_ssh_user=$/reg_ssh_user=$(whoami) /g" | \
 	cat mirror.conf | \
@@ -58,7 +59,8 @@ normalize-cluster-conf()
 {
 	# Normalize or sanitize the config file
 	# Prepend "export "
-	[ ! -s cluster.conf ] && echo "Warning: no 'cluster.conf' file defined in $PWD" >&2 && return 0
+	#[ ! -s cluster.conf ] && echo "Warning: no 'cluster.conf' file defined in $PWD" >&2 && return 0
+	[ ! -s cluster.conf ] &&                                                               return 0
 		##cut -d"#" -f1 | \
 	cat cluster.conf | \
 		sed -E "s/^\s*#.*//g" | \
@@ -72,7 +74,8 @@ normalize-vmware-conf()
 	# Determine if ESXi or vCenter
 	# Prepend "export "
 	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
-	[ ! -f vmware.conf ] && echo "Warning: no 'vmware.conf' file defined in $PWD" >&2 && return 0  # vmware.conf can be empty
+	#[ ! -f vmware.conf ] && echo "Warning: no 'vmware.conf' file defined in $PWD" >&2 && return 0  # vmware.conf can be empty
+	[ ! -f vmware.conf ] &&                                                              return 0  # vmware.conf can be empty
                 #cut -d"#" -f1 | \  # Can't use this since passwords can contain '#' char(s)!
 		#sed -E "s/\s+# [[:print:]]+$//g" | \
         vars=$(cat vmware.conf | \
