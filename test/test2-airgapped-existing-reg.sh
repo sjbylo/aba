@@ -96,7 +96,7 @@ if [ ! "$1" ]; then
 	#sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
 
 	mylog "Setting op_sets=test"
-	sed -i "s/^op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
+	sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
 	echo kiali-ossm > templates/operator-set-abatest 
 
 	make -C cli
