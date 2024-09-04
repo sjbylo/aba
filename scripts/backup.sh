@@ -144,7 +144,9 @@ fi
 
 rm -f aba/.bundle
 
-if [ "$inc" ]; then
+#if [ "$inc" ]; then
+# Changing this.  if "not repo backup only" (so, if 'inc' or 'tar'), then always create timestamp file so that future inc backups will not backup everything.
+if [ ! "$repo_only" ]; then
 	# Upon success, make a note of the time
 	echo_blue "Touching file ~/.aba.previous.backup" >&2
 	touch ~/.aba.previous.backup

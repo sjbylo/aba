@@ -90,6 +90,10 @@ if [ ! "$1" ]; then
 	sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf
 	#sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
 
+	mylog "Setting op_sets=test"
+	sed -i "s/^op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
+	echo kiali-ossm > templates/operator-set-abatest 
+
 	make -C cli
 
 	#################################
@@ -108,6 +112,8 @@ if [ ! "$1" ]; then
 	ssh steve@$bastion2 -- "date" || sleep 8
 	#################################
 
+	# Delete images
+	ssh steve@$bastion2 -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all"
 	# This file is not needed in a fully air-gapped env. 
 	ssh steve@$bastion2 -- "rm -fv ~/.pull-secret.json"
 	# Want to test fully disconnected 
@@ -187,11 +193,10 @@ mylog Adding ubi images to imageset conf file on `hostname`
 
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
-  - name: registry.redhat.io/ubi9/ubi:latest
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-test-cmd -r 99 3 -m "Saving ubi images to local disk" "make -C mirror save"
+test-cmd -r 99 3 -m "Saving 'vote-app' image to local disk" "make -C mirror save"
 
 ### mylog "'make inc' and ssh files over to internal bastion: steve@$bastion2"
 ### make -s -C mirror inc out=- | ssh steve@$bastion2 -- tar xvf -
@@ -203,9 +208,9 @@ mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_seq2.tar' file from `ho
 mkdir -p ~/tmp
 rm -f ~/tmp/file.tar
 make -s -C mirror inc out=~/tmp/file.tar
-mylog "Copy tar file to bastion"
+test-cmd -m "Check size of tar file and copy to bastion" "ls -l ~/tmp/file.tar"
 scp ~/tmp/file.tar steve@$bastion2:
-rm -f ~/tmp/file.tar
+rm -f ~/tmp/file.tar  # Remove file on client side
 mylog "The following untar command should unpack the file aba/mirror/save/mirror_seq2.tar only"
 test-cmd -h steve@$bastion2 -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
 test-cmd -h steve@$bastion2 -m "Removing tar file" "rm -f file.tar"

@@ -210,6 +210,7 @@ test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || tru
 ### NOT NEEDEDtest-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
 ### NOT NEEDEDtest-cmd -m "Delete cluster (if needed)" make -C sno delete 
 ### NOT NEEDEDtest-cmd -m "Uninstall mirror" make -C mirror uninstall 
+### NOT NEEDEDssh $reg_ssh_user@$bastion2 -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all"
 
 #####################################################################################################################
 #####################################################################################################################

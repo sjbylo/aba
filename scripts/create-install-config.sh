@@ -53,7 +53,7 @@ if [ -s regcreds/rootCA.pem ]; then
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
 	echo "Using root CA file at regcreds/rootCA.pem"
 else
-	echo_red "Warning: No file 'regcreds/rootCA.pem' found."
+	echo "Warning: No file 'regcreds/rootCA.pem' found.  Not adding 'additionalTrustBundle' to install-config.yaml"
 fi
 
 

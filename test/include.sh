@@ -42,9 +42,9 @@ test-cmd() {
 
 	echo "---------------------------------------------------------------------------------------"
 	if [ "$msg" ]; then
-		echo "$host: $msg ($@)" | tee -a test/test.log
+		echo "$host: $msg ($@) ($(pwd)) ($(date))" | tee -a test/test.log
 	else
-		echo "$host: $@" | tee -a test/test.log
+		echo "$host: $@ ($(pwd)) ($(date))" | tee -a test/test.log
 	fi
 	echo "---------------------------------------------------------------------------------------"
 

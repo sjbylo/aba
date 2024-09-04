@@ -35,9 +35,11 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 	exit 0
 fi
 
-exec >> $log_file 
-exec 2>> $log_file
-###exec > >(tee -a $log_file) 2>&1
+# Check if this script ir running as a daemon, if it is then output to a log file
+if [ ! -t 0 ]; then
+	exec >> $log_file 
+	exec 2>> $log_file
+fi
 
 echo Downloading the operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major in the background ...
 
