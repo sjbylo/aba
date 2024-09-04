@@ -42,6 +42,7 @@ uninstall: ## Uninstall any previously installed mirror registry
 sync: ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	make -C mirror sync
 
+# These are the targets needed to create the 'bundle' archive
 .PHONY: bundle
 bundle: download save tarrepo out=/tmp/bundle.tar
 
