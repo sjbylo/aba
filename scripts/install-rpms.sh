@@ -16,7 +16,7 @@ do
 done
 
 if [ "$rpms_to_install" ]; then
-	echo "Installing missing rpms:$rpms_to_install (logging to .dnf-install.log)"
+	echo "Installing required rpms:$rpms_to_install (logging to .dnf-install.log). Please wait!"
 	sudo dnf install $rpms -y >> .dnf-install.log 2>&1
 	[ $? -ne 0 ] && echo "Warning: an error occured whilst trying to install RPMs."
 fi

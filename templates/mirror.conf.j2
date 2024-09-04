@@ -14,10 +14,18 @@ reg_port=8443				# The port used by any *existing* mirror registry.
 reg_path=ocp4/openshift4		# This is the path where the OCP images will be stored,
 					# e.g. https://registry.example.com:8443/ocp4/openshift4/...
 
-op_sets="odf ocpv acm"			# Add operators, as defined by any existing templates/op.* files.
-#ops="web-terminal "			# Add individual operators.
+reg_pw=p4ssw0rd				# Registry password. Leave blank if a random password should be created e.g. reg_pw=
+					# The password must be at least 8 characters and contain no white-space.
 
-# Important: The below values are only needed if you want aba to install Quay for you.
+reg_root=				# Optional: Set the absolute path to a directory where Quay mirror registry storage should be kept. 
+					# Default is ~/quay-install.  Note that '~' can be used after the '='.
+					# Note: never delete this storage without uninstalling the Quay registry first!
+
+#op_sets="odf ocpv acm"			# Optional: Add operators, as defined by any existing templates/operator-set-* files.
+
+#ops="web-terminal "			# Optional: Add individual operators.
+
+# Important: The below 2 values (reg_ssh_key & reg_ssh_user) are only needed if you want aba to install Quay on a remote host.
 
 reg_ssh_key=				# Optional: Ssh key file to use for *remote* install of Quay.
 					# Example: ~/.ssh/id_rsa 
@@ -26,15 +34,8 @@ reg_ssh_key=				# Optional: Ssh key file to use for *remote* install of Quay.
 
 reg_ssh_user=				# Optional: Username to use for *remote* install of Quay. Default is current user.
 
-reg_pw=p4ssw0rd				# Registry password. Leave blank if a random password should be created e.g. reg_pw=
-					# The password must be at least 8 characters and contain no white-space.
 
-reg_root=				# Set the absolute path to a directory where the Quay mirror registry storage should be kept. 
-					# Default is ~/quay-install.  Note that '~' can be used after the '='.
-					# Note: never delete this storage without uninstalling the Quay registry first!
-
-
-# The below parameters are for advanced use and must not be changed.
+# The below parameters are for advanced use only and must not be changed!
 
 tls_verify=true				# If TLS should be verified for all registries. Default is 'true'.
 					# Note that the installation of OpenShift *requires* an existing, trusted certificate

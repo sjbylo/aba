@@ -132,20 +132,17 @@ if [ ! -f .bundle ]; then
 	# Update the conf file
 	sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
 	echo_blue "'ocp_version' set to '$target_ver' in aba.conf"
+
 	sleep 1
 
 	fi
 
-	# FIXME ############# SHOULD THIS GO HERE? ############
-	# Just in case, check the target ocp version in aba.conf match any existing versions defined in oc-mirror imageset config files. 
+	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
 	# FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
 	(
 		cd mirror
-		if [ -x scripts/check-version-mismatch.sh ]; then
-			scripts/check-version-mismatch.sh
-		fi
+		scripts/check-version-mismatch.sh
 	)
-	############# SHOULD THIS GO HERE? ############
 
 	##############################################################################################################################
 	# Determine editor
@@ -167,6 +164,7 @@ if [ ! -f .bundle ]; then
 		sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
 		export editor=$new_editor
 		echo_blue "'editor' set to '$new_editor' in aba.conf"
+
 		sleep 1
 	fi
 
@@ -185,6 +183,8 @@ if [ ! -f .bundle ]; then
 		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!"
 		echo_white "To allow access to the Red Hat image registry, please download your Red Hat pull secret and store is in the file '$pull_secret_file' and try again!"
 		echo_white "Note that the location of your pull secret file can be changed in 'aba.conf'."
+		echo
+
 		exit 1
 	fi
 
@@ -200,11 +200,12 @@ if [ ! -f .bundle ]; then
 	if ask "Install OpenShift into a fully disconnected network environment? (Y/n): "; then
 		echo
 		echo "Run: make bundle      # to save all images to local disk and create the bundle, follow the instructions."
+
 		exit 0
 	fi
 	
 	##############################################################################################################################
-	# Determine online installation (e.g. with a proxy)
+	# Determine online installation (e.g. via a proxy)
 
 	echo
 	echo_white "OpenShift can be installed directly from the Internet, e.g. via a proxy."
@@ -214,14 +215,20 @@ if [ ! -f .bundle ]; then
 	fi
 
 	echo 
-	echo "STEP: Set up the mirror registry and then sync it with the required container images."
+	echo 
+	echo_yellow Instructions
+	echo 
+	echo "Set up the mirror registry and then sync it with the required container images."
 	echo
-	echo "You have the choice to install the Quay appliance or re-use an existing mirror registry for container images."
+	echo "You have the choice to install the Quay appliance mirror or re-use an existing registry to store container images."
+	echo
 	echo "Run:"
 	echo "  make install       # to configure and/or install Quay, follow the instructions."
-	echo "  make sync          # to sychnonize all container images into your registry, follow the instructions."
+	echo "  make sync          # to sychnonize all container images - from the Internet - into your registry, follow the instructions."
+	echo
 	echo "Or run:"
 	echo "  make install sync  # to complete both actions."
+	echo
 
 else
 	# aba is running on the internal bastion, in 'bundle' mode.
@@ -229,22 +236,26 @@ else
 	# make & jq are needed below and in the next steps 
 	install_rpms make jq python3-pyyaml
 
-	echo_blue "Aba bundle detected!  This aba bundle is ready to install OpenShift version $ocp_version.  Assuming we're running on an internal bastion!"
+	echo_blue "Aba bundle detected!  This aba bundle is ready to install OpenShift version '$ocp_version'.  Assuming we're running on an internal bastion!"
 	
 	echo 
-	echo "STEP: Set up the mirror registry and then load it from disk with the required container images."
+	echo 
+	echo_yellow Instructions
+	echo 
+	echo "Set up the mirror registry and then load it from disk with the required container images."
 	echo
 	echo "Run:"
 	echo "  make install       # to configure and/or install Quay, follow the instructions."
 	echo "  make load          # to set up the mirror registry (configure or install quay) and load it, follow the instructions."
 	echo "Or run:"
 	echo "  make install load  # to complete both actions."
-
-	touch .bundle   # FIXME: only add the flag file to the actual bundle archive
+	echo
 fi
 
 echo 
-echo "Once 'make sync' has completed follow the instructions."
+echo "Once the images have been loaded or synced into the mirror registry follow the instructions provided."
+echo
+
 #echo "Once the registry is configured and loaded with images, run the following command to install OpenShift:"
 #echo "Run:"
 #echo
