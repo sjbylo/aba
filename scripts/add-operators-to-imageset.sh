@@ -49,7 +49,7 @@ else
 	exit 0
 fi
 
-echo "As defined in 'mirror/mirror.conf', addding opperators to the image set conf file ..." >&2
+echo "As defined in 'aba.conf' and/or 'mirror/mirror.conf', adding opperators to the image set conf file ..." >&2
 
 # Wait for the index to be generated?
 if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
@@ -66,10 +66,13 @@ do
 	# read in op list from template
 	if [ -s templates/operator-set-$set ]; then
 		echo "# $set operators"
+		echo -n "$set: " >&2
 		for op in $(cat templates/operator-set-$set)
 		do
+			echo -n "$op " >&2
 			add_op $op
 		done
+		echo >&2
 	else
 		echo_red "No such file 'templates/operator-set-$set' for operator set" >&2
 	fi
@@ -77,12 +80,19 @@ done
 
 if [ "$ops" ]; then
 	echo "# misc operators"
+	echo -n "Op: " >&2
+
+	##ops=$(echo $ops | tr -s " ")
+
+	for op in $ops
+	do
+		add_op $op
+		echo -n "$op " >&2
+	done
+
+	echo >&2
 else
-	echo "'ops' value not set in mirror.conf. Skipping operator render." >&2
+	echo "No 'ops' value set in aba.conf or mirror.conf. Skipping operator render." >&2
 fi
-ops=$(echo $ops | tr -s " ")
-for op in $ops
-do
-	add_op $op
-done
+
 

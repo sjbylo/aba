@@ -140,8 +140,7 @@ if [ ! -f .bundle ]; then
 	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
 	# FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
 	(
-		cd mirror
-		../scripts/check-version-mismatch.sh
+		make -s -C mirror checkversion
 	)
 
 	##############################################################################################################################
