@@ -97,7 +97,7 @@ sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf
 #sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
 
 mylog "Setting op_sets=test in mirror/mirror.conf"
-sed -i "s/^op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
+sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
 echo kiali-ossm > templates/operator-set-abatest 
 
 # FIXME: Why is this needed? 
