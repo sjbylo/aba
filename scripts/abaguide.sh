@@ -175,7 +175,7 @@ if [ ! -f .bundle ]; then
 		echo_blue "Pull secret found at '$pull_secret_file'."
 
 		# Now we have the required ocp version, we can fetch the operator index in the background. 
-		( make -s -C mirror index & ) & 
+		( make -s -C mirror index >> .fetch-index.log 2>&1 & ) & 
 
 		sleep 1
 	else
