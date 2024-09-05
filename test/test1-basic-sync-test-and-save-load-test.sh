@@ -14,6 +14,8 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
+uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=16G /tmp
+
 cd `dirname $0`
 cd ..
 
@@ -239,7 +241,8 @@ rm -rf sno
 test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
 test-cmd -m "Delete cluster (if needed)" make -C sno delete 
 test-cmd -m "Uninstall mirror" make -C mirror uninstall 
-test-cmd -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all"
+test-cmd -h steve@$bastion2 -m "Verify mirror uninstalled" podman ps 
+test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all"
 
 #####################################################################################################################
 #####################################################################################################################
@@ -320,7 +323,8 @@ test-cmd -m "Bare-metal simulation: Creating agent config files" make standard  
 test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso || true		# Since we're simulating bare-metal, only create iso
 
 test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
-test-cmd -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all"
+test-cmd -h steve@$bastion2 -m "Verify mirror uninstalled" podman ps 
+test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all"
 
 #####################################################################################################################
 #####################################################################################################################
