@@ -4,7 +4,8 @@ Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a fu
 Because Aba uses the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
 
 Aba automatically completes the following for you:
-1. Makes use of any existing container registry or installs the Quay mirror registry appliance for you. 
+1. Insatalls any type of OpenShift cluster, e.g. SNO, Compact, standard.
+2. Makes use of any existing container registry or installs the Quay mirror registry appliance for you. 
 1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
 1. Triggers the generation of the agent-based boot ISO. 
 1. Optionally creates the required VMs in ESXi or vSphere.
