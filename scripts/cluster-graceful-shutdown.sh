@@ -10,39 +10,44 @@ source <(normalize-cluster-conf)
 [ ! -d iso-agent-based ] && echo "Cluster not installed!" && exit 1
 server_url=$(cat iso-agent-based/auth/kubeconfig | grep server | awk '{print $NF}' | head -1)
 
+echo "Sending all output to .$cluster_id.shutdown.log"
 echo Checking cluster ...
 # Or use: timeout 3 bash -c "</dev/tcp/host/6443"
 if ! curl --retry 2 -skI $server_url >/dev/null; then
 	echo "Cluster not reachable at $server_url"
+
 	exit
 fi
 
-echo Attempting to log into the cluster ...
-until oc whoami >/dev/null 2>&1; do
-	#. <(make -s shell) || true
-	. <(make -s login) || true
+exec >> .$cluster_id.shutdown.log 2>&1
+exec 3> /dev/tty
+
+echo "Attempting to log into the cluster ... " >&3
+. <(make shell) 
+until oc whoami || . <(make login)
+do
 	sleep 2
 done
 
 sleep 5
 
 # Be sure we're logged in!  Sometimes the 2nd login can fail and "oc ..." (below) fails!
-until oc whoami >/dev/null 2>&1; do
+until oc whoami; do
 	. <(make -s login) || true
 	sleep 4
 done
 
 if ! oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null; then
-	echo "Failed to log into cluster.  Please log into the cluster and try again."
+	echo "Failed to log into cluster.  Please log into the cluster and try again." >&3
 
 	exit 1
 fi
 
 cluster_id=$(oc whoami --show-server | awk -F[/:] '{print $4}') || exit 1
-echo Cluster $cluster_id nodes:
-echo
-oc get nodes
-echo
+echo Cluster $cluster_id nodes: >&3
+echo >&3
+oc get nodes >&3
+echo >&3
 
 cluster_exp_date=$(oc -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
 
@@ -56,22 +61,22 @@ current_date_seconds=$(date +%s)
 seconds_diff=$((cluster_exp_date_seconds - current_date_seconds))
 days_diff=$((seconds_diff / 86400))
 
-echo "Certificate expiration date of cluster: $cluster_id: $cluster_exp_date"
-echo "There are $days_diff days until the cluster certificate expires. Ensure to start the cluster before then for the certificate to be automatically renewed."
+echo "Certificate expiration date of cluster: $cluster_id: $cluster_exp_date" >&3
+echo "There are $days_diff days until the cluster certificate expires. Ensure to start the cluster before then for the certificate to be automatically renewed." >&3
 
 ############
-echo
-echo -n "Shutdown the cluster? (Y/n): "
+echo >&3
+echo -n "Shutdown the cluster? (Y/n): " >&3
 read yn
 [ "$yn" = "n" ] && exit 1
 
-echo "Priming debug pods for all nodes (ensure all nodes are 'Ready'):"
+echo "Priming debug pods for all nodes (ensure all nodes are 'Ready'):" >&3
 for node in $(oc --request-timeout=20s get nodes -o jsonpath='{.items[*].metadata.name}'); do oc --request-timeout=20s debug -q --preserve-pod node/${node} -- chroot /host whoami > .$cluster_id.shutdown.log 2>&1 & done 
 wait
 
 # If not SNO ...
 if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
-	echo "Making all nodes unschedulable (corden):"
+	echo "Making all nodes unschedulable (corden):" >&3
 	for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do echo Uncorden ${node} ; oc adm cordon ${node} > .$cluster_id.shutdown.log 2>&1 & done 
 	wait
 
