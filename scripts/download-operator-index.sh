@@ -39,9 +39,11 @@ fi
 if [ ! -t 0 ]; then
 	exec >> $log_file 
 	exec 2>> $log_file
-fi
 
-echo Downloading the operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major in the background ...
+	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major (in the background) ...:
+else
+	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major ...:
+fi
 
 # Fetch latest operator catalog and default channels
 if ! oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major > $index_file; then

@@ -34,7 +34,7 @@ sync: .initialized .rpmsint ~/.pull-secret.json index install                   
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
-	$(SCRIPTS)/reg-sync.sh  $(debug)
+	$(SCRIPTS)/reg-sync.sh $(debug) $(retry)
 
 ~/.pull-secret.json:
 	$(SCRIPTS)/install-pull-secret.sh
@@ -47,7 +47,7 @@ save: .initialized .rpmsext ~/.pull-secret.json index mirror-registry.tar.gz ## 
 	###
 	### Save images from the Internet to local disk 
 	###
-	$(SCRIPTS)/reg-save.sh  $(debug)
+	$(SCRIPTS)/reg-save.sh $(debug) $(retry)
 
 # Only needed for 'make load'. 
 .PHONY: cli-oc-mirror
@@ -62,7 +62,7 @@ load: .initialized cli-oc-mirror .rpmsint install                 ## Load the sa
 	###
 	### Load images from local disk to mirror registry
 	###
-	$(SCRIPTS)/reg-load.sh  $(debug)
+	$(SCRIPTS)/reg-load.sh $(debug) $(retry)
 
 .PHONY: testload
 testload: save install load     # Test the save, install, load process on a connected host
@@ -97,8 +97,8 @@ mirror.conf: .initialized                     ../aba.conf               ## Confi
 install: .installed
 .installed: .initialized .rpmsext mirror.conf mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 	@rm -f .uninstalled 
-	@touch .installed
 	$(SCRIPTS)/reg-install.sh $(debug) 
+	@touch .installed
 
 .PHONY: installclean
 installclean:
