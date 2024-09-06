@@ -105,7 +105,7 @@ sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
 echo kiali-ossm > templates/operator-set-abatest 
 
 # FIXME: Why is this needed? 
-make -C cli
+make -C cli ~/bin/govc
 
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
