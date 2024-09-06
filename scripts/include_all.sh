@@ -143,7 +143,7 @@ edit_file() {
 	msg="$*"
 	if [ ! "$editor" -o "$editor" == "none" ]; then
 		echo
-		echo_cyan "The file '$(basename $PWD)/$conf_file' has been created.  Please edit it and continue (by repeating your last action)."
+		echo_cyan "The file '$(basename $PWD)/$conf_file' has been created.  Please edit it and try again."
 
 		return 1
 	else

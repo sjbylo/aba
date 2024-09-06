@@ -16,12 +16,9 @@ if [ ! "$ocp_version" ]; then
 	exit 1
 fi
 
-ask "Configure your private mirror registry (mirror.conf)? "
-
 scripts/j2 templates/mirror.conf.j2 > mirror.conf
 
-#[ "$ask" ] && $editor mirror.conf
-edit_file mirror.conf "Edit the mirror configuration file"
+edit_file mirror.conf "Configure your private mirror registry (mirror.conf)"
 
 exit 0
 

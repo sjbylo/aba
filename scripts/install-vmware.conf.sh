@@ -6,7 +6,7 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
-# Needed for $editor
+# Needed for $editor and $ask
 source <(normalize-aba-conf)
 
 [ "$platform" != "vmw" ] && echo "Platform param not set to 'vmw' in 'aba.conf'. Not configuring 'vmware.conf'." && > vmware.conf && exit 0
@@ -21,7 +21,7 @@ if [ ! -s vmware.conf ]; then
 		echo "Creating 'vmware.conf' from 'templates/vmware.conf'"
 		cp templates/vmware.conf .  # The default template 
 	fi
-	#[ "$ask" ] && $editor vmware.conf 
+
 	edit_file vmware.conf "If you want to use VMware, edit the vmware.conf file"
 fi
 
