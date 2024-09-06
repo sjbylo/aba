@@ -73,7 +73,7 @@ source <(normalize-aba-conf)
 
 reg_ssh_user=$(whoami)
 
-make -C cli
+make -C cli ~/bin/govc
 source <(normalize-vmware-conf)
 echo GOVC_URL=$GOVC_URL
 echo GOVC_DATASTORE=$GOVC_DATASTORE

@@ -67,7 +67,7 @@ source <(normalize-aba-conf)
 
 reg_ssh_user=$(whoami)
 
-make -C cli
+make -C cli ~/bin/govc
 source <(normalize-vmware-conf)
 
 rm -rf sno

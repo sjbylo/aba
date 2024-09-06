@@ -100,7 +100,7 @@ if [ ! "$1" ]; then
 	sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
 	echo kiali-ossm > templates/operator-set-abatest 
 
-	make -C cli
+	make -C cli ~/bin/govc
 
 	#################################
 	source <(normalize-vmware-conf)  # Needed for govc below
