@@ -46,7 +46,7 @@ rm -f aba/.aba.conf.seen   # Ensure user has chance to edit this conf file again
 # All 'find expr' below are by default "and"
 file_list=$(find		\
 	aba/aba			\
-	aba/abaguide		\
+	aba/aba-old		\
 	aba/.bundle		\
 	aba/aba.conf		\
 	aba/cli			\
