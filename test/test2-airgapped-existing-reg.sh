@@ -77,7 +77,7 @@ if [ ! "$1" ]; then
 	mylog "Setting ntp_server=$ntp" 
 	[ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
 
-	mylog "Setting op_sets=test in aba.conf"
+	mylog "Setting op_sets=abatest in aba.conf"
 	sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
 	echo kiali-ossm > templates/operator-set-abatest 
 
@@ -96,7 +96,7 @@ if [ ! "$1" ]; then
 	sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf
 	#sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
 
-	mylog "Setting op_sets=test"
+	mylog "Setting op_sets=abatest"
 	sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
 	echo kiali-ossm > templates/operator-set-abatest 
 

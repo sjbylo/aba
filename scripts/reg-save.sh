@@ -3,7 +3,10 @@
 
 source scripts/include_all.sh
 
-[ "$1" ] && set -x
+try=1
+[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
+[ "$1" -a $1 -gt 0 ] && try=`expr $1 + 1` && echo "Will retry $retry times."    # If the retry value exists and it's a number
+tot_try=$try
 
 umask 077
 
@@ -42,9 +45,7 @@ else
 
 	# If less than 50 GB, give a warning only
 	if [ $avail -lt 51250 ]; then
-		[ "$TERM" ] && tput setaf 1 
-		echo "Warning: Less than 50GB of space available under $PWD/save (only $avail MB). Operator images require between ~40 to ~400GB of disk space!"
-		[ "$TERM" ] && tput sgr0
+		echo_red "Warning: Less than 50GB of space available under $PWD/save (only $avail MB). Operator images require between ~40 to ~400GB of disk space!"
 	fi
 
 	echo Using existing save/imageset-config-save.yaml
@@ -62,13 +63,21 @@ echo
 # --continue-on-error : do not use this option. In testing the registry became unusable! 
 cmd="oc mirror --config=./imageset-config-save.yaml file://."
 echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
-echo "Running $(cat save-mirror.sh)"
+echo "Running: $(cat save-mirror.sh)"
 echo
-if ! ./save-mirror.sh; then
-	echo_red "Mirroring failed. Long-running processes can fail. If the issue seems temporary, retry; otherwise, fix it and try again."
-	exit 1
-fi
-# If oc-mirror fails due to transient errors, the user should try again
+
+until [ $try -eq 0 ]
+do
+	./save-mirror.sh && break
+	echo "Trying again ($try/$tot_try)"
+	let try=$try-1
+done
+
+#if ! ./save-mirror.sh; then
+	#echo_red "Mirroring failed. Long-running processes can fail. If the issue seems temporary, retry; otherwise, fix it and try again."
+	#exit 1
+#fi
+# If oc-mirror fails due to transient errors, the user should try again, unless retry is set
 
 echo
 echo_green "==> Image saving successful"
