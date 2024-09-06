@@ -57,6 +57,7 @@ test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $
 
 # Set up govc 
 cp $vf vmware.conf 
+sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 
 mylog "Setting 'ask='"
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf

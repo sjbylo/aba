@@ -66,6 +66,7 @@ vf=~/.vmware.conf
 test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
 # Set up govc 
 cp $vf vmware.conf 
+sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 
 # Do not ask to delete things
 mylog "Setting ask="
@@ -449,11 +450,6 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "All co available?" "make -C $subdir/aba
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -C $subdir/aba/standard delete" 
 
-## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating sno cluster with 'make -C $subdir/aba cluster name=sno type=sno'" "make -C $subdir/aba cluster name=sno type=sno" 
-## KEEP SNO test-cmd -h $reg_ssh_user@$bastion2 -m  "deleting sno cluster" "make -C $subdir/aba/sno delete" 
-######################
-
-### KEEP test-cmd -h $reg_ssh_user@$bastion2 -m  "Uninstalling mirror registry on internal bastion" "make -C $subdir/aba/mirror uninstall"
 
 mylog
 mylog "===> Completed test $0"

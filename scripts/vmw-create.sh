@@ -53,7 +53,8 @@ source <(normalize-cluster-conf)
 #fi
 
 # Check and warn about CPU count for SNO
-[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 16 ] && echo_magenta "Note: CPU count for SNO should be set to 16 (cores) for full support."
+[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 8 ] && \
+	echo_magenta "Note: The minimum requirement for SNO in production is 8 vCPU and 16 GB RAM." 
 
 # Enable hardware virt on the workers only (or also masters for 'scheduling enabled')
 master_nested_hv=false
