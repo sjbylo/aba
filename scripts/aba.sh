@@ -71,7 +71,7 @@ if [ ! -f .bundle ]; then
 	# Determine OCP version 
 
 	if [ "$ocp_version" ]; then
-		echo_blue "OpenShift version is defined as '$ocp_version'."
+		echo_blue "OpenShift version is defined in aba.conf as '$ocp_version'."
 	else
 
 	echo -n "Looking up OpenShift release versions ..."

@@ -3,6 +3,10 @@
 
 source scripts/include_all.sh
 
+try_tot=1
+[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
+[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Will retry $try_tot times."    # If the retry value exists and it's a number
+
 umask 077
 
 source <(normalize-aba-conf)
@@ -89,12 +93,24 @@ echo
 # --continue-on-error : do not use this option. In testing the registry became unusable! 
 cmd="oc mirror $tls_verify_opts --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
 echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
-echo "Running: $(cat sync-mirror.sh)"
-echo
-if ! ./sync-mirror.sh; then
-	echo_red "Mirroring failed. Long-running processes can fail. If the issue seems temporary, retry; otherwise, fix it and try again."
-	exit 1
-fi
+
+try=1
+while [ $try -le $try_tot ]
+do
+	echo_magenta -n "Attempt ($try/$try_tot)."
+	[ $try_tot -le 1 ] && echo " Set number of retries with 'make sync retry=<number>'" || echo
+	echo "Running: $(cat sync-mirror.sh)"
+	echo
+
+	./sync-mirror.sh && break
+
+	let try=$try+1
+done
+
+#if ! ./sync-mirror.sh; then
+#	echo_red "Mirroring failed. Long-running processes can fail. If the issue seems temporary, retry; otherwise, fix it and try again."
+#	exit 1
+#fi
 # If oc-mirror fails due to transient errors, the user should try again
 
 echo

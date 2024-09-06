@@ -3,6 +3,10 @@
 
 source scripts/include_all.sh
 
+try_tot=1
+[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
+[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Will retry $try_tot times."    # If the retry value exists and it's a number
+
 umask 077
 
 source <(normalize-aba-conf)
@@ -51,13 +55,26 @@ echo
 # Note: If 'make save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
 cmd="oc mirror $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
 echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
-echo "Running: $(cat load-mirror.sh)"
-if ! ./load-mirror.sh; then
-	[ "$TERM" ] && tput setaf 1 
-	echo_red "Mirroring failed. Long-running processes can fail. If the issue seems temporary, retry; otherwise, fix it and try again."
-	[ "$TERM" ] && tput sgr0
-       exit 1
-fi
+
+try=1
+while [ $try -le $try_tot ]
+do
+	echo_magenta -n "Attempt ($try/$try_tot)."
+	[ $try_tot -le 1 ] && echo " Set number of retries with 'make load retry=<number>'" || echo
+	echo "Running: $(cat load-mirror.sh)"
+	echo
+
+	./load-mirror.sh && break
+
+	let try=$try+1
+done
+
+#if ! ./load-mirror.sh; then
+	#[ "$TERM" ] && tput setaf 1 
+	#echo_red "Mirroring failed. Long-running processes can fail. If the issue seems temporary, retry; otherwise, fix it and try again."
+	#[ "$TERM" ] && tput sgr0
+       #exit 1
+#fi
 # If oc-mirror fails due to transient errors, the user should try again
 
 echo
