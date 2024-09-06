@@ -56,7 +56,7 @@ if [ -s regcreds/rootCA.pem ]; then
 		sleep 30
 
 		# Assume once it's re-created then it's working
-		while ! oc get imagestream -n openshift oauth-proxy 
+		while ! oc get imagestream -n openshift oauth-proxy 2>/dev/null
 		do
 			sleep 10
 		done
