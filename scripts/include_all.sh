@@ -147,8 +147,12 @@ edit_file() {
 
 		return 1
 	else
-		ask "$msg?" || return 1
-		$editor $conf_file
+		if [ "$ask" ]; then
+			ask "$msg?" || return 1
+			$editor $conf_file
+		else
+			echo "$msg? (auto answer)"
+		fi
 	fi
 }
 
