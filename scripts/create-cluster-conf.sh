@@ -54,7 +54,7 @@ fi
 
 if [ "$ask" ]; then
 	#### ask "Edit the cluster.conf file" || exit 1
-	$editor cluster.conf
+	edit_file cluster.conf "Edit the cluster.conf file to set all the parameters for OpenShift"
 fi
 
 exit 0

@@ -21,7 +21,8 @@ if [ ! -s vmware.conf ]; then
 		echo "Creating 'vmware.conf' from 'templates/vmware.conf'"
 		cp templates/vmware.conf .  # The default template 
 	fi
-	[ "$ask" ] && $editor vmware.conf 
+	#[ "$ask" ] && $editor vmware.conf 
+	edit_file vmware.conf "If you want to use VMware, edit the vmware.conf file"
 fi
 
 source <(normalize-vmware-conf)

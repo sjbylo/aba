@@ -39,5 +39,7 @@ else
 	echo_green "The cluster has been successfully installed."
 	echo_green "Run '. <(make shell)' to access the cluster using the kubeconfig file (x509 cert), or"
 	echo_green "Run '. <(make login)' to log into the cluster using the 'kubeadmin' password. "
+	[ -d regcreds ] && echo_green "Run 'make day2' to connect this cluster with your mirror registry."
+	echo_green "Run 'make help' for more options."
 fi
 
