@@ -151,7 +151,7 @@ edit_file() {
 			ask "$msg?" || return 1
 			$editor $conf_file
 		else
-			echo "$msg? (auto answer)"
+			echo_cyan "===> $msg? (auto answer)"
 		fi
 	fi
 }
