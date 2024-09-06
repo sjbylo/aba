@@ -171,7 +171,12 @@ if [ ! -f .bundle ]; then
 	# Allow edit of aba.conf
 
 	if [ ! -f .aba.conf.seen ]; then
-		edit_file aba.conf "Edit aba.conf to set global values, e.g. version, pull secret, base domain, net address (if known) etc" && touch .aba.conf.seen || echo_red "Warning: Please edit aba.conf before installing OpenShift!"
+		if edit_file aba.conf "Edit aba.conf to set global values, e.g. version, pull secret, base domain, net address (if known) etc"; then
+			touch .aba.conf.seen
+		else
+			echo_red "Warning: Please edit aba.conf before continuing!"
+			sleep 1
+		fi
 	fi
 
 

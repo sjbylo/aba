@@ -107,24 +107,15 @@ if [ "$dest" != "-" ]; then
 	echo
 	echo_white "After the bundle has been written, copy it to your *internal bastion*"
 	echo_white "Remember to copy over the large tar file(s) too, e.g. with the command:"
-	echo_white " cp mirror/save/mirror_seq*.tar $(dirname $dest)"
+	echo_white " cp mirror/save/mirror_seq*.tar <path to your portable media/usb stick/thumbdrive>"
 	echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
-	echo_white "Extract the bundle tar file under your home directory in your internal network, e.g. with the command:"
+	echo_white "Extract the bundle tar file anywhere under your home directory & continue, e.g. with the commands:"
 	echo_white "  tar xvf $(basename $dest)"
 	echo_white "  mv mirror_seq*.tar aba/mirror/save"
 	echo_white "  cd aba"
 	echo_white "  ./aba"
 	echo
-#	echo "Install (or connect) and load the registry:"
-#	echo "make install"
-#	echo "make load"
-#	echo
-#	echo "Then, create the iso file and install a cluster:"
-#	echo "make cluster name=mycluster"
-#	echo "cd mycluster; make or make help"
-#	echo
-#	echo "Writing tar file to $dest (use 'make tar out=/path/to/thumbdrive' to write to your portable storage device) ..."
-	echo_white "Run 'make help' for more options."
+	echo_white "Run 'make help' for all options."
 fi
 
 if [ "$inc" ]; then

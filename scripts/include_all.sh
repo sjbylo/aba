@@ -122,7 +122,7 @@ ask() {
 	[ "$1" == "-t" ] && timer="-t $1" && shift && shift 
 
 	## echo
-	echo -n "===> $@ $yn_opts: "
+	echo_cyan -n "===> $@ $yn_opts: "
 	read $timer yn
 
 	if [ "$def_val" == "y" ]; then
@@ -143,7 +143,7 @@ edit_file() {
 	msg="$*"
 	if [ ! "$editor" -o "$editor" == "none" ]; then
 		echo
-		echo "The file '$conf_file' has been created.  Please edit it and run the same command again."
+		echo_cyan "The file '$(basename $PWD)/$conf_file' has been created.  Please edit it and continue (by repeating your last action)."
 
 		return 1
 	else

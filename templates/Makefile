@@ -37,10 +37,6 @@ endif
 # The default target will build a cluster from scratch (for 'vmw' platform but not for bare-metal!) 
 all: $(TARGET_DEPENDENCIES)
 
-## OLD version => all: check ../aba.conf iso .autopoweroff .autoupload .autorefresh .finished login
-
-# vmw: all: check ../aba.conf iso .autopoweroff .autoupload .autorefresh .finished 
-# bm:  all: check ../aba.conf install-config.yaml agent-config.yaml .bm-message iso .bm-nextstep
 
 # Check cluster has been installed already and abort if it has
 .PHONY: check
@@ -55,10 +51,6 @@ help: ## Help
 ../aba.conf:
 	make -C .. aba.conf
 
-#../mirror/mirror.conf:
-#	@echo "Before installing an OpenShift cluster, please install or configure a mirror registry. See the aba/README file." && exit 1
-
-###.PHONY: init
 init: .initialized
 .initialized:
 	@ln -fs ../templates
@@ -80,12 +72,12 @@ vmware.conf: ## Use VMW vCenter or ESXi to create cluster.
 	@make -C ../cli ~/bin/govc
 	@test -f ../vmware.conf && ln -fs ../vmware.conf || true
 
-cluster.conf:  ## Set up the cluster.conf file.
+cluster.conf:  ## Set up the OpenShift cluster.conf file.
 	scripts/create-cluster-conf.sh $(name) $(type)
 
-agentconf: install-config.yaml agent-config.yaml  ## Convenient target to only build the agent config files.
+agentconf: install-config.yaml agent-config.yaml  ## Convenient target to only generate the agent config files, so they can be edited. 
 
-# Note that install-config.yaml can be configured with vSphere params (vmware.conf)
+# Note that install-config.yaml can be configured with vSphere params (need 'vmware.conf')
 install-config.yaml: .initialized vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
 	scripts/create-install-config.sh $(debug)
 
@@ -114,7 +106,7 @@ iso: iso-agent-based/agent.x86_64.iso ## Build the agent-based iso file.
 iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note that install-config.yaml can itself be dependent on vmware.conf params
 	scripts/generate-image.sh $(debug)
 
-ntp: .ntp ## Use NTP time sync during early installation. Required only if underlying platform/hardware does not support time sync.
+ntp: .ntp ## Configure NTP time sync during bootstrap (day1) and day2. Useful if underlying platform/hardware does not support time sync.
 .ntp: iso-agent-based/agent.x86_64.iso
 	@scripts/add_ntp_ignition_to_iso.sh $(debug) 
 	@touch .ntp
@@ -135,6 +127,7 @@ upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images
 	@scripts/vmw-upload.sh $(debug) 
 	@touch .autoupload
 
+
 # The following targets are meant for interactive use only
 
 # This target is a duplicate of .autorefresh below, except for the touch command.  'make refresh' is for interactive use and should always run.
@@ -142,7 +135,7 @@ upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images
 refresh:  ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
 	scripts/vmw-refresh.sh
 
-# This target, the same as 'refresh' should only run once.
+# This target is the same as 'refresh' but should only run once.
 .autorefresh: .initialized .autoupload vmware.conf 
 	scripts/vmw-refresh.sh
 	@touch .autorefresh
@@ -154,31 +147,31 @@ create: .initialized vmware.conf      ## Create the VMs based on the 'agent-base
 
 ###ls: vmware.conf  ## List VMs and their power state.
 .PHONY: ls
-ls: .initialized vmware.conf                     agent-config.yaml ## List VMs and their power state.
+ls: .initialized vmware.conf                     agent-config.yaml ## List all VMs and their power state.
 	@scripts/vmw-ls.sh || echo "No vm(s).  Try running 'make' or 'make refresh'."
 
 .PHONY: shutdown 
-shutdown: ## Trigger the cluster to gracefully shut itself down by draining all the nodes of pods. 
+shutdown: ## Trigger the cluster to gracefully shut itself down by draining all the nodes of pods and running shutdown command.
 	@scripts/cluster-graceful-shutdown.sh 
 
 .PHONY: startup
-startup: ## Start all VMs and allow all pods to start (uncorden)
+startup: ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
 	@scripts/cluster-startup.sh 
 
 .PHONY: rescue
-rescue: ## If a cluster does not start, rescue the cluster using ssh, if available. 
+rescue: ## If a cluster does not start due to login/CSR issues, rescue the cluster using ssh, if available. 
 	@scripts/cluster-rescue.sh 
 
 .PHONY: stop
-stop: .initialized vmware.conf                     agent-config.yaml ## Shut down all VM guests gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again! Try using 'make shutdown' for graceful cluster shutdown.
+stop: .initialized vmware.conf                     agent-config.yaml ## Shut down all VMs gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again! Try using 'make shutdown' for graceful cluster shutdown.
 	scripts/vmw-stop.sh $(debug)
 
 .PHONY: start
-start: .initialized vmware.conf                     agent-config.yaml ## Start all the VMs.
+start: .initialized vmware.conf                     agent-config.yaml ## Power on all VMs.  Use 'make startup' to ensure all nodes are uncordoned. 
 	@scripts/vmw-start.sh $(debug) || exit 0
 
 .PHONY: poweroff
-poweroff: .initialized vmware.conf                     agent-config.yaml ## Power off the VMs immediately.  This will stop the cluster abruptly. 
+poweroff: .initialized vmware.conf                     agent-config.yaml ## Power off all VMs immediately.  This will stop the cluster abruptly. 
 	scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: kill
@@ -186,7 +179,7 @@ kill:  .initialized vmware.conf                     agent-config.yaml ## Kill or
 	scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: delete
-delete: .initialized vmware.conf                     agent-config.yaml ## Delete the VMs. This will delete the cluster. 
+delete: .initialized vmware.conf                     agent-config.yaml ## Delete all VMs. This will delete the cluster!
 	@scripts/vmw-delete.sh $(debug) || exit 0
 
 .finished: .autorefresh
@@ -207,36 +200,36 @@ getco: ## Run 'oc get co' command on the cluster.
 	oc --kubeconfig iso-agent-based/auth/kubeconfig get co
 
 .PHONY: cmd
-cmd: ## Run any oc command on the cluster, must provide command, e.g. cmd="oc get pods -A", default is 'oc get co'.
+cmd: ## Run any oc command on the cluster. Must provide command, e.g. cmd="oc get pods -A", default is 'oc get co'.
 	@scripts/oc-command.sh $(cmd)
 
 .PHONY: ssh
-ssh: ## Open ssh to the rendezvous host for troubleshooting
+ssh: ## Open ssh to the rendezvous host (node 0) for troubleshooting
 	@scripts/ssh-rendezvous.sh $(cmd)
 
 .PHONY: shell   
-shell:  ## Access to the installed cluster. Run '. <(make shell)' or '. <(make -s shell)'
+shell:  ## Gain access to the installed cluster.  Run '. <(make -s shell)'
 	@echo "export KUBECONFIG=$(PWD)/iso-agent-based/auth/kubeconfig"
 
 .PHONY:
-day2:  ## Set up OperatorHub, CatalogSources, imageContentSourcePolicy resources. Run this target every time new Operators are loaded into the mirror registry.
+day2:  ## Set up OperatorHub, CatalogSources, imageContentSourcePolicy resources. Run this target after new Operators are loaded into the mirror registry. Requires access to 'mirror/.../oc-mirror-workspace' directory!
 	@scripts/day2.sh $(debug)
 
 .PHONY: vmw
-vmw: ## Configure VMW platform credentials.
+vmw: ## Configure vCenter/ESXi API credentials in vmware.conf file.
 	@[ ! -s ../vmware.conf ] && rm -f ../vmware.conf || true
 	@make -C .. vmw
 
 .PHONY: noask
-noask:  ## Set 'ask' in aba.conf to 'false'
+noask:  ## Set 'ask' in aba.conf to 'false'.  Aba will assume all defaults and not prompt you for anything which allows for fully automated installations.
 	@make -C .. noask
 
 .PHONY: ask
-ask: ## Set 'ask' in aba.conf to 'true'
+ask: ## Set 'ask' in aba.conf to 'true'  Aba will prompt you for certain actions. 
 	@make -C .. ask
 
 .PHONY: clean
-clean: ## Clean up files generated by 'aba', except your own configuration files. 'make clean && make' should re-build your cluster from scratch, using the same config. It is recommended to backup your important files. 
+clean: ## Clean up files generated by 'aba', except your own configuration files. 'make clean && make' should re-build your cluster from scratch, using the same cluster.conf file. It is recommended to backup your important files first!
 	rm -f scripts templates
 	rm -f install-config.yaml agent-config.yaml 
 	rm -rf iso-agent-based*

@@ -107,6 +107,7 @@ clean: ## Clean up all temporary files.
 	make -C test clean 
 	rm -f ~/.aba.previous.backup
 	rm -f ~/.aba.conf.created
+	rm -f .aba.conf.seen
 
 .PHONY: distclean
 distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this dies not run 'make uninstall' (uninstall the reg.)

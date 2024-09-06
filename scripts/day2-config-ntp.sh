@@ -9,7 +9,7 @@ umask 077
 
 source <(normalize-aba-conf)
 
-[ ! "$ntp_server" ] && echo "Define 'ntp_server' in 'aba.conf' to configure NTP" && exit 0
+[ ! "$ntp_server" ] && echo_red "Define 'ntp_server' value in 'aba.conf' to configure NTP" && exit 0
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -123,3 +123,6 @@ export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 oc apply -f 99-master-chrony-conf-override.yaml
 oc apply -f 99-worker-chrony-conf-override.yaml
 
+echo
+echo "OpenShift will now configure NTP on all nodes.  Node restart is required and will take some time to complete."
+echo
