@@ -168,6 +168,14 @@ if [ ! -f .bundle ]; then
 	fi
 
 	##############################################################################################################################
+	# Allow edit of aba.conf
+
+	if [ ! -f .aba.conf.seen ]; then
+		edit_file aba.conf "Edit aba.conf to set global values, e.g. version, pull secret, base domain, net address (if known) etc" && touch .aba.conf.seen || echo_red "Warning: Please edit aba.conf before installing OpenShift!"
+	fi
+
+
+	##############################################################################################################################
 	# Determine pull secret
 
 	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then

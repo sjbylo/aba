@@ -14,7 +14,10 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
-uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=16G /tmp
+# Try to fix "out of space" error when generating the op. index
+cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
+
+#uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=16G /tmp
 
 cd `dirname $0`
 cd ..

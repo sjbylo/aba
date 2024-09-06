@@ -1,5 +1,5 @@
   __   ____   __  
- / _\ (  _ \ / _\     Welcome to the Aba utility!
-/    \ ) _ (/    \    Follow the instructions below or
-\_/\_/(____/\_/\_/    see the README.md file for more.
+ / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!
+/    \ ) _ (/    \    Follow the instructions below or see the README.md file for more.
+\_/\_/(____/\_/\_/
 
