@@ -40,7 +40,8 @@ cd ..
 
 
 # Add the flag file so when aba is run again it knows it's a bundle!
-touch aba/.bundle
+touch aba/.bundle  # Flag this archive as a bundle
+rm -f aba/.aba.conf.seen   # Ensure user has chance to edit this conf file again on the internal network
 
 # All 'find expr' below are by default "and"
 file_list=$(find		\

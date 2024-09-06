@@ -130,7 +130,10 @@ if [ ! "$1" ]; then
 	scp $vf steve@$bastion2: 
 	##scp ~/.vmware.conf testy@$bastion2: 
 
-	uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
+	#uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
+	# Try to fix "out of space" error when generating the op. index
+	cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
+
 
 	ssh steve@$bastion2 "rpm -q make  || sudo yum install make -y"
 
