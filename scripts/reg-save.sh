@@ -3,10 +3,9 @@
 
 source scripts/include_all.sh
 
-try=1
+try_tot=1
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" -a $1 -gt 0 ] && try=`expr $1 + 1` && echo "Will retry $retry times."    # If the retry value exists and it's a number
-tot_try=$try
+[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Will retry $try_tot times."    # If the retry value exists and it's a number
 
 umask 077
 
@@ -63,14 +62,18 @@ echo
 # --continue-on-error : do not use this option. In testing the registry became unusable! 
 cmd="oc mirror --config=./imageset-config-save.yaml file://."
 echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
-echo "Running: $(cat save-mirror.sh)"
-echo
 
-until [ $try -eq 0 ]
+try=1
+while [ $try -le $try_tot ]
 do
+	echo_magenta -n "Attempt ($try/$try_tot)."
+	[ $try_tot -le 1 ] && echo " Set number of retries with 'make save retry=<number>'" || echo
+	echo "Running: $(cat save-mirror.sh)"
+	echo
+
 	./save-mirror.sh && break
-	echo "Trying again ($try/$tot_try)"
-	let try=$try-1
+
+	let try=$try+1
 done
 
 #if ! ./save-mirror.sh; then
