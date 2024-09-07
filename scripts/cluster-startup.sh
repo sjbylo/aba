@@ -13,7 +13,7 @@ sleep 10
 
 echo Waiting for cluster endpoint $server_url ...
 # Or use: timeout 3 bash -c "</dev/tcp/host/6443"
-while ! curl -skI $server_url >/dev/null
+while ! curl --retry 3 -skI $server_url >/dev/null
 do
 	sleep 2
 done

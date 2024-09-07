@@ -14,7 +14,7 @@ source <(normalize-mirror-conf)
 
 ### # Can the registry mirror already be reached?
 ### [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
-### res_remote=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
+### res_remote=$(curl --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" https://$reg_host:${reg_port}/health/instance || true)
 
 export reg_url=https://$reg_host:$reg_port
 

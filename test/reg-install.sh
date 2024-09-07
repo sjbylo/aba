@@ -3,7 +3,7 @@
 
 cd `dirname $0`
 
-curl -ILsk -o /dev/null https://localhost:8443/health/instance && echo "Mirror registry already installed on `hostname`" && exit 0
+curl --retry 3 -ILsk -o /dev/null https://localhost:8443/health/instance && echo "Mirror registry already installed on `hostname`" && exit 0
 
 if ! rpm -q podman || ! rpm -q rsync; then
 	sudo dnf install podman rsync -y

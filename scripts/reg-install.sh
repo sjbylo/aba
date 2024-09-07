@@ -28,7 +28,7 @@ fi
 # Check for Quay...
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
 echo_white Probing $reg_url/health/instance
-reg_code=$(curl --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
+reg_code=$(curl --retry 3 --retry 3 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
 if [ "$reg_code" = "200" ]; then
 	echo
@@ -44,7 +44,7 @@ fi
 
 # Check for any endpoint ...
 echo_white Probing $reg_url/
-reg_code=$(curl --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/ || true)
+reg_code=$(curl --retry 3 --retry 3 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/ || true)
 
 if [ "$reg_code" = "200" ]; then
 	echo

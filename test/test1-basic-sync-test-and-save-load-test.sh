@@ -178,7 +178,7 @@ test-cmd -r 99 3 -m "Syncing images from external network to internal mirror reg
 # Install yq for below test only!
 which yq || (
 	mylog Install yq
-	curl -sSL -o - https://github.com/mikefarah/yq/releases/download/v4.41.1/yq_linux_amd64.tar.gz | tar -C ~/bin -xzf - ./yq_linux_amd64 && \
+	curl --retry 3 -sSL -o - https://github.com/mikefarah/yq/releases/download/v4.41.1/yq_linux_amd64.tar.gz | tar -C ~/bin -xzf - ./yq_linux_amd64 && \
 		mv ~/bin/yq_linux_amd64 ~/bin/yq && \
 		chmod 755 ~/bin/yq
 	)
