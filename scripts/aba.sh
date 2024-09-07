@@ -10,10 +10,18 @@ source scripts/include_all.sh
 
 interactive_mode=1
 
-[ ! -f aba.conf ] && cp templates/aba.conf .
+if [ ! -f aba.conf ]; then
+	cp templates/aba.conf .
+
+	# Initial prep for interactive mode
+	sed -i "s/^ocp_version=[^ \t]*/ocp_version=			/g" aba.conf
+	sed -i "s/^editor=[^ \t]*/editor=			/g" aba.conf
+fi
 
 while [ "$*" ] 
 do
+	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf   # for testing, if unset, testing will halt in edit_file()!
+
 	if [ "$1" = "--debug" -o "$1" = "-d" ]; then
 		export DEBUG_ABA=1
 		set -x
@@ -40,10 +48,6 @@ done
 
 [ ! "$interactive_mode" ] && exit 0
 # From now on it's all considered interactive
-
-# Prep for interactive mode
-sed -i "s/^ocp_version=[^ \t]*/ocp_version=			/g" aba.conf
-sed -i "s/^editor=[^ \t]*/editor=			/g" aba.conf
 
 source <(normalize-aba-conf)
 
