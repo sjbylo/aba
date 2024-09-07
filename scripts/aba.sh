@@ -176,7 +176,7 @@ if [ ! -f .bundle ]; then
 	if [ ! -f .aba.conf.seen ]; then
 		touch .aba.conf.seen
 
-		if edit_file aba.conf "Edit aba.conf to set global values, e.g. version, pull secret, base domain, net address (if known) etc"; then
+		if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, ocp version, pull secret, base domain, net address etc (if known)"; then
 			:
 		else
 			#echo_red "Warning: Please edit aba.conf before continuing!"
