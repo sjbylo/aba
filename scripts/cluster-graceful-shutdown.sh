@@ -10,7 +10,8 @@ source <(normalize-cluster-conf)
 [ ! -s iso-agent-based/auth/kubeconfig ] && echo "Cannot find iso-agent-based/auth/kubeconfig file!" && exit 1
 server_url=$(cat iso-agent-based/auth/kubeconfig | grep server | awk '{print $NF}' | head -1)
 
-echo "Sending all output to $cluster_id.shutdown.log"
+logfile=$cluster_id.shutdown.log
+echo Sending all output to $logfile
 echo Checking cluster ...
 # Or use: timeout 3 bash -c "</dev/tcp/host/6443"
 if ! curl --retry 2 -skI $server_url >/dev/null; then
@@ -60,23 +61,23 @@ echo -n "Shutdown the cluster? (Y/n): "
 read yn
 [ "$yn" = "n" ] && exit 1
 
-echo "Priming debug pods for all nodes (ensure all nodes are 'Ready'):"
-for node in $($OC --request-timeout=20s get nodes -o jsonpath='{.items[*].metadata.name}'); do $OC --request-timeout=20s debug -q --preserve-pod node/${node} -- chroot /host whoami & done > $cluster_id.shutdown.log 2>&1
+echo "Priming debug pods for all nodes (ensure all nodes are 'Ready') ..."
+for node in $($OC --request-timeout=20s get nodes -o jsonpath='{.items[*].metadata.name}'); do $OC --request-timeout=20s debug -q --preserve-pod node/${node} -- chroot /host whoami & done > $logfile 2>&1
 wait
 
 # If not SNO ...
 if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
-	echo "Making all nodes unschedulable (corden):"
-	for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}'); do echo Uncorden ${node} ; $OC adm cordon ${node} > .$cluster_id.shutdown.log 2>&1 & done > $cluster_id.shutdown.log 2>&1
+	echo "Making all nodes unschedulable (corden) ..."
+	for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}'); do echo Uncorden ${node} ; $OC adm cordon ${node} & done > $logfile 2>&1
 	wait
 
-	echo "Draining all pods from all worker nodes (logging to .$cluster_id.shutdown.log):"
+	echo "Draining all pods from all worker nodes ..."
 	sleep 1
 	for node in $($OC get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); 
 	do
 		echo Drain ${node}
 		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=120s &
-	done > $cluster_id.shutdown.log 2>&1
+	done > $logfile 2>&1
 	wait
 fi
 
@@ -84,7 +85,7 @@ echo Shutting down all nodes:
 for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}');
 do
 	$OC --request-timeout=20s debug node/${node} -- chroot /host shutdown -h 1
-done > $cluster_id.shutdown.log 2>&1
+done > $logfile 2>&1
 
 echo 
 echo "The cluster will complete shutdown and power off in a short while!"
