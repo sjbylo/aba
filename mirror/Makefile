@@ -23,6 +23,10 @@ init: .initialized
 	../aba
 	make -C ../cli 
 
+.PHONY: cli-download
+cli-download:
+	make -C ../cli download
+
 ## If vmware.conf does not exist, then create it
 #../vmware.conf:
 #	@make -C .. vmware.conf
@@ -30,7 +34,7 @@ init: .initialized
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
 #sync: .initialized .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
-sync: .initialized .rpmsint ~/.pull-secret.json index install                   ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf') Use retry=# to retry after failure.
+sync: .initialized .rpmsint ~/.pull-secret.json index cli-download install                   ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf') Use retry=# to retry after failure.
 	###
 	### Upload images to the mirror registry from the Internet 
 	###
@@ -43,7 +47,7 @@ sync: .initialized .rpmsint ~/.pull-secret.json index install                   
 .PHONY: save
 # Note that for a connected laptop or bastion there is no need to install all the required packages (i.e. only 'rpmsext') 
 # mirror-registry.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
-save: .initialized .rpmsext ~/.pull-secret.json index mirror-registry.tar.gz ## Save images from the Internet to mirror/save/ & download 'mirror-registry.tar.gz' for later installation into your private network. Use retry=# to retry after failure.
+save: .initialized .rpmsext ~/.pull-secret.json index cli-download mirror-registry.tar.gz ## Save images from the Internet to mirror/save/ & download 'mirror-registry.tar.gz' for later installation into your private network. Use retry=# to retry after failure.
 	###
 	### Save images from the Internet to local disk 
 	###
