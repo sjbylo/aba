@@ -32,7 +32,7 @@ reg_code=$(curl --retry 3 --retry 3 --connect-timeout 10 -ILsk -o /dev/null -w "
 
 if [ "$reg_code" = "200" ]; then
 	echo
-	echo_red "Warning: Quay registry found at $reg_host:$reg_port."
+	echo_red "Warning: Quay registry found at $reg_url/health/instance."
 	echo_red "         To use this registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
 	echo_red "         The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively."
 	echo_red "         The pull secret file can also be created and verified using 'make password'"
@@ -48,7 +48,7 @@ reg_code=$(curl --retry 3 --retry 3 --connect-timeout 10 -ILsk -o /dev/null -w "
 
 if [ "$reg_code" = "200" ]; then
 	echo
-	echo_red "Warning: Endpoint found at $reg_host:$reg_port."
+	echo_red "Warning: Endpoint found at $reg_url/."
 	echo_red "         If this is your existing registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again."
 	echo_red "         The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively."
 	echo_red "         The pull secret file can also be created and verified using 'make password'"

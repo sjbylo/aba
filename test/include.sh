@@ -6,11 +6,11 @@ umask 077
 show_error() {
 	local exit_code=$?
 	echo 
-	[ "$TERM" ] && tput setaf 1
+	#[ "$TERM" ] && tput setaf 1
 	echo Script error: 
 	echo "Error occurred in command: '$BASH_COMMAND'"
 	echo "Error code: $exit_code"
-	[ "$TERM" ] && tput sgr0
+	#[ "$TERM" ] && tput sgr0
 
 	echo "FAILED" >> test/test.log
 

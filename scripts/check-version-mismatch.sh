@@ -1,5 +1,6 @@
 #!/bin/bash 
 # This script compares the OCP target version in aba.conf with versions defined in any existing imageset config files under mirror/sync/ or save/
+# Warns if there is a mismatch that needs to be addressed.
 
 source scripts/include_all.sh
 
@@ -36,15 +37,13 @@ do
 		####### echo is_version_greater "$om_ocp_min_ver" "$aba_ocp_ver" \|\| is_version_greater $aba_ocp_ver "$om_ocp_max_ver" \|\| \[ "$om_ocp_channel" \!\= "$aba_ocp_channel" \]
 		if is_version_greater "$om_ocp_min_ver" "$aba_ocp_ver" || is_version_greater $aba_ocp_ver "$om_ocp_max_ver" || [ "$om_ocp_channel" != "$aba_ocp_channel" ]; then
 			echo 
-			[ "$TERM" ] && tput setaf 1
-			echo "WARNING: The version of the 'openshift-install' CLI ($aba_ocp_ver) no longer matches the version defined in the imageset-config file."
-			echo "         Settings in 'mirror/$f' are currently min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel"
-			echo "         Before syncing or saving images (again), the mismatch in the file 'mirror/$f' must be corrected."
-			echo "         Fix the mismatch and try again!" 
-			[ "$TERM" ] && tput sgr0
+			echo_red "Warning: The version of the 'openshift-install' CLI ($aba_ocp_ver) no longer matches the version defined in the imageset-config file."
+			echo_red "         Settings in 'mirror/$f' are currently min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel"
+			echo_red "         Before syncing or saving images (again), the mismatch in the file 'mirror/$f' must be corrected."
+			echo_red "         Fix the mismatch and try again!" 
 			echo
-			sleep 2
 
+			sleep 2
 			### exit 1
 		fi
 	fi
