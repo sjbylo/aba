@@ -109,5 +109,5 @@ echo
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
-echo_green "install-config.yaml generated successfully"
+echo_green "install-config.yaml generated successfully!"
 

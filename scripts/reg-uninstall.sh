@@ -63,4 +63,4 @@ else
 fi
 
 echo
-echo_green "==> Registry uninstall successful"
+echo_green "Registry uninstall successful"

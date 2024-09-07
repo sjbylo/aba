@@ -29,8 +29,8 @@ log_file=.redhat-operator-index-v$ocp_ver_major.log
 # See if the index is already downloading (using 'ln') 
 [ ! -f $index_file ] && touch $index_file
 if ! ln $index_file $lock_file >/dev/null 2>&1; then
-	[ ! -s $index_file ] && echo_blue "Operator index 'v$ocp_ver_major' is downloading ..." || \
-		echo_blue "Operator index 'v$ocp_ver_major' already downloaded."
+	[ ! -s $index_file ] && echo_magenta "Operator index 'v$ocp_ver_major' is downloading ..." || \
+		echo_white "Operator index 'v$ocp_ver_major' already downloaded."
 
 	exit 0
 fi

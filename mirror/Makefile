@@ -14,18 +14,22 @@ init: .initialized
 	ln -fs ../aba.conf 
 	mkdir -p regcreds
 	touch regcreds/.dummy  # Needed only so tar includes the *empty* regcreds dir
-	@####make -C ../cli   #  needed so 'make load' works on internal bastion
 	touch .initialized
 	@##echo Initialized `pwd`
 
 # If aba.conf does not exist, then run the script to create it
 ../aba.conf:
 	../aba
-	make -C ../cli 
+	@###make -C ../cli 
 
 .PHONY: cli-download
 cli-download:
-	make -C ../cli download
+	make -C ../cli download   #  needed so 'make load' works on internal bastion
+
+# Only needed for 'make load'. 
+.PHONY: cli-oc-mirror
+cli-oc-mirror:
+	make -C ../cli ~/bin/oc-mirror
 
 ## If vmware.conf does not exist, then create it
 #../vmware.conf:
@@ -53,16 +57,9 @@ save: .initialized .rpmsext ~/.pull-secret.json index cli-download mirror-regist
 	###
 	$(SCRIPTS)/reg-save.sh $(debug) $(retry)
 
-# Only needed for 'make load'. 
-.PHONY: cli-oc-mirror
-cli-oc-mirror:
-	make -C ../cli ~/bin/oc-mirror
-
-# FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-#load: .initialized .rpmsint install ../vmware.conf  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
-load: .initialized cli-oc-mirror .rpmsint install                 ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf')  Use retry=# to retry after failure.
+load: .initialized cli-oc-mirror .rpmsint install  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf')  Use retry=# to retry after failure.
 	###
 	### Load images from local disk to mirror registry
 	###

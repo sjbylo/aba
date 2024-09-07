@@ -269,4 +269,4 @@ else
 fi
 
 echo
-echo_green "==> Registry installation successful"
+echo_green "Registry installated/configured successfully!"

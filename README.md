@@ -34,7 +34,7 @@ cd aba
 ```
 make install 
 ```
-- configures and connects to your existing container registry OR install a fresh quay appliance registry.
+- configures and connects to your existing container registry OR installs a fresh quay appliance registry.
 
 ```
 make sync
