@@ -114,7 +114,7 @@ fi
 
 if [ "$err" ]; then
 	echo
-	echo_red "WARNING: The files 'install-config.yaml' and/or 'agent-config.yaml' chould not be parsed properly." 
+	echo_red "Warning: The files 'install-config.yaml' and/or 'agent-config.yaml' chould not be parsed properly." 
 	echo
 
 	exit 1

@@ -32,14 +32,12 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 		fi
 	else
 		echo
-		echo "WARNING: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' cert file found."
+		echo_red "Warning: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' cert file found."
 		echo
 
 		if [ "$tls_verify" ]; then
-			[ "$TERM" ] && tput setaf 1
 			echo_red "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again."
 			echo
-			[ "$TERM" ] && tput sgr0
 
 			exit 1
 		fi

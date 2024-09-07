@@ -80,10 +80,9 @@ if [ ! -f .bundle ]; then
 	echo -n "Looking up OpenShift release versions ..."
 
 	if ! curl --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
-		[ "$TERM" ] && tput setaf 1
 		echo
-		echo "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the required images."
-		[ "$TERM" ] && tput sgr0
+		echo_red "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the required images."
+
 		exit 1
 	fi
 
