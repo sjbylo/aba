@@ -99,7 +99,7 @@ failed=1
 while [ $try -le $try_tot ]
 do
 	echo_magenta -n "Attempt ($try/$try_tot)."
-	[ $try_tot -le 1 ] && echo " Set number of retries with 'make sync retry=<number>'" || echo
+	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'make sync retry=<number>'" || echo
 	echo "Running: $(cat sync-mirror.sh)"
 	echo
 
@@ -113,7 +113,7 @@ done
 [ "$failed" ] && echo_red "Image synchronization aborted ..." && exit 1
 
 echo
-echo_green "==> Images synchronized successfully"
+echo_green "Images synchronized successfully!"
 echo 
 echo "OpenShift can now be installed with the command:"
 echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."

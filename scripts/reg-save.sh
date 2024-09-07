@@ -68,7 +68,7 @@ failed=1
 while [ $try -le $try_tot ]
 do
 	echo_magenta -n "Attempt ($try/$try_tot)."
-	[ $try_tot -le 1 ] && echo " Set number of retries with 'make save retry=<number>'" || echo
+	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'make save retry=<number>'" || echo
 	echo "Running: $(cat save-mirror.sh)"
 	echo
 
@@ -82,5 +82,5 @@ done
 [ "$failed" ] && echo_red "Image saving aborted ..." && exit 1
 
 echo
-echo_green "==> Images saved successfully"
+echo_green "Images saved successfully!"
 echo 

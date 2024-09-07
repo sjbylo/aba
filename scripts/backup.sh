@@ -23,25 +23,25 @@ if [ "$dest" != "-" ]; then
 	echo "$dest" | grep -q \.tar$ || dest="$dest.tar"
 
 	# If the destination file already exists...
-	[ -s $dest ] && echo "Warning: File $dest already exists" >&2 && exit 1
+	[ -s $dest ] && echo_red "Warning: File $dest already exists. Aborting!" >&2 && exit 1 # Must use stderr otherwise the tar archive becomes corrupt
 fi
 
 # Assume this script is run via 'make ...' from aba's top level dir
 cd ..  
 
 # If this is the first run OR is doing a full backup ... Set up for full backup 
-#[ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup && echo "Resetting timestamp file: ~/.aba.previous.backup" >&2
-[ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup ### && echo "Resetting timestamp file: ~/.aba.previous.backup" >&2
+[ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup 
 
-	###bin			\
-	# Remove bin in favour of cli/
-	#aba/vmware.conf		\
-	# vmware only on "internal" bastion
+# Note, for the bundle we prefer CLI install files and nothing under ~/bin
+# Remove bin in favour of cli/
+###bin			\
+# vmware only on "internal" bastion
+#aba/vmware.conf		\
 
 
-# Add the flag file so when aba is run again it knows it's a bundle!
+# Add the bundle flag file to the archive so when aba is run again it knows it's a bundle!
 touch aba/.bundle  # Flag this archive as a bundle
-rm -f aba/.aba.conf.seen   # Ensure user has chance to edit this conf file again on the internal network
+rm -f aba/.aba.conf.seen   # Ensure user can be offered to edit this conf file again on the internal network
 
 # All 'find expr' below are by default "and"
 file_list=$(find		\
@@ -60,6 +60,7 @@ file_list=$(find		\
 	aba/README-OTHER.md	\
 	aba/Troubleshooting.md	\
 	aba/test		\
+								\
 	! -path "aba/.git*"  					\
 	! -path "aba/cli/.init"  				\
 	! -path "aba/cli/.??*"	  				\
@@ -84,63 +85,72 @@ file_list=$(find		\
 	-newer ~/.aba.previous.backup 				\
 )
 
-#
 # Note, don't copy over any of the ".initialized", ".installed", ".rpms" flag files etc, since these components are needed on the internal bastion
-# Don't copy those very large 'tar' files since we have them compressed already.
-# Don't need to copy over the oc-mirror-workspace dirs.  The needed yaml files for 'make day2' are created at 'make load'.
+# Don't include/compress the 'image set' tar files since we have them compressed already.
+# Don't need to copy over the oc-mirror-workspace dirs.  The needed yaml files for 'make day2' are created at 'make load'. THIS IS WRONG
+# FIXME: Need to consider how to copy over the meta date (oc-mirror-workspace), or we leave it to the user to do.
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
 [ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_seq.*.tar$") || true  # 'true' needed!
 
 # Clean up file_list
-file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " white space
+file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " white space (is empty)
 
-[ ! "$file_list" ] && echo "No new files to backup!" >&2 && exit 0
+# For incremental backup, there may be no new files
+[ ! "$file_list" ] && echo_magenta "No new files to backup!" >&2 && exit 0
 
-[ "$repo_only" ] && echo "Warning: Not archiving any mirror/*/mirror_seq*.tar files! You will need to copy them into mirror/save/ yourself." >&2
+# Output reminder message
+if [ "$repo_only" ]; then
+	echo_magenta "Warning: Not archiving any 'image set' files: mirror/*/mirror_seq*.tar."
+	echo_magenta "         You will need to copy them, along with the bundle archive, into mirror/save/ (in your private network)."
+fi
 
+# If destination is NOT stdout (i.e. if in interactive mode)
 if [ "$dest" != "-" ]; then
-	### now=$(date "+%Y-%m-%d-%H-%M-%S")
+	### now=$(date "+%Y-%m-%d-%H-%M-%S")  # Not needed anymore
 
 	echo
-	echo_white "Writing tar file (bundle archive) to $dest"
+	echo_white "Writing tar file (bundle archive) to $dest ..."
 	echo
-	echo_white "After the bundle has been written, copy it to your *internal bastion*"
-	echo_white "Remember to copy over the large tar file(s) too, e.g. with the command:"
-	echo_white " cp mirror/save/mirror_seq*.tar <path to your portable media/usb stick/thumbdrive>"
+	echo_white "After the bundle has been written, copy it to your *internal bastion*, e.g. with:"
+	echo_white " cp $dest </path/to/your/portable/media/usb-stick/thumbdrive>"
+	echo_white "Remember to copy over the 'image set' tar files also, e.g. with the command:"
+	echo_white " cp mirror/save/mirror_seq*.tar <path/to/your/portable/media/usb-stick/thumbdrive>"
+	echo
 	echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
-	echo_white "Extract the bundle tar file anywhere under your home directory & continue, e.g. with the commands:"
+	echo_white "Extract the bundle tar file anywhere under your home directory"
+	echo_white "and move the 'image set' files into the save/ dir & continue by running './aba', e.g. with the commands:"
 	echo_white "  tar xvf $(basename $dest)"
 	echo_white "  mv mirror_seq*.tar aba/mirror/save"
 	echo_white "  cd aba"
 	echo_white "  ./aba"
 	echo
 	echo_white "Run 'make help' for all options."
+	echo
 fi
 
 if [ "$inc" ]; then
-	echo_blue "Writing 'incremental' tar archive of repo to $dest" >&2
+	echo_blue "Writing 'incremental' tar archive of repo to $dest" >&2  # Must use stderr otherwise the tar archive becomes corrupt
 else
 	echo_blue "Writing 'full' tar archive of repo to $dest" >&2
 fi
 
 out_file_list=$(echo $file_list | cut -c-90)
-echo >&2
+
 echo_blue "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
 echo >&2
-### echo file_list=$file_list >&2
 if ! tar cf $dest $file_list; then
 	rm -f aba/.bundle
 	exit
 fi
 
-rm -f aba/.bundle
+rm -f aba/.bundle  # We don't want this repo to be labelled as 'bundle', only the tar archive should be
 
-#if [ "$inc" ]; then
-# Changing this.  if "not repo backup only" (so, if 'inc' or 'tar'), then always create timestamp file so that future inc backups will not backup everything.
+# If "not repo backup only" (so, if 'inc' or 'tar'), then always create timestamp file so that future inc backups will not backup everything.
 if [ ! "$repo_only" ]; then
 	# Upon success, make a note of the time
-	echo_blue "Touching file ~/.aba.previous.backup" >&2
+	echo_white "Touching file ~/.aba.previous.backup" >&2
 	touch ~/.aba.previous.backup
 fi
 
+echo_green "Bundle archive created successfully at $dest!"
