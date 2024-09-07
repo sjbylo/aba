@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 # Attempt a cluster graceful shutdown by terminating all pods on all workers and then shutting down all nodes
 
 source scripts/include_all.sh
@@ -19,10 +19,7 @@ if ! curl --retry 2 -skI $server_url >/dev/null; then
 	exit
 fi
 
-exec >> .$cluster_id.shutdown.log 2>&1
-exec 3> /dev/tty
-
-echo "Attempting to log into the cluster ... " >&3
+echo "Attempting to log into the cluster ... "
 
 OC="oc --kubeconfig=iso-agent-based/auth/kubeconfig"
 
@@ -33,10 +30,10 @@ if ! $OC whoami; then
 fi
 
 cluster_id=$($OC whoami --show-server | awk -F[/:] '{print $4}') || exit 1
-echo Cluster $cluster_id nodes: >&3
-echo >&3
-$OC get nodes >&3
-echo >&3
+echo Cluster $cluster_id nodes:
+echo
+$OC get nodes
+echo
 
 if $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null; then
 	cluster_exp_date=$($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
@@ -51,26 +48,26 @@ if $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet
 	seconds_diff=$((cluster_exp_date_seconds - current_date_seconds))
 	days_diff=$((seconds_diff / 86400))
 
-	echo "Certificate expiration date of cluster: $cluster_id: $cluster_exp_date" >&3
-	echo "There are $days_diff days until the cluster certificate expires. Ensure to start the cluster before then for the certificate to be automatically renewed." >&3
+	echo "Certificate expiration date of cluster: $cluster_id: $cluster_exp_date"
+	echo "There are $days_diff days until the cluster certificate expires. Ensure to start the cluster before then for the certificate to be automatically renewed."
 
 else
-	echo "Cannot discover cluster's certificate expiration date." >&3
+	echo "Cannot discover cluster's certificate expiration date."
 fi
 
-echo >&3
-echo -n "Shutdown the cluster? (Y/n): " >&3
+echo
+echo -n "Shutdown the cluster? (Y/n): "
 read yn
 [ "$yn" = "n" ] && exit 1
 
-echo "Priming debug pods for all nodes (ensure all nodes are 'Ready'):" >&3
-for node in $($OC --request-timeout=20s get nodes -o jsonpath='{.items[*].metadata.name}'); do $OC --request-timeout=20s debug -q --preserve-pod node/${node} -- chroot /host whoami > .$cluster_id.shutdown.log 2>&1 & done 
+echo "Priming debug pods for all nodes (ensure all nodes are 'Ready'):"
+for node in $($OC --request-timeout=20s get nodes -o jsonpath='{.items[*].metadata.name}'); do $OC --request-timeout=20s debug -q --preserve-pod node/${node} -- chroot /host whoami & done > $cluster_id.shutdown.log 2>&1
 wait
 
 # If not SNO ...
 if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
-	echo "Making all nodes unschedulable (corden):" >&3
-	for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}'); do echo Uncorden ${node} ; $OC adm cordon ${node} > .$cluster_id.shutdown.log 2>&1 & done 
+	echo "Making all nodes unschedulable (corden):"
+	for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}'); do echo Uncorden ${node} ; $OC adm cordon ${node} > .$cluster_id.shutdown.log 2>&1 & done > $cluster_id.shutdown.log 2>&1
 	wait
 
 	echo "Draining all pods from all worker nodes (logging to .$cluster_id.shutdown.log):"
@@ -78,8 +75,8 @@ if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
 	for node in $($OC get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); 
 	do
 		echo Drain ${node}
-		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=120s >> .$cluster_id.shutdown.log 2>&1 &
-	done
+		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=120s &
+	done > $cluster_id.shutdown.log 2>&1
 	wait
 fi
 
@@ -87,7 +84,7 @@ echo Shutting down all nodes:
 for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}');
 do
 	$OC --request-timeout=20s debug node/${node} -- chroot /host shutdown -h 1
-done
+done > $cluster_id.shutdown.log 2>&1
 
 echo 
 echo "The cluster will complete shutdown and power off in a short while!"
