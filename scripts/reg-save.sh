@@ -47,15 +47,15 @@ else
 		echo_red "Warning: Less than 50GB of space available under $PWD/save (only $avail MB). Operator images require between ~40 to ~400GB of disk space!"
 	fi
 
-	echo Using existing save/imageset-config-save.yaml
-	echo "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make save' again."
+	echo_cyan "Using existing image set config file (save/imageset-config-save.yaml)"
+	echo_cyan "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make save' again to update the images."
 fi
 
 echo 
-echo "Saving images from external network to mirror/save/ directory."
+echo_cyan "Saving images from external network to mirror/save/ directory."
 echo
-echo "Warning: Ensure there is enough disk space under $PWD/save.  "
-echo "This can take 5-20+ mins to complete or even longer if Operator images are being saved!"
+echo_cyan "Warning: Ensure there is enough disk space under $PWD/save.  "
+echo_cyan "This can take 5-20+ mins to complete or even longer if Operator images are being saved!"
 echo 
 
 # Set up script to help for re-sync
@@ -69,7 +69,7 @@ while [ $try -le $try_tot ]
 do
 	echo_magenta -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'make save retry=<number>'" || echo
-	echo "Running: $(cat save-mirror.sh)"
+	echo_cyan "Running: $(cat save-mirror.sh)"
 	echo
 
 	./save-mirror.sh && failed= && break
