@@ -10,7 +10,7 @@ source scripts/include_all.sh
 
 source <(normalize-aba-conf)
 
-[ ! "$ntp_server" ] && echo "Not configuring NTP in early bootstrap node because 'ntp_server' not defined in aba.conf." && exit 0
+[ ! "$ntp_server" ] && echo_white "Not configuring NTP in early bootstrap node because 'ntp_server' not defined in aba.conf." && exit 0
 
 dir=iso-agent-based
 

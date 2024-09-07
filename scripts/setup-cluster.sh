@@ -25,21 +25,31 @@ fi
 pwd
 #make cluster.conf name=$name
 
-echo "Creating '$name/cluster.conf' file for cluster type [$cluster_type]."
+echo_magenta "Creating '$name/cluster.conf' file for cluster type [$cluster_type]."
 scripts/create-cluster-conf.sh $name $cluster_type
 
 msg="Install the cluster with 'cd $name; make'?"
 [ "$target" ] && msg="Make the target '$target' with 'cd $name; make $target'?"
 
+# adding "exit 0" here to give best practise instuctions to cd into the cluster dir!
+if [ "$ask" ]; then
+	echo
+	echo_cyan The cluster directory has been provisioned in $name
+	echo_cyan $msg
+	echo
+
+	exit 0
+fi
+
 if ask $msg; then
 	make $target
 
 	echo 
-	[ "$target" ] && echo "To continue working on this cluster, change into the directory '$name'. Example: 'cd $name && make help'"
+	[ "$target" ] && echo_cyan "To continue working on this cluster, change into the directory '$name'. Example: cd $name; make $target"
 	echo
 else
 	echo 
-	echo "To continue working on this cluster, change into the directory '$name' and run 'make'.  Example: 'cd $name && make' or 'cd $name && make help'"
+	echo_cyan "To continue working on this cluster, change into the directory '$name' and run 'make'.  Example: cd $name; make"
 	echo
 fi
 
