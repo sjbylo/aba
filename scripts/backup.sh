@@ -101,8 +101,8 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 
 # Output reminder message
 if [ "$repo_only" ]; then
-	echo_magenta "Warning: Not archiving any 'image set' files: mirror/*/mirror_seq*.tar."
-	echo_magenta "         You will need to copy them, along with the bundle archive, into mirror/save/ (in your private network)."
+	echo_magenta "Warning: Not archiving any 'image set' files: mirror/*/mirror_seq*.tar." >&2
+	echo_magenta "         You will need to copy them, along with the bundle archive, into mirror/save/ (in your private network)." >&2
 fi
 
 # If destination is NOT stdout (i.e. if in interactive mode)
