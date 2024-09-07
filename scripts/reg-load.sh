@@ -57,6 +57,7 @@ cmd="oc mirror $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
 echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
 
 try=1
+failed=1
 while [ $try -le $try_tot ]
 do
 	echo_magenta -n "Attempt ($try/$try_tot)."
@@ -64,21 +65,17 @@ do
 	echo "Running: $(cat load-mirror.sh)"
 	echo
 
-	./load-mirror.sh && break
+	./load-mirror.sh && failed= && break
+
+	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
 
 	let try=$try+1
 done
 
-#if ! ./load-mirror.sh; then
-	#[ "$TERM" ] && tput setaf 1 
-	#echo_red "Mirroring failed. Long-running processes can fail. If the issue seems temporary, retry; otherwise, fix it and try again."
-	#[ "$TERM" ] && tput sgr0
-       #exit 1
-#fi
-# If oc-mirror fails due to transient errors, the user should try again
+[ "$failed" ] && echo_red "Image loading aborted ..." && exit 1
 
 echo
-echo_green "==> Image loading successful"
+echo_green "==> Images loaded successfully"
 echo 
 echo "OpenShift can now be installed with the command:"
 echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."
