@@ -99,7 +99,7 @@ elif [ "$proxy" = "auto" ]; then
 		echo_red "set the '*_proxy' values in 'cluster.conf'"
 	fi
 else
-	echo_blue "Not configuring 'cluster wide proxy' since no proxy values are defined in 'cluster.conf'."
+	echo_white "Not configuring 'cluster wide proxy' since no proxy values are defined in 'cluster.conf'."
 fi
 
 echo
