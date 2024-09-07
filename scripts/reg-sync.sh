@@ -95,6 +95,7 @@ cmd="oc mirror $tls_verify_opts --config=imageset-config-sync.yaml docker://$reg
 echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 
 try=1
+failed=1
 while [ $try -le $try_tot ]
 do
 	echo_magenta -n "Attempt ($try/$try_tot)."
@@ -102,19 +103,17 @@ do
 	echo "Running: $(cat sync-mirror.sh)"
 	echo
 
-	./sync-mirror.sh && break
+	./sync-mirror.sh && failed= && break
+
+	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
 
 	let try=$try+1
 done
 
-#if ! ./sync-mirror.sh; then
-#	echo_red "Mirroring failed. Long-running processes can fail. If the issue seems temporary, retry; otherwise, fix it and try again."
-#	exit 1
-#fi
-# If oc-mirror fails due to transient errors, the user should try again
+[ "$failed" ] && echo_red "Image synchronization aborted ..." && exit 1
 
 echo
-echo_green "==> Image synchronization successful"
+echo_green "==> Images synchronized successfully"
 echo 
 echo "OpenShift can now be installed with the command:"
 echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."

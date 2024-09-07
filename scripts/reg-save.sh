@@ -64,6 +64,7 @@ cmd="oc mirror --config=./imageset-config-save.yaml file://."
 echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 
 try=1
+failed=1
 while [ $try -le $try_tot ]
 do
 	echo_magenta -n "Attempt ($try/$try_tot)."
@@ -71,17 +72,15 @@ do
 	echo "Running: $(cat save-mirror.sh)"
 	echo
 
-	./save-mirror.sh && break
+	./save-mirror.sh && failed= && break
+
+	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
 
 	let try=$try+1
 done
 
-#if ! ./save-mirror.sh; then
-	#echo_red "Mirroring failed. Long-running processes can fail. If the issue seems temporary, retry; otherwise, fix it and try again."
-	#exit 1
-#fi
-# If oc-mirror fails due to transient errors, the user should try again, unless retry is set
+[ "$failed" ] && echo_red "Image saving aborted ..." && exit 1
 
 echo
-echo_green "==> Image saving successful"
+echo_green "==> Images saved successfully"
 echo 
