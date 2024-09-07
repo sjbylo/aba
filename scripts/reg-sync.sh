@@ -36,10 +36,10 @@ export reg_url=https://$reg_host:$reg_port
 
 # Can the registry mirror already be reached?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
-reg_code=$(curl -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
+reg_code=$(curl --retry 3 --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
 ##[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\blocalhost\b" || no_proxy=$no_proxy,localhost 		  # adjust if proxy in use
-###res_local=$(curl -ILsk -o /dev/null -w "%{http_code}\n" https://localhost:${reg_port}/health/instance || true)
+###res_local=$(curl --retry 3 --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" https://localhost:${reg_port}/health/instance || true)
 
 #FIXME: 
 ### # Mirror registry installed?

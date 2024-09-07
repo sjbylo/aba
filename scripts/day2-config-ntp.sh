@@ -104,11 +104,11 @@ END
 if ! which butane >/dev/null 2>&1; then
 	# No rpm available for RHEL8
 	if ! sudo dnf install butane -y; then
-		if curl -s https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane; then
+		if curl --retry 3 -s https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane; then
 			sudo mv butane /usr/local/bin
 		else
 			echo "Please install 'butane' command and try again!"
-			echo "E.g. run: 'curl https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane'"
+			echo "E.g. run: 'curl --retry 3 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane'"
 
 			exit 1
 		fi

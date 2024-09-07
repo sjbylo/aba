@@ -12,7 +12,7 @@ export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 [ ! "$ocp_ver_major" ] && echo_red "Error, ocp_version not defined" && exit 1
 
-if ! curl -kIL http://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >/dev/null 2>&1; then
+if ! curl --retry 3 -kIL http://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >/dev/null 2>&1; then
 	echo_red "Error: can't access registry.redhat.io to fetch the operator index.  Aborting."
 
 	exit 1
