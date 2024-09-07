@@ -49,12 +49,12 @@ if [ ! -s cluster.conf ]; then
 
 	scripts/j2 templates/cluster.conf > cluster.conf 
 
+	# For sno, ensure these values are commented out as they are not needed!
 	[ "$type" = "sno" ] && sed -i -e "s/^api_vip=/#api_vip=/g" -e "s/^ingress_vip=/#ingress_vip=/g" cluster.conf
-fi
 
-if [ "$ask" ]; then
-	#### ask "Edit the cluster.conf file" || exit 1
-	edit_file cluster.conf "Edit the cluster.conf file to set all the parameters for OpenShift"
+	if [ "$ask" ]; then
+		edit_file cluster.conf "Edit the cluster.conf file to set all the parameters for OpenShift"
+	fi
 fi
 
 exit 0
