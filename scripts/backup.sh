@@ -153,4 +153,4 @@ if [ ! "$repo_only" ]; then
 	touch ~/.aba.previous.backup
 fi
 
-echo_green "Bundle archive created successfully at $dest!"
+echo_green "Bundle archive created successfully at $dest!" >&2
