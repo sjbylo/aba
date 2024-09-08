@@ -37,9 +37,9 @@ do
 		####### echo is_version_greater "$om_ocp_min_ver" "$aba_ocp_ver" \|\| is_version_greater $aba_ocp_ver "$om_ocp_max_ver" \|\| \[ "$om_ocp_channel" \!\= "$aba_ocp_channel" \]
 		if is_version_greater "$om_ocp_min_ver" "$aba_ocp_ver" || is_version_greater $aba_ocp_ver "$om_ocp_max_ver" || [ "$om_ocp_channel" != "$aba_ocp_channel" ]; then
 			echo 
-			echo_red "Warning: The version of the 'openshift-install' CLI ($aba_ocp_ver) no longer matches the version defined in the imageset-config file."
+			echo_red "Warning: The version of 'openshift-install' ($aba_ocp_ver) no longer matches the version defined in the imageset-config file."
 			echo_red "         Settings in 'mirror/$f' are currently min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel"
-			echo_red "         Before syncing or saving images (again), the mismatch in the file 'mirror/$f' must be corrected."
+			echo_red "         Before syncing or saving images (again), this mismatch must be corrected."
 			echo_red "         Fix the mismatch and try again!" 
 			echo
 
