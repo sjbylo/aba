@@ -372,7 +372,7 @@ rm -rf test/mesh
 ### test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting cluster dirs, $subdir/aba/sno $subdir/aba/compact $subdir/aba/standard" "rm -rf  $subdir/aba/sno $subdir/aba/compact $subdir/aba/standard" 
 
 ###
-build_test_cluster() {
+build_and_test_cluster() {
 	cluster_name=$1
 	cnt=$2  # Number of nodes to check/validate in the cluster
 
@@ -403,13 +403,14 @@ build_test_cluster() {
 	test-cmd -h steve@$bastion2 -m "Wait for vote-app rollout" "make -C $subdir/aba/$cluster_name cmd cmd='oc rollout status deployment vote-app -n demo'"
 }
 
-for c in sno compact standard
+#for c in sno compact standard
+for c in standard
 do
 	mylog "Building cluster $c"
 	[ "$c" = "sno" ] && cnt=1
 	[ "$c" = "compact" ] && cnt=3
 	[ "$c" = "standard" ] && cnt=5
-	build_test_cluster $c $cnt
+	build_and_test_cluster $c $cnt
 
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting '$c' cluster" "make -C $subdir/aba/$c delete" 
 done

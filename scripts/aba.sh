@@ -18,28 +18,117 @@ if [ ! -f aba.conf ]; then
 	sed -i "s/^editor=[^ \t]*/editor=			/g" aba.conf
 fi
 
+fetch_latest_version() {
+	curl --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt || return 1
+	## Get the latest stable OCP version number, e.g. 4.14.6
+	stable_ver=$(cat /tmp/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+	[ "$stable_ver" ] && echo $stable_ver || return 1
+}
+
+usage="\
+Usage: $(basename $0) bundle <version> /path/to/write/bundle/file /path/to/pull-secret-file [channel]
+
+<version>     OpenShift version
+<channel>     Optional OpenShift channel (stable, fast, eus, candidate ...)
+
+Usage: $(basename $0) <<options>>
+
+<<options>>:
+	--version <version>
+	[--channel <channel>]
+	[--platform <vmw|bm>]
+	--domain <domain>
+	--machine-network <network cidr>
+	--dns <dns ip>
+	--default-route <next hop ip>
+	--ntp <ntp ip>
+	[--pull-secret path/to/file]
+	[--editor <editor>]
+	[--ask <booleon>]
+"
+
+# for testing, if unset, testing will halt in edit_file()! 
+[ "$*" ] && \
+	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
+	interactive_mode=
+
 while [ "$*" ] 
 do
-	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf   # for testing, if unset, testing will halt in edit_file()!
-
-	if [ "$1" = "--debug" -o "$1" = "-d" ]; then
+	if [ "$1" = "--help" -o "$1" = "-h" ]; then
+		echo "$usage"
+		exit 0
+	elif [ "$1" = "--debug" -o "$1" = "-d" ]; then
 		export DEBUG_ABA=1
-		set -x
 		shift 
+	elif [ "$1" = "bundle" ]; then
+		shift
+		ver=$1
+		[ "$1" = "latest" ] && ver=$(fetch_latest_version)
+		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
+		[ ! "$ver" ] && echo_red "OpenShift version [$1] missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
+		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver/g" aba.conf
+		shift
+		[ "$1" ] && [ ! -d $(dirname $1) ] && echo "File destination path [$(dirname $1)] incorrect or missing!" >&2 && exit 1
+		[ -f "$1" ] && echo_red "Bundle file [$1] already exists!" >&2 && exit 1
+		[ "$1" ] && dest_path="$1"
+		shift
+		[ "$1" ] && [ ! -s $1 ] && echo_red "Pull secret file [$1] incorrect or missing!" >&2 && exit 1
+		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1#g" aba.conf
+		shift
+		[ "$1" ] && chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$' || true)
+		[ ! "$chan" ] && chan=stable && echo_cyan "Channel [$1] incorrect or missing. Using default value: stable" >&2
+		sed -i "s/^ocp_channel=[^ \t]*/ocp_channel=$chan/g" aba.conf
+
+		normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" 
+
+		echo
+		make bundle out="$dest_path" retry=3
+		exit 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing version arguments" >&2 && exit 1
 		ver=$(echo $1 | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver/g" aba.conf
 		target_ver=$ver
 		shift 
-		auto_ver=1
-		interactive_mode=
-#	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
-#		shift 
-#		[ -s $1 ] && cp $1 vmware.conf
-#		auto_vmw=1
-#		shift 
-#		interactive_mode=
+	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing channel arguments" >&2 && exit 1
+		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
+		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan  /g" aba.conf
+		target_chan=$chan
+		shift 
+	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing platform arguments" >&2 && exit 1
+		[ ! "$1" ] && echo_red -e "Missing platform, see usage.\n$usage" >&2 && exit 1
+		platform="$1"
+		sed -i "s/^platform=[^ \t]*/platform=$platform  /g" aba.conf
+		shift
+	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing editor arguments" >&2 && exit 1
+		[ ! "$1" ] && echo_red -e "Missing editor, see usage.\n$usage" >&2 && exit 1
+		editor="$1"
+		sed -i "s/^editor=[^ \t]*/editor=$editor  /g" aba.conf
+		shift
+	elif [ "$1" = "--machine-network" -o "$1" = "-n" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing machine network arguments" >&2 && exit 1
+		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 && exit 1
+		sed -i "s/^machine_network=[^ \t]*/machine_network=$1  /g" aba.conf
+		shift 
+	elif [ "$1" = "--pull-secret" -o "$1" = "-ps" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing pull-secret arguments" >&2 && exit 1
+		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
+		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1  #g" aba.conf
+		shift 
+	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing vmware arguments" >&2 && exit 1
+		[ -s $1 ] && cp $1 vmware.conf
+		shift 
 	else
 		echo "Unknown option: $1"
 		shift 
@@ -65,10 +154,17 @@ if [ ! -f .bundle ]; then
 
 	##############################################################################################################################
 	# Check if online
-	if ! curl --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
-		echo "To get started with 'aba' please run it on a workstation/laptop with Internet access and try again. Fedora & RHEL have need tested."
+	echo -n "Checking Internet connectivity ..."
+
+	if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
+		[ "$TERM" ] && tput el1 && tput cr
+		echo_red "Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the required images."
+		echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again."
+
 		exit 1
 	fi
+
+	[ "$TERM" ] && tput el1 && tput cr
 
 	##############################################################################################################################
 	# Determine OCP version 
@@ -76,67 +172,55 @@ if [ ! -f .bundle ]; then
 	if [ "$ocp_version" ]; then
 		echo_blue "OpenShift version is defined in aba.conf as '$ocp_version'."
 	else
+		## Get the latest stable OCP version number, e.g. 4.14.6
+		stable_ver=$(cat /tmp/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+		default_ver=$stable_ver
 
-	echo -n "Looking up OpenShift release versions ..."
+		# Extract the previous stable point version, e.g. 4.13.23
+		major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
+		stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
+		[ "$stable_ver_point" ] && \
+			stable_ver_prev=$(cat /tmp/.release.txt| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
 
-	if ! curl --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
-		echo
-		echo_red "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the required images."
+		# Determine any already installed tool versions
+		which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
 
-		exit 1
-	fi
+		# If openshift-install is already installed, then offer that version also
+		[ "$cur_ver" ] && or_ret="or [current version] " && default_ver=$cur_ver
 
-	## Get the latest stable OCP version number, e.g. 4.14.6
-	stable_ver=$(cat /tmp/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
-	default_ver=$stable_ver
+		[ "$TERM" ] && tput el1 && tput cr
+		sleep 0.5
 
-	# Extract the previous stable point version, e.g. 4.13.23
-	major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
-	stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
-	[ "$stable_ver_point" ] && \
-		stable_ver_prev=$(cat /tmp/.release.txt| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+		echo "Which version of OpenShift do you want to install?"
 
-	# Determine any already installed tool versions
-	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
-
-	# If openshift-install is already installed, then offer that version also
-	[ "$cur_ver" ] && or_ret="or [current version] " && default_ver=$cur_ver
-
-	[ "$TERM" ] && tput el1
-	[ "$TERM" ] && tput cr
-	sleep 0.5
-
-	echo "Which version of OpenShift do you want to install?"
-
-	target_ver=
-	while true
-	do
-		# Exit loop if release version exists
-		if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-			if curl --retry 2 -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
-				break
-			else
-				echo "Error: Failed to find release $target_ver"
+		target_ver=
+		while true
+		do
+			# Exit loop if release version exists
+			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
+				if curl --retry 2 -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
+					break
+				else
+					echo "Error: Failed to find release $target_ver"
+				fi
 			fi
-		fi
 
-		[ "$stable_ver" ] && or_s="or $stable_ver (latest) "
-		[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (previous) "
+			[ "$stable_ver" ] && or_s="or $stable_ver (latest) "
+			[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (previous) "
 
-		echo -n "Enter version $or_s$or_p$or_ret(l/p/<version>/Enter) [$default_ver]: "
+			echo -n "Enter version $or_s$or_p$or_ret(l/p/<version>/Enter) [$default_ver]: "
 
-		read target_ver
-		[ ! "$target_ver" ] && target_ver=$default_ver          # use default
-		[ "$target_ver" = "l" ] && target_ver=$stable_ver       # latest
-		[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev  # previous latest
-	done
+			read target_ver
+			[ ! "$target_ver" ] && target_ver=$default_ver          # use default
+			[ "$target_ver" = "l" ] && target_ver=$stable_ver       # latest
+			[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev  # previous latest
+		done
 
-	# Update the conf file
-	sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
-	echo_blue "'ocp_version' set to '$target_ver' in aba.conf"
+		# Update the conf file
+		sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
+		echo_blue "'ocp_version' set to '$target_ver' in aba.conf"
 
-	sleep 1
-
+		sleep 1
 	fi
 
 	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
@@ -217,7 +301,7 @@ if [ ! -f .bundle ]; then
 		echo
 		echo_yellow Instructions
 		echo
-		echo "Run: make bundle out=/path/to/bundle/filename   # to save all images to local disk & create the bundle archive (size ~1-2GB), follow the instructions."
+		echo "Run: make bundle out=/path/to/bundle/filename   # to save all images to local disk & create the bundle archive (size ~2-3GB), follow the instructions."
 		echo
 
 		exit 0
@@ -260,7 +344,7 @@ else
 	# make & jq are needed below and in the next steps 
 	install_rpms make jq python3-pyyaml
 
-	echo_blue "Aba bundle detected!  This aba bundle is ready to install OpenShift version '$ocp_version'.  Assuming we're running on an internal bastion!"
+	echo_blue "Aba bundle detected!  This aba bundle is ready to install OpenShift version '$ocp_version'.  Assuming we're running on an internal RHEL bastion!"
 	
 	echo 
 	echo 
