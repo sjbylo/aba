@@ -1,7 +1,7 @@
 #!/bin/bash 
 # Start here, run this to get going!
 
-uname -o | grep -q "^Darwin$" && echo "Please run 'aba' on RHEL or Fedora. Most tested is RHEL 9." && exit 1
+uname -o | grep -q "^Darwin$" && echo "Please run 'aba' on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." && exit 1
 
 dir=$(dirname $0)
 cd $dir
@@ -61,7 +61,7 @@ cat others/message.txt
 # Determine if this is an "aba bundle" or just a clone from GitHub
 
 if [ ! -f .bundle ]; then
-	echo "Fresh GitHub clone of 'aba' repo detected!"
+	#echo "Fresh GitHub clone of 'aba' repo detected!"
 
 	##############################################################################################################################
 	# Check if online
