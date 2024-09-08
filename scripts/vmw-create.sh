@@ -13,7 +13,8 @@ NO_MAC=
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
-	echo "vmware.conf file not defined. Run 'make vmw' to create it if needed"
+	echo_red "vmware.conf file not defined. Run 'make vmw' to create it if needed"
+
 	exit 0
 fi
 
@@ -24,6 +25,10 @@ fi
 
 CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
 WKR_MAC_ADDRESSES_ARRAY=($WKR_MAC_ADDRESSES)
+
+echo
+echo_magenta "Provisioning VMs to build the cluster ..."
+echo
 
 # FIXME: Check if folder $VC_FOLDER already exists or not.  Should we create it but never delete it.
 # Only the cluster folder shouod be created and deleted by aba
@@ -161,3 +166,4 @@ for name in $WORKER_NAMES ; do
 	let i=$i+1
 done
 
+echo Now run: make mon
