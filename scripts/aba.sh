@@ -213,9 +213,12 @@ if [ ! -f .bundle ]; then
 	echo
 	echo_white "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, 'aba' can download all required software"
 	echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'bundle archive' for you to transfer into the disconnected environment."
-	if ask "Install OpenShift into a fully disconnected network environment? (Y/n): "; then
+	if ask "Install OpenShift into a fully disconnected network environment"; then
 		echo
-		echo "Run: make bundle out=/path/to/bundle/filename   # to save all images to local disk & create the bundle archive, follow the instructions."
+		echo_yellow Instructions
+		echo
+		echo "Run: make bundle out=/path/to/bundle/filename   # to save all images to local disk & create the bundle archive (size ~1-2GB), follow the instructions."
+		echo
 
 		exit 0
 	fi
@@ -225,8 +228,13 @@ if [ ! -f .bundle ]; then
 
 	echo
 	echo_white "OpenShift can be installed directly from the Internet, e.g. via a proxy."
-	if ask "Install OpenShift directly from the Internet (Y/n): "; then
+	if ask "Install OpenShift directly from the Internet"; then
+		echo 
+		echo_yellow Instructions
+		echo 
 		echo "Run: make cluster name=myclustername"
+		echo 
+
 		exit 1
 	fi
 
@@ -234,9 +242,9 @@ if [ ! -f .bundle ]; then
 	echo 
 	echo_yellow Instructions
 	echo 
-	echo "Set up the mirror registry and then sync it with the required container images."
+	echo "Set up the mirror registry and sync it with the required container images."
 	echo
-	echo "You have the choice to install the Quay appliance mirror or re-use an existing registry to store container images."
+	echo "You have the choice to install the Quay mirror appliance or re-use an existing container registry to store container images."
 	echo
 	echo "Run:"
 	echo "  make install       # to configure and/or install Quay, follow the instructions."
@@ -268,15 +276,6 @@ else
 	echo
 fi
 
-echo 
 echo "Once the images have been loaded or synced into the mirror registry follow the instructions provided."
 echo
-
-#echo "Once the registry is configured and loaded with images, run the following command to install OpenShift:"
-#echo "Run:"
-#echo
-#echo "  make cluster name=mycluster    # and follow the instructions.  As usual, run 'make help' for help."
-
-# Set up the CLIs
-#make -C cli 
 

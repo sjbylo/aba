@@ -122,7 +122,7 @@ ask() {
 	[ "$1" == "-t" ] && timer="-t $1" && shift && shift 
 
 	## echo
-	echo_cyan -n "$@ $yn_opts: "
+	echo_cyan -n "$@? $yn_opts: "
 	read $timer yn
 
 	if [ "$def_val" == "y" ]; then
@@ -148,10 +148,10 @@ edit_file() {
 		return 1
 	else
 		if [ "$ask" ]; then
-			ask "$msg?" || return 1
+			ask "$msg" || return 1
 			$editor $conf_file
 		else
-			echo_cyan "$msg? (auto answer)"
+			echo_cyan "$msg? (auto answered)"
 		fi
 	fi
 }
