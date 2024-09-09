@@ -28,8 +28,8 @@ fetch_latest_version() {
 usage="\
 Usage: $(basename $0) bundle <version> /path/to/write/bundle/file /path/to/pull-secret-file [channel]
 
-<version>     OpenShift version
-<channel>     Optional OpenShift channel (stable, fast, eus, candidate ...)
+<version>     OpenShift version or 'latest'
+<channel>     Optional OpenShift channel (stable, fast, eus, candidate)
 
 Usage: $(basename $0) <<options>>
 
@@ -44,7 +44,7 @@ Usage: $(basename $0) <<options>>
 	--ntp <ntp ip>
 	[--pull-secret path/to/file]
 	[--editor <editor>]
-	[--ask <booleon>]
+	[--ask <boolean>]
 "
 
 # for testing, if unset, testing will halt in edit_file()! 
@@ -128,6 +128,13 @@ do
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing vmware arguments" >&2 && exit 1
 		[ -s $1 ] && cp $1 vmware.conf
+		shift 
+	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing 'ask' arguments" >&2 && exit 1
+		[ "$1" ] && ask=$(echo "$1" | grep -E -o "^(true|false|1|0)$" || true)
+		[ ! "$ask" ] && echo_red "Error in parsing ask arguments [$1]" >&2 && exit 1
+		sed -i "s#^ask=[^ \t]*#ask=$ask  #g" aba.conf
 		shift 
 	else
 		echo "Unknown option: $1"
