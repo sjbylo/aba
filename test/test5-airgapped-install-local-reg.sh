@@ -347,7 +347,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully (2/2)" "yes | make -C $subdir/aba/sno shutdown"
 #test-cmd -m "Wait for cluster to power down" sleep 600
 test-cmd -m "Wait for cluster to power down" sleep 60
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'poweredOff'" "until make -C $subdir/aba/sno ls | grep poweredOff | wc -l| grep ^1$ ; do sleep 1; echo .;done"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'poweredOff'" "until make -C $subdir/aba/sno ls | grep poweredOff | wc -l| grep ^1$ ; do sleep 10; echo .;done"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/sno ls"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Start cluster gracefully" "make -C $subdir/aba/sno startup"
 #test-cmd -m "Wait for cluster to settle" sleep 600
@@ -376,13 +376,18 @@ build_and_test_cluster() {
 	cluster_name=$1
 	cnt=$2  # Number of nodes to check/validate in the cluster
 
+	# Create cluster.conf
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster.conf" "make -C $subdir/aba cluster name=$cluster_name type=$cluster_name target=cluster.conf" || true
+
 	# See if this will speed things up!
 	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding master CPU" "sed -i 's/^master_cpu_count=.*/master_cpu_count=12/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding worker CPU" "sed -i 's/^worker_cpu_count=.*/worker_cpu_count=8/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
-	test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -C $subdir/aba $cluster_name" || true
+	###test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -C $subdir/aba $cluster_name" || true
+	# Now run make INSIDE of the cluster directory
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -C $subdir/aba/$cluster_name" || true
 	test-cmd -h $reg_ssh_user@$bastion2 -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "make -C $subdir/aba/$cluster_name mon" 
 	
 	# Restart cluster test 
