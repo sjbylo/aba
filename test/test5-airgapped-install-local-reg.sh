@@ -201,8 +201,10 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Tidying up internal bastion" "rm -rf $s
 mylog "Running 'make sno' on internal bastion"
 
 [ "$default_target" ] && mylog "Creating the cluster with target=$default_target only"
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno/iso with 'make -C $subdir/aba sno $default_target'" "make -C $subdir/aba sno $default_target" 
+#test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno/iso with 'make -C $subdir/aba sno $default_target'" "make -C $subdir/aba sno $default_target" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Installing sno/iso" "make -C $subdir/aba sno $default_target" 
 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"
 
 ######################
@@ -436,6 +438,13 @@ echo "00:50:56:1d:9e:01
 " > macs.conf
 scp macs.conf $reg_ssh_user@$bastion2:$subdir/aba/standard
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating cluster.conf" "cd $subdir/aba/standard; scripts/create-cluster-conf.sh standard standard"
+
+	cluster_name=standard
+	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding master CPU" "sed -i 's/^master_cpu_count=.*/master_cpu_count=12/g' $subdir/aba/$cluster_name/cluster.conf"
+	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding worker CPU" "sed -i 's/^worker_cpu_count=.*/worker_cpu_count=8/g' $subdir/aba/$cluster_name/cluster.conf"
+	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
+	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
+
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Making iso" "make -C $subdir/aba/standard iso"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating standard cluster" "make -C $subdir/aba/standard"
 
