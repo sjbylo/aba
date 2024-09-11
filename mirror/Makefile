@@ -88,7 +88,7 @@ mirror-registry: mirror-registry.tar.gz ## Extract the mirror-registry binary
 mirror-registry.tar.gz: ## Download the mirror-registry tarball
 	# Downloading 'mirror-registry.tar.gz' for later installation.
 	curl --progress-bar -OL \
-	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
+	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/1.3.9/mirror-registry.tar.gz
 
 # mirror,.conf no longer depends on aba.conf 
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
