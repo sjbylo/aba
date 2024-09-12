@@ -1,16 +1,27 @@
 # Code that all scripts need.  Ensure this script does not create any std output.
 
+echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_green()	{ [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_yellow()	{ [ "$TERM" ] && tput setaf 3; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_blue()	{ [ "$TERM" ] && tput setaf 4; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_magenta()	{ [ "$TERM" ] && tput setaf 5; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_cyan()	{ [ "$TERM" ] && tput setaf 6; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+
+if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
+    PATH="$HOME/bin:$PATH"
+fi
+
 umask 077
 
 # Function to display an error message and the last executed command
 show_error() {
 	local exit_code=$?
 	echo 
-	[ "$TERM" ] && tput setaf 1
-	echo Script error: 
-	echo "Error occurred in command: '$BASH_COMMAND'"
-	echo "Error code: $exit_code"
-	[ "$TERM" ] && tput sgr0
+	echo_red Script error: 
+	echo_red "Error occurred in command: '$BASH_COMMAND'"
+	echo_red "Error code: $exit_code"
 
 	exit $exit_code
 }
@@ -186,23 +197,6 @@ is_version_greater() {
 }
 
 output_error() { echo_red "$@"; }
-
-echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_green()	{ [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_yellow()	{ [ "$TERM" ] && tput setaf 3; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_blue()	{ [ "$TERM" ] && tput setaf 4; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_magenta()	{ [ "$TERM" ] && tput setaf 5; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_cyan()	{ [ "$TERM" ] && tput setaf 6; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-
-# 0: Black
-# 1: Red
-# 2: Green
-# 3: Yellow
-# 4: Blue
-# 5: Magenta
-# 6: Cyan
-# 7: White
 
 longest_line() {
     # Calculate the longest line from stdin
