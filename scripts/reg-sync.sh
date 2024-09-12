@@ -116,6 +116,7 @@ echo
 echo_green "Images synchronized successfully!"
 echo 
 echo "OpenShift can now be installed with the command:"
+echo "  cd aba"
 echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."
 
 exit 0

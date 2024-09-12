@@ -27,12 +27,12 @@ add_op() {
     - name: $op_name"
 		fi
 	else
-		echo_red "Operator name '$1' not found in index file mirror/.redhat-operator-index-v$ocp_ver_major" >&2
+		echo_red "Warning: Operator name '$1' not found in index file mirror/.redhat-operator-index-v$ocp_ver_major" >&2
 	fi
 }
 
 if [ ! "$op_sets" ]; then
-	echo "'op_sets' value not set in mirror.conf. Skipping operator render." >&2
+	echo "'op_sets' value not set in aba.conf or mirror.conf. Skipping operator sets render." >&2
 fi
 
 op_sets=$(echo $op_sets | tr -s " ")
@@ -44,7 +44,7 @@ cat <<END
     packages:
 END
 else
-	echo "No operators defined in 'mirror/mirror.conf'.  Not adding any operators to image set config file." >&2
+	echo "No operators defined in 'aba.conf'.  Not adding any operators to image set config file." >&2
 
 	exit 0
 fi
@@ -81,8 +81,6 @@ done
 if [ "$ops" ]; then
 	echo "# misc operators"
 	echo -n "Op: " >&2
-
-	##ops=$(echo $ops | tr -s " ")
 
 	for op in $ops
 	do
