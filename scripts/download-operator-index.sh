@@ -12,7 +12,7 @@ export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 [ ! "$ocp_ver_major" ] && echo_red "Error, ocp_version not defined" && exit 1
 
-if ! curl --retry 3 -kIL https://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >/dev/null 2>&1; then
+if ! curl --connect-timeout 10 --retry 3 -kIL https://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >/dev/null 2>&1; then
 	echo_red "Error: can't access registry.redhat.io to fetch the operator index.  Aborting."
 
 	exit 1
@@ -29,18 +29,21 @@ log_file=.redhat-operator-index-v$ocp_ver_major.log
 # See if the index is already downloading (using 'ln') 
 [ ! -f $index_file ] && touch $index_file
 if ! ln $index_file $lock_file >/dev/null 2>&1; then
-	[ ! -s $index_file ] && echo_magenta "Operator index 'v$ocp_ver_major' is downloading ..." || \
+	if [ ! -s $index_file ]; then
+		echo_magenta "Operator index 'v$ocp_ver_major' is downloading ..."
+	else
 		echo_white "Operator index 'v$ocp_ver_major' already downloaded."
+	fi
 
 	exit 0
 fi
 
-# Check if this script ir running as a daemon, if it is then output to a log file
+# Check if this script is running in the background, if it is then output to a log file
 if [ ! -t 0 ]; then
+	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major (in the background - see $log_file) ...: >&2
+
 	exec >> $log_file 
 	exec 2>> $log_file
-
-	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major (in the background) ...:
 else
 	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major ...:
 fi

@@ -41,7 +41,7 @@ rm -f ~/.aba.previous.backup
 
 which make || sudo dnf install make -y
 
-v=4.16.3
+v=4.16.5
 
 > mirror/mirror.conf
 echo "ocp_version=$v" >> aba.conf  # Only to fix error, missing "ocp_version"
@@ -330,14 +330,15 @@ make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir -xvf
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading jaeger operator images to mirror" "make -C $subdir/aba/mirror load" 
 
 
-test-cmd -m "Pausing for 60s to let OCP settle" sleep 60    # For some reason, the cluster was still not fully ready in tests!
+test-cmd -m "Pausing for 90s to let OCP settle" sleep 90    # For some reason, the cluster was still not fully ready in tests!
 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -C $subdir/aba/$cluster_type cmd; until make -C $subdir/aba/$cluster_type cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m "Run 'day2'" "make -C $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
-test-cmd -m "Pausing for 30s to let OCP settle" sleep 30  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
+test-cmd -m "Pausing for 60s to let OCP settle" sleep 60  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
 
 test-cmd -h $reg_ssh_user@$bastion2 -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
 
@@ -361,7 +362,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/sno cmd cmd='get po -A | grep -v -e Running -e Complete'"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/sno cmd"
 test-cmd -m "Wait for cluster to settle" sleep 60
-test-cmd -h $reg_ssh_user@$bastion2 -m  "All co available?" "make -C $subdir/aba/sno cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -C $subdir/aba/sno cmd; make -C $subdir/aba/sno cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/sno cmd cmd='get po -A | grep ^travel-.*Running'"
@@ -391,7 +392,9 @@ build_and_test_cluster() {
 	# Now run make INSIDE of the cluster directory
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -C $subdir/aba/$cluster_name" || true
 	test-cmd -h $reg_ssh_user@$bastion2 -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "make -C $subdir/aba/$cluster_name mon" 
-	
+
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -C $subdir/aba/$cluster_name cmd; until make -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+
 	# Restart cluster test 
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Log into cluster" ". <(make -s -C $subdir/aba/$cluster_name login)"
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/$cluster_name ls"
@@ -408,7 +411,7 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/$cluster_name cmd cmd='get po -A | grep -v -e Running -e Complete'"
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/$cluster_name cmd"
 	test-cmd -m "Wait for cluster to settle" sleep 60
-	test-cmd -h $reg_ssh_user@$bastion2 -m  "All co available?" "until make -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -C $subdir/aba/$cluster_name cmd; until make -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 	# Deploy test app
 	test-cmd -h steve@$bastion2 -m "Create project 'demo'" "make -C $subdir/aba/$cluster_name cmd cmd='oc new-project demo'" || true
@@ -448,6 +451,8 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating cluster.conf" "cd $subdir/aba/
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Making iso" "make -C $subdir/aba/standard iso"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating standard cluster" "make -C $subdir/aba/standard"
 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -C $subdir/aba/standard cmd; until make -C $subdir/aba/standard cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+
 # Restart cluster test 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Log into cluster" ". <(make -s -C $subdir/aba/standard login)"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/standard ls"
@@ -466,7 +471,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='get po -A | grep -v -e Running -e Complete'"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd"
 test-cmd -m "Wait for cluster to settle" sleep 60
-test-cmd -h $reg_ssh_user@$bastion2 -m  "All co available?" "make -C $subdir/aba/standard cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -C $subdir/aba/standard cmd; make -C $subdir/aba/standard cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -C $subdir/aba/standard delete" 

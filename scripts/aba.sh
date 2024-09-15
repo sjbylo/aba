@@ -19,7 +19,7 @@ if [ ! -f aba.conf ]; then
 fi
 
 fetch_latest_version() {
-	curl --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt || return 1
+	curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt || return 1
 	## Get the latest stable OCP version number, e.g. 4.14.6
 	stable_ver=$(cat /tmp/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 	[ "$stable_ver" ] && echo $stable_ver || return 1
@@ -82,6 +82,7 @@ do
 		normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" 
 
 		echo
+		install_rpms make 
 		make bundle out="$dest_path" retry=3
 		exit 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
@@ -205,7 +206,7 @@ if [ ! -f .bundle ]; then
 		do
 			# Exit loop if release version exists
 			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-				if curl --retry 2 -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
+				if curl --connect-timeout 10 --retry 2 -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 					break
 				else
 					echo "Error: Failed to find release $target_ver"
@@ -233,6 +234,7 @@ if [ ! -f .bundle ]; then
 	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
 	# FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
 	(
+		install_rpms make 
 		make -s -C mirror checkversion
 	)
 
@@ -280,6 +282,8 @@ if [ ! -f .bundle ]; then
 
 	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 		echo_blue "Pull secret found at '$pull_secret_file'."
+
+		install_rpms make 
 
 		# Now we have the required ocp version, we can fetch the operator index in the background. 
 		( make -s -C mirror index >> .fetch-index.log 2>&1 & ) & 

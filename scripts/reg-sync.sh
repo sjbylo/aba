@@ -16,7 +16,7 @@ source <(normalize-mirror-conf)
 if [ -s save/mirror_seq1_000000.tar ]; then
 	echo 
 	echo_red "Warning: You already have images saved on local disk in $PWD/save."
-	echo_red "         Are you sure you don't want to 'make load' them into the mirror registry at $reg_host?"
+	echo_red "         Are you sure you don't use 'make load' to uplaod them into the mirror registry at $reg_host?"
 
 	ask "Continue with 'sync'" || exit 1
 fi
@@ -32,14 +32,21 @@ else
 	echo_red "Error: The pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
 fi
 
+# Check internet connection...
+echo_cyan -n "Checking access to https://api.openshift.com/: "
+if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/; then
+	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry."
+	exit 1
+fi
+
 export reg_url=https://$reg_host:$reg_port
 
 # Can the registry mirror already be reached?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
-reg_code=$(curl --retry 3 --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
+reg_code=$(curl --connect-timeout 10 --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
 ##[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\blocalhost\b" || no_proxy=$no_proxy,localhost 		  # adjust if proxy in use
-###res_local=$(curl --retry 3 --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" https://localhost:${reg_port}/health/instance || true)
+###res_local=$(curl --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" https://localhost:${reg_port}/health/instance || true)
 
 #FIXME: 
 ### # Mirror registry installed?
