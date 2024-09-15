@@ -26,6 +26,9 @@ index_file=.redhat-operator-index-v$ocp_ver_major
 lock_file=.redhat-operator-index-v$ocp_ver_major.lock
 log_file=.redhat-operator-index-v$ocp_ver_major.log
 
+delete_lock() { rm -f $lock_file; [ ! -s $index_file ] && rm -f $index_file; }
+trap 'delete_lock' INT
+
 # See if the index is already downloading (using 'ln') 
 [ ! -f $index_file ] && touch $index_file
 if ! ln $index_file $lock_file >/dev/null 2>&1; then
@@ -37,6 +40,10 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 
 	exit 0
 fi
+
+echo_blue "The operator index is downloading for v$ocp_ver_major, please wait 3-6 mins ..."
+
+# Lock successful, now download the index ...
 
 # Check if this script is running in the background, if it is then output to a log file
 if [ ! -t 0 ]; then

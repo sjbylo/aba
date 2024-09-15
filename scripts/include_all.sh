@@ -116,7 +116,7 @@ install_rpms() {
 
 	if [ "$rpms_to_install" ]; then
 		echo "Installing missing rpms:$rpms_to_install (logging to .dnf-install.log)"
-		if ! sudo dnf install $@ -y >> .dnf-install.log 2>&1; then
+		if ! sudo dnf install $rpms_to_install -y >> .dnf-install.log 2>&1; then
 			echo_red "Warning: an error occured whilst trying to install RPMs, see the logs at .dnf-install.log."
 			echo_red "If dnf cannot be used to install rpm packages, please install the following packages manually and try again!"
 			echo_magenta $rpms_to_install
