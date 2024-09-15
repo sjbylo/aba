@@ -55,7 +55,7 @@ cat others/message.txt
 
 echo -n "Looking up OpenShift release versions ..."
 
-if ! curl --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
+if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
 	[ "$TERM" ] && tput setaf 1
 	echo
 	echo "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
@@ -90,7 +90,7 @@ while true
 do
 	# Exit loop if release version exists
 	if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-		if curl --retry 2 -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
+		if curl --connect-timeout 10 --retry 2 -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 			break
 		else
 			echo "Error: Failed to find release $target_ver"
@@ -161,7 +161,7 @@ if [ ! -f ~/.aba.conf.created -o ~/.aba.conf.created -nt aba.conf ]; then
 fi
 
 domain_reachable() {
-	curl --retry 2 -IL $1 >/dev/null 2>&1 && return 0
+	curl --connect-timeout 10 --retry 2 -IL $1 >/dev/null 2>&1 && return 0
 	return 1
 }
 ip_reachable() {

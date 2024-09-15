@@ -67,7 +67,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
 else	
 	echo_red "Warning: Config map already exists. Assuming workaround has already been applied."
-	echo_red "         No cert file regcreds/rootCA.pem found (no mirror available?)."
+	### echo_red "         No cert file regcreds/rootCA.pem found (no mirror available?)."  # This is wrong statement
 fi
 
 #echo "############################"

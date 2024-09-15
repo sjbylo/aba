@@ -11,6 +11,13 @@ umask 077
 
 source <(normalize-aba-conf)
 
+# Check internet connection...
+echo_cyan -n "Checking access to https://api.openshift.com/: "
+if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/; then
+	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk."
+	exit 1
+fi
+
 mkdir -p save
 
 # Ensure the RH pull secrete files exist

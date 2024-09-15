@@ -52,6 +52,7 @@ fi
 echo "As defined in 'aba.conf' and/or 'mirror/mirror.conf', adding opperators to the image set conf file ..." >&2
 
 # Wait for the index to be generated?
+i=0
 if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
 	echo "Waiting 1-2 mins for the operator index to be generated ..." >&2
 	until [ -s .redhat-operator-index-v$ocp_ver_major ]
@@ -59,6 +60,9 @@ if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
 		sleep 3
 	done
 	sleep 1
+
+	[ $1 -ge 8 ] && echo_red "Giving up waiting for operator index download! Do you have Internet access?" && break
+	let i=$i+1
 fi
 
 for set in $op_sets
