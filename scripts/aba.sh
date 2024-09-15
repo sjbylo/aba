@@ -26,7 +26,7 @@ fetch_latest_version() {
 }
 
 usage="\
-Usage: $(basename $0) bundle <version> /path/to/write/bundle/file /path/to/pull-secret-file [channel]
+Usage: $(basename $0) --bundle --version <version> --bundle-file /path/to/write/bundle/file --pull-secret /path/to/pull-secret-file [--channel channel] [--op_sets <list of operator sets>] [--ops <listy of operator names>]
 
 <version>     OpenShift version or 'latest'
 <channel>     Optional OpenShift channel (stable, fast, eus, candidate)
@@ -42,6 +42,8 @@ Usage: $(basename $0) <<options>>
 	--dns <dns ip>
 	--default-route <next hop ip>
 	--ntp <ntp ip>
+	--op-sets <list of operator sets>
+	--ops <list of operators>
 	[--pull-secret path/to/file]
 	[--editor <editor>]
 	[--ask <boolean>]
@@ -54,41 +56,37 @@ Usage: $(basename $0) <<options>>
 
 while [ "$*" ] 
 do
+	echo "\$* = " $*
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		echo "$usage"
 		exit 0
 	elif [ "$1" = "--debug" -o "$1" = "-d" ]; then
 		export DEBUG_ABA=1
 		shift 
-	elif [ "$1" = "bundle" ]; then
+	elif [ "$1" = "--bundle" ]; then
+		ACTION=bundle
 		shift
-		ver=$1
-		[ "$1" = "latest" ] && ver=$(fetch_latest_version)
-		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
-		[ ! "$ver" ] && echo_red "OpenShift version [$1] missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
-		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver/g" aba.conf
+		#[ "$1" ] && [ ! -s $1 ] && echo_red "Pull secret file [$1] incorrect or missing!" >&2 && exit 1
+		#sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1#g" aba.conf
+		#shift
+		#[ "$1" ] && chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$' || true)
+		#[ ! "$chan" ] && chan=stable && echo_cyan "Channel [$1] incorrect or missing. Using default value: stable" >&2
+		#sed -i "s/^ocp_channel=[^ \t]*/ocp_channel=$chan/g" aba.conf
+
+	elif [ "$1" = "--bundle-file" ]; then
 		shift
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing bundle file path argument" >&2 && exit 1
 		[ "$1" ] && [ ! -d $(dirname $1) ] && echo "File destination path [$(dirname $1)] incorrect or missing!" >&2 && exit 1
 		[ -f "$1" ] && echo_red "Bundle file [$1] already exists!" >&2 && exit 1
-		[ "$1" ] && dest_path="$1"
+		[ "$1" ] && bundle_dest_path="$1"
 		shift
-		[ "$1" ] && [ ! -s $1 ] && echo_red "Pull secret file [$1] incorrect or missing!" >&2 && exit 1
-		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1#g" aba.conf
-		shift
-		[ "$1" ] && chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$' || true)
-		[ ! "$chan" ] && chan=stable && echo_cyan "Channel [$1] incorrect or missing. Using default value: stable" >&2
-		sed -i "s/^ocp_channel=[^ \t]*/ocp_channel=$chan/g" aba.conf
-
-		normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" 
-
-		echo
-		install_rpms make 
-		make bundle out="$dest_path" retry=3
-		exit 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing version arguments" >&2 && exit 1
-		ver=$(echo $1 | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
+		ver=$1
+		echo "$ver" | grep -q "^-" && echo_red "Error in parsing version arguments" >&2 && exit 1
+		[ "$ver" = "latest" ] && ver=$(fetch_latest_version)
+		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
+		[ ! "$ver" ] && echo_red "OpenShift version [$ver] missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver/g" aba.conf
 		target_ver=$ver
 		shift 
@@ -99,6 +97,31 @@ do
 		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan  /g" aba.conf
 		target_chan=$chan
 		shift 
+	elif [ "$1" = "--domain" -o "$1" = "-d" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing domain arguments" >&2 && exit 1
+		domain=$(echo $1 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
+		sed -i "s/^domain=[^ \t]*/domain=$domain  /g" aba.conf
+		target_domain=$domain
+		shift 
+	elif [ "$1" = "--dns" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing dns arguments" >&2 && exit 1
+		dns_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
+		sed -i "s/^dns_server=[^ \t]*/dns_server=$dns_ip  /g" aba.conf
+		shift 
+	elif [ "$1" = "--ntp" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing ntp arguments" >&2 && exit 1
+		ntp_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
+		sed -i "s/^ntp_server=[^ \t]*/ntp_server=$ntp_ip  /g" aba.conf
+		shift 
+	elif [ "$1" = "--default-route" ]; then
+		shift 
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing default-route arguments" >&2 && exit 1
+		def_route_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
+		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip  /g" aba.conf
+		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing platform arguments" >&2 && exit 1
@@ -106,6 +129,18 @@ do
 		platform="$1"
 		sed -i "s/^platform=[^ \t]*/platform=$platform  /g" aba.conf
 		shift
+	elif [ "$1" = "--op-sets" ]; then
+		shift
+		[ ! "$1" ] && echo_red "Missing args when parsing op-sets" && break
+		while ! echo "$1" | grep -q -e "^-"; do [ -s templates/operator-set-$1 ] && op_set_list="$op_set_list $1"; shift || break; done
+		echo op_set_list=$op_set_list
+		sed -i "s/op_sets=[^ \t]*/op_sets=\"$op_set_list\"  /g" aba.conf
+	elif [ "$1" = "--ops" ]; then
+		shift
+		[ ! "$1" ] && echo_red "Missing args when parsing ops" && break
+		while ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift || break; done
+		echo ops_list=$ops_list
+		sed -i "s/ops=[^ \t]*/ops=\"$ops_list\"  /g" aba.conf
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing editor arguments" >&2 && exit 1
@@ -139,9 +174,21 @@ do
 		shift 
 	else
 		echo "Unknown option: $1"
+		err=1
 		shift 
 	fi
 done
+
+[ "$err" ] && echo_red "An error has occured, aborting!" && exit 1
+
+if [ "$ACTION" = "bundle" ]; then
+	install_rpms make 
+
+	normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" 
+	echo bundle file path = $bundle_dest_path 
+	make bundle out="$bundle_dest_path" retry=3
+	exit 
+fi
 
 [ ! "$interactive_mode" ] && exit 0
 # From now on it's all considered interactive
@@ -300,7 +347,8 @@ if [ ! -f .bundle ]; then
 	fi
 
 	# make & jq are needed below and in the next steps 
-	install_rpms make jq python3-pyyaml
+	#install_rpms make jq python3-pyyaml
+	scripts/install-rpms.sh external 
 
 	##############################################################################################################################
 	# Determine air-gapped
@@ -353,9 +401,10 @@ else
 	# aba is running on the internal bastion, in 'bundle' mode.
 
 	# make & jq are needed below and in the next steps 
-	install_rpms make jq python3-pyyaml
+	#install_rpms make jq python3-pyyaml
+	scripts/install-rpms.sh internal
 
-	echo_blue "Aba bundle detected!  This aba bundle is ready to install OpenShift version '$ocp_version'.  Assuming we're running on an internal RHEL bastion!"
+	echo_blue "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version', assuming this is running on an internal RHEL bastion!"
 	
 	echo 
 	echo 
