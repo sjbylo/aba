@@ -19,8 +19,11 @@ if [ ! -f aba.conf ]; then
 fi
 
 fetch_latest_version() {
-	curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt || return 1
-	## Get the latest stable OCP version number, e.g. 4.14.6
+	# $1 must be one of 'stable', 'fast' or 'candidate'
+	local c=$1
+	[ "$c" = "eus" ] && c=stable   # .../ocp/eus/release.txt does not exist
+	curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$c/release.txt > /tmp/.release.txt || return 1
+	# Get the latest stable OCP version number, e.g. 4.14.6
 	stable_ver=$(cat /tmp/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 	[ "$stable_ver" ] && echo $stable_ver || return 1
 }
@@ -54,9 +57,13 @@ Usage: $(basename $0) <<options>>
 	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
 	interactive_mode=
 
+ops_list=
+op_set_list=
+chan=stable
+
 while [ "$*" ] 
 do
-	echo "\$* = " $*
+	####echo "\$* = " $*
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		echo "$usage"
 		exit 0
@@ -80,22 +87,28 @@ do
 		[ -f "$1" ] && echo_red "Bundle file [$1] already exists!" >&2 && exit 1
 		[ "$1" ] && bundle_dest_path="$1"
 		shift
-	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
-		shift 
-		ver=$1
-		echo "$ver" | grep -q "^-" && echo_red "Error in parsing version arguments" >&2 && exit 1
-		[ "$ver" = "latest" ] && ver=$(fetch_latest_version)
-		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
-		[ ! "$ver" ] && echo_red "OpenShift version [$ver] missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
-		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver/g" aba.conf
-		target_ver=$ver
-		shift 
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing channel arguments" >&2 && exit 1
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
 		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan  /g" aba.conf
 		target_chan=$chan
+		shift 
+	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
+		shift 
+		ver=$1
+		echo "$ver" | grep -q "^-" && echo_red "Error in parsing version arguments" >&2 && exit 1
+		if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt > /tmp/.release.txt; then
+			echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images."
+			echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again."
+			exit 1
+		fi
+
+		[ "$ver" = "latest" ] && ver=$(fetch_latest_version $chan)
+		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
+		[ ! "$ver" ] && echo_red "OpenShift version [$ver] missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
+		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver/g" aba.conf
+		target_ver=$ver
 		shift 
 	elif [ "$1" = "--domain" -o "$1" = "-d" ]; then
 		shift 
@@ -131,15 +144,17 @@ do
 		shift
 	elif [ "$1" = "--op-sets" ]; then
 		shift
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Missing args when parsing op-sets" && break
 		while ! echo "$1" | grep -q -e "^-"; do [ -s templates/operator-set-$1 ] && op_set_list="$op_set_list $1"; shift || break; done
-		echo op_set_list=$op_set_list
+		##echo op_set_list=$op_set_list
 		sed -i "s/op_sets=[^ \t]*/op_sets=\"$op_set_list\"  /g" aba.conf
 	elif [ "$1" = "--ops" ]; then
 		shift
-		[ ! "$1" ] && echo_red "Missing args when parsing ops" && break
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
+		[ ! "$1" ] && echo_red "Missing args when parsing '--ops'" && break
 		while ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift || break; done
-		echo ops_list=$ops_list
+		##echo ops_list=$ops_list
 		sed -i "s/ops=[^ \t]*/ops=\"$ops_list\"  /g" aba.conf
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		shift 
@@ -183,10 +198,9 @@ done
 
 if [ "$ACTION" = "bundle" ]; then
 	install_rpms make 
-
 	normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" 
 	echo bundle file path = $bundle_dest_path 
-	make bundle out="$bundle_dest_path" retry=3
+	make bundle out="$bundle_dest_path" retry=7  # Try 8 times
 	exit 
 fi
 
@@ -211,9 +225,10 @@ if [ ! -f .bundle ]; then
 	# Check if online
 	echo -n "Checking Internet connectivity ..."
 
-	if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
+	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # ocp/aus/release.txt does not exist!
+	if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt > /tmp/.release.txt; then
 		[ "$TERM" ] && tput el1 && tput cr
-		echo_red "Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the required images."
+		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images."
 		echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again."
 
 		exit 1

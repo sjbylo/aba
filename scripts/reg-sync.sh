@@ -3,9 +3,9 @@
 
 source scripts/include_all.sh
 
-try_tot=1
+try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Will retry $try_tot times."    # If the retry value exists and it's a number
+[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Will try $try_tot times."    # If the retry value exists and it's a number
 
 umask 077
 
@@ -33,9 +33,10 @@ else
 fi
 
 # Check internet connection...
-echo_cyan -n "Checking access to https://api.openshift.com/: "
+##echo_cyan -n "Checking access to https://api.openshift.com/: "
 if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/; then
 	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry."
+
 	exit 1
 fi
 

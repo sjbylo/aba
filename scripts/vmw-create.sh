@@ -75,6 +75,7 @@ for name in $CP_NAMES ; do
 
 	echo "Create VM: $vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [$mac] [$GOVC_NETWORK] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 	govc vm.create \
+		-annotation="Created on '$(date)' as control node for OCP v$ocp_version" \
 		-version vmx-15 \
 		-g rhel8_64Guest \
 		-firmware=efi \
@@ -125,6 +126,7 @@ for name in $WORKER_NAMES ; do
 
 	echo "Create VM: $vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 	govc vm.create \
+		-annotation="Created on '$(date)' as control node for OCP v$ocp_version" \
 		-version vmx-15 \
 		-g rhel8_64Guest \
 		-firmware=efi \

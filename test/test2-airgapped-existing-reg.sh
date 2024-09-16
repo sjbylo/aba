@@ -119,7 +119,7 @@ if [ ! "$1" ]; then
 	#################################
 
 	# Delete images
-	ssh steve@$bastion2 -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all"
+	ssh steve@$bastion2 -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage"
 	# This file is not needed in a fully air-gapped env. 
 	ssh steve@$bastion2 -- "rm -fv ~/.pull-secret.json"
 	# Want to test fully disconnected 
