@@ -35,13 +35,13 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 	if [ ! -s $index_file ]; then
 		echo_magenta "Operator index 'v$ocp_ver_major' is downloading ..."
 	else
-		echo_white "Operator index 'v$ocp_ver_major' already downloaded."
+		echo_white "Operator index 'v$ocp_ver_major' already downloaded!"
 	fi
 
 	exit 0
 fi
 
-echo_blue "The operator index is downloading for v$ocp_ver_major, please wait 3-6 mins ..."
+echo_blue "Operator index v$ocp_ver_major is downloading, please wait 3-6 mins ..."
 
 # Lock successful, now download the index ...
 
@@ -57,7 +57,7 @@ fi
 
 # Fetch latest operator catalog and default channels
 if ! oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major > $index_file; then
-	echo "$(date): Error: oc-mirror returned $? whilst downloading operator index."
+	echo_red "Error: oc-mirror returned $? whilst downloading operator index."
 	rm -f $lock_file
 
 	exit 1
@@ -72,5 +72,5 @@ do
 done > imageset-config-operator-catalog-v${ocp_ver_major}.yaml
 
 # Adding this to log file sincxe it will run in the background
-echo "$(date): Downloaded operator index for v$ocp_ver_major successfuly"
+echo "Downloaded operator index for v$ocp_ver_major successfully"
 

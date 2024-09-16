@@ -137,7 +137,7 @@ END
 
 # Delete images
 test-cmd -h steve@$bastion2 -m "Verify mirror uninstalled" podman ps 
-test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all"
+test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage"
 # This file is not needed in a fully air-gapped env. 
 ssh steve@$bastion2 -- "rm -fv ~/.pull-secret.json"
 # Want to test fully disconnected 
