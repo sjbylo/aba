@@ -43,8 +43,7 @@ do
 			echo_red "         Fix the mismatch and try again!" 
 			echo
 
-			sleep 2
-			### exit 1
+			exit 1
 		fi
 	fi
 done
