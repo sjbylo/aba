@@ -97,7 +97,7 @@ ssh $reg_ssh_user@$bastion2 -- "date" || sleep 3
 ssh $reg_ssh_user@$bastion2 -- "date" || sleep 8
 
 # Delete images
-ssh $reg_ssh_user@$bastion2 -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage"
+ssh $reg_ssh_user@$bastion2 -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 # This file is not needed in a fully air-gapped env. 
 ssh $reg_ssh_user@$bastion2 -- "rm -fv ~/.pull-secret.json"
 # Want to test fully disconnected 
@@ -246,7 +246,7 @@ test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $d
 test-cmd -m "Delete cluster (if needed)" make -C sno delete 
 test-cmd -m "Uninstall mirror" make -C mirror uninstall 
 test-cmd -h steve@$bastion2 -m "Verify mirror uninstalled" podman ps 
-test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage"
+test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 #####################################################################################################################
 #####################################################################################################################
@@ -328,7 +328,7 @@ test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso || t
 
 test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
 test-cmd -h steve@$bastion2 -m "Verify mirror uninstalled" podman ps 
-test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage"
+test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 #####################################################################################################################
 #####################################################################################################################
