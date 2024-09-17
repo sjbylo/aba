@@ -153,4 +153,4 @@ if [ ! "$repo_only" ]; then
 	touch ~/.aba.previous.backup
 fi
 
-[ "$dest" != "-" ] && echo_green "Bundle archive written successfully to $dest!" >&2 || echo_green "Bundle archive streamed successfully!"
+[ "$dest" != "-" ] && echo_green "Bundle archive written successfully to $dest!" >&2 || echo_green "Bundle archive streamed successfully!" >&2
