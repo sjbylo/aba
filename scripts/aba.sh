@@ -297,8 +297,8 @@ if [ ! -f .bundle ]; then
 	# FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
 	(
 		install_rpms make 
-		make -s -C mirror checkversion
-	)
+		make -s -C mirror checkversion 2>/dev/null
+	) || exit 
 
 	##############################################################################################################################
 	# Determine editor
