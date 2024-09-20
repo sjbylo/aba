@@ -74,6 +74,8 @@ rm -rf sno
 test-cmd -m "Installing SNO cluster from public registry, since no registry available." make sno 
 test-cmd -m "Deleting sno cluster" make -C sno delete || true
 
+test-cmd "make distclean ask="
+
 mylog
 mylog "===> Completed test $0"
 mylog

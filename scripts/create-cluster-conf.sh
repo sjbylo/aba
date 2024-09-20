@@ -44,7 +44,7 @@ if [ ! -s cluster.conf ]; then
 		export starting_ip=$standard_starting_ip
 		export mac_prefix=00:50:56:2x:xx:
 		export num_masters=3
-		export num_workers=2
+		export num_workers=3
 	fi
 
 	scripts/j2 templates/cluster.conf > cluster.conf 

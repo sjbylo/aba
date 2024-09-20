@@ -303,6 +303,8 @@ test-cmd -h steve@$bastion2 -m "Deleting sno cluster" "make -C $subdir/aba/sno d
 
 test-cmd -m "Clean up 'existing' mirror registry on internal bastion" test/reg-test-uninstall-remote.sh $bastion2
 
+test-cmd "make distclean ask="
+
 mylog
 mylog "===> Completed test $0"
 mylog
