@@ -334,6 +334,9 @@ test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune
 #####################################################################################################################
 #####################################################################################################################
 
+# Must remove the old files under mirror/save 
+make distclean ask=
+
 mylog
 mylog "===> Completed test $0"
 mylog
