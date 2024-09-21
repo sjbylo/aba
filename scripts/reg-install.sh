@@ -97,7 +97,7 @@ if [ "$reg_ssh_key" ]; then
 	else
 		if [ -f $f ]; then
 			echo
-			echo_red "Error: $reg_host is not a remote host! Correct the problem in mirror.conf and try again."
+			echo_red "Error: $reg_host is not a remote host! Correct the problem in mirror.conf (undefine reg_ssh_key?) and try again."
 			echo
 
 			exit 1
@@ -201,7 +201,7 @@ else
 	else
 		if [ ! -f $f ]; then
 			echo
-			echo_red "Error: $reg_host is a remote host! Correct the problem in mirror.conf and try again."
+			echo_red "Error: $reg_host is a remote host! Correct the problem in mirror.conf (define reg_ssh_key?) and try again."
 			echo
 
 			exit 1

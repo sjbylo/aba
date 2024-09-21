@@ -31,14 +31,15 @@ fetch_latest_version() {
 usage="\
 ABA: Install & manage air-gapped OpenShift quickly
 
-Usage: $(basename $0) --bundle [--channel <channel>] \\
+Usage: $(basename $0) bundle \\
+		     [--channel <channel>] \\
 		      --version <version> \\
 		      --bundle-file /path/to/bundle-file \\
       		      [--pull-secret ~/.pull-secret.json] \\
 		      [--op-sets <list of operator sets>] \\
       		      [--ops <list of operator names>]
 
-'--bundle' writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
+'bundle' writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
 in air-gapped/fully disconnected environments. 
 
 Usage: $(basename $0) <<options>>
@@ -55,7 +56,7 @@ Usage: $(basename $0) <<options>>
 	--op-sets <operator set list>	# Add sets of operator names to imageset file, as defined in 'templates/operator-set.*' files.
 	--ops <list of operators>	# Configure optional list of operator names to add to the imageset file (for oc-mirror).
 	--pull-secret <path/to/file>	# Write your pull secret json file here. 
-	--editor <editor>		# Set the editor to use, e.g. vi, emacs, pico, none.  'none' meane manual editing of config files. 
+	--editor <editor>		# Set the editor to use, e.g. vi, emacs, pico, none.  'none' means manual editing of config files. 
 	--ask				# Prompt user when needed.
 	--noask				# Do not prompt, assume default answers.
 "
@@ -65,7 +66,7 @@ Usage: $(basename $0) <<options>>
 	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
 	interactive_mode=
 
-# set defaultsa 
+# set defaults 
 ops_list=
 op_set_list=
 chan=stable
@@ -79,7 +80,7 @@ do
 	elif [ "$1" = "--debug" -o "$1" = "-d" ]; then
 		export DEBUG_ABA=1
 		shift 
-	elif [ "$1" = "--bundle" ]; then
+	elif [ "$1" = "bundle" ]; then
 		ACTION=bundle
 		shift
 	elif [ "$1" = "--bundle-file" ]; then
@@ -184,12 +185,11 @@ do
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 && exit 1
 		[ -s $1 ] && cp $1 vmware.conf
 		shift 
-	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
+	elif [ "$1" = "--ask" ]; then
+		sed -i "s#^ask=[^ \t]*#ask=true  #g" aba.conf
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ask arguments" >&2 && exit 1
-		[ "$1" ] && ask=$(echo "$1" | grep -E -o "^(true|false|1|0)$" || true)
-		[ ! "$ask" ] && echo_red "Error in parsing ask arguments [$1]" >&2 && exit 1
-		sed -i "s#^ask=[^ \t]*#ask=$ask  #g" aba.conf
+	elif [ "$1" = "--noask" ]; then
+		sed -i "s#^ask=[^ \t]*#ask=false  #g" aba.conf
 		shift 
 	else
 		echo "Unknown option: $1"
@@ -198,20 +198,35 @@ do
 	fi
 done
 
-[ "$err" ] && echo_red "An error has occured, aborting!" && exit 1
+[ "$err" ] && echo_red "An error has occurred, aborting!" && exit 1
 
 if [ "$ACTION" = "bundle" ]; then
 	install_rpms make 
 
 	echo_cyan "A bundle archive file will be created using the following values:"
 	echo
+	source <(normalize-aba-conf)
+	echo $ask
 	normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" 
 	echo Bundle output file = $bundle_dest_path 
 	echo
 
-	[ -s mirror/save/imageset-config-save.yaml ] && ask "Create bundle file (move existing mirror/save directory to mirror/save.bk)" && rm -rf mirror/save.bk && mv mirror/save mirror/save.bk
+	if [ -s mirror/save/imageset-config-save.yaml ]; then
+		if ask "Create bundle file (mirror/save/imageset file will be backed up)"; then
+			mv -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.backup.$(date +%Y%m%d-%H%M)
+		else
+			exit 1
+		fi
+	fi
 
-	make bundle out="$bundle_dest_path" retry=7  # Try 8 times!
+	if files_on_same_device mirror $bundle_dest_path; then
+		#make bundle out="$bundle_dest_path" retry=7  # Try 8 times!
+		echo_cyan "Creating minor bundle archive (because files are on same file system) ..."
+		make download save tarrepo out="$bundle_dest_path" retry=7	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
+	else
+		echo_cyan "Creating full bundle archive (assuming destination file is on portable media) ..."
+		make download save tar out="$bundle_dest_path" retry=7    	# Try save 8 times, then create full archive, including all files. 
+	fi
 
 	exit 
 fi
@@ -237,7 +252,7 @@ if [ ! -f .bundle ]; then
 	# Check if online
 	echo -n "Checking Internet connectivity ..."
 
-	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # ocp/aus/release.txt does not exist!
+	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # ocp/eus/release.txt does not exist!
 	if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt > /tmp/.release.txt; then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images."
