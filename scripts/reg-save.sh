@@ -75,7 +75,7 @@ try=1
 failed=1
 while [ $try -le $try_tot ]
 do
-	echo_magenta -n "Attempt ($try/$try_tot)."
+	echo_magenta -n "Trying again. Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'make save retry=<number>'" || echo
 	echo_cyan "Running: $(cat save-mirror.sh)"
 	echo
