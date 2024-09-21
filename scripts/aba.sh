@@ -201,6 +201,7 @@ done
 [ "$err" ] && echo_red "An error has occurred, aborting!" && exit 1
 
 if [ "$ACTION" = "bundle" ]; then
+	[ ! "$bundle_dest_path" ] && echo_red "Error: bundle file missing!" && exit 1
 	install_rpms make 
 
 	echo_cyan "A bundle archive file will be created using the following values:"
