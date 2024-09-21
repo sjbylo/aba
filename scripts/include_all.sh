@@ -216,3 +216,21 @@ longest_line() {
     }'
 }
 
+files_on_same_device() {
+	# Check if two file paths were provided
+	if [ "$#" -ne 2 ]; then
+		echo "Usage: files_on_same_device <file_path1> <file_path2>"
+		exit 1
+	fi
+
+	# Get the device number for each file path using 'stat'
+	DIR1=$(dirname "$1")
+	DIR2=$(dirname "$2")
+
+	DEV1=$(stat -c %d "$DIR1")
+	DEV2=$(stat -c %d "$DIR2")
+
+	# Compare the device numbers
+	[ "$DEV1" == "$DEV2" ] && return 0 || return 1
+}
+

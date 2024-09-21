@@ -109,24 +109,45 @@ fi
 if [ "$dest" != "-" ]; then
 	### now=$(date "+%Y-%m-%d-%H-%M-%S")  # Not needed anymore
 
-	echo
-	echo_white "Writing tar file (bundle archive) to $dest ..."
-	echo
-	echo_white "After the bundle has been written, copy it to your *internal bastion*, e.g. with:"
-	echo_white " cp $dest </path/to/your/portable/media/usb-stick/thumbdrive>"
-	echo_white "Remember to copy over the 'image set' tar files also, e.g. with the command:"
-	echo_white " cp mirror/save/mirror_seq*.tar <path/to/your/portable/media/usb-stick/thumbdrive>"
-	echo
-	echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
-	echo_white "Extract the bundle tar file anywhere under your home directory"
-	echo_white "and move the 'image set' files into the save/ dir & continue by running './aba', e.g. with the commands:"
-	echo_white "  tar xvf $(basename $dest)"
-	echo_white "  mv mirror_seq*.tar aba/mirror/save"
-	echo_white "  cd aba"
-	echo_white "  ./aba"
-	echo
-	echo_white "Run 'make help' for all options."
-	echo
+	if [ "$repo_only" ]; then
+		echo
+		echo_cyan "Writing partial bundle archive to $dest ..."
+		echo
+		echo_white "After the bundle has been written, copy it to your *internal bastion*, e.g. with:"
+		echo_white " cp $dest </path/to/your/portable/media/usb-stick/thumbdrive>"
+		echo_white "Remember to copy over the 'image set' tar files also, e.g. with the command:"
+		echo_white " cp mirror/save/mirror_seq*.tar <path/to/your/portable/media/usb-stick/thumbdrive>"
+		echo
+		echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
+		echo_white "Extract the bundle tar file anywhere under your home directory"
+		echo_white "and move the 'image set' files into the save/ dir & continue by running './aba', e.g. with the commands:"
+		echo_white "  tar xvf $(basename $dest)"
+		echo_white "  mv mirror_seq*.tar aba/mirror/save"
+		echo_white "  cd aba"
+		echo_white "  ./aba"
+		echo
+		echo_white "Run 'make help' for all options."
+		echo
+	else
+		echo
+		echo_cyan "Writing full bundle archive to $dest ..."
+		echo
+		echo_white "If not already ... after the bundle has been written, copy it to your *internal bastion*, e.g. with:"
+		echo_white " cp $dest </path/to/your/portable/media/usb-stick/thumbdrive>"
+		#echo_white "Remember to copy over the 'image set' tar files also, e.g. with the command:"
+		#echo_white " cp mirror/save/mirror_seq*.tar <path/to/your/portable/media/usb-stick/thumbdrive>"
+		echo
+		#echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
+		echo_white "Extract the bundle tar file anywhere under your home directory"
+		#echo_white "and move the 'image set' files into the save/ dir & continue by running './aba', e.g. with the commands:"
+		echo_white "  tar xvf $(basename $dest)"
+		#echo_white "  mv mirror_seq*.tar aba/mirror/save"
+		echo_white "  cd aba"
+		echo_white "  ./aba"
+		echo
+		echo_white "Run 'make help' for all options."
+		echo
+	fi
 fi
 
 if [ "$inc" ]; then
@@ -151,7 +172,7 @@ rm -f aba/.bundle  # We don't want this repo to be labelled as 'bundle', only th
 if [ ! "$repo_only" ]; then
 	# Upon success, make a note of the time
 	echo_white "Touching file ~/.aba.previous.backup" >&2
-	touch ~/.aba.previous.backup
+	[ "$inc" ] && touch ~/.aba.previous.backup
 fi
 
 [ "$dest" != "-" ] && echo_green "Bundle archive written successfully to $dest!" >&2 || echo_green "Bundle archive streamed successfully!" >&2
