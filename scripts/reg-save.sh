@@ -13,7 +13,7 @@ source <(normalize-aba-conf)
 
 # Check internet connection...
 ##echo_cyan -n "Checking access to https://api.openshift.com/: "
-if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/; then
+if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
 	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk."
 
 	exit 1
@@ -21,7 +21,7 @@ fi
 
 mkdir -p save
 
-# Ensure the RH pull secrete files exist
+# Ensure the RH pull secret files are located in the right places
 scripts/create-containers-auth.sh
 
 # Generate first imageset-config file for saving images.  
@@ -42,9 +42,11 @@ if [ ! -s save/imageset-config-save.yaml ]; then
 	export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-	echo "Generating save/imageset-config-save.yaml to save images to local disk for OpenShift 'v$ocp_version' and channel '$ocp_channel' ..."
+	echo "Generating initial 'save/imageset-config-save.yaml' to save images to local disk for OpenShift 'v$ocp_version' and channel '$ocp_channel' ..."
+
 	scripts/j2 ./templates/imageset-config-save.yaml.j2 > save/imageset-config-save.yaml 
 	scripts/add-operators-to-imageset.sh >> save/imageset-config-save.yaml 
+
 	touch save/.created
 else
 	# Check disk space under save/. 
@@ -87,8 +89,8 @@ do
 	let try=$try+1
 done
 
+echo
 [ "$failed" ] && echo_red "Image saving aborted ..." && exit 1
 
-echo
 echo_green "Images saved successfully!"
 echo 
