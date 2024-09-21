@@ -15,8 +15,8 @@ source <(normalize-mirror-conf)
 # Show warning if 'make save' has been used previously.
 if [ -s save/mirror_seq1_000000.tar ]; then
 	echo 
-	echo_red "Warning: You already have images saved on local disk in $PWD/save."
-	echo_red "         Are you sure you don't use 'make load' to uplaod them into the mirror registry at $reg_host?"
+	echo_red "Warning: Image sets exist on local disk in $PWD/save."
+	echo_red "         Are you sure you don't want to load them into the mirror registry at $reg_host (make load)?"
 
 	ask "Continue with 'sync'" || exit 1
 fi
@@ -34,7 +34,7 @@ fi
 
 # Check internet connection...
 ##echo_cyan -n "Checking access to https://api.openshift.com/: "
-if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/; then
+if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
 	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry."
 
 	exit 1
@@ -46,26 +46,13 @@ export reg_url=https://$reg_host:$reg_port
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
 reg_code=$(curl --connect-timeout 10 --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
-##[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\blocalhost\b" || no_proxy=$no_proxy,localhost 		  # adjust if proxy in use
-###res_local=$(curl --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" https://localhost:${reg_port}/health/instance || true)
-
-#FIXME: 
-### # Mirror registry installed?
-### if [ "$reg_code" != "200" ]; then
-### 	echo "Error: Registry at https://$reg_host:${reg_port}/ is not responding" && exit 1
-### fi
-
-# FIXME: This is not needed as 'make install' has already verified this
-### podman logout --all >/dev/null 
-### echo -n "Checking registry access is working using 'podman login' ... "
-### podman login -u init -p $reg_password $reg_url 
-
 mkdir -p sync 
 
 # Generate first imageset-config file for syncing images.  
 # Do not overwrite the file. Allow users to add images and operators to imageset-config-sync.yaml and run "make sync" again. 
 if [ ! -s sync/imageset-config-sync.yaml ]; then
 	rm -rf sync/*
+
 	export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 

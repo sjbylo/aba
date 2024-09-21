@@ -29,17 +29,21 @@ fetch_latest_version() {
 }
 
 usage="\
-ABA: Install & manage air-gapped OpenShift quickly
+Aba: Install & manage air-gapped OpenShift. 
+
+Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially disconnected environment,
+either onto vSphere, ESXi or bare-metal. Because Aba uses the Agent-based installer there is no need to configure a load balancer,
+a bootstrap node or even require DHCP.
 
 Usage: $(basename $0) bundle \\
-		     [--channel <channel>] \\
-		      --version <version> \\
-		      --bundle-file /path/to/bundle-file \\
-      		      [--pull-secret ~/.pull-secret.json] \\
-		      [--op-sets <list of operator sets>] \\
-      		      [--ops <list of operator names>]
+	[--channel <channel>] \\
+	 --version <version> \\
+	 --bundle-file /path/to/bundle-file \\
+	[--pull-secret ~/.pull-secret.json] \\
+	[--op-sets <list of operator sets>] \\
+	[--ops <list of operator names>]
 
-'bundle' writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
+The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
 in air-gapped/fully disconnected environments. 
 
 Usage: $(basename $0) <<options>>
@@ -51,12 +55,12 @@ Usage: $(basename $0) <<options>>
 	--domain <domain>		# Set the OpenShift base domain, e.g. company.com.
 	--machine-network <cidr>	# Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24.
 	--dns <ip address>		# Set one DNS IP address.
-	--default-route <next hop ip>	# Set any default route (optional).
+	--default-route <next hop ip>	# Set the default route of the internal network, if any (optional).
 	--ntp <ntp ip>			# Set the NTP IP address (optional but recommended!). 
-	--op-sets <operator set list>	# Add sets of operator names to imageset file, as defined in 'templates/operator-set.*' files.
 	--ops <list of operators>	# Configure optional list of operator names to add to the imageset file (for oc-mirror).
-	--pull-secret <path/to/file>	# Write your pull secret json file here. 
-	--editor <editor>		# Set the editor to use, e.g. vi, emacs, pico, none.  'none' means manual editing of config files. 
+	--op-sets <operator set list>	# Add sets of operator names to imageset file, as defined in 'templates/operator-set.*' files.
+	--pull-secret <path/to/file>	# Location of your pull secret (json) file here. 
+	--editor <editor command>	# Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
 	--ask				# Prompt user when needed.
 	--noask				# Do not prompt, assume default answers.
 "
@@ -207,26 +211,26 @@ if [ "$ACTION" = "bundle" ]; then
 	echo_cyan "A bundle archive file will be created using the following values:"
 	echo
 	source <(normalize-aba-conf)
-	echo $ask
 	normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" 
 	echo Bundle output file = $bundle_dest_path 
 	echo
 
 	if [ -s mirror/save/imageset-config-save.yaml ]; then
 		if ask "Create bundle file (mirror/save/imageset file will be backed up)"; then
-			mv -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.backup.$(date +%Y%m%d-%H%M)
+			mv -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.backup.$(date +%Y%m%d-%H%M%S)
 		else
 			exit 1
 		fi
 	fi
 
 	if files_on_same_device mirror $bundle_dest_path; then
-		#make bundle out="$bundle_dest_path" retry=7  # Try 8 times!
 		echo_cyan "Creating minor bundle archive (because files are on same file system) ..."
-		make download save tarrepo out="$bundle_dest_path" retry=7	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
+		# Try to save 8 times, then create archive of the repo ONLY, excluding large imageset files.
+		make download save tarrepo out="$bundle_dest_path" retry=7
 	else
 		echo_cyan "Creating full bundle archive (assuming destination file is on portable media) ..."
-		make download save tar out="$bundle_dest_path" retry=7    	# Try save 8 times, then create full archive, including all files. 
+		# Try to save 8 times, then create full archive, including all files. 
+		make download save tar out="$bundle_dest_path" retry=7
 	fi
 
 	exit 

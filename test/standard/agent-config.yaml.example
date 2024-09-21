@@ -142,3 +142,30 @@ hosts:
             next-hop-address: 10.0.1.1
             next-hop-interface: ens160
   
+  - hostname: worker3
+    role: worker
+    interfaces:
+     - name: ens160
+       macAddress: 88:88:88:88:88:06
+    networkConfig:
+      interfaces:
+        - name: ens160
+          type: ethernet
+          state: up
+          mac-address: 88:88:88:88:88:06
+          ipv4:
+            enabled: true
+            address:
+              - ip: 10.0.1.86
+                prefix-length: 24
+            dhcp: false
+      dns-resolver:
+        config:
+          server:
+            - 10.0.1.8
+      routes:
+        config:
+          - destination: 0.0.0.0/0
+            next-hop-address: 10.0.1.1
+            next-hop-interface: ens160
+  
