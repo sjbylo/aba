@@ -29,27 +29,35 @@ fetch_latest_version() {
 }
 
 usage="\
-Usage: $(basename $0) --bundle --version <version> --bundle-file /path/to/write/bundle/file --pull-secret /path/to/pull-secret-file [--channel channel] [--op_sets <list of operator sets>] [--ops <listy of operator names>]
+ABA: Install & manage air-gapped OpenShift quickly
 
-<version>     OpenShift version or 'latest'
-<channel>     Optional OpenShift channel (stable, fast, eus, candidate)
+Usage: $(basename $0) --bundle [--channel <channel>] \\
+		      --version <version> \\
+		      --bundle-file /path/to/bundle-file \\
+      		      [--pull-secret ~/.pull-secret.json] \\
+		      [--op-sets <list of operator sets>] \\
+      		      [--ops <list of operator names>]
+
+'--bundle' writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
+in air-gapped/fully disconnected environments. 
 
 Usage: $(basename $0) <<options>>
 
 <<options>>:
-	--version <version>
-	[--channel <channel>]
-	[--platform <vmw|bm>]
-	--domain <domain>
-	--machine-network <network cidr>
-	--dns <dns ip>
-	--default-route <next hop ip>
-	--ntp <ntp ip>
-	--op-sets <list of operator sets>
-	--ops <list of operators>
-	[--pull-secret path/to/file]
-	[--editor <editor>]
-	[--ask <boolean>]
+	--channel <channel>		# Set the OpenShift installation channel, e.g. fast, stable (default), eus or candidate.
+	--version <version>		# Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest'.
+	--platform vmw|bm		# Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
+	--domain <domain>		# Set the OpenShift base domain, e.g. company.com.
+	--machine-network <cidr>	# Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24.
+	--dns <ip address>		# Set one DNS IP address.
+	--default-route <next hop ip>	# Set any default route (optional).
+	--ntp <ntp ip>			# Set the NTP IP address (optional but recommended!). 
+	--op-sets <operator set list>	# Add sets of operator names to imageset file, as defined in 'templates/operator-set.*' files.
+	--ops <list of operators>	# Configure optional list of operator names to add to the imageset file (for oc-mirror).
+	--pull-secret <path/to/file>	# Write your pull secret json file here. 
+	--editor <editor>		# Set the editor to use, e.g. vi, emacs, pico, none.  'none' meane manual editing of config files. 
+	--ask				# Prompt user when needed.
+	--noask				# Do not prompt, assume default answers.
 "
 
 # for testing, if unset, testing will halt in edit_file()! 
@@ -57,6 +65,7 @@ Usage: $(basename $0) <<options>>
 	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
 	interactive_mode=
 
+# set defaultsa 
 ops_list=
 op_set_list=
 chan=stable
@@ -73,23 +82,16 @@ do
 	elif [ "$1" = "--bundle" ]; then
 		ACTION=bundle
 		shift
-		#[ "$1" ] && [ ! -s $1 ] && echo_red "Pull secret file [$1] incorrect or missing!" >&2 && exit 1
-		#sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1#g" aba.conf
-		#shift
-		#[ "$1" ] && chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$' || true)
-		#[ ! "$chan" ] && chan=stable && echo_cyan "Channel [$1] incorrect or missing. Using default value: stable" >&2
-		#sed -i "s/^ocp_channel=[^ \t]*/ocp_channel=$chan/g" aba.conf
-
 	elif [ "$1" = "--bundle-file" ]; then
 		shift
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing bundle file path argument" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --bundle-file path argument" >&2 && exit 1
 		[ "$1" ] && [ ! -d $(dirname $1) ] && echo "File destination path [$(dirname $1)] incorrect or missing!" >&2 && exit 1
 		[ -f "$1" ] && echo_red "Bundle file [$1] already exists!" >&2 && exit 1
 		[ "$1" ] && bundle_dest_path="$1"
 		shift
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing channel arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 && exit 1
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
 		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan  /g" aba.conf
 		target_chan=$chan
@@ -97,7 +99,7 @@ do
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		shift 
 		ver=$1
-		echo "$ver" | grep -q "^-" && echo_red "Error in parsing version arguments" >&2 && exit 1
+		echo "$ver" | grep -q "^-" && echo_red "Error in parsing --version arguments" >&2 && exit 1
 		if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt > /tmp/.release.txt; then
 			echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images."
 			echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again."
@@ -112,32 +114,32 @@ do
 		shift 
 	elif [ "$1" = "--domain" -o "$1" = "-d" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing domain arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 && exit 1
 		domain=$(echo $1 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		sed -i "s/^domain=[^ \t]*/domain=$domain  /g" aba.conf
 		target_domain=$domain
 		shift 
 	elif [ "$1" = "--dns" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing dns arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 && exit 1
 		dns_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^dns_server=[^ \t]*/dns_server=$dns_ip  /g" aba.conf
 		shift 
 	elif [ "$1" = "--ntp" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing ntp arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 && exit 1
 		ntp_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^ntp_server=[^ \t]*/ntp_server=$ntp_ip  /g" aba.conf
 		shift 
 	elif [ "$1" = "--default-route" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing default-route arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 && exit 1
 		def_route_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip  /g" aba.conf
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing platform arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --platform arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red -e "Missing platform, see usage.\n$usage" >&2 && exit 1
 		platform="$1"
 		sed -i "s/^platform=[^ \t]*/platform=$platform  /g" aba.conf
@@ -145,44 +147,46 @@ do
 	elif [ "$1" = "--op-sets" ]; then
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 && exit 1
-		[ ! "$1" ] && echo_red "Missing args when parsing op-sets" && break
+		[ ! "$1" ] && echo_red "Warning: Missing args when parsing op-sets" && exit 1
 		while ! echo "$1" | grep -q -e "^-"; do [ -s templates/operator-set-$1 ] && op_set_list="$op_set_list $1"; shift || break; done
-		##echo op_set_list=$op_set_list
-		sed -i "s/op_sets=[^ \t]*/op_sets=\"$op_set_list\"  /g" aba.conf
+		op_set_list=$(echo "$op_set_list" | xargs)  # Trim white space
+		#echo ADDDING op_set_list=$op_set_list
+		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\"  /g" aba.conf
 	elif [ "$1" = "--ops" ]; then
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
-		[ ! "$1" ] && echo_red "Missing args when parsing '--ops'" && break
+		[ ! "$1" ] && echo_red "Warning: Missing args when parsing '--ops'" && exit 1
 		while ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift || break; done
-		##echo ops_list=$ops_list
-		sed -i "s/ops=[^ \t]*/ops=\"$ops_list\"  /g" aba.conf
+		ops_list=$(echo "$ops_list" | xargs)  # Trim white space
+		#echo ADDING ops_list=$ops_list
+		sed -i "s/^ops=[^#$]*/ops=\"$ops_list\"  /g" aba.conf
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing editor arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red -e "Missing editor, see usage.\n$usage" >&2 && exit 1
 		editor="$1"
 		sed -i "s/^editor=[^ \t]*/editor=$editor  /g" aba.conf
 		shift
 	elif [ "$1" = "--machine-network" -o "$1" = "-n" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing machine network arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 && exit 1
 		sed -i "s/^machine_network=[^ \t]*/machine_network=$1  /g" aba.conf
 		shift 
 	elif [ "$1" = "--pull-secret" -o "$1" = "-ps" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing pull-secret arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
 		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
 		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1  #g" aba.conf
 		shift 
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing vmware arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 && exit 1
 		[ -s $1 ] && cp $1 vmware.conf
 		shift 
 	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing 'ask' arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ask arguments" >&2 && exit 1
 		[ "$1" ] && ask=$(echo "$1" | grep -E -o "^(true|false|1|0)$" || true)
 		[ ! "$ask" ] && echo_red "Error in parsing ask arguments [$1]" >&2 && exit 1
 		sed -i "s#^ask=[^ \t]*#ask=$ask  #g" aba.conf
@@ -198,9 +202,17 @@ done
 
 if [ "$ACTION" = "bundle" ]; then
 	install_rpms make 
+
+	echo_cyan "A bundle archive file will be created using the following values:"
+	echo
 	normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" 
-	echo bundle file path = $bundle_dest_path 
-	make bundle out="$bundle_dest_path" retry=7  # Try 8 times
+	echo Bundle output file = $bundle_dest_path 
+	echo
+
+	[ -s mirror/save/imageset-config-save.yaml ] && ask "Create bundle file (move existing mirror/save directory to mirror/save.bk)" && rm -rf mirror/save.bk && mv mirror/save mirror/save.bk
+
+	make bundle out="$bundle_dest_path" retry=7  # Try 8 times!
+
 	exit 
 fi
 
