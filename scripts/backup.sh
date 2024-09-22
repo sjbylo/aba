@@ -161,7 +161,7 @@ out_file_list=$(echo $file_list | cut -c-90)
 echo_blue "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
 echo >&2
 if ! tar cf $dest $file_list; then
-	echo_red "tar command failed with return code $?"
+	echo_red "tar command failed with return code $?" >&2
 	rm -f aba/.bundle
 	exit
 fi
