@@ -154,7 +154,9 @@ source <(cd mirror && normalize-mirror-conf)
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
-test-cmd -r 99 3 -m "Saving images to local disk" "make save" 
+#### NEW TEST test-cmd -r 99 3 -m "Saving images to local disk" "make save" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
+test-cmd -r 99 3 -m "Creating bundle" "./aba bundle --channel stable --version latest --bundle-file - | ssh $reg_ssh_user@$bastion2 tar -C $subdir -xvf -"
 
 # Existing regcreds/pull-secret files issue.  E.g. if aba has been used already to install a reg. .. then 'make save' is run!
 # Set up bad creds and be sure they do not get copied to internal bastion!
@@ -176,14 +178,14 @@ test-cmd -m  "Verifying existance of file 'mirror/save/mirror_seq1_000000.tar'" 
 # If the VM snapshot is reverted, as above, no need to delete old files
 ####test-cmd -h $reg_ssh_user@$bastion2 -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/* $subdir/aba"
 
-ssh $reg_ssh_user@$bastion2 "rpm -q make  || sudo yum install make -y"
+ssh $reg_ssh_user@$bastion2 "rpm -q make || sudo yum install make -y"
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
+#### NEW TEST test-cmd -h $reg_ssh_user@$bastion2 -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
 
-mylog "Use 'make tarrepo' to copy tar+ssh archive plus seq1 tar file to internal bastion"
-###make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir - xvf -
-make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir -xvf -
-scp mirror/save/mirror_seq1_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
+#### NEW TEST mylog "Use 'make tarrepo' to copy tar+ssh archive plus seq1 tar file to internal bastion"
+#### NEW TEST ###make -s -C mirror inc out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir - xvf -
+#### NEW TEST make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$bastion2 -- tar -C $subdir -xvf -
+#### NEW TEST scp mirror/save/mirror_seq1_000000.tar $reg_ssh_user@$bastion2:$subdir/aba/mirror/save
 
 ### test-cmd -h $reg_ssh_user@$bastion2 -r 5 3 -m "Checking regcreds/ does not exist on $bastion2" "test ! -d $subdir/aba/mirror/regcreds | exit 1" 
 
