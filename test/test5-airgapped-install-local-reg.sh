@@ -41,10 +41,10 @@ rm -f ~/.aba.previous.backup
 
 which make || sudo dnf install make -y
 
-v=4.16.5
+#v=4.16.5
 
 > mirror/mirror.conf
-echo "ocp_version=$v" >> aba.conf  # Only to fix error, missing "ocp_version"
+echo "ocp_version=4.16.999" >> aba.conf  # Only to fix error, missing "ocp_version"
 test-cmd -m "Cleaning up mirror - distclean" "make -C mirror distclean ask=" 
 #test-cmd -m "Cleaning up mirror - clean" "make -C mirror clean" 
 
@@ -63,7 +63,7 @@ mylog
 
 rm -f aba.conf  # Set it up next
 vf=~/.vmware.conf
-test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
+test-cmd -m "Configure aba.conf for latest version and vmware $vf" ./aba --version latest ## --vmw $vf
 # Set up govc 
 cp $vf vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
@@ -425,7 +425,7 @@ do
 	mylog "Building cluster $c"
 	[ "$c" = "sno" ] && cnt=1
 	[ "$c" = "compact" ] && cnt=3
-	[ "$c" = "standard" ] && cnt=5
+	[ "$c" = "standard" ] && cnt=6
 	build_and_test_cluster $c $cnt
 
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting '$c' cluster" "make -C $subdir/aba/$c delete" 
@@ -438,6 +438,7 @@ echo "00:50:56:1d:9e:01
 00:50:56:1d:9e:03
 00:50:56:1d:9e:04
 00:50:56:1d:9e:05
+00:50:56:1d:9e:06
 " > macs.conf
 scp macs.conf $reg_ssh_user@$bastion2:$subdir/aba/standard
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating cluster.conf" "cd $subdir/aba/standard; scripts/create-cluster-conf.sh standard standard"
@@ -459,12 +460,12 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully (2/2)" "yes | make -C $subdir/aba/standard shutdown"
 #test-cmd -m "Wait for cluster to power down" sleep 600
 test-cmd -m "Wait for cluster to power down" sleep 60
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'poweredOff'" "until make -C $subdir/aba/standard ls |grep poweredOff |wc -l| grep ^5$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'poweredOff'" "until make -C $subdir/aba/standard ls |grep poweredOff |wc -l| grep ^6$; do sleep 10; echo -n .; done"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/standard ls"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Start cluster gracefully" "make -C $subdir/aba/standard startup"
 #test-cmd -m "Wait for cluster to settle" sleep 600
 test-cmd -m "Wait for cluster to settle" sleep 60
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'Ready'" "cd $subdir/aba/standard; until oc get nodes| grep Ready|grep -v Not|wc -l| grep ^5$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'Ready'" "cd $subdir/aba/standard; until oc get nodes| grep Ready|grep -v Not|wc -l| grep ^6$; do sleep 10; echo -n .; done"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='get nodes'"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='whoami'"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -C $subdir/aba/standard cmd cmd='version'"
