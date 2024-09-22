@@ -89,9 +89,9 @@ do
 		shift
 	elif [ "$1" = "--bundle-file" ]; then
 		shift
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --bundle-file path argument" >&2 && exit 1
+		echo "$1" | grep -q "^--" && echo_red "Error in parsing --bundle-file path argument" >&2 && exit 1
 		[ "$1" ] && [ ! -d $(dirname $1) ] && echo "File destination path [$(dirname $1)] incorrect or missing!" >&2 && exit 1
-		[ -f "$1" ] && echo_red "Bundle file [$1] already exists!" >&2 && exit 1
+		[ "$1" != "-" ] && [ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
 		[ "$1" ] && bundle_dest_path="$1"
 		shift
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
@@ -205,32 +205,44 @@ done
 [ "$err" ] && echo_red "An error has occurred, aborting!" && exit 1
 
 if [ "$ACTION" = "bundle" ]; then
-	[ ! "$bundle_dest_path" ] && echo_red "Error: bundle file missing!" && exit 1
-	install_rpms make 
+	[ ! "$bundle_dest_path" ] && echo_red "Error: bundle archive filename not provided!" >&2 && exit 1
 
-	echo_cyan "A bundle archive file will be created using the following values:"
-	echo
+	install_rpms make >.bundle.log
+
+	echo_cyan "A bundle archive file will be created using the following values:" >&2
+	echo >&2
 	source <(normalize-aba-conf)
-	normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" 
-	echo Bundle output file = $bundle_dest_path 
-	echo
+
+	normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" >&2
+
+	echo Bundle output file = $bundle_dest_path >&2
+	echo >&2
 
 	if [ -s mirror/save/imageset-config-save.yaml ]; then
 		if ask "Create bundle file (mirror/save/imageset file will be backed up)"; then
-			mv -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.backup.$(date +%Y%m%d-%H%M%S)
+			mv -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.backup.$(date +%Y%m%d-%H%M) >&2
 		else
 			exit 1
 		fi
 	fi
 
+	# This is a special case where we want to only output the tar repo contents to stdout 
+	# so we can do something like: ./aba bundle ... --bundle-file - | ssh host tar xvf - 
+	if [ "$bundle_dest_path" = "-" ]; then
+		echo "Downloading binary data.  See logfile '.bundle.log' for details." >&2
+		make -s download save retry=7 >>.bundle.log 2>&1
+		make -s tar out=-
+
+		exit
+	fi
+
 	if files_on_same_device mirror $bundle_dest_path; then
+		#make bundle out="$bundle_dest_path" retry=7  # Try 8 times!
 		echo_cyan "Creating minor bundle archive (because files are on same file system) ..."
-		# Try to save 8 times, then create archive of the repo ONLY, excluding large imageset files.
-		make download save tarrepo out="$bundle_dest_path" retry=7
+		make download save tarrepo out="$bundle_dest_path" retry=7	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
 	else
 		echo_cyan "Creating full bundle archive (assuming destination file is on portable media) ..."
-		# Try to save 8 times, then create full archive, including all files. 
-		make download save tar out="$bundle_dest_path" retry=7
+		make download save tar out="$bundle_dest_path" retry=7    	# Try save 8 times, then create full archive, including all files. 
 	fi
 
 	exit 
