@@ -31,9 +31,9 @@ time (
 	echo "=========================================================================="  	>> test/test.log
 	echo "START TESTS @ $(date)" 								>> test/test.log
 	echo "==========================================================================" 	>> test/test.log
-#	time test/test1-basic-sync-test-and-save-load-test.sh && \
-#	time test/test2-airgapped-existing-reg.sh && \
-#	time test/test3-using-public-quay-reg.sh && \
+	time test/test1-basic-sync-test-and-save-load-test.sh && \
+	time test/test2-airgapped-existing-reg.sh && \
+	time test/test3-using-public-quay-reg.sh && \
 	time test/test5-airgapped-install-local-reg.sh 
 ) && ( echo SUCCESS  || echo FAILED ) | tee -a test/test.log
 
