@@ -396,8 +396,9 @@ if [ ! -f .bundle ]; then
 
 		install_rpms make 
 
-		# Now we have the required ocp version, we can fetch the operator index in the background. 
-		( make -s -C mirror index >> .fetch-index.log 2>&1 & ) & 
+		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
+		make -s -C mirror init >/dev/null 2>&1
+		( cd mirror; scripts/download-operator-index.sh --background > .fetch-index.log 2>&1)
 
 		sleep 1
 	else
