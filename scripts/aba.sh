@@ -29,13 +29,17 @@ fetch_latest_version() {
 }
 
 usage="\
-Aba: Install & manage air-gapped OpenShift. 
+Install & manage air-gapped OpenShift. 
 
-Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially disconnected environment,
-either onto vSphere, ESXi or bare-metal. Because Aba uses the Agent-based installer there is no need to configure a load balancer,
-a bootstrap node or even require DHCP.
+   Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially disconnected environment,
+   either onto bare-metal, vSphere or ESXi. Because Aba uses the Agent-based installer there is no need to configure a load balancer,
+   a bootstrap node or even require DHCP.
 
-Usage: $(basename $0) bundle \\
+Usage:
+   ./aba	# Interactive mode.  Let Aba lead you through the process.
+
+Usage:
+   ./$(basename $0) bundle \\	
 	[--channel <channel>] \\
 	 --version <version> \\
 	 --bundle-file /path/to/bundle-file \\
@@ -43,26 +47,27 @@ Usage: $(basename $0) bundle \\
 	[--op-sets <list of operator sets>] \\
 	[--ops <list of operator names>]
 
-The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
-in air-gapped/fully disconnected environments. 
+   The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
+   in air-gapped/fully disconnected environments. 
 
-Usage: $(basename $0) <<options>>
+Usage:
+   ./$(basename $0) <<options>>
 
-<<options>>:
-	--channel <channel>		# Set the OpenShift installation channel, e.g. fast, stable (default), eus or candidate.
-	--version <version>		# Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest'.
-	--platform vmw|bm		# Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
-	--domain <domain>		# Set the OpenShift base domain, e.g. company.com.
-	--machine-network <cidr>	# Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24.
-	--dns <ip address>		# Set one DNS IP address.
-	--default-route <next hop ip>	# Set the default route of the internal network, if any (optional).
-	--ntp <ntp ip>			# Set the NTP IP address (optional but recommended!). 
-	--ops <list of operators>	# Configure optional list of operator names to add to the imageset file (for oc-mirror).
-	--op-sets <operator set list>	# Add sets of operator names to imageset file, as defined in 'templates/operator-set.*' files.
-	--pull-secret <path/to/file>	# Location of your pull secret (json) file here. 
-	--editor <editor command>	# Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
-	--ask				# Prompt user when needed.
-	--noask				# Do not prompt, assume default answers.
+   <<options>>:
+	 --pull-secret <path/to/file>	# Location of your pull secret (json) file here. 
+	 --channel <channel>		# Set the OpenShift installation channel, e.g. fast, stable (default), eus or candidate.
+	 --version <version>		# Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest'.
+	 --platform vmw|bm		# Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
+	 --domain <domain>		# Set the OpenShift base domain, e.g. company.com.
+	 --machine-network <cidr>	# Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24.
+	 --dns <ip address>		# Set one DNS IP address.
+	 --default-route <next hop ip>	# Set the default route of the internal network, if any (optional).
+	 --ntp <ntp ip>			# Set the NTP IP address (optional but recommended!). 
+	 --ops <list of operators>	# Configure optional list of operator names to add to the imageset file (for oc-mirror).
+	 --op-sets <operator set list>	# Add sets of operator names to imageset file, as defined in 'templates/operator-set.*' files.
+	 --editor <editor command>	# Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
+	 --ask				# Prompt user when needed.
+	 --noask			# Do not prompt, assume default answers.
 "
 
 # for testing, if unset, testing will halt in edit_file()! 
