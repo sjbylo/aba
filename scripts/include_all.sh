@@ -174,19 +174,30 @@ edit_file() {
 }
 
 try_cmd() {
-	local pause=$1; shift
-	local interval=$1; shift
-	local total=$1; shift
+	# Run a command, if it fails, try again after 'pause' seconds
+	# Usage: try_cmd [-q] <pause> <interval> <total>
+	local quiet=
+	[ "$1" = "-q" ] && local quiet=1 && shift
+	local pause=$1; shift		# initial pause time in sec
+	local interval=$1; shift	# add interval to pause time
+	local total=$1; shift		# total number of tries
+
 	local count=1
-	echo "Attempt $count/$total of command: \"$*\""
+
+	[ ! "$quiet" ] && echo "Attempt $count/$total of command: \"$*\""
+
 	while ! eval $*
 	do
-		[ $count -ge $total ] && echo "Giving up!" && return 1
-		echo Pausing $pause seconds ...
+		if [ ! "$quiet" ]; then
+			[ $count -ge $total ] && echo "Giving up!" && return 1
+			echo Pausing $pause seconds ...
+		fi
 		sleep $pause
+
 		let pause=$pause+$interval
 		let count=$count+1
-		echo "Attempt $count/$total of command: \"$*\""
+
+		[ ! "$quiet" ] && echo "Attempt $count/$total of command: \"$*\""
 	done
 }
 

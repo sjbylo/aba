@@ -27,12 +27,12 @@ add_op() {
     - name: $op_name"
 		fi
 	else
-		echo_red "Warning: Operator name '$1' not found in index file mirror/.redhat-operator-index-v$ocp_ver_major" >&2
+		echo_red "Warning: Operator '$1' not found in index file mirror/.redhat-operator-index-v$ocp_ver_major" >&2
 	fi
 }
 
 if [ ! "$op_sets" ]; then
-	echo "'op_sets' value not set in aba.conf or mirror.conf. Skipping operator sets render." >&2
+	echo "'op_sets' value not set in aba.conf or mirror.conf. No operator sets to add to the image config file." >&2
 fi
 
 op_sets=$(echo $op_sets | tr -s " ")
@@ -44,26 +44,21 @@ cat <<END
     packages:
 END
 else
-	echo "No operators defined in 'aba.conf'.  Not adding any operators to image set config file." >&2
+	#echo "No individual operators defined in 'aba.conf'.  Not adding any individual operators to the image set config file." >&2
+	echo "No operators to add to the catalog index.  No 'op*' values set in aba.conf" >&2
 
 	exit 0
 fi
 
-echo "As defined in 'aba.conf' and/or 'mirror/mirror.conf', adding opperators to the image set conf file ..." >&2
-
-# Wait for the index to be generated?
-i=0
+# Check for the index file
 if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
-	echo "Waiting 1-2 mins for the operator index to be generated ..." >&2
-	until [ -s .redhat-operator-index-v$ocp_ver_major ]
-	do
-		sleep 3
-	done
-	sleep 1
+	echo "Missing operator index file: .redhat-operator-index-v$ocp_ver_major ..." >&2
 
-	[ $1 -ge 8 ] && echo_red "Giving up waiting for operator index download! Do you have Internet access?" && break
-	let i=$i+1
+	exit 0
 fi
+
+echo "Adding operator set(s) to the image set config file ..." >&2
+###echo "As defined in 'aba.conf' and/or 'mirror/mirror.conf', adding operator set(s) to the image set config file ..." >&2
 
 for set in $op_sets
 do
@@ -78,7 +73,7 @@ do
 		done
 		echo >&2
 	else
-		echo_red "No such file 'templates/operator-set-$set' for operator set" >&2
+		echo_red "Missing operator set file: templates/operator-set-$set" >&2
 	fi
 done
 
@@ -94,7 +89,7 @@ if [ "$ops" ]; then
 
 	echo >&2
 else
-	echo "No 'ops' value set in aba.conf or mirror.conf. Skipping operator render." >&2
+	echo "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image config file." >&2
 fi
 
 
