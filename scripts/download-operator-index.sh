@@ -14,8 +14,8 @@ fi
 [ "$1" ] && set -x
 
 # Clean up on INT
-delete_lock() { echo_red "Aborting, deleteing lock"; rm -f $lock_file $pid_file; [ ! -s $index_file ] && rm -f $index_file; exit 1;}
-trap 'delete_lock' INT
+handle_interupt() { echo_red "Aborting download."; rm -f $lock_file $pid_file; [ ! -s $index_file ] && rm -f $index_file; exit 0;}
+trap 'handle_interupt' INT
 
 source <(normalize-aba-conf)
 
@@ -58,7 +58,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 		# No need to wait if operator vars are not defined in aba.conf!
 		[ ! "$op_sets" -a ! "$ops" ] && exit 0
 
-		delete_lock() { echo_red "Aborting waiting for download to complete"; exit 0; }
+		handle_interupt() { echo_red "Stopped waiting for download to complete"; exit 0; }
 		echo_magenta "Waiting for operator index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
 		try_cmd -q 2 0 150 test -s $index_file || true  # keep checking file does not have content, for max 300s (2 x 150s)
 	else
@@ -75,7 +75,8 @@ echo_blue "Operator index v$ocp_ver_major is downloading, please wait a few mins
 # Lock successful, now download the index ...
 
 # If running in forground, on INT, delete lock AND run $0 in background
-[ -t 0 ] && delete_lock() { echo_red "Putting download into background"; rm -f $lock_file; ( $0 $* > .fetch-index.log 2>&1 & ) & exit 0; }
+## NOT A GOOD IDEA [ -t 0 ] && handle_interupt() { echo_red "Putting download into background"; rm -f $lock_file; ( $0 $* > .fetch-index.log 2>&1 & ) & exit 0; }
+### FIX ME [ -t 0 ] && handle_interupt() { echo_red "Stopping download"; rm -f $lock_file;  exit 0; }
 
 # Fetch latest operator catalog and default channels
 if ! oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major > $index_file; then
