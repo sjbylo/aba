@@ -86,15 +86,18 @@ do
 	./save-mirror.sh && failed= && break
 
 	let try=$try+1
-	[ $try -le $try_tot ] && echo_magenta -n "Trying again. "
+	[ $try -le $try_tot ] && echo_red -n "Image saving failed ... Trying again. "
 done
 
 if [ "$failed" ]; then
-	echo_red "Image saving aborted ..."
+	echo_red -n "Image saving aborted ..."
+	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts)!" || echo
 	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
 
 	exit 1
 fi
 
-echo_green "Images saved successfully!"
+echo
+echo_green -n "Images saved successfully!"
+[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts)!" || echo
 echo 
