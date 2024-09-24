@@ -102,18 +102,21 @@ do
 	./sync-mirror.sh && failed= && break
 
 	let try=$try+1
-	[ $try -le $try_tot ] && echo_magenta -n "Trying again. "
+	[ $try -le $try_tot ] && echo_red -n "Image synchronization failed ... Trying again. "
 done
 
 if [ "$failed" ]; then
-	echo_red "Image synchronization aborted ..."
+	echo_red -n "Image synchronization aborted ..."
+	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts)!" || echo
 	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
 
 	exit 1
 fi
 
 echo
-echo_green "Images synchronized successfully!"
+echo_green -n "Images synchronized successfully!"
+[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts)!" || echo
+
 echo 
 echo "OpenShift can now be installed with the command:"
 echo "  cd aba"
