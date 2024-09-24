@@ -56,23 +56,28 @@ echo
 cmd="oc mirror $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
 echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
 
+# This loop is based on the "retry=?" value
 try=1
 failed=1
 while [ $try -le $try_tot ]
 do
-	echo_magenta -n "Trying again. Attempt ($try/$try_tot)."
+	echo_magenta -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'make load retry=<number>'" || echo
 	echo "Running: $(cat load-mirror.sh)"
 	echo
 
 	./load-mirror.sh && failed= && break
 
-	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
-
 	let try=$try+1
+	[ $try -le $try_tot ] && echo_magenta -n "Trying again. "
 done
 
-[ "$failed" ] && echo_red "Image loading aborted ..." && exit 1
+if [ "$failed" ]; then
+	echo_red "Image loading aborted ..."
+	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
+
+	exit 1
+fi
 
 echo
 echo_green "Images loaded successfully!"
