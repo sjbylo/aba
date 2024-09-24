@@ -73,24 +73,28 @@ echo
 cmd="oc mirror --config=./imageset-config-save.yaml file://."
 echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 
+# This loop is based on the "retry=?" value
 try=1
 failed=1
 while [ $try -le $try_tot ]
 do
-	echo_magenta -n "Trying again. Attempt ($try/$try_tot)."
+	echo_magenta -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'make save retry=<number>'" || echo
 	echo_cyan "Running: $(cat save-mirror.sh)"
 	echo
 
 	./save-mirror.sh && failed= && break
 
-	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
-
 	let try=$try+1
+	[ $try -le $try_tot ] && echo_magenta -n "Trying again. "
 done
 
-echo
-[ "$failed" ] && echo_red "Image saving aborted ..." && exit 1
+if [ "$failed" ]; then
+	echo_red "Image saving aborted ..."
+	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
+
+	exit 1
+fi
 
 echo_green "Images saved successfully!"
 echo 
