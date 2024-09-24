@@ -134,17 +134,12 @@ inc:   ## Same as 'make tar' except a timestamp file is used to only backup file
 
 .PHONY: index
 index: init catalog
-##.PHONY: index-no-wait
-##index: init catalog-no-wait
 
 .PHONY: catalog
 # -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
 catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
 	@make -s -C ../cli ~/bin/oc-mirror
 	@scripts/download-operator-index.sh
-
-##catalog-no-wait:
-	##@scripts/download-operator-index.sh
 
 #uninstall: .initialized mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
 uninstall: .initialized             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
