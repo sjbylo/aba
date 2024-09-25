@@ -21,6 +21,7 @@ fi
 echo "Attempting to log into the cluster ... "
 
 # Refresh kubeconfig
+unset KUBECONFIG
 cp iso-agent-based/auth.backup/kubeconfig  iso-agent-based/auth/kubeconfig
 OC="oc --kubeconfig=iso-agent-based/auth/kubeconfig"
 
@@ -87,7 +88,8 @@ if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
 	for node in $($OC get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); 
 	do
 		echo Drain ${node}
-		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=120s &
+		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=60s --force&
+		# See: https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html-single/backup_and_restore/index#graceful-shutdown_graceful-shutdown-cluster
 	done >> $logfile 2>&1
 	wait
 fi
