@@ -60,13 +60,14 @@ if [ ! "$1" ]; then
 	# clean up all, assuming reg. is not running (deleted)
 	test-cmd "echo ocp_version=$v > aba.conf"
 	#test-cmd "make -C mirror distclean ask="
-	test-cmd "make distclean ask="
+	#test-cmd "make distclean ask="
+	mv cli cli.m && mkdir cli && cp cli/.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
 
 	rm -f aba.conf
 	vf=~/.vmware.conf
-	test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ## --vmw $vf
+	test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" ./aba --version latest ## --vmw $vf
 	# Set up govc 
 	cp $vf vmware.conf 
 	sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
@@ -303,7 +304,8 @@ test-cmd -h steve@$bastion2 -m "Deleting sno cluster" "make -C $subdir/aba/sno d
 
 test-cmd -m "Clean up 'existing' mirror registry on internal bastion" test/reg-test-uninstall-remote.sh $bastion2
 
-test-cmd "make distclean ask="
+#test-cmd "make distclean ask="
+mv cli cli.m && mkdir cli && cp cli/.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"
