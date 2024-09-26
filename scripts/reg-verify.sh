@@ -10,6 +10,12 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
+if [ ! "$reg_host" -o ! "$reg_port" ]; then
+	echo_red "Error: No registry is configured in 'mirror.conf'.  Run: 'make mirror.conf' and edit it." >&2
+
+	exit 1
+fi
+
 reg_url=https://$reg_host:$reg_port
 
 # Check for existing reg.creds (provided by user)
