@@ -146,7 +146,7 @@ additionalTrustBundle: |
   -----END CERTIFICATE-----
 sshKey: |
   ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDmV+i4k1y9R7umYkRMVMCrpIFebRYnjXdsP3uex+Tti9g3WE+SriQhh9FcpkdZQkLV1nF0VaOKjVEF3lif7DeJfOlMwO0x8wLSqFUv94JccnlG8+Nwab+UJ3yinQXC3r1dJ330uoT44Qc0dHn8fiJm0jCDozcvVV9dPUOkONcGkBMWmZgxbjeBW1JgtM6t1NTB1Zu7yVpG1P+Ot4jlBxREqzGx/O3UGk97CJMncaT7wfgODovp0yo86lzc1UshChXYv6JeO360rmvILsmnOdZlzSVYiq+czSWztMDQMfT9fOCp8SZH1M2/puhRf+w7vcyAAgzF30BHYgU9CyIE/tkZ sbylo@ovpn-117-52.sin2.redhat.com
-imageContentSources:
+ImageDigestSources:
 - mirrors:
   - registry2.example.com:8443/mypath/openshift/release
   source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
