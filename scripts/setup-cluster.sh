@@ -28,13 +28,13 @@ pwd
 echo_magenta "Creating '$name/cluster.conf' file for cluster type [$cluster_type]."
 scripts/create-cluster-conf.sh $name $cluster_type
 
-msg="Install the cluster with 'cd $name; make'?"
-[ "$target" ] && msg="Make the target '$target' with 'cd $name; make $target'?"
+msg="Install the cluster with 'cd $name; make'"
+[ "$target" ] && msg="Make the target '$target' with 'cd $name; make $target'"
 
 # adding "exit 0" here to give best practise instuctions to cd into the cluster dir!
 if [ "$ask" ]; then
 	echo
-	echo_cyan The cluster directory has been provisioned in $name
+	echo_cyan The cluster directory has been created: $name
 	echo_cyan $msg
 	echo
 
