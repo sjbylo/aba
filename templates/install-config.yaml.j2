@@ -53,6 +53,6 @@ additionalTrustBundle: |
   {{ additional_trust_bundle|indent(2) }}
   {%- endif %}
 {%- if image_content_sources != '' %}
-imageContentSources:
+ImageDigestSources:
   {{ image_content_sources|indent(2) }}
 {% endif %}
