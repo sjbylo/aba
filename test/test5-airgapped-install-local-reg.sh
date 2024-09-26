@@ -479,7 +479,8 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -s -C $subdir/aba/standard delete" 
 
-test-cmd "make distclean ask="
+#test-cmd "make distclean ask="
+mv cli cli.m && mkdir cli && cp cli/.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"

@@ -84,8 +84,8 @@ if [ "$set_http_proxy" -a "$set_https_proxy" ]; then
 	export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
 
 	# Using proxy! No need for this
-	unset image_content_sources
-	unset additional_trust_bundle
+	image_content_sources=
+	additional_trust_bundle=
 elif [ "$proxy" = "auto" ]; then
 	if [ "$http_proxy" -a "$https_proxy" ]; then
 		echo_blue "Configuring 'cluster wide proxy' using your env. vars:"
@@ -96,8 +96,8 @@ elif [ "$proxy" = "auto" ]; then
 		export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
 
 		# Using proxy! No need for this
-		unset image_content_sources
-		unset additional_trust_bundle
+		image_content_sources=
+		additional_trust_bundle=
 	else
 		echo_red "Warning: proxy value is set to 'auto' but not all env proxy vars set. Ignoring."
 		echo_red "If you want to configure the cluster wide proxy, either set 'proxy=auto' or"

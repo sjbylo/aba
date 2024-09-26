@@ -45,13 +45,14 @@ which make || sudo dnf install make -y
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
 echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
-make distclean ask=
+#make distclean ask=
+mv cli cli.m && mkdir cli && cp cli/.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
 #make clean
 
 # Set up aba.conf properly
 rm -f aba.conf
 vf=~/.vmware.conf
-test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $v ### --vmw $vf
+test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" ./aba --version latest ### --vmw $vf
 
 # Set up govc 
 cp $vf vmware.conf 
@@ -64,6 +65,8 @@ mylog "Setting ntp_server=$ntp"
 [ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
 
 source <(normalize-aba-conf)
+echo Check aba.conf:
+normalize-aba-conf
 
 reg_ssh_user=$(whoami)
 
@@ -71,10 +74,14 @@ make -C cli ~/bin/govc
 source <(normalize-vmware-conf)
 
 rm -rf sno
+test-cmd -m "Creating sno/cluster.conf." make sno target=cluster.conf
+test-cmd -m "Adding proxy=auto to sno/cluster.conf" "sed -i 's/^proxy=.*/proxy=auto/g' sno/cluster.conf"
+
 test-cmd -m "Installing SNO cluster from public registry, since no registry available." make sno 
 test-cmd -m "Deleting sno cluster" make -C sno delete || true
 
-test-cmd "make distclean ask="
+#test-cmd "make distclean ask="
+mv cli cli.m && mkdir cli && cp cli/.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"
