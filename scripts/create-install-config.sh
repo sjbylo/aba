@@ -18,6 +18,7 @@ export pull_secret=
 export ssh_key_pub=
 export additional_trust_bundle=
 export image_content_sources=
+export insert_proxy=
 
 # Generate the needed iso-agent-based config files ...
 
@@ -44,6 +45,7 @@ else
 		echo Found pull secret file at $pull_secret_file.  Assuming online installation using public RH registry.
 	else
 		echo_red "Error: No pull secrets found. Aborting!  See the README for help!" 
+
 		exit 1
 	fi
 fi
@@ -67,9 +69,48 @@ fi
 export ssh_key_pub=$(cat $ssh_key_file.pub) 
 
 
+# See if the cluster wide proxy should be added
+#if [ "$set_http_proxy" -a "$set_https_proxy" -a "$set_no_proxy" ]; then
+if [ "$set_http_proxy" -a "$set_https_proxy" ]; then
+	export http_proxy=$set_http_proxy
+	export https_proxy=$set_https_proxy
+	export no_proxy=$set_no_proxy
+
+	echo_blue "Configuring 'cluster wide proxy' using values defined in config.conf:"
+	echo_blue "  http_proxy=$http_proxy"
+	echo_blue "  https_proxy=$https_proxy"
+	echo_blue "  no_proxy=$no_proxy"
+
+	export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
+
+	# Using proxy! No need for this
+	unset image_content_sources
+	unset additional_trust_bundle
+elif [ "$proxy" = "auto" ]; then
+	if [ "$http_proxy" -a "$https_proxy" ]; then
+		echo_blue "Configuring 'cluster wide proxy' using your env. vars:"
+		echo_blue "  http_proxy=$http_proxy"
+		echo_blue "  https_proxy=$https_proxy"
+		echo_blue "  no_proxy=$no_proxy"
+
+		export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
+
+		# Using proxy! No need for this
+		unset image_content_sources
+		unset additional_trust_bundle
+	else
+		echo_red "Warning: proxy value is set to 'auto' but not all env proxy vars set. Ignoring."
+		echo_red "If you want to configure the cluster wide proxy, either set 'proxy=auto' or"
+		echo_red "set the '*_proxy' values in 'cluster.conf'"
+	fi
+else
+	echo_white "Not configuring the cluster wide proxy since no (or not enough) proxy values are defined in cluster.conf."
+	echo_white "At least http_proxy and https_proxy are needed."
+fi
+
 # Check the private registry is defined, if it's in use
 if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
-	[ ! "$reg_host" ] && echo && echo_red "Error: registry host is not defined!" && exit 1
+	[ ! "$reg_host" ] && echo && echo_red "Error: registry host is not defined in mirror.conf!" && exit 1
 fi
 
 # Check that the release image is available in the private registry
@@ -77,35 +118,10 @@ if [ "$additional_trust_bundle" -a "$image_content_sources" ]; then
 	scripts/verify-release-image.sh
 fi
 
-# See if the cluster wide proxy should be added
-if [ "$set_http_proxy" -a "$set_https_proxy" -a "$set_no_proxy" ]; then
-	export http_proxy=$set_http_proxy
-	export https_proxy=$set_https_proxy
-	export no_proxy=$set_no_proxy
-
-	echo_blue "Configuring 'cluster wide proxy' (from values in 'config.conf') as:"
-	echo_blue "  'http_proxy=$http_proxy', 'https_proxy=$https_proxy' & 'no_proxy=$no_proxy'."
-
-	export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
-elif [ "$proxy" = "auto" ]; then
-	if [ "$http_proxy" -a "$https_proxy" -a "$no_proxy" ]; then
-		echo_blue "Configuring 'cluster wide proxy' (from env. vars) as:"
-		echo_blue "  'http_proxy=$http_proxy', 'https_proxy=$https_proxy' & 'no_proxy=$no_proxy'."
-
-		export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
-	else
-		echo_red "Warning: proxy set to 'auto' but not all env proxy vars set. Ignoring."
-		echo_red "If you want to configure the cluster wide proxy, either set 'proxy=auto' in 'cluster.conf' or"
-		echo_red "set the '*_proxy' values in 'cluster.conf'"
-	fi
-else
-	echo_white "Not configuring 'cluster wide proxy' since no proxy values are defined in 'cluster.conf'."
-fi
-
 echo
 echo Generating Agent-based configuration file: $PWD/install-config.yaml 
 echo
-# Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret ...
+# Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret, insert_proxy ...
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
