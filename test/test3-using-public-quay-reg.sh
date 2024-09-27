@@ -46,7 +46,8 @@ which make || sudo dnf install make -y
 v=4.16.3
 echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
 #make distclean ask=
-mv cli cli.m && mkdir cli && cp cli/.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
+make -C ~/aba distclean ask=
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
 #make clean
 
 # Set up aba.conf properly
@@ -81,7 +82,8 @@ test-cmd -m "Installing SNO cluster from public registry, since no registry avai
 test-cmd -m "Deleting sno cluster" make -C sno delete || true
 
 #test-cmd "make distclean ask="
-mv cli cli.m && mkdir cli && cp cli/.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
+make -C ~/aba distclean ask=
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"
