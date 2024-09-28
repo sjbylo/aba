@@ -14,8 +14,8 @@ if [ ! -f aba.conf ]; then
 	cp templates/aba.conf .
 
 	# Initial prep for interactive mode
-	sed -i "s/^ocp_version=[^ \t]*/ocp_version=			/g" aba.conf
-	sed -i "s/^editor=[^ \t]*/editor=			/g" aba.conf
+	sed -i "s/^ocp_version=[^ \t]*/ocp_version= /g" aba.conf
+	sed -i "s/^editor=[^ \t]*/editor= /g" aba.conf
 fi
 
 fetch_latest_version() {
@@ -36,7 +36,7 @@ Install & manage air-gapped OpenShift.
    a bootstrap node or even require DHCP.
 
 Usage:
-   ./aba	# Interactive mode.  Let Aba lead you through the process.
+   ./aba				# Interactive mode.  Let Aba lead you through the process.
 
 Usage:
    ./$(basename $0) bundle \\	
@@ -45,13 +45,14 @@ Usage:
 	 --bundle-file /path/to/bundle-file \\
 	[--pull-secret ~/.pull-secret.json] \\
 	[--op-sets <list of operator sets>] \\
-	[--ops <list of operator names>]
+	[--ops <list of operator names>] \\
+	<<options>> 
 
    The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
-   in air-gapped/fully disconnected environments. 
+   in air-gapped/fully disconnected environments. See below for other <<options>>.
 
 Usage:
-   ./$(basename $0) <<options>>
+   ./$(basename $0) <<options>>         # Update provided values in aba.conf
 
    <<options>>:
 	 --pull-secret <path/to/file>	# Location of your pull secret (json) file here. 
@@ -103,7 +104,7 @@ do
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 && exit 1
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
-		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan  /g" aba.conf
+		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" aba.conf
 		target_chan=$chan
 		shift 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
@@ -119,40 +120,40 @@ do
 		[ "$ver" = "latest" ] && ver=$(fetch_latest_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
 		[ ! "$ver" ] && echo_red "OpenShift version [$ver] missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
-		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver/g" aba.conf
+		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" aba.conf
 		target_ver=$ver
 		shift 
 	elif [ "$1" = "--domain" -o "$1" = "-d" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 && exit 1
 		domain=$(echo $1 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
-		sed -i "s/^domain=[^ \t]*/domain=$domain  /g" aba.conf
+		sed -i "s/^domain=[^ \t]*/domain=$domain /g" aba.conf
 		target_domain=$domain
 		shift 
 	elif [ "$1" = "--dns" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 && exit 1
 		dns_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-		sed -i "s/^dns_server=[^ \t]*/dns_server=$dns_ip  /g" aba.conf
+		sed -i "s/^dns_server=[^ \t]*/dns_server=$dns_ip /g" aba.conf
 		shift 
 	elif [ "$1" = "--ntp" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 && exit 1
 		ntp_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-		sed -i "s/^ntp_server=[^ \t]*/ntp_server=$ntp_ip  /g" aba.conf
+		sed -i "s/^ntp_server=[^ \t]*/ntp_server=$ntp_ip /g" aba.conf
 		shift 
 	elif [ "$1" = "--default-route" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 && exit 1
 		def_route_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip  /g" aba.conf
+		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip /g" aba.conf
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --platform arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red -e "Missing platform, see usage.\n$usage" >&2 && exit 1
 		platform="$1"
-		sed -i "s/^platform=[^ \t]*/platform=$platform  /g" aba.conf
+		sed -i "s/^platform=[^ \t]*/platform=$platform /g" aba.conf
 		shift
 	elif [ "$1" = "--op-sets" ]; then
 		shift
@@ -161,7 +162,7 @@ do
 		while ! echo "$1" | grep -q -e "^-"; do [ -s templates/operator-set-$1 ] && op_set_list="$op_set_list $1"; shift || break; done
 		op_set_list=$(echo "$op_set_list" | xargs)  # Trim white space
 		#echo ADDDING op_set_list=$op_set_list
-		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\"  /g" aba.conf
+		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" aba.conf
 	elif [ "$1" = "--ops" ]; then
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
@@ -169,25 +170,25 @@ do
 		while ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift || break; done
 		ops_list=$(echo "$ops_list" | xargs)  # Trim white space
 		#echo ADDING ops_list=$ops_list
-		sed -i "s/^ops=[^#$]*/ops=\"$ops_list\"  /g" aba.conf
+		sed -i "s/^ops=[^#$]*/ops=\"$ops_list\" /g" aba.conf
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red -e "Missing editor, see usage.\n$usage" >&2 && exit 1
 		editor="$1"
-		sed -i "s/^editor=[^ \t]*/editor=$editor  /g" aba.conf
+		sed -i "s/^editor=[^ \t]*/editor=$editor /g" aba.conf
 		shift
 	elif [ "$1" = "--machine-network" -o "$1" = "-n" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 && exit 1
-		sed -i "s/^machine_network=[^ \t]*/machine_network=$1  /g" aba.conf
+		sed -i "s/^machine_network=[^ \t]*/machine_network=$1 /g" aba.conf
 		shift 
 	elif [ "$1" = "--pull-secret" -o "$1" = "-ps" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
 		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
-		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1  #g" aba.conf
+		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1 #g" aba.conf
 		shift 
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
 		shift 
@@ -195,10 +196,10 @@ do
 		[ -s $1 ] && cp $1 vmware.conf
 		shift 
 	elif [ "$1" = "--ask" ]; then
-		sed -i "s#^ask=[^ \t]*#ask=true  #g" aba.conf
+		sed -i "s#^ask=[^ \t]*#ask=true #g" aba.conf
 		shift 
 	elif [ "$1" = "--noask" ]; then
-		sed -i "s#^ask=[^ \t]*#ask=false  #g" aba.conf
+		sed -i "s#^ask=[^ \t]*#ask=false #g" aba.conf
 		shift 
 	else
 		echo "Unknown option: $1"
@@ -310,7 +311,7 @@ if [ ! -f .bundle ]; then
 		[ "$TERM" ] && tput el1 && tput cr
 		sleep 0.5
 
-		echo "Which version of OpenShift do you want to install?"
+		echo_cyan "Which version of OpenShift do you want to install?"
 
 		target_ver=
 		while true
@@ -320,14 +321,14 @@ if [ ! -f .bundle ]; then
 				if curl --connect-timeout 10 --retry 2 -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 					break
 				else
-					echo "Error: Failed to find release $target_ver"
+					echo_red "Error: Failed to find release $target_ver"
 				fi
 			fi
 
 			[ "$stable_ver" ] && or_s="or $stable_ver (latest) "
 			[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (previous) "
 
-			echo -n "Enter version $or_s$or_p$or_ret(l/p/<version>/Enter) [$default_ver]: "
+			echo_cyan -n "Enter version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
 
 			read target_ver
 			[ ! "$target_ver" ] && target_ver=$default_ver          # use default
@@ -336,7 +337,7 @@ if [ ! -f .bundle ]; then
 		done
 
 		# Update the conf file
-		sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
+		sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver /g" aba.conf
 		echo_blue "'ocp_version' set to '$target_ver' in aba.conf"
 
 		sleep 1

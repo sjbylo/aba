@@ -20,6 +20,13 @@ show_error() {
 # Set the trap to call the show_error function on ERR signal
 trap 'show_error' ERR
 
+draw-line() {
+	# Get the number of columns (width of the terminal)
+	cols=$(tput cols)
+
+	# Create a line of dashes or any character you prefer
+	printf '%*s\n' "$cols" '' | tr ' ' '-'
+}
 
 # -h remote <host or ip> to run the test on (optional)
 # -r <count> <backoff>  (optional)
@@ -40,13 +47,13 @@ test-cmd() {
 		[ "$1" = "-m" ] && local msg="$2" && shift && shift 
 	done
 
-	echo "---------------------------------------------------------------------------------------"
+	draw-line
 	if [ "$msg" ]; then
 		echo "$host: $msg ($@) ($(pwd)) ($(date))" | tee -a test/test.log
 	else
 		echo "$host: $@ ($(pwd)) ($(date))" | tee -a test/test.log
 	fi
-	echo "---------------------------------------------------------------------------------------"
+	draw-line
 
 	i=1
 	while true
@@ -88,7 +95,7 @@ mylog() {
 	echo "---------------------------------------------------------------------------------------"
 	echo $@
 	echo $@ >> test/test.log
-	echo "---------------------------------------------------------------------------------------"
+	draw-line
 
 	[ "$reset_xtrace" ] && set -x
 }
