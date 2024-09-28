@@ -111,12 +111,13 @@ clean: ## Clean up all temporary files.
 
 .PHONY: distclean
 distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this dies not run 'make uninstall' (uninstall the reg.)
-	@test "$(ask)" && scripts/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
+	@test "$(ask)" && scripts/ask.sh -n "This is the same as a factory reset and will delete all files! Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
 	@make clean
-	rm -f vmware.conf
+	mkdir -p ~/tmp
+	test -f vmware.conf && mv vmware.conf ~/tmp || true
 	make -C cli distclean 
-	make -C mirror distclean 
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
+	make -C mirror distclean 
 	rm -f aba.conf ~/.aba.conf*
 	rm -rf sno compact standard 
 

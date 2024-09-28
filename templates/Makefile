@@ -4,7 +4,7 @@ SCRIPTS   = ../scripts
 #cmd      ?= "get co"    # The default command
 debug    ?= 		# Set debug=1 for some commands 
 
-include ../aba.conf
+-include ../aba.conf
 platform := $(strip $(shell echo $(platform)))
 
 # The next section is (unfortunatelly) needed because making a bare-metal cluster has a different flow, with interruptions!
@@ -48,6 +48,7 @@ check:
 help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^(\s|[\.a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+# aba.conf should never be missing!
 ../aba.conf:
 	make -C .. aba.conf
 

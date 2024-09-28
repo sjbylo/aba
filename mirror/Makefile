@@ -19,8 +19,9 @@ init: .initialized
 
 # If aba.conf does not exist, then run the script to create it
 ../aba.conf:
-	../aba
-	@###make -C ../cli 
+	echo "aba.conf missing! Please read the README on how to get started!")
+	exit 0
+	@#../aba
 
 .PHONY: cli-download
 cli-download:
@@ -90,9 +91,9 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 	curl --progress-bar -OL \
 	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/1.3.9/mirror-registry.tar.gz
 
-# mirror,.conf no longer depends on aba.conf 
+# mirror.conf depends on aba.conf for the 'domain aalue
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
-mirror.conf: .initialized                     ../aba.conf               ## Configure the mirror.conf file.
+mirror.conf: .initialized                     ../aba.conf   ## Configure the mirror.conf file.
 	@$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 install: .installed
