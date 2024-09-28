@@ -59,10 +59,10 @@ if [ ! "$1" ]; then
 
 	# clean up all, assuming reg. is not running (deleted)
 	test-cmd "echo ocp_version=$v > aba.conf"
-	#test-cmd "make -C mirror distclean ask="
-	#test-cmd "make distclean ask="
-	make -C ~/aba distclean ask=
-	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
+	#test-cmd "make -C mirror distclean force=1="
+	#test-cmd "make distclean force=1="
+	make -C ~/aba distclean force=1=
+	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
 
@@ -305,10 +305,10 @@ test-cmd -h steve@$bastion2 -m "Deleting sno cluster" "make -C $subdir/aba/sno d
 
 test-cmd -m "Clean up 'existing' mirror registry on internal bastion" test/reg-test-uninstall-remote.sh $bastion2
 
-#test-cmd "make distclean ask="
+#test-cmd "make distclean force=1="
 
-make -C ~/aba distclean ask=
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
+make -C ~/aba distclean force=1=
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"

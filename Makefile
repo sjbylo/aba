@@ -111,7 +111,7 @@ clean: ## Clean up all temporary files.
 
 .PHONY: distclean
 distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this dies not run 'make uninstall' (uninstall the reg.)
-	@test "$(ask)" && scripts/ask.sh -n "This is the same as a factory reset and will delete all files! Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
+	@scripts/distclean-gate.sh $(force)
 	@make clean
 	mkdir -p ~/tmp
 	test -f vmware.conf && mv vmware.conf ~/tmp || true
