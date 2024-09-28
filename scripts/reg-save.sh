@@ -65,7 +65,7 @@ echo
 echo_cyan "Saving images from external network to mirror/save/ directory."
 echo
 echo_cyan "Warning: Ensure there is enough disk space under $PWD/save.  "
-echo_cyan "This can take 5-20+ mins to complete or even longer if Operator images are being saved!"
+echo_cyan "This can take 5-20+ minutes to complete or even longer if Operator images are being saved!"
 echo 
 
 # Set up script to help for re-sync

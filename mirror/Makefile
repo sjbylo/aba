@@ -152,28 +152,30 @@ uninstall: .initialized             mirror-registry .uninstalled     ## Uninstal
 checkversion: init
 	@scripts/check-version-mismatch.sh
 
-# Note that 'mirror-registry.tar.gz' is needed to 'uninstall' registry in distclean!
+# Note that 'mirror-registry.tar.gz' is needed to 'uninstall' the registry.
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
+# Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
 clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
-	@echo "Important: to uninstall the registry, run 'make uninstall' first!" 
+	@[ -f .installed ] && echo "Important: to uninstall the registry, run 'make uninstall'!" || true
 	rm -rf *.tar mirror-registry 
-	rm -f .initialized 
 	rm -f templates scripts
-	rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep the imageset config file
-	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
 	rm -f aba.conf  # remove link only
+	rm -f .initialized 
+	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh # Only clean up the created scripts, not the script needed to uninstall the reg.
-	rm -f .redhat-operator-index*
 	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 
-	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rfv save || true  # Delete only if not edited
+	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rf save || true  # Delete only if not edited
+	@[ -d sync ] && [ sync/.created -nt sync/imageset-config*yaml ] && rm -rf sync || true  # Delete only if not edited
+	@#rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep this simple
 
 # Note that reg-uninstall.sh script will delete registry and regcreds/ dir.
+# Backup regcreds/ and anything that should not be lost
 .PHONY: distclean
 #distclean: .initialized  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 distclean:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
-	@echo "Important: to uninstall the registry, run 'make uninstall' first!" 
-	@[ -x scripts/distclean-gate.sh ] && scripts/distclean-gate.sh $(force)
+	@[ -f .installed ] && echo "Important: to uninstall the registry, you must run 'make uninstall' first!" || true
+	@[ -x scripts/distclean-gate.sh ] && scripts/distclean-gate.sh $(force) || true
 	make clean
 	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true
 	@#rm -rf regcreds
@@ -182,8 +184,9 @@ distclean:                # Clean up all files. Only use if you know what you're
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
-	rm -f .dnf-install.log
+	rm -f *.log .*.log
 	rm -f .ssh.conf
 	rm -f .rpmsext .rpmsint
+	rm -f .redhat-operator-index* 
 	rm -f .initialized 
 

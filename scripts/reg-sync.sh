@@ -62,6 +62,7 @@ if [ ! -s sync/imageset-config-sync.yaml ]; then
 	scripts/j2 ./templates/imageset-config-sync.yaml.j2 > sync/imageset-config-sync.yaml 
 	scripts/add-operators-to-imageset.sh >> sync/imageset-config-sync.yaml
 
+	touch sync/.created
 else
 	echo_cyan "Using existing image set config file (save/imageset-config-sync.yaml)"
 	echo_cyan "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make sync' again."
@@ -78,7 +79,7 @@ echo
 echo "Now loading the images to the registry $reg_host:$reg_port/$reg_path. "
 # Check if aba installed Quay or it's an existing reg.
 if [ -s ./reg-uninstall.sh ]; then
-	echo "Warning: Ensure there is enough disk space under $reg_root.  This can take 5-20+ mins to complete or even longer if Operator images are being copied!"
+	echo "Warning: Ensure there is enough disk space under $reg_root.  This can take 5-20+ minutes to complete or even longer if Operator images are being copied!"
 fi
 echo
 
