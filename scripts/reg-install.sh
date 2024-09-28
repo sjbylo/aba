@@ -82,7 +82,7 @@ END
 
 # Install Quay mirror on **remote host** if ssh key defined 
 if [ "$reg_ssh_key" ]; then
-	ask "Install Quay mirror registry appliance onto remote host ($reg_host)?" || exit 1
+	ask "Install Quay mirror registry appliance remotly, accessable via $reg_host:$reg_port" || exit 1
 
 	echo "Installing Quay registry to remote host at $reg_ssh_user@$reg_host ..."
 
@@ -145,8 +145,8 @@ if [ "$reg_ssh_key" ]; then
 
 	# Generate the script to be used to delete this registry
 	uninstall_cmd="./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opt --autoApprove -v"
-	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh.provision
-	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh.provision
+	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
+	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
   	#	-k $reg_ssh_key --initPassword $reg_pw $reg_root_opt"
@@ -158,7 +158,7 @@ if [ "$reg_ssh_key" ]; then
 	$cmd --initPassword $reg_pw
 
 	# Now, activate the uninstall script 
-	mv ./reg-uninstall.sh.provision reg-uninstall.sh
+	### No need ### mv ./reg-uninstall.sh.provision reg-uninstall.sh
 
 	rm -rf regcreds
 	mkdir regcreds
@@ -190,7 +190,7 @@ if [ "$reg_ssh_key" ]; then
 
 	#### TESTING WITHOUT - Added to reg-load/save/sync # scripts/create-containers-auth.sh
 else
-	ask "Install Quay mirror registry appliance onto localhost (`hostname`)?" || exit 1
+	ask "Install Quay mirror registry appliance locally on `hostname`, accessable via $reg_host:$reg_port" || exit 1
 
 	echo "Installing Quay registry on localhost ..."
 
@@ -221,8 +221,8 @@ else
 
 	# Generate the script to be used to delete this registry
 	uninstall_cmd="./mirror-registry uninstall --autoApprove $reg_root_opt -v"
-	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh.provision
-	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh.provision
+	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
+	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opt"
 	cmd="./mirror-registry install -v --quayHostname $reg_host $reg_root_opt"
@@ -232,7 +232,7 @@ else
 	$cmd --initPassword $reg_pw
 
 	# Now, activate the uninstall script 
-	mv ./reg-uninstall.sh.provision reg-uninstall.sh
+	### No need ### mv ./reg-uninstall.sh.provision reg-uninstall.sh
 
 	rm -rf regcreds
 	mkdir regcreds

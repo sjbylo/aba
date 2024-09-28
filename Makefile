@@ -119,5 +119,5 @@ distclean: # Clean up *everything*.  Only use if you know what you are doing! No
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
 	make -C mirror distclean 
 	rm -f aba.conf ~/.aba.conf*
-	rm -rf sno compact standard 
+	@#rm -rf sno compact standard 
 
