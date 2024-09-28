@@ -20,7 +20,6 @@ init: .initialized
 # If aba.conf does not exist, must abort!
 ../aba.conf:
 	@echo "aba.conf missing! Please read the README on how to get started!"
-
 	@exit 1
 
 .PHONY: cli-download
@@ -157,7 +156,7 @@ checkversion: init
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 .PHONY: clean
 clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
-	@echo "Note: to uninstall the registry, run 'make uninstall'" 
+	@echo "Important: to uninstall the registry, run 'make uninstall' first!" 
 	rm -rf *.tar mirror-registry 
 	rm -f .initialized 
 	rm -f templates scripts
@@ -173,8 +172,8 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 .PHONY: distclean
 #distclean: .initialized  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 distclean:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
-	@echo "Note: to uninstall the registry, run 'make uninstall'" 
-#	@test "$(ask)" && $(SCRIPTS)/ask.sh -n "Are you sure?" && echo "Not running 'make distclean' in $(PWD)" && exit 1 || true
+	@echo "Important: to uninstall the registry, run 'make uninstall' first!" 
+	@[ -x scripts/distclean-gate.sh ] && scripts/distclean-gate.sh $(force)
 	make clean
 	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true
 	@#rm -rf regcreds
@@ -187,9 +186,4 @@ distclean:                # Clean up all files. Only use if you know what you're
 	rm -f .ssh.conf
 	rm -f .rpmsext .rpmsint
 	rm -f .initialized 
-
-.PHONY: testask
-testask:
-	@test "$(ask)" && $(SCRIPTS)/ask.sh -n "Are you sure?" && echo "stop..." && exit 1 || true
-	@echo cont...
 

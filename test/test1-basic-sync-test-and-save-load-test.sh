@@ -47,8 +47,8 @@ which make || sudo dnf install make -y
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
 echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
-make -C ~/aba distclean ask=
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
+make -C ~/aba distclean force=1=
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
 #make clean
 
 # Set up aba.conf properly
@@ -336,8 +336,8 @@ test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune
 #####################################################################################################################
 
 # Must remove the old files under mirror/save 
-##make distclean ask=
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
+##make distclean force=1=
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"

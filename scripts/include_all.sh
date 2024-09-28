@@ -34,8 +34,8 @@ normalize-aba-conf() {
 	# Normalize or sanitize the config file
 	# Extract the machine_network and the prefix_length from the CIDR notation
 	# Prepend "export "
-	[ ! -s aba.conf ] && echo "aba/aba.conf missing! run: cd aba && ./aba" && exit 1
-		#cut -d"#" -f1 | \
+	[ ! -s aba.conf ] && echo "ask=true" && return 0  # if aba.conf missing, output a safe default, "ask=true"
+
 	cat aba.conf | \
 		sed -E "s/^\s*#.*//g" | \
 		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
@@ -127,7 +127,7 @@ install_rpms() {
 }
 
 ask() {
-	source <(normalize-aba-conf)
+	source <(normalize-aba-conf)  # if aba.conf does not exists, this outputs 'ask=true' to be on the safe side.
 	[ ! "$ask" ] && return 0  # reply "default reply"
 
 	# Default reply is 'yes' (or 'no') and return 0

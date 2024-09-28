@@ -45,7 +45,7 @@ which make || sudo dnf install make -y
 
 > mirror/mirror.conf
 echo "ocp_version=4.16.999" >> aba.conf  # Only to fix error, missing "ocp_version"
-test-cmd -m "Cleaning up mirror - distclean" "make -s -C mirror distclean ask=" 
+test-cmd -m "Cleaning up mirror - distclean force=1=" 
 #test-cmd -m "Cleaning up mirror - clean" "make -s -C mirror clean" 
 
 rm -rf sno compact standard 
@@ -479,9 +479,9 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -s -C $subdir/aba/standard delete" 
 
-#test-cmd "make distclean ask="
-make -C ~/aba distclean ask=
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean ask=; rm -rf cli && mv cli.m cli
+#test-cmd "make distclean force=1="
+make -C ~/aba distclean force=1=
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"
