@@ -1,9 +1,23 @@
 # Makefile to download and install oc, openshift-install, oc-mirror and govc 
 
-include ../aba.conf
+-include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
 
-all: ../aba.conf ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc
+#all: ../aba.conf ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc
+all:             ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc
+
+# If 'distclean' found in $MAKECMDGOALS, i.e. no distclean provided
+ifneq ($(filter distclean,$(MAKECMDGOALS)),)
+  # distclean not given
+else
+  ifeq ($(ocp_version),)
+    # ocp_version is empty!
+    $(error "Value ocp_version not set in aba.conf!  Please set ocp_version in aba.conf and try again. Read the README on how to get started!")
+#  else
+#    # ocp_version ok
+#    $(warning "MAKECMDGOALS = $(MAKECMDGOALS)")
+  endif
+endif
 
 download: openshift-client-linux-$(ocp_version).tar.gz openshift-install-linux-$(ocp_version).tar.gz oc-mirror.tar.gz govc_Linux_x86_64.tar.gz
 
@@ -17,12 +31,10 @@ help: ## Help
 	mkdir -p ~/bin
 	touch .init
 
-../aba.conf:
-	../aba
-
-ifeq ($(ocp_version),)
-	$(error "ocp_version is empty. Please set ocp_version in aba.conf before continuing.")
-endif
+#../aba.conf:
+#	@#../aba --version latest
+#	@# This is only needed becase it gets executed for some reason
+#	echo ocp_version=4.16.10 > ../aba.conf
 
 # Be sure that the correct version is installed by creating .*installed flag file
 ########################################
@@ -73,5 +85,5 @@ clean: ## Clean up installed binaries
 
 .PHONY: distclean
 distclean: clean ## Clean up everything
-	rm -f *.tar.gz
+	rm -f *.tar.gz .init
 
