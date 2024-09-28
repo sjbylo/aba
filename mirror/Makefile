@@ -17,11 +17,11 @@ init: .initialized
 	touch .initialized
 	@##echo Initialized `pwd`
 
-# If aba.conf does not exist, then run the script to create it
+# If aba.conf does not exist, must abort!
 ../aba.conf:
-	echo "aba.conf missing! Please read the README on how to get started!")
-	exit 0
-	@#../aba
+	@echo "aba.conf missing! Please read the README on how to get started!"
+
+	@exit 1
 
 .PHONY: cli-download
 cli-download:

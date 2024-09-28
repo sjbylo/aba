@@ -119,7 +119,7 @@ do
 
 		[ "$ver" = "latest" ] && ver=$(fetch_latest_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
-		[ ! "$ver" ] && echo_red "OpenShift version [$ver] missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
+		[ ! "$ver" ] && echo_red "Missing value after --version. OpenShift version missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" aba.conf
 		target_ver=$ver
 		shift 
