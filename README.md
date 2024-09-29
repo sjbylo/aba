@@ -72,6 +72,15 @@ Read more for all the details.
 
 The usual things you need to install OpenShift using the Agent-based installer. 
 
+- **RHEL**
+   - Aba will try to install all required RPMs using "dnf".  If dnf is not configured or working the RPMs will need to be installed another way, e.g. DVD. 
+   - Ensure the internal RHEL bastion has the RPMs installed (as defined in the file templates/rpms-internal.txt).
+   - Ensure the *external* RHEL bastion has the RPMs installed (as defined in the file templates/rpms-external.txt).
+   - Install your favourite editor. 
+   - Ensure all RPMs are updated with "sudo dnf update". 
+   - Ensure this git repository is cloned into the bastion anywhere under a user's home directory.
+   - Add your Red Hat registry pull secret file to ~/.pull-secret.json
+   - Ensure the user has sudo permission. Password-less is highly recommended!
 - **DNS**
    - with A records for 1) OpenShift API 2) Ingress and 3) the internal mirror registry.
 - **NTP**
@@ -83,7 +92,7 @@ The usual things you need to install OpenShift using the Agent-based installer.
   - Disconnected mode: A RHEL VM with connectivity to both the external (internet facing) and the internal networks.
   - Fully disconnected mode (air-gapped): A RHEL VM in the private network and another RHEL VM (or a Fedora/RHEL laptop) in the internet facing network. 
   - A user account with sudo configured (i.e. with root access). 
-  - 30 GB or more of disk space for the base OCP platform.  Much more space is required if Operators will be installed (400 GB or much more).
+  - A large amount of space to store the OpenShift container images.  30 GB or more of disk space is required for the base OpenShift platform.  Much more space is required if Operators will be installed (500 GB or much more).
   - Internet access is required from your connected bastion (or laptop) to download the container images, CLI tools and other files. 
      - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift.   See 'Disconnected mode' below.
      - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported.  For this, two bastions (one connected & the other internal) are required.  See 'Fully disconnected mode' below.
