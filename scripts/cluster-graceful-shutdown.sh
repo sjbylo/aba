@@ -63,7 +63,7 @@ echo -n "Shutdown the cluster? (Y/n): "
 read yn
 [ "$yn" = "n" ] && exit 1
 
-logfile=$cluster_id.shutdown.log
+logfile=.shutdown.log
 echo "Logging all output to log file: $logfile ..." | tee $logfile
 
 echo "Preparing cluster for gracefull shutdown (ensure all nodes are 'Ready') ..." | tee -a $logfile
@@ -88,7 +88,8 @@ if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
 	for node in $($OC get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); 
 	do
 		echo Drain ${node}
-		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=60s --force&
+		#$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=60s --force&
+		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=60s        &
 		# See: https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html-single/backup_and_restore/index#graceful-shutdown_graceful-shutdown-cluster
 	done >> $logfile 2>&1
 	wait
