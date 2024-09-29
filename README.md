@@ -76,7 +76,7 @@ The usual things you need to install OpenShift when using the Agent-based instal
    - Aba will try to install all required RPMs using "dnf".  If dnf is not configured or working the RPMs will need to be installed another way, e.g. DVD. 
    - Ensure the internal RHEL bastion has the RPMs installed (as defined in the file templates/rpms-internal.txt).
    - Ensure the *external* RHEL bastion has the RPMs installed (as defined in the file templates/rpms-external.txt).
-   - Install your favourite editor. 
+   - Install your favorite editor. 
    - Ensure all RPMs are updated with "sudo dnf update". 
    - Ensure this git repository is cloned into the bastion anywhere under a user's home directory.
    - Add your Red Hat registry pull secret file to ~/.pull-secret.json
@@ -123,7 +123,7 @@ The usual things you need to install OpenShift when using the Agent-based instal
         - points to a free IP in your private subnet. 
       - OpenShift Ingress: *.apps.ocp1.example.com 
         - points to a free IP in your private subnet. 
-        - Note: For Single Node OpenShift (SNO), the above records should point to a single IP address, used for the single OpenShift node. 
+        - Note: For Single Node OpenShift (SNO), the above records should point to a single IP address, used for the single OpenShift node. For all other topologies, two separate IP addresses should be used!
       - Quay mirror registry: registry.example.com 
         - points to the IP address of your registry.  This can be either the one you want installed or your existing registry. 
 - **Registry**
