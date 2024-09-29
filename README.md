@@ -70,7 +70,7 @@ Read more for all the details.
 
 ## Prerequisites
 
-The usual things you need to install OpenShift using the Agent-based installer. 
+The usual things you need to install OpenShift when using the Agent-based installer. 
 
 - **RHEL**
    - Aba will try to install all required RPMs using "dnf".  If dnf is not configured or working the RPMs will need to be installed another way, e.g. DVD. 
