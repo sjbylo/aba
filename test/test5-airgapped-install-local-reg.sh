@@ -370,6 +370,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd cmd='get po -A | grep ^travel-.*Running'"
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting sno cluster" "make -s -C $subdir/aba/sno delete" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Running 'make clean' in $subdir/aba/sno" "make -s -C $subdir/aba/sno clean" 
 
 rm -rf test/mesh 
 
@@ -384,7 +385,7 @@ build_and_test_cluster() {
 	# Create cluster.conf
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster.conf" "make -s -C $subdir/aba cluster name=$cluster_name type=$cluster_name target=cluster.conf" || true
 
-	# See if this will speed things up!
+	# Add more cpu/ram ... See if this will speed things up!
 	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding master CPU" "sed -i 's/^master_cpu_count=.*/master_cpu_count=12/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding worker CPU" "sed -i 's/^worker_cpu_count=.*/worker_cpu_count=8/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
@@ -431,6 +432,7 @@ do
 	build_and_test_cluster $c $cnt
 
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting '$c' cluster" "make -s -C $subdir/aba/$c delete" 
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Running 'make clean' in $subdir/aba/$c" "make -s -C $subdir/aba/$c clean" 
 done
 
 # Test bare-metal with BYO macs
@@ -478,6 +480,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s
 # Restart cluster test end 
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -s -C $subdir/aba/standard delete" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Running 'make clean' in $subdir/aba/stanadard" "make -s -C $subdir/aba/stanadard clean" 
 
 #test-cmd "make distclean force=1="
 make -C ~/aba distclean force=1=
