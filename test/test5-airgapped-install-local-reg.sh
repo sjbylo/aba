@@ -352,7 +352,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully (2/2)" "yes | make -s -C $subdir/aba/sno shutdown"
 #test-cmd -m "Wait for cluster to power down" sleep 600
 test-cmd -m "Wait for cluster to power down" sleep 60
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'poweredOff'" "until make -s -C $subdir/aba/sno ls | grep poweredOff | wc -l| grep ^1$ ; do sleep 10; echo .;done"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'poweredOff'" "until make -s -C $subdir/aba/sno ls | grep poweredOff | wc -l| grep ^1$ ; do sleep 10; echo -n .;done"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/sno ls"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Start cluster gracefully" "make -s -C $subdir/aba/sno startup"
 #test-cmd -m "Wait for cluster to settle" sleep 600
