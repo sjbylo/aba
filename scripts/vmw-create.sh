@@ -63,7 +63,8 @@ source <(normalize-cluster-conf)
 
 # Enable hardware virt on the workers only (or also masters for 'scheduling enabled')
 master_nested_hv=false
-[ $WORKER_REPLICAS -eq 0 ] && master_nested_hv=true && echo Setting hardware virt on master nodes ...
+[ $WORKER_REPLICAS -eq 0 ] && master_nested_hv=true && echo Setting hardware virtualization on master nodes ...
+echo Setting hardware virtualization on worker nodes ...
 worker_nested_hv=true
 
 i=1
