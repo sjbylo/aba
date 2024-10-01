@@ -480,7 +480,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s
 # Restart cluster test end 
 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -s -C $subdir/aba/standard delete" 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Running 'make clean' in $subdir/aba/stanadard" "make -s -C $subdir/aba/stanadard clean" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Running 'make clean' in $subdir/aba/stanadard" "make -s -C $subdir/aba/standard clean" 
 
 #test-cmd "make distclean force=1="
 make -C ~/aba distclean force=1=
