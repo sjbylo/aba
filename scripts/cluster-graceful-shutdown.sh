@@ -8,24 +8,25 @@ source scripts/include_all.sh
 source <(normalize-cluster-conf)
 
 [ ! -s iso-agent-based/auth/kubeconfig ] && echo "Cannot find iso-agent-based/auth/kubeconfig file!" && exit 1
-server_url=$(cat iso-agent-based/auth/kubeconfig | grep server | awk '{print $NF}' | head -1)
+
+server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)
 
 echo Checking cluster ...
 # Or use: timeout 3 bash -c "</dev/tcp/host/6443"
 if ! curl --connect-timeout 10 --retry 2 -skI $server_url >/dev/null; then
-	echo "Cluster not reachable at $server_url"
+	echo_red "Cluster not reachable at $server_url"
 
 	exit
 fi
 
-echo "Attempting to log into the cluster ... "
+echo "Attempting to access the cluster ... "
 
 # Refresh kubeconfig
 unset KUBECONFIG
 cp iso-agent-based/auth.backup/kubeconfig  iso-agent-based/auth/kubeconfig
 OC="oc --kubeconfig=iso-agent-based/auth/kubeconfig"
 
-if ! $OC whoami; then
+if ! $OC whoami >/dev/null; then
 	echo_red "Error: Cannot access the cluster using iso-agent-based/auth/kubeconfig file!"
 
 	exit 1
@@ -37,6 +38,16 @@ echo Cluster $cluster_id nodes:
 echo
 $OC get nodes
 echo
+
+logfile=.shutdown.log
+echo Start of shutdown $(date) > $logfile
+
+# Preparing debug pods for gracefull shutdown (ensure all nodes are 'Ready') ...
+for node in $($OC --request-timeout=30s get nodes -o jsonpath='{.items[*].metadata.name}')
+do
+	$OC --request-timeout=30s debug --preserve-pod node/${node} -- chroot /host hostname &
+done >> $logfile 2>&1
+#wait
 
 if $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null; then
 	cluster_exp_date=$($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
@@ -52,26 +63,24 @@ if $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet
 	days_diff=$((seconds_diff / 86400))
 
 	echo "Certificate expiration date of cluster: $cluster_id: $cluster_exp_date"
-	echo "There are $days_diff days until the cluster certificate expires. Ensure to start the cluster before then for the certificate to be automatically renewed."
+	echo_yellow "There are $days_diff days until the cluster certificate expires."
+	echo "Make sure the cluster is started beforehand to allow the CA certificate to renew automatically."
 
 else
 	echo_red "Unable to discover cluster's certificate expiration date."
 fi
 
 echo
-echo -n "Shutdown the cluster? (Y/n): "
+echo_cyan -n "Gracefully shutdown the cluster? (Y/n): "
 read yn
 [ "$yn" = "n" ] && exit 1
 
-logfile=.shutdown.log
-echo "Logging all output to log file: $logfile ..." | tee $logfile
-
-echo "Preparing cluster for gracefull shutdown (ensure all nodes are 'Ready') ..." | tee -a $logfile
-for node in $($OC --request-timeout=30s get nodes -o jsonpath='{.items[*].metadata.name}')
-do
-	$OC --request-timeout=30s debug -q --preserve-pod node/${node} -- chroot /host whoami &
-done >> $logfile 2>&1
+# wait for all debug pods to have worked ok
 wait
+
+echo "Cluster ready for gracefull shutdown!  Sending all output to $logfile ..." | tee -a $logfile
+
+#echo "Sending all output to $logfile ..." | tee -a $logfile
 
 # If not SNO ...
 if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
@@ -88,19 +97,21 @@ if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
 	for node in $($OC get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); 
 	do
 		echo Drain ${node}
-		#$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=60s --force&
-		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=60s        &
+		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=60s --force &
 		# See: https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html-single/backup_and_restore/index#graceful-shutdown_graceful-shutdown-cluster
 	done >> $logfile 2>&1
+
 	wait
 fi
 
 echo Shutting down all nodes ... | tee -a $logfile
 for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}');
 do
-	$OC --request-timeout=30s debug node/${node} -- chroot /host shutdown -h 1
+	$OC --request-timeout=30s debug node/${node} -- chroot /host shutdown -h 1 &
 done >> $logfile 2>&1
 
+wait
+
 echo 
-echo "The cluster will complete shutdown and power off in a short while!" | tee -a $logfile
+echo_green "All servers in the cluster will complete shutdown and power off in a short while!" | tee -a $logfile
 
