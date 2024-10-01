@@ -87,9 +87,9 @@ if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
 	echo "Making all nodes unschedulable (corden) ..." | tee -a $logfile
 	for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}')
 	do
-		echo Uncorden ${node}
-		$OC adm cordon ${node} &
-	done >> $logfile 2>&1
+		#echo Corden ${node}
+		$OC adm cordon ${node} 2>> $logfile &
+	done | tee -a $logfile
 	wait
 
 	echo "Draining all pods from all worker nodes ..." | tee -a $logfile

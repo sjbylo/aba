@@ -118,5 +118,5 @@ if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v
 	fi
 fi
 
-echo_green "All operators are fully available!"
+echo_green "All cluster operators are fully available!"
 
