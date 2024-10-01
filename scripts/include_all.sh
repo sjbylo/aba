@@ -121,7 +121,7 @@ install_rpms() {
 			echo_red "If dnf cannot be used to install rpm packages, please install the following packages manually and try again!"
 			echo_magenta $rpms_to_install
 
-			exit 1
+			return 1
 		fi
 	fi
 }
@@ -175,29 +175,38 @@ edit_file() {
 
 try_cmd() {
 	# Run a command, if it fails, try again after 'pause' seconds
-	# Usage: try_cmd [-q] <pause> <interval> <total>
+	# Usage: try_cmd [-q] <pause> <backoff> <total>
 	local quiet=
-	[ "$1" = "-q" ] && local quiet=1 && shift
+	[ "$1" = "-q" ] && local quiet=1 && local out=">/dev/null 2>&1" && shift
 	local pause=$1; shift		# initial pause time in sec
-	local interval=$1; shift	# add interval to pause time
+	local backoff=$1; shift		# add backoff time to pause time
 	local total=$1; shift		# total number of tries
 
 	local count=1
 
 	[ ! "$quiet" ] && echo "Attempt $count/$total of command: \"$*\""
 
-	while ! eval $*
+	#echo DEBUG: eval "$*" "$out"
+	#while ! eval $* $out
+	echo  >>.cmd.out 
+	echo cmd $* >>.cmd.out 
+	while ! eval $* >>.cmd.out 2>&1
 	do
-		if [ ! "$quiet" ]; then
-			[ $count -ge $total ] && echo "Giving up!" && return 1
-			echo Pausing $pause seconds ...
+		if [ $count -ge $total ]; then
+			[ ! "$quiet" ] && echo_red "Giving up on command \"$*\""
+			# Return non-zero
+			return 1
 		fi
+
+		[ ! "$quiet" ] && echo Pausing $pause seconds ...
 		sleep $pause
 
-		let pause=$pause+$interval
+		let pause=$pause+$backoff
 		let count=$count+1
 
 		[ ! "$quiet" ] && echo "Attempt $count/$total of command: \"$*\""
+		#echo DEBUG: eval "$*" "$out"
+		echo cmd $* >>.cmd.out 
 	done
 }
 
@@ -231,7 +240,8 @@ files_on_same_device() {
 	# Check if two file paths were provided
 	if [ "$#" -ne 2 ]; then
 		echo "Usage: files_on_same_device <file_path1> <file_path2>"
-		exit 1
+
+		return 1
 	fi
 
 	# Get the device number for each file path using 'stat'

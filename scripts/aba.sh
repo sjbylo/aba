@@ -213,7 +213,7 @@ done
 if [ "$ACTION" = "bundle" ]; then
 	[ ! "$bundle_dest_path" ] && echo_red "Error: bundle archive filename not provided!" >&2 && exit 1
 
-	install_rpms make >.bundle.log
+	install_rpms make >.bundle.log|| exit 1
 
 	echo_cyan "A bundle archive file will be created using the following values:" >&2
 	echo >&2
@@ -346,7 +346,7 @@ if [ ! -f .bundle ]; then
 	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
 	# FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
 	(
-		install_rpms make 
+		install_rpms make || exit 1
 		make -s -C mirror checkversion 2>/dev/null
 	) || exit 
 
@@ -395,7 +395,7 @@ if [ ! -f .bundle ]; then
 	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 		echo_blue "Pull secret found at '$pull_secret_file'."
 
-		install_rpms make 
+		install_rpms make || exit 1
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		make -s -C mirror init >/dev/null 2>&1
