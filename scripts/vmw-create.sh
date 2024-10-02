@@ -171,4 +171,5 @@ for name in $WORKER_NAMES ; do
 	let i=$i+1
 done
 
+echo
 echo Now run: make mon
