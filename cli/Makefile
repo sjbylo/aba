@@ -70,7 +70,8 @@ openshift-install-linux-$(ocp_version).tar.gz:  ## Download openshift-install ta
 # Version 4.14 has bug fixes 
 oc-mirror.tar.gz: ## Download oc-mirror tarball ver 4.14.9 or higher 
 	# Installing oc-mirror version 4.14.9 or higher
-	../scripts/output_ver_lower_4.14.9.sh $(ocp_version) && curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.14.9/oc-mirror.tar.gz || curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/oc-mirror.tar.gz 
+	#../scripts/output_ver_lower_4.14.9.sh $(ocp_version) && curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.14.9/oc-mirror.tar.gz || curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/oc-mirror.tar.gz 
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.16.13/oc-mirror.tar.gz
 
 ########################################
 ~/bin/govc: .init govc_Linux_x86_64.tar.gz    ## Install govc into ~/bin
