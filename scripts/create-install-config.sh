@@ -104,8 +104,7 @@ elif [ "$proxy" = "auto" ]; then
 		echo_red "set the '*_proxy' values in 'cluster.conf'"
 	fi
 else
-	echo_white "Not configuring the cluster wide proxy since no (or not enough) proxy values are defined in cluster.conf."
-	echo_white "At least http_proxy and https_proxy are needed."
+	echo_white "Not configuring the cluster wide proxy since no (or not enough) proxy values are defined in cluster.conf (at least http_proxy and https_proxy are required)."
 fi
 
 # Check the private registry is defined, if it's in use
