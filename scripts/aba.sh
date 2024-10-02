@@ -426,7 +426,7 @@ if [ ! -f .bundle ]; then
 		echo
 		echo_yellow Instructions
 		echo
-		echo "Run: make bundle out=/path/to/bundle/filename   # to save all images to local disk & create the bundle archive (size ~2-3GB), follow the instructions."
+		echo "Run: make bundle out=/path/to/bundle/filename   # to save all images to local disk & create the bundle archive (size ~20-30GB for a base installation), follow the instructions."
 		echo
 
 		exit 0
@@ -448,12 +448,11 @@ if [ ! -f .bundle ]; then
 	fi
 
 	echo 
-	echo 
 	echo_yellow Instructions
 	echo 
-	echo "Set up the mirror registry and sync it with the required container images."
+	echo "Action required: Set up the mirror registry and sync it with the necessary container images."
 	echo
-	echo "You have the choice to install the Quay mirror appliance or re-use an existing container registry to store container images."
+	echo "To store container images, Aba can install the Quay mirror appliance or you can utilize an existing container registry."
 	echo
 	echo "Run:"
 	echo "  make install       # to configure and/or install Quay, follow the instructions."
@@ -475,14 +474,16 @@ else
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_seq*tar 2>/dev/null)" ]; then
 		echo
-		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'make save') are copied to the 'mirror/save' directory before following the instructions below!"
+		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'make save') are copied to the 'aba/mirror/save' directory before following the instructions below!"
 		echo_red "         For example, run the command: cp /path/to/portable/media/mirror_seq*tar mirror/save"
 	fi
 
 	echo 
 	echo_yellow Instructions
 	echo 
-	echo "Set up the mirror registry and then load it from disk with the required container images."
+	echo "Action Required: Set up the mirror registry and load it from disk with the necessary container images."
+	echo
+	echo "To store container images, Aba can install the Quay mirror appliance or you can utilize an existing container registry."
 	echo
 	echo "Run:"
 	echo "  make install       # to configure and/or install Quay, follow the instructions."
@@ -492,6 +493,6 @@ else
 	echo
 fi
 
-echo "Once the images have been loaded or synced into the mirror registry follow the instructions provided."
+echo "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the subsequent instructions."
 echo
 

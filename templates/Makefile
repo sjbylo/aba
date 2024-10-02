@@ -90,12 +90,12 @@ agent-config.yaml: .initialized             cluster.conf mirror.conf  ## Create 
 	@echo "1 cd <cluster name>"
 	@echo "2 Check & edit the agent configuration files: "
 	@echo "   - install-config.yaml:"
-	@echo "       Add proxy values, in case you want to use them."
+	@#echo "       Add proxy values, in case you want to use them."
 	@echo "   - agent-config.yaml:"
-	@echo "       Modify the mac addresses to match your hosts net interfaces."
-	@echo "       Optionally add drive & NIC hints, vlan tag and any other network configuration, if needed."
+	@echo "       You must modify the mac addresses to match your host's network interfaces."
+	@echo "       Optionally, add drive & NIC hints, vlan tag and any other network configurations, if needed."
 	@echo "3 Run 'make iso' to create the ISO file."
-	@echo "4 Boot all your hosts with the ISO file."
+	@echo "4 Power on all your hosts and boot them with the ISO file."
 	@echo "5 Run 'make mon' to monitor the installation progress."
 	@echo 
 	@touch .bm-message
