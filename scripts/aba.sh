@@ -473,7 +473,7 @@ else
 	echo_blue "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version', assuming this is running on an internal RHEL bastion!"
 	
 	# Check if tar files are already in place
-	if [ ! "$(ls mirror/save/mirror_seq*tar)" ]; then
+	if [ ! "$(ls mirror/save/mirror_seq*tar 2>/dev/null)" ]; then
 		echo
 		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'make save') are copied to the 'mirror/save' directory before following the instructions below!"
 		echo_red "         For example, run the command: cp /path/to/portable/media/mirror_seq*tar mirror/save"
