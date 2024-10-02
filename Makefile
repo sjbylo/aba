@@ -93,15 +93,13 @@ rsync:  ## Copy (rsync) all required files to internal bastion for testing purpo
 
 .PHONY: ask
 ask: ## Set 'ask' in aba.conf to 'true'
-	@[ ! -s aba.conf ] && cp templates/aba.conf .
-	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=true/g" aba.conf
-	@echo value ask has been set to true in aba.conf.
+	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
+	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=true/g" aba.conf && echo value ask has been set to true in aba.conf.
 
 .PHONY: noask
 noask:  ## Set 'ask' in aba.conf to 'false'
-	@[ ! -s aba.conf ] && cp templates/aba.conf .
-	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf
-	@echo value ask has been set to false in aba.conf.
+	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
+	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf && echo value ask has been set to false in aba.conf.
 
 .PHONY: clean
 clean: ## Clean up all temporary files.
