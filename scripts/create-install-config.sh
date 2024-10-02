@@ -50,15 +50,6 @@ else
 	fi
 fi
 
-# ... we also, need a root CA... if using our own registry.
-if [ -s regcreds/rootCA.pem ]; then
-	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
-	echo "Using root CA file at regcreds/rootCA.pem"
-else
-	echo_red "WARNING: No file 'regcreds/rootCA.pem' found.  Not adding 'additionalTrustBundle' to install-config.yaml!"
-	echo_red "         If this is unexpected, you must to set up your mirror registry!  Run: make -C aba/mirror install"
-fi
-
 
 # Check for ssh key files 
 if [ -s $ssh_key_file.pub ]; then
@@ -106,6 +97,23 @@ elif [ "$proxy" = "auto" ]; then
 	fi
 else
 	echo_white "Not configuring the cluster wide proxy since no (or not enough) proxy values are defined in cluster.conf (at least http_proxy and https_proxy are required)."
+fi
+
+# ... we also, need a root CA... if using our own registry.
+if [ -s regcreds/rootCA.pem ]; then
+	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
+	echo "Using root CA file at regcreds/rootCA.pem"
+else
+	# Only show this warning IF there is no internet connection:??
+	# Or, only show if proxy is NOT being used?
+	if [ "$insert_proxy" ]; then
+		echo_red "Not using a mirror registry!  Using proxy settings to access public registry."
+	else
+		# Should check accessibility to registry.redhat.io?
+		echo_red "WARNING: No mirror registry configured!"
+		echo_red "         If this is unexpected, you must set up a mirror registry!  Run: cd ..; make install"
+		echo_red "         Root CA file 'regcreds/rootCA.pem' not found. Not adding 'additionalTrustBundle' to install-config.yaml!"
+	fi
 fi
 
 # Check the private registry is defined, if it's in use
