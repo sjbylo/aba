@@ -55,7 +55,8 @@ if [ -s regcreds/rootCA.pem ]; then
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
 	echo "Using root CA file at regcreds/rootCA.pem"
 else
-	echo "Warning: No file 'regcreds/rootCA.pem' found.  Not adding 'additionalTrustBundle' to install-config.yaml"
+	echo_red "WARNING: No file 'regcreds/rootCA.pem' found.  Not adding 'additionalTrustBundle' to install-config.yaml!"
+	echo_red "         If this is unexpected, you must to set up your mirror registry!  Run: make -C aba/mirror install"
 fi
 
 

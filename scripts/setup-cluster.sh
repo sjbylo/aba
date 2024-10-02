@@ -25,7 +25,7 @@ fi
 pwd
 #make cluster.conf name=$name
 
-echo_magenta "Creating '$name/cluster.conf' file for cluster type [$cluster_type]."
+echo_magenta "Creating '$name/cluster.conf' file for cluster type '$cluster_type'."
 scripts/create-cluster-conf.sh $name $cluster_type
 
 msg="Install the cluster with 'cd $name; make'"
