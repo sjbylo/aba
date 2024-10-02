@@ -66,7 +66,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 	fi
 	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
 else	
-	echo_red "Warning: Config map already exists. Assuming workaround has already been applied."
+	echo_red "Registry trust bundle already added. Assuming workaround has already been applied."
 	### echo_red "         No cert file regcreds/rootCA.pem found (no mirror available?)."  # This is wrong statement
 fi
 
@@ -143,8 +143,8 @@ if [ "$file_list" ]; then
 
 		echo "Patching registry poll interval for CatalogSource cs-redhat-operator-index"
 		oc patch CatalogSource cs-redhat-operator-index  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
-		echo Waiting 60s ...
-		sleep 60
+		echo Pausing ...
+		sleep 15
 	else
 		:
 	fi
