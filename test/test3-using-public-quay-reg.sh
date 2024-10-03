@@ -53,7 +53,9 @@ mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; r
 # Set up aba.conf properly
 rm -f aba.conf
 vf=~/.vmware.conf
-test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" ./aba --version latest ### --vmw $vf
+[ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
+test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" ./aba --version $VER_OVERRIDE ### --vmw $vf
+#test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" ./aba --version latest ### --vmw $vf
 
 # Set up govc 
 cp $vf vmware.conf 

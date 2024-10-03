@@ -63,7 +63,9 @@ mylog
 
 rm -f aba.conf  # Set it up next
 vf=~/.vmware.conf
-test-cmd -m "Configure aba.conf for latest version and vmware $vf" ./aba --version latest ## --vmw $vf
+[ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
+test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" ./aba --version $VER_OVERRIDE ### --vmw $vf
+#test-cmd -m "Configure aba.conf for latest version and vmware $vf" ./aba --version latest ## --vmw $vf
 # Set up govc 
 cp $vf vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
