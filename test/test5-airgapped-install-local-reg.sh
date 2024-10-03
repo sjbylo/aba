@@ -158,7 +158,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 #### NEW TEST test-cmd -r 99 3 -m "Saving images to local disk" "make save" 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-test-cmd -r 99 3 -m "Creating bundle" "./aba bundle --channel stable --version latest --bundle-file - | ssh $reg_ssh_user@$bastion2 tar -C $subdir -xvf -"
+test-cmd -r 99 3 -m "Creating bundle for channel stable" "./aba bundle --channel stable --version 4.16.12 --bundle-file - | ssh $reg_ssh_user@$bastion2 tar -C $subdir -xvf -"
 
 # Existing regcreds/pull-secret files issue.  E.g. if aba has been used already to install a reg. .. then 'make save' is run!
 # Set up bad creds and be sure they do not get copied to internal bastion!

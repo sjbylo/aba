@@ -144,7 +144,7 @@ if [ "$file_list" ]; then
 		echo "Patching registry poll interval for CatalogSource cs-redhat-operator-index"
 		oc patch CatalogSource cs-redhat-operator-index  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
 		echo Pausing ...
-		sleep 15
+		sleep 60
 	else
 		:
 	fi
