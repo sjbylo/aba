@@ -43,5 +43,22 @@ if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/open
 	exit 1
 fi
 
+# HACK
+cat > .idms.yaml <<END
+apiVersion: config.openshift.io/v1
+kind: ImageDigestMirrorSet
+metadata:
+  name: image-digest-mirror
+spec:
+  imageDigestMirrors:
+END
+echo "$image_content_sources" | sed 's/^/  /' >> .idms.yaml
+
+echo Extracting openshift-install from $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha
+#oc adm release extract --idms-file=/tmp/.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images:${release_ver}-x86_64
+oc adm release extract --idms-file=/tmp/.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha --insecure=true
+[ -s openshift-install ] && mv openshift-install ~/bin
+rm -f .idms.yaml
+
 echo_green "Release image for version $release_ver is available at $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha"
 
