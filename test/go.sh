@@ -1,7 +1,7 @@
 #!/bin/bash -ex
 # Simple top level script to run all tests
 
-export VER_OVERRIDE=4.16.12
+export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
 
 # This is for testing a specific branch ($1) directly from "git clone", otherwise it will test
 # the local dir. ($PWD)

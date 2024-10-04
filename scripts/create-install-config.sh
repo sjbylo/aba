@@ -123,7 +123,7 @@ fi
 
 # Check that the release image is available in the private registry
 if [ "$additional_trust_bundle" -a "$image_content_sources" ]; then
-	scripts/create-containers-auth.sh
+	scripts/create-containers-auth.sh --load
 	scripts/verify-release-image.sh
 fi
 
