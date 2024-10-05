@@ -45,9 +45,8 @@ which make || sudo dnf install make -y
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
 echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
-#make distclean force=1=
-make -C ~/aba distclean force=1=
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
+### wrong # make -C ~/aba distclean force=1
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
 #make clean
 
 # Set up aba.conf properly
@@ -81,11 +80,12 @@ test-cmd -m "Creating sno/cluster.conf." make sno target=cluster.conf
 test-cmd -m "Adding proxy=auto to sno/cluster.conf" "sed -i 's/^proxy=.*/proxy=auto/g' sno/cluster.conf"
 
 test-cmd -m "Installing SNO cluster from public registry, since no registry available." make sno 
-test-cmd -m "Deleting sno cluster" make -C sno delete || true
+# keep it #test-cmd -m "Deleting sno cluster" make -C sno delete || true
+test-cmd -m "Stopping sno cluster" "yes|make -C sno shutdown"
 
-#test-cmd "make distclean force=1="
-make -C ~/aba distclean force=1=
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
+#test-cmd "make distclean force=1"
+#make -C ~/aba distclean force=1
+###mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"

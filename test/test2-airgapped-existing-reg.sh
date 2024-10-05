@@ -58,11 +58,9 @@ if [ ! "$1" ]; then
 	#v=4.15.22
 
 	# clean up all, assuming reg. is not running (deleted)
-	test-cmd "echo ocp_version=$v > aba.conf"
-	#test-cmd "make -C mirror distclean force=1="
-	#test-cmd "make distclean force=1="
-	make -C ~/aba distclean force=1=
-	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
+	#test-cmd "echo ocp_version=$v > aba.conf"
+	####make -C ~/aba distclean force=1
+	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
 
@@ -246,8 +244,7 @@ else
 
 	# Run 'make -C mirror clean' here since we (might be) are re-installing another cluster *with the same mac addresses*! So, install might fail.
 	test-cmd -h steve@$bastion2 -m "Cleaning sno dir" "make -C $subdir/aba/sno clean"  # This does not remove the cluster.conf file, so cluster can be re-installed 
-
-test-cmd -h steve@$bastion2 -m "Installing sno cluster" "make -C $subdir/aba/sno"  
+	test-cmd -h steve@$bastion2 -m "Installing sno cluster" "make -C $subdir/aba/sno"  
 fi
 
 test-cmd -h steve@$bastion2 -m "Checking cluster operator status on cluster sno" "make -C $subdir/aba/sno cmd"
@@ -299,18 +296,20 @@ test-cmd -h steve@$bastion2 -r 30 1 -m "Install Multiclusterhub" "make -C $subdi
 sleep 300
 # THIS TEST ALWAYS EXIT 0 # test-cmd -h steve@$bastion2 -r 30 1 -m "Check Multiclusterhub status is 'Running'" "make -C $subdir/aba/sno cmd cmd='oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
 test-cmd -h steve@$bastion2 -r 30 1 -m "Check hub status is 'running'" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
+test-cmd -h steve@$bastion2 -r 30 1 -m "Output hub status" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status}| grep -i running"
 #### TESTING ACM + MCH 
 
-test-cmd -h steve@$bastion2 -m "Deleting sno cluster" "make -C $subdir/aba/sno delete" 
+# Keep it # test-cmd -h steve@$bastion2 -m "Deleting sno cluster" "make -C $subdir/aba/sno delete" 
+test-cmd -h steve@$bastion2 -m "Stopping sno cluster" "yes|make -C $subdir/aba/sno shutdown" 
 
 ######################
 
-test-cmd -m "Clean up 'existing' mirror registry on internal bastion" test/reg-test-uninstall-remote.sh $bastion2
+## keep it up # test-cmd -m "Clean up 'existing' mirror registry on internal bastion" test/reg-test-uninstall-remote.sh $bastion2
 
-#test-cmd "make distclean force=1="
+#test-cmd "make distclean force=1"
 
-make -C ~/aba distclean force=1=
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
+## keep it up # make -C ~/aba distclean force=1
+## keep it up # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"
