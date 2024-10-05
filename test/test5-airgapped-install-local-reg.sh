@@ -396,10 +396,16 @@ build_and_test_cluster() {
 
 	###test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba $cluster_name" || true
 	# Now run make INSIDE of the cluster directory
-	test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba/$cluster_name" || true
+	####test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba/$cluster_name" || true
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba/$cluster_name"
 	test-cmd -h $reg_ssh_user@$bastion2 -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "make -s -C $subdir/aba/$cluster_name mon" 
 
-	test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s -C $subdir/aba/$cluster_name cmd; until make -s -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+	#####
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all cluster operators available?" "make -s -C $subdir/aba/$cluster_name cmd; until make -s -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all cluster operators fully available?" "make -s -C $subdir/aba/$cluster_name cmd; until make -s -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Show all cluster operators" "make -s -C $subdir/aba/$cluster_name cmd"
 
 	# Restart cluster test 
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Log into cluster" ". <(make -s -C $subdir/aba/$cluster_name login)"
