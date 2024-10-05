@@ -43,9 +43,10 @@ which make || sudo dnf install make -y
 
 #v=4.16.5
 
-> mirror/mirror.conf
-echo "ocp_version=4.16.999" >> aba.conf  # Only to fix error, missing "ocp_version"
-test-cmd -m "Cleaning up mirror - distclean force=1=" 
+###> mirror/mirror.conf
+##echo "ocp_version=4.16.999" >> aba.conf  # Only to fix error, missing "ocp_version"
+test-cmd -m "Cleaning up - make distclean force=1" 
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
 #test-cmd -m "Cleaning up mirror - clean" "make -s -C mirror clean" 
 
 rm -rf sno compact standard 
@@ -336,7 +337,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m  "Loading jaeger operator images 
 
 test-cmd -m "Pausing for 90s to let OCP settle" sleep 90    # For some reason, the cluster was still not fully ready in tests!
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s -C $subdir/aba/$cluster_type cmd; until make -s -C $subdir/aba/$cluster_type cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s -C $subdir/aba/$cluster_type cmd; until make -s -C $subdir/aba/$cluster_type cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
 test-cmd -h $reg_ssh_user@$bastion2 -r 99 3 -m "Run 'day2'" "make -s -C $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
@@ -481,12 +482,13 @@ test-cmd -m "Wait for cluster to settle" sleep 60
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s -C $subdir/aba/standard cmd; make -s -C $subdir/aba/standard cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -s -C $subdir/aba/standard delete" 
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Running 'make clean' in $subdir/aba/stanadard" "make -s -C $subdir/aba/standard clean" 
+# keep it # test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -s -C $subdir/aba/standard delete" 
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Stopping standard cluster" "yes|make -s -C $subdir/aba/standard shutdown" 
+# keep it # test-cmd -h $reg_ssh_user@$bastion2 -m  "Running 'make clean' in $subdir/aba/stanadard" "make -s -C $subdir/aba/standard clean" 
 
-#test-cmd "make distclean force=1="
-make -C ~/aba distclean force=1=
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
+#test-cmd "make distclean force=1"
+# keep it # make -C ~/aba distclean force=1
+# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"

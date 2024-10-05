@@ -47,8 +47,8 @@ which make || sudo dnf install make -y
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
 echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
-make -C ~/aba distclean force=1=
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
+## this is wrong # make -C ~/aba distclean force=1
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
 #make clean
 
 # Set up aba.conf properly
@@ -315,30 +315,31 @@ test-cmd -r 99 3 -m "Saving and loading images into mirror" make -C mirror save 
 make -C sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
 
-test-cmd -m "Deleting cluster" make -C sno delete 
+### Let it be ## test-cmd -m "Deleting cluster" make -C sno delete 
+test-cmd -m "Stopping cluster" "yes|make -C sno shutdown"
 
 ### FIXME mylog "Removing vmware config file to simulate 'bare metal' and iso creation"
 mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' file to simulate 'bare metal' and iso creation"
 
 # FIXME
-sed -i "s/^platform=.*/platform=blah/g" aba.conf
+sed -i "s/^platform=.*/platform=bm/g" aba.conf
 ####> vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
 ####test-cmd -m "Creating standard iso file with 'make standard target=iso'" make standard target=iso # Since we're simulating bare-metal, only create iso
-test-cmd -m "Bare-metal simulation: Creating agent config files" make standard   		# Since we're simulating bare-metal, this will only create agent configs
-test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso || true		# Since we're simulating bare-metal, only create iso
+test-cmd -m "Bare-metal simulation: Creating agent config files" make standard   	# Since we're simulating bare-metal, this will only create agent configs
+test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso || true	# Since we're simulating bare-metal, only create iso
 
-test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
-test-cmd -h steve@$bastion2 -m "Verify mirror uninstalled" podman ps 
-test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+#test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
+#test-cmd -h steve@$bastion2 -m "Verify mirror uninstalled" podman ps 
+#test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 #####################################################################################################################
 #####################################################################################################################
 #####################################################################################################################
 
 # Must remove the old files under mirror/save 
-##make distclean force=1=
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1=; rm -rf cli && mv cli.m cli
+##make distclean force=1
+# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"
