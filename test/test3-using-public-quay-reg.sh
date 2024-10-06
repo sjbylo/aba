@@ -82,7 +82,7 @@ test-cmd -m "Adding proxy=auto to sno/cluster.conf" "sed -i 's/^proxy=.*/proxy=a
 test-cmd -m "Installing SNO cluster from public registry, since no registry available." make sno 
 # keep it #test-cmd -m "Deleting sno cluster" make -C sno delete || true
 ###test-cmd -m "Stopping sno cluster" "yes|make -C sno shutdown"
-test-cmd -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown || true"
+test-cmd -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown || echo cluster not up"
 
 #test-cmd "make distclean force=1"
 #make -C ~/aba distclean force=1

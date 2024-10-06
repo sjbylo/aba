@@ -7,58 +7,85 @@ source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
 
-# Set the rendezvous_ip to the the first master's ip
+[ ! "$cluster_name" ] && echo_red "Error: missing cluster_name value in cluster.conf!" && exit 1
+[ ! "$base_domain" ] && echo_red "Error: missing base_domain value in cluster.conf!" && exit 1
+[ ! "$machine_ip_prefix" ] && echo_red "Error: missing machine_ip_prefix value in cluster.conf!" && exit 1
+[ ! "$starting_ip" ] && echo_red "Error: missing starting_ip value in cluster.conf!" && exit 1
+[ ! "$num_masters" ] && echo_red "Error: missing num_masters value in cluster.conf!" && exit 1
+[ ! "$num_workers" ] && echo_red "Error: missing num_workers value in cluster.conf!" && exit 1
+
+cl_domain="$cluster_name.$base_domain"
+cl_apps_domain="*.apps.$cl_domain"
+cl_api_domain="api.$cl_domain"
+
+# Set the rendezvous_ip to the first master's ip
 export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
 export rendezvous_ip=$machine_ip_prefix$starting_ip
 
 SNO=
-[ $num_masters -eq 1 -a $num_workers -eq 0 ] && SNO=1 && echo "Configuration is for Single Node Openshift (SNO) ..."
+[ $num_masters -eq 1 -a $num_workers -eq 0 ] && SNO=1 && echo_green "Configuration is for Single Node Openshift (SNO) ..."
+[ $num_masters -ne 1 -a $num_masters -ne 3 ] && echo_red "Error: number of masters can only be 1 or 3!" && exit 1
 
-[ $num_masters -ne 1 -a $num_masters -ne 3 ] && echo_red "Error: number of masters can only be '1' or '3'" && exit 1
-echo "Master count is valid [$num_masters]"
+echo_green "Master count: $num_masters is valid."
 
 # Checking for invalid config 
 if [ $num_masters -eq 1 -a $num_workers -ne 0 ]; then
-	echo_red "Error: number of workers must be '0' if number of masters is '1' (SNO)"
+	echo_red "Error: number of workers must be 0 if number of masters is 1 (SNO)!"
+
 	exit 1
 fi
 
-echo "Master [$num_masters] and worker counts [$num_workers] are valid."
+echo_green "Worker count: $num_workers is valid."
 
 # If not SNO, then ensure api_vip and ingress_vip are defined 
 if [ ! "$SNO" ]; then
-	[ ! "$api_vip" -o ! "$ingress_vip" ] && echo_red "Error: 'api_vip' and 'ingress_vip' must be defined for this configuration" && exit 1
-	echo "'api_vip' and 'ingress_vip' are defined [$api_vip] [$ingress_vip]"
+	[ ! "$api_vip" -o ! "$ingress_vip" ] && \
+		echo_red "Error: Values api_vip and ingress_vip must both be defined for this configuration!" && \
+		exit 1
+
+	echo_green "Values api_vip ($api_vip) and ingress_vip ($ingress_vip) are defined."
 else
-	[ "$api_vip" -o "$ingress_vip" ] && echo "Warning: No need for 'api_vip' and 'ingress_vip' values in SNO configuration, they will be ignored." 
+	[ "$api_vip" -o "$ingress_vip" ] && \
+		echo_red "Warning: Values api_vip and ingress_vip are not required for SNO configuration, they will be ignored." 
 fi
 
-# Checking if dig is installed ...
+ip_of_api=$(dig +time=8 +short $cl_api_domain)
+ip_of_apps=$(dig +time=8 +short x.apps.$cl_domain)
 
-ip_of_api=$(dig +time=8 +short api.$cluster_name.$base_domain)
-ip_of_apps=$(dig +time=8 +short x.apps.$cluster_name.$base_domain)
+[ ! "$ip_of_api" ] && ip_of_api="<empty>"
+[ ! "$ip_of_apps" ] && ip_of_apps="<empty>"
 
 # If NOT SNO...
 if [ ! "$SNO" ]; then
 	# Ensure api DNS exists and points to correct ip
-	[ "$ip_of_api" != "$api_vip" ] && echo_red "Error: DNS record [api.$cluster_name.$base_domain] does not resolve to [$api_vip]" && exit 1
-	echo "DNS record for OCP api (api.$cluster_name.$base_domain) is valid [$ip_of_api]"
+	[ "$ip_of_api" != "$api_vip" ] && \
+		echo_red "Error: DNS record $cl_api_domain does not resolve to $api_vip, it resolves to $ip_of_api!" && \
+		exit 1
+
+	echo_green "DNS record for OCP api ($cl_api_domain) is valid: $ip_of_api."
 
 	# Ensure apps DNS exists and points to correct ip
-	[ "$ip_of_apps" != "$ingress_vip" ] && echo_red "Error: DNS record [\*.apps.$cluster_name.$base_domain] does not resolve to [$ingress_vip]" && exit 1
-	echo "DNS record for apps ingress (*.apps.$cluster_name.$base_domain) is valid [$ip_of_apps]"
+	[ "$ip_of_apps" != "$ingress_vip" ] && \
+		echo_red "Error: DNS record $cl_apps_domain does not resolve to $ingress_vip, it resolves to $ip_of_apps!" && \
+		exit 1
+
+	echo_green "DNS record for apps ingress ($cl_apps_domain) is valid: $ip_of_apps."
 else
 	# For SNO...
 	# Check values are both pointing to "rendezvous_ip"
 	# Ensure api DNS exists 
 	[ "$ip_of_api" != "$rendezvous_ip" ] && \
-		echo_red "Error: DNS record [api.$cluster_name.$base_domain] does not resolve to the rendezvous ip [$rendezvous_ip]" && exit 1
-	echo "DNS record for OCP api (SNO) is valid [$ip_of_api]"
+		echo_red "Error: DNS record $cl_api_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $ip_of_api!" && \
+		exit 1
+
+	echo_green "DNS record for OCP api ($cl_api_domain) is valid: $ip_of_api"
 
 	# Ensure apps DNS exists 
 	[ "$ip_of_apps" != "$rendezvous_ip" ] && \
-		echo_red "Error: DNS record [\*.apps.$cluster_name.$base_domain] does not resolve to the rendezvous ip [$rendezvous_ip]" && exit 1
-	echo "DNS record for apps ingress (SNO) is valid [$ip_of_apps]"
+		echo_red "Error: DNS record $cl_apps_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $ip_of_apps!" && \
+		exit 1
+
+	echo_green "DNS record for apps ingress ($cl_apps_domain) is valid: $ip_of_apps"
 fi
 
 exit 0

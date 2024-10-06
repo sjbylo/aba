@@ -23,9 +23,9 @@ fi
 
 echo Uploading image $MANIFEST_DIR/agent.x86_64.iso to [$ISO_DATASTORE] images/agent-${CLUSTER_NAME}.iso
 
-if ! govc datastore.upload -ds $ISO_DATASTORE $MANIFEST_DIR/agent.x86_64.iso images/agent-${CLUSTER_NAME}.iso | tee /dev/tty| grep -qi "Uploading.*OK"; then
+if ! govc datastore.upload -ds $ISO_DATASTORE $MANIFEST_DIR/agent.x86_64.iso images/agent-${CLUSTER_NAME}.iso | tee `tty`| grep -qi "Uploading.*OK"; then
 	# Since govc does not return non-zero on error we need to parse the output for non-success! 
-	output_error "Warning: ISO file may be attached to a running VM and cannot be overwritten.  Try to stop the VM first with 'make stop' and try again."
+	output_error "Warning: ISO file may be attached to a running VM and cannot be overwritten.  Stop the VM first with 'make stop' and try again."
 
 	exit 1
 fi

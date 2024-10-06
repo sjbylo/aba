@@ -68,10 +68,10 @@ if [ "$set_http_proxy" -a "$set_https_proxy" ]; then
 	export https_proxy=$set_https_proxy
 	export no_proxy=$set_no_proxy
 
-	echo_blue "Configuring 'cluster wide proxy' using values defined in config.conf:"
-	echo_blue "  http_proxy=$http_proxy"
-	echo_blue "  https_proxy=$https_proxy"
-	echo_blue "  no_proxy=$no_proxy"
+	echo_green "Configuring 'cluster wide proxy' using values defined in config.conf:"
+	echo_white "  http_proxy=$http_proxy"
+	echo_white "  https_proxy=$https_proxy"
+	echo_white "  no_proxy=$no_proxy"
 
 	export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
 
@@ -80,10 +80,10 @@ if [ "$set_http_proxy" -a "$set_https_proxy" ]; then
 	additional_trust_bundle=
 elif [ "$proxy" = "auto" ]; then
 	if [ "$http_proxy" -a "$https_proxy" ]; then
-		echo_blue "Configuring 'cluster wide proxy' using your env. vars:"
-		echo_blue "  http_proxy=$http_proxy"
-		echo_blue "  https_proxy=$https_proxy"
-		echo_blue "  no_proxy=$no_proxy"
+		echo_green "Configuring 'cluster wide proxy' using your environment variables:"
+		echo_white "  http_proxy=$http_proxy"
+		echo_white "  https_proxy=$https_proxy"
+		echo_white "  no_proxy=$no_proxy"
 
 		export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
 

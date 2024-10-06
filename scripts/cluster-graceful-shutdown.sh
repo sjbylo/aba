@@ -71,7 +71,7 @@ else
 fi
 
 echo
-echo_cyan -n "Gracefully shutdown the cluster? (Y/n): "
+echo_cyan -n "Gracefully shut down the cluster? (Y/n): "
 read yn
 [ "$yn" = "n" ] && exit 1
 
