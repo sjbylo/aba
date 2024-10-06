@@ -490,7 +490,7 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s
 
 # keep it # test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -s -C $subdir/aba/standard delete" 
 ###test-cmd -h $reg_ssh_user@$bastion2 -m  "Stopping standard cluster" "yes|make -s -C $subdir/aba/standard shutdown" 
-test-cmd -h $reg_ssh_user@$bastion2 -m "If cluster up, stopping cluster" ". <(make -sC $subdir/aba/standard shell) && . <(make -sC $subdir/aba/standard login) && yes|make -sC $subdir/aba/standard shutdown"
+test-cmd -h $reg_ssh_user@$bastion2 -m "If cluster up, stopping cluster" ". <(make -sC $subdir/aba/standard shell) && . <(make -sC $subdir/aba/standard login) && yes|make -sC $subdir/aba/standard shutdown || true"
 # keep it # test-cmd -h $reg_ssh_user@$bastion2 -m  "Running 'make clean' in $subdir/aba/stanadard" "make -s -C $subdir/aba/standard clean" 
 
 #test-cmd "make distclean force=1"

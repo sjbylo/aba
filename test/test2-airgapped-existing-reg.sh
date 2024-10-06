@@ -301,7 +301,7 @@ test-cmd -h steve@$bastion2 -r 30 1 -m "Output hub status" "oc --kubeconfig=$sub
 
 # Keep it # test-cmd -h steve@$bastion2 -m "Deleting sno cluster" "make -C $subdir/aba/sno delete" 
 ####test-cmd -h steve@$bastion2 -m "Stopping sno cluster" "yes|make -C $subdir/aba/sno shutdown" 
-test-cmd -h steve@$bastion2 -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown"
+test-cmd -h steve@$bastion2 -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown || true"
 
 ######################
 
