@@ -32,19 +32,22 @@ trap 'show_error' ERR
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
-	# Extract the machine_network and the prefix_length from the CIDR notation
+	# Correct ask=? which must be either =1 or = (empty)
+	# Extract machine_network and prefix_length from the CIDR notation
 	# Prepend "export "
-	[ ! -s aba.conf ] && echo "ask=true" && return 0  # if aba.conf missing, output a safe default, "ask=true"
+	[ ! -s aba.conf ] && echo "ask=true" && return 0  # if aba.conf is missing, output a safe default, "ask=true"
 
 	cat aba.conf | \
-		sed -E "s/^\s*#.*//g" | \
-		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
-			sed -e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" | \
-			sed -e "s/ask=1\b/ask=true/g" | \
-			sed -e "s#\(^machine_network=[0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\)/#\1\nprefix_length=#g" | \
-			sed -e "s/^/export /g";
+		sed -E	-e "s/^\s*#.*//g" \
+			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
+			-e "s/ask=1\b/ask=true/g" \
+			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
+		sed	-e "s/^/export /g";
 
 }
+#			replaced with the above shorter -e expression
+#			sed -e "s#\(^machine_network=[0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\)/#\1\nprefix_length=#g" | \
 
 normalize-mirror-conf()
 {
@@ -57,13 +60,13 @@ normalize-mirror-conf()
 		#cut -d"#" -f1 | \
 			#sed -E "s/^reg_ssh_user=[[:space:]]+|reg_ssh_user=$/reg_ssh_user=$(whoami) /g" | \
 	cat mirror.conf | \
-		sed -E "s/^\s*#.*//g" | \
-			sed -E "s/^reg_ssh_user=[[:space:]]+/reg_ssh_user=$(whoami) /g" | \
-			sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
-			sed -e "s/^tls_verify=0\b/tls_verify= /g" -e "s/tls_verify=false/tls_verify= /g" | \
-			sed -e "s/^tls_verify=1\b/tls_verify=true /g" | \
-			sed -e 's/^reg_root=~/reg_root=\\~/g' | \
-			sed -e "s/^/export /g"
+		sed -E	-e "s/^\s*#.*//g" \
+			-e "s/^reg_ssh_user=[[:space:]]+/reg_ssh_user=$(whoami) /g" \
+			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e "s/^tls_verify=0\b/tls_verify= /g" -e "s/tls_verify=false/tls_verify= /g" \
+			-e "s/^tls_verify=1\b/tls_verify=true /g" \
+			-e 's/^reg_root=~/reg_root=\\~/g' | \
+		sed	-e "s/^/export /g"
 }
 
 normalize-cluster-conf()
@@ -74,8 +77,8 @@ normalize-cluster-conf()
 	[ ! -s cluster.conf ] &&                                                               return 0
 		##cut -d"#" -f1 | \
 	cat cluster.conf | \
-		sed -E "s/^\s*#.*//g" | \
-		sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+		sed -E	-e "s/^\s*#.*//g" \
+			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
 			sed -e "s/^/export /g";
 }
 
@@ -90,12 +93,12 @@ normalize-vmware-conf()
                 #cut -d"#" -f1 | \  # Can't use this since passwords can contain '#' char(s)!
 		#sed -E "s/\s+# [[:print:]]+$//g" | \
         vars=$(cat vmware.conf | \
-		sed -E "s/^\s*#.*//g" | \
-                sed -e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
-		sed -e "s/^VMW_FOLDER=/VC_FOLDER=/g" | \
-                sed -e "s/^/export /g")
+		sed -E	-e "s/^\s*#.*//g" \
+			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e "s/^VMW_FOLDER=/VC_FOLDER=/g" | \
+                sed	-e "s/^/export /g")
 	eval "$vars"
-	# Detect if ESXi is used and set the VC_FOLDER that ESXi likes.  Ignore GOVC_DATACENTER and GOVC_CLUSTER. 
+	# Detect if ESXi is used and set the VC_FOLDER that ESXi prefers, and ignore GOVC_DATACENTER and GOVC_CLUSTER. 
         if govc about | grep -q "^API type:.*HostAgent$"; then
 		echo "$vars" | sed -e "s#VC_FOLDER.*#VC_FOLDER=/ha-datacenter/vm#g" -e "/GOVC_DATACENTER/d" -e "/GOVC_CLUSTER/d"
 		echo export VC=

@@ -104,21 +104,23 @@ if [ -s regcreds/rootCA.pem ]; then
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
 	echo "Using root CA file at regcreds/rootCA.pem"
 else
-	# Only show this warning IF there is no internet connection:??
+	# Only show this warning IF there is no internet connection?
 	# Or, only show if proxy is NOT being used?
 	if [ "$insert_proxy" ]; then
-		echo_red "Not using a mirror registry!  Using proxy settings to access public registry."
+		echo_red "No private mirror registry configured! Using proxy settings to access public registry."
 	else
 		# Should check accessibility to registry.redhat.io?
-		echo_red "WARNING: No mirror registry configured!"
-		echo_red "         If this is unexpected, you must set up a mirror registry!  Run: cd ..; make install"
+		echo
+		echo_red "Warning: No private mirror registry configured & no proxy settings provided!"
+		echo_red "         If this is *unexpected*, you likely need to set up a mirror registry!  Run: cd ..; make install" # FIXME: improve
 		echo_red "         Root CA file 'regcreds/rootCA.pem' not found. Not adding 'additionalTrustBundle' to install-config.yaml!"
+		echo
 	fi
 fi
 
 # Check the private registry is defined, if it's in use
 if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
-	[ ! "$reg_host" ] && echo && echo_red "Error: registry host is not defined in mirror.conf!" && exit 1
+	[ ! "$reg_host" ] && echo && echo_red "Error: registry host value reg_host is not defined in mirror.conf!" && exit 1
 fi
 
 # Check that the release image is available in the private registry
