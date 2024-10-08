@@ -117,7 +117,7 @@ ntp: .ntp ## Configure NTP time sync during bootstrap (day1) and day2. Useful if
 	@exit 0
 
 .autopoweroff: .ntp
-	scripts/vmw-kill.sh $(debug) || true 
+	@scripts/vmw-kill.sh $(debug) || true 
 	@touch .autopoweroff
 
 upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images/agent-<cluster-name>.iso

@@ -74,7 +74,7 @@ done
 
 if [ "$failed" ]; then
 	echo_red -n "Image loading aborted ..."
-	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts)!" || echo
+	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
 
 	exit 1
@@ -82,7 +82,7 @@ fi
 
 echo
 echo_green -n "Images loaded successfully!"
-[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts)!" || echo
+[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
 
 echo 
 echo "OpenShift can now be installed with the command:"
