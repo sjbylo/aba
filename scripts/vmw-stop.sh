@@ -1,5 +1,5 @@
 #!/bin/bash 
-# Stop the VMs gracefully 
+# Stop the VMs gracefully with vmware system shutdown
 
 source scripts/include_all.sh
 
