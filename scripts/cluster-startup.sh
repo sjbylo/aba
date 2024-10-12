@@ -13,6 +13,7 @@ cp iso-agent-based/auth.backup/kubeconfig iso-agent-based/auth/kubeconfig
 server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)
 
 cluster_name=$(echo $server_url| grep -o -E '(([a-zA-Z](-?[a-zA-Z0-9])*)\.)+[a-zA-Z]{2,}:[0-9]{2,}' | sed "s/^api\.//g")
+server_url=${server_url}/
 
 # Check for bare-metal installation
 if [ ! -s vmware.conf ]; then
@@ -58,7 +59,7 @@ if ! try_cmd -q 1 0 2 $OC get nodes ; then
 fi
 
 echo
-echo "Cluster endpoint up and accessible: $server_url"
+echo "Cluster endpoint accessible at $server_url"
 
 echo
 echo Cluster $cluster_name nodes:
@@ -80,40 +81,64 @@ do
 	sleep 5
 done
 
+# Wait for this command to work!
 until $OC get nodes >/dev/null 2>&1
 do
 	sleep 10
 done
 
+all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -qv "^True$" | wc -l | grep -q "^0$"; }
+
+##$OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
+
+# Wait for all nodes in Ready state
+if ! all_nodes_ready; then
+	echo_white "Waiting for all nodes to be 'Ready' ..."
+
+	sleep 3
+
+	until all_nodes_ready
+	do
+		CSRs=$($OC get csr -A | grep -qv pending | awk '{print $1}')
+		if [ "$CSRs" ]; then
+			$OC adm certificate approve $CSRs
+		fi
+		sleep 8
+	done
+fi
+##$OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
+
+echo_green "All nodes are in 'Ready' state."
+
 echo
 $OC get nodes
 
 echo
-echo "Note the certificate expiration date of this cluster ($cluster_name):"
+echo_white "Note the certificate expiration date of this cluster ($cluster_name):"
 d=$($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
 echo_yellow $d
 echo
 
-echo_green "The cluster will complete startup and become fully available in a short while!"
-
 console=$($OC whoami --show-console)/
 if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
+	echo_green "The cluster will complete startup and become fully available in a short while!"
+	echo
 	echo "Waiting for the console to become available at $console"
 
 	if ! try_cmd -q 5 0 60 "curl --retry 2 -skL $console | grep 'Red Hat OpenShift'"; then
-		echo Stopping
-		exit 0
+		echo "Giving up waiting for the console!"
+		#exit 0
 	fi
 fi
 
 echo_green "Cluster console is accessible at $console"
 
 if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
-	#echo "Waiting for all cluster operators to become fully available ..."
+	echo "Waiting for all cluster operators ..."
 
 	echo
 	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False$' | wc -l| grep '^0$'"; then
-		echo Stopping
+		echo "Giving up waiting for the operators!"
 		exit 0
 	fi
 fi

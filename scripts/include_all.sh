@@ -1,4 +1,5 @@
 # Code that all scripts need.  Ensure this script does not create any std output.
+# Add any arg1 to turn off the below Error trap
 
 echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
@@ -27,7 +28,7 @@ show_error() {
 }
 
 # Set the trap to call the show_error function on ERR signal
-trap 'show_error' ERR
+[ ! "$1" ] && trap 'show_error' ERR
 
 
 normalize-aba-conf() {
@@ -161,6 +162,7 @@ edit_file() {
 	conf_file=$1
 	shift
 	msg="$*"
+
 	if [ ! "$editor" -o "$editor" == "none" ]; then
 		echo
 		echo_cyan "The file '$(basename $PWD)/$conf_file' has been created.  Please edit it and then continue or try again."
