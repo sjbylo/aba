@@ -67,9 +67,10 @@ mirror.conf: .initialized ## Set up the mirror.conf file.
 	@echo Using `pwd`/mirror.conf file 
 
 vmware.conf: ## Use VMW vCenter or ESXi to create cluster.
-	@make -C .. vmw
-	@make -C ../cli ~/bin/govc
-	@test -f ../vmware.conf && ln -fs ../vmware.conf || true
+	make -sC ../cli ~/bin/govc
+	make -sC .. vmw
+	@#test -f ../vmware.conf &&                          ln -fs ../vmware.conf || true
+	[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf || true
 
 cluster.conf:  ## Set up the OpenShift cluster.conf file.
 	scripts/create-cluster-conf.sh $(name) $(type)
@@ -213,6 +214,10 @@ shell:  ## Gain access to the installed cluster.  Run '. <(make -s shell)'
 .PHONY:
 day2:  ## Set up OperatorHub, CatalogSources, imageContentSourcePolicy resources. Run this target after new Operators are loaded into the mirror registry. Requires access to 'mirror/.../oc-mirror-workspace' directory!
 	@scripts/day2.sh $(debug)
+
+.PHONY: remove-cdrom
+remove-cdrom:  ## Remove the cdrom devide from all VMs
+	scripts/vmw-remove-cdrom-device.sh
 
 .PHONY: vmw
 vmw: ## Configure vCenter/ESXi API credentials in vmware.conf file.
