@@ -153,7 +153,7 @@ fi
 if [ "$inc" ]; then
 	echo_blue "Writing 'incremental' tar archive of repo to $dest" >&2  # Must use stderr otherwise the tar archive becomes corrupt
 else
-	echo_blue "Writing 'full' tar archive of repo to $dest" >&2
+	echo_blue "Writing tar file to $dest" >&2
 fi
 
 out_file_list=$(echo $file_list | cut -c-90)
