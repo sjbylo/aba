@@ -25,7 +25,7 @@ ifneq ($(platform),vmw)   # if platform is not 'vmw', i.e. bare-metal is assumed
 	endif
 else  # If platform is 'vmw', all steps can be automated 
 	# Create the agent based config files and the matching VMs
-	TARGET_DEPENDENCIES = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .finished
+	TARGET_DEPENDENCIES = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .install-complete
 endif
 
 # DEBUG # $(info TARGET_DEPENDENCIES = $(TARGET_DEPENDENCIES))
@@ -182,14 +182,14 @@ kill:  .initialized vmware.conf                     agent-config.yaml ## Kill or
 delete: .initialized vmware.conf                     agent-config.yaml ## Delete all VMs. This will delete the cluster!
 	@scripts/vmw-delete.sh $(debug) || exit 0
 
-.finished: .autorefresh
+.install-complete: .autorefresh
 	@scripts/monitor-install.sh $(debug)
-	@touch .finished
+	@touch .install-complete
 
 .PHONY: mon
 mon:  ## Monitor the agent-based installation of OpenShift.
 	@scripts/monitor-install.sh $(debug)
-	@touch .finished
+	@touch .install-complete
 
 .PHONY: login
 login: 
