@@ -73,7 +73,7 @@ load: ## Load the saved images into a registry on the internal bastion (as defin
 
 .PHONY: sno
 sno: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make sno target=iso' to make that target.
-	scripts/setup-cluster.sh $@ $@ $(target) || exit 0
+	scripts/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: compact
 compact: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make compact target=iso' to make that target.
