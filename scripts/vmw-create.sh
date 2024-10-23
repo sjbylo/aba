@@ -92,6 +92,8 @@ for name in $CP_NAMES ; do
 		-on=false \
 		 $vm_name
 
+	### FIXME govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address "$mac"
+
 	govc device.boot -secure -vm $vm_name
 
 	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true -nested-hv-enabled=$master_nested_hv
@@ -135,8 +137,8 @@ for name in $WORKER_NAMES ; do
 		-firmware=efi \
 		-c=$worker_cpu_count \
 		-m=`expr $worker_mem \* 1024` \
-		-net.adapter vmxnet3 \
 		-disk-datastore=$GOVC_DATASTORE \
+		-net.adapter vmxnet3 \
 		-net.address="$mac" \
 		-iso-datastore=$ISO_DATASTORE \
 		-iso="images/agent-${CLUSTER_NAME}.iso" \
