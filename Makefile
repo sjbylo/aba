@@ -44,7 +44,9 @@ sync: ## Sync images from the Internet directly to an internal registry (as defi
 
 # These are the targets needed to create the 'bundle' archive
 .PHONY: bundle
-bundle: download save tarrepo ## Create a bundle archive of content to be carried into the air-gapped env.
+#bundle: download save tarrepo ## Create a bundle archive of content to be carried into the air-gapped env.
+bundle:  ## Create a bundle archive of content to be carried into the air-gapped env. Example: make bundle out=/path/to/archive/bundle
+	scripts/make-bundle.sh $(out)
 
 .PHONY: save
 save: ## Save images from the Internet to mirror/save. 
