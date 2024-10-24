@@ -40,7 +40,7 @@ mylog ============================================================
 mylog "Test to install remote reg. on $bastion2 and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
-ntp=10.0.1.8 # If available
+ntp_ip=10.0.1.8 # If available
 
 which make || sudo dnf install make -y
 
@@ -61,15 +61,16 @@ test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" ./ab
 cp $vf vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 
-mylog "Setting 'ask='"
-sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
+test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." make noask
 
-mylog "Setting ntp_server=$ntp" 
-[ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
+#mylog "Setting ntp_server=$ntp_ip" 
+#[ "$ntp_ip" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp_ip    #\2/g" aba.conf
+[ "$ntp_ip" ] && test-cmd -m "Setting ntp_server=$ntp_ip in aba.conf" ./aba --ntp $ntp_ip
 
-mylog "Setting op_sets=\"abatest\" in aba.conf"
-sed -i "s/^op_sets=.*/op_sets=\"abatest\" /g" aba.conf
+#mylog "Setting op_sets=\"abatest\" in aba.conf"
+#sed -i "s/^op_sets=.*/op_sets=\"abatest\" /g" aba.conf
 echo kiali-ossm > templates/operator-set-abatest 
+test-cmd -m "Setting op_sets=\"abatest\" in aba.conf" ./aba --op-sets abatest
 
 source <(normalize-aba-conf)
 

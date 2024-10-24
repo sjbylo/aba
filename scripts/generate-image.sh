@@ -1,46 +1,52 @@
 #!/bin/bash 
-# Refresh the ISO
+# All configs have been completed, now create the ISO.
 
 source scripts/include_all.sh
 
+# Output the cluster configuration, to be installed.
+
 config=$(scripts/cluster-config.sh) 
-output=$(echo "$config" | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t --output-separator " | ")
-len=$(echo "$output" | longest_line)
+conf_display=$(echo "$config" | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t --output-separator " | ")
+len=$(echo "$conf_display" | longest_line)
 printf '=%.0s' $(seq 1 "$len")
 echo
-echo Cluster configuration
+echo_cyan Cluster configuration
 printf '=%.0s' $(seq 1 "$len")
 echo
-echo "$output"
+openshift-install version
+printf '=%.0s' $(seq 1 "$len")
+echo
+echo_cyan "$conf_display"
 printf '=%.0s' $(seq 1 "$len")
 echo
 
 # FIXME: Use $config above? ###
-eval `scripts/cluster-config.sh || exit 1`
+#eval `scripts/cluster-config.sh || exit 1`
+eval "$config || exit 1"
 
 if [ -d $MANIFEST_DIR ]; then
-	echo "Backing up previous $MANIFEST_DIR' dir to '$MANIFEST_DIR.backup':"
+	echo_cyan "Backing up previous $MANIFEST_DIR' dir to '$MANIFEST_DIR.backup':"
 
 	rm -rf $MANIFEST_DIR.backup
 	cp -rp $MANIFEST_DIR $MANIFEST_DIR.backup
 fi
 
-echo Generating the ISO boot image for cluster: $CLUSTER_NAME.$BASE_DOMAIN ...
+echo_cyan Generating the ISO boot image for cluster: $CLUSTER_NAME.$BASE_DOMAIN ...
 
 rm -rf $MANIFEST_DIR 
 mkdir -p $MANIFEST_DIR
 
 cp install-config.yaml agent-config.yaml $MANIFEST_DIR 
 
-echo "openshift-install agent create image --dir $MANIFEST_DIR "
+echo_cyan "openshift-install agent create image --dir $MANIFEST_DIR "
 openshift-install agent create image --dir $MANIFEST_DIR 
 
 # FIXME: to implement PXE 
 #openshift-install agent create pxe-files --dir $MANIFEST_DIR
 
-echo "Making backup of '$MANIFEST_DIR/auth' to '$MANIFEST_DIR/auth.backup'"
+echo_cyan "Making backup of '$MANIFEST_DIR/auth' to '$MANIFEST_DIR/auth.backup'"
 cp -rp $MANIFEST_DIR/auth $MANIFEST_DIR/auth.backup
 
 echo 
-echo "The agent based ISO has been created in the '$MANIFEST_DIR' directory"
+echo_green "The agent based ISO has been created in the '$MANIFEST_DIR' directory"
 echo
