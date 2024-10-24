@@ -87,7 +87,7 @@ do
 	sleep 10
 done
 
-all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -qv "^True$" | wc -l | grep -q "^0$"; }
+all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v "^True$" | wc -l | grep -q "^0$"; }
 
 ##$OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
 
@@ -95,11 +95,11 @@ all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditi
 if ! all_nodes_ready; then
 	echo_white "Waiting for all nodes to be 'Ready' ..."
 
-	sleep 3
+	sleep 8
 
 	until all_nodes_ready
 	do
-		CSRs=$($OC get csr -A | grep -qv pending | awk '{print $1}')
+		CSRs=$($OC get csr -A --no-headers | grep -vi pending | awk '{print $1}')
 		if [ "$CSRs" ]; then
 			$OC adm certificate approve $CSRs
 		fi
@@ -124,6 +124,15 @@ if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
 	echo_green "The cluster will complete startup and become fully available in a short while!"
 	echo
 	echo "Waiting for the console to become available at $console"
+
+	# Check any pending CSRs
+	CSRs=$($OC get csr -A --no-headers | grep -vi pending | awk '{print $1}')
+	while [ "$CSRs" ]
+	do
+		$OC adm certificate approve $CSRs
+		sleep 20
+		CSRs=$($OC get csr -A --no-headers | grep -vi pending | awk '{print $1}')
+	done
 
 	if ! try_cmd -q 5 0 60 "curl --retry 2 -skL $console | grep 'Red Hat OpenShift'"; then
 		echo "Giving up waiting for the console!"
