@@ -2,6 +2,5 @@ kubevirt-hyperconverged
 kubernetes-nmstate-operator
 lvms-operator
 mtv-operator
-kubernetes-nmstate-operator
 node-maintenance-operator
 node-healthcheck-operator
