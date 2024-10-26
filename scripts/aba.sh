@@ -42,7 +42,7 @@ Usage:
    ./$(basename $0) bundle \\	
 	[--channel <channel>] \\
 	 --version <version> \\
-	 --bundle-file /path/to/bundle-file \\
+	 --out </path/to/mybundle|-> \\
 	[--pull-secret ~/.pull-secret.json] \\
 	[--op-sets <list of operator sets>] \\
 	[--ops <list of operator names>] \\
@@ -69,6 +69,7 @@ Usage:
 	 --editor <editor command>	# Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
 	 --ask				# Prompt user when needed.
 	 --noask			# Do not prompt, assume default answers.
+	 --out <file|->			# Bundle output destination, e.g. file or stadout (-).
 "
 
 # for testing, if unset, testing will halt in edit_file()! 
@@ -93,9 +94,9 @@ do
 	elif [ "$1" = "bundle" ]; then
 		ACTION=bundle
 		shift
-	elif [ "$1" = "--bundle-file" ]; then
+	elif [ "$1" = "--out" ]; then
 		shift
-		echo "$1" | grep -q "^--" && echo_red "Error in parsing --bundle-file path argument" >&2 && exit 1
+		echo "$1" | grep -q "^--" && echo_red "Error in parsing --out path argument" >&2 && exit 1
 		[ "$1" ] && [ ! -d $(dirname $1) ] && echo "File destination path [$(dirname $1)] incorrect or missing!" >&2 && exit 1
 		[ "$1" != "-" ] && [ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
 		[ "$1" ] && bundle_dest_path="$1"
@@ -113,7 +114,8 @@ do
 		echo "$ver" | grep -q "^-" && echo_red "Error in parsing --version arguments" >&2 && exit 1
 		if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt > /tmp/.release.txt; then
 			echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images."
-			echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again."
+			echo_red "To get started, run Aba on a connected workstation/laptop with Fedora or RHEL and try again."
+
 			exit 1
 		fi
 
@@ -202,7 +204,7 @@ do
 		sed -i "s#^ask=[^ \t]*#ask=false #g" aba.conf
 		shift 
 	else
-		echo "Unknown option: $1"
+		echo_red "Unknown option: $1"
 		err=1
 		shift 
 	fi
@@ -211,45 +213,7 @@ done
 [ "$err" ] && echo_red "An error has occurred, aborting!" && exit 1
 
 if [ "$ACTION" = "bundle" ]; then
-	[ ! "$bundle_dest_path" ] && echo_red "Error: bundle archive filename not provided!" >&2 && exit 1
-
-	install_rpms make >.bundle.log|| exit 1
-
-	echo_cyan "A bundle archive file will be created using the following values:" >&2
-	echo >&2
-	source <(normalize-aba-conf)
-
-	normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" >&2
-
-	echo Bundle output file = $bundle_dest_path >&2
-	echo >&2
-
-	if [ -s mirror/save/imageset-config-save.yaml ]; then
-		if ask "Create bundle file (mirror/save/imageset file will be backed up)"; then
-			mv -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.backup.$(date +%Y%m%d-%H%M) >&2
-		else
-			exit 1
-		fi
-	fi
-
-	# This is a special case where we want to only output the tar repo contents to stdout 
-	# so we can do something like: ./aba bundle ... --bundle-file - | ssh host tar xvf - 
-	if [ "$bundle_dest_path" = "-" ]; then
-		echo "Downloading binary data.  See logfile '.bundle.log' for details." >&2
-		make -s download save retry=7 >>.bundle.log 2>&1
-		make -s tar out=-
-
-		exit
-	fi
-
-	if files_on_same_device mirror $bundle_dest_path; then
-		#make bundle out="$bundle_dest_path" retry=7  # Try 8 times!
-		echo_cyan "Creating minor bundle archive (because files are on same file system) ..."
-		make download save tarrepo out="$bundle_dest_path" retry=7	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
-	else
-		echo_cyan "Creating full bundle archive (assuming destination file is on portable media) ..."
-		make download save tar out="$bundle_dest_path" retry=7    	# Try save 8 times, then create full archive, including all files. 
-	fi
+	make -s bundle out="$bundle_dest_path"
 
 	exit 
 fi
