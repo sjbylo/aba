@@ -5,7 +5,7 @@ metadata:
 rendezvousIP: 10.0.1.81
 hosts:
   - hostname: master1
-  
+
     role: master
     interfaces:
      - name: ens160
@@ -31,9 +31,9 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: 10.0.1.1
             next-hop-interface: ens160
-  
+
   - hostname: master2
-  
+
     role: master
     interfaces:
      - name: ens160
@@ -59,9 +59,9 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: 10.0.1.1
             next-hop-interface: ens160
-  
+
   - hostname: master3
-  
+
     role: master
     interfaces:
      - name: ens160
@@ -87,8 +87,9 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: 10.0.1.1
             next-hop-interface: ens160
-  
+
   - hostname: worker1
+
     role: worker
     interfaces:
      - name: ens160
@@ -114,8 +115,9 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: 10.0.1.1
             next-hop-interface: ens160
-  
+
   - hostname: worker2
+
     role: worker
     interfaces:
      - name: ens160
@@ -141,8 +143,9 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: 10.0.1.1
             next-hop-interface: ens160
-  
+
   - hostname: worker3
+
     role: worker
     interfaces:
      - name: ens160
@@ -168,4 +171,4 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: 10.0.1.1
             next-hop-interface: ens160
-  
+
