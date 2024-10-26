@@ -12,11 +12,11 @@ hosts:
   {% endif %}
     role: master
     interfaces:
-     - name: ens160
+     - name: {{ port0 }}
        macAddress: {{ arr_macs[hostcnt] }}
     networkConfig:
       interfaces:
-        - name: ens160
+        - name: {{ port0 }}
           type: ethernet
           state: up
           mac-address: {{ arr_macs[hostcnt] }}
@@ -34,17 +34,17 @@ hosts:
         config:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
-            next-hop-interface: ens160
+            next-hop-interface: {{ port0 }}
   {% endfor %}
   {%- for hostcnt in range(num_workers|int) %}
   - hostname: {{ worker_prefix }}{{ loop.index }}
     role: worker
     interfaces:
-     - name: ens160
+     - name: {{ port0 }}
        macAddress: {{ arr_macs[hostcnt + 3] }}
     networkConfig:
       interfaces:
-        - name: ens160
+        - name: {{ port0 }}
           type: ethernet
           state: up
           mac-address: {{ arr_macs[hostcnt + 3] }}
@@ -62,5 +62,5 @@ hosts:
         config:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
-            next-hop-interface: ens160
+            next-hop-interface: {{ port0 }}
   {% endfor %}
