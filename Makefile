@@ -32,6 +32,7 @@ cli:  ## Download and install the CLI binaries into ~/bin
 download:  ## Download all required CLI install files without installing. 
 	make -C cli download
 
+mirror: install
 install: ## Set up the registry as per the settings in mirror/mirror.conf. Place credential file(s) into mirror/regcreds/ for existing registry.  See README.md.
 	make -C mirror install
 
@@ -97,11 +98,15 @@ rsync:  ## Copy (rsync) all required files to internal bastion for testing purpo
 ask: ## Set 'ask' in aba.conf to 'true'
 	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
 	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=true/g" aba.conf && echo value ask has been set to true in aba.conf.
+.PHONY: setask
+setask: ask
 
 .PHONY: noask
 noask:  ## Set 'ask' in aba.conf to 'false'
 	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
 	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf && echo value ask has been set to false in aba.conf.
+.PHONY: setnoask
+setnoask: noask
 
 .PHONY: clean
 clean: ## Clean up all temporary files.
@@ -115,10 +120,9 @@ clean: ## Clean up all temporary files.
 distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this dies not run 'make uninstall' (uninstall the reg.)
 	@scripts/distclean-gate.sh $(force)
 	@make clean
-	mkdir -p ~/tmp
-	test -f vmware.conf && mv vmware.conf ~/tmp || true
-	make -C cli distclean 
+	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
+	make -C cli distclean 
 	make -C mirror distclean 
 	rm -f aba.conf ~/.aba.conf*
 	@#rm -rf sno compact standard 
