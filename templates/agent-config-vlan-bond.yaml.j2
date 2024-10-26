@@ -56,7 +56,7 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
             next-hop-interface: bond0.{{ vlan }}
-            table-id: {{ vlan }}
+            table-id: 254
 
   {% endfor %}
   {%- for hostcnt in range(num_workers|int) %}
@@ -107,5 +107,5 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
             next-hop-interface: bond0.{{ vlan }}
-            table-id: {{ vlan }}
+            table-id: 254
   {% endfor %}

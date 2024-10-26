@@ -4,26 +4,27 @@ metadata:
   name: {{ cluster_name }}
 rendezvousIP: {{ rendezvous_ip }}
 hosts:
-  {%- for hostcnt in range(num_masters|int) %}
-  {%- if num_workers == '0' and num_masters == '1' %}
+  {%- for role, prefix, count, mac_offset in [("master", master_prefix, num_masters|int, 0), ("worker", worker_prefix, num_workers|int, 3)] %}
+  {%- for hostcnt in range(count) %}
+  {%- if role == 'master' and num_workers == '0' and num_masters == '1' %}
   - hostname: {{ cluster_name }}
   {%- else %}
-  - hostname: {{ master_prefix }}{{ loop.index }}
+  - hostname: {{ prefix }}{{ loop.index }}
   {% endif %}
-    role: master
+    role: {{ role }}
     interfaces:
      - name: {{ port0 }}
-       macAddress: {{ arr_macs[hostcnt] }}
+       macAddress: {{ arr_macs[hostcnt + mac_offset] }}
     networkConfig:
       interfaces:
         - name: {{ port0 }}
           type: ethernet
           state: up
-          mac-address: {{ arr_macs[hostcnt] }}
+          mac-address: {{ arr_macs[hostcnt + mac_offset] }}
           ipv4:
             enabled: true
             address:
-              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int - 1 ) }}
+              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int - 1 + (2 if role == 'worker' else 0)) }}
                 prefix-length: {{ prefix_length }}
             dhcp: false
       dns-resolver:
@@ -36,31 +37,5 @@ hosts:
             next-hop-address: {{ next_hop_address }}
             next-hop-interface: {{ port0 }}
   {% endfor %}
-  {%- for hostcnt in range(num_workers|int) %}
-  - hostname: {{ worker_prefix }}{{ loop.index }}
-    role: worker
-    interfaces:
-     - name: {{ port0 }}
-       macAddress: {{ arr_macs[hostcnt + 3] }}
-    networkConfig:
-      interfaces:
-        - name: {{ port0 }}
-          type: ethernet
-          state: up
-          mac-address: {{ arr_macs[hostcnt + 3] }}
-          ipv4:
-            enabled: true
-            address:
-              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int + 2) }}
-                prefix-length: {{ prefix_length }}
-            dhcp: false
-      dns-resolver:
-        config:
-          server:
-            - {{ dns_server }}
-      routes:
-        config:
-          - destination: 0.0.0.0/0
-            next-hop-address: {{ next_hop_address }}
-            next-hop-interface: {{ port0 }}
   {% endfor %}
+

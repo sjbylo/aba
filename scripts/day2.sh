@@ -156,7 +156,7 @@ if [ "$file_list" ]; then
 		echo -n .
 		sleep $i
 		let i=$i+1
-		[ $i -gt 25 ] && echo_red "Warning: Giving up waiting ..." && break
+		[ $i -gt 40 ] && echo_red "Warning: Giving up waiting ..." && break
 	done
 
 	echo "The CatalogSource is 'ready'"
