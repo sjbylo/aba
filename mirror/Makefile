@@ -24,7 +24,7 @@ init: .initialized
 
 .PHONY: cli-download
 cli-download:
-	make -C ../cli download   #  needed so 'make load' works on internal bastion
+	@make -C ../cli download 
 
 # Only needed for 'make load'. 
 .PHONY: cli-oc-mirror
@@ -95,6 +95,7 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 mirror.conf: .initialized                     ../aba.conf   ## Configure the mirror.conf file.
 	@$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
+mirror: install
 install: .installed
 .installed: .initialized .rpmsext mirror.conf mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 	@rm -f .uninstalled 
