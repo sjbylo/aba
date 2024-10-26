@@ -36,6 +36,5 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
             next-hop-interface: {{ port0 }}
+  {%- endfor %}
   {% endfor %}
-  {% endfor %}
-
