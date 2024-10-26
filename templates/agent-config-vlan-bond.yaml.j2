@@ -1,0 +1,111 @@
+apiVersion: v1alpha1
+kind: AgentConfig
+metadata:
+  name: {{ cluster_name }}
+rendezvousIP: {{ rendezvous_ip }}
+hosts:
+  {%- for hostcnt in range(num_masters|int) %}
+  {%- if num_workers == '0' and num_masters == '1' %}
+  - hostname: {{ cluster_name }}
+  {%- else %}
+  - hostname: {{ master_prefix }}{{ loop.index }}
+  {% endif %}
+    role: master
+    interfaces:
+     - name: {{ port0 }}
+       macAddress: {{ arr_macs[hostcnt * 2] }}
+     - name: {{ port1 }}
+       macAddress: {{ arr_macs[hostcnt * 2 + 1] }}
+    networkConfig:
+      interfaces:
+        - name: bond0.{{ vlan }} 
+          type: vlan 
+          state: up
+          vlan:
+            base-iface: bond0
+            id: {{ vlan }}
+          ipv4:
+            enabled: true
+            address:
+              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int - 1 ) }}
+                prefix-length: 24
+            dhcp: false
+        - name: bond0 
+          type: bond 
+          state: up
+          mac-address: {{ arr_macs[hostcnt * 2] }}
+          ipv4:
+            enabled: false
+          ipv6:
+            enabled: false
+          link-aggregation:
+            mode: active-backup 
+            options:
+              miimon: "150" 
+            port:
+             - {{ port0 }}
+             - {{ port1 }}
+
+      dns-resolver:
+        config:
+          server:
+            - {{ dns_server }}
+
+      routes:
+        config:
+          - destination: 0.0.0.0/0
+            next-hop-address: {{ next_hop_address }}
+            next-hop-interface: bond0.{{ vlan }}
+            table-id: {{ vlan }}
+
+  {% endfor %}
+  {%- for hostcnt in range(num_workers|int) %}
+  - hostname: {{ worker_prefix }}{{ loop.index }}
+    role: worker
+
+    interfaces:
+     - name: {{ port0 }}
+       macAddress: {{ arr_macs[hostcnt * 2 + 6] }}
+     - name: {{ port1 }}
+       macAddress: {{ arr_macs[hostcnt * 2 + 7] }}
+    networkConfig:
+      interfaces:
+        - name: bond0.{{ vlan }} 
+          type: vlan 
+          state: up
+          vlan:
+            base-iface: bond0
+            id: {{ vlan }}
+          ipv4:
+            enabled: true
+            address:
+              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int + 2) }}
+                prefix-length: 24
+            dhcp: false
+        - name: bond0 
+          type: bond 
+          state: up
+          mac-address: {{ arr_macs[hostcnt * 2 + 6] }}
+          ipv4:
+            enabled: false
+          ipv6:
+            enabled: false
+          link-aggregation:
+            mode: active-backup 
+            options:
+              miimon: "150" 
+            port:
+             - {{ port0 }}
+             - {{ port1 }}
+      dns-resolver:
+        config:
+          server:
+            - {{ dns_server }}
+
+      routes:
+        config:
+          - destination: 0.0.0.0/0
+            next-hop-address: {{ next_hop_address }}
+            next-hop-interface: bond0.{{ vlan }}
+            table-id: {{ vlan }}
+  {% endfor %}

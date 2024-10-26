@@ -46,12 +46,18 @@ if [ -s macs.conf ]; then
 	grep -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' macs.conf > .macs.conf
 else
 	# Since the jinja2 template now uses a simple list, we can also auto-generate the addresses in a similar way for VMs. 
-	for host in $(seq 1 $num_masters); do
-		printf "%s%02d\n" $mac_prefix $host
+	# Note, double the number of mac addresses are genrated in case port bonding is required (port0/1 and vlan in cluster.conf)
+	for i in $(seq 1 `expr $num_masters \* 2 + $num_workers \* 2`); do
+		printf "%s%02d\n" $mac_prefix $i
 	done > .macs.conf
-	for host in $(seq 1 $num_workers); do
-		printf "%s%02d\n" $mac_prefix $(expr $host + 3)
-	done >> .macs.conf
+
+# FIXME: Added above for binding config (2 x number of ports)
+#	for host in $(seq 1 $num_masters); do
+#		printf "%s%02d\n" $mac_prefix $host
+#	done > .macs.conf
+#	for host in $(seq 1 $num_workers); do
+#		printf "%s%02d\n" $mac_prefix $(expr $host + 3)
+#	done >> .macs.conf
 fi
 export arr_macs=$(cat .macs.conf | tr "\n" " " | tr -s "[:space:]")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
 rm -f .macs.conf
@@ -61,9 +67,18 @@ echo
 echo Generating Agent-based configuration file: $PWD/agent-config.yaml 
 echo
 
+if [ "$port0" -a "$port1" -a "$vlan" ]; then
+	template_file=agent-config-vlan-bond.yaml.j2
+	echo_white "Using bonding vlan agent config template '$template_file' (port0=$port0 port1=$port1 vlan=$vlan)"
+else
+	template_file=agent-config.yaml.j2
+	##echo_white "Using standard agent config template '$template_file'" # Output overkill
+fi
+
 # Note that machine_ip_prefix, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
-scripts/j2 templates/agent-config.yaml.j2 > agent-config.yaml
+#scripts/j2 templates/agent-config.yaml.j2 > agent-config.yaml
+scripts/j2 templates/$template_file > agent-config.yaml
 
 echo_green "$PWD/agent-config.yaml generated successfully!"
 echo
