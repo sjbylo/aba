@@ -99,7 +99,7 @@ if ! all_nodes_ready; then
 
 	until all_nodes_ready
 	do
-		CSRs=$($OC get csr -A --no-headers | grep -vi pending | awk '{print $1}')
+		CSRs=$($OC get csr -A --no-headers | grep -i pending | awk '{print $1}')
 		if [ "$CSRs" ]; then
 			$OC adm certificate approve $CSRs
 		fi
@@ -126,12 +126,12 @@ if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
 	echo "Waiting for the console to become available at $console"
 
 	# Check any pending CSRs
-	CSRs=$($OC get csr -A --no-headers | grep -vi pending | awk '{print $1}')
+	CSRs=$($OC get csr -A --no-headers | grep -i pending | awk '{print $1}')
 	while [ "$CSRs" ]
 	do
 		$OC adm certificate approve $CSRs
 		sleep 20
-		CSRs=$($OC get csr -A --no-headers | grep -vi pending | awk '{print $1}')
+		CSRs=$($OC get csr -A --no-headers | grep -i pending | awk '{print $1}')
 	done
 
 	if ! try_cmd -q 5 0 60 "curl --retry 2 -skL $console | grep 'Red Hat OpenShift'"; then
