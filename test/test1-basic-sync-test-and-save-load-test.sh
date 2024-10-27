@@ -212,8 +212,14 @@ do
         ### NOT NEEDED [ ! -f test/$cname/agent-config.yaml.example ]   && cat $cname/agent-config.yaml   > test/$cname/agent-config.yaml.example
 
 	# Remove some of the params which either change or cannot be placed into git (FIXME: specify the VC password exactly) 
-	cat $cname/install-config.yaml | yq 'del(.additionalTrustBundle,.platform.vsphere.vcenters,.pullSecret)' > test/$cname/install-config.yaml
-	cat $cname/agent-config.yaml                                                                             > test/$cname/agent-config.yaml
+	# Remove all empty lines
+	cat $cname/install-config.yaml | \
+		yq 'del(.additionalTrustBundle,.platform.vsphere.vcenters,.pullSecret)' | \
+		sed -i '/^$/d' | \
+		cat > test/$cname/install-config.yaml
+	cat $cname/agent-config.yaml | \
+		sed -i '/^$/d' | \
+		cat > test/$cname/agent-config.yaml
 
         # Check if the files DO NOT match (are different)
         if ! diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example; then
