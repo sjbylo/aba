@@ -269,6 +269,7 @@ test-cmd -h steve@$bastion2 -m "Wait for vote-app rollout" "make -s -C $subdir/a
 mylog 
 mylog Append svc mesh and kiali operators to imageset conf
 
+# FIXME: Get values from the correct file!
 cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/kiali/demo_travels_cars:v1
   - name: quay.io/kiali/demo_travels_control:v1
@@ -288,12 +289,6 @@ cat >> mirror/save/imageset-config-save.yaml <<END
       - name: kiali-ossm
         channels:
         - name: stable
-#      - name: jaeger-product
-#        channels:
-#        - name: stable
-#      - name: advanced-cluster-management
-#        channels:
-#        - name: release-2.9
 END
 
 ########

@@ -259,6 +259,7 @@ test-cmd -h steve@$bastion2 -m "Deleting vote-app" "make -C $subdir/aba/sno cmd 
 
 mylog "Adding advanced-cluster-management operator images to mirror/save/imageset-config-save.yaml file on `hostname`"
 
+# FIXME: Get values from the correct file!
 cat >> mirror/save/imageset-config-save.yaml <<END
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.16
