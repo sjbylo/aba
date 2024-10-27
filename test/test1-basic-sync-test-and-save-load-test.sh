@@ -215,10 +215,10 @@ do
 	# Remove all empty lines
 	cat $cname/install-config.yaml | \
 		yq 'del(.additionalTrustBundle,.platform.vsphere.vcenters,.pullSecret)' | \
-		sed -i '/^$/d' | \
+		sed '/^[ \t]*$/d' | \
 		cat > test/$cname/install-config.yaml
 	cat $cname/agent-config.yaml | \
-		sed -i '/^$/d' | \
+		sed '/^[ \t]*$/d' | \
 		cat > test/$cname/agent-config.yaml
 
         # Check if the files DO NOT match (are different)
