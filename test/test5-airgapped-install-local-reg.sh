@@ -269,6 +269,8 @@ test-cmd -h steve@$bastion2 -m "Wait for vote-app rollout" "make -s -C $subdir/a
 mylog 
 mylog Append svc mesh and kiali operators to imageset conf
 
+export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
+
 # FIXME: Get values from the correct file!
 cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/kiali/demo_travels_cars:v1
@@ -281,15 +283,20 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/kiali/demo_travels_portal:v1
   - name: quay.io/kiali/demo_travels_travels:v1
   operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.16
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
     packages:
-      - name: servicemeshoperator
-        channels:
-        - name: stable
-      - name: kiali-ossm
-        channels:
-        - name: stable
 END
+#      - name: servicemeshoperator
+#        channels:
+#        - name: stable
+#      - name: kiali-ossm
+#        channels:
+#        - name: stable
+#END
+
+# Append the correct values for each operator
+grep -A2 -e servicemeshoperator	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
+grep -A2 -e kiali-ossm		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
 
 ########
 test-cmd -r 99 3 -m "Saving mesh operators to local disk" "make -s -C mirror save"

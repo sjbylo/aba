@@ -259,18 +259,22 @@ test-cmd -h steve@$bastion2 -m "Deleting vote-app" "make -C $subdir/aba/sno cmd 
 
 mylog "Adding advanced-cluster-management operator images to mirror/save/imageset-config-save.yaml file on `hostname`"
 
-# FIXME: Get values from the correct file!
+export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
+
 cat >> mirror/save/imageset-config-save.yaml <<END
   operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.16
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
     packages:
-      - name: advanced-cluster-management
-        channels:
-        - name: release-2.10
-      - name: multicluster-engine
-        channels:
-        - name: stable-2.5
 END
+
+# Append the correct values for each operator
+grep -A2 -e advanced-cluster-management	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
+grep -A2 -e multicluster-engine  	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
+
+#      - name: multicluster-engine
+#        channels:
+#        - name: stable-2.5
+#END
 
 test-cmd -r 99 3 -m "Saving advanced-cluster-management images to local disk" "make -C mirror save"
 
