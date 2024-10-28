@@ -20,7 +20,7 @@ metadata:
   name: advanced-cluster-management
   namespace: open-cluster-management
 spec:
-  channel: release-2.10
+  channel: release-2.11
   installPlanApproval: Automatic
   name: advanced-cluster-management
   source: cs-redhat-operator-index
