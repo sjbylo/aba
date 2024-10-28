@@ -222,12 +222,15 @@ do
 		cat > test/$cname/agent-config.yaml
 
         # Check if the files DO NOT match (are different)
+
+	mylog "Comparing test/$cname/install-config.yaml test/$cname/install-config.yaml.example"
         if ! diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example; then
 		cp test/$cname/install-config.yaml test/$cname/install-config.yaml.failed
 		mylog "Config mismatch! See file test/$cname/install-config.yaml.failed"
                 exit 1
         fi
 
+	mylog "Comparing test/$cname/agent-config.yaml   test/$cname/agent-config.yaml.example"
         if ! diff test/$cname/agent-config.yaml   test/$cname/agent-config.yaml.example; then
 		cp test/$cname/agent-config.yaml test/$cname/agent-config.yaml.failed
 		mylog "Config mismatch! See file test/$cname/agent-config.yaml.failed"
