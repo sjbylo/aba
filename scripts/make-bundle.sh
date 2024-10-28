@@ -28,7 +28,7 @@ echo >&2
 
 # Check if the repo is alreay in use, e.g. we don't want mirror.conf in the bundle
 # "force" would mean that "make bundle" can be run again and again.
-force=1
+force=1 # FIXME
 if [ ! "$force" ]; then
 	if [ -s mirror/save/imageset-config-save.yaml -o -f mirror/mirror.conf ]; then
 		echo_red "This repo is already in use!  Use a fresh Aba repo or run 'make distclean' and try again!" >&2
