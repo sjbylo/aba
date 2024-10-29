@@ -118,7 +118,7 @@ iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note
 	@touch .bm-nextstep
 	@exit 0
 
-.autopoweroff: .ntp
+.autopoweroff: # .ntp
 	@scripts/vmw-kill.sh $(debug) || true 
 	@touch .autopoweroff
 
@@ -215,6 +215,10 @@ shell:  ## Gain access to the installed cluster.  Run '. <(make -s shell)'
 .PHONY:
 day2:  ## Set up OperatorHub, CatalogSources, imageContentSourcePolicy resources. Run this target after new Operators are loaded into the mirror registry. Requires access to 'mirror/.../oc-mirror-workspace' directory!
 	@scripts/day2.sh $(debug)
+
+.PHONY:
+day2-ntp:  ## Configure OpenShift with your NTP server
+	@scripts/day2-config-ntp.sh $(debug)
 
 .PHONY: remove-cdrom
 remove-cdrom:  ## Remove the cdrom devide from all VMs

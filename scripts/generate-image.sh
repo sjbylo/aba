@@ -13,7 +13,7 @@ echo
 echo_cyan Cluster configuration
 printf '=%.0s' $(seq 1 "$len")
 echo
-openshift-install version | echo_cyan
+openshift-install version 2>&1 | echo_cyan
 printf '=%.0s' $(seq 1 "$len")
 echo
 echo_cyan "$conf_display"

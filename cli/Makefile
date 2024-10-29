@@ -4,7 +4,7 @@
 ocp_version := $(strip $(shell echo $(ocp_version)))
 
 #all: ../aba.conf ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc
-all:             ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc
+all:             ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc ~/bin/butane
 
 # If 'distclean' found in $MAKECMDGOALS, i.e. no distclean provided
 ifneq ($(filter distclean,$(MAKECMDGOALS)),)
@@ -19,7 +19,7 @@ else
   endif
 endif
 
-download: openshift-client-linux-$(ocp_version).tar.gz openshift-install-linux-$(ocp_version).tar.gz oc-mirror.tar.gz govc_Linux_x86_64.tar.gz
+download: openshift-client-linux-$(ocp_version).tar.gz openshift-install-linux-$(ocp_version).tar.gz oc-mirror.tar.gz govc_Linux_x86_64.tar.gz butane-binary
 
 ##@ Help-related tasks
 .PHONY: help
@@ -79,6 +79,14 @@ oc-mirror.tar.gz: ## Download oc-mirror tarball ver 4.14.9 or higher
 
 govc_Linux_x86_64.tar.gz:   ## Download govc tarball
 	curl -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz"
+
+~/bin/butane: butane-binary
+	cp butane-binary ~/bin/butane
+	chmod +x ~/bin/butane
+
+butane-binary:
+	curl -s --connect-timeout 10 --retry 3 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane-binary
+
 
 .PHONY: clean 
 clean: ## Clean up installed binaries

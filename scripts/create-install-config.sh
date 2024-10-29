@@ -112,7 +112,7 @@ else
 		# Should check accessibility to registry.redhat.io?
 		echo
 		echo_red "Warning: No private mirror registry configured & no proxy settings provided!"
-		echo_red "         If this is *unexpected*, you likely need to set up a mirror registry!  Run: cd ..; make install" # FIXME: improve
+		echo_red "         If this is *unexpected*, you likely need to set up a mirror registry!  Run: cd ..; make mirror" # FIXME: improve
 		echo_red "         Root CA file 'regcreds/rootCA.pem' not found. Not adding 'additionalTrustBundle' to install-config.yaml!"
 		echo
 	fi
