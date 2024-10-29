@@ -2,8 +2,6 @@
 
 source scripts/include_all.sh
 
-#[ "$1" ] && set -x
-
 source <(normalize-aba-conf)   # Fetch the domain name
 
 name=standard
@@ -11,6 +9,7 @@ cluster_type=standard
 [ "$1" ] && name=$1 && shift
 [ "$1" ] && cluster_type=$1 && shift
 [ "$1" ] && target=$1
+##[ "$1" ] && set -x
 
 if [ ! -d $name ]; then
 	mkdir $name
@@ -34,8 +33,8 @@ msg="Install the cluster with 'cd $name; make'"
 # adding "exit 0" here to give best practise instuctions to cd into the cluster dir!
 if [ "$ask" ]; then
 	echo
-	echo_cyan The cluster directory has been created: $name
-	echo_cyan $msg
+	echo_cyan "The cluster directory has been created: $name"
+	echo_cyan "$msg"
 	echo
 
 	exit 0

@@ -254,7 +254,7 @@ if [ ! -f .bundle ]; then
 	# Determine OCP version 
 
 	if [ "$ocp_version" ]; then
-		echo_blue "OpenShift version is defined in aba.conf as '$ocp_version'."
+		echo_cyan "OpenShift version is defined in aba.conf as '$ocp_version'."
 	else
 		## Get the latest stable OCP version number, e.g. 4.14.6
 		stable_ver=$(cat /tmp/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
@@ -302,7 +302,7 @@ if [ ! -f .bundle ]; then
 
 		# Update the conf file
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver /g" aba.conf
-		echo_blue "'ocp_version' set to '$target_ver' in aba.conf"
+		echo_cyan "'ocp_version' set to '$target_ver' in aba.conf"
 
 		sleep 1
 	fi
@@ -333,7 +333,7 @@ if [ ! -f .bundle ]; then
 
 		sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
 		export editor=$new_editor
-		echo_blue "'editor' set to '$new_editor' in aba.conf"
+		echo_cyan "'editor' set to '$new_editor' in aba.conf"
 
 		sleep 1
 	fi
@@ -357,7 +357,7 @@ if [ ! -f .bundle ]; then
 	# Determine pull secret
 
 	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
-		echo_blue "Pull secret found at '$pull_secret_file'."
+		echo_cyan "Pull secret found at '$pull_secret_file'."
 
 		install_rpms make || exit 1
 
@@ -433,7 +433,7 @@ else
 	#install_rpms make jq python3-pyyaml
 	scripts/install-rpms.sh internal
 
-	echo_blue "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version', assuming this is running on an internal RHEL bastion!"
+	echo_cyan "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version', assuming this is running on an internal RHEL bastion!"
 	
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_seq*tar 2>/dev/null)" ]; then

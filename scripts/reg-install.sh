@@ -153,7 +153,7 @@ if [ "$reg_ssh_key" ]; then
 	cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
   		-k $reg_ssh_key $reg_root_opt"
 
-	echo_blue "Running command: \"$cmd --initPassword <hidden>\""
+	echo_cyan "Running command: \"$cmd --initPassword <hidden>\""
 
 	$cmd --initPassword $reg_pw
 
@@ -227,7 +227,7 @@ else
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opt"
 	cmd="./mirror-registry install -v --quayHostname $reg_host $reg_root_opt"
 
-	echo_blue "Running command: \"$cmd --initPassword <hidden>\""
+	echo_cyan "Running command: \"$cmd --initPassword <hidden>\""
 
 	$cmd --initPassword $reg_pw
 

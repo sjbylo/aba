@@ -105,13 +105,12 @@ agent-config.yaml: .initialized             cluster.conf mirror.conf  ## Create 
 iso: iso-agent-based/agent.x86_64.iso ## Build the agent-based iso file.
 iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note that install-config.yaml can itself be dependent on vmware.conf params
 	scripts/generate-image.sh $(debug)
-	scripts/add_ntp_ignition_to_iso.sh $(debug) 
 
-# FIXME: Is this needed?
-ntp: .ntp ## Configure NTP time sync during bootstrap (day1) and day2. Useful if underlying platform/hardware does not support time sync.
-.ntp: iso-agent-based/agent.x86_64.iso
-	@scripts/add_ntp_ignition_to_iso.sh $(debug) 
-	@touch .ntp
+## FIXME: Is this needed?
+#ntp: .ntp ## Configure NTP time sync during bootstrap (day1) and day2. Useful if underlying platform/hardware does not support time sync.
+#.ntp: iso-agent-based/agent.x86_64.iso
+#	@scripts/add_ntp_ignition_to_iso.sh $(debug) 
+#	@touch .ntp
 
 .bm-nextstep:
 	@echo "Next steps:"

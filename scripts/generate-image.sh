@@ -13,7 +13,7 @@ echo
 echo_cyan Cluster configuration
 printf '=%.0s' $(seq 1 "$len")
 echo
-openshift-install version
+openshift-install version | echo_cyan
 printf '=%.0s' $(seq 1 "$len")
 echo
 echo_cyan "$conf_display"
@@ -46,6 +46,9 @@ openshift-install agent create image --dir $MANIFEST_DIR
 
 echo_cyan "Making backup of '$MANIFEST_DIR/auth' to '$MANIFEST_DIR/auth.backup'"
 cp -rp $MANIFEST_DIR/auth $MANIFEST_DIR/auth.backup
+
+# Add NTP config to ignition, if needed
+scripts/add_ntp_ignition_to_iso.sh
 
 echo 
 echo_green "The agent based ISO has been created in the '$MANIFEST_DIR' directory"

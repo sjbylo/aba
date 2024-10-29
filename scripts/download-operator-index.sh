@@ -70,7 +70,7 @@ fi
 
 echo $$ > $pid_file
 
-echo_blue "Operator index v$ocp_ver_major is already downloading, please wait a few minutes ..."
+echo_cyan "Operator index v$ocp_ver_major is already downloading, please wait a few minutes ..."
 
 # Lock successful, now download the index ...
 
