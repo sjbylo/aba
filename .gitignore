@@ -1,5 +1,6 @@
 cli/.init
 cli/*tar.gz
+cli/butane-binary
 compact*
 *.md.bak
 *.bak
