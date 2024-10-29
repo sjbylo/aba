@@ -419,11 +419,11 @@ if [ ! -f .bundle ]; then
 	echo "To store container images, Aba can install the Quay mirror appliance or you can utilize an existing container registry."
 	echo
 	echo "Run:"
-	echo "  make install       # to configure and/or install Quay, follow the instructions."
+	echo "  make mirror       # to configure and/or install Quay, follow the instructions."
 	echo "  make sync          # to sychnonize all container images - from the Internet - into your registry, follow the instructions."
 	echo
 	echo "Or run:"
-	echo "  make install sync  # to complete both actions."
+	echo "  make mirror sync  # to complete both actions."
 	echo
 
 else
@@ -450,10 +450,10 @@ else
 	echo "To store container images, Aba can install the Quay mirror appliance or you can utilize an existing container registry."
 	echo
 	echo "Run:"
-	echo "  make install       # to configure and/or install Quay, follow the instructions."
+	echo "  make mirror       # to configure and/or install Quay, follow the instructions."
 	echo "  make load          # to set up the mirror registry (configure or install quay) and load it, follow the instructions."
 	echo "Or run:"
-	echo "  make install load  # to complete both actions."
+	echo "  make mirror load  # to complete both actions."
 	echo
 fi
 

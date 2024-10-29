@@ -2,14 +2,14 @@
 # Add any arg1 to turn off the below Error trap
 
 # [ -t 0 ] is true if there is no data on stdin 
-echo_black()	{ [ "$TERM" ] && tput setaf 0; [ -t 0 ] && [ "$1" ] && echo -e $* || cat; [ "$TERM" ] && tput sgr0; }
-echo_red()	{ [ "$TERM" ] && tput setaf 1; [ -t 0 ] && [ "$1" ] && echo -e $* || cat; [ "$TERM" ] && tput sgr0; }
-echo_green()	{ [ "$TERM" ] && tput setaf 2; [ -t 0 ] && [ "$1" ] && echo -e $* || cat; [ "$TERM" ] && tput sgr0; }
-echo_yellow()	{ [ "$TERM" ] && tput setaf 3; [ -t 0 ] && [ "$1" ] && echo -e $* || cat; [ "$TERM" ] && tput sgr0; }
-echo_blue()	{ [ "$TERM" ] && tput setaf 4; [ -t 0 ] && [ "$1" ] && echo -e $* || cat; [ "$TERM" ] && tput sgr0; }
-echo_magenta()	{ [ "$TERM" ] && tput setaf 5; [ -t 0 ] && [ "$1" ] && echo -e $* || cat; [ "$TERM" ] && tput sgr0; }
-echo_cyan()	{ [ "$TERM" ] && tput setaf 6; [ -t 0 ] && [ "$1" ] && echo -e $* || cat; [ "$TERM" ] && tput sgr0; }
-echo_white()	{ [ "$TERM" ] && tput setaf 7; [ -t 0 ] && [ "$1" ] && echo -e $* || cat; [ "$TERM" ] && tput sgr0; }
+echo_black()	{ [ "$TERM" ] && tput setaf 0; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
+echo_red()	{ [ "$TERM" ] && tput setaf 1; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
+echo_green()	{ [ "$TERM" ] && tput setaf 2; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
+echo_yellow()	{ [ "$TERM" ] && tput setaf 3; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
+echo_blue()	{ [ "$TERM" ] && tput setaf 4; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
+echo_magenta()	{ [ "$TERM" ] && tput setaf 5; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
+echo_cyan()	{ [ "$TERM" ] && tput setaf 6; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
+echo_white()	{ [ "$TERM" ] && tput setaf 7; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
 
 if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
     PATH="$HOME/bin:$PATH"

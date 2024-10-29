@@ -304,6 +304,8 @@ test-cmd -h steve@$bastion2 -r 30 1 -m "Check hub status is 'running'" "oc --kub
 test-cmd -h steve@$bastion2 -r 30 1 -m "Output hub status" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status}| grep -i running"
 #### TESTING ACM + MCH 
 
+test-cmd -h steve@$bastion2 -m "Initiate NTP config but not wait for completion" "make -C sno day2-ntp"
+
 # Keep it # test-cmd -h steve@$bastion2 -m "Deleting sno cluster" "make -C $subdir/aba/sno delete" 
 ####test-cmd -h steve@$bastion2 -m "Stopping sno cluster" "yes|make -C $subdir/aba/sno shutdown" 
 test-cmd -h steve@$bastion2 -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown || echo cluster not up"

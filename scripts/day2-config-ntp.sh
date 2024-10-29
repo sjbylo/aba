@@ -100,6 +100,8 @@ storage:
           local stratum 3 orphan
 END
 
+make ~/bin/butane
+
 # Check and install butane package
 if ! which butane >/dev/null 2>&1; then
 	# No rpm available for RHEL8
