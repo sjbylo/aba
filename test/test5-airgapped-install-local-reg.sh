@@ -295,8 +295,9 @@ END
 #END
 
 # Append the correct values for each operator
-grep -A2 -e servicemeshoperator	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
-grep -A2 -e kiali-ossm		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
+mylog Append sm and kiali operators to imageset conf
+grep -A2 -e "name: servicemeshoperator$"	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+grep -A2 -e "name: kiali-ossm$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
 ########
 test-cmd -r 99 3 -m "Saving mesh operators to local disk" "make -s -C mirror save"
@@ -310,12 +311,12 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Configuring day2 ops" "make -s -C $subd
 
 mylog 
 mylog Append jaeger operator to imageset conf
-
-cat >> mirror/save/imageset-config-save.yaml <<END
-      - name: jaeger-product
-        channels:
-        - name: stable
-END
+grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+#cat >> mirror/save/imageset-config-save.yaml <<END
+#    - name: jaeger-product
+#      channels:
+#      - name: stable
+#END
 
 test-cmd -r 99 3 -m "Saving jaeger operator to local disk" "make -s -C mirror save"
 
