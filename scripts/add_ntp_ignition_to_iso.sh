@@ -12,6 +12,8 @@ source <(normalize-aba-conf)
 
 [ ! "$ntp_server" ] && echo_white "Not configuring NTP in early bootstrap node because 'ntp_server' not defined in aba.conf." && exit 0
 
+echo_cyan "Adding NTP server in early bootstrap ignition: $ntp_server" 
+
 dir=iso-agent-based
 
 coreos-installer iso ignition show $dir/agent.x86_64.iso > $dir/tmp.ign
