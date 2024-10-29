@@ -268,8 +268,8 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 # Append the correct values for each operator
-grep -A2 -e advanced-cluster-management	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
-grep -A2 -e multicluster-engine  	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
+grep -A2 -e "name: advanced-cluster-management$"	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
+grep -A2 -e "name: multicluster-engine$"  	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
 
 #      - name: multicluster-engine
 #        channels:
