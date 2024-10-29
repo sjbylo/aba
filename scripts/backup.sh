@@ -151,14 +151,14 @@ if [ "$dest" != "-" ]; then
 fi
 
 if [ "$inc" ]; then
-	echo_blue "Writing 'incremental' tar archive of repo to $dest" >&2  # Must use stderr otherwise the tar archive becomes corrupt
+	echo_cyan "Writing 'incremental' tar archive of repo to $dest" >&2  # Must use stderr otherwise the tar archive becomes corrupt
 else
-	echo_blue "Writing tar file to $dest" >&2
+	echo_cyan "Writing tar file to $dest" >&2
 fi
 
 out_file_list=$(echo $file_list | cut -c-90)
 
-echo_blue "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
+echo_cyan "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
 echo >&2
 if ! tar cf $dest $file_list; then
 	echo_red "tar command failed with return code $?" >&2
