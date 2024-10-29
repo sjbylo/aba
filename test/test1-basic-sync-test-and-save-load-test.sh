@@ -40,7 +40,7 @@ mylog ============================================================
 mylog "Test to install remote reg. on $bastion2 and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
-ntp_ip=10.0.1.8 # If available
+ntp_ip=10.0.1.8,10.0.1.8 # If available
 
 which make || sudo dnf install make -y
 
