@@ -14,9 +14,8 @@ source <(normalize-aba-conf)
 
 echo_cyan "Adding NTP server in early bootstrap ignition: $ntp_server" 
 
-dir=iso-agent-based
-
-coreos-installer iso ignition show $dir/agent.x86_64.iso > $dir/tmp.ign
+iso_dir=iso-agent-based
+coreos-installer iso ignition show $iso_dir/agent.x86_64.iso > $iso_dir/tmp.ign
 
 export CHRONY_CONF_BASE64=$(cat << EOF | base64 -w 0
 server $ntp_server iburst
@@ -27,6 +26,26 @@ logdir /var/log/chrony
 EOF
 )
 
+#ntp_server=$(echo "$ntp_server" | tr "," "\n" | tr -d " ")
+
+svr_list=$(
+echo "$ntp_server" | tr ',' '\n' | tr -d " " | while read item; do
+    echo "server ${item} iburst"
+done
+)
+
+config=$(cat << EOF
+driftfile /var/lib/chrony/drift
+makestep 1.0 3
+rtcsync
+logdir /var/log/chrony
+EOF
+)
+
+export CHRONY_CONF_BASE64_2=$(echo -e "$svr_list\n$config" | base64 -w 0)
+
+echo $CHRONY_CONF_BASE64_2 | base64 -d > $iso_dir/chrony.conf
+
 jq '.storage.files += [{
   "group": {},
   "overwrite": true,
@@ -35,10 +54,10 @@ jq '.storage.files += [{
     "name": "root"
   },
   "contents": {
-    "source": "data:text/plain;charset=utf-8;base64,'$CHRONY_CONF_BASE64'"
+    "source": "data:text/plain;charset=utf-8;base64,'$CHRONY_CONF_BASE64_2'"
   },
   "mode": 420
-}]' $dir/tmp.ign > $dir/custom_ign.ign
+}]' $iso_dir/tmp.ign > $iso_dir/custom_ign.ign
 
-coreos-installer iso ignition embed -fi $dir/custom_ign.ign $dir/agent.x86_64.iso
+coreos-installer iso ignition embed -fi $iso_dir/custom_ign.ign $iso_dir/agent.x86_64.iso
 
