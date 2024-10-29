@@ -4,14 +4,16 @@ Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a fu
 Because Aba uses the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
 
 Aba automatically completes the following for you:
-1. Installs any type of OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
+1. Helps install any type of OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
 2. Makes use of any existing container registry or installs the Quay mirror registry appliance for you. 
 1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
 1. Triggers the generation of the agent-based boot ISO. 
+1. Configures NTP during installation time to help avoid issues when using nodes with incorrect date & time.
 1. Optionally creates the required VMs in ESXi or vSphere.
 1. Monitors the installation progress. 
-1. Allows for adding more images (e.g. Operators) as a day 1 or 2 operation.
-1. Configures the OperatorHub integration with the internal container registry. 
+1. Allows for adding more images (e.g. Operators) when synchonizing the mirror registry. (day 1 or 2 operation.)
+1. Configures the OperatorHub integration with the mirror registry. 
+1. Can create an archive "bundle" containing all files needed to complete a fully air-gapped installation. 
 1. Executes several workarounds for some typical issues with disconnected environments.
 1. Enables the integration with vSphere as a day 2 operation.
 
@@ -73,7 +75,7 @@ Read more for all the details.
 The usual things you need to install OpenShift when using the Agent-based installer. 
 
 - **RHEL**
-   - Aba will try to install all required RPMs using "dnf".  If dnf is not configured or working the RPMs will need to be installed another way, e.g. DVD. 
+   - Aba will attempt to install all required RPMs using "dnf".  If dnf is not configured or working the RPMs will need to be installed another way, e.g. DVD. 
    - Ensure the internal RHEL bastion has the RPMs installed (as defined in the file templates/rpms-internal.txt).
    - Ensure the *external* RHEL bastion has the RPMs installed (as defined in the file templates/rpms-external.txt).
    - Install your favorite editor. 
@@ -84,7 +86,7 @@ The usual things you need to install OpenShift when using the Agent-based instal
 - **DNS**
    - with A records for 1) OpenShift API 2) Ingress and 3) the internal mirror registry.
 - **NTP**
-   - OpenShift requires that NTP be available. Installation is possible without an NTP server. However, asynchronous server clocks will cause errors, which an NTP server prevents.
+   - OpenShift requires that NTP be available. Installation is possible without an NTP server. However, asynchronous server clocks will cause errors, which an NTP server prevents. Aba can configure NTP at installation time which helps avoid issues when using nodes with incorrect date & time.
 - **Private subnet** (optional)
    - Install OpenShift into a private, air-gapped network.
    - Aba also works in connected environments without a private mirror registry, e.g. accessing public container registries via a proxy. 
