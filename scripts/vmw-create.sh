@@ -24,7 +24,9 @@ if [ ! "$CLUSTER_NAME" ]; then
 fi
 
 CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
+CP_MAC_ADDRESSES_ARRAY2=($CP_MAC_ADDRESSES2)
 WKR_MAC_ADDRESSES_ARRAY=($WKR_MAC_ADDRESSES)
+WKR_MAC_ADDRESSES_ARRAY2=($WKR_MAC_ADDRESSES2)
 
 echo
 echo_magenta "Provisioning VMs to build the cluster ..."
@@ -73,6 +75,7 @@ for name in $CP_NAMES ; do
 
 	vm_name=${CLUSTER_NAME}-$name
 	mac=${CP_MAC_ADDRESSES_ARRAY[$a]}
+	mac2=${CP_MAC_ADDRESSES_ARRAY2[$a]}
 
 	echo_cyan -n "Create VM: "
 	echo "$vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [$mac] [$GOVC_NETWORK] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
@@ -92,7 +95,10 @@ for name in $CP_NAMES ; do
 		-on=false \
 		 $vm_name
 
-	### FIXME govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address "$mac"
+	if [ "$mac2" ]; then
+		echo "Adding 2nd network interface with mac address: $mac2"
+		govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address $mac2
+	fi
 
 	govc device.boot -secure -vm $vm_name
 
@@ -127,6 +133,7 @@ for name in $WORKER_NAMES ; do
 
 	vm_name=${CLUSTER_NAME}-$name
 	mac=${WKR_MAC_ADDRESSES_ARRAY[$a]}
+	mac2=${WKR_MAC_ADDRESSES_ARRAY2[$a]}
 
 	echo_cyan -n "Create VM: "
 	echo "$vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
@@ -145,6 +152,11 @@ for name in $WORKER_NAMES ; do
 		-folder="$cluster_folder" \
 		-on=false \
 		 $vm_name
+
+	if [ "$mac2" ]; then
+		echo "Adding 2nd network interface with mac address: $mac2"
+		govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address $mac2
+	fi
 
 	govc device.boot -secure -vm $vm_name
 

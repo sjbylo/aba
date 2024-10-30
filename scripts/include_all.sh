@@ -20,6 +20,8 @@ echo_magenta()	{ [ "$TERM" ] && tput setaf 5; echo -e "$@"; [ "$TERM" ] && tput 
 echo_cyan()	{ [ "$TERM" ] && tput setaf 6; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 
+cat_cyan()	{ [ "$TERM" ] && tput setaf 6; cat; [ "$TERM" ] && tput sgr0; }
+
 if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
     PATH="$HOME/bin:$PATH"
 fi
