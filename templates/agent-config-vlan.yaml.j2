@@ -17,17 +17,19 @@ hosts:
        macAddress: {{ arr_macs[hostcnt + mac_offset] }}
     networkConfig:
       interfaces:
-        - name: {{ port0 }}
-          description: Access mode port {{ port0 }}
-          type: ethernet
-          state: up
-          mac-address: {{ arr_macs[hostcnt + mac_offset] }}
-          ipv4:
-            enabled: true
-            address:
-              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int - 1 + (3 if role == 'worker' else 0)) }}
-                prefix-length: {{ prefix_length }}
-            dhcp: false
+      - name: {{ port0 }}.{{ vlan }}
+        description: VLAN {{ vlan }} using port {{ port0 }}
+        type: vlan 
+        state: up 
+        vlan:
+          base-iface: {{ port0 }}
+          id: {{ vlan }}
+        ipv4:
+          enabled: true
+          address:
+            - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int - 1 + (3 if role == 'worker' else 0)) }}
+              prefix-length: {{ prefix_length }}
+          dhcp: false
       dns-resolver:
         config:
           server:
@@ -38,6 +40,6 @@ hosts:
         config:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
-            next-hop-interface: {{ port0 }}
+            next-hop-interface: {{ port0 }}.{{ vlan }}
 {% endfor %}
 {%- endfor %}

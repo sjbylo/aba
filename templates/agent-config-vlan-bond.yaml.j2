@@ -20,6 +20,7 @@ hosts:
     networkConfig:                                                                      
       interfaces:                                                                       
         - name: bond0.{{ vlan }}  
+          description: VLAN {{ vlan }} with bond using ports {{ port0 }} and {{ port1 }}
           type: vlan                                                                    
           state: up                                                                     
           vlan:           
@@ -49,11 +50,13 @@ hosts:
       dns-resolver:
         config:
           server:
-            - {{ dns_server }}
+            {%- for dns in arr_dns_servers %}
+            - {{ dns }}
+            {%- endfor %}
       routes:
         config:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
             next-hop-interface: bond0.{{ vlan }}
-  {% endfor %}
-  {% endfor %}
+{% endfor %}
+{%- endfor %}
