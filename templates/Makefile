@@ -118,7 +118,7 @@ iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note
 	@touch .bm-nextstep
 	@exit 0
 
-.autopoweroff: # .ntp
+.autopoweroff: iso
 	@scripts/vmw-kill.sh $(debug) || true 
 	@touch .autopoweroff
 
