@@ -40,8 +40,8 @@ for name in $WORKER_NAMES $CP_NAMES; do
 done
 
 if [ "$wait" ]; then
-	#until make -s -C $subdir/aba/$cluster_name ls |grep poweredOff |wc -l| grep ^$cnt$; do sleep 10; done"
-	until make -s ls | grep poweredOn | wc -l | grep ^0$; do sleep 10; done
+	echo_cyan "Waiting for all nodes to power down ..."
+	until make -s ls | grep poweredOn | wc -l | grep -q ^0$; do sleep 10; done
 fi
 
 exit 0
