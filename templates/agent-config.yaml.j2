@@ -18,6 +18,7 @@ hosts:
     networkConfig:
       interfaces:
         - name: {{ port0 }}
+          description: Access mode port {{ port0 }}
           type: ethernet
           state: up
           mac-address: {{ arr_macs[hostcnt + mac_offset] }}
@@ -30,7 +31,9 @@ hosts:
       dns-resolver:
         config:
           server:
-            - {{ dns_server }}
+            {%- for dns in arr_dns_servers %}
+            - {{ dns }}
+            {%- endfor %}
       routes:
         config:
           - destination: 0.0.0.0/0

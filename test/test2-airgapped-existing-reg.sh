@@ -236,6 +236,9 @@ test-cmd -h steve@$bastion2 -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/
 test-cmd -h steve@$bastion2 -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
 #### TESTING ACM + MCH 
 
+test-cmd -h steve@$bastion2 -m "Adding 2nd interface for bonding" "sed -i 's/^.*port1=.*/port1=ens192/g' $subdir/aba/sno/cluster.conf"
+test-cmd -h steve@$bastion2 -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8/g' $subdir/aba/sno/cluster.conf"
+
 # Is the cluster can be reached ... use existing cluster
 if test-cmd -h steve@$bastion2 -m "Checking if sno cluster up" "make -C $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
 	mylog "Using existing sno cluster"

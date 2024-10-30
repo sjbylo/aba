@@ -136,7 +136,7 @@ do
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 && exit 1
 		dns_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-		sed -i "s/^dns_server=[^ \t]*/dns_server=$dns_ip /g" aba.conf
+		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ip /g" aba.conf
 		shift 
 	elif [ "$1" = "--ntp" ]; then
 		shift 

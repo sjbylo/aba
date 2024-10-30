@@ -20,6 +20,7 @@ hosts:
     networkConfig:
       interfaces:
         - name: bond0
+          description: Access mode bond using ports {{ port0 }} and {{ port1 }}
           type: bond
           state: up
           ipv4:
@@ -39,7 +40,9 @@ hosts:
       dns-resolver:
         config:
           server:
-            - {{ dns_server }}
+            {%- for dns in arr_dns_servers %}
+            - {{ dns }}
+            {%- endfor %}
       routes:
         config:
           - destination: 0.0.0.0/0
