@@ -9,13 +9,14 @@ umask 077
 
 source <(normalize-aba-conf)
 
-[ ! "$ntp_server" ] && echo_red "Define 'ntp_server' value in 'aba.conf' to configure NTP" && exit 0
+[ ! "$ntp_servers" ] && echo_red "Define 'ntp_servers' value in 'aba.conf' to configure NTP" && exit 0
+
+ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-[ ! -s 99-master-chrony-conf-override.bu ] && cat > 99-master-chrony-conf-override.bu <<END
+[ ! -s .99-master-chrony-conf-override.bu ] && cat > .99-master-chrony-conf-override.bu <<END
 variant: openshift
-#version: $ocp_ver_major.0
 version: 4.12.0
 metadata:
   name: 99-master-chrony-conf-override
@@ -32,7 +33,7 @@ storage:
           # Please consider joining the pool (https://www.pool.ntp.org/join.html).
 
           # The Machine Config Operator manages this file
-          server $ntp_server iburst
+$(for svr in $ntp_servers; do echo "          server $svr iburst"; done)
 
           stratumweight 0
           driftfile /var/lib/chrony/drift
@@ -57,7 +58,7 @@ storage:
           local stratum 3 orphan
 END
 
-[ ! -s 99-worker-chrony-conf-override.bu ] && cat > 99-worker-chrony-conf-override.bu <<END
+[ ! -s .99-worker-chrony-conf-override.bu ] && cat > .99-worker-chrony-conf-override.bu <<END
 variant: openshift
 version: 4.12.0
 metadata:
@@ -75,7 +76,7 @@ storage:
           # Please consider joining the pool (https://www.pool.ntp.org/join.html).
 
           # The Machine Config Operator manages this file
-          server $ntp_server iburst
+$(for svr in $ntp_servers; do echo "          server $svr iburst"; done)
 
           stratumweight 0
           driftfile /var/lib/chrony/drift
@@ -100,7 +101,7 @@ storage:
           local stratum 3 orphan
 END
 
-make ~/bin/butane
+make -s ~/bin/butane
 
 # Check and install butane package
 if ! which butane >/dev/null 2>&1; then
@@ -117,8 +118,8 @@ if ! which butane >/dev/null 2>&1; then
 	fi
 fi
 
-butane 99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
-butane 99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
+butane .99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
+butane .99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
 export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 

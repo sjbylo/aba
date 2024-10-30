@@ -54,8 +54,8 @@ test-cmd -m "Configure aba.conf for version $v and vmware $vf" ./aba --version $
 mylog "Setting 'ask='"
 sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1/g' aba.conf
 
-### NN mylog "Setting ntp_server=$ntp" 
-### NN [ "$ntp" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp    #\2/g" aba.conf
+### NN mylog "Setting ntp_servers=$ntp" 
+### NN [ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
 
 source <(normalize-aba-conf)
 

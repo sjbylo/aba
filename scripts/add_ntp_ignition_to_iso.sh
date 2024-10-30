@@ -10,15 +10,15 @@ source scripts/include_all.sh
 
 source <(normalize-aba-conf)
 
-[ ! "$ntp_server" ] && echo_white "Not configuring NTP in early bootstrap node because 'ntp_server' not defined in aba.conf." && exit 0
+[ ! "$ntp_servers" ] && echo_white "Not configuring NTP in early bootstrap node because 'ntp_servers' not defined in aba.conf." && exit 0
 
-echo_cyan "Adding NTP server in early bootstrap ignition: $ntp_server" 
+echo_cyan "Adding NTP server in early bootstrap ignition: $ntp_servers" 
 
 iso_dir=iso-agent-based
 coreos-installer iso ignition show $iso_dir/agent.x86_64.iso > $iso_dir/tmp.ign
 
 export CHRONY_CONF_BASE64=$(cat << EOF | base64 -w 0
-server $ntp_server iburst
+server $ntp_servers iburst
 driftfile /var/lib/chrony/drift
 makestep 1.0 3
 rtcsync
@@ -26,10 +26,8 @@ logdir /var/log/chrony
 EOF
 )
 
-#ntp_server=$(echo "$ntp_server" | tr "," "\n" | tr -d " ")
-
 svr_list=$(
-echo "$ntp_server" | tr ',' '\n' | tr -d " " | while read item; do
+echo "$ntp_servers" | tr -d "[:space:]" | tr ',' '\n' | while read item; do
     echo "server ${item} iburst"
 done
 )

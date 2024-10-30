@@ -142,7 +142,7 @@ do
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 && exit 1
 		ntp_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-		sed -i "s/^ntp_server=[^ \t]*/ntp_server=$ntp_ip /g" aba.conf
+		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_ip /g" aba.conf
 		shift 
 	elif [ "$1" = "--default-route" ]; then
 		shift 
