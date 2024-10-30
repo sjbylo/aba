@@ -397,11 +397,18 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$bastion2 -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
-	###test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba $cluster_name" || true
-	# Now run make INSIDE of the cluster directory
-	####test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba/$cluster_name" || true
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba/$cluster_name"
-	test-cmd -h $reg_ssh_user@$bastion2 -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "make -s -C $subdir/aba/$cluster_name mon" 
+	if ! test-cmd -h $reg_ssh_user@$bastion2 -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "make -s -C $subdir/aba/$cluster_name mon"; then
+		mylog "CLUSTER INSTALL FAILED: REBOOTING ALL NODES ..."
+
+		# See if the agent is still running and fetch the logs
+		make ssh cmd="agent-gather -O" | ssh 10.0.1.6 -- "cat > agent-gather-$cluster_name-.tar.xz" || true
+
+		make -C $subdir/aba/$cluster_name stop wait=1
+		make -C $subdir/aba/$cluster_name start
+		sleep 60
+		make -C $subdir/aba/$cluster_name mon
+	fi
 
 	#####
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all cluster operators available?" "make -s -C $subdir/aba/$cluster_name cmd; until make -s -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"

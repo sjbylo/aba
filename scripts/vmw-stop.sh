@@ -5,7 +5,9 @@ source scripts/include_all.sh
 
 scripts/install-govc.sh
 
+[ "$1" = "wait=1" ] && wait=1 && shift
 [ "$1" ] && set -x
+
 
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
@@ -37,4 +39,10 @@ for name in $WORKER_NAMES $CP_NAMES; do
 	govc vm.power -s ${CLUSTER_NAME}-$name || true
 done
 
+if [ "$wait" ]; then
+	#until make -s -C $subdir/aba/$cluster_name ls |grep poweredOff |wc -l| grep ^$cnt$; do sleep 10; done"
+	until make -s ls | grep poweredOn | wc -l | grep ^0$; do sleep 10; done
+fi
+
 exit 0
+
