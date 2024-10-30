@@ -50,20 +50,12 @@ else
 	for i in $(seq 1 `expr $num_masters \* 2 + $num_workers \* 2`); do
 		printf "%s%02d\n" $mac_prefix $i
 	done > .macs.conf
-
-# FIXME: Added above for binding config (2 x number of ports)
-#	for host in $(seq 1 $num_masters); do
-#		printf "%s%02d\n" $mac_prefix $host
-#	done > .macs.conf
-#	for host in $(seq 1 $num_workers); do
-#		printf "%s%02d\n" $mac_prefix $(expr $host + 3)
-#	done >> .macs.conf
 fi
 export arr_macs=$(cat .macs.conf | tr "\n" " " | tr -s "[:space:]")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
 rm -f .macs.conf
 
 # Set up the dns server(s)
-export arr_dns_servers=$(echo $dns_servers | tr -d " " | tr "," " ")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
+export arr_dns_servers=$(echo $dns_servers | tr -d "[:space:]" | tr "," " ")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
 echo_cyan "Adding DNS server(s): $arr_dns_servers"
 
 # Use j2cli to render the templates

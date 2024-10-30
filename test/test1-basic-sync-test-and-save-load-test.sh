@@ -63,9 +63,9 @@ sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 
 test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." make noask
 
-#mylog "Setting ntp_server=$ntp_ip" 
-#[ "$ntp_ip" ] && sed -i "s/^ntp_server=\([^#]*\)#\(.*\)$/ntp_server=$ntp_ip    #\2/g" aba.conf
-[ "$ntp_ip" ] && test-cmd -m "Setting ntp_server=$ntp_ip in aba.conf" ./aba --ntp $ntp_ip
+#mylog "Setting ntp_servers=$ntp_ip" 
+#[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip    #\2/g" aba.conf
+[ "$ntp_ip" ] && test-cmd -m "Setting ntp_servers=$ntp_ip in aba.conf" ./aba --ntp $ntp_ip
 
 #mylog "Setting op_sets=\"abatest\" in aba.conf"
 #sed -i "s/^op_sets=.*/op_sets=\"abatest\" /g" aba.conf
