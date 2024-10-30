@@ -70,9 +70,12 @@ echo
 if [ "$port0" -a "$port1" -a "$vlan" ]; then
 	template_file=agent-config-vlan-bond.yaml.j2
 	echo_white "Using bonding vlan agent config template '$template_file' (port0=$port0 port1=$port1 vlan=$vlan)"
+elif [ "$port0" -a "$port1" -a ! "$vlan" ]; then
+	template_file=agent-config-bond.yaml.j2
+	echo_white "Using basic bonding agent config template '$template_file' (port0=$port0 port1=$port1)"
 else
 	template_file=agent-config.yaml.j2
-	##echo_white "Using standard agent config template '$template_file'" # Output overkill
+	echo_white "Using standard agent config template '$template_file'"
 fi
 
 # Note that machine_ip_prefix, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 

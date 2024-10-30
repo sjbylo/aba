@@ -1,0 +1,50 @@
+apiVersion: v1alpha1
+kind: AgentConfig
+metadata:
+  name: {{ cluster_name }}
+rendezvousIP: {{ rendezvous_ip }}
+hosts:
+{%- for role, prefix, count, mac_offset in [("master", master_prefix, num_masters|int, 0), ("worker", worker_prefix, num_workers|int, 6)] %}
+{%- for hostcnt in range(count) %}
+{%- if role == 'master' and num_workers == '0' and num_masters == '1' %}
+  - hostname: {{ cluster_name }}
+{% else %}
+  - hostname: {{ prefix }}{{ loop.index }}
+{% endif %}
+    role: {{ role }}
+    interfaces:
+     - name: {{ port0 }}
+       macAddress: {{ arr_macs[hostcnt * 2 + mac_offset] }}
+     - name: {{ port1 }}
+       macAddress: {{ arr_macs[hostcnt * 2 + mac_offset + 1] }}
+    networkConfig:
+      interfaces:
+        - name: bond0
+          type: bond
+          state: up
+          ipv4:
+            enabled: true
+            address:
+              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int - 1 + (3 if role == 'worker' else 0)) }}
+                prefix-length: {{ prefix_length }}
+            dhcp: false
+          link-aggregation:
+            mode: active-backup
+            options:
+              miimon: '140'
+            port:
+            - {{ port0 }}
+            - {{ port1 }}
+
+      dns-resolver:
+        config:
+          server:
+            - {{ dns_server }}
+      routes:
+        config:
+          - destination: 0.0.0.0/0
+            next-hop-address: {{ next_hop_address }}
+            next-hop-interface: bond0
+{% endfor %}
+{%- endfor %}
+
