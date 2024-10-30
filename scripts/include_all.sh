@@ -1,16 +1,6 @@
 # Code that all scripts need.  Ensure this script does not create any std output.
 # Add any arg1 to turn off the below Error trap
 
-# [ -t 0 ] is true if there is no data on stdin 
-###echo_black()	{ [ "$TERM" ] && tput setaf 0; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
-###echo_red()	{ [ "$TERM" ] && tput setaf 1; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
-###echo_green()	{ [ "$TERM" ] && tput setaf 2; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
-###echo_yellow()	{ [ "$TERM" ] && tput setaf 3; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
-###echo_blue()	{ [ "$TERM" ] && tput setaf 4; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
-###echo_magenta()	{ [ "$TERM" ] && tput setaf 5; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
-###echo_cyan()	{ [ "$TERM" ] && tput setaf 6; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
-###echo_white()	{ [ "$TERM" ] && tput setaf 7; [ -t 0 ] && [ "$1" ] && echo -e "$@" || cat; [ "$TERM" ] && tput sgr0; }
-
 echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 echo_green()	{ [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
@@ -59,8 +49,6 @@ normalize-aba-conf() {
 		sed	-e "s/^/export /g";
 
 }
-#			replaced with the above shorter -e expression
-#			sed -e "s#\(^machine_network=[0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\)/#\1\nprefix_length=#g" | \
 
 normalize-mirror-conf()
 {
@@ -68,10 +56,9 @@ normalize-mirror-conf()
 	# Ensure any ~/ is masked, e.g. \~/
 	# Ensrue reg_ssh_user has a value
 	# Prepend "export "
-	#[ ! -s mirror.conf ] && echo "Warning: no 'mirror.conf' file defined in $PWD" >&2 && return 0
+
 	[ ! -s mirror.conf ] &&                                                              return 0
-		#cut -d"#" -f1 | \
-			#sed -E "s/^reg_ssh_user=[[:space:]]+|reg_ssh_user=$/reg_ssh_user=$(whoami) /g" | \
+
 	cat mirror.conf | \
 		sed -E	-e "s/^\s*#.*//g" \
 			-e "s/^reg_ssh_user=[[:space:]]+/reg_ssh_user=$(whoami) /g" \
@@ -86,12 +73,14 @@ normalize-cluster-conf()
 {
 	# Normalize or sanitize the config file
 	# Prepend "export "
-	#[ ! -s cluster.conf ] && echo "Warning: no 'cluster.conf' file defined in $PWD" >&2 && return 0
+	# Extract machine_network and prefix_length from the CIDR notation
+
 	[ ! -s cluster.conf ] &&                                                               return 0
-		##cut -d"#" -f1 | \
+
 	cat cluster.conf | \
 		sed -E	-e "s/^\s*#.*//g" \
-			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" | \
+			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
 			sed -e "s/^/export /g";
 }
 
@@ -101,10 +90,9 @@ normalize-vmware-conf()
 	# Determine if ESXi or vCenter
 	# Prepend "export "
 	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
-	#[ ! -f vmware.conf ] && echo "Warning: no 'vmware.conf' file defined in $PWD" >&2 && return 0  # vmware.conf can be empty
+
 	[ ! -f vmware.conf ] &&                                                              return 0  # vmware.conf can be empty
-                #cut -d"#" -f1 | \  # Can't use this since passwords can contain '#' char(s)!
-		#sed -E "s/\s+# [[:print:]]+$//g" | \
+
         vars=$(cat vmware.conf | \
 		sed -E	-e "s/^\s*#.*//g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
@@ -122,6 +110,7 @@ normalize-vmware-conf()
 }
 
 install_rpms() {
+	# Try to install the RPMs only if they are missing
 	local rpms_to_install=
 
 	for rpm in $@
@@ -143,31 +132,40 @@ install_rpms() {
 }
 
 ask() {
-	source <(normalize-aba-conf)  # if aba.conf does not exists, this outputs 'ask=true' to be on the safe side.
+	source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
 	[ ! "$ask" ] && return 0  # reply "default reply"
 
 	# Default reply is 'yes' (or 'no') and return 0
 	yn_opts="(Y/n)"
-	def_val=y
-	[ "$1" == "-n" ] && def_val=n && yn_opts="(y/N)" && shift
-	[ "$1" == "-y" ] && def_val=y && yn_opts="(Y/n)" && shift
+	def_responce=y
+	[ "$1" == "-n" ] && def_responce=n && yn_opts="(y/N)" && shift
+	[ "$1" == "-y" ] && def_responce=y && yn_opts="(Y/n)" && shift
 	timer=
 	[ "$1" == "-t" ] && timer="-t $1" && shift && shift 
 
-	## echo
 	echo_cyan -n "$@? $yn_opts: "
 	read $timer yn
 
-	if [ "$def_val" == "y" ]; then
-		[ ! "$yn" -o "$yn" == "y" -o "$yn" == "Y" ] && return 0
-	else
-		[ ! "$yn" ] && return 0
-		[ "$yn" == "n" -o "$yn" == "N" ] && return 0 
-		[ "$yn" != "y" -a "$yn" != "Y" ] && return 0
-	fi
+	# Return default responce, 0
+	[ ! "$yn" ] && return 0
+
+	[ "$def_responce" == "y" ] && [ "$yn" == "y" -o "$yn" == "Y" ] && return 0
+	[ "$def_responce" == "n" ] && [ "$yn" == "n" -o "$yn" == "N" ] && return 0
 
 	# return "non-default" responce 
 	return 1
+
+#	if [ "$def_responce" == "y" ]; then
+#		[ ! "$yn" -o "$yn" == "y" -o "$yn" == "Y" ] && return 0
+#	else
+#		# Return default responce
+#		[ ! "$yn" ] && return 0
+#		[ "$yn" == "n" -o "$yn" == "N" ] && return 0 
+#		[ "$yn" != "y" -a "$yn" != "Y" ] && return 0
+#	fi
+#
+#	# return "non-default" responce 
+#	return 1
 }
 
 edit_file() {

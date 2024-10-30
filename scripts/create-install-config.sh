@@ -20,6 +20,12 @@ export additional_trust_bundle=
 export image_content_sources=
 export insert_proxy=
 
+# Change the default of bare-metal host prefix
+if [ "$platform" = "bm" -a $hostPrefix -eq 23 ]; then
+	echo_cyan "Adjusting the default host prefix from 23 to 22 for bare-metal servers."
+	export hostPrefix=22
+fi
+
 # Generate the needed iso-agent-based config files ...
 
 # Read in the needed files ...
