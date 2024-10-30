@@ -16,7 +16,7 @@ controlPlane:
 networking:
   clusterNetwork:
   - cidr: 10.128.0.0/14
-    hostPrefix: 23
+    hostPrefix: {{ hostPrefix }}
   machineNetwork:
   - cidr: {{ machine_network }}/{{ prefix_length }}
   networkType: OVNKubernetes

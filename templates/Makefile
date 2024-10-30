@@ -48,7 +48,6 @@ help: ## Help
 ../aba.conf:
 	@echo "aba.conf missing! Please read the README on how to get started!"
 	@exit 1
-	@#make -C .. aba.conf
 
 init: .initialized
 .initialized:
@@ -57,7 +56,7 @@ init: .initialized
 	@ln -fs ../mirror
 	@ln -fs ../mirror/regcreds 
 	@ln -fs ../aba.conf
-	make -C ../cli
+	make -sC ../cli
 	@touch .initialized
 	@echo Initialized `pwd` successfully
 
@@ -227,15 +226,15 @@ remove-cdrom:  ## Remove the cdrom devide from all VMs
 .PHONY: vmw
 vmw: ## Configure vCenter/ESXi API credentials in vmware.conf file.
 	@[ ! -s ../vmware.conf ] && rm -f ../vmware.conf || true
-	@make -C .. vmw
+	@make -sC .. vmw
 
 .PHONY: noask
 noask:  ## Set 'ask' in aba.conf to 'false'.  Aba will assume all defaults and not prompt you for anything which allows for fully automated installations.
-	@make -C .. noask
+	@make -sC .. noask
 
 .PHONY: ask
 ask: ## Set 'ask' in aba.conf to 'true'  Aba will prompt you for certain actions. 
-	@make -C .. ask
+	@make -sC .. ask
 
 # Note that only delete 'vmware.conf/regcreds/aba.conf' if they are symbolic links (i.e. not files/changed by user) 
 .PHONY: clean
