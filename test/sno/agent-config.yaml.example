@@ -12,6 +12,7 @@ hosts:
     networkConfig:
       interfaces:
         - name: ens160
+          description: Access mode port ens160
           type: ethernet
           state: up
           mac-address: 88:88:88:88:88:01

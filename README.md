@@ -328,6 +328,8 @@ cd mycluster     # change to the directory with the agent-based install files, u
 
 ## Features that are not implemented yet
 
+- ~~Support bonding and vlan.~~
+
 - ~~Make it easier to integrate with vSphere, including storage.~~
 
 - Configure htpasswd login, add users, disable kubeadmin.
