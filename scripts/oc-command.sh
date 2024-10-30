@@ -1,5 +1,7 @@
 #!/bin/bash 
 
+source scripts/include_all.sh
+
 [ ! "$1" ] && cmd="get co" || cmd="$*"
 
 echo "$cmd" | grep "^oc " && cmd=$(echo "$cmd" | cut -f2-  -d" ")  # Fix command if needed

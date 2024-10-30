@@ -401,8 +401,11 @@ build_and_test_cluster() {
 	if ! test-cmd -h $reg_ssh_user@$bastion2 -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "make -s -C $subdir/aba/$cluster_name mon"; then
 		mylog "CLUSTER INSTALL FAILED: REBOOTING ALL NODES ..."
 
+		set -x
+
 		# See if the agent is still running and fetch the logs
-		make ssh cmd="agent-gather -O" | ssh 10.0.1.6 -- "cat > agent-gather-$cluster_name-.tar.xz" || true
+		make -C $subdir/aba/$cluster_name ssh cmd="agent-gather -O" | ssh 10.0.1.6 -- "cat > agent-gather-$cluster_name-.tar.xz" || true
+		scp $subdir/aba/$cluster_name/iso-agent-based/.openshift_install.log 10.0.1.6:$cluster_name_openshift_install.log
 
 		make -C $subdir/aba/$cluster_name stop wait=1
 		make -C $subdir/aba/$cluster_name start
