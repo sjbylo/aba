@@ -1,8 +1,8 @@
 # Aba is tooling, wrapped around the agent-based installer for OpenShift.
 
-1. [Intro](#sec1)
-1. [Quick Guide](#sec2)
-1. [Prerequisites](#sec3)
+1. [Intro](#intro)
+1. [Quick Guide](#quick-guide)
+1. [Prerequisites](#prerequisites)
 
 ## Intro
 
