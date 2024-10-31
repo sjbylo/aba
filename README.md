@@ -3,6 +3,16 @@
 1. [Intro](#intro)
 1. [Quick Guide](#quick-guide)
 1. [Prerequisites](#prerequisites)
+1. [Initial Steps](#initial-steps)
+1. [Getting Started with aba](#getting-started-with-aba)
+1. [Disconnected mode](#disconnected-mode)
+1. [Fully disconnected (air-gapped) mode](#fully-disconnected-(air-gapped)-mode)
+1. [Install OpenShift](#install-openshift)
+1. [Features that are not implemented yet](#features-that-are-not-implemented-yet)
+1. [Configuration files](#configuration-files)
+1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-and-or-openshift-install.yaml-files)
+1. [Miscellaneous](#miscellaneous)
+1. [Advanced](#advanced)
 
 ## Intro
 
@@ -40,7 +50,7 @@ cd aba
 - helps decide if you want to install onto VMware/ESXi or onto bare-metal. 
 
 ```
-make install 
+make mirror 
 ```
 - configures and connects to your existing container registry OR installs a fresh quay appliance registry.
 
@@ -167,7 +177,7 @@ In this mode, the connected bastion has access to both the Internet and the priv
 make sync
 ```
 This command will:
-  - trigger 'make install' (to configure the mirror registry), if needed. 
+  - trigger 'make mirror' (to configure the mirror registry), if needed. 
   - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in mirror/regcreds/ first! See above for more).
   - or, installs Quay registry on the internal bastion (or remote internal bastion) and copies the generated pull secret and certificate into the 'mirror/regcreds' directory for later use.
   - pull images from the Internet and store them in the registry.
