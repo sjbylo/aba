@@ -27,13 +27,13 @@ Aba automatically completes the following for you:
 1. Configures NTP during installation time to help avoid issues when using nodes with incorrect date & time.
 1. Optionally creates the required VMs in ESXi or vSphere.
 1. Monitors the installation progress. 
-1. Allows for adding more images (e.g. Operators) when synchonizing the mirror registry. (day 1 or 2 operation.)
+1. Allows for adding more images (e.g. Operators) when synchonizing the mirror registry (day 1 or 2 operation).
 1. Configures the OperatorHub integration with the mirror registry. 
 1. Can create an archive "bundle" containing all files needed to complete a fully air-gapped installation. 
 1. Executes several workarounds for some typical issues with disconnected environments.
 1. Enables the integration with vSphere as a day 2 operation.
 
-Use aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail.  It also works with connected environments.  
+Use aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail.  It also works with connected environments!
 
 For the very impatient: clone this repo onto a RHEL VM with an internet connection, install and run 'make'.  You will be guided through the process.  Fedora has also been tested as the 'connected' VM to download the needed images and other content. 
 
@@ -46,7 +46,7 @@ git clone https://github.com/sjbylo/aba.git
 cd aba
 ./aba
 ```
-- clones the repo, installs 'make' and configures high-level settings, e.g. OCP target version, your domain name, machine network CIDR etc.
+- clones the repo, installs 'make' and configures high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc.
 - helps decide if you want to install onto VMware/ESXi or onto bare-metal. 
 
 ```
@@ -127,7 +127,7 @@ The usual things you need to install OpenShift when using the Agent-based instal
    - First, install a bastion with a fresh version of RHEL. Fedora can also be used except Quay mirror fails to install on it.
    - a 'minimal install' of RHEL 9.4, RHEL 8.9 and Fedora 40 have been tested, other recent versions of RHEL/Fedora should work too.
       - Note that on Fedora 40, the mirror registry failed to install due to an [unexpected keyword argument 'cert_file'](https://github.com/quay/mirror-registry/issues/140) error, but remote installs of the Quay appliance (from Fedora) worked ok. 
-      - Note that only RHEL 9 is supported for OCP v4.15+ as the latest version of oc-mirror only works on RHEL 9.
+      - Note that only RHEL 9 is supported for OpenShift v4.15+ as the latest version of oc-mirror only works on RHEL 9.
 - **Git repo**
    - Clone or copy this git repository (https://github.com/sjbylo/aba.git) anywhere under your *home directory* on the connected bastion (e.g. on a Fedora/RHEL laptop). 
    - Ensure sudo root access is configured. Password-less sudo is preferable. 
@@ -266,13 +266,13 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 cd aba
 make cluster name=mycluster [type=sno|compact|standard] [target=xyz]
 ```
-- will create a directory 'mycluster', copy the Makefile into it and then run 'make' inside the directory.
+- will create a directory 'mycluster', copy the Makefile into it and then promt you to run 'make' inside the directory.
 - Note, *all* advanced preset parameters at the bottom of the `aba.conf` configuration file must be completed for the optional "type" parameter to have any affect. 
 
-If needed, the following command can be used to monitor the progress of the Agent-based installer. For example: 
+ You should run the following command to monitor the progress of the Agent-based installer. For example: 
 
 ```
-cd <cluster dir>   # e.g. cd sno  
+cd <cluster dir>   # e.g. cd compact
 make mon
 ```
 
@@ -286,6 +286,12 @@ INFO To access the cluster as the system:admin user when using 'oc', run
 INFO     export KUBECONFIG=/home/steve/aba/compact/iso-agent-based/auth/kubeconfig 
 INFO Access the OpenShift web-console here: https://console-openshift-console.apps.compact.example.com 
 INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ" 
+
+The cluster has been successfully installed.
+Run '. <(make shell)' to access the cluster using the kubeconfig file (x509 cert), or
+Run '. <(make login)' to log into the cluster using the 'kubeadmin' password. 
+Run 'make help' for more options.
+
 ```
 You can get access to the cluster using one of the commands:
 
@@ -308,12 +314,18 @@ You can run commands against the cluster, e.g. to show the installation progress
 watch make cmd cmd="get co"
 ```
 
-If you only want to create the agent-based iso file, e.g. to boot bare-metal nodes, use:
+If you want to create the agent-based config files, e.g. to make changes to `install-config.yaml` and `agent-config.yaml`, use:
 
 ```
 cd mycluster
 make agentconf
-# then manually edit the 'agent-config.yaml' file to set the appropriate Mac addresses matching your bare-metal nodes, change drive and net interface hints etc.
+# then, if needed,  manually edit the 'agent-config.yaml' file to set the appropriate mac addresses matching your bare-metal nodes, change drive and net interface hints etc.
+```
+
+If you want to create the agent-based iso file, e.g. to boot bare-metal nodes, use:
+
+```
+cd mycluster
 make iso
 # boot the bare-metal node(s) with the generated ISO file. This can be done using a USB stick or via the server's remote management interfaces (BMC etc).
 make mon
@@ -321,25 +333,26 @@ make mon
 
 If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme. 
 
-Other examples of commands (make <targets>), when working with VMware/ESXi:
+Other examples of commands (make <targets>):
 
 cd mycluster     # change to the directory with the agent-based install files, using 'mycluster' as an example.
 
 | Target | Description |
 | :----- | :---------- |
-| make day2        | Integrate the private mirror into OCP. |
-| make ls          | Show list of VMs and their state. |
-| make start       | Power on all VMs |
-| make stop        | Gracefully shut down all VMs |
-| make powerdown   | Power down all VMs immediately |
-| make kill        | Same as 'powerdown' |
-| make delete      | Delete all VMs  |
-| make create      | Create all VMs  |
-| make refresh     | Delete & re-create the VMs causing the cluster to be re-installed. |
-| make delete      | Delete all the VMs  |
-| make login       | Display the 'oc login' command for the cluster.  Use: . <(make login)  |
-| make shell       | Display the command to access the cluster using the kubeconfig file.  Use: . <(make shell) |
-| make help        | Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/<mycluster>/Makefile)  |
+| `make day2`        | Integrate the private mirror into OpenShift. |
+| `make ls`          | Show list of VMs and their state. |
+| `make startup`     | Greacefully start up a cluster |
+| `make shutdown`    | Greacefully shut down (or hibernate) a cluster. `make shutdown wait=1` wait for poweroff |
+| `make start`       | Power on all VMs |
+| `make stop`        | Gracefully shut down all VMs (guest shutdown only!) |
+| `make powerdown`   | Power down all VMs immediately |
+| `make kill`        | Same as 'powerdown' |
+| `make create`      | Create all VMs  |
+| `make refresh`     | Delete & re-create the VMs causing the cluster to be re-installed. |
+| `make delete`      | Delete all the VMs  |
+| `make login`       | Display the 'oc login' command for the cluster.  Use: . <(make login)  |
+| `make shell`       | Display the command to access the cluster using the kubeconfig file.  Use: . <(make shell) |
+| `make help`        | Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/<mycluster>/Makefile)  |
 
 
 ## Features that are not implemented yet
@@ -396,7 +409,7 @@ As an example, edit agent-config.yaml to include the following to direct agent-b
       deviceName: /dev/sdb
 ```
 
-or, adding vSphere integration into 'install-config.yaml' (works from the OCP Console on day 2, with v4.14 and below) - Note, this is completed automatically now if you are deploying on vSphere or ESXi.
+or, adding vSphere integration into 'install-config.yaml' (works from the OpenShift Console on day 2, with v4.14 and below) - Note, this is completed automatically now if you are deploying on vSphere or ESXi.
 
 ```
 platform:
