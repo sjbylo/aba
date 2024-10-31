@@ -146,9 +146,9 @@ The usual things you need to install OpenShift when using the Agent-based instal
         - points to the IP address of your registry.  This can be either the one you want installed or your existing registry. 
 - **Registry**
    - If you are using an existing registry:
-     - Copy your existing registry's credential files (pull secret and root CA) into the 'mirror/regcreds' directory, e.g.:
-       - mirror/regcreds/pull-secret-mirror.json   (pull secret file for your registry)
-       - mirror/regcreds/rootCA.pem                (root CA file for your registry) 
+     - Copy your existing registry's credential files (pull secret and root CA) into the `mirror/regcreds` directory, e.g.:
+       - `mirror/regcreds/pull-secret-mirror.json`   (pull secret file for your registry)
+       - `mirror/regcreds/rootCA.pem`                (root CA file for your registry) 
      - Later, when the images are pushed to the registry, these files will be used. 
 - **Finally**
    - run the ./aba command to initialize the installation process (see 'Getting Started' below).
@@ -178,8 +178,8 @@ make sync
 ```
 This command will:
   - trigger 'make mirror' (to configure the mirror registry), if needed. 
-    - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in mirror/regcreds/ first! See above for more).
-    - or, installs Quay registry on the internal bastion (or remote internal bastion) and copies the generated pull secret and certificate into the 'mirror/regcreds' directory for later use.
+    - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `mirror/regcreds/` first! See above for more).
+    - or, installs Quay registry on the internal bastion (or remote internal bastion) and copies the generated pull secret and certificate into the `mirror/regcreds` directory for later use.
   - pull images from the Internet and store them in the registry.
 
 Now continue with "Install OpenShift" below.
