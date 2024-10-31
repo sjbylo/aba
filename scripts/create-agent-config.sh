@@ -55,7 +55,6 @@ export arr_macs=$(cat .macs.conf | tr "\n" " " | tr -s "[:space:]")  # scripts/j
 rm -f .macs.conf
 
 # Set up the dns server(s)
-echo_cyan "Adding DNS server(s): $dns_servers"
 export arr_dns_servers=$(echo $dns_servers | tr -d "[:space:]" | tr "," " ")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
 echo_cyan "Adding DNS server(s): $arr_dns_servers"
 
