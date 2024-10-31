@@ -352,7 +352,7 @@ cd mycluster     # change to the directory with the agent-based install files, u
 | `make delete`      | Delete all the VMs  |
 | `make login`       | Display the `oc login` command for the cluster.  Use: . <(make login)  |
 | `make shell`       | Display the command to access the cluster using the kubeconfig file.  Use: . <(make shell) |
-| `make help`        | Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/`mycluster`/Makefile)  |
+| `make help`        | Help is available in all Makefiles (in `aba/Makefile`,  `aba/mirror/Makefile`,  `aba/cli/Makefile` and `aba/< mycluster >/Makefile`)  |
 
 
 ## Features that are not implemented yet
