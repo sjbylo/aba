@@ -307,8 +307,8 @@ rm sno/cluster.conf   # This should 100% reset the cluster and make should start
 mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 201"
 test-cmd -m "Configuring SNO cluster with 'make sno target=cluster.conf" make sno target=cluster.conf
 mylog "Setting CIDR 10.0.1.128/25"
-sed -i "s/^machine_network=[^ \t]*/machine_network=10.0.1.128 /g" sno/cluster.conf
-sed -i "s/^prefix_length=[^ \t]*/prefix_length=25 /g" sno/cluster.conf
+sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.128/25 #g" sno/cluster.conf
+##sed -i "s/^prefix_length=[^ \t]*/prefix_length=25 /g" sno/cluster.conf
 
 mylog "Setting starting_ip=201"
 sed -i "s/^starting_ip=[^ \t]*/starting_ip=201 /g" sno/cluster.conf
@@ -326,7 +326,7 @@ make -C sno clean # This should clean up the cluster and make should start from 
 test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
 
 ### Let it be ## test-cmd -m "Deleting cluster" make -C sno delete 
-test-cmd -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown || echo cluster not up"
+test-cmd -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown || echo cluster shutdown failure"
 
 ### FIXME mylog "Removing vmware config file to simulate 'bare metal' and iso creation"
 mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' file to simulate 'bare metal' and iso creation"
