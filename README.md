@@ -63,7 +63,7 @@ make sync
 ```
 make cluster name=sno type=sno
 ```
-- creates a directory 'sno' (for Single Node OpenShift) and the file "sno/cluster.conf" which needs to be edited. 
+- creates a directory 'sno' (for Single Node OpenShift) and the file `sno/cluster.conf` which needs to be edited. 
 - any topology of OpenShift is supported, e.g. sno (1), compact (3), standard (3+n).
 
 ```
@@ -163,7 +163,7 @@ To get started, run:
 ./aba 
 ```
 
-Note that this command will create the 'aba.conf' file which contains some values that you *must change*, e.g. your preferred platform, your domain name, your network address (if known) and any operators you will require etc.
+Note that this command will create the `aba.conf` file which contains some values that you *must change*, e.g. your preferred platform, your domain name, your network address (if known) and any operators you will require etc.
 
 Now, continue with either 'Disconnected mode' or 'Fully disconnected (air-gapped) mode' below. 
 
@@ -267,7 +267,7 @@ cd aba
 make cluster name=mycluster [type=sno|compact|standard] [target=xyz]
 ```
 - will create a directory 'mycluster', copy the Makefile into it and then run 'make' inside the directory.
-- Note, *all* advanced preset parameters at the bottom of the 'aba.conf' configuration file must be completed for the optional "type" parameter to have any affect. 
+- Note, *all* advanced preset parameters at the bottom of the `aba.conf` configuration file must be completed for the optional "type" parameter to have any affect. 
 
 If needed, the following command can be used to monitor the progress of the Agent-based installer. For example: 
 
@@ -361,10 +361,10 @@ cd mycluster     # change to the directory with the agent-based install files, u
 
 | Config file | Description |
 | :---------- | :---------- |
-| *aba/aba.conf*                    | the 'global' config, used to set the target version of OpenShift, your domain name, private network address, DNS IP etc |
-| *aba/mirror/mirror.conf*          | describes your private/internal mirror registry (either existing or to-be-installed)  |
-| *aba/`cluster-name`/cluster.conf* | describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs etc |
-| *aba/vmware.conf*                 | vCenter/ESXi access configuration using 'govc' CLI (optional) |
+| `aba/aba.conf`                    | the 'global' config, used to set the target version of OpenShift, your domain name, private network address, DNS IP etc |
+| `aba/mirror/mirror.conf`          | describes your private/internal mirror registry (either existing or to-be-installed)  |
+| `aba/`cluster-name`/cluster.conf` | describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs etc |
+| `aba/vmware.conf`                 | vCenter/ESXi access configuration using 'govc' CLI (optional) |
 
 
 ## Customizing agent-config.yaml and/or openshift-install.yaml files
@@ -435,7 +435,7 @@ scripts/monitor-install.sh
 - Govc is used to create and manage VMs on ESXi or vSphere.
   - https://github.com/vmware/govmomi/tree/main/govc
 
-Be sure to set the correct (govc) values to access vCenter in the vmware.conf file.  Note that ESXi is also supported.
+Be sure to set the correct (govc) values to access vCenter in the `vmware.conf` file.  Note that ESXi is also supported.
 
 Why 'make' was chosen to build Aba?
 
@@ -451,14 +451,14 @@ Cluster presets are used mainly to automate the testing of Aba.
 ```
 make sno
 ```
-- This will create a directory 'sno' and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in 'aba.conf' must be completed for this to work).  If you are using VMware it will create the VMs for you.
-- Be sure to go through *all* the values in 'aba/vmware.conf' and 'sno/cluster.conf'.
+- This will create a directory 'sno' and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `aba.conf` must be completed for this to work).  If you are using VMware it will create the VMs for you.
+- Be sure to go through *all* the values in `aba/vmware.conf` and `sno/cluster.conf`.
 - Be sure your DNS entries have been set up in advance. See above on Prerequisites. 
 - Aba will show you the installation progress.  To troubleshoot cluster installation, run 'make ssh' to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands and actions in Aba are idempotent.  If you hit a problem, fix it and try again should always be the right way forward!
 
 ```
-make compact    # for a 3 node cluster topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
-make standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
+make compact    # for a 3 node cluster topology (note, *all* parameters in `aba.conf` must be completed for this to work).
+make standard   # for a 3+2 topology (note, *all* parameters in `aba.conf` must be completed for this to work).
 ```
 - Run this to create a compact cluster (works in a similar way to the above). 
 
