@@ -172,11 +172,11 @@ start: .initialized vmware.conf                     agent-config.yaml ## Power o
 
 .PHONY: poweroff
 poweroff: .initialized vmware.conf                     agent-config.yaml ## Power off all VMs immediately.  This will stop the cluster abruptly. 
-	scripts/vmw-kill.sh $(debug) || exit 0
+	@scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: kill
 kill:  .initialized vmware.conf                     agent-config.yaml ## Kill or power off the VMs immediately.  This will stop the cluster abruptly. 
-	scripts/vmw-kill.sh $(debug) || exit 0
+	@scripts/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: delete
 delete: .initialized vmware.conf                     agent-config.yaml ## Delete all VMs. This will delete the cluster!

@@ -355,10 +355,12 @@ sleep 30  # Sleep in case need to check the cluster
 # Restart cluster test 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Log into cluster" ". <(make -s -C $subdir/aba/sno login)"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/sno ls"
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully (2/2)" "yes | make -s -C $subdir/aba/sno shutdown"
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully and wait (2/2)" "yes | make -s -C $subdir/aba/sno shutdown wait=1"
+
 #test-cmd -m "Wait for cluster to power down" sleep 600
-test-cmd -m "Wait for cluster to power down" sleep 60
+####test-cmd -m "Wait for cluster to power down" sleep 60
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'poweredOff'" "until make -s -C $subdir/aba/sno ls | grep poweredOff | wc -l| grep ^1$ ; do sleep 10; echo -n .;done"
+
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/sno ls"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Start cluster gracefully" "make -s -C $subdir/aba/sno startup"
 #test-cmd -m "Wait for cluster to settle" sleep 600
@@ -423,9 +425,11 @@ build_and_test_cluster() {
 	# Restart cluster test 
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Log into cluster" ". <(make -s -C $subdir/aba/$cluster_name login)"
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/$cluster_name ls"
-	test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully" "yes | make -s -C $subdir/aba/$cluster_name shutdown"
-	test-cmd -m "Wait for cluster to power down" sleep 30
+	test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully and wait" "yes | make -s -C $subdir/aba/$cluster_name shutdown wait=1"
+
+	####test-cmd -m "Wait for cluster to power down" sleep 30
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'poweredOff'" "until make -s -C $subdir/aba/$cluster_name ls |grep poweredOff |wc -l| grep ^$cnt$; do sleep 10; done"
+
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/$cluster_name ls"
 	test-cmd -h $reg_ssh_user@$bastion2 -m  "Start cluster gracefully" "make -s -C $subdir/aba/$cluster_name startup"
 	test-cmd -m "Wait for cluster to settle" sleep 30
@@ -483,10 +487,11 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s
 # Restart cluster test 
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Log into cluster" ". <(make -s -C $subdir/aba/standard login)"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/standard ls"
-test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully (2/2)" "yes | make -s -C $subdir/aba/standard shutdown"
-#test-cmd -m "Wait for cluster to power down" sleep 600
-test-cmd -m "Wait for cluster to power down" sleep 60
+test-cmd -h $reg_ssh_user@$bastion2 -m  "Shut cluster down gracefully and wait (2/2)" "yes | make -s -C $subdir/aba/standard shutdown wait=1"
+
+#test-cmd -m "Wait for cluster to power down" sleep 60
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Checking for all nodes 'poweredOff'" "until make -s -C $subdir/aba/standard ls |grep poweredOff |wc -l| grep ^6$; do sleep 10; echo -n .; done"
+
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Check node status" "make -s -C $subdir/aba/standard ls"
 test-cmd -h $reg_ssh_user@$bastion2 -m  "Start cluster gracefully" "make -s -C $subdir/aba/standard startup"
 #test-cmd -m "Wait for cluster to settle" sleep 600
@@ -502,8 +507,10 @@ test-cmd -h $reg_ssh_user@$bastion2 -m  "Waiting for all co available?" "make -s
 # Restart cluster test end 
 
 # keep it # test-cmd -h $reg_ssh_user@$bastion2 -m  "Deleting standard cluster" "make -s -C $subdir/aba/standard delete" 
-###test-cmd -h $reg_ssh_user@$bastion2 -m  "Stopping standard cluster" "yes|make -s -C $subdir/aba/standard shutdown" 
-test-cmd -h $reg_ssh_user@$bastion2 -m "If cluster up, stopping cluster" ". <(make -sC $subdir/aba/standard shell) && . <(make -sC $subdir/aba/standard login) && yes|make -sC $subdir/aba/standard shutdown || echo cluster not up"
+###test-cmd -h $reg_ssh_user@$bastion2 -m  "Stopping standard cluster and wait" "yes|make -s -C $subdir/aba/standard shutdown wait=1" 
+
+test-cmd -h $reg_ssh_user@$bastion2 -m "If cluster up, shutting cluster down and wait" ". <(make -sC $subdir/aba/standard shell) && . <(make -sC $subdir/aba/standard login) && yes|make -sC $subdir/aba/standard shutdown wait=1 || echo cluster shutdown failure"
+
 # keep it # test-cmd -h $reg_ssh_user@$bastion2 -m  "Running 'make clean' in $subdir/aba/stanadard" "make -s -C $subdir/aba/standard clean" 
 
 #test-cmd "make distclean force=1"
