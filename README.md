@@ -46,7 +46,7 @@ git clone https://github.com/sjbylo/aba.git
 cd aba
 ./aba
 ```
-- clones the repo, installs `make` and configures high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc.
+- clones the repo, installs 'make' and configures high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc.
 - helps decide if you want to install onto VMware/ESXi or onto bare-metal. 
 
 ```
@@ -208,11 +208,11 @@ Example:
 
 make inc                                          # Write tar archive to /tmp
 or
-make inc out=/dev/path/to/thumb-drive/aba.tgz     # Write archive `aba.tgz` to the device mounted at /dev/path/to/thumb-drive
+make inc out=/dev/path/to/thumb-drive/aba.tgz     # Write archive 'aba.tgz' to the device mounted at /dev/path/to/thumb-drive
 or
 make inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to internal host (if possible).
 
-# Copy the file `aba.tgz` to your internal bastion via your portable storage device.
+# Copy the file 'aba.tgz' to your internal bastion via your portable storage device.
 
 # Then, on the internal bastion run:
 tar xvf aba.tgz                                   # Extract the tar file. Ensure file timestamps are kept the same as on the connected bastion.
@@ -225,8 +225,9 @@ For such cases where it is not possible to write directly to a portable storage 
 Example:
 
 ```
-make tarrepo out=/dev/path/to/drive/aba.tgz       # Write archive `aba.tgz` to the device mounted at /dev/path/to/drive, EXCEPT for the `seq#` tar files under save/
+make tarrepo out=/dev/path/to/drive/aba.tgz
 ```
+- Write archive `aba.tgz` to the device mounted at /dev/path/to/drive, EXCEPT for the `seq#` tar files under save/
 - The `seq#` tar file(s) in the "mirror/save" directory and the repo tarball `aba.tgz` can be copied separately to a storage device, e.g. USB stick, S3 or other. 
 
 Copy the "aba.tgz" file to the internal bastion and unpack the archive. Note the directory "aba/mirror/save".
@@ -282,7 +283,7 @@ After OpenShift has been installed you will see the following output:
 
 ```
 INFO Install complete!                            
-INFO To access the cluster as the system:admin user when using `oc`, run 
+INFO To access the cluster as the system:admin user when using 'oc', run 
 INFO     export KUBECONFIG=/home/steve/aba/compact/iso-agent-based/auth/kubeconfig 
 INFO Access the OpenShift web-console here: https://console-openshift-console.apps.compact.example.com 
 INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ" 
@@ -376,7 +377,7 @@ cd mycluster     # change to the directory with the agent-based install files, u
 | :---------- | :---------- |
 | `aba/aba.conf`                    | the 'global' config, used to set the target version of OpenShift, your domain name, private network address, DNS IP etc |
 | `aba/mirror/mirror.conf`          | describes your private/internal mirror registry (either existing or to-be-installed)  |
-| `aba/`cluster-name`/cluster.conf` | describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs etc |
+| `aba/`cluster-name`/cluster.conf` | describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, bonding etc |
 | `aba/vmware.conf`                 | vCenter/ESXi access configuration using `govc` CLI (optional) |
 
 
@@ -393,7 +394,7 @@ cd mycluster
 make
 ```
 
-The following script can be used to extract the cluster config from the agent-config yaml files. This script can be run to check that the correct information can be extracted to create the VMs. 
+The following script can be used to extract the cluster config from the agent-config yaml files. This script can be run to check that the correct information can be extracted to create the VMs (if required). 
 
 Example:
 
@@ -422,7 +423,7 @@ platform:
 Check `cluster-config.sh` is able to parse all the data it needs to create the agent config files (and the VMs, if needed):
 
 ```
-scripts/cluster-config.sh        # example execution to show the cluster configuration extracted from the Agend-based files. 
+scripts/cluster-config.sh        # example execution to show the cluster configuration extracted from the agend-based files. 
 ```
 
 Run make again to rebuild the agent-based ISO and refresh the VMs, e.g.:
@@ -430,13 +431,13 @@ Run make again to rebuild the agent-based ISO and refresh the VMs, e.g.:
 ```
 make
 ...
-scripts/generate-image.sh
+make iso
 ...
-scripts/vmw-upload.sh
+make upload
 ...
-scripts/vmw-create.sh --start
+make refresh
 ...
-scripts/monitor-install.sh
+make mon
 ```
 
 
@@ -470,8 +471,8 @@ make sno
 - Aba will show you the installation progress.  To troubleshoot cluster installation, run `make ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands and actions in Aba are idempotent.  If you hit a problem, fix it and try again should always be the right way forward!
 
 ```
-make compact    # for a 3 node cluster topology (note, *all* parameters in `aba.conf` must be completed for this to work).
-make standard   # for a 3+2 topology (note, *all* parameters in `aba.conf` must be completed for this to work).
+make compact    # for a 3 node cluster topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
+make standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
 ```
 - Run this to create a compact cluster (works in a similar way to the above). 
 
