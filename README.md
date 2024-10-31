@@ -178,8 +178,8 @@ make sync
 ```
 This command will:
   - trigger 'make mirror' (to configure the mirror registry), if needed. 
-  - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in mirror/regcreds/ first! See above for more).
-  - or, installs Quay registry on the internal bastion (or remote internal bastion) and copies the generated pull secret and certificate into the 'mirror/regcreds' directory for later use.
+    - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in mirror/regcreds/ first! See above for more).
+    - or, installs Quay registry on the internal bastion (or remote internal bastion) and copies the generated pull secret and certificate into the 'mirror/regcreds' directory for later use.
   - pull images from the Internet and store them in the registry.
 
 Now continue with "Install OpenShift" below.
