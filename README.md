@@ -35,7 +35,7 @@ Aba automatically completes the following for you:
 
 Use aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail.  It also works with connected environments!
 
-For the very impatient: clone this repo onto a RHEL VM with an internet connection, install and run 'make'.  You will be guided through the process.  Fedora has also been tested as the 'connected' VM to download the needed images and other content. 
+For the very impatient: clone this repo onto a RHEL VM with an internet connection, install and run `make`.  You will be guided through the process.  Fedora has also been tested as the 'connected' VM to download the needed images and other content. 
 
 ## Quick Guide
 
@@ -46,7 +46,7 @@ git clone https://github.com/sjbylo/aba.git
 cd aba
 ./aba
 ```
-- clones the repo, installs 'make' and configures high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc.
+- clones the repo, installs `make` and configures high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc.
 - helps decide if you want to install onto VMware/ESXi or onto bare-metal. 
 
 ```
@@ -58,12 +58,12 @@ make mirror
 make sync
 ```
 - copies the required images directly to the mirror registry (for partially disconnected environments, e.g. via a proxy).
-- Fully disconnected (air-gapped) environments are also supported with 'make save/load' (see below).
+- Fully disconnected (air-gapped) environments are also supported with `make save/load` (see below).
 
 ```
 make cluster name=sno type=sno
 ```
-- creates a directory 'sno' (for Single Node OpenShift) and the file `sno/cluster.conf` which needs to be edited. 
+- creates a directory `sno` (for Single Node OpenShift) and the file `sno/cluster.conf` which needs to be edited. 
 - any topology of OpenShift is supported, e.g. sno (1), compact (3), standard (3+n).
 
 ```
@@ -118,7 +118,7 @@ The usual things you need to install OpenShift when using the Agent-based instal
    - vCenter or ESXi API access. 
       - Ensure enough privileges to vCenter. If 'admin' privileges cannot be provided, see the [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) documentation for more.
    - Bare-metal
-      - Note that bare-metal nodes can be booted manually using the generated ISO. Mac addresses can be set in the 'install-config.yaml' file after running 'make install-config.yaml'.
+      - Note that bare-metal nodes can be booted manually using the generated ISO. Mac addresses can be set in the `install-config.yaml` file after running `make install-config.yaml`.
 
 
 ## Initial Steps
@@ -132,7 +132,7 @@ The usual things you need to install OpenShift when using the Agent-based instal
    - Clone or copy this git repository (https://github.com/sjbylo/aba.git) anywhere under your *home directory* on the connected bastion (e.g. on a Fedora/RHEL laptop). 
    - Ensure sudo root access is configured. Password-less sudo is preferable. 
 - **Pull Secret**
-   - To install OpenShift, a API credentials are needed to allow access to and pull images from, Red Hat's registries.  Copy your pull secret in JSON format to the file '~/.pull-secret.json' (in your $HOME directory).
+   - To install OpenShift, a API credentials are needed to allow access to and pull images from, Red Hat's registries.  Copy your pull secret in JSON format to the file `~/.pull-secret.json` (in your $HOME directory).
       - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret
       - It's a good idea to make the file user read-only, e.g. `chmod 600 ~/.pull-secret.json`.
 - **DNS**
@@ -177,14 +177,14 @@ In this mode, the connected bastion has access to both the Internet and the priv
 make sync
 ```
 This command will:
-  - trigger 'make mirror' (to configure the mirror registry), if needed. 
+  - trigger `make mirror` (to configure the mirror registry), if needed. 
     - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `mirror/regcreds/` first! See above for more).
     - or, installs Quay registry on the internal bastion (or remote internal bastion) and copies the generated pull secret and certificate into the `mirror/regcreds` directory for later use.
   - pull images from the Internet and store them in the registry.
 
 Now continue with "Install OpenShift" below.
 
-Note that the above 'disconnected mode' can be repeated, for example to download and install Operators as a day 2 operation or to upgrade OpenShift, by updating the 'sync/imageset-sync.yaml' file and running 'make sync/day2' again.
+Note that the above 'disconnected mode' can be repeated, for example to download and install Operators as a day 2 operation or to upgrade OpenShift, by updating the `sync/imageset-sync.yaml` file and running `make sync/day2` again.
 
 
 ## Fully disconnected (air-gapped) mode
@@ -198,7 +198,7 @@ make save
 
 - pulls the images from the Internet and saves them into the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators)!
 
-Then, using one of 'make inc/tar/tarrepo' (incremental/full or separate copies), copy the whole aba/ repo (including templates, scripts, images, CLIs and other install files) to your internal bastion (in your private network) via a portable storage device, e.g. a thumb drive. 
+Then, using one of `make inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repo (including templates, scripts, images, CLIs and other install files) to your internal bastion (in your private network) via a portable storage device, e.g. a thumb drive. 
 
 Example:
 
@@ -208,11 +208,11 @@ Example:
 
 make inc                                          # Write tar archive to /tmp
 or
-make inc out=/dev/path/to/thumb-drive/aba.tgz     # Write archive 'aba.tgz' to the device mounted at /dev/path/to/thumb-drive
+make inc out=/dev/path/to/thumb-drive/aba.tgz     # Write archive `aba.tgz` to the device mounted at /dev/path/to/thumb-drive
 or
 make inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to internal host (if possible).
 
-# Copy the file 'aba.tgz' to your internal bastion via your portable storage device.
+# Copy the file `aba.tgz` to your internal bastion via your portable storage device.
 
 # Then, on the internal bastion run:
 tar xvf aba.tgz                                   # Extract the tar file. Ensure file timestamps are kept the same as on the connected bastion.
@@ -225,9 +225,9 @@ For such cases where it is not possible to write directly to a portable storage 
 Example:
 
 ```
-make tarrepo out=/dev/path/to/drive/aba.tgz       # Write archive 'aba.tgz' to the device mounted at /dev/path/to/drive, EXCEPT for the 'seq#' tar files under save/
+make tarrepo out=/dev/path/to/drive/aba.tgz       # Write archive `aba.tgz` to the device mounted at /dev/path/to/drive, EXCEPT for the `seq#` tar files under save/
 ```
-- The 'seq#' tar file(s) in the "mirror/save" directory and the repo tarball 'aba.tgz' can be copied separately to a storage device, e.g. USB stick, S3 or other. 
+- The `seq#` tar file(s) in the "mirror/save" directory and the repo tarball `aba.tgz` can be copied separately to a storage device, e.g. USB stick, S3 or other. 
 
 Copy the "aba.tgz" file to the internal bastion and unpack the archive. Note the directory "aba/mirror/save".
 Copy or move the "seq" tar file(s), as is, from the "mirror/save" directory to the internal bastion, into the "mirror/save" directory on the internal bastion.
@@ -238,20 +238,20 @@ make load
 ```
 - will (if required) install Quay (from the bundle archive) and then load the images into Quay.
 - Required RPMs:
-  - Note that the internal bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure 'dnf' to use a proxy). 
+  - Note that the internal bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure `dnf` to use a proxy). 
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation. 
-  - If rpms are not readily available in your private network, the command 'make rpms' can help by downloading the required rpms, which can then be copied to the internal bastion and installed with 'dnf localinstall rpms/*.rpm'.  Note this will only work if your external and internal bastions are running the exact same version of RHEL (at least, that was the experience when testing Aba!). 
+  - If rpms are not readily available in your private network, the command `make rpms` can help by downloading the required rpms, which can then be copied to the internal bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your external and internal bastions are running the exact same version of RHEL (at least, that was the experience when testing Aba!). 
 
 Now continue with "Install OpenShift" below.
 
 Note that the above 'air-gapped workflow' can be repeated in the *exact same way*, for example to incrementally install Operators or download new versions of images to upgrade OpenShift.
 
 For example, by:
-- editing the 'save/imageset-save.yaml' file on the connected bastion to add more images or to fetch the latest images
-- running 'make save'
-- running 'make inc' (or make tar or make tarrepo) to create a bundle archive (see above)
+- editing the `save/imageset-save.yaml` file on the connected bastion to add more images or to fetch the latest images
+- running `make save`
+- running `make inc` (or make tar or make tarrepo) to create a bundle archive (see above)
 - unpacking the tar archive on the internal bastion
-- running 'make load' to load the images into the internal registry.
+- running `make load` to load the images into the internal registry.
 
 Note that generated 'image sets' are sequential and must be pushed to the target mirror registry in order. You can derive the sequence number from the file name of the generated image set archive file in the mirror/save directory. 
 
@@ -266,7 +266,7 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 cd aba
 make cluster name=mycluster [type=sno|compact|standard] [target=xyz]
 ```
-- will create a directory 'mycluster', copy the Makefile into it and then promt you to run 'make' inside the directory.
+- will create a directory `mycluster`, copy the Makefile into it and then promt you to run `make` inside the directory.
 - Note, *all* advanced preset parameters at the bottom of the `aba.conf` configuration file must be completed for the optional "type" parameter to have any affect. 
 
  You should run the following command to monitor the progress of the Agent-based installer. For example: 
@@ -276,13 +276,13 @@ cd <cluster dir>   # e.g. cd compact
 make mon
 ```
 
-Get help with 'make help'.
+Get help with `make help`.
 
 After OpenShift has been installed you will see the following output:
 
 ```
 INFO Install complete!                            
-INFO To access the cluster as the system:admin user when using 'oc', run 
+INFO To access the cluster as the system:admin user when using `oc`, run 
 INFO     export KUBECONFIG=/home/steve/aba/compact/iso-agent-based/auth/kubeconfig 
 INFO Access the OpenShift web-console here: https://console-openshift-console.apps.compact.example.com 
 INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ" 
@@ -335,7 +335,7 @@ If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) rea
 
 Other examples of commands (make <targets>):
 
-cd mycluster     # change to the directory with the agent-based install files, using 'mycluster' as an example.
+cd mycluster     # change to the directory with the agent-based install files, using `mycluster` as an example.
 
 | Target | Description |
 | :----- | :---------- |
@@ -346,13 +346,13 @@ cd mycluster     # change to the directory with the agent-based install files, u
 | `make start`       | Power on all VMs |
 | `make stop`        | Gracefully shut down all VMs (guest shutdown only!) |
 | `make powerdown`   | Power down all VMs immediately |
-| `make kill`        | Same as 'powerdown' |
+| `make kill`        | Same as `powerdown` |
 | `make create`      | Create all VMs  |
 | `make refresh`     | Delete & re-create the VMs causing the cluster to be re-installed. |
 | `make delete`      | Delete all the VMs  |
-| `make login`       | Display the 'oc login' command for the cluster.  Use: . <(make login)  |
+| `make login`       | Display the `oc login` command for the cluster.  Use: . <(make login)  |
 | `make shell`       | Display the command to access the cluster using the kubeconfig file.  Use: . <(make shell) |
-| `make help`        | Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/<mycluster>/Makefile)  |
+| `make help`        | Help is available in all Makefiles (in aba/Makefile  aba/mirror/Makefile  aba/cli/Makefile and aba/`mycluster`/Makefile)  |
 
 
 ## Features that are not implemented yet
@@ -377,12 +377,12 @@ cd mycluster     # change to the directory with the agent-based install files, u
 | `aba/aba.conf`                    | the 'global' config, used to set the target version of OpenShift, your domain name, private network address, DNS IP etc |
 | `aba/mirror/mirror.conf`          | describes your private/internal mirror registry (either existing or to-be-installed)  |
 | `aba/`cluster-name`/cluster.conf` | describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs etc |
-| `aba/vmware.conf`                 | vCenter/ESXi access configuration using 'govc' CLI (optional) |
+| `aba/vmware.conf`                 | vCenter/ESXi access configuration using `govc` CLI (optional) |
 
 
 ## Customizing agent-config.yaml and/or openshift-install.yaml files
 
-- Once a cluster config directory has been created (e.g. 'compact') and Agent-based configuration has been created, some changes can be made to the 'install-config.yaml' and 'agent-config.yaml' files if needed. 'make' can be run again to re-create the ISO and the VMs etc (if required).  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.  
+- Once a cluster config directory has been created (e.g. `compact`) and Agent-based configuration has been created, some changes can be made to the `install-config.yaml` and `agent-config.yaml` files if needed. `make` can be run again to re-create the ISO and the VMs etc (if required).  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.  
 
 The workflow could look like this:
 ```
@@ -409,7 +409,7 @@ As an example, edit agent-config.yaml to include the following to direct agent-b
       deviceName: /dev/sdb
 ```
 
-or, adding vSphere integration into 'install-config.yaml' (works from the OpenShift Console on day 2, with v4.14 and below) - Note, this is completed automatically now if you are deploying on vSphere or ESXi.
+or, adding vSphere integration into `install-config.yaml` (works from the OpenShift Console on day 2, with v4.14 and below) - Note, this is completed automatically now if you are deploying on vSphere or ESXi.
 
 ```
 platform:
@@ -419,7 +419,7 @@ platform:
 
 ```
 
-Check 'cluster-config.sh' is able to parse all the data it needs to create the agent config files (and the VMs, if needed):
+Check `cluster-config.sh` is able to parse all the data it needs to create the agent config files (and the VMs, if needed):
 
 ```
 scripts/cluster-config.sh        # example execution to show the cluster configuration extracted from the Agend-based files. 
@@ -450,7 +450,7 @@ scripts/monitor-install.sh
 
 Be sure to set the correct (govc) values to access vCenter in the `vmware.conf` file.  Note that ESXi is also supported.
 
-Why 'make' was chosen to build Aba?
+Why `make` was chosen to build Aba?
 
 The UNIX/Linux command "make" is a utility for automating tasks based on rules specified in a Makefile. It enhances efficiency by managing dependencies, 
 facilitating streamlined processes. Widely applied beyond software development, "make" proves versatile in system management, ensuring organized 
@@ -464,10 +464,10 @@ Cluster presets are used mainly to automate the testing of Aba.
 ```
 make sno
 ```
-- This will create a directory 'sno' and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `aba.conf` must be completed for this to work).  If you are using VMware it will create the VMs for you.
+- This will create a directory `sno` and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `aba.conf` must be completed for this to work).  If you are using VMware it will create the VMs for you.
 - Be sure to go through *all* the values in `aba/vmware.conf` and `sno/cluster.conf`.
 - Be sure your DNS entries have been set up in advance. See above on Prerequisites. 
-- Aba will show you the installation progress.  To troubleshoot cluster installation, run 'make ssh' to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands and actions in Aba are idempotent.  If you hit a problem, fix it and try again should always be the right way forward!
+- Aba will show you the installation progress.  To troubleshoot cluster installation, run `make ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands and actions in Aba are idempotent.  If you hit a problem, fix it and try again should always be the right way forward!
 
 ```
 make compact    # for a 3 node cluster topology (note, *all* parameters in `aba.conf` must be completed for this to work).
