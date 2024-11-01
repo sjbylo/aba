@@ -8,8 +8,8 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`
 fi
 
-CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
-WKR_MAC_ADDRESSES_ARRAY=($WKR_MAC_ADDRESSES)
+CP_MAC_ADDR_ARRAY=($CP_MAC_ADDR)
+WKR_MAC_ADDR_ARRAY=($WKR_MAC_ADDR)
 
 # Need command 'arp' 
 
@@ -20,7 +20,7 @@ which arp >/dev/null || exit 0
 arp -an > /tmp/.all_arp_entries 
 IN_ARP_CACHE=
 > /tmp/.list_of_matching_arp_entries
-for mac in $CP_MAC_ADDRESSES $WKR_MAC_ADDRESSES
+for mac in $CP_MAC_ADDR $WKR_MAC_ADDR
 do
 	# checking mac address: $mac ...
 	if grep -q " $mac " /tmp/.all_arp_entries; then
@@ -53,7 +53,7 @@ if [ -s /tmp/.list_of_matching_arp_entries ]; then
 		arp -an > /tmp/.all_arp_entries 
 		P=
 		MAC_IN_USE=
-		for mac in $CP_MAC_ADDRESSES $WKR_MAC_ADDRESSES
+		for mac in $CP_MAC_ADDR $WKR_MAC_ADDR
 		do
 			# checking $mac ...
 			if grep -q " $mac " /tmp/.all_arp_entries; then

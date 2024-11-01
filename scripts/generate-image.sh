@@ -24,32 +24,32 @@ echo
 #eval `scripts/cluster-config.sh || exit 1`
 eval "$config || exit 1"
 
-if [ -d $MANIFEST_DIR ]; then
-	echo_cyan "Backing up previous $MANIFEST_DIR' dir to '$MANIFEST_DIR.backup':"
+if [ -d $ASSETS_DIR ]; then
+	echo_cyan "Backing up previous $ASSETS_DIR' dir to '$ASSETS_DIR.backup':"
 
-	rm -rf $MANIFEST_DIR.backup
-	cp -rp $MANIFEST_DIR $MANIFEST_DIR.backup
+	rm -rf $ASSETS_DIR.backup
+	cp -rp $ASSETS_DIR $ASSETS_DIR.backup
 fi
 
 echo_cyan Generating the ISO boot image for cluster: $CLUSTER_NAME.$BASE_DOMAIN ...
 
-rm -rf $MANIFEST_DIR 
-mkdir -p $MANIFEST_DIR
+rm -rf $ASSETS_DIR 
+mkdir -p $ASSETS_DIR
 
-cp install-config.yaml agent-config.yaml $MANIFEST_DIR 
+cp install-config.yaml agent-config.yaml $ASSETS_DIR 
 
-echo_cyan "openshift-install agent create image --dir $MANIFEST_DIR "
-openshift-install agent create image --dir $MANIFEST_DIR 
+echo_cyan "openshift-install agent create image --dir $ASSETS_DIR "
+openshift-install agent create image --dir $ASSETS_DIR 
 
 # FIXME: to implement PXE 
-#openshift-install agent create pxe-files --dir $MANIFEST_DIR
+#openshift-install agent create pxe-files --dir $ASSETS_DIR
 
-echo_cyan "Making backup of '$MANIFEST_DIR/auth' to '$MANIFEST_DIR/auth.backup'"
-cp -rp $MANIFEST_DIR/auth $MANIFEST_DIR/auth.backup
+echo_cyan "Making backup of '$ASSETS_DIR/auth' to '$ASSETS_DIR/auth.backup'"
+cp -rp $ASSETS_DIR/auth $ASSETS_DIR/auth.backup
 
 # Add NTP config to ignition, if needed
 scripts/add_ntp_ignition_to_iso.sh
 
 echo 
-echo_green "The agent based ISO has been created in the '$MANIFEST_DIR' directory"
+echo_green "The agent based ISO has been created in the '$ASSETS_DIR' directory"
 echo
