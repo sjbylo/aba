@@ -178,7 +178,8 @@ edit_file() {
 
 	if [ ! "$editor" -o "$editor" == "none" ]; then
 		echo
-		echo_yellow "The file '$(basename $PWD)/$conf_file' has been created.  Please edit it and then follow the instructons or try again."
+		#echo_yellow "The file '$(basename $PWD)/$conf_file' has been created. Please edit it & follow the instructons and/or try again."
+		echo_yellow "The file '$PWD/$conf_file' has been created. Please edit it & follow the instructons and/or try again."
 
 		return 1
 	else
