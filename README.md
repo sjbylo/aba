@@ -34,11 +34,12 @@ Aba automatically completes the following for you:
 1. Monitors the installation progress. 
 1. Allows for adding more images (e.g. Operators) when synchonizing the mirror registry (day 1 or 2 operation).
 1. Configures the OperatorHub integration with the mirror registry. 
-1. Can create an archive "bundle" containing all files needed to complete a fully air-gapped installation. 
+1. Can create an "archive bundle" containing all the files needed to complete a fully air-gapped installation. 
 1. Executes several workarounds for some typical issues with disconnected environments.
 1. Enables the integration with vSphere as a day 2 operation.
+1. Helps configure OpenShift with your NTP servers and many more. 
 
-For the very impatient: clone or download this git repository onto a RHEL VM with an internet connection and run `./aba -h` or `./aba`.  You will be guided through the process.  Fedora has also been tested as the 'connected' VM to download the needed images and other content. 
+For the very impatient: clone or download this git repository onto a RHEL 9 VM with an internet connection and run `./aba -h` or `./aba`.  You will be guided through the process.  Fedora has also been tested as the 'connected' VM to download the needed images and other content. 
 
 ## Quick Guide
 
@@ -91,29 +92,32 @@ Read more for all the details.
 
 ## Prerequisites
 
-The usual things you need to install OpenShift when using the Agent-based installer. 
+You will need the usual things when installing OpenShift using the Agent-based installer. 
 
 - **RHEL**
-   - Aba will attempt to install all required RPMs using "dnf".  If dnf is not configured or working the RPMs will need to be installed another way, e.g. DVD. 
-   - Ensure the internal RHEL bastion has the RPMs installed (as defined in the file templates/rpms-internal.txt).
-   - Ensure the *external* RHEL bastion has the RPMs installed (as defined in the file templates/rpms-external.txt).
-   - Install your favorite editor. 
+   - "Connected workstation": this is usually a RHEL or Fedora x86 VM running on your laptop with Internet access. 
+   - "Internal bastion": this is a RHEL 9 host/VM running in your internal/private/air-gapped network. 
+      - Note that if the bastion has Internet access, the bastion can be used to sync the data (and therefore the 'connected workstation' is not required).
+   - Ensure this git repository is cloned/downloaded into the 'connected workstation', anywhere under your user's home directory.
+   - On your connected workstation, add your Red Hat registry pull secret file to ~/.pull-secret.json
+   - Aba will attempt to install all required RPMs using "dnf".  If dnf is not configured or working the RPMs will need to be installed another way, e.g. from DVD. 
+      - Ensure the connected workstation has the RPMs installed as defined in the file `templates/rpms-external.txt`.  RHEL/Fedora have been tested. 
+      - Ensure the internal RHEL bastion has the RPMs installed as defined in the file `templates/rpms-internal.txt`.  RHEL 9 has been most tested. 
    - Ensure all RPMs are updated with "sudo dnf update". 
-   - Ensure this git repository is cloned into the bastion anywhere under a user's home directory.
-   - Add your Red Hat registry pull secret file to ~/.pull-secret.json
-   - Ensure the user has sudo permission. Password-less is highly recommended!
+   - Ensure your user has sudo permission. Password-less is highly recommended!
+   - Install your favorite editor.
 - **DNS**
    - with A records for 1) OpenShift API 2) Ingress and 3) the internal mirror registry.
 - **NTP**
    - OpenShift requires that NTP be available. Installation is possible without an NTP server. However, asynchronous server clocks will cause errors, which an NTP server prevents. Aba can configure NTP at installation time which helps avoid issues when using nodes with incorrect date & time.
 - **Private subnet** (optional)
-   - Install OpenShift into a private, air-gapped network.
-   - Aba also works in connected environments without a private mirror registry, e.g. accessing public container registries via a proxy. 
-- **One or two Bastion hosts**
+   - Install OpenShift into your private, air-gapped network.
+   - Note that Aba also works in connected environments without a private mirror registry, e.g. by accessing public container registries via a proxy. 
+- **A bastion (and optionally a connected workstation)**
   - Disconnected mode: A RHEL VM with connectivity to both the external (internet facing) and the internal networks.
   - Fully disconnected mode (air-gapped): A RHEL VM in the private network and another RHEL VM (or a Fedora/RHEL laptop) in the internet facing network. 
   - A user account with sudo configured (i.e. with root access). 
-  - A large amount of space to store the OpenShift container images.  30 GB or more of disk space is required for the base OpenShift platform.  Much more space is required if Operators will be installed (500 GB or much more).
+  - A large amount of space to store the OpenShift container images.  30 GB or more of disk space is required for the base OpenShift platform.  Much more space is required if Operators will be installed (500 GB or more).
   - Internet access is required from your connected bastion (or laptop) to download the container images, CLI tools and other files. 
      - A "[partially disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-partial)" is supported. This means the bastion needs to have (temporary) Internet access to download the images and then it needs access to the private subnet to install OpenShift.   See 'Disconnected mode' below.
      - Fully air-gapped or "[fully disconnected environment](https://docs.openshift.com/container-platform/4.14/installing/disconnected_install/installing-mirroring-disconnected.html#mirroring-image-set-full)" is also supported.  For this, two bastions (one connected & the other internal) are required.  See 'Fully disconnected mode' below.
@@ -127,7 +131,7 @@ The usual things you need to install OpenShift when using the Agent-based instal
 ## Initial Steps
 
 - **Bastion**
-   - First, install a bastion with a fresh version of RHEL. Fedora can also be used except Quay mirror fails to install on it.
+   - First, install a bastion with a fresh version of RHEL. 
    - a 'minimal install' of RHEL 9.4, RHEL 8.9 and Fedora 40 have been tested, other recent versions of RHEL/Fedora should work too.
       - Note that on Fedora 40, the mirror registry failed to install due to an [unexpected keyword argument 'cert_file'](https://github.com/quay/mirror-registry/issues/140) error, but remote installs of the Quay appliance (from Fedora) worked ok. 
       - Note that only RHEL 9 is supported for OpenShift v4.15+ as the latest version of oc-mirror only works on RHEL 9.
@@ -156,7 +160,9 @@ The usual things you need to install OpenShift when using the Agent-based instal
 - **Finally**
    - run the ./aba command to initialize the installation process (see 'Getting Started' below).
 
+
 ![Air-gapped data transfer](images/air-gapped.jpg "Air-gapped data transfer")
+
 
 ## Getting Started with Aba
 

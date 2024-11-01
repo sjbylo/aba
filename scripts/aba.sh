@@ -1,7 +1,7 @@
 #!/bin/bash 
 # Start here, run this to get going!
 
-uname -o | grep -q "^Darwin$" && echo "Please run 'aba' on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." && exit 1
+uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." && exit 1
 
 dir=$(dirname $0)
 cd $dir
@@ -233,7 +233,7 @@ cat others/message.txt
 # Determine if this is an "aba bundle" or just a clone from GitHub
 
 if [ ! -f .bundle ]; then
-	#echo "Fresh GitHub clone of 'aba' repo detected!"
+	#echo "Fresh GitHub clone of Aba repo detected!"
 
 	##############################################################################################################################
 	# Check if online
@@ -319,7 +319,7 @@ if [ ! -f .bundle ]; then
 
 	if [ ! "$editor" ]; then
 		echo
-		echo -n "Aba can use an editor to aid in the workflow.  Enter preferred editor command ('vi', 'nano' etc or 'none')? [vi]: "
+		echo -n "Aba can use an editor to aid in the workflow. Enter your preferred editor or set to 'none' if you prefer to edit the configuration files manually  ('vi', 'nano' etc or 'none')? [vi]: "
 		read new_editor
 
 		[ ! "$new_editor" ] && new_editor=vi  # default
@@ -384,8 +384,8 @@ if [ ! -f .bundle ]; then
 	# Determine air-gapped
 
 	echo
-	echo_white "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, 'aba' can download all required software"
-	echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'bundle archive' for you to transfer into the disconnected environment."
+	echo_white "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, Aba can download all required software"
+	echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'bundle archive' for you to transfer into your disconnected environment."
 	if ask "Install OpenShift into a fully disconnected network environment"; then
 		echo
 		echo_yellow Instructions
