@@ -1,6 +1,13 @@
-# Aba is tooling, wrapped around the agent-based installer for OpenShift.
+# Aba makes it easier to install your first OpenShift cluster in your air-gapped environment. 
 
-1. [Intro](#intro)
+Easily install an OpenShift cluster - "Cluster Zero" - into a fully or partially disconnected environment, either onto bare-metal or VMware (vSphere/ESXi).
+Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
+
+## Who should use Aba?
+
+Use Aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail.  It also works with connected environments!
+
+1. [What does Aba do for me?](#what-does-Aba-do-for-me)
 1. [Quick Guide](#quick-guide)
 1. [Prerequisites](#prerequisites)
 1. [Initial Steps](#initial-steps)
@@ -8,18 +15,16 @@
 1. [Disconnected mode](#disconnected-mode)
 1. [Fully disconnected (air-gapped) mode](#fully-disconnected-(air-gapped)-mode)
 1. [Install OpenShift](#install-openshift)
-1. [Features that are not implemented yet](#features-that-are-not-implemented-yet)
 1. [Configuration files](#configuration-files)
 1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-and-or-openshift-install.yaml-files)
+1. [Features that are not implemented yet](#features-that-are-not-implemented-yet)
 1. [Miscellaneous](#miscellaneous)
 1. [Advanced](#advanced)
 
-## Intro
-
-Aba makes it easier to install an OpenShift cluster - "Cluster Zero" - into a fully or partially disconnected environment, either onto vSphere, ESXi or bare-metal. 
-Because Aba uses the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP. 
+## What does Aba do for me?
 
 Aba automatically completes the following for you:
+
 1. Helps install any type of OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
 2. Makes use of any existing container registry or installs the Quay mirror registry appliance for you. 
 1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
@@ -33,9 +38,7 @@ Aba automatically completes the following for you:
 1. Executes several workarounds for some typical issues with disconnected environments.
 1. Enables the integration with vSphere as a day 2 operation.
 
-Use aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail.  It also works with connected environments!
-
-For the very impatient: clone this repo onto a RHEL VM with an internet connection, install and run `make`.  You will be guided through the process.  Fedora has also been tested as the 'connected' VM to download the needed images and other content. 
+For the very impatient: clone or download this git repository onto a RHEL VM with an internet connection and run `./aba -h` or `./aba`.  You will be guided through the process.  Fedora has also been tested as the 'connected' VM to download the needed images and other content. 
 
 ## Quick Guide
 
@@ -155,7 +158,7 @@ The usual things you need to install OpenShift when using the Agent-based instal
 
 ![Air-gapped data transfer](images/air-gapped.jpg "Air-gapped data transfer")
 
-## Getting Started with aba
+## Getting Started with Aba
 
 To get started, run:
 
