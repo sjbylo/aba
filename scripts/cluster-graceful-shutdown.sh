@@ -6,9 +6,10 @@ source scripts/include_all.sh
 [ "$1" = "wait=1" ] && wait=1 && shift
 [ "$1" ] && set -x
 
-source <(normalize-cluster-conf)
-
 [ ! -s iso-agent-based/auth/kubeconfig ] && echo "Cannot find iso-agent-based/auth/kubeconfig file!" && exit 1
+
+source <(normalize-aba-conf)
+source <(normalize-cluster-conf)
 
 server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)
 
@@ -116,7 +117,7 @@ wait
 echo 
 echo_green "All servers in the cluster will complete shutdown and power off in a short while!" | tee -a $logfile
 
-if [ "$wait" ]; then
+if [ "$wait" -a -s vmware.conf ]; then
 	echo_cyan "Waiting for all nodes to power down ..." | tee -a $logfile
 	until make -s ls | grep poweredOn | wc -l | grep -q ^0$; do sleep 10; done
 fi

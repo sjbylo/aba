@@ -82,6 +82,8 @@ normalize-cluster-conf()
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
 			sed -e "s/^/export /g";
+	# Add any missing default values
+	[ ! "$hostPrefix" ] && echo export hostPrefix=23
 }
 
 normalize-vmware-conf()

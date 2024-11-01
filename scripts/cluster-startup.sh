@@ -5,13 +5,12 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
+[ ! -d iso-agent-based ] && echo_white "Cluster not installed!  Try running 'make clean; make' to install this cluster!" >&2 && exit 1
+
 unset KUBECONFIG
 cp iso-agent-based/auth.backup/kubeconfig iso-agent-based/auth/kubeconfig
 
-[ ! -d iso-agent-based ] && echo_white "Cluster not installed!  Try running 'make clean; make' to install this cluster!" >&2 && exit 1
-
 server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)
-
 cluster_name=$(echo $server_url| grep -o -E '(([a-zA-Z](-?[a-zA-Z0-9])*)\.)+[a-zA-Z]{2,}:[0-9]{2,}' | sed "s/^api\.//g")
 server_url=${server_url}/
 
@@ -32,12 +31,11 @@ if [ ! -s vmware.conf ]; then
 	fi
 else
 	echo Starting cluster $cluster_name ...
-	make -s start #|| exit 1
+	make -s start
 fi
 
-#echo DEBUG0 Have quick check if endpoint is available
+# Have quick check if endpoint is available (cluster may already be running)
 if ! try_cmd -q 1 0 1 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
-	#echo DEBUG1: ret=$?
 	echo Waiting for cluster endpoint $server_url ...
 
 	# Now wait for longer...
@@ -52,9 +50,7 @@ fi
 OC="oc --kubeconfig iso-agent-based/auth/kubeconfig"
 
 # Just to be as sure as possible we can access the cluster!
-#echo DEBUG3
 if ! try_cmd -q 1 0 2 $OC get nodes ; then
-	#echo DEBUG4
 	try_cmd -q 3 0 40 $OC get nodes 
 fi
 
@@ -73,7 +69,7 @@ echo
 
 uncorden_all_nodes() { for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}'); do $OC adm uncordon ${node}; done; }
 
-sleep 5 	# Sometimes need to wait to avoid uncordon errors
+sleep 5 	# Sometimes need to wait to avoid uncordon errors!
 
 echo "Making all nodes schedulable (uncordon):"
 until uncorden_all_nodes
@@ -88,8 +84,6 @@ do
 done
 
 all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v "^True$" | wc -l | grep -q "^0$"; }
-
-##$OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then

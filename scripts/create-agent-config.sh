@@ -79,7 +79,6 @@ fi
 
 # Note that machine_ip_prefix, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
-#scripts/j2 templates/agent-config.yaml.j2 > agent-config.yaml
 scripts/j2 templates/$template_file > agent-config.yaml
 
 echo_green "$PWD/agent-config.yaml generated successfully!"
