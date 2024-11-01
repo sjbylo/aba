@@ -9,6 +9,7 @@ if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
 	echo "vmware.conf file not defined. Run 'make vmw' to create it if needed"
+
 	exit 0
 fi
 
