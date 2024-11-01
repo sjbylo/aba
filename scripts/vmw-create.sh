@@ -23,10 +23,10 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`
 fi
 
-CP_MAC_ADDRESSES_ARRAY=($CP_MAC_ADDRESSES)
-CP_MAC_ADDRESSES_ARRAY2=($CP_MAC_ADDRESSES2)
-WKR_MAC_ADDRESSES_ARRAY=($WKR_MAC_ADDRESSES)
-WKR_MAC_ADDRESSES_ARRAY2=($WKR_MAC_ADDRESSES2)
+CP_MAC_ADDR_ARRAY=($CP_MAC_ADDR)
+CP_MAC_ADDR_ARRAY2=($CP_MAC_ADDR_2ND)
+WKR_MAC_ADDR_ARRAY=($WKR_MAC_ADDR)
+WKR_MAC_ADDR_ARRAY2=($WKR_MAC_ADDR_2ND)
 
 echo
 echo_magenta "Provisioning VMs to build the cluster ..."
@@ -74,8 +74,8 @@ for name in $CP_NAMES ; do
 	a=`expr $i-1`
 
 	vm_name=${CLUSTER_NAME}-$name
-	mac=${CP_MAC_ADDRESSES_ARRAY[$a]}
-	mac2=${CP_MAC_ADDRESSES_ARRAY2[$a]}
+	mac=${CP_MAC_ADDR_ARRAY[$a]}
+	mac2=${CP_MAC_ADDR_ARRAY2[$a]}
 
 	echo_cyan -n "Create VM: "
 	echo "$vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [$mac] [$GOVC_NETWORK] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
@@ -132,8 +132,8 @@ for name in $WORKER_NAMES ; do
 	a=`expr $i-1`
 
 	vm_name=${CLUSTER_NAME}-$name
-	mac=${WKR_MAC_ADDRESSES_ARRAY[$a]}
-	mac2=${WKR_MAC_ADDRESSES_ARRAY2[$a]}
+	mac=${WKR_MAC_ADDR_ARRAY[$a]}
+	mac2=${WKR_MAC_ADDR_ARRAY2[$a]}
 
 	echo_cyan -n "Create VM: "
 	echo "$vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
