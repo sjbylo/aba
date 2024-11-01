@@ -24,28 +24,40 @@ fi
 export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/localhost-recovery.kubeconfig
 
 if oc get nodes | grep -q SchedulingDisabled; then
+	add_pause=1
 	echo "Setting nodes scheduling enabled"
 	for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc adm uncordon ${node} & done
+	wait
 else
-	echo "No nodes set to 'SchedulingDisabled'"
+	echo "No nodes set to 'SchedulingDisabled'.  Nothing to do!"
 fi
 
-echo "Checking if any CSRs to accept ..."
-until [ ! "$(oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}')" ]
-do
-	oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | \
-		xargs -P 5 oc adm certificate approve
+echo "Checking if any CSRs to approve ..."
+if [ "$(oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}')" ]; then
+	add_pause=1
+	until [ ! "$(oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}')" ]
+	do
+		oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | \
+			xargs -P 5 oc adm certificate approve
+	
+		sleep 20 # This is the time we wait to see if there are any more still CSRs to approve
+	done
+else
+	echo "No CSRs exist. Nothing to do!" 
+fi
 
-	sleep 20
-done
-echo "Done"
+echo "Rescue complete."
 
-sleep 20
+# Only pause if changes were made
+[ "$add_pause" ] && sleep 20
 
+echo
 echo Nodes:
 oc get nodes
+echo
 echo CSRs:
 oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}'
+echo
 echo Cluster Operators:
 oc get co
 
