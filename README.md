@@ -7,6 +7,25 @@ Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/bl
 
 Use Aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail.
 
+1. [Who should use Aba?](#who-should-use-aba)
+1. [What does Aba do for me?](#what-does-aba-do-for-me)
+1. [Installing OpenShift in a Disconnected Network](#installing-openshift-in-a-disconnected-network)
+1. [Prerequisites](#prerequisites)
+  1. [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
+  1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
+1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
+1. [Quick Guide](#quick-guide)
+1. [Getting Started with Aba](#getting-started-with-aba)
+  1. [Disconnected Scenario](#disconnected-scenario)
+  1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
+1. [Installing OpenShift](#installing-openshift)
+1. [Configuration files](#configuration-files)
+1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-andor-openshift-install.yaml-files)
+1. [Features that are not implemented yet](#features-that-are-not-implemented-yet)
+1. [Miscellaneous](#miscellaneous)
+1. [Advanced](#advanced)
+
+
 1. [What does Aba do for me?](#what-does-Aba-do-for-me)
 1. [Quick Guide](#quick-guide)
 1. [Prerequisites](#prerequisites)
