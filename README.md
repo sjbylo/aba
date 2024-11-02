@@ -68,7 +68,7 @@ Each scenario includes two main network zones:
 Bastion Requirements
 
 - **Connected Bastion**: Can be a workstation or virtual machine (VM) running on a laptop, configured with RHEL 8/9 or Fedora.
-- **Private Network Bastion**: Must be running RHEL 9 to support OpenShift installation in the private network.
+- **Internat Network Bastion**: Must be running RHEL 9 to support OpenShift installation in the private network.
 
 These configurations ensure that each network zone meets OpenShift’s requirements for disconnected or fully air-gapped installations.
 
@@ -213,7 +213,7 @@ make sync
 This command will:
   - trigger `make mirror` (to configure the mirror registry), if needed. 
     - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `mirror/regcreds/` first! See above for more).
-    - or, installs Quay registry on the internal bastion (or remote internal bastion) and copies the generated pull secret and certificate into the `mirror/regcreds` directory for later use.
+    - or, installs Quay registry on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `mirror/regcreds` directory for later use.
   - pull images from the Internet and store them in the registry.
 
 Now continue with "Installing OpenShift" below.
@@ -225,8 +225,8 @@ Note that the above 'disconnected scenario' can be repeated, for example to down
 
 ### Fully disconnected (air-gapped) Scenario
 
-In this scenario, your connected bastion has access to the Internet but no access to the private network.
-You also require an internal bastion in a private subnet.
+In this scenario, your connected workstation has access to the Internet but no access to the private network.
+You also require an bastion in a private subnet.
 
 ```
 make save
@@ -234,12 +234,12 @@ make save
 
 - pulls the images from the Internet and saves them into the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators)!
 
-Then, using one of `make inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repo (including templates, scripts, images, CLIs and other install files) to your internal bastion (in your private network) via a portable storage device, e.g. a thumb drive. 
+Then, using one of `make inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repo (including templates, scripts, images, CLIs and other install files) to your bastion (in your private network) via a portable storage device, e.g. a thumb drive. 
 
 Example:
 
 ```
-# On the connected bastion:
+# On the connected workstation:
 # Mount your thumb drive and:
 
 make inc                                          # Write tar archive to /tmp
@@ -248,10 +248,10 @@ make inc out=/dev/path/to/thumb-drive/aba.tgz     # Write archive 'aba.tgz' to t
 or
 make inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to internal host (if possible).
 
-# Copy the file 'aba.tgz' to your internal bastion via your portable storage device.
+# Copy the file 'aba.tgz' to your bastion via your portable storage device.
 
-# Then, on the internal bastion run:
-tar xvf aba.tgz                                   # Extract the tar file. Ensure file timestamps are kept the same as on the connected bastion.
+# Then, on the bastion run:
+tar xvf aba.tgz                                   # Extract the tar file. Ensure file timestamps are kept the same as on the connected workstation.
 cd aba             
 ./aba
 ```
@@ -266,8 +266,8 @@ make tarrepo out=/dev/path/to/drive/aba.tgz
 - Write archive `aba.tgz` to the device mounted at /dev/path/to/drive, EXCEPT for the `seq#` tar files under save/
 - The `seq#` tar file(s) in the "mirror/save" directory and the repo tarball `aba.tgz` can be copied separately to a storage device, e.g. USB stick, S3 or other. 
 
-Copy the "aba.tgz" file to the internal bastion and unpack the archive. Note the directory "aba/mirror/save".
-Copy or move the "seq" tar file(s), as is, from the "mirror/save" directory to the internal bastion, into the "mirror/save" directory on the internal bastion.
+Copy the "aba.tgz" file to the bastion and unpack the archive. Note the directory "aba/mirror/save".
+Copy or move the "seq" tar file(s), as is, from the "mirror/save" directory to the  bastion, into the "mirror/save" directory on the bastion.
 
 ```
 sudo dnf install make -y     # If dnf does not work in the private environment (i.e. no Satalite), ensure all required RPMs are pre-installed, e.g. from a DVD drive at the time of installation. 
@@ -275,19 +275,19 @@ make load
 ```
 - will (if required) install Quay (from the bundle archive) and then load the images into Quay.
 - Required RPMs:
-  - Note that the internal bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure `dnf` to use a proxy). 
+  - Note that the bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure `dnf` to use a proxy). 
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation. 
-  - If rpms are not readily available in your private network, the command `make rpms` can help by downloading the required rpms, which can then be copied to the internal bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your external and internal bastions are running the exact same version of RHEL (at least, that was the experience when testing Aba!). 
+  - If rpms are not readily available in your private network, the command `make rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your external bastion and internal bastions are running the exact same version of RHEL (at least, that was the experience when testing Aba!). 
 
 Now continue with "Installing OpenShift" below.
 
 Note that the above 'air-gapped workflow' can be repeated in the *exact same way*, for example to incrementally install Operators or download new versions of images to upgrade OpenShift.
 
 For example, by:
-- editing the `save/imageset-save.yaml` file on the connected bastion to add more images or to fetch the latest images
+- editing the `save/imageset-save.yaml` file on the connected workstation to add more images or to fetch the latest images
 - running `make save`
 - running `make inc` (or make tar or make tarrepo) to create a bundle archive (see above)
-- unpacking the tar archive on the internal bastion
+- unpacking the tar archive on the bastion
 - running `make load` to load the images into the internal registry.
 
 Note that generated 'image sets' are sequential and must be pushed to the target mirror registry in order. You can derive the sequence number from the file name of the generated image set archive file in the mirror/save directory. 
