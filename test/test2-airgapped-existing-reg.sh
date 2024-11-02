@@ -96,7 +96,7 @@ if [ ! "$1" ]; then
 	## test the internal bastion ($bastion2) as mirror
 	mylog "Setting reg_host=$bastion2"
 	sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf
-	#sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
+	#sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
 
 	mylog "Setting op_sets=\"abatest\""
 	sed -i "s/^.*op_sets=.*/op_sets=\"abatest\" /g" ./mirror/mirror.conf
