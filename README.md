@@ -23,7 +23,7 @@ Use Aba if you want to get OpenShift up and running quickly in an air-gapped env
 
 ## What does Aba do for me?
 
-Aba automatically completes the following for you:
+Aba automatically completes the following and more:
 
 1. Helps install any type of OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
 2. Makes use of any existing container registry or installs the Quay mirror registry appliance for you. 
@@ -32,14 +32,39 @@ Aba automatically completes the following for you:
 1. Configures NTP during installation time to help avoid issues when using nodes with incorrect date & time.
 1. Optionally creates the required VMs in ESXi or vSphere.
 1. Monitors the installation progress. 
-1. Allows for adding more images (e.g. Operators) when synchonizing the mirror registry (day 1 or 2 operation).
+1. Allows for adding more images (e.g. Operators) when synchronizing the mirror registry (day 1 or 2 operation).
 1. Configures the OperatorHub integration with the mirror registry. 
 1. Can create an "archive bundle" containing all the files needed to complete a fully air-gapped installation. 
 1. Executes several workarounds for some typical issues with disconnected environments.
 1. Enables the integration with vSphere as a day 2 operation.
 1. Helps configure OpenShift with your NTP servers and many more. 
 
-For the very impatient: clone or download this git repository onto a RHEL 9 VM with an internet connection and run `./aba -h` or `./aba`.  You will be guided through the process.  Fedora has also been tested as the 'connected' VM to download the needed images and other content. 
+For the very impatient:
+  - Clone or download this git repository onto a workstation with an internet connection (RHEL 8/9 or Fedora) and run `./aba -h` or `./aba`.
+  - You will be guided through the process of downloading what's needed and transferring that to your internal (air-gapped) RHEL 9 bastion. 
+
+
+## Installing OpenShift in a Disconnected Network
+
+![Air-gapped data transfer](images/air-gapped.jpg "Air-gapped data transfer")
+
+The diagram above illustrates two scenarios for installing OpenShift in a disconnected network environment.
+
+- **Top Section**: The *Disconnected Scenario* (partial network access via a proxy).
+- **Bottom Section**: The *Fully Disconnected (Air-Gapped) Scenario* (data transfer only through physical means, such as "sneaker net" into a private data center).
+
+Each scenario includes two main network zones:
+
+- **Connected Network**: Located on the left side of the diagram, where external resources are accessible.
+- **Private Network**: Located on the right side of the diagram, isolated from direct internet access.
+
+### Bastion Requirements
+
+- **Connected Bastion**: Can be a workstation or virtual machine (VM) running on a laptop, configured with RHEL 8/9 or Fedora.
+- **Private Network Bastions**: Must be running RHEL 9 to support OpenShift installation in the private network.
+
+These configurations ensure that each network zone meets OpenShift’s requirements for disconnected or fully air-gapped installations.
+
 
 ## Quick Guide
 
@@ -50,8 +75,9 @@ git clone https://github.com/sjbylo/aba.git
 cd aba
 ./aba
 ```
-- clones the repo, installs 'make' and configures high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc.
-- helps decide if you want to install onto VMware/ESXi or onto bare-metal. 
+- clones the repo and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
+- If needed, add any required operators to the `aba.conf` file.
+- helps you decide if you have a partially diconnected or fully disconnected (air-gapped) environment and how you should proceed. 
 
 ```
 make mirror 
@@ -65,22 +91,23 @@ make sync
 - Fully disconnected (air-gapped) environments are also supported with `make save/load` (see below).
 
 ```
-make cluster name=sno type=sno
+make cluster name=mycluster type=sno
 ```
-- creates a directory `sno` (for Single Node OpenShift) and the file `sno/cluster.conf` which needs to be edited. 
-- any topology of OpenShift is supported, e.g. sno (1), compact (3), standard (3+n).
+- creates a directory `mycluster` and the file `mycluser/cluster.conf`.
+- Edit/verify the `mycluster/cluster.conf` file.
+- Note that any topology of OpenShift is supported, e.g. sno (1), compact (3), standard (3+n).
 
 ```
-cd sno
+cd mycluster
 make
 ```
-- creates the Agent-based config files, generates the Agent-based iso file, creates and boots the VMs (for VMware). 
+- creates the Agent-based config files, generates the Agent-based iso file, creates and boots the VMs (if using VMware). 
 - monitors the installation progress.
 
 ```
 make day2
 ```
-- configures the internal registry for Operator Hub, ready to install Operators. 
+- configures OpenShift to access the internal registry ready to install from the Operators Hub. 
 
 ```
 make help
@@ -89,6 +116,72 @@ make help
 
 Read more for all the details.
 
+
+##########################
+##########################
+
+## Prerequisites
+
+### Fully Disconnected (Air-Gapped) Prerequisites
+
+In a fully disconnected environment, where no internet access is available, two bastions are required: one connected to the internet and the other on the private network.
+
+- **Connected Workstation**
+   - An x86 RHEL 8/9 or Fedora (e.g. VM) with internet access, typically on a laptop.
+   - Clone or download this Git repository to any location in your home directory.
+   - Download and store the Red Hat registry pull secret to `~/.pull-secret.json`.
+   - Install required RPMs listed in `templates/rpms-external.txt`.
+   - Run `sudo dnf update` to ensure all packages are up to date (optional).
+   - Passwordless `sudo` access is highly recommended.
+
+- **Internal Bastion**
+   - A RHEL 9 VM or host within your private, air-gapped network.
+   - Install required RPMs as listed in `templates/rpms-internal.txt` (or let Aba use dnf to install, if available).
+   - Passwordless `sudo` access is highly recommended.
+
+### Partially Disconnected Prerequisites
+
+In a partially disconnected environment, the internal network has limited or proxy-based internet access, allowing data synchronization directly.
+
+- **Bastion**
+   - A single RHEL 9 VM with internet access and connectivity to the private network.
+   - Downlaod and copy this Git repository to any location in your home directory on the bastion.
+   - Configure the Red Hat registry pull secret at `~/.pull-secret.json`.
+   - Install required RPMs from `templates/rpms-external.txt`.
+   - Run `sudo dnf update` to ensure all packages are up to date (optional).
+   - Passwordless `sudo` access is highly recommended.
+
+### Common Requirements for Both Environments
+
+- **Registry Storage**
+   - Minimum of 30 GB is required for OpenShift base images, with additional Operators requiring more (500 GB or more).
+
+- **Network Configuration**
+   - **DNS**: Configure the following DNS A records (these are examples!):
+      - **OpenShift API**: `<api.ocp1.example.com>` pointing to a free IP in the private subnet.
+      - **OpenShift Ingress**: `<*.apps.ocp1.example.com>` pointing to a free IP in the private subnet.
+      - **Mirror Registry**: `<registry.example.com>` pointing to the IP address of your internal mirror registry (or where Aba should install it).
+      - *Note*: For Single Node OpenShift (SNO), configure both OpenShift API and Ingress records to point to the same IP.
+   - **NTP**: An NTP server is recommended to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
+
+- **Platform**
+   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) for specific permissions.
+   - For bare-metal installations, manually boot the nodes using the generated ISO file. 
+
+- **Registry**
+   - If using an existing registry, add its credentials (pull secret and root CA) in the `mirror/regcreds` directory:
+      - `mirror/regcreds/pull-secret-mirror.json`
+      - `mirror/regcreds/rootCA.pem`
+
+After configuring these prerequisites, run `./aba` to start the OpenShift installation process.
+
+
+Note that Aba also works in connected environments without a private mirror registry, e.g. by accessing public container registries via a proxy. 
+
+<!--
+##########################
+Mac addresses can be stored in a file `mycluster/macs.conf` or manually set in `install-config.yaml` after generating it with `make install-config.yaml` or `make agentconf`.
+##########################
 
 ## Prerequisites
 
@@ -112,7 +205,6 @@ You will need the usual things when installing OpenShift using the Agent-based i
    - OpenShift requires that NTP be available. Installation is possible without an NTP server. However, asynchronous server clocks will cause errors, which an NTP server prevents. Aba can configure NTP at installation time which helps avoid issues when using nodes with incorrect date & time.
 - **Private subnet** (optional)
    - Install OpenShift into your private, air-gapped network.
-   - Note that Aba also works in connected environments without a private mirror registry, e.g. by accessing public container registries via a proxy. 
 - **A bastion (and optionally a connected workstation)**
   - Disconnected mode: A RHEL VM with connectivity to both the external (internet facing) and the internal networks.
   - Fully disconnected mode (air-gapped): A RHEL VM in the private network and another RHEL VM (or a Fedora/RHEL laptop) in the internet facing network. 
@@ -127,6 +219,7 @@ You will need the usual things when installing OpenShift using the Agent-based i
    - Bare-metal
       - Note that bare-metal nodes can be booted manually using the generated ISO. Mac addresses can be set in the `install-config.yaml` file after running `make install-config.yaml`.
 
+-->
 
 ## Initial Steps
 
@@ -160,8 +253,6 @@ You will need the usual things when installing OpenShift using the Agent-based i
 - **Finally**
    - run the ./aba command to initialize the installation process (see 'Getting Started' below).
 
-
-![Air-gapped data transfer](images/air-gapped.jpg "Air-gapped data transfer")
 
 
 ## Getting Started with Aba
@@ -276,7 +367,7 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 cd aba
 make cluster name=mycluster [type=sno|compact|standard] [target=xyz]
 ```
-- will create a directory `mycluster`, copy the Makefile into it and then promt you to run `make` inside the directory.
+- will create a directory `mycluster`, copy the Makefile into it and then prompt you to run `make` inside the directory.
 - Note, *all* advanced preset parameters at the bottom of the `aba.conf` configuration file must be completed for the optional "type" parameter to have any affect. 
 
  You should run the following command to monitor the progress of the Agent-based installer. For example: 
@@ -351,8 +442,8 @@ cd mycluster     # change to the directory with the agent-based install files, u
 | :----- | :---------- |
 | `make day2`        | Integrate the private mirror into OpenShift. |
 | `make ls`          | Show list of VMs and their state. |
-| `make startup`     | Greacefully start up a cluster |
-| `make shutdown`    | Greacefully shut down (or hibernate) a cluster. `make shutdown wait=1` wait for poweroff |
+| `make startup`     | Gracefully start up a cluster |
+| `make shutdown`    | Gracefully shut down (or hibernate) a cluster. `make shutdown wait=1` wait for power-off |
 | `make start`       | Power on all VMs |
 | `make stop`        | Gracefully shut down all VMs (guest shutdown only!) |
 | `make powerdown`   | Power down all VMs immediately |
