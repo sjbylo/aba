@@ -14,7 +14,7 @@ Use Aba if you want to get OpenShift up and running quickly in an air-gapped env
 1. [Getting Started with aba](#getting-started-with-aba)
 1. [Disconnected Scenario](#disconnected-scenario)
 1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-(air-gapped)-scenario)
-1. [Install OpenShift](#install-openshift)
+1. [Installing OpenShift](#install-openshift)
 1. [Configuration files](#configuration-files)
 1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-and-or-openshift-install.yaml-files)
 1. [Features that are not implemented yet](#features-that-are-not-implemented-yet)
@@ -40,8 +40,9 @@ Aba automatically completes the following and more:
 1. Helps configure OpenShift with your NTP servers and many more. 
 
 For the very impatient:
-  - Clone or download this git repository (https://github.com/sjbylo/aba.git) onto a workstation with an internet connection (RHEL 8/9 or Fedora) and run `./aba -h` or `./aba`.
-  - You will be guided through the process of downloading what's needed and transferring that to your internal (air-gapped) RHEL 9 bastion. 
+
+  - Clone/download this git repository (https://github.com/sjbylo/aba.git) onto a workstation with an internet connection (RHEL 8/9 or Fedora).
+  - Run `./aba -h` or `./aba` and Aba will guide you through the process.
 
 
 ## Installing OpenShift in a Disconnected Network
@@ -50,7 +51,7 @@ For the very impatient:
 
 The diagram above illustrates two scenarios for installing OpenShift in a disconnected network environment.
 
-- **Top Section**: The *Disconnected Scenario* (partial network access via a proxy).
+- **Top Section**: The *Disconnected Scenario* (partial network access, e.g. via a proxy).
 - **Bottom Section**: The *Fully Disconnected (Air-Gapped) Scenario* (data transfer only through physical means, such as "sneaker net" into a private data center).
 
 Each scenario includes two main network zones:
@@ -58,67 +59,13 @@ Each scenario includes two main network zones:
 - **Connected Network**: Located on the left side of the diagram, where external resources are accessible.
 - **Private Network**: Located on the right side of the diagram, isolated from direct internet access.
 
-### Bastion Requirements
+Bastion Requirements
 
 - **Connected Bastion**: Can be a workstation or virtual machine (VM) running on a laptop, configured with RHEL 8/9 or Fedora.
 - **Private Network Bastion**: Must be running RHEL 9 to support OpenShift installation in the private network.
 
 These configurations ensure that each network zone meets OpenShift’s requirements for disconnected or fully air-gapped installations.
 
-
-## Quick Guide
-
-For those who are less impatient...
-
-```
-git clone https://github.com/sjbylo/aba.git
-cd aba
-./aba
-```
-- clones the repo and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
-- If needed, add any required operators to the `aba.conf` file.
-- helps you decide if you have a partially disconnected or fully disconnected (air-gapped) environment and how you should proceed. 
-
-```
-make mirror 
-```
-- configures and connects to your existing container registry OR installs a fresh quay appliance registry.
-
-```
-make sync
-```
-- copies the required images directly to the mirror registry (for partially disconnected environments, e.g. via a proxy).
-- Fully disconnected (air-gapped) environments are also supported with `make save/load` (see below).
-
-```
-make cluster name=mycluster type=sno
-```
-- creates a directory `mycluster` and the file `mycluser/cluster.conf`.
-- Edit/verify the `mycluster/cluster.conf` file.
-- Note that any topology of OpenShift is supported, e.g. sno (1), compact (3), standard (3+n).
-
-```
-cd mycluster
-make
-```
-- creates the Agent-based config files, generates the Agent-based iso file, creates and boots the VMs (if using VMware). 
-- monitors the installation progress.
-
-```
-make day2
-```
-- configures OpenShift to access the internal registry ready to install from the Operators Hub. 
-
-```
-make help
-```
-- shows what other commands are available. 
-
-Read more for all the details.
-
-
-##########################
-##########################
 
 ## Prerequisites
 
@@ -178,6 +125,55 @@ After configuring these prerequisites, run `./aba` to start the OpenShift instal
 Note: that Aba also works in connected environments without a private mirror registry, e.g. by accessing public container registries via a proxy.  To do this, configure the proxy values in `cluster.conf`.
 
 
+## Quick Guide
+
+For those who are less impatient...
+
+```
+git clone https://github.com/sjbylo/aba.git
+cd aba
+./aba
+```
+- clones the repo and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
+- If needed, add any required operators to the `aba.conf` file.
+- helps you decide if you have a partially disconnected or fully disconnected (air-gapped) environment and how you should proceed. 
+
+```
+make mirror 
+```
+- configures and connects to your existing container registry OR installs a fresh quay appliance registry.
+
+```
+make sync
+```
+- copies the required images directly to the mirror registry (for partially disconnected environments, e.g. via a proxy).
+- Fully disconnected (air-gapped) environments are also supported with `make save/load` (see below).
+
+```
+make cluster name=mycluster type=sno
+```
+- creates a directory `mycluster` and the file `mycluser/cluster.conf`.
+- Edit/verify the `mycluster/cluster.conf` file.
+- Note that any topology of OpenShift is supported, e.g. sno (1), compact (3), standard (3+n).
+
+```
+cd mycluster
+make
+```
+- creates the Agent-based config files, generates the Agent-based iso file, creates and boots the VMs (if using VMware). 
+- monitors the installation progress.
+
+```
+make day2
+```
+- configures OpenShift to access the internal registry ready to install from the Operators Hub. 
+
+```
+make help
+```
+- shows what other commands are available. 
+
+
 ## Getting Started with Aba
 
 To get started, run:
@@ -205,7 +201,7 @@ This command will:
     - or, installs Quay registry on the internal bastion (or remote internal bastion) and copies the generated pull secret and certificate into the `mirror/regcreds` directory for later use.
   - pull images from the Internet and store them in the registry.
 
-Now continue with "Install OpenShift" below.
+Now continue with "Installing OpenShift" below.
 
 Note that the above 'disconnected scenario' can be repeated, for example to download and install Operators as a day 2 operation or to upgrade OpenShift, by updating the `sync/imageset-sync.yaml` file and running `make sync/day2` again.
 
@@ -266,7 +262,7 @@ make load
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation. 
   - If rpms are not readily available in your private network, the command `make rpms` can help by downloading the required rpms, which can then be copied to the internal bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your external and internal bastions are running the exact same version of RHEL (at least, that was the experience when testing Aba!). 
 
-Now continue with "Install OpenShift" below.
+Now continue with "Installing OpenShift" below.
 
 Note that the above 'air-gapped workflow' can be repeated in the *exact same way*, for example to incrementally install Operators or download new versions of images to upgrade OpenShift.
 
@@ -282,7 +278,7 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 ![Connecting to or creating Mirror Registry](images/make-install.jpg "Connecting to or creating Mirror Registry")
 
 
-## Install OpenShift 
+## Installing OpenShift 
 
 ![Installing OpenShift](images/make-cluster.jpg "Installing OpenShift")
 
@@ -379,20 +375,6 @@ cd mycluster     # change to the directory with the agent-based install files, u
 | `make help`        | Help is available in all Makefiles (in `aba/Makefile`,  `aba/mirror/Makefile`,  `aba/cli/Makefile` and `aba/<mycluster>/Makefile`)  |
 
 
-## Features that are not implemented yet
-
-- ~~Support bonding and vlan.~~
-
-- ~~Make it easier to integrate with vSphere, including storage.~~
-
-- Configure htpasswd login, add users, disable kubeadmin.
-
-- ~~Disable public OperatorHub and configure the internal registry to serve images.~~
-
-- Use PXE boot as alternative to ISO upload.
-
-- ~~Make it easier to populate the imageset config file with current values, i.e. download the values from the latest catalog and insert them into the image set file.~~
-
 
 ## Configuration files
 
@@ -462,6 +444,20 @@ make refresh
 ...
 make mon
 ```
+
+## Features that are not implemented yet
+
+- ~~Support bonding and vlan.~~
+
+- ~~Make it easier to integrate with vSphere, including storage.~~
+
+- Configure htpasswd login, add users, disable kubeadmin.
+
+- ~~Disable public OperatorHub and configure the internal registry to serve images.~~
+
+- Use PXE boot as alternative to ISO upload.
+
+- ~~Make it easier to populate the imageset config file with current values, i.e. download the values from the latest catalog and insert them into the image set file.~~
 
 
 ## Miscellaneous
