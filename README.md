@@ -73,7 +73,11 @@ Bastion Requirements
 These configurations ensure that each network zone meets OpenShift’s requirements for disconnected or fully air-gapped installations.
 
 
+[Back to top](#what-does-aba-do-for-me)
+
 ## Prerequisites
+
+[Back to top](#what-does-aba-do-for-me)
 
 ### Fully Disconnected (Air-Gapped) Prerequisites
 
@@ -92,6 +96,8 @@ In a fully disconnected environment, where no internet access is available, two 
    - Install required RPMs as listed in `templates/rpms-internal.txt` (or let Aba use dnf to install, if available).
    - Password-less `sudo` access is highly recommended.
 
+[Back to top](#what-does-aba-do-for-me)
+
 ### Partially Disconnected Prerequisites
 
 In a partially disconnected environment, the internal network has limited or proxy-based internet access, allowing data synchronization directly.
@@ -103,6 +109,8 @@ In a partially disconnected environment, the internal network has limited or pro
    - Install required RPMs from `templates/rpms-external.txt`.
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
    - Password-less `sudo` access is highly recommended.
+
+[Back to top](#what-does-aba-do-for-me)
 
 ### Common Requirements for Both Environments
 
@@ -130,6 +138,8 @@ After configuring these prerequisites, run `./aba` to start the OpenShift instal
 
 Note: that Aba also works in connected environments without a private mirror registry, e.g. by accessing public container registries via a proxy.  To do this, configure the proxy values in `cluster.conf`.
 
+
+[Back to top](#what-does-aba-do-for-me)
 
 ## A Very Quick Guide
 
@@ -180,6 +190,8 @@ make help
 - shows what other commands are available. 
 
 
+[Back to top](#what-does-aba-do-for-me)
+
 ## Getting Started with Aba
 
 To get started, run:
@@ -191,6 +203,8 @@ To get started, run:
 Note that this command will create the `aba.conf` file which contains some values that you *must change*, e.g. your preferred platform, your domain name, your network address (if known) and any operators you will require etc.
 
 Now, continue with either 'Disconnected scenario' or 'Fully disconnected (air-gapped) scenario' below. 
+
+[Back to top](#what-does-aba-do-for-me)
 
 ## Disconnected Scenario 
 
@@ -212,6 +226,8 @@ Now continue with "Installing OpenShift" below.
 
 Note that the above 'disconnected scenario' can be repeated, for example to download and install Operators as a day 2 operation or to upgrade OpenShift, by updating the `sync/imageset-sync.yaml` file and running `make sync/day2` again.
 
+
+[Back to top](#what-does-aba-do-for-me)
 
 ## Fully disconnected (air-gapped) Scenario
 
@@ -285,6 +301,8 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 <img src="images/make-install.jpg" alt="Connecting to or creating Mirror Registry" title="Connecting to or creating Mirror Registry" width="50%">
 
 
+
+[Back to top](#what-does-aba-do-for-me)
 
 ## Installing OpenShift 
 
@@ -385,6 +403,8 @@ cd mycluster     # change to the directory with the agent-based install files, u
 
 
 
+[Back to top](#what-does-aba-do-for-me)
+
 ## Configuration files
 
 | Config file | Description |
@@ -394,6 +414,8 @@ cd mycluster     # change to the directory with the agent-based install files, u
 | `aba/`cluster-name`/cluster.conf` | describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, bonding etc |
 | `aba/vmware.conf`                 | vCenter/ESXi access configuration using `govc` CLI (optional) |
 
+
+[Back to top](#what-does-aba-do-for-me)
 
 ## Customizing agent-config.yaml and/or openshift-install.yaml files
 
@@ -454,6 +476,8 @@ make refresh
 make mon
 ```
 
+[Back to top](#what-does-aba-do-for-me)
+
 ## Feature Backlog
 
 - ~~Support bonding and vlan.~~
@@ -468,6 +492,8 @@ make mon
 
 - ~~Make it easier to populate the imageset config file with current values, i.e. download the values from the latest catalog and insert them into the image set file.~~
 
+
+[Back to top](#what-does-aba-do-for-me)
 
 ## Miscellaneous
 
@@ -485,6 +511,8 @@ The UNIX/Linux command "make" is a utility for automating tasks based on rules s
 facilitating streamlined processes. Widely applied beyond software development, "make" proves versatile in system management, ensuring organized 
 execution of diverse tasks through predefined rules!
 
+
+[Back to top](#what-does-aba-do-for-me)
 
 ## Advanced
 
@@ -504,4 +532,6 @@ make standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must 
 ```
 - Run this to create a compact cluster (works in a similar way to the above). 
 
+
+[Back to top](#what-does-aba-do-for-me)
 
