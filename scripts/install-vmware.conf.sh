@@ -14,26 +14,25 @@ source <(normalize-aba-conf)
 if [ ! -s vmware.conf ]; then
 	if [ -s ~/.vmware.conf ]; then
 		echo "Creating 'vmware.conf' from '~/.vmware.conf'"
-		cp ~/.vmware.conf vmware.conf   # The working user edited file, if any
+		cp ~/.vmware.conf vmware.conf   # The working user edited file, if it exists
 	else
 		echo "Creating 'vmware.conf' from 'templates/vmware.conf'"
 		cp templates/vmware.conf .  # The default template 
 	fi
 
-	edit_file vmware.conf "If you want to deploy to VMware, edit the vmware.conf file"
+	trap - ERR
+	edit_file vmware.conf "If you want to deploy to VMware, edit the 'vmware.conf' file" || exit 0
 fi
 
 source <(normalize-vmware-conf)
 
-##make -sC cli ~/bin/govc   # Taken care of by make deps
-
 # Check access
 if ! govc about; then
-	echo "Error: Cannot access vSphere or ESXi.  Please try again!"
+	echo_red "Error: Cannot access vSphere or ESXi.  Please edit 'vmware.conf' and try again!"
 
 	exit 1
 else
-	echo "Saving working version of 'vmware.conf' to '~/.vmware.conf'."
+	echo_cyan "Saving working version of 'vmware.conf' to '~/.vmware.conf'."
 	[ -s vmware.conf ] && cp vmware.conf ~/.vmware.conf
 fi
 

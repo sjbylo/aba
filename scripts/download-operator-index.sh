@@ -62,7 +62,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 		echo_magenta "Waiting for operator index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
 		try_cmd -q 2 0 150 test -s $index_file || true  # keep checking file does not have content, for max 300s (2 x 150s)
 	else
-		echo_white "Operator index v$ocp_ver_major already downloaded!"
+		echo_white "Operator index v$ocp_ver_major already downloaded at $index_file"
 	fi
 
 	exit 0
@@ -70,7 +70,7 @@ fi
 
 echo $$ > $pid_file
 
-echo_cyan "Operator index v$ocp_ver_major is already downloading, please wait a few minutes ..."
+echo_cyan "Operator index v$ocp_ver_major is already downloading to $index_file, please wait a few minutes ..."
 
 # Lock successful, now download the index ...
 
@@ -101,5 +101,5 @@ echo_white "Generated imageset-config-operator-catalog-v${ocp_ver_major}.yaml fi
 ##rm -f $lock_file $pid_file
 
 # Adding this to log file since it will run in the background
-echo "Downloaded operator index for v$ocp_ver_major successfully"
+echo_green "Downloaded operator index for v$ocp_ver_major successfully"
 

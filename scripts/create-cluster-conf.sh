@@ -52,9 +52,7 @@ if [ ! -s cluster.conf ]; then
 	# For sno, ensure these values are commented out as they are not needed!
 	[ "$type" = "sno" ] && sed -i -e "s/^api_vip=/#api_vip=/g" -e "s/^ingress_vip=/#ingress_vip=/g" cluster.conf
 
-	if [ "$ask" ]; then
-		edit_file cluster.conf "Edit the cluster.conf file to set all the parameters for OpenShift"
-	fi
+	edit_file cluster.conf "Edit the cluster.conf file to set all the parameters for OpenShift" || exit 1
 fi
 
 exit 0

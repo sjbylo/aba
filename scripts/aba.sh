@@ -344,12 +344,7 @@ if [ ! -f .bundle ]; then
 	if [ ! -f .aba.conf.seen ]; then
 		touch .aba.conf.seen
 
-		if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, ocp version, pull secret, base domain, net address etc (if known)"; then
-			:
-		else
-			#echo_red "Warning: Please edit aba.conf before continuing!"
-			exit 1
-		fi
+		edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, ocp version, pull secret, default base domain, default net address etc (if known)" || exit 1
 	fi
 
 
@@ -390,7 +385,11 @@ if [ ! -f .bundle ]; then
 		echo
 		echo_yellow Instructions
 		echo
-		echo "Run: make bundle out=/path/to/bundle/filename   # to save all images to local disk & create the bundle archive (size ~20-30GB for a base installation), follow the instructions."
+		echo "Run: make bundle out=/path/to/portable/media             # to save all images to local disk & then create the bundle archive"
+		echo "                                                         # (size ~20-30GB for a base installation)."
+		echo "     make bundle out=- | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
+		echo "     make bundle out=- | split -b 10G ocp_               # Stream the archive and split it into several more managable files."
+		echo "                                                         # Unpack the files with: cat ocp_* | tar xvf - "
 		echo
 
 		exit 0
@@ -416,14 +415,14 @@ if [ ! -f .bundle ]; then
 	echo 
 	echo "Action required: Set up the mirror registry and sync it with the necessary container images."
 	echo
-	echo "To store container images, Aba can install the Quay mirror appliance or you can utilize an existing container registry."
+	echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 	echo
 	echo "Run:"
-	echo "  make mirror       # to configure and/or install Quay, follow the instructions."
-	echo "  make sync          # to sychnonize all container images - from the Internet - into your registry, follow the instructions."
+	echo "  make mirror                 # to configure and/or install Quay."
+	echo "  make sync [retry=N]         # to sychnonize all container images - from the Internet - into your registry."
 	echo
 	echo "Or run:"
-	echo "  make mirror sync  # to complete both actions."
+	echo "  make mirror sync retry=8    # to complete both actions and ensure any image sync issues are retried."
 	echo
 
 else
@@ -450,10 +449,10 @@ else
 	echo "To store container images, Aba can install the Quay mirror appliance or you can utilize an existing container registry."
 	echo
 	echo "Run:"
-	echo "  make mirror       # to configure and/or install Quay, follow the instructions."
-	echo "  make load          # to set up the mirror registry (configure or install quay) and load it, follow the instructions."
+	echo "  make mirror                  # to configure and/or install Quay."
+	echo "  make load [retry=N]          # to set up the mirror registry (configure or install quay) and load it."
 	echo "Or run:"
-	echo "  make mirror load  # to complete both actions."
+	echo "  make mirror load retry=8     # to complete both actions and ensure any image load issues are retried."
 	echo
 fi
 

@@ -2,6 +2,8 @@ TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 debug   ?=
 
+all: mirror
+
 ##@ Help-related tasks
 .PHONY: help
 help: ## Help

@@ -80,31 +80,46 @@ UserKnownHostsFile=/dev/null
 ConnectTimeout=15
 END
 
+flag_file=/tmp/.$RANDOM
+
 # Install Quay mirror on **remote host** if ssh key defined 
 if [ "$reg_ssh_key" ]; then
-	ask "Install Quay mirror registry appliance remotly, accessable via $reg_host:$reg_port" || exit 1
+	# First, ensure the reg host points to a remote host and not this localhost
+	echo_cyan "You have configured the mirror to be a remote host (since 'reg_ssh_key' is defined in 'aba.conf')."
+	echo_cyan "Verifying FQDN '$reg_host' points to a remote host ..."
 
-	echo "Installing Quay registry to remote host at $reg_ssh_user@$reg_host ..."
-
-	f=/tmp/.$RANDOM
-	if ! ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host touch $f; then
+	if ! ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host touch $flag_file; then
 		echo
 		echo_red "Error: Can't ssh to $reg_ssh_user@$reg_host using key '$reg_ssh_key'"
-		echo_red "       Configure passwordless ssh to $reg_ssh_user@$reg_host and try again."
+		echo_red "       Configure password-less ssh to $reg_ssh_user@$reg_host and try again."
 		echo
 
 		exit 1
 	else
-		if [ -f $f ]; then
+		# If the flag file exists, then the FQDN points to this host (config wrong!) 
+		if [ -f $flag_file ]; then
+			#echo
+			#echo_red "Error: $reg_host is not a remote host! Correct the problem in mirror.conf (undefine reg_ssh_key?) and try again."
+			#echo
+
 			echo
-			echo_red "Error: $reg_host is not a remote host! Correct the problem in mirror.conf (undefine reg_ssh_key?) and try again."
+			echo_red "Error: FQDN '$reg_host' resolves to this host '`hostname`'!"
+			echo_red "       By unsetting 'reg_ssh_key' in 'aba.conf', you have configued a *remote* mirror '$reg_host' (which resolves to '$fqdn_ip')."
+			echo_red "       If that should be the local host, please undefine the 'reg_ssh_key' value in 'mirror.conf'."
+			echo_red "       Otherwise, ensure the DNS record points to the correct *remote* host."
+			echo_red "       Please correct the problem and try again."
 			echo
+
+			rm -f $flag_file
 
 			exit 1
 		fi
 
 		echo "Ssh access to remote host ($reg_host) is working ..."
 	fi
+
+	ask "Install Quay mirror registry appliance remotly, accessable via $reg_host:$reg_port" || exit 1
+	echo "Installing Quay registry to remote host at $reg_ssh_user@$reg_host ..."
 
 	# Workaround START ########
 	# See: https://access.redhat.com/solutions/7040517 "Installing the mirror-registry to a remote disconnected host fails (on the first attempt)"
@@ -190,23 +205,53 @@ if [ "$reg_ssh_key" ]; then
 
 	#### TESTING WITHOUT - Added to reg-load/save/sync # scripts/create-containers-auth.sh
 else
-	ask "Install Quay mirror registry appliance locally on `hostname`, accessable via $reg_host:$reg_port" || exit 1
+	# First, ensure the reg host points to this localhost and not a remote host
+	# Sanity check to see if the correct host was defined
+	# Resolve FQDN
+	echo_cyan "You have configured the mirror to be on this localhost (since 'reg_ssh_key' is undefined in 'aba.conf')."
+	echo_cyan "Verifying FQDN '$reg_host' points to this localhost ..."
+	fqdn_ip=$(dig +short $reg_host | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}') || true
 
-	echo "Installing Quay registry on localhost ..."
-
-	# Sanity check to see if the correct host was defined (this may not work since there is no reg_ssh_key value defined)
-	if ! ssh -F .ssh.conf $reg_host touch $f >/dev/null 2>&1; then
-		# This is to be expected and can be ignored
-		:
-	else
-		if [ ! -f $f ]; then
-			echo
-			echo_red "Error: $reg_host is a remote host! Correct the problem in mirror.conf (define reg_ssh_key?) and try again."
-			echo
-
-			exit 1
-		fi
+	if [ ! "$fqdn_ip" ]; then
+		echo
+		echo_red "Warning: '$reg_host' does not resolve to an IP addr!"
+		echo_red "         Please correct the problem and try again!"
+		echo
 	fi
+
+	# Get local IP addresses
+	local_ips=$(hostname -I)
+
+	# Check if FQDN IP matches any local IP
+	if ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
+		echo
+		echo_red "Error: FQDN '$reg_host' does not resolve to an IP addr on this host '`hostname`'!"
+		echo_red "       By setting 'reg_ssh_key' in 'aba.conf' you have configued the mirror to be on the local host '$reg_host' (which resolves to '$fqdn_ip')."
+		echo_red "       If that should be a remote host, please define the 'reg_ssh_key' value in 'mirror.conf'."
+		echo_red "       Otherwise, ensure the DNS record points to an IP address on this local host '`hostname`'."
+		echo_red "       Please correct the problem and try again."
+		echo
+
+		exit 1
+	fi
+
+#	if ! ssh -F .ssh.conf $reg_host touch $flag_file >/dev/null 2>&1; then
+#		# This is to be expected and can be ignored
+#		:
+#	else
+#		if [ ! -f $flag_file ]; then
+#			echo
+#			echo_red "Error: $reg_host is a remote host! Correct the problem in mirror.conf (define reg_ssh_key?) and try again."
+#			echo
+#
+#			exit 1
+#		else
+#			rm -f $flag_file
+#		fi
+#	fi
+
+	ask "Install Quay mirror registry appliance locally on host '`hostname`', accessable via $reg_host:$reg_port" || exit 1
+	echo "Installing Quay registry on localhost ..."
 
 	# mirror-registry installer does not open the port for us
 	echo Allowing firewall access to this host at $reg_host/$reg_port ...

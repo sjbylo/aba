@@ -146,7 +146,7 @@ ask() {
 	timer=
 	[ "$1" == "-t" ] && timer="-t $1" && shift && shift 
 
-	echo_cyan -n "$@? $yn_opts: "
+	echo_yellow -n "$@? $yn_opts: "
 	read $timer yn
 
 	# Return default responce, 0
@@ -176,20 +176,22 @@ edit_file() {
 	shift
 	msg="$*"
 
-	if [ ! "$editor" -o "$editor" == "none" ]; then
-		echo
-		#echo_yellow "The file '$(basename $PWD)/$conf_file' has been created. Please edit it & follow the instructons and/or try again."
-		echo_yellow "The file '$PWD/$conf_file' has been created. Please edit it & follow the instructons and/or try again."
+	if [ "$ask" ]; then
+		if [ ! "$editor" -o "$editor" == "none" ]; then
+			echo
+			echo_yellow "The file '$PWD/$conf_file' has been created. Please edit/verify it & continue/try again."
 
-		return 1
-	else
-		if [ "$ask" ]; then
+			return 1
+		else
 			ask "$msg" || return 1
 			$editor $conf_file
-		else
-			echo_cyan "$msg? (auto answered)"
 		fi
+	else
+		#echo_yellow "$msg? (auto answered, ask=$ask)"
+		echo_yellow "'$conf_file' has been created for you (skipping edit since 'ask' set to 'false' in 'aba.conf')."
 	fi
+
+	return 0
 }
 
 try_cmd() {

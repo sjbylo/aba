@@ -5,7 +5,7 @@ Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/bl
 
 ## Who should use Aba?
 
-Use Aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail.  It also works with connected environments!
+Use Aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail.
 
 1. [What does Aba do for me?](#what-does-Aba-do-for-me)
 1. [Quick Guide](#quick-guide)

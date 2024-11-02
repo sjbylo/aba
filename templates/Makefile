@@ -65,13 +65,13 @@ mirror.conf: .initialized ## Set up the mirror.conf file.
 	@touch mirror.conf
 	@echo Using `pwd`/mirror.conf file 
 
-vmware.conf: ## Use VMW vCenter or ESXi to create cluster.
+vmware.conf: .initialized ## Use VMW vCenter or ESXi to create cluster.
 	make -sC ../cli ~/bin/govc
 	make -sC .. vmw
 	@#test -f ../vmware.conf &&                          ln -fs ../vmware.conf || true
 	[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf || true
 
-cluster.conf:  ## Set up the OpenShift cluster.conf file.
+cluster.conf: .initialized  ## Set up the OpenShift cluster.conf file.
 	scripts/create-cluster-conf.sh $(name) $(type)
 
 agentconf: install-config.yaml agent-config.yaml  ## Convenient target to only generate the agent config files, so they can be edited. 
