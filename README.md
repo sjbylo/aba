@@ -244,14 +244,16 @@ Example:
 
 make inc                                          # Write tar archive to /tmp
 or
-make inc out=/dev/path/to/thumb-drive/aba.tgz     # Write archive 'aba.tgz' to the device mounted at /dev/path/to/thumb-drive
+make inc out=/dev/path/to/thumb-drive/aba.tgz     # Write archive 'aba.tgz' to the device 
+                                                  # mounted at /dev/path/to/thumb-drive
 or
 make inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to internal host (if possible).
 
 # Copy the file 'aba.tgz' to your bastion via your portable storage device.
 
 # Then, on the bastion run:
-tar xvf aba.tgz                                   # Extract the tar file. Ensure file timestamps are kept the same as on the connected workstation.
+tar xvf aba.tgz                                   # Extract the tar file. Ensure file timestamps are
+                                                  # kept the same as on the connected workstation.
 cd aba             
 ./aba
 ```
@@ -270,7 +272,8 @@ Copy the "aba.tgz" file to the bastion and unpack the archive. Note the director
 Copy or move the "seq" tar file(s), as is, from the "mirror/save" directory to the  bastion, into the "mirror/save" directory on the bastion.
 
 ```
-sudo dnf install make -y     # If dnf does not work in the private environment (i.e. no Satalite), ensure all required RPMs are pre-installed, e.g. from a DVD drive at the time of installation. 
+sudo dnf install make -y     # If dnf does not work in the private environment (i.e. no Satalite),
+                             # ensure all required RPMs are pre-installed, e.g. from a DVD drive at the time of installation. 
 make load
 ```
 - will (if required) install Quay (from the bundle archive) and then load the images into Quay.
@@ -368,7 +371,8 @@ If you want to create the agent-based iso file, e.g. to boot bare-metal nodes, u
 ```
 cd mycluster
 make iso
-# boot the bare-metal node(s) with the generated ISO file. This can be done using a USB stick or via the server's remote management interfaces (BMC etc).
+# boot the bare-metal node(s) with the generated ISO file. 
+# This can be done using a USB stick or via the server's remote management interfaces (BMC etc).
 make mon
 ```
 
