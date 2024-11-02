@@ -120,7 +120,7 @@ In a partially disconnected environment, the internal network has limited or pro
    - **NTP**: An NTP server is recommended to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
 
 - **Platform**
-   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.openshift.com/container-platform/4.14/installing/installing_vsphere/installing-vsphere-installer-provisioned-customizations.html#installation-vsphere-installer-infra-requirements_installing-vsphere-installer-provisioned-customizations) for specific permissions.
+   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.openshift.com/container-platform/4.17/installing/installing_vsphere/ipi/ipi-vsphere-installation-reqs.html#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions.
    - For bare-metal installations, manually boot the nodes using the generated ISO file. 
 
 - **Registry**
