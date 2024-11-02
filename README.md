@@ -77,8 +77,6 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 ## Prerequisites
 
-[Back to top](#who-should-use-aba)
-
 ### Fully Disconnected (Air-Gapped) Prerequisites
 
 In a fully disconnected environment, where no internet access is available, two bastions are required: one connected to the internet and the other on the private network.
@@ -96,8 +94,6 @@ In a fully disconnected environment, where no internet access is available, two 
    - Install required RPMs as listed in `templates/rpms-internal.txt` (or let Aba use dnf to install, if available).
    - Password-less `sudo` access is highly recommended.
 
-[Back to top](#who-should-use-aba)
-
 ### Partially Disconnected Prerequisites
 
 In a partially disconnected environment, the internal network has limited or proxy-based internet access, allowing data synchronization directly.
@@ -109,8 +105,6 @@ In a partially disconnected environment, the internal network has limited or pro
    - Install required RPMs from `templates/rpms-external.txt`.
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
    - Password-less `sudo` access is highly recommended.
-
-[Back to top](#who-should-use-aba)
 
 ### Common Requirements for Both Environments
 
@@ -206,7 +200,7 @@ Now, continue with either 'Disconnected scenario' or 'Fully disconnected (air-ga
 
 [Back to top](#who-should-use-aba)
 
-## Disconnected Scenario 
+### Disconnected Scenario 
 
 In this scenario, the connected bastion has access to both the Internet and the private subnet (but not necessarily at the same time).
 
@@ -229,7 +223,7 @@ Note that the above 'disconnected scenario' can be repeated, for example to down
 
 [Back to top](#who-should-use-aba)
 
-## Fully disconnected (air-gapped) Scenario
+### Fully disconnected (air-gapped) Scenario
 
 In this scenario, your connected bastion has access to the Internet but no access to the private network.
 You also require an internal bastion in a private subnet.
