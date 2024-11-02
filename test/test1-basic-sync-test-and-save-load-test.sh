@@ -144,7 +144,7 @@ mylog "Setting 'reg_host' to '$bastion2' in file 'mirror/mirror.conf'"
 sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf	# Install on registry2 
 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
-sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
+sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 mylog "Setting op_sets=\"abatest\" in mirror/mirror.conf"
 sed -i "s/^.*op_sets=.*/op_sets=\"abatest\" /g" ./mirror/mirror.conf
@@ -268,7 +268,7 @@ test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune
 mylog "Configure mirror to install on internal (remote) bastion in default dir, with random password to '/my/path'"
 
 #sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf	# Install on registry2 
-#sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
+#sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 ## FIXME INSTALL FAILURE mylog "Setting reg_root=~/my-quay-mirror"
 ## FIXME INSTALL FAILURE sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
@@ -284,7 +284,7 @@ mylog "Setting reg_ssh_user=testy for remote installation"
 sed -i "s#reg_ssh_user=[^ \t]*#reg_ssh_user=testy   #g" ./mirror/mirror.conf	     	# If remote, set user
 
 mylog "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" 
-sed -i "s#reg_ssh_key=.*#reg_ssh_key=~/.ssh/testy_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
+sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/testy_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 # FIXME: no need? or use 'make clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"

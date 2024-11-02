@@ -110,7 +110,7 @@ mylog "Setting 'reg_host' to '$int_bastion' in file 'mirror/mirror.conf'"
 sed -i "s/^reg_host.*/reg_host=$int_bastion/g" ./mirror/mirror.conf	# Install on internal bastion
 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
-sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
+sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 mylog "Setting reg_root=~/my-quay-mirror"
 sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
@@ -170,7 +170,7 @@ mylog "Setting 'reg_host' to '$int_bastion' in file 'mirror/mirror.conf'"
 sed -i "s/^reg_host.*/reg_host=$int_bastion/g" ./mirror/mirror.conf	# Install on internal bastion
 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
-sed -i "s#reg_ssh_key=#reg_ssh_key=~/.ssh/id_rsa#g" ./mirror/mirror.conf	     	# Remote or localhost
+sed -i "s#reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 ## FIXME INSTALL FAILURE mylog "Setting reg_root=~/my-quay-mirror"
 ## FIXME INSTALL FAILURE sed -i "s#reg_root=#reg_root=~/my-quay-mirror#g" ./mirror/mirror.conf	     	# test other storage location
