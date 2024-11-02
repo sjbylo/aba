@@ -12,15 +12,15 @@ Use Aba if you want to get OpenShift up and running quickly in an air-gapped env
 1. [Prerequisites](#prerequisites)
    1. [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
-1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
-1. [Quick Guide](#quick-guide)
+   1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
+1. [A Very Quick Guide](#a-very-quick-guide)
 1. [Getting Started with Aba](#getting-started-with-aba)
    1. [Disconnected Scenario](#disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
 1. [Configuration files](#configuration-files)
 1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-andor-openshift-install.yaml-files)
-1. [Features that are not implemented yet](#features-that-are-not-implemented-yet)
+1. [Feature Backlog](#feature-backlog)
 1. [Miscellaneous](#miscellaneous)
 1. [Advanced](#advanced)
 
@@ -53,6 +53,8 @@ For the very impatient:
 ## Installing OpenShift in a Disconnected Network
 
 ![Air-gapped data transfer](images/air-gapped.jpg "Air-gapped data transfer")
+<img src="images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="50%">
+
 
 The diagram above illustrates two scenarios for installing OpenShift in a disconnected network environment.
 
@@ -130,7 +132,7 @@ After configuring these prerequisites, run `./aba` to start the OpenShift instal
 Note: that Aba also works in connected environments without a private mirror registry, e.g. by accessing public container registries via a proxy.  To do this, configure the proxy values in `cluster.conf`.
 
 
-## Quick Guide
+## A Very Quick Guide
 
 For those who are less impatient...
 
@@ -450,7 +452,7 @@ make refresh
 make mon
 ```
 
-## Features that are not implemented yet
+## Feature Backlog
 
 - ~~Support bonding and vlan.~~
 
