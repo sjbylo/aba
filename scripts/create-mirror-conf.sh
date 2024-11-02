@@ -19,7 +19,7 @@ fi
 # Input is 'domain' from aba.conf
 scripts/j2 templates/mirror.conf.j2 > mirror.conf
 
-edit_file mirror.conf "Configure your private mirror registry (mirror.conf)"
+edit_file mirror.conf "Configure your private mirror registry (mirror.conf)" || exit 1  # if edirot=none exit 0
 
 exit 0
 
