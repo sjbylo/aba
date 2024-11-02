@@ -285,14 +285,14 @@ For example, by:
 Note that generated 'image sets' are sequential and must be pushed to the target mirror registry in order. You can derive the sequence number from the file name of the generated image set archive file in the mirror/save directory. 
 
 ![Connecting to or creating Mirror Registry](images/make-install.jpg "Connecting to or creating Mirror Registry")
-<img src="images/make-install.jpg" alt="Connecting to or creating Mirror Registry" title="Connecting to or creating Mirror Registry" width="80%">
+<img src="images/make-install.jpg" alt="Connecting to or creating Mirror Registry" title="Connecting to or creating Mirror Registry" width="50%">
 
 
 
 ## Installing OpenShift 
 
 ![Installing OpenShift](images/make-cluster.jpg "Installing OpenShift")
-<img src="images/make-cluster.jpg" alt="Installing OpenShift" title="Installing OpenShift" width="80%">
+<img src="images/make-cluster.jpg" alt="Installing OpenShift" title="Installing OpenShift" width="50%">
 
 
 ```
