@@ -53,7 +53,7 @@ For the very impatient:
 ## Installing OpenShift in a Disconnected Network
 
 ![Air-gapped data transfer](images/air-gapped.jpg "Air-gapped data transfer")
-<img src="images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="50%">
+<img src="images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="80%">
 
 
 The diagram above illustrates two scenarios for installing OpenShift in a disconnected network environment.
@@ -198,6 +198,8 @@ Now, continue with either 'Disconnected scenario' or 'Fully disconnected (air-ga
 In this scenario, the connected bastion has access to both the Internet and the private subnet (but not necessarily at the same time).
 
 ![Disconnected and Air-gapped Scenario](images/make-sync.jpg "Disconnected and Air-gapped scenario")
+<img src="images/make-sync.jpg" alt="Disconnected and Air-gapped Scenario" title="Disconnected and Air-gapped scenario" width="80%">
+
 
 ```
 make sync
@@ -283,11 +285,15 @@ For example, by:
 Note that generated 'image sets' are sequential and must be pushed to the target mirror registry in order. You can derive the sequence number from the file name of the generated image set archive file in the mirror/save directory. 
 
 ![Connecting to or creating Mirror Registry](images/make-install.jpg "Connecting to or creating Mirror Registry")
+<img src="images/make-install.jpg" alt="Connecting to or creating Mirror Registry" title="Connecting to or creating Mirror Registry" width="80%">
+
 
 
 ## Installing OpenShift 
 
 ![Installing OpenShift](images/make-cluster.jpg "Installing OpenShift")
+<img src="images/make-cluster.jpg" alt="Installing OpenShift" title="Installing OpenShift" width="80%">
+
 
 ```
 cd aba
