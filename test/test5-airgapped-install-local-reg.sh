@@ -248,8 +248,8 @@ test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing $cluster_type cluster, re
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Listing VMs (should show 24G memory)" "make -s -C $subdir/aba/$cluster_type ls"
 
 #### DEL? test-cmd -h $reg_ssh_user@$int_bastion -m  "Deploying test vote-app" $subdir/aba/test/deploy-test-app.sh $subdir
-test-cmd -h steve@$int_bastion -m "Create project 'demo'" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc new-project demo'" || true
-test-cmd -h steve@$int_bastion -m "Launch vote-app" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'" || true
+test-cmd -h steve@$int_bastion -m "Create project 'demo'" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc new-project demo' || true" # || true
+test-cmd -h steve@$int_bastion -m "Launch vote-app" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo' || true"  #|| true
 test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc rollout status deployment vote-app -n demo'"
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
@@ -377,7 +377,7 @@ build_and_test_cluster() {
 	cnt=$2  # Number of nodes to check/validate in the cluster
 
 	# Create cluster.conf
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating '$cluster_name' cluster.conf" "make -s -C $subdir/aba cluster name=$cluster_name type=$cluster_name target=cluster.conf" || true
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating '$cluster_name' cluster.conf" "make -s -C $subdir/aba cluster name=$cluster_name type=$cluster_name target=cluster.conf || true" # || true
 
 	# Add more cpu/ram ... See if this will speed things up!
 	test-cmd -h $reg_ssh_user@$int_bastion -m "Adding master CPU" "sed -i 's/^master_cpu_count=.*/master_cpu_count=12/g' $subdir/aba/$cluster_name/cluster.conf"
@@ -392,7 +392,7 @@ build_and_test_cluster() {
 		set -x
 
 		# See if the agent is still running and fetch the logs
-		make -C $subdir/aba/$cluster_name ssh cmd="agent-gather -O" | ssh 10.0.1.6 -- "cat > agent-gather-$cluster_name-.tar.xz" || true
+		make -C $subdir/aba/$cluster_name ssh cmd="agent-gather -O" | ssh 10.0.1.6 -- "cat > agent-gather-$cluster_name-.tar.xz || true" # || true
 		scp $subdir/aba/$cluster_name/iso-agent-based/.openshift_install.log 10.0.1.6:$cluster_name_openshift_install.log
 
 		make -C $subdir/aba/$cluster_name stop wait=1
@@ -429,8 +429,8 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "make -s -C $subdir/aba/$cluster_name cmd; until make -s -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 	# Deploy test app
-	test-cmd -h steve@$int_bastion -m "Create project 'demo'" "make -s -C $subdir/aba/$cluster_name cmd cmd='oc new-project demo'" || true
-	test-cmd -h steve@$int_bastion -m "Launch vote-app" "make -s -C $subdir/aba/$cluster_name cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'" || true
+	test-cmd -h steve@$int_bastion -m "Create project 'demo'" "make -s -C $subdir/aba/$cluster_name cmd cmd='oc new-project demo' || true" # || true
+	test-cmd -h steve@$int_bastion -m "Launch vote-app" "make -s -C $subdir/aba/$cluster_name cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo' || true" # || true
 	test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "make -s -C $subdir/aba/$cluster_name cmd cmd='oc rollout status deployment vote-app -n demo'"
 }
 

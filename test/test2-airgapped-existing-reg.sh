@@ -172,7 +172,7 @@ test-cmd -r 20 3 -m "Saving images to local disk on `hostname`" make save
 mylog "'make tar' and copy (ssh) files over to internal bastion: steve@$int_bastion"
 make -s -C mirror tar out=- | ssh steve@$int_bastion -- tar -C $subdir -xvf -
 
-test-cmd -h steve@$int_bastion -m "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "make -C $subdir/aba load" || true  # This user's action is expected to fail since there are no login credentials for the "existing reg."
+test-cmd -h steve@$int_bastion -m "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "make -C $subdir/aba load || true" # || true  # This user's action is expected to fail since there are no login credentials for the "existing reg."
 
 # But, now regcreds/ is created...
 mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: steve@$int_bastion"
@@ -255,8 +255,8 @@ test-cmd -h steve@$int_bastion -m "Checking cluster operator status on cluster s
 ######################
 
 ###test-cmd -h steve@$int_bastion -m "Deploying vote-app on cluster" $subdir/aba/test/deploy-test-app.sh $subdir
-test-cmd -h steve@$int_bastion -m "Create project 'demo'" "make -C $subdir/aba/sno cmd cmd='oc new-project demo'" || true
-test-cmd -h steve@$int_bastion -m "Launch vote-app" "make -C $subdir/aba/sno cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'" || true
+test-cmd -h steve@$int_bastion -m "Create project 'demo'" "make -C $subdir/aba/sno cmd cmd='oc new-project demo' || true" # || true
+test-cmd -h steve@$int_bastion -m "Launch vote-app" "make -C $subdir/aba/sno cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo' || true"  # || true
 test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "make -C $subdir/aba/sno cmd cmd='oc rollout status deployment vote-app -n demo'"
 test-cmd -h steve@$int_bastion -m "Deleting vote-app" "make -C $subdir/aba/sno cmd cmd='oc delete project demo'"
 
