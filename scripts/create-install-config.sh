@@ -68,7 +68,6 @@ export ssh_key_pub=$(cat $ssh_key_file.pub)
 
 
 # See if the cluster wide proxy should be added
-#if [ "$set_http_proxy" -a "$set_https_proxy" -a "$set_no_proxy" ]; then
 if [ "$set_http_proxy" -a "$set_https_proxy" ]; then
 	export http_proxy=$set_http_proxy
 	export https_proxy=$set_https_proxy
@@ -118,7 +117,7 @@ else
 		# Should check accessibility to registry.redhat.io?
 		echo
 		echo_red "Warning: No private mirror registry configured & no proxy settings provided!"
-		echo_red "         If this is *unexpected*, you likely need to set up a mirror registry!  Run: cd ..; make mirror" # FIXME: improve
+		echo_red "         If this is *unexpected* you likely need to set up a mirror registry! See the Readme.md file for more."
 		echo_red "         Root CA file 'regcreds/rootCA.pem' not found. Not adding 'additionalTrustBundle' to install-config.yaml!"
 		echo
 	fi

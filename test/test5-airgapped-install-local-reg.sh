@@ -41,10 +41,6 @@ rm -f ~/.aba.previous.backup
 
 which make || sudo dnf install make -y
 
-#v=4.16.5
-
-###> mirror/mirror.conf
-##echo "ocp_version=4.16.999" >> aba.conf  # Only to fix error, missing "ocp_version"
 test-cmd -m "Cleaning up - make distclean force=1" 
 mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
 #test-cmd -m "Cleaning up mirror - clean" "make -s -C mirror clean" 
@@ -53,7 +49,6 @@ rm -rf sno compact standard
 
 bastion2=registry.example.com
 bastion_vm=bastion-internal-rhel9
-subdir=~
 subdir=~/subdir
 
 mylog ============================================================
@@ -66,15 +61,14 @@ rm -f aba.conf  # Set it up next
 vf=~/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" ./aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
-#test-cmd -m "Configure aba.conf for latest version and vmware $vf" ./aba --version latest ## --vmw $vf
+
 # Set up govc 
 cp $vf vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 
 # Do not ask to delete things
-mylog "Setting ask="
+mylog "Setting ask=false"
 make noask
-#sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
 
 mylog "Setting ntp_servers=$ntp" 
 [ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
@@ -91,24 +85,24 @@ test-cmd -m "Init test: download mirror-registry.tar.gz" "make -s -C test mirror
 #################################
 # Copy and edit mirror.conf 
 
-##sudo dnf install python36 python3-jinja2 -y
 rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
-
 # Simulate creation and edit of mirror.conf file
 scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
+# FIXME: Why not use 'make mirror.conf'?
 
 mylog "Test the internal bastion ($bastion2) as mirror"
 
 mylog "Setting reg_host=$bastion2"
 sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf
-#sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
 
+# FIXME: Duplication with above (on purpose?) 
 mylog "Setting op_sets=\"abatest\" in mirror/mirror.conf"
 sed -i "s/^.*op_sets=.*/op_sets=\"abatest\" /g" ./mirror/mirror.conf
 echo kiali-ossm > templates/operator-set-abatest 
 
+
 # FIXME: Why is this needed? 
-make -C cli ~/bin/govc
+####make -C cli ~/bin/govc
 
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
@@ -153,7 +147,6 @@ scp $vf steve@$bastion2:
 #################################
 
 source <(cd mirror && normalize-mirror-conf)
-#### [ ! "$reg_ssh_user" ] && reg_ssh_user=$(whoami)
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
@@ -223,13 +216,6 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
 END
-
-echo = TEST =
-echo ~/.docker/*
-cat ~/.docker/*
-echo ~/.containers/*
-cat ~/.containers/*
-echo = TEST =
 
 test-cmd -r 99 3 -m "Saving ubi images to local disk on `hostname`" "make -s -C mirror save" 
 
