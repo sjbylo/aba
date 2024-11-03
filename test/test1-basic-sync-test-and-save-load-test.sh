@@ -25,7 +25,7 @@ cd ..
 rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
-bastion2=registry.example.com
+int_bastion=registry.example.com
 bastion_vm=bastion-internal-rhel9
 
 source scripts/include_all.sh && trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
@@ -37,7 +37,7 @@ mylog default_target=$default_target
 mylog ============================================================
 mylog Starting test $(basename $0)
 mylog ============================================================
-mylog "Test to install remote reg. on $bastion2 and then sync and save/load images.  Install sno ocp + test app."
+mylog "Test to install remote reg. on $int_bastion and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
 ntp_ip=10.0.1.8,10.0.1.8 # If available
@@ -95,28 +95,28 @@ mylog Revert internal bastion vm to snapshot and powering on ...
 	sleep 5
 )
 # Wait for host to come up
-ssh $reg_ssh_user@$bastion2 -- "date" || sleep 2
-ssh $reg_ssh_user@$bastion2 -- "date" || sleep 3
-ssh $reg_ssh_user@$bastion2 -- "date" || sleep 8
+ssh $reg_ssh_user@$int_bastion -- "date" || sleep 2
+ssh $reg_ssh_user@$int_bastion -- "date" || sleep 3
+ssh $reg_ssh_user@$int_bastion -- "date" || sleep 8
 
 # Delete images
-ssh $reg_ssh_user@$bastion2 -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+ssh $reg_ssh_user@$int_bastion -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 # This file is not needed in a fully air-gapped env. 
-ssh $reg_ssh_user@$bastion2 -- "rm -fv ~/.pull-secret.json"
+ssh $reg_ssh_user@$int_bastion -- "rm -fv ~/.pull-secret.json"
 # Want to test fully disconnected 
-ssh $reg_ssh_user@$bastion2 -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
+ssh $reg_ssh_user@$int_bastion -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
 # Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
-ssh steve@$bastion2 -- "rm -rfv ~/*"
+ssh steve@$int_bastion -- "rm -rfv ~/*"
 
 # Just be sure a valid govc config file exists on internal bastion
-scp $vf steve@$bastion2: 
+scp $vf steve@$int_bastion: 
 
 # Test with other use
 rm -f ~/.ssh/testy_rsa*
 ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N ''
 pub_key=$(cat ~/.ssh/testy_rsa.pub)   # This must be different key
 u=testy
-cat << END  | ssh $bastion2 -- sudo bash 
+cat << END  | ssh $int_bastion -- sudo bash 
 set -ex
 userdel $u -r -f || true
 useradd $u -p not-used
@@ -128,20 +128,20 @@ echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
 chmod 600 ~$u/.ssh/authorized_keys
 chown -R $u.$u ~$u
 END
-ssh -i ~/.ssh/testy_rsa testy@$bastion2 whoami
+ssh -i ~/.ssh/testy_rsa testy@$int_bastion whoami
 
 
 #####################################################################################################################
 #####################################################################################################################
 #####################################################################################################################
 
-mylog "Confgure mirror to install registry on internal (remote) $bastion2"
+mylog "Confgure mirror to install registry on internal (remote) $int_bastion"
 
 # Create and edit mirror.conf 
 make -C mirror mirror.conf
 
-mylog "Setting 'reg_host' to '$bastion2' in file 'mirror/mirror.conf'"
-sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf	# Install on registry2 
+mylog "Setting 'reg_host' to '$int_bastion' in file 'mirror/mirror.conf'"
+sed -i "s/registry.example.com/$int_bastion /g" ./mirror/mirror.conf	# Install on registry2 
 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
 sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
@@ -176,7 +176,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 ######################
 # This will install mirror and sync images
 mylog "Installing Quay mirror registry at $reg_host:$reg_port and then ..."
-test-cmd -r 99 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync
+test-cmd -r 20 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync
 
 # Install yq for below test only!
 which yq || (
@@ -251,14 +251,14 @@ test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || tru
 
 #######################
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 99 3 -m "Saving and then loading cluster images into mirror" "make -C mirror save load" 
+test-cmd -r 20 3 -m "Saving and then loading cluster images into mirror" "make -C mirror save load" 
 
 rm -rf sno
 test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
 test-cmd -m "Delete cluster (if needed)" make -C sno delete 
 test-cmd -m "Uninstall mirror" make -C mirror uninstall 
-test-cmd -h steve@$bastion2 -m "Verify mirror uninstalled" podman ps 
-test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+test-cmd -h steve@$int_bastion -m "Verify mirror uninstalled" podman ps 
+test-cmd -h steve@$int_bastion -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 #####################################################################################################################
 #####################################################################################################################
@@ -267,7 +267,7 @@ test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune
 ## FIXME INSTALL FAILURE mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 mylog "Configure mirror to install on internal (remote) bastion in default dir, with random password to '/my/path'"
 
-#sed -i "s/registry.example.com/$bastion2 /g" ./mirror/mirror.conf	# Install on registry2 
+#sed -i "s/registry.example.com/$int_bastion /g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 ## FIXME INSTALL FAILURE mylog "Setting reg_root=~/my-quay-mirror"
@@ -299,7 +299,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 ######################
 # This will install the reg. and sync the images
-test-cmd -r 99 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync 
+test-cmd -r 20 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync 
 
 make -C sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and make should start from scratch next time
@@ -320,7 +320,7 @@ test-cmd -m "Installing sno cluster" make sno
 
 #######################
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 99 3 -m "Saving and loading images into mirror" make -C mirror save load 
+test-cmd -r 20 3 -m "Saving and loading images into mirror" make -C mirror save load 
 
 make -C sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
@@ -340,8 +340,8 @@ test-cmd -m "Bare-metal simulation: Creating agent config files" make standard  
 test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso || true	# Since we're simulating bare-metal, only create iso
 
 #test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
-#test-cmd -h steve@$bastion2 -m "Verify mirror uninstalled" podman ps 
-#test-cmd -h steve@$bastion2 -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+#test-cmd -h steve@$int_bastion -m "Verify mirror uninstalled" podman ps 
+#test-cmd -h steve@$int_bastion -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 #####################################################################################################################
 #####################################################################################################################

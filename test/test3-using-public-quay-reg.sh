@@ -23,7 +23,7 @@ cd ..
 rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
-bastion2=registry.example.com
+int_bastion=registry.example.com
 bastion_vm=bastion-internal-rhel9
 
 source scripts/include_all.sh && trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
