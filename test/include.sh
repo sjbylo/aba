@@ -82,8 +82,7 @@ test-cmd() {
 			echo "Next attempt will be ($i/$tot_cnt)"
 			echo "Sleeping $sleep_time seconds ..."
 			sleep $sleep_time
-			#sleep_time=`expr $sleep_time \* $backoff`
-			sleep_time=`expr $sleep_time + $backoff \* 10`
+			sleep_time=`expr $sleep_time + $backoff \* 8`
 			echo "Attempting command again ($i/$tot_cnt) - ($@)" | tee -a test/test.log
 		done
 
