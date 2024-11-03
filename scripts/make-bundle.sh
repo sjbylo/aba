@@ -7,7 +7,7 @@ source scripts/include_all.sh
 [ "$1" ] && force=true && shift
 [ "$1" ] && set -x
 
-install_rpms make >.bundle.log|| exit 1
+install_rpms make | cat -v >.bundle.log|| exit 1
 
 source <(normalize-aba-conf)
 
@@ -49,7 +49,7 @@ fi
 # so we can do something like: ./aba bundle ... --bundle-file - | ssh host tar xvf - 
 if [ "$bundle_dest_path" = "-" ]; then
 	echo "Downloading binary data.  See logfile '.bundle.log' for details." >&2
-	make -s download save retry=7 >>.bundle.log 2>&1
+	make -s download save retry=7 | cat -v >>.bundle.log 2>&1
 	make -s tar out=-
 
 	exit

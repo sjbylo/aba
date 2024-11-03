@@ -19,7 +19,7 @@ else
   endif
 endif
 
-download: openshift-client-linux-$(ocp_version).tar.gz openshift-install-linux-$(ocp_version).tar.gz oc-mirror.tar.gz govc_Linux_x86_64.tar.gz butane-binary
+download: openshift-client-linux-$(ocp_version).tar.gz openshift-install-linux-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
 
 ##@ Help-related tasks
 .PHONY: help
@@ -63,15 +63,16 @@ openshift-install-linux-$(ocp_version).tar.gz:  ## Download openshift-install ta
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/openshift-install-linux-$(ocp_version).tar.gz
 
 ########################################
-~/bin/oc-mirror: .init oc-mirror.tar.gz ~/bin/oc   ## Install oc-mirror into ~/bin
-	tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
+~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz ~/bin/oc   ## Install oc-mirror into ~/bin
+	grep -oP '(?<=VERSION_ID=")[^"]+' /etc/os-release | grep "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
 
 # Version 4.14 has bug fixes 
-oc-mirror.tar.gz: ## Download oc-mirror tarball ver 4.14.9 or higher 
-	# Installing oc-mirror version 4.14.9 or higher
-	#../scripts/output_ver_lower_4.14.9.sh $(ocp_version) && curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.14.9/oc-mirror.tar.gz || curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/oc-mirror.tar.gz 
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.16.13/oc-mirror.tar.gz
+oc-mirror.tar.gz: ## Download oc-mirror tarball
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest/oc-mirror.tar.gz	
+
+oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest/oc-mirror.rhel9.tar.gz
 
 ########################################
 ~/bin/govc: .init govc_Linux_x86_64.tar.gz    ## Install govc into ~/bin

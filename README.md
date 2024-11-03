@@ -68,7 +68,7 @@ Each scenario includes two main network zones:
 Bastion Requirements
 
 - **Connected Bastion**: Can be a workstation or virtual machine (VM) running on a laptop, configured with RHEL 8/9 or Fedora.
-- **Internat Network Bastion**: Must be running RHEL 9 to support OpenShift installation in the private network.
+- **Internal Bastion**: Must be running RHEL 9 to support OpenShift installation in the private network.
 
 These configurations ensure that each network zone meets OpenShift’s requirements for disconnected or fully air-gapped installations.
 
@@ -85,7 +85,7 @@ In a fully disconnected environment, where no internet access is available, two 
    - An x86 RHEL 8/9 or Fedora (e.g. VM) with internet access, typically on a laptop.
    - Clone or download this Git repository (https://github.com/sjbylo/aba.git) to any location in your home directory.
    - Download and store the Red Hat registry pull secret to `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
-   - Install required RPMs listed in `templates/rpms-external.txt`.
+   - Install required RPMs listed in `templates/rpms-external.txt` (or let Aba use dnf to install).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
    - Password-less `sudo` access is highly recommended.
 
@@ -101,8 +101,8 @@ In a partially disconnected environment, the internal network has limited or pro
 - **Bastion**
    - A single RHEL 9 VM with internet access and connectivity to the private network.
    - Download and copy this Git repository to any location in your home directory on the bastion.
-   - Configure the Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
-   - Install required RPMs from `templates/rpms-external.txt`.
+   - Download and store your Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
+   - Install required RPMs from `templates/rpms-external.txt` (or let Aba use dnf to install, if available).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
    - Password-less `sudo` access is highly recommended.
 
@@ -113,9 +113,9 @@ In a partially disconnected environment, the internal network has limited or pro
 
 - **Network Configuration**
    - **DNS**: Configure the following DNS A records (these are examples!):
-      - **OpenShift API**: `<api.ocp1.example.com>` pointing to a free IP in the private subnet.
-      - **OpenShift Ingress**: `<*.apps.ocp1.example.com>` pointing to a free IP in the private subnet.
-      - **Mirror Registry**: `<registry.example.com>` pointing to the IP address of your internal mirror registry (or where Aba should install it).
+      - **OpenShift API**: `api.ocp1.example.com` pointing to a free IP in the private subnet.
+      - **OpenShift Ingress**: `*.apps.ocp1.example.com` (wildcard A record) pointing to a free IP in the private subnet.
+      - **Mirror Registry**: `registry.example.com` pointing to the IP address of your internal mirror registry (or where Aba should install it).
       - *Note*: For Single Node OpenShift (SNO), configure both OpenShift API and Ingress records to point to the same IP.
    - **NTP**: An NTP server is recommended to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
 
