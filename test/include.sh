@@ -55,8 +55,8 @@ test-cmd() {
 	fi
 	draw-line
 
-	QUIT=
-	while [ ! "$QUIT" ]
+	ALL_DONE=
+	while [ ! "$ALL_DONE" ]
 	do
 		i=1
 		while true
@@ -89,8 +89,12 @@ test-cmd() {
 
 		[ "$reset_xtrace" ] && set -x
 
-		echo -n "COMMAND FAILED WITH ret=$ret, TRY AGAIN? (Y/n): "; read yn
-		[ "$yn" = "n" -o "$yn" = "N" ] && QUIT=1
+		if [ $ret -eq 0 ]; then
+			ALL_DONE=1
+		else
+			echo -n "COMMAND FAILED WITH ret=$ret, TRY AGAIN? (Y/n): "; read yn
+			[ "$yn" = "n" -o "$yn" = "N" ] && ALL_DONE=1
+		fi
 	done
 
 	return $ret  # 'set' was always returning 0, even if $@ command failed
