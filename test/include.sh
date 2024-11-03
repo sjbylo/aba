@@ -55,36 +55,43 @@ test-cmd() {
 	fi
 	draw-line
 
-	i=1
-	while true
+	QUIT=
+	while [ ! "$QUIT" ]
 	do
-		set +e
-		if [ "$host" != "localhost" ]; then
-			echo "Running command: \"$@\" on host $host"
-			ssh $host -- "export TERM=xterm; $@"    # TERM set just for testing purposes
-		else
-			echo "Running command: \"$@\" on localhost"
-			eval "$@"
-		fi
-		ret=$?
-		set -e
+		i=1
+		while true
+		do
+			set +e
+			if [ "$host" != "localhost" ]; then
+				echo "Running command: \"$@\" on host $host"
+				ssh $host -- "export TERM=xterm; $@"    # TERM set just for testing purposes
+			else
+				echo "Running command: \"$@\" on localhost"
+				eval "$@"
+			fi
+			ret=$?
+			set -e
 
-		[ $ret -eq 0 ] && break
+			[ $ret -eq 0 ] && break
 
-		echo "Attempt ($i/$tot_cnt) failed with error $ret for command \"$@\""
+			echo "Attempt ($i/$tot_cnt) failed with error $ret for command \"$@\""
 
-		let i=$i+1
-		[ $i -gt $tot_cnt ] && echo "Giving up with command \"$@\"!" && break
+			let i=$i+1
+			[ $i -gt $tot_cnt ] && echo "Giving up with command \"$@\"!" && break
 
-		echo "Next attempt will be ($i/$tot_cnt)"
-		echo "Sleeping $sleep_time seconds ..."
-		sleep $sleep_time
-		#sleep_time=`expr $sleep_time \* $backoff`
-		sleep_time=`expr $sleep_time + $backoff \* 10`
-		echo "Attempting command again ($i/$tot_cnt) - ($@)" | tee -a test/test.log
+			echo "Next attempt will be ($i/$tot_cnt)"
+			echo "Sleeping $sleep_time seconds ..."
+			sleep $sleep_time
+			#sleep_time=`expr $sleep_time \* $backoff`
+			sleep_time=`expr $sleep_time + $backoff \* 10`
+			echo "Attempting command again ($i/$tot_cnt) - ($@)" | tee -a test/test.log
+		done
+
+		[ "$reset_xtrace" ] && set -x
+
+		echo -n "COMMAND FAILED WITH ret=$ret, TRY AGAIN? (Y/n): "; read yn
+		[ "$yn" = "n" -o "$yn" = "N" ] && QUIT=1
 	done
-
-	[ "$reset_xtrace" ] && set -x
 
 	return $ret  # 'set' was always returning 0, even if $@ command failed
 }
