@@ -27,7 +27,7 @@ show_error() {
 }
 
 # Set the trap to call the show_error function on ERR signal
-trap 'show_error' ERR
+#trap 'show_error' ERR
 
 draw-line() {
 	# Get the number of columns (width of the terminal)
@@ -103,6 +103,8 @@ test-cmd() {
 			echo "Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
 		done
 
+		echo here
+		set -x
 		[ "$reset_xtrace" ] && set -x
 
 		[ "$ignore_result" ] && echo "Ignoring result [$ret] and returning 0" && return 0  # We want to return 0 to ignore any errors (-i)
