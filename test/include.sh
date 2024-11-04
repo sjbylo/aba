@@ -1,5 +1,14 @@
 # Code that all scripts need.  Ensure this script does not create any std output.
 
+echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_green()	{ [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_yellow()	{ [ "$TERM" ] && tput setaf 3; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_blue()	{ [ "$TERM" ] && tput setaf 4; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_magenta()	{ [ "$TERM" ] && tput setaf 5; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_cyan()	{ [ "$TERM" ] && tput setaf 6; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+
 umask 077
 
 # Function to display an error message and the last executed command
@@ -39,6 +48,8 @@ test-cmd() {
 	local sleep_time=20
 	local host=localhost
 
+	trap - ERR
+
 	while echo $1 | grep -q ^-
 	do
 		[ "$1" = "-i" ] && local ignore_result=1 && shift
@@ -66,7 +77,7 @@ test-cmd() {
 		i=1
 		while true
 		do
-			set +e
+			#set +e # no needed?
 			if [ "$host" != "localhost" ]; then
 				echo "Running command: \"$cmd\" on host $host"
 				ssh $host -- "export TERM=xterm; $cmd"    # TERM set just for testing purposes
@@ -75,7 +86,7 @@ test-cmd() {
 				eval "$cmd"
 			fi
 			ret=$?
-			set -e
+			#set -e
 
 			[ $ret -eq 0 ] && break
 
@@ -98,9 +109,12 @@ test-cmd() {
 		if [ $ret -eq 0 ]; then
 			ALL_DONE=1
 		else
-			echo -n "COMMAND FAILED WITH ret=$ret, TRY AGAIN? (Y/n) (or change command): "; read yn
+			echo_red -n "COMMAND FAILED WITH ret=$ret, TRY AGAIN? (Y/n) (or change command): "
+			read yn
 			if [ "$yn" = "n" -o "$yn" = "N" ]; then
-				ALL_DONE=1
+				echo Skipping this command and moving to the next ...
+				return 0  # If return non-zero then this shell is lost!
+				###ALL_DONE=1
 			elif [ "$yn" = "Y" -o "$yn" = "y" -o ! "$yn" ]; then
 				echo Trying again ...
 			else
@@ -110,6 +124,7 @@ test-cmd() {
 		fi
 	done
 
+	echo Returning val $ret
 	return $ret
 }
 
