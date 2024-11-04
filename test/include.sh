@@ -43,12 +43,12 @@ draw-line() {
 test-cmd() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
-	local ignore_result=
-	local tot_cnt=1
-	local sleep_time=20
-	local host=localhost
+	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
+	local tot_cnt=1		# Try to run the command max tot_cnt times.
+	local sleep_time=20     # Initial sleep time
+	local host=localhost	# def. host to run on
 
-	trap - ERR
+	trap - ERR  # FIXME: needed?
 
 	while echo $1 | grep -q ^-
 	do
@@ -88,7 +88,8 @@ test-cmd() {
 			ret=$?
 			#set -e
 
-			[ $ret -eq 0 ] && break
+			#[ $ret -eq 0 ] && break
+			[ $ret -eq 0 ] && return 0
 
 			echo "Attempt ($i/$tot_cnt) failed with error $ret for command \"$cmd\""
 
@@ -104,24 +105,24 @@ test-cmd() {
 
 		[ "$reset_xtrace" ] && set -x
 
-		[ "$ignore_result" ] && return 0  # We want to return 0 to ignore any errors (-i)
+		[ "$ignore_result" ] && echo "Ignoring result [$ret] and returning 0" && return 0  # We want to return 0 to ignore any errors (-i)
 
-		if [ $ret -eq 0 ]; then
-			ALL_DONE=1
-		else
-			echo_red -n "COMMAND FAILED WITH ret=$ret, TRY AGAIN? (Y/n) (or change command): "
+		#if [ $ret -eq 0 ]; then
+		#	ALL_DONE=1
+		#else
+			echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN OR SKIP OR ENTER NEW COMMAND? (Y/n): "
 			read yn
 			if [ "$yn" = "n" -o "$yn" = "N" ]; then
-				echo Skipping this command and moving to the next ...
+				echo Skipping this command ...
 				return 0  # If return non-zero then this shell is lost!
 				###ALL_DONE=1
 			elif [ "$yn" = "Y" -o "$yn" = "y" -o ! "$yn" ]; then
-				echo Trying again ...
+				echo Trying same command again ...
 			else
 				cmd="$yn"
 				echo "Running new command: $cmd"
 			fi
-		fi
+		#fi
 	done
 
 	echo Returning val $ret

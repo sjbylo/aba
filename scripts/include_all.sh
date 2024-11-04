@@ -84,7 +84,8 @@ normalize-cluster-conf()
 			sed -e "s/^/export /g";
 
 	# Add any missing default values, mainly for backwards compat.
-	grep -q ^hostPrefix= cluster.conf || echo export hostPrefix=23
+	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
+	grep -q ^port0= cluster.conf 		|| echo export port0=eth0
 }
 
 normalize-vmware-conf()
