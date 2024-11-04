@@ -140,5 +140,7 @@ mylog() {
 	draw-line
 
 	[ "$reset_xtrace" ] && set -x
+
+	return 0
 }
 
