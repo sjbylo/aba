@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -x
 # This test installs a mirror reg. on the internal bastion (just for testing) and then
 # treats that registry as an "existing registry" in the test internal workflow. 
 
@@ -28,8 +28,9 @@ int_bastion=registry.example.com
 bastion_vm=bastion-internal-rhel9
 ntp=10.0.1.8 # If available
 
-source scripts/include_all.sh && trap - ERR  # Trap not wanted during testing?
+source scripts/include_all.sh no-trap # Need for below normalize fn() calls
 source test/include.sh
+trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 
 [ ! "$target_full" ] && default_target="target=iso"   # Default is to generate 'iso' only on some tests
 mylog default_target=$default_target
