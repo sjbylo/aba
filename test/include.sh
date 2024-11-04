@@ -104,7 +104,7 @@ test-cmd() {
 
 		[ "$reset_xtrace" ] && set -x
 
-		[ "$ignore_result" ] && return $ret  # We want to return the result and ignore any errors (-i)
+		[ "$ignore_result" ] && return 0  # We want to return 0 to ignore any errors (-i)
 
 		if [ $ret -eq 0 ]; then
 			ALL_DONE=1
