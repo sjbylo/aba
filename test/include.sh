@@ -34,12 +34,15 @@ draw-line() {
 test-cmd() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
+	local ignore_result=
 	local tot_cnt=1
 	local sleep_time=20
 	local host=localhost
 
 	while echo $1 | grep -q ^-
 	do
+		[ "$1" = "-i" ] && local ignore_result=1 && shift
+
 		[ "$1" = "-h" ] && local host="$2" && shift && shift 
 
 		[ "$1" = "-r" ] && local tot_cnt="$2" && backoff=$3 && shift && shift && shift 
@@ -90,6 +93,8 @@ test-cmd() {
 
 		[ "$reset_xtrace" ] && set -x
 
+		[ "$ignore_result" ] && return $ret  # We want to return the result and ignore any errors (-i)
+
 		if [ $ret -eq 0 ]; then
 			ALL_DONE=1
 		else
@@ -105,7 +110,7 @@ test-cmd() {
 		fi
 	done
 
-	return $ret  # 'set' was always returning 0, even if $@ command failed
+	return $ret
 }
 
 mylog() {
