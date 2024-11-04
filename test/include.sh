@@ -47,11 +47,13 @@ test-cmd() {
 		[ "$1" = "-m" ] && local msg="$2" && shift && shift 
 	done
 
+	local cmd="$@"
+
 	draw-line
 	if [ "$msg" ]; then
-		echo "$host: $msg ($@) ($(pwd)) ($(date))" | tee -a test/test.log
+		echo "$host: $msg ($cmd) ($(pwd)) ($(date))" | tee -a test/test.log
 	else
-		echo "$host: $@ ($(pwd)) ($(date))" | tee -a test/test.log
+		echo "$host: $cmd ($(pwd)) ($(date))" | tee -a test/test.log
 	fi
 	draw-line
 
@@ -63,27 +65,27 @@ test-cmd() {
 		do
 			set +e
 			if [ "$host" != "localhost" ]; then
-				echo "Running command: \"$@\" on host $host"
-				ssh $host -- "export TERM=xterm; $@"    # TERM set just for testing purposes
+				echo "Running command: \"$cmd\" on host $host"
+				ssh $host -- "export TERM=xterm; $cmd"    # TERM set just for testing purposes
 			else
-				echo "Running command: \"$@\" on localhost"
-				eval "$@"
+				echo "Running command: \"$cmd\" on localhost"
+				eval "$cmd"
 			fi
 			ret=$?
 			set -e
 
 			[ $ret -eq 0 ] && break
 
-			echo "Attempt ($i/$tot_cnt) failed with error $ret for command \"$@\""
+			echo "Attempt ($i/$tot_cnt) failed with error $ret for command \"$cmd\""
 
 			let i=$i+1
-			[ $i -gt $tot_cnt ] && echo "Giving up with command \"$@\"!" && break
+			[ $i -gt $tot_cnt ] && echo "Giving up with command \"$cmd\"!" && break
 
 			echo "Next attempt will be ($i/$tot_cnt)"
 			echo "Sleeping $sleep_time seconds ..."
 			sleep $sleep_time
 			sleep_time=`expr $sleep_time + $backoff \* 8`
-			echo "Attempting command again ($i/$tot_cnt) - ($@)" | tee -a test/test.log
+			echo "Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
 		done
 
 		[ "$reset_xtrace" ] && set -x
@@ -91,8 +93,15 @@ test-cmd() {
 		if [ $ret -eq 0 ]; then
 			ALL_DONE=1
 		else
-			echo -n "COMMAND FAILED WITH ret=$ret, TRY AGAIN? (Y/n): "; read yn
-			[ "$yn" = "n" -o "$yn" = "N" ] && ALL_DONE=1
+			echo -n "COMMAND FAILED WITH ret=$ret, TRY AGAIN? (Y/n) (or change command): "; read yn
+			if [ "$yn" = "n" -o "$yn" = "N" ]; then
+				ALL_DONE=1
+			elif [ "$yn" = "Y" -o "$yn" = "y" -o ! "$yn" ]; then
+				echo Trying again ...
+			else
+				cmd="$yn"
+				echo "Running new command: $cmd"
+			fi
 		fi
 	done
 
