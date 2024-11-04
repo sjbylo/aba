@@ -80,7 +80,7 @@ test-cmd -m "Creating sno/cluster.conf." make sno target=cluster.conf
 test-cmd -m "Adding proxy=auto to sno/cluster.conf" "sed -i 's/^proxy=.*/proxy=auto/g' sno/cluster.conf"
 
 test-cmd -m "Installing SNO cluster from public registry, since no registry available." make sno 
-# keep it #test-cmd -m "Deleting sno cluster" make -C sno delete || true
+# keep it #test-cmd -m "Deleting sno cluster" make -C sno delete
 ###test-cmd -m "Stopping sno cluster" "yes|make -C sno shutdown"
 #test-cmd -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown || echo cluster shutdown failure"
 test-cmd -m "If cluster up, stopping cluster" "                                                      yes|make -C sno shutdown wait=1"

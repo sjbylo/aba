@@ -247,7 +247,7 @@ done
 ######################
 rm -rf sno
 test-cmd -m "Installing SNO cluster with 'make sno $default_target'" make sno $default_target
-test-cmd -m "Deleting sno cluster (if it was created)" make -C sno delete || true
+test-cmd -i -m "Deleting sno cluster (if it was created)" make -C sno delete 
 
 #######################
 #  This will save the images, install (the reg.) then load the images
@@ -336,8 +336,8 @@ sed -i "s/^platform=.*/platform=bm/g" aba.conf
 ####> vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
 ####test-cmd -m "Creating standard iso file with 'make standard target=iso'" make standard target=iso # Since we're simulating bare-metal, only create iso
-test-cmd -m "Bare-metal simulation: Creating agent config files" make standard   	# Since we're simulating bare-metal, this will only create agent configs
-test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso || true	# Since we're simulating bare-metal, only create iso
+test-cmd -m "Bare-metal simulation: Creating agent config files" make standard   	# Since we're simulating bare-metal, *make will stop* after creating agent configs 
+test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso        	# Since we're simulating bare-metal, only create iso
 
 #test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
 #test-cmd -h steve@$int_bastion -m "Verify mirror uninstalled" podman ps 
