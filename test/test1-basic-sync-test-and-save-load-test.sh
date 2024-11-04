@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -x
 # This test is for a connected bastion.  It will install registry on remote bastion and then sync images and install clusters, 
 # ... then savd/load images and install clusters. 
 # This test requires a valid ~/.vmware.conf file.
@@ -28,8 +28,9 @@ rm -f ~/.aba.previous.backup
 int_bastion=registry.example.com
 bastion_vm=bastion-internal-rhel9
 
-source scripts/include_all.sh && trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
+source scripts/include_all.sh no-trap  # Need for below normalize fn() calls
 source test/include.sh
+trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 
 [ ! "$target_full" ] && default_target="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
 mylog default_target=$default_target

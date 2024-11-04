@@ -12,19 +12,19 @@ echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sg
 umask 077
 
 # Function to display an error message and the last executed command
-show_error() {
-	local exit_code=$?
-	echo 
-	#[ "$TERM" ] && tput setaf 1
-	echo Script error: 
-	echo "Error occurred in command: '$BASH_COMMAND'"
-	echo "Error code: $exit_code"
-	#[ "$TERM" ] && tput sgr0
-
-	echo "FAILED" >> test/test.log
-
-	exit $exit_code
-}
+#show_error() {
+#	local exit_code=$?
+#	echo 
+#	#[ "$TERM" ] && tput setaf 1
+#	echo Script error: 
+#	echo "Error occurred in command: '$BASH_COMMAND'"
+#	echo "Error code: $exit_code"
+#	#[ "$TERM" ] && tput sgr0
+#
+#	echo "FAILED" >> test/test.log
+#
+#	exit $exit_code
+#}
 
 # Set the trap to call the show_error function on ERR signal
 #trap 'show_error' ERR
@@ -45,10 +45,9 @@ test-cmd() {
 
 	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
 	local tot_cnt=1		# Try to run the command max tot_cnt times.
-	local sleep_time=20     # Initial sleep time
 	local host=localhost	# def. host to run on
 
-	trap - ERR  # FIXME: needed?
+	#trap - ERR  # FIXME: needed?
 
 	while echo $1 | grep -q ^-
 	do
@@ -71,13 +70,13 @@ test-cmd() {
 	fi
 	draw-line
 
-	ALL_DONE=
-	while [ ! "$ALL_DONE" ]
+	while true
 	do
+		local sleep_time=20     # Initial sleep time
 		i=1
+
 		while true
 		do
-			#set +e # no needed?
 			if [ "$host" != "localhost" ]; then
 				echo "Running command: \"$cmd\" on host $host"
 				ssh $host -- "export TERM=xterm; $cmd"    # TERM set just for testing purposes
@@ -86,13 +85,11 @@ test-cmd() {
 				eval "$cmd"
 			fi
 			ret=$?
-			#set -e
+			echo Return value = $ret
 
-			#[ $ret -eq 0 ] && break
 			[ $ret -eq 0 ] && return 0
 
 			echo "Attempt ($i/$tot_cnt) failed with error $ret for command \"$cmd\""
-
 			let i=$i+1
 			[ $i -gt $tot_cnt ] && echo "Giving up with command \"$cmd\"!" && break
 
@@ -103,28 +100,23 @@ test-cmd() {
 			echo "Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
 		done
 
-		echo here
-		set -x
 		[ "$reset_xtrace" ] && set -x
 
 		[ "$ignore_result" ] && echo "Ignoring result [$ret] and returning 0" && return 0  # We want to return 0 to ignore any errors (-i)
 
-		#if [ $ret -eq 0 ]; then
-		#	ALL_DONE=1
-		#else
-			echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN OR SKIP OR ENTER NEW COMMAND? (Y/n): "
-			read yn
-			if [ "$yn" = "n" -o "$yn" = "N" ]; then
-				echo Skipping this command ...
-				return 0  # If return non-zero then this shell is lost!
-				###ALL_DONE=1
-			elif [ "$yn" = "Y" -o "$yn" = "y" -o ! "$yn" ]; then
-				echo Trying same command again ...
-			else
-				cmd="$yn"
-				echo "Running new command: $cmd"
-			fi
-		#fi
+		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N) OR ENTER NEW COMMAND? (Y/n/<cmd>): "
+		read ans
+
+		if [ "$ans" = "n" -o "$ans" = "N" ]; then
+			echo Skipping this command ...
+
+			return 0  # If return non-zero then this shell is lost!
+		elif [ "$ans" = "Y" -o "$ans" = "y" -o ! "$ans" ]; then
+			echo Trying same command again ...
+		else
+			cmd="$ans"
+			echo "Running new command: $cmd"
+		fi
 	done
 
 	echo Returning val $ret
