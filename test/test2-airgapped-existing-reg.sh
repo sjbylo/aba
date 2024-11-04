@@ -240,7 +240,7 @@ test-cmd -h steve@$int_bastion -m "Adding 2nd interface for bonding" "sed -i 's/
 test-cmd -h steve@$int_bastion -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8/g' $subdir/aba/sno/cluster.conf"
 
 # Is the cluster can be reached ... use existing cluster
-if test-cmd -h steve@$int_bastion -m "Checking if sno cluster up" "make -C $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
+if test-cmd -h steve@$int_bastion -m "Checking if sno cluster up" "make -C $subdir/aba/sno cmd cmd='oc get clusterversion' || true"; then
 	mylog "Using existing sno cluster"
 else
 	mylog "Creating the sno cluster"
