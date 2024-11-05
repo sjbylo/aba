@@ -8,6 +8,7 @@ source scripts/include_all.sh
 umask 077
 
 source <(normalize-aba-conf)
+source <(normalize-cluster-conf)
 
 [ ! "$ntp_servers" ] && echo_red "Define 'ntp_servers' value in 'aba.conf' to configure NTP" && exit 0
 

@@ -327,7 +327,7 @@ make -C sno clean # This should clean up the cluster and make should start from 
 test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
 
 ### Let it be ## test-cmd -m "Deleting cluster" make -C sno delete 
-test-cmd -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown || echo cluster shutdown failure"
+test-cmd -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown wait=1"
 
 ### FIXME mylog "Removing vmware config file to simulate 'bare metal' and iso creation"
 mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' file to simulate 'bare metal' and iso creation"

@@ -195,6 +195,15 @@ test-cmd -h steve@$int_bastion -m "Deleting cluster (if it exists)" "make -C $su
 
 ssh steve@$int_bastion "rm -rf $subdir/aba/sno" 
 
+#### TESTING ACM + MCH 
+# Adjust size of SNO cluster for ACM install 
+test-cmd -h steve@$int_bastion -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/master_mem=40/g' $subdir/aba/sno/cluster.conf"
+test-cmd -h steve@$int_bastion -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
+#### TESTING ACM + MCH 
+
+test-cmd -h steve@$int_bastion -m "Adding 2nd interface for bonding" "sed -i 's/^.*port1=.*/port1=ens192/g' $subdir/aba/sno/cluster.conf"
+test-cmd -h steve@$int_bastion -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8/g' $subdir/aba/sno/cluster.conf"
+
 test-cmd -h steve@$int_bastion -m "Install sno cluster with 'make -C $subdir/aba sno $default_target'" "make -C $subdir/aba sno $default_target" 
 
 ######################
@@ -231,17 +240,10 @@ test-cmd -h steve@$int_bastion -m "Verifying access to mirror registry $reg_host
 
 test-cmd -h steve@$int_bastion -r 20 3 -m "Loading images into mirror $reg_host:$reg_port" "make -C $subdir/aba/mirror load" 
 
-#### TESTING ACM + MCH 
-# Adjust size of SNO cluster for ACM install 
-test-cmd -h steve@$int_bastion -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/master_mem=40/g' $subdir/aba/sno/cluster.conf"
-test-cmd -h steve@$int_bastion -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
-#### TESTING ACM + MCH 
-
-test-cmd -h steve@$int_bastion -m "Adding 2nd interface for bonding" "sed -i 's/^.*port1=.*/port1=ens192/g' $subdir/aba/sno/cluster.conf"
-test-cmd -h steve@$int_bastion -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8/g' $subdir/aba/sno/cluster.conf"
-
 # Is the cluster can be reached ... use existing cluster
-if test-cmd -i -h steve@$int_bastion -m "Checking if sno cluster up" "make -C $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
+#if test-cmd -i -h steve@$int_bastion -m "Checking if sno cluster up" "make -C $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
+# Do not use test-cmd here since that will never retiurn the true result!
+if ssh steve@$int_bastion "make -C $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
 	mylog "Using existing sno cluster"
 else
 	mylog "Creating the sno cluster"
