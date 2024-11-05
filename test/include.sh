@@ -72,6 +72,7 @@ test-cmd() {
 
 	while true
 	do
+		cd $PWD  # Just in case the dir is re-created
 		local sleep_time=20     # Initial sleep time
 		i=1
 
