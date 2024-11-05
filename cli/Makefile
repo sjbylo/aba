@@ -2,6 +2,7 @@
 
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
+ocp_version := 4.17.2
 
 #all: ../aba.conf ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc
 all:             ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc ~/bin/butane
