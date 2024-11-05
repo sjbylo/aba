@@ -197,6 +197,8 @@ ssh steve@$int_bastion "rm -rf $subdir/aba/sno"
 
 #### TESTING ACM + MCH 
 # Adjust size of SNO cluster for ACM install 
+test-cmd -h steve@$int_bastion -m "Generate cluster.conf" "make -C $subdir/aba cluster name=sno type=sno target=cluster.conf"
+test-cmd -h steve@$int_bastion -m "Check cluster.conf exists" "test -s $subdir/aba/sno/cluster.conf"
 test-cmd -h steve@$int_bastion -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/master_mem=40/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h steve@$int_bastion -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
 #### TESTING ACM + MCH 
