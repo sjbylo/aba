@@ -326,8 +326,8 @@ test-cmd -r 20 3 -m "Saving and loading images into mirror" make -C mirror save 
 make -C sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
 
-### Let it be ## test-cmd -m "Deleting cluster" make -C sno delete 
-test-cmd -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown wait=1"
+### Let it be ## test-cmd -m "Deleting cluster" make -C sno delete.  -i ignore the return value, i.e. if cluster not running/accessible 
+test-cmd -i -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown wait=1"
 
 ### FIXME mylog "Removing vmware config file to simulate 'bare metal' and iso creation"
 mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' file to simulate 'bare metal' and iso creation"
