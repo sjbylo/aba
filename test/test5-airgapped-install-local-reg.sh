@@ -96,14 +96,17 @@ mylog "Test the internal bastion ($int_bastion) as mirror"
 mylog "Setting reg_host=$int_bastion"
 sed -i "s/registry.example.com/$int_bastion /g" ./mirror/mirror.conf
 
-# FIXME: Duplication with above (on purpose?) 
-mylog "Setting op_sets=\"abatest\" in mirror/mirror.conf"
-sed -i "s/^.*op_sets=.*/op_sets=\"abatest\" /g" ./mirror/mirror.conf
+# This is also a test that overriding vakues works ok, e.g. this is an override in the mirror.connf gile, overriding from aba.conf file
+####mylog "Setting op_sets=\"abatest\" in mirror/mirror.conf"
+test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_sets=.*/op_sets='abatest' /g' ./mirror/mirror.conf"
 echo kiali-ossm > templates/operator-set-abatest 
 
+# Uncomment this line
+# NOT NEEDED.  This is a local reg on host $int_bastion!
+#### test-cmd -m "Setting for local mirror" "sed -i 's/.*reg_ssh_key=/reg_ssh_key=/g' ./mirror/mirror.conf"
 
-# FIXME: Why is this needed? 
-####make -C cli ~/bin/govc
+# This is needed for below VM reset!
+make -C cli ~/bin/govc
 
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
