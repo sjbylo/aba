@@ -478,6 +478,8 @@ make mon
 
 ## Feature Backlog
 
+- Assist in adding OpenShift Update Service (OSUS) to the custer.
+
 - ~~Support bonding and vlan.~~
 
 - ~~Make it easier to integrate with vSphere, including storage.~~
