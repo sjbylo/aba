@@ -305,10 +305,13 @@ test-cmd -r 20 3 -m "Syncing images from external network to internal mirror reg
 make -C sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and make should start from scratch next time
 
-mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 201"
+####mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 201"
+mylog "Testing install with smaller CIDR 10.0.1.200/30 with start ip 201"
 test-cmd -m "Configuring SNO cluster with 'make sno target=cluster.conf" make sno target=cluster.conf
-mylog "Setting CIDR 10.0.1.128/25"
-sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.128/25 #g" sno/cluster.conf
+###mylog "Setting CIDR 10.0.1.128/25"
+mylog "Setting CIDR 10.0.1.200/30"
+###sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.128/25 #g" sno/cluster.conf
+sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g" sno/cluster.conf
 ##sed -i "s/^prefix_length=[^ \t]*/prefix_length=25 /g" sno/cluster.conf
 
 mylog "Setting starting_ip=201"
