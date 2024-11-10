@@ -32,7 +32,7 @@ add_op() {
 }
 
 if [ ! "$op_sets" ]; then
-	echo "'op_sets' value not set in aba.conf or mirror.conf. No operator sets to add to the image config file." >&2
+	echo_cyan "'op_sets' value not set in aba.conf or mirror.conf. No operator sets to add to the image config file." >&2
 fi
 
 op_sets=$(echo $op_sets | tr -s " ")
@@ -44,31 +44,30 @@ cat <<END
     packages:
 END
 else
-	#echo "No individual operators defined in 'aba.conf'.  Not adding any individual operators to the image set config file." >&2
-	echo "No operators to add to the catalog index.  No 'op*' values set in aba.conf" >&2
+	#echo_cyan "No individual operators defined in 'aba.conf'.  Not adding any individual operators to the image set config file." >&2
+	echo_cyan "No operators to add to the catalog index.  No 'op*' values set in aba.conf" >&2
 
 	exit 0
 fi
 
 # Check for the index file
 if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
-	echo "Missing operator index file: .redhat-operator-index-v$ocp_ver_major ..." >&2
+	echo_red "Missing operator index file: .redhat-operator-index-v$ocp_ver_major ..." >&2
 
 	exit 0
 fi
 
-echo "Adding operator set(s) to the image set config file ..." >&2
-###echo "As defined in 'aba.conf' and/or 'mirror/mirror.conf', adding operator set(s) to the image set config file ..." >&2
+echo_cyan "Adding operator set(s) to the image set config file ..." >&2
 
 for set in $op_sets
 do
 	# read in op list from template
 	if [ -s templates/operator-set-$set ]; then
 		echo "# $set operators"
-		echo -n "$set: " >&2
+		echo_cyan -n "$set: " >&2
 		for op in $(cat templates/operator-set-$set)
 		do
-			echo -n "$op " >&2
+			echo_cyan -n "$op " >&2
 			add_op $op
 		done
 		echo >&2
@@ -79,17 +78,17 @@ done
 
 if [ "$ops" ]; then
 	echo "# misc operators"
-	echo -n "Op: " >&2
+	echo_cyan -n "Op: " >&2
 
 	for op in $ops
 	do
 		add_op $op
-		echo -n "$op " >&2
+		echo_cyan -n "$op " >&2
 	done
 
 	echo >&2
 else
-	echo "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image config file." >&2
+	echo_cyan "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image config file." >&2
 fi
 
 
