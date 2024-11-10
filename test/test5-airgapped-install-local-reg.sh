@@ -61,7 +61,8 @@ mylog
 rm -f aba.conf  # Set it up next
 vf=~/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
-test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" ./aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
+test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" ./aba --channel fast --version $VER_OVERRIDE
+mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
 
 # Set up govc 
 cp $vf vmware.conf 
@@ -78,7 +79,9 @@ mylog "Setting op_sets=\"abatest\" in aba.conf"
 sed -i "s/^op_sets=.*/op_sets=\"abatest\" /g" aba.conf
 echo kiali-ossm > templates/operator-set-abatest 
 
+# Needed for $ocp_version below
 source <(normalize-aba-conf)
+mylog "Checking value of: ocp_version=$ocp_version"
 
 # Be sure this file exists
 test-cmd -m "Init test: download mirror-registry.tar.gz" "make -s -C test mirror-registry.tar.gz"
@@ -156,7 +159,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 #### NEW TEST test-cmd -r 20 3 -m "Saving images to local disk" "make save" 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-test-cmd -r 20 3 -m "Creating bundle for channel fast" "./aba bundle --channel fast --version latest --out - | ssh $reg_ssh_user@$int_bastion tar -C $subdir -xvf -"
+test-cmd -r 20 3 -m "Creating bundle for channel fast" "./aba bundle --channel fast --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion tar -C $subdir -xvf -"
 
 # Existing regcreds/pull-secret files issue.  E.g. if aba has been used already to install a reg. .. then 'make save' is run!
 # Set up bad creds and be sure they do not get copied to internal bastion!
@@ -259,7 +262,7 @@ test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "make -s -C $subdi
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 mylog 
-mylog Append svc mesh and kiali operators to imageset conf using v$ocp_ver_major
+mylog "Append svc mesh and kiali operators to imageset conf using v$ocp_ver_major ($ocp_version)"
 
 # FIXME: Get values from the correct file!
 cat >> mirror/save/imageset-config-save.yaml <<END
