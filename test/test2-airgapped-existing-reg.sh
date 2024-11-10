@@ -171,7 +171,7 @@ test-cmd -r 20 3 -m "Saving images to local disk on `hostname`" make save
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
 mylog "'make tar' and copy (ssh) files over to internal bastion: steve@$int_bastion"
-make -s -C mirror tar out=- | ssh steve@$int_bastion -- tar -C $subdir -xvf -
+test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion" "make -s -C mirror tar out=- | ssh steve@$int_bastion -- tar -C $subdir -xvf -"
 
 test-cmd -i -h steve@$int_bastion -m "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "make -C $subdir/aba load" # This user's action is expected to fail since there are no login credentials for the "existing reg."
 
@@ -228,12 +228,12 @@ test-cmd -r 20 3 -m "Saving 'vote-app' image to local disk" "make -C mirror save
 ### scp mirror/save/mirror_seq2.tar steve@$int_bastion $subdir/aba/mirror/save
 
 mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: steve@$int_bastion"
-mkdir -p ~/tmp
-rm -f ~/tmp/file.tar
-make -s -C mirror inc out=~/tmp/file.tar
-test-cmd -m "Check size of tar file and copy to bastion" "ls -l ~/tmp/file.tar"
-scp ~/tmp/file.tar steve@$int_bastion:
-rm -f ~/tmp/file.tar  # Remove file on client side
+test-cmd -m "Create tmp dir" mkdir -p ~/tmp
+test-cmd -m "rm and old tar file" rm -f ~/tmp/file.tar
+test-cmd -m "Create the tar file.  Should only contain (more-or-less) the seq2 file" make -s -C mirror inc out=~/tmp/file.tar
+test-cmd -m "Check size of tar file" "ls -l ~/tmp/file.tar"
+test-cmd -m "Copy tar file over to $int_bastion" scp ~/tmp/file.tar steve@$int_bastion:
+test-cmd -m "Remove local tar file" rm -f ~/tmp/file.tar  # Remove file on client side
 mylog "The following untar command should unpack the file aba/mirror/save/mirror_seq2.tar only"
 test-cmd -h steve@$int_bastion -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
 test-cmd -h steve@$int_bastion -m "Removing tar file" "rm -f file.tar"
