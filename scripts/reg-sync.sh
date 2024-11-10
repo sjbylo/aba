@@ -15,10 +15,11 @@ source <(normalize-mirror-conf)
 # Show warning if 'make save' has been used previously.
 if [ -s save/mirror_seq1_000000.tar ]; then
 	echo 
-	echo_red "Warning: Image sets exist on local disk in $PWD/save."
-	echo_red "         Are you sure you don't want to load them into the mirror registry at $reg_host (make load)?"
+	echo_red "Warning: Existing image set archive files found at $PWD/save."
+	echo_red "         Note that you also have the option to load them into the mirror registry at $reg_host (make load)?"
+	echo 
 
-	ask "Continue with 'sync'" || exit 1
+	##ask "Continue with 'sync'" || exit 1
 fi
 
 # This is a pull secret for RH registry
@@ -29,7 +30,11 @@ if [ -s $pull_secret_mirror_file ]; then
 elif [ -s $pull_secret_file ]; then
 	:
 else
-	echo_red "Error: The pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" && exit 1
+	echo
+	echo_red "Error: The pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret"
+	echo
+
+	exit 1
 fi
 
 # Check internet connection...
@@ -46,28 +51,6 @@ export reg_url=https://$reg_host:$reg_port
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
 reg_code=$(curl --connect-timeout 10 --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
-mkdir -p sync 
-
-# Generate first imageset-config file for syncing images.  
-# Do not overwrite the file. Allow users to add images and operators to imageset-config-sync.yaml and run "make sync" again. 
-if [ ! -s sync/imageset-config-sync.yaml ]; then
-	rm -rf sync/*
-
-	export ocp_ver=$ocp_version
-	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
-
-	echo "Generating initial image set configuration: 'sync/imageset-config-sync.yaml' for 'v$ocp_version' and channel '$ocp_channel' ..."
-
-	[ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
-	scripts/j2 ./templates/imageset-config-sync.yaml.j2 > sync/imageset-config-sync.yaml 
-	scripts/add-operators-to-imageset.sh >> sync/imageset-config-sync.yaml
-
-	touch sync/.created
-else
-	echo_cyan "Using existing image set config file (save/imageset-config-sync.yaml)"
-	echo_cyan "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make sync' again."
-fi
-
 # This is needed since sometimes an existing registry may already be available
 scripts/create-containers-auth.sh
 
@@ -83,11 +66,12 @@ if [ -s ./reg-uninstall.sh ]; then
 fi
 echo
 
-[ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
+## [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
 # Set up script to help for manual re-sync
 # --continue-on-error : do not use this option. In testing the registry became unusable! 
-cmd="oc-mirror $tls_verify_opts --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
+#cmd="oc-mirror $tls_verify_opts --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
+cmd="oc-mirror                  --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
 echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 
 # This loop is based on the "retry=?" value
@@ -109,7 +93,7 @@ done
 if [ "$failed" ]; then
 	echo_red -n "Image synchronization aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
-	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
+	echo_red "Warning: Long-running processes can fail! Resolve any issues (if needed) and try again."
 
 	exit 1
 fi
