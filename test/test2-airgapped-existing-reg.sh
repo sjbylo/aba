@@ -245,6 +245,7 @@ test-cmd -h steve@$int_bastion -r 20 3 -m "Loading images into mirror $reg_host:
 # Is the cluster can be reached ... use existing cluster
 #if test-cmd -i -h steve@$int_bastion -m "Checking if sno cluster up" "make -C $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
 # Do not use test-cmd here since that will never retiurn the true result!
+mylog "Cecking if cluster was installed or not, if error, then not!"
 if ssh steve@$int_bastion "make -C $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
 	mylog "Using existing sno cluster"
 else
