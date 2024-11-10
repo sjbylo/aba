@@ -20,10 +20,13 @@ export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 echo_white "What this 'day2' script does:"
 echo_white "- Add the internal mirror registry's Root CA to the cluster trust store."
 echo_white "- Configure OperatorHub to integrate with the internal mirror registry."
-echo_white "- Apply any/all imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)."
+echo_white "- Apply any/all imageContentSourcePolicy resource files under mirror/save|sync/oc-mirror-workspace that were created by oc-mirror (make sync/load)."
 echo_white "- For fully disconnected environments, disable online public catalog sources."
-echo_white "- Install any CatalogSources."
-echo_white "- Apply any signatures."
+echo_white "- Install any CatalogSources found under mirror/save|sync/oc-mirror-workspace."
+echo_white "- Apply any signatures found under mirror/save|sync/oc-mirror-workspace."
+echo
+echo_white "Should the files mirror/save|sync/oc-mirror-workspace* not be available, please copy them from where they were created to this location and try again!"
+echo
 
 echo
 echo_white "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
@@ -73,7 +76,7 @@ fi
 #echo "############################"
 
 echo
-echo "Applying the imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)"
+echo "Applying any imageContentSourcePolicy resource files that were created by oc-mirror under mirror/{save,sync}/oc-mirror-workspace* (make sync/load)"
 echo
 
 # If one should clash with an existing ICSP resource, change its name by incrementing the value (-x) and try to apply it again.
@@ -84,7 +87,7 @@ if [ "$file_list" ]; then
 	for f in $file_list
 	do
 		echo "Running: oc create -f $f"
-		oc create -f $f && continue   # If it can be created, move to the next file
+		oc create -f $f 2>/dev/null && continue   # If it can be created, move to the next file
 
 		# If it can't be created....
 		# If it's different, then apply the resource with a different name
@@ -102,7 +105,7 @@ if [ "$file_list" ]; then
 			# Adjust the name: in the file
 			sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
 			echo "Running: oc create -f $f"
-			oc create -f $f || true
+			oc create -f $f 2>/dev/null || true
 		done
 	done
 else
@@ -128,7 +131,7 @@ fi
 #echo "############################"
 
 echo
-echo Install any CatalogSources
+echo "Applying any CatalogSources resources found under mirror/{save,sync}/oc-mirror-workspace/results-*"
 echo
 file_list=$(find mirror/{save,sync}/oc-mirror-workspace/results-* -type f -name catalogSource*.yaml 2>/dev/null || true)
 if [ "$file_list" ]; then
@@ -136,7 +139,7 @@ if [ "$file_list" ]; then
 	echo Looking for latest CatalogSource file:
 	echo "Running: oc apply -f $cs_file"
 
-	if oc create -f $cs_file; then
+	if oc create -f $cs_file 2>/dev/null; then
 		# Setting: displayName: Private Catalog (registry.example.com)
 		echo "Patching registry display name: 'Private Catalog ($reg_host)' for CatalogSource cs-redhat-operator-index"
 		oc patch CatalogSource cs-redhat-operator-index  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "Private Catalog ('$reg_host')"}}'
@@ -165,19 +168,22 @@ if [ "$file_list" ]; then
 	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" 
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' 
 else
+	echo
 	echo_magenta "No Operator CatalogSources found under mirror/{save,sync}/oc-mirror-workspace. (no mirror available?)"
 	echo_magenta "Operator images would need to be loaded into the mirror registry first by a) editing the mirror/save/imageset-config-save.yaml file and b) running 'make save/load'. See the README for more."
+	echo
 fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
 
 # Now add any signatures
-echo "Applying any signatures:"
-file_list=$(find mirror/{sync,save}/oc-mirror-workspace/results-* -type f -name catalogSource*.yaml 2>/dev/null || true)
+echo "Applying any signature files under: mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures:"
+file_list=$(find mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures -type f -name signature*json 2>/dev/null || true)
+#release-signatures/signature
 if [ "$file_list" ]; then
 	for f in $file_list
 	do
-		oc apply -f $f
+		oc apply -f $f 2>/dev/null
 		echo $f
 	done
 else

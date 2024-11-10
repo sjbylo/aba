@@ -29,7 +29,7 @@ fi
 # Assume this script is run via 'make ...' from aba's top level dir
 cd ..  
 
-# If this is the first run OR is doing a full backup ... Set up for full backup 
+# If this is the first run OR is doing a full backup ... set up for full backup (i.e. set time in past) 
 [ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup 
 
 # Note, for the bundle we prefer CLI install files and nothing under ~/bin
@@ -160,19 +160,25 @@ out_file_list=$(echo $file_list | cut -c-90)
 
 echo_cyan "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
 echo >&2
-if ! tar cf $dest $file_list; then
-	echo_red "tar command failed with return code $?" >&2
+tar cf $dest $file_list
+ret=$?
+if [ $ret -ne 0 ]; then
+	echo_red "tar command failed with return code $ret" >&2
 	rm -f aba/.bundle
-	exit
+
+	exit $ret
 fi
 
 rm -f aba/.bundle  # We don't want this repo to be labelled as 'bundle', only the tar archive should be
 
-# If "not repo backup only" (so, if 'inc' or 'tar'), then always create timestamp file so that future inc backups will not backup everything.
-if [ ! "$repo_only" ]; then
+# If "not repo backup only" (so, if 'inc' or 'tar'), then always update timestamp file so that future inc backups will not backup everything.
+# If using 'repo only, then you always want the whole repo to be backed up (so no need to use the timestamp file).
+# NOTE: ONLY INC BACKUPS USE THIS FILE!!! See above. 
+#if [ ! "$repo_only" ]; then
 	# Upon success, make a note of the time
 	echo_white "Touching file ~/.aba.previous.backup" >&2
-	[ "$inc" ] && touch ~/.aba.previous.backup
-fi
+	#[ "$inc" ] && touch ~/.aba.previous.backup
+	touch ~/.aba.previous.backup
+#fi
 
-[ "$dest" != "-" ] && echo_green "Bundle archive written successfully to $dest!" >&2 || echo_green "Bundle archive streamed successfully!" >&2
+[ "$dest" != "-" ] && echo_green "Bundle archive written successfully to $dest!" >&2 || echo_green "Bundle archive streamed successfully to stdout!" >&2
