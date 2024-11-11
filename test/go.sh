@@ -40,9 +40,9 @@ time (
 	time test/test5-airgapped-install-local-reg.sh && \
 	time test/test1-basic-sync-test-and-save-load-test.sh && \
 	time test/test3-using-public-quay-reg.sh && \
-	ret=$?
+	ret=$? || ret=$?
 )
-( [ $ret -eq 0 ] && echo SUCCESS || echo FAILED ) | tee -a test/test.log
+[ $ret -eq 0 ] && echo SUCCESS || echo FAILED | tee -a test/test.log
 
 date 
 
