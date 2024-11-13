@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-. scripts/include_all.sh
+source scripts/include_all.sh
 
 normalize-vmware-conf
 

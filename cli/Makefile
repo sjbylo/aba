@@ -1,5 +1,7 @@
 # Makefile to download and install oc, openshift-install, oc-mirror and govc 
 
+.SILENT:
+
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
 
@@ -31,6 +33,11 @@ help: ## Help
 	mkdir -p ~/bin
 	touch .init
 
+# aba.conf should never be missing!
+../aba.conf:
+	@echo "aba.conf missing! Please read the README on how to get started!"
+	@exit 1
+
 #../aba.conf:
 #	@#../aba --version latest
 #	@# This is only needed becase it gets executed for some reason
@@ -47,6 +54,7 @@ help: ## Help
 	@touch .$(ocp_version)-openshift-client-linux-installed 
 
 openshift-client-linux-$(ocp_version).tar.gz:  ## Downlaod oc tarball 
+	echo Downlaoding openshift-client-linux-$(ocp_version).tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/openshift-client-linux-$(ocp_version).tar.gz
 
 
@@ -60,6 +68,7 @@ openshift-client-linux-$(ocp_version).tar.gz:  ## Downlaod oc tarball
 	@touch .$(ocp_version)-openshift-install-linux-installed 
 
 openshift-install-linux-$(ocp_version).tar.gz:  ## Download openshift-install tarball
+	echo Downlaoding openshift-install-linux-$(ocp_version).tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$(ocp_version)/openshift-install-linux-$(ocp_version).tar.gz
 
 ########################################
@@ -69,9 +78,11 @@ openshift-install-linux-$(ocp_version).tar.gz:  ## Download openshift-install ta
 
 # Version 4.14 has bug fixes 
 oc-mirror.tar.gz: ## Download oc-mirror tarball
+	echo Downlaoding oc-mirror.tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest/oc-mirror.tar.gz	
 
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
+	echo Downlaoding oc-mirror.rhel9.tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest/oc-mirror.rhel9.tar.gz
 
 ########################################
@@ -79,6 +90,7 @@ oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 	tar -C ~/bin -xmzf govc_Linux_x86_64.tar.gz govc
 
 govc_Linux_x86_64.tar.gz:   ## Download govc tarball
+	echo Downlaoding govc_Linux_x86_64.tar.gz
 	curl -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz"
 
 ~/bin/butane: butane-binary
