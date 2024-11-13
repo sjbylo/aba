@@ -64,7 +64,7 @@ file_list=$(find		\
 	! -path "aba/.git*"  					\
 	! -path "aba/cli/.init"  				\
 	! -path "aba/cli/.??*"	  				\
-	! -path "aba/mirror/.initialized"  			\
+	! -path "aba/mirror/.init"  			\
 	! -path "aba/mirror/.rpms"  				\
 	! -path "aba/mirror/.installed"  			\
 	! -path "aba/mirror/.loaded" 				\
@@ -85,7 +85,7 @@ file_list=$(find		\
 	-newer ~/.aba.previous.backup 				\
 )
 
-# Note, don't copy over any of the ".initialized", ".installed", ".rpms" flag files etc, since these components are needed on the internal bastion
+# Note, don't copy over any of the ".init", ".installed", ".rpms" flag files etc, since these components are needed on the internal bastion
 # Don't include/compress the 'image set' tar files since we have them compressed already.
 # Don't need to copy over the oc-mirror-workspace dirs.  The needed yaml files for 'make day2' are created at 'make load'. THIS IS WRONG
 # FIXME: Need to consider how to copy over the meta date (oc-mirror-workspace), or we leave it to the user to do.

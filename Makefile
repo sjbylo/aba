@@ -1,3 +1,8 @@
+.SILENT:
+
+TEMPLATES = ../templates
+SCRIPTS   = ../scripts
+
 ##ocp_target_ver   ?= 4.13.19
 ##d        ?= 
 ##DEBUG     = $d
@@ -18,81 +23,81 @@ help: ## Help
 
 init: aba .init
 .init: 
-	make -C mirror rpms
+	@make -C mirror rpms
 
 ###vmw: vmware.conf  ## Configure and use vSphere or ESXi to install OpenShift
 ###vmware.conf:
 .PHONY: vmw
 vmw:
-	scripts/install-vmware.conf.sh
+	$(SCRIPTS)/install-vmware.conf.sh
 
 cli:  ## Download and install the CLI binaries into ~/bin
-	make -C cli
+	@make -C cli
 
 download:  ## Download all required CLI install files without installing. 
-	make -C cli download
+	@make -C cli download
 
 mirror: install
 install: ## Set up the registry as per the settings in mirror/mirror.conf. Place credential file(s) into mirror/regcreds/ for existing registry.  See README.md.
-	make -C mirror install
+	@make -C mirror install
 
 uninstall: ## Uninstall any previously installed mirror registry  
-	make -C mirror uninstall
+	@make -C mirror uninstall
 
 .PHONY: sync
 sync: ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
-	make -C mirror sync
+	@make -C mirror sync
 
 # These are the targets needed to create the 'bundle' archive
 .PHONY: bundle
 # Note: '@' used to ensure tar format is not corrupted when using out=-
 bundle:  ## Create a bundle archive of content to be carried into the air-gapped env. Example: make bundle out=/path/to/archive/bundle
-	@scripts/make-bundle.sh $(out)
+	@$(SCRIPTS)/make-bundle.sh $(out)
 
 .PHONY: save
 save: ## Save images from the Internet to mirror/save. 
-	make -C mirror save 
+	@make -C mirror save 
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. make tar out=/dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use out=- to send tar output to stdout.
-	scripts/backup.sh $(out)
+	$(SCRIPTS)/backup.sh $(out)
 
 # Note, the '@' is required for valid tar format output!
 .PHONY: tarrepo
 tarrepo:  ## Archive the full repo *excluding* the mirror/mirror_seq*tar files. Works in the same way as 'make tar'.
-	@scripts/backup.sh --repo $(out)
+	@$(SCRIPTS)/backup.sh --repo $(out)
 
 .PHONY: inc
 inc:  ## Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'make tar'.
-	scripts/backup.sh --inc $(out)
+	$(SCRIPTS)/backup.sh --inc $(out)
 
 ## .PHONY: increpo
 ## increpo:  ## Create an incremental archive of the repo, e.g. make inc out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-backup.tar. Can also use out=- to send tar data to stdout.  The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup
-## 	@scripts/backup.sh --inc --repo $(out)
+## 	@$(SCRIPTS)/backup.sh --inc --repo $(out)
 
 .PHONY: load
 load: ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
-	make -C mirror load
+	@make -C mirror load
 
 .PHONY: sno
 sno: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make sno target=iso' to make that target.
-	scripts/setup-cluster.sh $@ $@ $(target)
+	$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: compact
 compact: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make compact target=iso' to make that target.
-	@scripts/setup-cluster.sh $@ $@ $(target)
+	@$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: standard
 standard: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make standard target=iso' to make that target.
-	@scripts/setup-cluster.sh $@ $@ $(target)
+	@$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: cluster
 cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. make cluster name=mycluster [type=sno|compact|standard] [target=<target>]
-	scripts/setup-cluster.sh $(name) $(type)
+	$(SCRIPTS)/setup-cluster.sh $(name) $(type)
 
 .PHONY: rsync
 rsync:  ## Copy (rsync) all required files to internal bastion for testing purposes only.  ip=hostname is required. 
-	scripts/test-airgapped.sh $(ip)
+	$(SCRIPTS)/test-airgapped.sh $(ip)
 
 .PHONY: ask
 ask: ## Set 'ask' in aba.conf to 'true'
@@ -110,20 +115,20 @@ setnoask: noask
 
 .PHONY: clean
 clean: ## Clean up all temporary files.
-	make -C mirror clean 
-	make -C test clean 
+	@make -C mirror clean 
+	@make -C test clean 
 	rm -f ~/.aba.previous.backup
 	rm -f ~/.aba.conf.created
 	rm -f .aba.conf.seen
 
 .PHONY: distclean
 distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this dies not run 'make uninstall' (uninstall the reg.)
-	@scripts/distclean-gate.sh $(force)
+	@$(SCRIPTS)/distclean-gate.sh $(force)
 	@make clean
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
-	make -C cli distclean 
-	make -C mirror distclean 
+	@make -C cli distclean 
+	@make -C mirror distclean 
 	rm -f aba.conf ~/.aba.conf*
 	@#rm -rf sno compact standard 
 
