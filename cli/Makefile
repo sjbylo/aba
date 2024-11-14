@@ -2,6 +2,9 @@
 
 .SILENT:
 
+TEMPLATES = ../templates
+SCRIPTS   = ../scripts
+
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
 

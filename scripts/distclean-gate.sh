@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source ../scripts/include_all.sh
+source scripts/include_all.sh
 
 force=$1
 
