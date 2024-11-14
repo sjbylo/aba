@@ -160,7 +160,7 @@ shutdown: ## Trigger the cluster to gracefully shut itself down by draining all 
 	@$(SCRIPTS)/cluster-graceful-shutdown.sh 
 
 .PHONY: startup
-startup: ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
+startup: vmware.conf ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
 	@$(SCRIPTS)/cluster-startup.sh 
 
 .PHONY: rescue
@@ -225,7 +225,7 @@ day2-ntp:  ## Configure OpenShift with your NTP server
 	@$(SCRIPTS)/day2-config-ntp.sh $(debug)
 
 .PHONY: remove-cdrom
-remove-cdrom:  ## Remove the cdrom devide from all VMs
+remove-cdrom: vmware.conf  ## Remove the cdrom devide from all VMs
 	$(SCRIPTS)/vmw-remove-cdrom-device.sh
 
 .PHONY: vmw

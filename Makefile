@@ -1,7 +1,7 @@
 .SILENT:
 
-TEMPLATES = ../templates
-SCRIPTS   = ../scripts
+TEMPLATES = templates
+SCRIPTS   = scripts
 
 ##ocp_target_ver   ?= 4.13.19
 ##d        ?= 
@@ -123,7 +123,7 @@ clean: ## Clean up all temporary files.
 
 .PHONY: distclean
 distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this dies not run 'make uninstall' (uninstall the reg.)
-	@$(SCRIPTS)/distclean-gate.sh $(force)
+	@scripts/distclean-gate.sh $(force)
 	@make clean
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true

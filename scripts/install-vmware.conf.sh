@@ -9,7 +9,17 @@ source scripts/include_all.sh
 # Needed for $editor and $ask
 source <(normalize-aba-conf)
 
-[ "$platform" != "vmw" ] && echo_white "Platform param not set to 'vmw' in 'aba.conf'. Not configuring 'vmware.conf'." && > vmware.conf && exit 0
+[ "$platform" != "vmw" ] && echo_white "Platform value  not set to 'vmw' in 'aba.conf'. Not configuring: vmware.conf" && > vmware.conf && exit 0
+
+if [ -s vmware.conf ]; then
+	source <(normalize-vmware-conf)
+
+	if ! govc about >dev/null 2>&1; then
+		echo_red "Error: Cannot access vSphere or ESXi.  Please edit 'vmware.conf' and try again!"
+
+		exit 1
+	fi
+fi
 
 if [ ! -s vmware.conf ]; then
 	if [ -s ~/.vmware.conf ]; then
@@ -22,18 +32,18 @@ if [ ! -s vmware.conf ]; then
 
 	trap - ERR
 	edit_file vmware.conf "If you want to deploy to VMware, edit the 'vmware.conf' file" || exit 0
-fi
 
-source <(normalize-vmware-conf)
+	source <(normalize-vmware-conf)
 
-# Check access
-if ! govc about; then
-	echo_red "Error: Cannot access vSphere or ESXi.  Please edit 'vmware.conf' and try again!"
+	# Check access
+	if ! govc about; then
+		echo_red "Error: Cannot access vSphere or ESXi.  Please edit 'vmware.conf' and try again!"
 
-	exit 1
-else
-	echo_cyan "Saving working version of 'vmware.conf' to '~/.vmware.conf'."
-	[ -s vmware.conf ] && cp vmware.conf ~/.vmware.conf
+		exit 1
+	else
+		echo_cyan "Saving working version of 'vmware.conf' to '~/.vmware.conf'."
+		[ -s vmware.conf ] && cp vmware.conf ~/.vmware.conf
+	fi
 fi
 
 exit 0

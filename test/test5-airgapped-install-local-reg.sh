@@ -177,6 +177,7 @@ test-cmd -r 20 3 -m "Creating bundle for channel fast" "./aba bundle --channel f
 # Smoke test!
 ##[ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 test-cmd -m  "Verifying existance of file 'mirror/save/mirror_seq1_000000.tar'" "ls -lh mirror/save/mirror_seq1_000000.tar" 
+test-cmd -m  "Delete file that's already copied to internal bastion: 'mirror/save/mirror_seq1_000000.tar'" "rm -f mirror/save/mirror_seq1_000000.tar" 
 
 # If the VM snapshot is reverted, as above, no need to delete old files
 ####test-cmd -h $reg_ssh_user@$int_bastion -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/* $subdir/aba"
@@ -200,6 +201,8 @@ ssh $reg_ssh_user@$int_bastion "rpm -q make || sudo yum install make -y"
 mylog Runtest: START - airgap
 
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading cluster images into mirror on internal bastion" "make -s -C $subdir/aba load" 
+
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Delete already loaded image set file to make space: '$subdir/aba/mirror/save/mirror_seq1_000000.tar'" "rm -f $subdir/aba/mirror/save/mirror_seq1_000000.tar" 
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Tidying up internal bastion" "rm -rf $subdir/aba/sno" 
 
