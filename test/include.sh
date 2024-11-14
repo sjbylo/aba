@@ -37,6 +37,23 @@ draw-line() {
 	printf '%*s\n' "$cols" '' | tr ' ' '-'
 }
 
+# Define a cleanup function to handle Ctrl-C
+cleanup() {
+	if [[ -n "$sub_pid" ]]; then
+		echo "Interrupt received. Terminating command ..."
+		kill "$sub_pid" 2>/dev/null
+		wait "$sub_pid" 2>/dev/null
+		echo "Test command terminated."
+	else
+		echo Stopping
+		echo
+		exit 1
+	fi
+}
+
+# Trap Ctrl-C (SIGINT) and call cleanup function
+trap cleanup SIGINT
+
 # -h remote <host or ip> to run the test on (optional)
 # -r <count> <backoff>  (optional)
 # -m "Description of test"
@@ -70,43 +87,56 @@ test-cmd() {
 	fi
 	draw-line
 
+	# Loop to repeat the command if user requests
 	while true
 	do
 		cd $PWD  # Just in case the dir is re-created
 
-		local sleep_time=20     # Initial sleep time
+		local sleep_time=5     # Initial sleep time
 		local i=1
 
+		# Loop to repeat the command if it fails
 		while true
 		do
 			if [ "$host" != "localhost" ]; then
 				echo "Running command: \"$cmd\" on host $host"
-				ssh $host -- "export TERM=xterm; $cmd"    # TERM set just for testing purposes
+				ssh -o LogLevel=ERROR $host -- "export TERM=xterm; $cmd" &    # TERM set just for testing purposes
 			else
 				echo "Running command: \"$cmd\" on localhost"
-				eval "$cmd"
+				eval "$cmd" &
 			fi
+			sub_pid=$!  # Capture the PID of the subprocess
+			wait "$sub_pid"
 			ret=$?
 			echo Return value = $ret
 
-			[ $ret -eq 0 ] && return 0
+			[ $ret -eq 0 ] && return 0 # Command successful 
+			[ $ret -eq 130 ] && break  # on Ctrl-C *during command execution*
 
-			echo "Attempt ($i/$tot_cnt) failed with error $ret for command \"$cmd\""
+			echo_cyan "Attempt ($i/$tot_cnt) failed with error $ret for command \"$cmd\""
 			let i=$i+1
 			[ $i -gt $tot_cnt ] && echo "Giving up with command \"$cmd\"!" && break
 
 			echo "Next attempt will be ($i/$tot_cnt)"
 			echo "Sleeping $sleep_time seconds ..."
+			#trap - SIGINT  # This will cause Ctl-C to quit everything during sleep $sleep_time
 			sleep $sleep_time
+			#trap cleanup SIGINT
 			sleep_time=`expr $sleep_time + $backoff \* 8`
-			echo "Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
+
+			echo_cyan "Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
 		done
 
 		[ "$reset_xtrace" ] && set -x
 
 		[ "$ignore_result" ] && echo "Ignoring result [$ret] and returning 0" && return 0  # We want to return 0 to ignore any errors (-i)
 
-		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N) OR ENTER NEW COMMAND? (Y/n/<cmd>): "
+		sub_pid=
+		if [[ $ret -eq 130 ]]; then
+			sub_pid=
+		fi
+			
+		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N) OR ENTER NEW COMMAND OR Ctrl-C? (Y/n/<cmd>): "
 		read ans
 
 		if [ "$ans" = "n" -o "$ans" = "N" ]; then

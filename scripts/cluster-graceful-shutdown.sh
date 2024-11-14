@@ -21,7 +21,7 @@ if ! curl --connect-timeout 10 --retry 2 -skI $server_url >/dev/null; then
 	exit
 fi
 
-echo "Attempting to access the cluster ... "
+echo_cyan "Attempting to access the cluster ... "
 
 # Refresh kubeconfig
 unset KUBECONFIG
