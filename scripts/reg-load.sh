@@ -61,7 +61,7 @@ try=1
 failed=1
 while [ $try -le $try_tot ]
 do
-	echo_magenta -n "Attempt ($try/$try_tot)."
+	echo_cyan -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'make load retry=<number>'" || echo
 	echo "Running: $(cat load-mirror.sh)"
 	echo

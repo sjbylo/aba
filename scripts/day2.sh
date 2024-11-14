@@ -20,21 +20,34 @@ export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 echo_white "What this 'day2' script does:"
 echo_white "- Add the internal mirror registry's Root CA to the cluster trust store."
 echo_white "- Configure OperatorHub to integrate with the internal mirror registry."
-echo_white "- Apply any/all imageContentSourcePolicy resource files under mirror/save|sync/oc-mirror-workspace that were created by oc-mirror (make sync/load)."
+echo_white "- Apply any/all imageContentSourcePolicy resource files under mirror/{save,sync}/oc-mirror-workspace that were created by oc-mirror (make sync/load)."
 echo_white "- For fully disconnected environments, disable online public catalog sources."
-echo_white "- Install any CatalogSources found under mirror/save|sync/oc-mirror-workspace."
-echo_white "- Apply any signatures found under mirror/save|sync/oc-mirror-workspace."
-echo
-echo_white "Should the files mirror/save|sync/oc-mirror-workspace* not be available, please copy them from where they were created to this location and try again!"
+echo_white "- Install any CatalogSources found under mirror/{save,sync}/oc-mirror-workspace."
+echo_white "- Apply any release image signatures found under mirror/{save,sync}/oc-mirror-workspace."
 echo
 
+
+echo For disconnected environments, disabling online public catalog sources
 echo
+
+# This should really check the connectivity from the cluster, not from the bastion
+# E.g. ssh node "curl --connect-timeout 30 -s -kIL https://registry.redhat.io" or check for cluster proxy config?
+ret=$(curl --retry 3 -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/ || true)
+if [ "$ret" != "200" ]; then
+	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
+	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
+       	echo "Patched OperatorHub, disabled Red Hat public catalog sources"
+
+else
+	echo "Access to the Internet from this host is working, not disabling public catalog sources"
+fi
+
+
 echo_white "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
 echo_white "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image'."
 echo_white "Adding registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331 for more."
 echo_white "This CA problem might affect other applications in the cluster."
 echo
-
 cm_existing=$(oc get cm registry-config -n openshift-config || true)
 if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 	echo "Adding the trust CA of the registry ($reg_host) ..."
@@ -69,11 +82,17 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 	fi
 	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
 else	
-	echo_red "Registry trust bundle already added. Assuming workaround has already been applied."
-	### echo_red "         No cert file regcreds/rootCA.pem found (no mirror available?)."  # This is wrong statement
+	echo_cyan "Registry trust bundle already added (cm registry-config -n openshift-config). Assuming workaround has already been applied."
 fi
 
 #echo "############################"
+
+file_list=$(ls mirror/{sync,save}/oc-mirror-workspace 2>/dev/null || true)
+if [ ! "$file_list" ]; then
+	echo
+	echo_red "Missing oc-mirror meta-data (mirror/{save,sync}/oc-mirror-workspace* not be available). Please copy this directory from where it was created to this location and try again!"
+	echo
+fi
 
 echo
 echo "Applying any imageContentSourcePolicy resource files that were created by oc-mirror under mirror/{save,sync}/oc-mirror-workspace* (make sync/load)"
@@ -109,26 +128,8 @@ if [ "$file_list" ]; then
 		done
 	done
 else
-	echo_magenta "No imageContentSourcePolicy.yaml files found under 'mirror/{save,sync}/oc-mirror-workspace*' (no mirror available?)"
+	echo_cyan "No imageContentSourcePolicy.yaml files found under 'mirror/{save,sync}/oc-mirror-workspace*' (no operators mirrored?)."
 fi
-
-#echo "############################"
-
-echo
-echo For disconnected environments, disable online public catalog sources
-echo
-
-ret=$(curl --retry 3 -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/ || true)
-if [ "$ret" != "200" ]; then
-	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
-	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
-       	echo "Patched OperatorHub, disabled Red Hat public catalog sources"
-
-else
-	echo "Access to the Internet from this host is working, not disabling public catalog sources"
-fi
-
-#echo "############################"
 
 echo
 echo "Applying any CatalogSources resources found under mirror/{save,sync}/oc-mirror-workspace/results-*"
@@ -169,8 +170,8 @@ if [ "$file_list" ]; then
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' 
 else
 	echo
-	echo_magenta "No Operator CatalogSources found under mirror/{save,sync}/oc-mirror-workspace. (no mirror available?)"
-	echo_magenta "Operator images would need to be loaded into the mirror registry first by a) editing the mirror/save/imageset-config-save.yaml file and b) running 'make save/load'. See the README for more."
+	echo_cyan "No Operator CatalogSources found under mirror/{save,sync}/oc-mirror-workspace (no operators mirrored?)."
+	echo_cyan "Operator images can be loaded into the mirror registry first by a) editing the mirror/save/imageset-config-save.yaml file and b) running 'make save/load'. See the README for more."
 	echo
 fi
 
@@ -179,15 +180,14 @@ fi
 # Now add any signatures
 echo "Applying any signature files under: mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures:"
 file_list=$(find mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures -type f -name signature*json 2>/dev/null || true)
-#release-signatures/signature
 if [ "$file_list" ]; then
 	for f in $file_list
 	do
+		echo Applying: $f
 		oc apply -f $f 2>/dev/null
-		echo $f
 	done
 else
-	echo_magenta "No Signatures available in mirror/{sync,save}/oc-mirror-workspace/results-* (no mirror available?)"
+	echo_cyan "No release signatures found in mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures (no new OCP versions mirrored?)."
 fi
 
 exit 0

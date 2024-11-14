@@ -14,7 +14,7 @@ source <(normalize-aba-conf)
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)
 
-	if ! govc about >dev/null 2>&1; then
+	if ! govc about >/dev/null 2>&1; then
 		echo_red "Error: Cannot access vSphere or ESXi.  Please edit 'vmware.conf' and try again!"
 
 		exit 1

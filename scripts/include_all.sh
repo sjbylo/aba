@@ -206,7 +206,7 @@ try_cmd() {
 
 	local count=1
 
-	[ ! "$quiet" ] && echo "Attempt $count/$total of command: \"$*\""
+	[ ! "$quiet" ] && echo_cyan "Attempt $count/$total of command: \"$*\""
 
 	#echo DEBUG: eval "$*" "$out"
 	#while ! eval $* $out
@@ -226,7 +226,7 @@ try_cmd() {
 		let pause=$pause+$backoff
 		let count=$count+1
 
-		[ ! "$quiet" ] && echo "Attempt $count/$total of command: \"$*\""
+		[ ! "$quiet" ] && echo_cyan "Attempt $count/$total of command: \"$*\""
 		#echo DEBUG: eval "$*" "$out"
 		echo cmd $* >>.cmd.out 
 	done
