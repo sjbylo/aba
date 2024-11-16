@@ -396,14 +396,15 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
 	test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba/$cluster_name"
+
 	if ! test-cmd -h $reg_ssh_user@$int_bastion -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "make -s -C $subdir/aba/$cluster_name mon"; then
 		mylog "CLUSTER INSTALL FAILED: REBOOTING ALL NODES ..."
 
 		set -x
 
 		# See if the agent is still running and fetch the logs
-		make -C $subdir/aba/$cluster_name ssh cmd="agent-gather -O" | ssh 10.0.1.6 -- "cat > agent-gather-$cluster_name-.tar.xz || true" # || true
-		scp $subdir/aba/$cluster_name/iso-agent-based/.openshift_install.log 10.0.1.6:$cluster_name_openshift_install.log
+		make -sC $subdir/aba/$cluster_name ssh cmd="agent-gather -O" | ssh 10.0.1.6 -- "cat > agent-gather-$cluster_name-.tar.xz || true" # || true
+		scp $subdir/aba/$cluster_name/iso-agent-based/.openshift_install.log 10.0.1.6:${cluster_name}_openshift_install.log
 
 		make -C $subdir/aba/$cluster_name stop wait=1
 		make -C $subdir/aba/$cluster_name start

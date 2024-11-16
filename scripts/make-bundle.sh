@@ -7,16 +7,16 @@ source scripts/include_all.sh
 [ "$1" ] && force=true && shift
 [ "$1" ] && set -x
 
-install_rpms make | cat -v >.bundle.log|| exit 1
+install_rpms make 2>/dev/null | cat -v >.bundle.log|| exit 1
 
 source <(normalize-aba-conf)
 
 [ ! "$bundle_dest_path" ] && echo_red "Error: missing bundle archive filename! Example: /mnt/usb-media/my-bundle" >&2 && exit 1
 
 if [ "$bundle_dest_path" = "-" ]; then
-	echo_cyan "A bundle archive will be output using the following values:" >&2
+	echo_cyan "The bundle archive will be generated and written to standard output using the following parameters" >&2
 else
-	echo_cyan "A bundle archive file will be created using the following values:" >&2
+	echo_cyan "The bundle archive file will be created on disk using the following parameters:" >&2
 	bundle_dest_path="$bundle_dest_path-$ocp_version"
 fi
 
@@ -49,7 +49,8 @@ fi
 # so we can do something like: ./aba bundle ... --bundle-file - | ssh host tar xvf - 
 if [ "$bundle_dest_path" = "-" ]; then
 	echo "Downloading binary data.  See logfile '.bundle.log' for details." >&2
-	make -s download save retry=7 | cat -v >>.bundle.log 2>&1
+
+	make -s download save retry=7 2>&1 | cat -v >>.bundle.log
 	make -s tar out=-
 
 	exit

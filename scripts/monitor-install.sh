@@ -28,12 +28,13 @@ echo ===========================================================================
 echo Running wait-for command ...
 echo "openshift-install agent wait-for install-complete --dir $ASSETS_DIR"
 openshift-install agent wait-for install-complete --dir $ASSETS_DIR    # --log-level=debug
+ret=$?
 
-if [ $? -ne 0 ]; then
+if [ $ret -ne 0 ]; then
 	echo 
 	echo_red "Something went wrong with the installation.  Fix the problem and try again!"
 
-	exit $?
+	exit $ret
 else
 	echo 
 	echo_green "The cluster has been successfully installed."
