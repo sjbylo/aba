@@ -108,10 +108,11 @@ test-cmd() {
 			sub_pid=$!  # Capture the PID of the subprocess
 			wait "$sub_pid"
 			ret=$?
-			echo Return value = $ret
 
 			[ $ret -eq 0 ] && return 0 # Command successful 
 			[ $ret -eq 130 ] && break  # on Ctrl-C *during command execution*
+
+			echo Return value = $ret
 
 			echo_cyan "Attempt ($i/$tot_cnt) failed with error $ret for command \"$cmd\""
 			let i=$i+1

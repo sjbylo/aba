@@ -87,12 +87,12 @@ all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditi
 
 check_and_approve_csrs() {
 	# Check any pending CSRs
-	CSRs=$($OC get csr -A --no-headers | grep -i pending | awk '{print $1}')
+	CSRs=$($OC get csr -A --no-headers 2>/dev/null | grep -i pending | awk '{print $1}')
 	while [ "$CSRs" ]
 	do
 		$OC adm certificate approve $CSRs
 		sleep 30
-		CSRs=$($OC get csr -A --no-headers | grep -i pending | awk '{print $1}')
+		CSRs=$($OC get csr -A --no-headers 2>/dev/null | grep -i pending | awk '{print $1}')
 	done
 }
 

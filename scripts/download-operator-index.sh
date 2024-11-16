@@ -31,12 +31,12 @@ pid_file=.redhat-operator-index-v$ocp_ver_major.pid
 
 # Check if this script is running in the background, if it is then output to a log file
 if [ ! -t 0 ]; then
-	echo "Downloading operator index in the background from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major (see $log_file) ...: >&2
+	echo "Downloading operator index in the background from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major (see $log_file) ..." >&2
 
 	exec > $log_file 
 	exec 2> $log_file
 else
-	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major ...:
+	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major ..."
 fi
 
 if ! curl --connect-timeout 15 --retry 3 -kIL https://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >/dev/null 2>&1; then
