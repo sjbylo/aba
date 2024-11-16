@@ -361,4 +361,4 @@ mylog
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak
 
-echo SUCCESS 
+echo SUCCESS $0

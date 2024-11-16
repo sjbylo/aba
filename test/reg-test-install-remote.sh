@@ -7,6 +7,7 @@ cat > .ssh.conf <<END
 StrictHostKeyChecking no
 UserKnownHostsFile=/dev/null
 ConnectTimeout=15
+LogLevel=ERROR
 END
 
 reg_host=$1
