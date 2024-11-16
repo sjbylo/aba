@@ -22,6 +22,7 @@ add_op() {
 		# Skip if the operator has already been added
 		if [ -n "${added_operators[$op_name]}" ]; then
 			echo "Operator '$op_name' has already been added. Skipping..." >&2
+			echo "    # $op_name added above"
 			return
 		fi
 
