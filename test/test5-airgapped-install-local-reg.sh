@@ -56,7 +56,6 @@ mylog ============================================================
 mylog Starting test $(basename $0)
 mylog ============================================================
 mylog "Test to install a local reg. on $int_bastion and save + copy + load images.  Install sno ocp and a test app and svc mesh."
-mylog
 
 rm -f aba.conf  # Set it up next
 vf=~/.vmware.conf
@@ -157,45 +156,16 @@ source <(cd mirror && normalize-mirror-conf)
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
-#### NEW TEST test-cmd -r 20 3 -m "Saving images to local disk" "make save" 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-test-cmd -r 20 3 -m "Creating bundle for channel fast" "./aba bundle --channel fast --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion tar -C $subdir -xvf -"
-
-# Existing regcreds/pull-secret files issue.  E.g. if aba has been used already to install a reg. .. then 'make save' is run!
-# Set up bad creds and be sure they do not get copied to internal bastion!
-#if [ ! -d mirror/regcreds ]; then
-#	echo "No mirror/regcreds dir found, as expected!  Creating invalid regcreds dir!"
-#else
-#	echo "Warning: mirror/regcreds dir should not exist!"
-#	ls -al mirror/regcreds
-#	cat mirror/regcreds/*
-#	rm -rf mirror/regcreds
-#fi
-#cp -rf test/mirror/regcreds mirror
-#tar xf test/regcreds-invalid.tar
+test-cmd -r 20 3 -m "Creating bundle for channel fast and versiono $ocp_version" "./aba bundle --channel fast --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion tar -C $subdir -xvf -"
 
 # Smoke test!
-##[ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 test-cmd -m  "Verifying existance of file 'mirror/save/mirror_seq1_000000.tar'" "ls -lh mirror/save/mirror_seq1_000000.tar" 
-test-cmd -m  "Delete file that's already copied to internal bastion: 'mirror/save/mirror_seq1_000000.tar'" "rm -f mirror/save/mirror_seq1_000000.tar" 
-
-# If the VM snapshot is reverted, as above, no need to delete old files
-####test-cmd -h $reg_ssh_user@$int_bastion -m  "Clean up home dir on internal bastion" "rm -rf ~/bin/* $subdir/aba"
+test-cmd -m  "Delete this file that's already been copied to internal bastion: 'mirror/save/mirror_seq1_000000.tar'" "rm -f mirror/save/mirror_seq1_000000.tar" 
 
 ssh $reg_ssh_user@$int_bastion "rpm -q make || sudo yum install make -y"
 
-#### NEW TEST test-cmd -h $reg_ssh_user@$int_bastion -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-
-#### NEW TEST mylog "Use 'make tarrepo' to copy tar+ssh archive plus seq1 tar file to internal bastion"
-#### NEW TEST ###make -s -C mirror inc out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir - xvf -
-#### NEW TEST make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
-#### NEW TEST scp mirror/save/mirror_seq1_000000.tar $reg_ssh_user@$int_bastion:$subdir/aba/mirror/save
-
-### test-cmd -h $reg_ssh_user@$int_bastion -r 5 3 -m "Checking regcreds/ does not exist on $int_bastion" "test ! -d $subdir/aba/mirror/regcreds | exit 1" 
-
-### echo "Install the reg creds, simulating a manual config" 
-### ssh $reg_ssh_user@$int_bastion -- "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
-### ssh $reg_ssh_user@$int_bastion -- "cp -v ~/.containers/auth.json $subdir/aba/mirror/regcreds/pull-secret-mirror.json"
+test-cmd -h $reg_ssh_user@$int_bastion -r 5 3 -m "Checking regcreds/ does not exist on $int_bastion" "test ! -d $subdir/aba/mirror/regcreds" 
 
 ######################
 mylog Runtest: START - airgap
@@ -208,9 +178,7 @@ test-cmd -h $reg_ssh_user@$int_bastion -m  "Tidying up internal bastion" "rm -rf
 
 mylog "Running 'make sno' on internal bastion"
 
-[ "$default_target" ] && mylog "Creating the cluster with target=$default_target only"
-#test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing sno/iso with 'make -s -C $subdir/aba sno $default_target'" "make -s -C $subdir/aba sno $default_target" 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing sno/iso" "make -s -C $subdir/aba sno $default_target" 
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing sno/iso" "make -s -C $subdir/aba sno iso" 
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"
@@ -236,7 +204,6 @@ scp mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$int_bastion:$subdir/aba/mi
 
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading UBI images into mirror" "make -s -C $subdir/aba/mirror load" 
 
-mylog 
 mylog Add vote-app image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
@@ -244,9 +211,10 @@ END
 
 test-cmd -r 20 3 -m "Saving vote-app image to local disk" " make -s -C mirror save" 
 
-mylog Copy repo to internal bastion
-##make -s -C mirror inc out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir - xvf -
+mylog Copy repo only to internal bastion
 make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
+
+mylog Copy extra image set tar file to internal bastion
 scp mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$int_bastion:$subdir/aba/mirror/save
 
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading vote-app image into mirror" "make -s -C $subdir/aba/mirror load" 
@@ -257,9 +225,9 @@ test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing $cluster_type cluster, re
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Listing VMs (should show 24G memory)" "make -s -C $subdir/aba/$cluster_type ls"
 
-#### DEL? test-cmd -h $reg_ssh_user@$int_bastion -m  "Deploying test vote-app" $subdir/aba/test/deploy-test-app.sh $subdir
-test-cmd -h steve@$int_bastion -m "Create project 'demo'" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc new-project demo' || true" # || true
-test-cmd -h steve@$int_bastion -m "Launch vote-app" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo' || true"  #|| true
+myLog "Deploying test vote-app"
+test-cmd -h steve@$int_bastion -m "Create project 'demo'" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc new-project demo'" 
+test-cmd -h steve@$int_bastion -m "Launch vote-app" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc rollout status deployment vote-app -n demo'"
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
@@ -282,13 +250,6 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
     packages:
 END
-#      - name: servicemeshoperator
-#        channels:
-#        - name: stable
-#      - name: kiali-ossm
-#        channels:
-#        - name: stable
-#END
 
 # Append the correct values for each operator
 mylog Append sm and kiali operators to imageset conf
@@ -298,45 +259,37 @@ grep -A2 -e "name: kiali-ossm$"		mirror/imageset-config-operator-catalog-v${ocp_
 ########
 test-cmd -r 20 3 -m "Saving mesh operators to local disk" "make -s -C mirror save"
 
-mylog Copy tar+ssh archives to internal bastion
+mylog Create incremental tar and ssh to internal bastion
 make -s -C mirror inc out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
 
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading images to mirror" "make -s -C $subdir/aba/mirror load" 
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Configuring day2 ops" "make -s -C $subdir/aba/$cluster_type day2"
 
-mylog 
 mylog Append jaeger operator to imageset conf
 grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
-#cat >> mirror/save/imageset-config-save.yaml <<END
-#    - name: jaeger-product
-#      channels:
-#      - name: stable
-#END
 
 test-cmd -r 20 3 -m "Saving jaeger operator to local disk" "make -s -C mirror save"
 
 mylog Downloading the mesh demo into test/mesh, for use by deploy script
 (
-	rm -rf test/mesh && mkdir test/mesh && cd test/mesh && git clone https://github.com/sjbylo/openshift-service-mesh-demo.git && \
+	rm -rf test/mesh && mkdir test/mesh && cd test/mesh && \
+	git clone https://github.com/sjbylo/openshift-service-mesh-demo.git && \
 	cd openshift-service-mesh-demo && \
-
-	sed -i "s#quay\.io#$reg_host:$reg_port/$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml &&  # required since other methods are messy
+	sed -i "s#quay\.io#$reg_host:$reg_port/$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml && \ # required since other methods are messy
 	sed -i "s/source: .*/source: cs-redhat-operator-index/g" operators/* 
 ) 
 
 mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
 make -s -C mirror inc out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf - 
-##mylog "Copy latest tar file $(ls -1tr mirror/save/mirror_seq*tar | tail -1)"   # THIS FAILS: DOES NOT COPY THE MESH FILES "openshift-service-mesh-demo"
-##scp $(ls -1tr mirror/save/mirror_seq*tar | tail -1) $reg_ssh_user@$int_bastion:$subdir/aba/mirror/save 
 
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading jaeger operator images to mirror" "make -s -C $subdir/aba/mirror load" 
 
 
 test-cmd -m "Pausing for 90s to let OCP settle" sleep 90    # For some reason, the cluster was still not fully ready in tests!
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "make -s -C $subdir/aba/$cluster_type cmd; until make -s -C $subdir/aba/$cluster_type cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all cluster operators to be available?" "make -s -C $subdir/aba/$cluster_type cmd; until make -s -C $subdir/aba/$cluster_type cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m "Run 'day2'" "make -s -C $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
@@ -346,32 +299,27 @@ test-cmd -m "Pausing for 60s to let OCP settle" sleep 60  # And wait for https:/
 
 test-cmd -h $reg_ssh_user@$int_bastion -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
 
-sleep 30  # Sleep in case need to check the cluster
-
 # Restart cluster test 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Log into cluster" ". <(make -s -C $subdir/aba/sno login)"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "make -s -C $subdir/aba/sno ls"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Shut cluster down gracefully and wait (2/2)" "yes | make -s -C $subdir/aba/sno shutdown wait=1"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Shut cluster down gracefully and wait for poweroff (2/2)" "yes | make -s -C $subdir/aba/sno shutdown wait=1"
 
-#test-cmd -m "Wait for cluster to power down" sleep 600
-####test-cmd -m "Wait for cluster to power down" sleep 60
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'poweredOff'" "until make -s -C $subdir/aba/sno ls | grep poweredOff | wc -l| grep ^1$ ; do sleep 10; echo -n .;done"
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "make -s -C $subdir/aba/sno ls"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "make -s -C $subdir/aba/sno startup"
-#test-cmd -m "Wait for cluster to settle" sleep 600
-test-cmd -m "Wait for cluster to settle" sleep 60
+test-cmd -m "Wait for cluster to settle" sleep 30
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'Ready'" "cd $subdir/aba/sno; until oc get nodes| grep Ready|grep -v Not |wc -l| grep ^1$; do sleep 10; echo -n .; done"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd cmd='get nodes'"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd cmd='whoami' | grep system:admin"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd cmd='version'"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd cmd='get po -A | grep -v -e Running -e Complete'"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd"
-test-cmd -m "Wait for cluster to settle" sleep 60
+test-cmd -m "Wait for cluster to settle" sleep 30
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "make -s -C $subdir/aba/sno cmd; make -s -C $subdir/aba/sno cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd cmd='get po -A | grep ^travel-.*Running'"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up and app running" "make -s -C $subdir/aba/sno cmd cmd='get po -A | grep ^travel-.*Running'"
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Deleting sno cluster" "make -s -C $subdir/aba/sno delete" 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Running 'make clean' in $subdir/aba/sno" "make -s -C $subdir/aba/sno clean" 
@@ -460,7 +408,8 @@ done
 
 # Test bare-metal with BYO macs
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating standard cluster dir" "cd $subdir/aba; rm -rf standard; mkdir -p standard; ln -s ../templates/Makefile standard; make -s -C standard init" 
-echo "00:50:56:1d:9e:01
+echo "\
+00:50:56:1d:9e:01
 00:50:56:1d:9e:02
 00:50:56:1d:9e:03
 00:50:56:1d:9e:04
@@ -514,10 +463,8 @@ test-cmd -h $reg_ssh_user@$int_bastion -m "If cluster up, shutting cluster down 
 # keep it # make -C ~/aba distclean force=1
 # keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
 
-mylog
 mylog "===> Completed test $0"
-mylog
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak
 
-echo SUCCESS 
+echo SUCCESS $0
