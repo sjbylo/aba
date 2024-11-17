@@ -99,9 +99,9 @@ mirror-registry: mirror-registry.tar.gz ## Extract the mirror-registry binary
 	tar xmvzf mirror-registry.tar.gz
 
 mirror-registry.tar.gz: ## Download the mirror-registry tarball
-	# Downloading 'mirror-registry.tar.gz' for later installation.
+	echo "Downloading mirror-registry.tar.gz ..."
 	curl --progress-bar -OL \
-	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/1.3.9/mirror-registry.tar.gz
+	https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/1.3.11/mirror-registry.tar.gz
 
 # mirror.conf depends on aba.conf for the 'domain aalue
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
@@ -190,7 +190,6 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 #distclean: .init  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 distclean:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@[ -f .installed ] && echo "Important: to uninstall the registry, you must run 'make uninstall' first!" || true
-	@[ -x $(SCRIPTS)/distclean-gate.sh ] && $(SCRIPTS)/distclean-gate.sh $(force) || true
 	make clean
 	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true
 	@#rm -rf regcreds

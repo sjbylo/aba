@@ -109,6 +109,6 @@ clean: ## Clean up installed binaries
 	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc} .*installed
 
 .PHONY: distclean
-distclean: clean ## Clean up everything
+distclean: clean # Clean up everything. Only use if you know what you are doing!
 	rm -f *.tar.gz .init
 

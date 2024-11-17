@@ -178,7 +178,7 @@ test-cmd -h $reg_ssh_user@$int_bastion -m  "Tidying up internal bastion" "rm -rf
 
 mylog "Running 'make sno' on internal bastion"
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing sno/iso" "make -s -C $subdir/aba sno iso" 
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing sno/iso" "make -s -C $subdir/aba sno target=iso" 
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"

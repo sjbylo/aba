@@ -115,20 +115,19 @@ setnoask: noask
 
 .PHONY: clean
 clean: ## Clean up all temporary files.
-	@make -C mirror clean 
-	@make -C test clean 
+	make -C mirror clean 
+	make -C test clean 
 	rm -f ~/.aba.previous.backup
 	rm -f ~/.aba.conf.created
 	rm -f .aba.conf.seen
 
 .PHONY: distclean
 distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this dies not run 'make uninstall' (uninstall the reg.)
-	@$(SCRIPTS)/distclean-gate.sh $(force)
-	@make clean
+	$(SCRIPTS)/distclean-gate.sh $(force)
+	make clean
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
-	@make -C cli distclean 
-	@make -C mirror distclean 
+	make -C cli distclean 
+	make -C mirror distclean 
 	rm -f aba.conf ~/.aba.conf*
-	@#rm -rf sno compact standard 
 

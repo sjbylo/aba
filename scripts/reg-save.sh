@@ -45,6 +45,7 @@ do
 	echo
 
 	./save-mirror.sh && failed= && break
+	# CHANGE /save-mirror.sh 2> >(tee .oc-mirror-error.log >&2) && failed= && break
 
 	let try=$try+1
 	[ $try -le $try_tot ] && echo_red -n "Image saving failed ... Trying again. "
@@ -54,6 +55,8 @@ if [ "$failed" ]; then
 	echo_red -n "Image saving aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes can fail! Resolve any issues (if needed) and try again."
+	# CHANGE echo_red Error output:
+	# CHANGE cat_red .oc-mirror-error.log
 
 	exit 1
 fi
