@@ -45,13 +45,13 @@ if ! curl --connect-timeout 15 --retry 3 -kIL https://registry.redhat.io/redhat/
 	exit 1
 fi
 
-# FIXME this is a hack. Better implement as dep in makefile?
+# FIXME: this is a hack. Better implement as dep in makefile?
 scripts/create-containers-auth.sh >/dev/null 2>&1
 
 # See if the index is already downloading (using 'ln') 
 [ ! -f $index_file ] && touch $index_file
 if ! ln $index_file $lock_file >/dev/null 2>&1; then
-	# Passed here only if the lock file exists (index already downloading) 
+	# Passed here only if the lock file exists (i.e. index already downloading) 
 
 	# If still downloading...
 	if [ ! -s $index_file ]; then
@@ -70,13 +70,13 @@ fi
 
 echo $$ > $pid_file
 
-echo_cyan "Operator index v$ocp_ver_major is already downloading to $index_file, please wait a few minutes ..."
-
 # Lock successful, now download the index ...
 
 # If running in forground, on INT, delete lock AND run $0 in background
 ## NOT A GOOD IDEA [ -t 0 ] && handle_interupt() { echo_red "Putting download into background"; rm -f $lock_file; ( $0 $* > .fetch-index.log 2>&1 & ) & exit 0; }
 ### FIX ME [ -t 0 ] && handle_interupt() { echo_red "Stopping download"; rm -f $lock_file;  exit 0; }
+
+echo_cyan "Downloading Operator index v$ocp_ver_major to $index_file, please wait a few minutes ..."
 
 # Fetch latest operator catalog and default channels
 if ! oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major > $index_file; then
@@ -86,9 +86,9 @@ if ! oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operato
 	exit 1
 fi
 
-echo_white "Downloaded $index_file"
+echo_white "Downloaded $index_file successfully"
 
-# Generate a handy yaml file with operators which can be manually copied into image set confgi if needed.
+# Generate a handy yaml file with operators which can be manually copied into image set config if needed.
 tail -n +3 $index_file | awk '{print $1,$NF}' | while read op_name op_default_channel
 do
 	echo "\
@@ -96,6 +96,7 @@ do
       channels:
       - name: $op_default_channel"
 done > imageset-config-operator-catalog-v${ocp_ver_major}.yaml
+
 echo_white "Generated imageset-config-operator-catalog-v${ocp_ver_major}.yaml file"
 
 ##rm -f $lock_file $pid_file

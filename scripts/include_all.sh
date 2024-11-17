@@ -11,6 +11,7 @@ echo_cyan()	{ [ "$TERM" ] && tput setaf 6; echo -e "$@"; [ "$TERM" ] && tput sgr
 echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 
 cat_cyan()	{ [ "$TERM" ] && tput setaf 6; cat; [ "$TERM" ] && tput sgr0; }
+cat_red()	{ [ "$TERM" ] && tput setaf 1; cat; [ "$TERM" ] && tput sgr0; }
 
 if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
     PATH="$HOME/bin:$PATH"
