@@ -10,7 +10,7 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
-[ ! "$ntp_servers" ] && echo_red "Define 'ntp_servers' value in 'aba.conf' to configure NTP" && exit 0
+[ ! "$ntp_servers" ] && echo_red "Define 'ntp_servers' value in 'aba.conf' to configure NTP" >&2 && exit 0
 
 ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
 

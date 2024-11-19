@@ -11,7 +11,7 @@ install_rpms make 2>/dev/null | cat -v >.bundle.log|| exit 1
 
 source <(normalize-aba-conf)
 
-[ ! "$bundle_dest_path" ] && echo_red "Error: missing bundle archive filename! Example: /mnt/usb-media/my-bundle" >&2 && exit 1
+[ ! "$bundle_dest_path" ] && echo_red "Error: missing bundle archive filename! Example: /mnt/usb-media/my-bundle" >&2 >&2 && exit 1
 
 if [ "$bundle_dest_path" = "-" ]; then
 	echo_cyan "The bundle archive will be generated and written to standard output using the following parameters" >&2
@@ -31,7 +31,7 @@ echo >&2
 force=1 # FIXME
 if [ ! "$force" ]; then
 	if [ -s mirror/save/imageset-config-save.yaml -o -f mirror/mirror.conf ]; then
-		echo_red "This repo is already in use!  Use a fresh Aba repo or run 'make distclean' and try again!" >&2
+		echo_red "This repo is already in use!  Use a fresh Aba repo or run 'make distclean' and try again!" >&2 >&2
 
 		exit 1
 	fi

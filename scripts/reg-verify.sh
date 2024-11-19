@@ -11,7 +11,7 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 if [ ! "$reg_host" -o ! "$reg_port" ]; then
-	echo_red "Error: No registry is configured in 'mirror.conf'.  Run: 'make mirror.conf' and edit it." >&2
+	echo_red "Error: No registry is configured in 'mirror.conf'.  Run: 'make mirror.conf' and edit it." >&2 >&2
 
 	exit 1
 fi
@@ -38,11 +38,11 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 		fi
 	else
 		echo
-		echo_red "Warning: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' cert file found."
+		echo_red "Warning: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' cert file found." >&2
 		echo
 
 		if [ "$tls_verify" ]; then
-			echo_red "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again."
+			echo_red "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again." >&2
 			echo
 
 			exit 1
@@ -66,10 +66,10 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 fi
 
 echo
-echo_red "Error:   No mirror registry credential file found in 'regcreds/pull-secret-mirror.json'"
-echo_red "         If you want to use your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
-echo_red "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively."
-echo_red "         See the README.md for further instructions."
+echo_red "Error:   No mirror registry credential file found in 'regcreds/pull-secret-mirror.json'" >&2
+echo_red "         If you want to use your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again." >&2
+echo_red "         The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively." >&2
+echo_red "         See the README.md for further instructions." >&2
 echo
 
 exit 1

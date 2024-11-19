@@ -7,7 +7,7 @@ source scripts/include_all.sh
 
 if [ ! -x ~/bin/openshift-install ]; then
 	echo
-	echo_red "The ~/bin/openshift-install CLI is missing!  Please run ./aba first."
+	echo_red "The ~/bin/openshift-install CLI is missing!  Please run ./aba first." >&2
 	echo
 
 	exit 1
@@ -22,8 +22,8 @@ release_ver=$(echo "$out" | grep "^openshift-install" | cut -d" " -f2)
 
 if [ "$ocp_version" != "$release_ver" ]; then
 	echo
-	echo_red "Warning: The OpenShift version set in 'aba.conf' is not the same as the version of the 'openshift-install' CLI." 
-	echo_red "         Please run 'make -C cli' and try again." 
+	echo_red "Warning: The OpenShift version set in 'aba.conf' is not the same as the version of the 'openshift-install' CLI." >&2 
+	echo_red "         Please run 'make -C cli' and try again." >&2 
 	echo
 
 	exit 1
@@ -34,11 +34,11 @@ fi
 
 if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha >/dev/null; then
 	echo
-	echo_red "Error: Release image missing in your registry at $reg_host:$reg_port/$reg_path. Expected version is $release_ver."
-	echo_red "       Did you remember to 'sync' or 'save/load' the images into your registry?"
-	echo_red "       Be sure that the images in your registry match the version of the 'openshift-install' CLI (currently version $release_ver)"
-	echo_red "       Do you have the correct image versions in your registry?"
-	echo_red "       Failed to access the release image: docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha"
+	echo_red "Error: Release image missing in your registry at $reg_host:$reg_port/$reg_path. Expected version is $release_ver." >&2
+	echo_red "       Did you remember to 'sync' or 'save/load' the images into your registry?" >&2
+	echo_red "       Be sure that the images in your registry match the version of the 'openshift-install' CLI (currently version $release_ver)" >&2
+	echo_red "       Do you have the correct image versions in your registry?" >&2
+	echo_red "       Failed to access the release image: docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha" >&2
 
 	exit 1
 fi

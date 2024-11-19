@@ -14,12 +14,12 @@ fi
 [ "$1" ] && set -x
 
 # Clean up on INT
-handle_interupt() { echo_red "Aborting download."; rm -f $lock_file $pid_file; [ ! -s $index_file ] && rm -f $index_file; exit 0;}
+handle_interupt() { echo_red "Aborting download." >&2; rm -f $lock_file $pid_file; [ ! -s $index_file ] && rm -f $index_file; exit 0;}
 trap 'handle_interupt' INT
 
 source <(normalize-aba-conf)
 
-[ ! "$ocp_version" ] && echo_red "Error, ocp_version not defined in aba.conf!" >&2 && exit 1
+[ ! "$ocp_version" ] && echo_red "Error, ocp_version not defined in aba.conf!" >&2 >&2 && exit 1
 
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
@@ -40,7 +40,7 @@ else
 fi
 
 if ! curl --connect-timeout 15 --retry 3 -kIL https://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >/dev/null 2>&1; then
-	echo_red "Error: while fetching the operator index from https://registry.redhat.io/.  Aborting." >&2
+	echo_red "Error: while fetching the operator index from https://registry.redhat.io/.  Aborting." >&2 >&2
 
 	exit 1
 fi
@@ -58,7 +58,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 		# No need to wait if operator vars are not defined in aba.conf!
 		[ ! "$op_sets" -a ! "$ops" ] && exit 0
 
-		handle_interupt() { echo_red "Stopped waiting for download to complete"; exit 0; }
+		handle_interupt() { echo_red "Stopped waiting for download to complete" >&2; exit 0; }
 		echo_magenta "Waiting for operator index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
 		try_cmd -q 2 0 150 test -s $index_file || true  # keep checking file does not have content, for max 300s (2 x 150s)
 	else
@@ -73,14 +73,14 @@ echo $$ > $pid_file
 # Lock successful, now download the index ...
 
 # If running in forground, on INT, delete lock AND run $0 in background
-## NOT A GOOD IDEA [ -t 0 ] && handle_interupt() { echo_red "Putting download into background"; rm -f $lock_file; ( $0 $* > .fetch-index.log 2>&1 & ) & exit 0; }
-### FIX ME [ -t 0 ] && handle_interupt() { echo_red "Stopping download"; rm -f $lock_file;  exit 0; }
+## NOT A GOOD IDEA [ -t 0 ] && handle_interupt() { echo_red "Putting download into background" >&2; rm -f $lock_file; ( $0 $* > .fetch-index.log 2>&1 & ) & exit 0; }
+### FIX ME [ -t 0 ] && handle_interupt() { echo_red "Stopping download" >&2; rm -f $lock_file;  exit 0; }
 
 echo_cyan "Downloading Operator index v$ocp_ver_major to $index_file, please wait a few minutes ..."
 
 # Fetch latest operator catalog and default channels
 if ! oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major > $index_file; then
-	echo_red "Error: oc-mirror returned $? whilst downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major."
+	echo_red "Error: oc-mirror returned $? whilst downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major." >&2
 	rm -f $lock_file $pid_file
 
 	exit 1

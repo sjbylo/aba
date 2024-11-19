@@ -15,7 +15,7 @@ if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)
 
 	if ! govc about >/dev/null 2>&1; then
-		echo_red "Error: Cannot access vSphere or ESXi.  Please edit 'vmware.conf' and try again!"
+		echo_red "Error: Cannot access vSphere or ESXi.  Please edit 'vmware.conf' and try again!" >&2
 
 		exit 1
 	fi
@@ -37,7 +37,7 @@ if [ ! -s vmware.conf ]; then
 
 	# Check access
 	if ! govc about; then
-		echo_red "Error: Cannot access vSphere or ESXi.  Please edit 'vmware.conf' and try again!"
+		echo_red "Error: Cannot access vSphere or ESXi.  Please edit 'vmware.conf' and try again!" >&2
 
 		exit 1
 	else

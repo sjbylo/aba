@@ -15,8 +15,8 @@ source <(normalize-mirror-conf)
 # Show warning if 'make save' has been used previously.
 if [ -s save/mirror_seq1_000000.tar ]; then
 	echo 
-	echo_red "Warning: Existing image set archive files found at $PWD/save."
-	echo_red "         Note that you also have the option to load them into the mirror registry at $reg_host (make load)?"
+	echo_red "Warning: Existing image set archive files found at $PWD/save." >&2
+	echo_red "         Note that you also have the option to load them into the mirror registry at $reg_host (make load)?" >&2
 	echo 
 
 	##ask "Continue with 'sync'" || exit 1
@@ -31,7 +31,7 @@ elif [ -s $pull_secret_file ]; then
 	:
 else
 	echo
-	echo_red "Error: The pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret"
+	echo_red "Error: The pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" >&2
 	echo
 
 	exit 1
@@ -40,7 +40,7 @@ fi
 # Check internet connection...
 ##echo_cyan -n "Checking access to https://api.openshift.com/: "
 if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
-	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry."
+	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry." >&2
 
 	exit 1
 fi
@@ -93,7 +93,7 @@ done
 if [ "$failed" ]; then
 	echo_red -n "Image synchronization aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
-	echo_red "Warning: Long-running processes can fail! Resolve any issues (if needed) and try again."
+	echo_red "Warning: Long-running processes can fail! Resolve any issues (if needed) and try again." >&2
 
 	exit 1
 fi

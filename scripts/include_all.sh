@@ -23,9 +23,9 @@ umask 077
 show_error() {
 	local exit_code=$?
 	echo 
-	echo_red Script error: 
-	echo_red "Error occurred in command: '$BASH_COMMAND'"
-	echo_red "Error code: $exit_code"
+	echo_red "Script error: " >&2
+	echo_red "Error occurred in command: '$BASH_COMMAND'" >&2
+	echo_red "Error code: $exit_code" >&2
 
 	exit $exit_code
 }
@@ -127,8 +127,8 @@ install_rpms() {
 	if [ "$rpms_to_install" ]; then
 		echo "Installing missing rpms:$rpms_to_install (logging to .dnf-install.log)"
 		if ! sudo dnf install $rpms_to_install -y >> .dnf-install.log 2>&1; then
-			echo_red "Warning: an error occured whilst trying to install RPMs, see the logs at .dnf-install.log."
-			echo_red "If dnf cannot be used to install rpm packages, please install the following packages manually and try again!"
+			echo_red "Warning: an error occured whilst trying to install RPMs, see the logs at .dnf-install.log." >&2
+			echo_red "If dnf cannot be used to install rpm packages, please install the following packages manually and try again!" >&2
 			echo_magenta $rpms_to_install
 
 			return 1
@@ -216,7 +216,7 @@ try_cmd() {
 	while ! eval $* >>.cmd.out 2>&1
 	do
 		if [ $count -ge $total ]; then
-			[ ! "$quiet" ] && echo_red "Giving up on command \"$*\""
+			[ ! "$quiet" ] && echo_red "Giving up on command \"$*\"" >&2
 			# Return non-zero
 			return 1
 		fi
@@ -245,7 +245,7 @@ is_version_greater() {
      [[ "$sorted_versions" != "$version1|$version2|" ]]
 }
 
-output_error() { echo_red "$@"; }
+output_error() { echo_red "$@" >&2; }
 
 longest_line() {
     # Calculate the longest line from stdin

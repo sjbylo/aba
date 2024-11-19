@@ -12,7 +12,7 @@ umask 077
 source <(normalize-aba-conf)
 
 if [ ! -s $pull_secret_file -a "$public_pull_secret_file_needed" ]; then
-	echo_red "Error: Your pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret"
+	echo_red "Error: Your pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" >&2
 	exit 1
 fi
 
@@ -43,7 +43,7 @@ elif [ -s $pull_secret_file ]; then
 
 else
 	echo 
-	echo_red "Aborting! Pull secret file(s) missing: '$pull_secret_file', 'regcreds/pull-secret-mirror.json' and/or 'regcreds/pull-secret-full.json'" 
+	echo_red "Aborting! Pull secret file(s) missing: '$pull_secret_file', 'regcreds/pull-secret-mirror.json' and/or 'regcreds/pull-secret-full.json'" >&2 
 
 	exit 1
 fi

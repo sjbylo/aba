@@ -90,7 +90,7 @@ fi
 file_list=$(ls mirror/{sync,save}/oc-mirror-workspace 2>/dev/null || true)
 if [ ! "$file_list" ]; then
 	echo
-	echo_red "Missing oc-mirror meta-data (mirror/{save,sync}/oc-mirror-workspace* not be available). Please copy this directory from where it was created to this location and try again!"
+	echo_red "Missing oc-mirror meta-data (mirror/{save,sync}/oc-mirror-workspace* not be available). Please copy this directory from where it was created to this location and try again!" >&2
 	echo
 fi
 
@@ -160,7 +160,7 @@ if [ "$file_list" ]; then
 		echo -n .
 		sleep $i
 		let i=$i+1
-		[ $i -gt 40 ] && echo_red "Warning: Giving up waiting ..." && break
+		[ $i -gt 40 ] && echo_red "Warning: Giving up waiting ..." >&2 && break
 	done
 
 	echo "The CatalogSource is 'ready'"
