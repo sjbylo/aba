@@ -343,7 +343,8 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$int_bastion -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba/$cluster_name"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba/$cluster_name" || \
+		test-cmd -h $reg_ssh_user@$int_bastion -m  "Restarting nodes of failed cluster" "make -s -C $subdir/aba/$cluster_name stop; sleep 200; make -s -C $subdir/aba/$cluster_name start"
 
 	if ! test-cmd -h $reg_ssh_user@$int_bastion -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "make -s -C $subdir/aba/$cluster_name mon"; then
 		mylog "CLUSTER INSTALL FAILED: REBOOTING ALL NODES ..."
