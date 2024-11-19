@@ -24,3 +24,5 @@ rsync --progress --partial -avz reg-install.sh mirror-registry.tar.gz  $reg_ssh_
 
 ssh -F .ssh.conf $reg_ssh_user@$reg_host "bash -e test/reg-install.sh"
 
+ssh -F .ssh.conf $reg_ssh_user@$reg_host "rm -rf test"  # Just so we don't run out of disk space during tests! 
+
