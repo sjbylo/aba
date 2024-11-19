@@ -16,7 +16,7 @@ server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{prin
 echo Checking cluster ...
 # Or use: timeout 3 bash -c "</dev/tcp/host/6443"
 if ! curl --connect-timeout 10 --retry 2 -skI $server_url >/dev/null; then
-	echo_red "Cluster not reachable at $server_url"
+	echo_red "Cluster not reachable at $server_url" >&2
 
 	exit
 fi
@@ -29,7 +29,7 @@ cp iso-agent-based/auth.backup/kubeconfig  iso-agent-based/auth/kubeconfig
 OC="oc --kubeconfig=iso-agent-based/auth/kubeconfig"
 
 if ! $OC whoami >/dev/null; then
-	echo_red "Error: Cannot access the cluster using iso-agent-based/auth/kubeconfig file!"
+	echo_red "Error: Cannot access the cluster using iso-agent-based/auth/kubeconfig file!" >&2
 
 	exit 1
 fi
@@ -69,7 +69,7 @@ if $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet
 	echo "Make sure the cluster is started beforehand to allow the CA certificate to renew automatically."
 
 else
-	echo_red "Unable to discover cluster's certificate expiration date."
+	echo_red "Unable to discover cluster's certificate expiration date." >&2
 fi
 
 echo

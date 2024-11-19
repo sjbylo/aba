@@ -62,9 +62,9 @@ if [ -s /tmp/.list_of_matching_arp_entries ]; then
 			fi
 		done
 		if [ "$MAC_IN_USE" ]; then
-			echo_red "Error: One or more mac addresses are *currently* in use:$P" 
-			echo_red "       Consider Changing 'mac_prefix' in cluster.conf and try again." 
-			echo_red "       If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
+			echo_red "Error: One or more mac addresses are *currently* in use:$P" >&2 
+			echo_red "       Consider Changing 'mac_prefix' in cluster.conf and try again." >&2 
+			echo_red "       If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" >&2 
 
 			exit 1
 		fi

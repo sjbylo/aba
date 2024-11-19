@@ -23,7 +23,7 @@ if [ "$dest" != "-" ]; then
 	echo "$dest" | grep -q \.tar$ || dest="$dest.tar"
 
 	# If the destination file already exists...
-	[ -s $dest ] && echo_red "Warning: File $dest already exists. Aborting!" >&2 && exit 1 # Must use stderr otherwise the tar archive becomes corrupt
+	[ -s $dest ] && echo_red "Warning: File $dest already exists. Aborting!" >&2 >&2 && exit 1 # Must use stderr otherwise the tar archive becomes corrupt
 fi
 
 # Assume this script is run via 'make ...' from aba's top level dir
@@ -163,7 +163,7 @@ echo >&2
 tar cf $dest $file_list
 ret=$?
 if [ $ret -ne 0 ]; then
-	echo_red "tar command failed with return code $ret" >&2
+	echo_red "tar command failed with return code $ret" >&2 >&2
 	rm -f aba/.bundle
 
 	exit $ret

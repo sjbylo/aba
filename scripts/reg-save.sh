@@ -14,7 +14,7 @@ source <(normalize-aba-conf)
 # Check internet connection...
 ##echo_cyan -n "Checking access to https://api.openshift.com/: "
 if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
-	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk."
+	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk." >&2
 
 	exit 1
 fi
@@ -48,15 +48,15 @@ do
 	# CHANGE /save-mirror.sh 2> >(tee .oc-mirror-error.log >&2) && failed= && break
 
 	let try=$try+1
-	[ $try -le $try_tot ] && echo_red -n "Image saving failed ... Trying again. "
+	[ $try -le $try_tot ] && echo_red -n "Image saving failed ... Trying again. " >&2
 done
 
 if [ "$failed" ]; then
-	echo_red -n "Image saving aborted ..."
+	echo_red -n "Image saving aborted ..." >&2
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
-	echo_red "Warning: Long-running processes can fail! Resolve any issues (if needed) and try again."
-	# CHANGE echo_red Error output:
-	# CHANGE cat_red .oc-mirror-error.log
+	echo_red "Warning: Long-running processes can fail! Resolve any issues (if needed) and try again." >&2
+	# CHANGE echo_red Error output: >&2
+	# CHANGE cat_red .oc-mirror-error.log >&2
 
 	exit 1
 fi

@@ -50,7 +50,7 @@ else
 		export pull_secret=$(cat $pull_secret_file)
 		echo Found pull secret file at $pull_secret_file.  Assuming online installation using public RH registry.
 	else
-		echo_red "Error: No pull secrets found. Aborting!  See the README for help!" 
+		echo_red "Error: No pull secrets found. Aborting!  See the README for help!" >&2 
 
 		exit 1
 	fi
@@ -96,9 +96,9 @@ elif [ "$proxy" = "auto" ]; then
 		image_content_sources=
 		additional_trust_bundle=
 	else
-		echo_red "Warning: proxy value is set to 'auto' but not all env proxy vars set. Ignoring."
-		echo_red "If you want to configure the cluster wide proxy, either set 'proxy=auto' or"
-		echo_red "set the '*_proxy' values in 'cluster.conf'"
+		echo_red "Warning: proxy value is set to 'auto' but not all env proxy vars set. Ignoring." >&2
+		echo_red "If you want to configure the cluster wide proxy, either set 'proxy=auto' or" >&2
+		echo_red "set the '*_proxy' values in 'cluster.conf'" >&2
 	fi
 else
 	echo_white "Not configuring the cluster wide proxy since no (or not enough) proxy values are defined in cluster.conf (at least http_proxy and https_proxy are required)."
@@ -112,20 +112,20 @@ else
 	# Only show this warning IF there is no internet connection?
 	# Or, only show if proxy is NOT being used?
 	if [ "$insert_proxy" ]; then
-		echo_red "No private mirror registry configured! Using proxy settings to access public registry."
+		echo_red "No private mirror registry configured! Using proxy settings to access public registry." >&2
 	else
 		# Should check accessibility to registry.redhat.io?
 		echo
-		echo_red "Warning: No private mirror registry configured & no proxy settings provided!"
-		echo_red "         If this is *unexpected* you likely need to set up a mirror registry! See the Readme.md file for more."
-		echo_red "         Root CA file 'regcreds/rootCA.pem' not found. Not adding 'additionalTrustBundle' to install-config.yaml!"
+		echo_red "Warning: No private mirror registry configured & no proxy settings provided!" >&2
+		echo_red "         If this is *unexpected* you likely need to set up a mirror registry! See the Readme.md file for more." >&2
+		echo_red "         Root CA file 'regcreds/rootCA.pem' not found. Not adding 'additionalTrustBundle' to install-config.yaml!" >&2
 		echo
 	fi
 fi
 
 # Check the private registry is defined, if it's in use
 if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
-	[ ! "$reg_host" ] && echo && echo_red "Error: registry host value reg_host is not defined in mirror.conf!" && exit 1
+	[ ! "$reg_host" ] && echo && echo_red "Error: registry host value reg_host is not defined in mirror.conf!" >&2 && exit 1
 fi
 
 # Check that the release image is available in the private registry

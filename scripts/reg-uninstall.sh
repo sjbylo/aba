@@ -58,7 +58,7 @@ elif podman ps | grep -q registry; then
 		exit 1
 	fi
 else
-	echo_red No mirror registry to uninstall
+	echo_red "No mirror registry to uninstall" >&2
 
 	exit 0
 fi

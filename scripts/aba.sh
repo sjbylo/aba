@@ -96,14 +96,14 @@ do
 		shift
 	elif [ "$1" = "--out" ]; then
 		shift
-		echo "$1" | grep -q "^--" && echo_red "Error in parsing --out path argument" >&2 && exit 1
+		echo "$1" | grep -q "^--" && echo_red "Error in parsing --out path argument" >&2 >&2 && exit 1
 		[ "$1" ] && [ ! -d $(dirname $1) ] && echo "File destination path [$(dirname $1)] incorrect or missing!" >&2 && exit 1
-		[ "$1" != "-" ] && [ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
+		[ "$1" != "-" ] && [ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 >&2 && exit 1
 		[ "$1" ] && bundle_dest_path="$1"
 		shift
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 >&2 && exit 1
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
 		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" aba.conf
 		target_chan=$chan
@@ -111,90 +111,90 @@ do
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		shift 
 		ver=$1
-		echo "$ver" | grep -q "^-" && echo_red "Error in parsing --version arguments" >&2 && exit 1
+		echo "$ver" | grep -q "^-" && echo_red "Error in parsing --version arguments" >&2 >&2 && exit 1
 		if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt > /tmp/.release.txt; then
-			echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images."
-			echo_red "To get started, run Aba on a connected workstation/laptop with Fedora or RHEL and try again."
+			echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
+			echo_red "To get started, run Aba on a connected workstation/laptop with Fedora or RHEL and try again." >&2
 
 			exit 1
 		fi
 
 		[ "$ver" = "latest" ] && ver=$(fetch_latest_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
-		[ ! "$ver" ] && echo_red "Missing value after --version. OpenShift version missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
+		[ ! "$ver" ] && echo_red "Missing value after --version. OpenShift version missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 >&2 && exit 1
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" aba.conf
 		target_ver=$ver
 		shift 
 	elif [ "$1" = "--domain" -o "$1" = "-d" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 >&2 && exit 1
 		domain=$(echo $1 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		sed -i "s/^domain=[^ \t]*/domain=$domain /g" aba.conf
 		target_domain=$domain
 		shift 
 	elif [ "$1" = "--dns" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 >&2 && exit 1
 		dns_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ip /g" aba.conf
 		shift 
 	elif [ "$1" = "--ntp" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 >&2 && exit 1
 		ntp_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_ip /g" aba.conf
 		shift 
 	elif [ "$1" = "--default-route" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 >&2 && exit 1
 		def_route_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip /g" aba.conf
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --platform arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --platform arguments" >&2 >&2 && exit 1
 		[ ! "$1" ] && echo_red -e "Missing platform, see usage.\n$usage" >&2 && exit 1
 		platform="$1"
 		sed -i "s/^platform=[^ \t]*/platform=$platform /g" aba.conf
 		shift
 	elif [ "$1" = "--op-sets" ]; then
 		shift
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 && exit 1
-		[ ! "$1" ] && echo_red "Warning: Missing args when parsing op-sets" && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 >&2 && exit 1
+		[ ! "$1" ] && echo_red "Warning: Missing args when parsing op-sets" >&2 && exit 1
 		while ! echo "$1" | grep -q -e "^-"; do [ -s templates/operator-set-$1 ] && op_set_list="$op_set_list $1"; shift || break; done
 		op_set_list=$(echo "$op_set_list" | xargs)  # Trim white space
 		#echo ADDDING op_set_list=$op_set_list
 		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" aba.conf
 	elif [ "$1" = "--ops" ]; then
 		shift
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
-		[ ! "$1" ] && echo_red "Warning: Missing args when parsing '--ops'" && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 >&2 && exit 1
+		[ ! "$1" ] && echo_red "Warning: Missing args when parsing '--ops'" >&2 && exit 1
 		while ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift || break; done
 		ops_list=$(echo "$ops_list" | xargs)  # Trim white space
 		#echo ADDING ops_list=$ops_list
 		sed -i "s/^ops=[^#$]*/ops=\"$ops_list\" /g" aba.conf
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 >&2 && exit 1
 		[ ! "$1" ] && echo_red -e "Missing editor, see usage.\n$usage" >&2 && exit 1
 		editor="$1"
 		sed -i "s/^editor=[^ \t]*/editor=$editor /g" aba.conf
 		shift
 	elif [ "$1" = "--machine-network" -o "$1" = "-n" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 && exit 1
-		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 >&2 && exit 1
+		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 >&2 && exit 1
 		sed -i "s/^machine_network=[^ \t]*/machine_network=$1 /g" aba.conf
 		shift 
 	elif [ "$1" = "--pull-secret" -o "$1" = "-ps" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
-		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 >&2 && exit 1
+		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 >&2 && exit 1
 		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1 #g" aba.conf
 		shift 
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 >&2 && exit 1
 		[ -s $1 ] && cp $1 vmware.conf
 		shift 
 	elif [ "$1" = "--ask" ]; then
@@ -204,13 +204,13 @@ do
 		sed -i "s#^ask=[^ \t]*#ask=false #g" aba.conf
 		shift 
 	else
-		echo_red "Unknown option: $1"
+		echo_red "Unknown option: $1" >&2
 		err=1
 		shift 
 	fi
 done
 
-[ "$err" ] && echo_red "An error has occurred, aborting!" && exit 1
+[ "$err" ] && echo_red "An error has occurred, aborting!" >&2 && exit 1
 
 if [ "$ACTION" = "bundle" ]; then
 	make -s bundle out="$bundle_dest_path"
@@ -242,8 +242,8 @@ if [ ! -f .bundle ]; then
 	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # ocp/eus/release.txt does not exist!
 	if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt > /tmp/.release.txt; then
 		[ "$TERM" ] && tput el1 && tput cr
-		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images."
-		echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again."
+		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
+		echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again." >&2
 
 		exit 1
 	fi
@@ -285,7 +285,7 @@ if [ ! -f .bundle ]; then
 				if curl --connect-timeout 10 --retry 2 -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 					break
 				else
-					echo_red "Error: Failed to find release $target_ver"
+					echo_red "Error: Failed to find release $target_ver" >&2
 				fi
 			fi
 
@@ -326,7 +326,7 @@ if [ ! -f .bundle ]; then
 
 		if [ "$new_editor" != "none" ]; then
 			if ! which $new_editor >/dev/null 2>&1; then
-				echo_red "Editor '$new_editor' command not found! Please install your preferred editor and try again!"
+				echo_red "Editor '$new_editor' command not found! Please install your preferred editor and try again!" >&2
 				exit 1
 			fi
 		fi
@@ -363,7 +363,7 @@ if [ ! -f .bundle ]; then
 		sleep 1
 	else
 		echo
-		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!"
+		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
 		echo_white "To allow access to the Red Hat image registry, please download your Red Hat pull secret and store is in the file '$pull_secret_file' and try again!"
 		echo_white "Note that the location of your pull secret file can be changed in 'aba.conf'."
 		echo
@@ -437,8 +437,8 @@ else
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_seq*tar 2>/dev/null)" ]; then
 		echo
-		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'make save') are copied to the 'aba/mirror/save' directory before following the instructions below!"
-		echo_red "         For example, run the command: cp /path/to/portable/media/mirror_seq*tar mirror/save"
+		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'make save') are copied to the 'aba/mirror/save' directory before following the instructions below!" >&2
+		echo_red "         For example, run the command: cp /path/to/portable/media/mirror_seq*tar mirror/save" >&2
 	fi
 
 	echo 

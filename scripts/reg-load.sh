@@ -35,7 +35,7 @@ fi
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
 if [ ! -d save ]; then
-	echo_red "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first on an external (Internet connected) bastion/laptop"
+	echo_red "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first on an external (Internet connected) bastion/laptop" >&2
 
 	exit 1
 fi
@@ -75,7 +75,7 @@ done
 if [ "$failed" ]; then
 	echo_red -n "Image loading aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
-	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again."
+	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again." >&2
 
 	exit 1
 fi

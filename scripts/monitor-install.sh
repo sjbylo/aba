@@ -18,7 +18,7 @@ fi
 
 ##if [ $? -ne 0 ]; then
 ##	echo 
-##	echo_red "Something went wrong with the installation.  Fix the problem and try again!"
+##	echo_red "Something went wrong with the installation.  Fix the problem and try again!" >&2
 ##
 ##	exit $?
 ##fi
@@ -32,7 +32,7 @@ ret=$?
 
 if [ $ret -ne 0 ]; then
 	echo 
-	echo_red "Something went wrong with the installation.  Fix the problem and try again!"
+	echo_red "Something went wrong with the installation.  Fix the problem and try again!" >&2
 
 	exit $ret
 else

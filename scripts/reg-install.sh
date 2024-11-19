@@ -32,11 +32,11 @@ reg_code=$(curl --retry 3 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_cod
 
 if [ "$reg_code" = "200" ]; then
 	echo
-	echo_red "Warning: Quay registry found at $reg_url/health/instance."
-	echo_red "         To use this registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again."
-	echo_red "         The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively."
-	echo_red "         The pull secret file can also be created and verified using 'make password'"
-	echo_red "         See the README.md for further instructions."
+	echo_red "Warning: Quay registry found at $reg_url/health/instance." >&2
+	echo_red "         To use this registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again." >&2
+	echo_red "         The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." >&2
+	echo_red "         The pull secret file can also be created and verified using 'make password'" >&2
+	echo_red "         See the README.md for further instructions." >&2
 	echo 
 
 	exit 1
@@ -48,11 +48,11 @@ reg_code=$(curl --retry 3 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_cod
 
 if [ "$reg_code" = "200" ]; then
 	echo
-	echo_red "Warning: Endpoint found at $reg_url/."
-	echo_red "         If this is your existing registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again."
-	echo_red "         The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively."
-	echo_red "         The pull secret file can also be created and verified using 'make password'"
-	echo_red "         See the README.md for further instructions."
+	echo_red "Warning: Endpoint found at $reg_url/." >&2
+	echo_red "         If this is your existing registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." >&2
+	echo_red "         The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." >&2
+	echo_red "         The pull secret file can also be created and verified using 'make password'" >&2
+	echo_red "         See the README.md for further instructions." >&2
 	echo 
 
 	exit 1
@@ -91,8 +91,8 @@ if [ "$reg_ssh_key" ]; then
 
 	if ! ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host touch $flag_file; then
 		echo
-		echo_red "Error: Can't ssh to $reg_ssh_user@$reg_host using key '$reg_ssh_key'"
-		echo_red "       Configure password-less ssh to $reg_ssh_user@$reg_host and try again."
+		echo_red "Error: Can't ssh to $reg_ssh_user@$reg_host using key '$reg_ssh_key'" >&2
+		echo_red "       Configure password-less ssh to $reg_ssh_user@$reg_host and try again." >&2
 		echo
 
 		exit 1
@@ -100,15 +100,15 @@ if [ "$reg_ssh_key" ]; then
 		# If the flag file exists, then the FQDN points to this host (config wrong!) 
 		if [ -f $flag_file ]; then
 			#echo
-			#echo_red "Error: $reg_host is not a remote host! Correct the problem in mirror.conf (undefine reg_ssh_key?) and try again."
+			#echo_red "Error: $reg_host is not a remote host! Correct the problem in mirror.conf (undefine reg_ssh_key?) and try again." >&2
 			#echo
 
 			echo
-			echo_red "Error: FQDN '$reg_host' resolves to this host '`hostname`'!"
-			echo_red "       By unsetting 'reg_ssh_key' in 'aba.conf', you have configued a *remote* mirror '$reg_host' (which resolves to '$fqdn_ip')."
-			echo_red "       If that should be the local host, please undefine the 'reg_ssh_key' value in 'mirror.conf'."
-			echo_red "       Otherwise, ensure the DNS record points to the correct *remote* host."
-			echo_red "       Please correct the problem and try again."
+			echo_red "Error: FQDN '$reg_host' resolves to this host '`hostname`'!" >&2
+			echo_red "       By unsetting 'reg_ssh_key' in 'aba.conf', you have configued a *remote* mirror '$reg_host' (which resolves to '$fqdn_ip')." >&2
+			echo_red "       If that should be the local host, please undefine the 'reg_ssh_key' value in 'mirror.conf'." >&2
+			echo_red "       Otherwise, ensure the DNS record points to the correct *remote* host." >&2
+			echo_red "       Please correct the problem and try again." >&2
 			echo
 
 			rm -f $flag_file
@@ -215,8 +215,8 @@ else
 
 	if [ ! "$fqdn_ip" ]; then
 		echo
-		echo_red "Warning: '$reg_host' does not resolve to an IP addr!"
-		echo_red "         Please correct the problem and try again!"
+		echo_red "Warning: '$reg_host' does not resolve to an IP addr!" >&2
+		echo_red "         Please correct the problem and try again!" >&2
 		echo
 	fi
 
@@ -226,11 +226,11 @@ else
 	# Check if FQDN IP matches any local IP
 	if ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
 		echo
-		echo_red "Error: FQDN '$reg_host' does not resolve to an IP addr on this host '`hostname`'!"
-		echo_red "       By setting 'reg_ssh_key' in 'aba.conf' you have configued the mirror to be on the local host '$reg_host' (which resolves to '$fqdn_ip')."
-		echo_red "       If that should be a remote host, please define the 'reg_ssh_key' value in 'mirror.conf'."
-		echo_red "       Otherwise, ensure the DNS record points to an IP address on this local host '`hostname`'."
-		echo_red "       Please correct the problem and try again."
+		echo_red "Error: FQDN '$reg_host' does not resolve to an IP addr on this host '`hostname`'!" >&2
+		echo_red "       By setting 'reg_ssh_key' in 'aba.conf' you have configued the mirror to be on the local host '$reg_host' (which resolves to '$fqdn_ip')." >&2
+		echo_red "       If that should be a remote host, please define the 'reg_ssh_key' value in 'mirror.conf'." >&2
+		echo_red "       Otherwise, ensure the DNS record points to an IP address on this local host '`hostname`'." >&2
+		echo_red "       Please correct the problem and try again." >&2
 		echo
 
 		exit 1
@@ -242,7 +242,7 @@ else
 #	else
 #		if [ ! -f $flag_file ]; then
 #			echo
-#			echo_red "Error: $reg_host is a remote host! Correct the problem in mirror.conf (define reg_ssh_key?) and try again."
+#			echo_red "Error: $reg_host is a remote host! Correct the problem in mirror.conf (define reg_ssh_key?) and try again." >&2
 #			echo
 #
 #			exit 1

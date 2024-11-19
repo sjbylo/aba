@@ -10,8 +10,8 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 
 if [ ! "$ocp_version" -o ! "$domain" ]; then
-	echo_red "Values 'domain' and/or 'ocp_version' missing in aba.conf."
-	echo_red "Please see the README on how to get started!"  # Should never need to reach here
+	echo_red "Values 'domain' and/or 'ocp_version' missing in aba.conf." >&2
+	echo_red "Please see the README on how to get started!" >&2  # Should never need to reach here
 
 	exit 1
 fi
