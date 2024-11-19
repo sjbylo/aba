@@ -64,8 +64,8 @@ Usage:
 	 --dns <ip address>		# Set one DNS IP address.
 	 --default-route <next hop ip>	# Set the default route of the internal network, if any (optional).
 	 --ntp <ntp ip>			# Set the NTP IP address (optional but recommended!). 
-	 --ops <list of operators>	# Configure optional list of operator names to add to the imageset file (for oc-mirror).
-	 --op-sets <operator set list>	# Add sets of operator names to imageset file, as defined in 'templates/operator-set.*' files.
+	 --ops <list of operators>	# Add individual operators to your image set config file (for oc-mirror).
+	 --op-sets <operator set list>	# Add sets of operators to your image set config file, as defined in 'templates/operator-set.*' files.
 	 --editor <editor command>	# Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
 	 --ask				# Prompt user when needed.
 	 --noask			# Do not prompt, assume default answers.
