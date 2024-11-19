@@ -388,7 +388,7 @@ if [ ! -f .bundle ]; then
 		echo "Run: make bundle out=/path/to/portable/media             # to save all images to local disk & then create the bundle archive"
 		echo "                                                         # (size ~20-30GB for a base installation)."
 		echo "     make bundle out=- | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
-		echo "     make bundle out=- | split -b 10G ocp_               # Stream the archive and split it into several more managable files."
+		echo "     make bundle out=- | split -b 10G - ocp_             # Stream the archive and split it into several more managable files."
 		echo "                                                         # Unpack the files with: cat ocp_* | tar xvf - "
 		echo
 
