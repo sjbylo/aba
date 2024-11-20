@@ -190,7 +190,7 @@ edit_file() {
 		fi
 	else
 		#echo_yellow "$msg? (auto answered, ask=$ask)"
-		echo_yellow "'$conf_file' has been created for you (skipping edit since 'ask' set to 'false' in 'aba.conf')."
+		echo_yellow "'$conf_file' has been created for you (skipping edit since ask=false in aba.conf)."
 	fi
 
 	return 0

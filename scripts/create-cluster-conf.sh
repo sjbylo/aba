@@ -6,7 +6,7 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 
 if [ ! "$ocp_version" ]; then
-	echo "Please run ./aba first!"
+	echo "Please run ./aba first or see the README.md file!"
 
 	exit 1
 fi
@@ -52,7 +52,9 @@ if [ ! -s cluster.conf ]; then
 	# For sno, ensure these values are commented out as they are not needed!
 	[ "$type" = "sno" ] && sed -i -e "s/^api_vip=/#api_vip=/g" -e "s/^ingress_vip=/#ingress_vip=/g" cluster.conf
 
-	edit_file cluster.conf "Edit the cluster.conf file to set all the parameters for OpenShift" || exit 1
+	edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift" || exit 1
+else
+	echo_cyan "Keeping existing $name/cluster.conf file"
 fi
 
 exit 0
