@@ -61,7 +61,7 @@ init: .init
 	@ln -fs ../mirror
 	@ln -fs ../mirror/regcreds 
 	@ln -fs ../aba.conf
-	@make -C ../cli
+	@make -sC ../cli
 	@touch .init
 	@echo Initialized `pwd` successfully
 
