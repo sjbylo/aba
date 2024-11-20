@@ -14,8 +14,8 @@ Use Aba if you want to get OpenShift up and running quickly in an air-gapped env
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
    1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
 1. [A Very Quick Guide](#a-very-quick-guide)
-1. [Getting Started with Aba](#getting-started-with-aba)
 1. [Creating a bundle archive with everything you need to install OpenShift in an air-gapped network](#Creating-a-bundle-archive-with-everything-you-need-to-install-OpenShift-in-an-air-gapped-network)
+1. [Getting Started with Aba](#getting-started-with-aba)
    1. [Disconnected Scenario](#disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
@@ -188,20 +188,6 @@ make help
 
 [Back to top](#who-should-use-aba)
 
-## Getting Started with Aba
-
-To get started, run:
-
-```
-./aba 
-```
-
-Note that this command will create the `aba.conf` file which contains some values that you *must change*, e.g. your preferred platform, your domain name, your network address (if known) and any operators you will require etc.
-
-Now, continue with either 'Disconnected scenario' or 'Fully disconnected (air-gapped) scenario' below. 
-
-[Back to top](#who-should-use-aba)
-
 
 ## Creating a bundle archive with everything you need to install OpenShift in an air-gapped network
 
@@ -246,6 +232,24 @@ cd aba
 ```
 
 You will find the large image set file under `aba/mirror/save`.
+
+[Back to top](#who-should-use-aba)
+
+
+## Getting Started with Aba
+
+To get started, run:
+
+```
+./aba 
+```
+
+Note that this command will create the `aba.conf` file which contains some values that you *must change*, e.g. your preferred platform, your domain name, your network address (if known) and any operators you will require etc.
+
+Now, continue with either 'Disconnected scenario' or 'Fully disconnected (air-gapped) scenario' below. 
+
+[Back to top](#who-should-use-aba)
+
 
 
 ### Disconnected Scenario 
