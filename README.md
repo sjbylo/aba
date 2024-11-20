@@ -75,6 +75,7 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 [Back to top](#who-should-use-aba)
 
+
 ## Prerequisites
 
 ### Fully Disconnected (Air-Gapped) Prerequisites
@@ -199,6 +200,52 @@ Note that this command will create the `aba.conf` file which contains some value
 Now, continue with either 'Disconnected scenario' or 'Fully disconnected (air-gapped) scenario' below. 
 
 [Back to top](#who-should-use-aba)
+
+
+## Creating a bundle archive with everything you need to install OpenShift in an air-gapped network
+
+You need to download a set of images to install a particular version of OpenShift into a fully disconnected (air-gapped) netork?
+
+Here is how you can use Aba to create a `bundle archive` to do that!
+
+Store your pull secret in this file:
+
+```
+~/.pull-secret.json
+```
+
+Run these commands on a RHEL 9 or Fedora VM: 
+
+```
+git clone https://github.com/sjbylo/aba.git
+cd aba
+```
+
+Connect your large USB media stick (or other device) into your VM and create/write the `bundle archive` onto it:
+
+```
+v=4.17.3
+./aba bundle --channel stable --version $v --op-sets ocp acm ocpv odf appdev --ops web-terminal --out - | split -b 10G - /path/to/your/large/space/filesystem/ocp_mycluster_${v}_ # Note: this is all one command
+```
+
+- This will generate several 10GB files: ocp_mycluster_4.17.3_aa|ab|ac... etc 
+- For the above option "--op-sets", see the sets of operators defined in the files `templates/operator-set-*`
+- If needed, add individual operators after "--ops"
+
+Copy the files to a RHEL9 box wthin the private network. 
+
+Unpack the bundle archive, e.g: 
+
+```
+mkdir mycluster
+cd mycluster
+cat /path/to/ocp_mycluster_4.14.40_* | tar xvf -  # to check and extract the bundle archive
+cd aba
+./aba      # Run aba if you want Aba to install & load the mirror registry for you
+```
+
+You will find the large image set file under `aba/mirror/save`.
+
 
 ### Disconnected Scenario 
 

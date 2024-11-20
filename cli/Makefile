@@ -62,9 +62,6 @@ openshift-client-linux-$(ocp_version).tar.gz:  ## Downlaod oc tarball
 	echo Downlaoding openshift-client-linux-$(ocp_version).tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-linux-$(ocp_version).tar.gz
 
-#https://mirror.openshift.com/pub/openshift-v4/aarch64/clients/ocp/latest/oc-mirror.rhel9.tar.gz
-
-
 # Be sure that the correct version is installed by creating .*installed flag file
 ########################################
 ~/bin/openshift-install: .init .$(ocp_version)-openshift-install-linux-installed ## Install openshift-install into ~/bin
@@ -98,7 +95,7 @@ oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 
 govc_Linux_x86_64.tar.gz:   ## Download govc tarball
 	echo Downlaoding govc_Linux_x86_64.tar.gz
-	curl -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz"
+	curl --progress-bar -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz"
 
 ~/bin/butane: butane-binary
 	cp butane-binary ~/bin/butane
