@@ -1,4 +1,5 @@
 #!/bin/bash -e
+# Create the cluster build dir
 
 source scripts/include_all.sh
 
@@ -9,20 +10,16 @@ cluster_type=standard
 [ "$1" ] && name=$1 && shift
 [ "$1" ] && cluster_type=$1 && shift
 [ "$1" ] && target=$1
-##[ "$1" ] && set -x
 
 if [ ! -d $name ]; then
 	mkdir $name
 	cd $name
 	ln -fs ../templates/Makefile 
-	make init
+	make -s init
 else
 	cd $name 
-	make clean init
+	make -s clean init
 fi
-
-pwd
-#make cluster.conf name=$name
 
 echo_magenta "Creating '$name/cluster.conf' file for cluster type '$cluster_type'."
 scripts/create-cluster-conf.sh $name $cluster_type
@@ -40,15 +37,18 @@ if [ "$ask" ]; then
 	exit 0
 fi
 
-if ask $msg; then
-	make $target
+make $target
 
-	echo 
-	[ "$target" ] && echo_cyan "To continue working on this cluster, change into the directory '$name'. Example: cd $name; make $target"
-	echo
-else
-	echo 
-	echo_cyan "To continue working on this cluster, change into the directory '$name' and run 'make'.  Example: cd $name; make"
-	echo
-fi
+#if ask $msg; then
+#	make $target
+#
+#	echo 
+#	[ "$target" ] && 
+#	echo_cyan "To continue working on this cluster, change into the directory '$name'. Example: cd $name; make $target"
+#	echo
+#else
+#	echo 
+#	echo_cyan "To continue working on this cluster, change into the directory '$name' and run 'make'.  Example: cd $name; make"
+#	echo
+#fi
 
