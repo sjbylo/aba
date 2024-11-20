@@ -217,7 +217,7 @@ v=4.17.3
 
 Create the bundle archive with this single command:
 ```
-./aba bundle --channel stable --version $v --op-sets ocp acm ocpv odf appdev --ops web-terminal --out - | split -b 10G - /path/to/your/large/space/filesystem/ocp_mycluster_${v}_
+./aba bundle --channel stable --version $v --op-sets ocp acm ocpv odf appdev --ops web-terminal --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
 ```
 
 - This will generate several 10GB files: ocp_mycluster_4.17.3_aa|ab|ac... etc 

@@ -36,7 +36,7 @@ cli-oc-mirror:
 	@make -sC ../cli ~/bin/oc-mirror
 
 imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the intial image set config file with all provided values and operators
-isconf: imagesetconfig ## Same as imagesetconf
+isconf: imagesetconf ## Same as imagesetconf
 
 sync/imageset-config-sync.yaml:
 	$(SCRIPTS)/reg-create-imageset-config-sync.sh
