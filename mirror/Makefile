@@ -28,12 +28,12 @@ init: .init
 
 .PHONY: cli-download
 cli-download:
-	@make -C ../cli download 
+	@make -sC ../cli download 
 
 # Only needed for 'make load'. 
 .PHONY: cli-oc-mirror
 cli-oc-mirror:
-	@make -C ../cli ~/bin/oc-mirror
+	@make -sC ../cli ~/bin/oc-mirror
 
 imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the intial image set config file with all provided values and operators
 isconf: imagesetconfig ## Same as imagesetconf
@@ -46,7 +46,7 @@ save/imageset-config-save.yaml:
 
 ## If vmware.conf does not exist, then create it
 #../vmware.conf:
-#	@make -C .. vmware.conf
+#	@make -sC .. vmware.conf
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
@@ -138,15 +138,15 @@ uninstallclean:
 
 .PHONY: tar
 tar:   ## Create a full tar backup of ~/aba & ~/bin, ready to be transported to your private network.
-	@make -s -C .. tar $(out)
+	@make -sC .. tar $(out)
 
 .PHONY: tarrepo
 tarrepo:   ## Same as 'make tar' but excludes all 'mirror_seq*tar' files under mirror/save/.
-	@make -s -C .. tarrepo $(out)
+	@make -sC .. tarrepo $(out)
 
 .PHONY: inc
 inc:   ## Same as 'make tar' except a timestamp file is used to only backup files that have changed since the last 'make inc' was run.
-	@make -s -C .. inc $(out)
+	@make -sC .. inc $(out)
 
 .PHONY: index
 index: init catalog
@@ -154,7 +154,7 @@ index: init catalog
 .PHONY: catalog
 # -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
 catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
-	@make -s -C ../cli ~/bin/oc-mirror
+	@make -sC ../cli ~/bin/oc-mirror
 	@$(SCRIPTS)/download-operator-index.sh
 
 #uninstall: .init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  

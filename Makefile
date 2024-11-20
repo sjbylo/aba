@@ -23,7 +23,7 @@ help: ## Help
 
 init: aba .init
 .init: 
-	@make -C mirror rpms
+	@make -sC mirror rpms
 
 ###vmw: vmware.conf  ## Configure and use vSphere or ESXi to install OpenShift
 ###vmware.conf:
@@ -32,21 +32,21 @@ vmw:
 	$(SCRIPTS)/install-vmware.conf.sh
 
 cli:  ## Download and install the CLI binaries into ~/bin
-	@make -C cli
+	@make -sC cli
 
 download:  ## Download all required CLI install files without installing. 
-	@make -C cli download
+	@make -sC cli download
 
 mirror: install
 install: ## Set up the registry as per the settings in mirror/mirror.conf. Place credential file(s) into mirror/regcreds/ for existing registry.  See README.md.
-	@make -C mirror install
+	@make -sC mirror install
 
 uninstall: ## Uninstall any previously installed mirror registry  
-	@make -C mirror uninstall
+	@make -sC mirror uninstall
 
 .PHONY: sync
 sync: ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
-	@make -C mirror sync
+	@make -sC mirror sync
 
 # These are the targets needed to create the 'bundle' archive
 .PHONY: bundle
@@ -56,7 +56,7 @@ bundle:  ## Create a bundle archive of content to be carried into the air-gapped
 
 .PHONY: save
 save: ## Save images from the Internet to mirror/save. 
-	@make -C mirror save 
+	@make -sC mirror save 
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. make tar out=/dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use out=- to send tar output to stdout.
@@ -77,7 +77,7 @@ inc:  ## Create an incremental archive of the repo. The incremental files to inc
 
 .PHONY: load
 load: ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
-	@make -C mirror load
+	@make -sC mirror load
 
 .PHONY: sno
 sno: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make sno target=iso' to make that target.
@@ -115,8 +115,8 @@ setnoask: noask
 
 .PHONY: clean
 clean: ## Clean up all temporary files.
-	make -C mirror clean 
-	make -C test clean 
+	make -sC mirror clean 
+	make -sC test clean 
 	rm -f ~/.aba.previous.backup
 	rm -f ~/.aba.conf.created
 	rm -f .aba.conf.seen
@@ -127,7 +127,7 @@ distclean: # Clean up *everything*.  Only use if you know what you are doing! No
 	make clean
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
-	make -C cli distclean 
-	make -C mirror distclean 
+	make -sC cli distclean 
+	make -sC mirror distclean 
 	rm -f aba.conf ~/.aba.conf*
 

@@ -51,7 +51,7 @@ if [ "$bundle_dest_path" = "-" ]; then
 	echo "Downloading binary data.  See logfile '.bundle.log' for details." >&2
 
 	make -s download save retry=7 2>&1 | cat -v >>.bundle.log
-	make -s tar out=-
+	make -s tar out=-   # Be sure the output of this command is ONLY tar output!
 
 	exit
 fi
