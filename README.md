@@ -210,16 +210,21 @@ cd aba
 
 Connect your large USB media stick (or other device) into your VM and create/write the `bundle archive` onto it:
 
+Set the version you want to install:
 ```
 v=4.17.3
-./aba bundle --channel stable --version $v --op-sets ocp acm ocpv odf appdev --ops web-terminal --out - | split -b 10G - /path/to/your/large/space/filesystem/ocp_mycluster_${v}_ # Note: this is all one command
+```
+
+Create the bundle archive with this single command:
+```
+./aba bundle --channel stable --version $v --op-sets ocp acm ocpv odf appdev --ops web-terminal --out - | split -b 10G - /path/to/your/large/space/filesystem/ocp_mycluster_${v}_
 ```
 
 - This will generate several 10GB files: ocp_mycluster_4.17.3_aa|ab|ac... etc 
-- For the above option "--op-sets", see the sets of operators defined in the files `templates/operator-set-*`
+- The --op-sets option refers to predefined operator sets in `templates/operator-set-*`.
 - If needed, add individual operators after "--ops"
 
-Copy the files to a RHEL9 box wthin the private network. 
+Copy the files to a RHEL 9 machine wthin the private network. 
 
 Unpack the bundle archive, e.g: 
 
