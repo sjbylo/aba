@@ -5,7 +5,7 @@
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 
-arch := $(strip $(shell uname -i))
+arch := $(strip $(shell uname -m))
 
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
