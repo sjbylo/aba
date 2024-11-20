@@ -4,3 +4,5 @@ lvms-operator
 mtv-operator
 node-maintenance-operator
 node-healthcheck-operator
+cluster-kube-descheduler-operator
+metallb-operator
