@@ -15,7 +15,7 @@ Use Aba if you want to get OpenShift up and running quickly in an air-gapped env
    1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
 1. [A Very Quick Guide](#a-very-quick-guide)
 1. [Getting Started with Aba](#getting-started-with-aba)
-1. [Creating a bundle archive with everything you need to install OpenShift in an air-gapped network](#Creating a bundle archive with everything you need to install OpenShift in an air-gapped network)
+1. [Creating a bundle archive with everything you need to install OpenShift in an air-gapped network](#Creating-a-bundle-archive-with-everything-you-need-to-install-OpenShift-in-an-air-gapped-network)
    1. [Disconnected Scenario](#disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
