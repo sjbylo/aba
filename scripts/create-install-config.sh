@@ -101,7 +101,7 @@ elif [ "$proxy" = "auto" ]; then
 		echo_red "set the '*_proxy' values in 'cluster.conf'" >&2
 	fi
 else
-	echo_white "Not configuring the cluster wide proxy since no (or not enough) proxy values are defined in cluster.conf (at least http_proxy and https_proxy are required)."
+	echo_white "Not configuring the cluster wide proxy since proxy values not set in cluster.conf."
 fi
 
 # ... we also, need a root CA... if using our own registry.
