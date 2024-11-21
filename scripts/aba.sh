@@ -15,6 +15,7 @@ if [ ! -f aba.conf ]; then
 
 	# Initial prep for interactive mode
 	sed -i "s/^ocp_version=[^ \t]*/ocp_version= /g" aba.conf
+	sed -i "s/^ocp_channel=[^ \t]*/ocp_channel= /g" aba.conf
 	sed -i "s/^editor=[^ \t]*/editor= /g" aba.conf
 fi
 
@@ -233,14 +234,10 @@ cat others/message.txt
 # Determine if this is an "aba bundle" or just a clone from GitHub
 
 if [ ! -f .bundle ]; then
-	#echo "Fresh GitHub clone of Aba repo detected!"
+	# Fresh GitHub clone of Aba repo detected!
 
-	##############################################################################################################################
-	# Check if online
 	echo -n "Checking Internet connectivity ..."
-
-	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # ocp/eus/release.txt does not exist!
-	if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt > /tmp/.release.txt; then
+	if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.release.txt; then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
 		echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again." >&2
@@ -249,6 +246,39 @@ if [ ! -f .bundle ]; then
 	fi
 
 	[ "$TERM" ] && tput el1 && tput cr
+
+	##############################################################################################################################
+	# Determine OCP channel
+
+	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # .../ocp/eus/release.txt does not exist!
+
+	if [ "$ocp_channel" ]; then
+		echo_cyan "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
+	else
+		echo_cyan -n "Which OpenShift update channel do you want to use? (f)ast, (s)table, or (c)andidate) [stable]: "
+		read ans
+		[ ! "$ans" ] && ocp_channel=stable
+		[ "$ans" = "f" ] && ocp_channel=fast
+		[ "$ans" = "s" ] && ocp_channel=stable
+		#[ "$ans" = "e" ] && ocp_channel=eus
+		[ "$ans" = "c" ] && ocp_channel=candidate
+
+		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$ocp_channel /g" aba.conf
+		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
+		sleep 0.5
+	fi
+
+	##############################################################################################################################
+	# Fetch release.txt
+
+	if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt > /tmp/.release.txt; then
+		[ "$TERM" ] && tput el1 && tput cr
+		echo_red "Failed to access https://mirror.openshift.com" >&2
+
+		exit 1
+	fi
+
+	###[ "$TERM" ] && tput el1 && tput cr
 
 	##############################################################################################################################
 	# Determine OCP version 
@@ -304,7 +334,7 @@ if [ ! -f .bundle ]; then
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver /g" aba.conf
 		echo_cyan "'ocp_version' set to '$target_ver' in aba.conf"
 
-		sleep 1
+		sleep 0.5
 	fi
 
 	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
@@ -319,7 +349,8 @@ if [ ! -f .bundle ]; then
 
 	if [ ! "$editor" ]; then
 		echo
-		echo -n "Aba can use an editor to aid in the workflow. Enter your preferred editor or set to 'none' if you prefer to edit the configuration files manually  ('vi', 'nano' etc or 'none')? [vi]: "
+		echo    "Aba can use an editor to aid in the workflow."
+		echo -n "Enter your preferred editor or set to 'none' if you prefer to edit the configuration files yourself ('vi', 'nano' etc or 'none')? [vi]: "
 		read new_editor
 
 		[ ! "$new_editor" ] && new_editor=vi  # default
@@ -335,7 +366,7 @@ if [ ! -f .bundle ]; then
 		export editor=$new_editor
 		echo_cyan "'editor' set to '$new_editor' in aba.conf"
 
-		sleep 1
+		sleep 0.5
 	fi
 
 	##############################################################################################################################
@@ -344,7 +375,7 @@ if [ ! -f .bundle ]; then
 	if [ ! -f .aba.conf.seen ]; then
 		touch .aba.conf.seen
 
-		edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, ocp version, pull secret, default base domain, default net address etc (if known)" || exit 1
+		edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, pull secret, default base domain & net address, dns & ntp etc (if known)" || exit 1
 	fi
 
 
@@ -360,7 +391,7 @@ if [ ! -f .bundle ]; then
 		make -s -C mirror init >/dev/null 2>&1
 		( cd mirror; scripts/download-operator-index.sh --background > .fetch-index.log 2>&1)
 
-		sleep 1
+		sleep 0.5
 	else
 		echo
 		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
