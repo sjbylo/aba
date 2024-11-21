@@ -5,12 +5,31 @@
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 
+os   := $(strip $(shell uname -o))
 arch := $(strip $(shell uname -m))
 
+# Normalize 'os' variable
+ifeq ($(os),GNU/Linux)
+	os := linux
+else ifeq ($(os),Darwin)
+	os := mac
+endif
+
+# Normalize 'arch' variable for macOS
+ifeq ($(os),mac)
+	ifeq ($(arch),arm64)
+		arch := aarch64
+	endif
+endif
+
+#ifneq ($(filter distclean,$(MAKECMDGOALS)),)
+
+# Include aba.conf if it exists
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
 
-#all: ../aba.conf ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc
+#endif
+
 all:             ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc ~/bin/butane
 
 # If 'distclean' found in $MAKECMDGOALS, i.e. no distclean provided
@@ -26,7 +45,7 @@ else
   endif
 endif
 
-download: openshift-client-linux-$(ocp_version).tar.gz openshift-install-linux-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
+download: openshift-client-$(os)-$(ocp_version).tar.gz openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
 
 ##@ Help-related tasks
 .PHONY: help
@@ -43,44 +62,41 @@ help: ## Help
 	@echo "aba.conf missing! Please read the README on how to get started!"
 	@exit 1
 
-#../aba.conf:
-#	@#../aba --version latest
-#	@# This is only needed becase it gets executed for some reason
-#	echo ocp_version=4.16.10 > ../aba.conf
-
-# Be sure that the correct version is installed by creating .*installed flag file
 ########################################
-#~/bin/oc: .init openshift-client-linux-$(ocp_version).tar.gz ## Install oc into ~/bin
-~/bin/oc: .init .$(ocp_version)-openshift-client-linux-installed  ## Install oc into ~/bin
-	tar -C ~/bin -xmzf openshift-client-linux-$(ocp_version).tar.gz oc kubectl
-
-.$(ocp_version)-openshift-client-linux-installed: openshift-client-linux-$(ocp_version).tar.gz
-	@rm -f .??*-openshift-client-linux-installed
-	@touch .$(ocp_version)-openshift-client-linux-installed 
-
-openshift-client-linux-$(ocp_version).tar.gz:  ## Downlaod oc tarball 
-	echo Downlaoding openshift-client-linux-$(ocp_version).tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-linux-$(ocp_version).tar.gz
-
 # Be sure that the correct version is installed by creating .*installed flag file
+
+~/bin/oc: .init .$(ocp_version)-openshift-client-$(os)-installed  ## Install oc into ~/bin
+	tar -C ~/bin -xmzf openshift-client-$(os)-$(ocp_version).tar.gz oc kubectl
+
+.$(ocp_version)-openshift-client-$(os)-installed: openshift-client-$(os)-$(ocp_version).tar.gz
+	@rm -f .??*-openshift-client-$(os)-installed
+	@touch .$(ocp_version)-openshift-client-$(os)-installed 
+
+openshift-client-$(os)-$(ocp_version).tar.gz:  ## Downlaod oc tarball 
+	echo Downlaoding openshift-client-$(os)-$(ocp_version).tar.gz
+	@echo https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-$(ocp_version).tar.gz
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-$(ocp_version).tar.gz
+
 ########################################
-~/bin/openshift-install: .init .$(ocp_version)-openshift-install-linux-installed ## Install openshift-install into ~/bin
-	tar -C ~/bin -xmzf openshift-install-linux-$(ocp_version).tar.gz openshift-install
+# Be sure that the correct version is installed by creating .*installed flag file
 
-.$(ocp_version)-openshift-install-linux-installed: openshift-install-linux-$(ocp_version).tar.gz
-	@rm -f .??*-openshift-install-linux-installed
-	@touch .$(ocp_version)-openshift-install-linux-installed 
+~/bin/openshift-install: .init .$(ocp_version)-openshift-install-$(os)-installed ## Install openshift-install into ~/bin
+	tar -C ~/bin -xmzf openshift-install-$(os)-$(ocp_version).tar.gz openshift-install
 
-openshift-install-linux-$(ocp_version).tar.gz:  ## Download openshift-install tarball
-	echo Downlaoding openshift-install-linux-$(ocp_version).tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-linux-$(ocp_version).tar.gz
+.$(ocp_version)-openshift-install-$(os)-installed: openshift-install-$(os)-$(ocp_version).tar.gz
+	@rm -f .??*-openshift-install-$(os)-installed
+	@touch .$(ocp_version)-openshift-install-$(os)-installed 
+
+openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install tarball
+	echo Downlaoding openshift-install-$(os)-$(ocp_version).tar.gz
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
 
 ########################################
 ~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz ~/bin/oc   ## Install oc-mirror into ~/bin
-	@grep -oP '(?<=VERSION_ID=")[^"]+' /etc/os-release | grep "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
+	###@grep -oP '(?<=VERSION_ID=")[^"]+' /etc/os-release | grep "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
+	@grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f2 | tr -d '"' | grep "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
 
-# Version 4.14 has bug fixes 
 oc-mirror.tar.gz: ## Download oc-mirror tarball
 	echo Downlaoding oc-mirror.tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.tar.gz	
@@ -91,7 +107,7 @@ oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 
 ########################################
 ~/bin/govc: .init govc_Linux_x86_64.tar.gz    ## Install govc into ~/bin
-	tar -C ~/bin -xmzf govc_Linux_$(arch).tar.gz govc
+	tar -C ~/bin -xmzf govc_Linux_x86_64.tar.gz govc
 
 govc_Linux_x86_64.tar.gz:   ## Download govc tarball
 	echo Downlaoding govc_Linux_x86_64.tar.gz
