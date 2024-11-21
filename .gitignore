@@ -53,3 +53,4 @@ cli/.*installed
 .??*.log
 aba.conf.bk
 templates/operator-set-abatest
+.aba.conf.seen
