@@ -487,6 +487,6 @@ else
 	echo
 fi
 
-echo "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the subsequent instructions."
+echo "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
 echo
 

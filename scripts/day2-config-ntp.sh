@@ -128,5 +128,5 @@ oc apply -f 99-master-chrony-conf-override.yaml
 oc apply -f 99-worker-chrony-conf-override.yaml
 
 echo
-echo "OpenShift will now configure NTP on all nodes.  Node restart is required and will take some time to complete."
+echo "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
 echo

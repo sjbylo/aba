@@ -40,7 +40,7 @@ if [ "$(oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata
 		oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | \
 			xargs -P 5 oc adm certificate approve
 	
-		sleep 20 # This is the time we wait to see if there are any more still CSRs to approve
+		sleep 30 # This is the time we wait to see if there are any more CSRs to approve
 	done
 else
 	echo "No CSRs exist. Nothing to do!" 
