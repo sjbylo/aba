@@ -1,0 +1,8 @@
+ocs-operator
+odf-operator
+mcg-operator
+odf-csi-addons-operator
+odr-cluster-operator
+odr-hub-operator
+local-storage-operator
+odf-multicluster-orchestrator
