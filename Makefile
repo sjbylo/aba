@@ -1,3 +1,4 @@
+# Top level Makefile
 .SILENT:
 
 TEMPLATES = templates
@@ -14,6 +15,10 @@ aba:  ## Run the ./aba script to sert up 'aba.conf'
 
 aba.conf:
 	./aba
+
+.PHONY: interactive
+interactive:
+	$(SCRIPTS)/aba-interactive.sh
 
 ##@ Help-related tasks
 

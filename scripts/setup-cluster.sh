@@ -37,7 +37,7 @@ if [ "$ask" ]; then
 	exit 0
 fi
 
-make $target
+make -s $target
 
 #if ask $msg; then
 #	make $target
