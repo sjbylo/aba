@@ -1,0 +1,30 @@
+#!/bin/bash
+# Simple Aba installer.  Copy aba command somewhere into the $PATH
+
+cd $(dirname $0)
+
+if [ -x aba ]; then
+	if [[ "$PATH" =~ "/usr/local/bin:" ]]; then
+		sudo cp -p aba /usr/local/bin && echo "aba has been installed to /usr/local/bin" && exit 0
+	fi
+
+	if [[ "$PATH" =~ "$HOME/bin:" ]]; then
+		mkdir -p $HOME/bin
+		cp -p aba $HOME/bin
+	fi
+
+	if [ $? -eq 0 ]; then
+		echo "aba has been installed to $HOME/bin"
+
+		exit 0
+	else
+		echo "Please copy aba into your PATH"
+
+		exit 1
+	fi
+else
+	echo "aba file not found in $PWD"
+
+	exit 1
+fi
+
