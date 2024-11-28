@@ -60,16 +60,16 @@ if [ ! "$1" ]; then
 
 	# clean up all, assuming reg. is not running (deleted)
 	#test-cmd "echo ocp_version=$v > aba.conf"
-	####make -C ~/aba distclean force=1
-	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
+	####make -C ~/aba distclean --force
+	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force 1; rm -rf cli && mv cli.m cli
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
 
 	rm -f aba.conf
 	vf=~/.vmware.conf
 	[ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
-	test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" ./aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
-	#test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" ./aba --version latest ## --vmw $vf
+	test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
+	#test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ## --vmw $vf
 	# Set up govc 
 	cp $vf vmware.conf 
 	sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
@@ -171,7 +171,8 @@ test-cmd -r 20 3 -m "Saving images to local disk on `hostname`" make save
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
 mylog "'make tar' and copy (ssh) files over to internal bastion: steve@$int_bastion"
-test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion" "make -s -C mirror tar out=- | ssh steve@$int_bastion -- tar -C $subdir -xvf -"
+test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion" "aba -d mirror tar --out - | ssh steve@$int_bastion -- tar -C $subdir -xvf -"
+test-cmd -h steve@$int_bastion -m "Install aba" "$subdir/aba/install"
 
 test-cmd -i -h steve@$int_bastion -m "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "make -C $subdir/aba load" # This user's action is expected to fail since there are no login credentials for the "existing reg."
 
@@ -329,10 +330,10 @@ test-cmd -h steve@$int_bastion -m "If cluster up, stopping cluster" ". <(make -s
 
 ## keep it up # test-cmd -m "Clean up 'existing' mirror registry on internal bastion" test/reg-test-uninstall-remote.sh $int_bastion
 
-#test-cmd "make distclean force=1"
+#test-cmd "make distclean --force"
 
-## keep it up # make -C ~/aba distclean force=1
-## keep it up # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
+## keep it up # make -C ~/aba distclean --force
+## keep it up # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean --force; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"

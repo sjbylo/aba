@@ -38,10 +38,10 @@ if [ $ret -ne 0 ]; then
 else
 	echo 
 	echo_green "The cluster has been successfully installed."
-	echo_green "Run '. <(make shell)' to access the cluster using the kubeconfig file (x509 cert), or"
-	echo_green "Run '. <(make login)' to log into the cluster using the 'kubeadmin' password. "
-	[ -d regcreds ] && echo_green "Run 'make day2' to connect this cluster with your mirror registry."
-	echo_green "Run 'make day2-ntp' to connect this cluster with your NTP server(s)."
-	echo_green "Run 'make help' for more options."
+	echo_green "Run '. <(aba shell)' to access the cluster using the kubeconfig file (x509 cert), or"
+	echo_green "Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password. "
+	[ -d regcreds ] && echo_green "Run 'aba day2' to connect this cluster with your mirror registry."
+	echo_green "Run 'aba day2-ntp' to connect this cluster with your NTP server(s)."
+	echo_green "Run 'aba help' for more options."
 fi
 

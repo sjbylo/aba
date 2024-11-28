@@ -10,7 +10,7 @@ scripts/install-govc.sh
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
-	echo "vmware.conf file not defined. Run 'make vmw' to create it if needed"
+	echo "vmware.conf file not defined. Run 'aba vmw' to create it if needed"
 	exit 0
 fi
 
@@ -25,7 +25,7 @@ echo Uploading image $ASSETS_DIR/agent.x86_64.iso to [$ISO_DATASTORE] images/age
 
 if ! govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.x86_64.iso images/agent-${CLUSTER_NAME}.iso | tee /dev/tty | grep -qi "Uploading.*OK"; then
 	# Since govc does not return non-zero on error we need to parse the output for non-success! 
-	output_error "Warning: ISO file may be attached to a running VM and cannot be overwritten.  Stop the VM first with 'make stop' and try again."
+	output_error "Warning: ISO file may be attached to a running VM and cannot be overwritten.  Stop the VM first with 'aba stop' and try again."
 
 	exit 1
 fi

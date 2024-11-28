@@ -35,7 +35,7 @@ if [ "$reg_code" = "200" ]; then
 	echo_red "Warning: Quay registry found at $reg_url/health/instance." >&2
 	echo_red "         To use this registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again." >&2
 	echo_red "         The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." >&2
-	echo_red "         The pull secret file can also be created and verified using 'make password'" >&2
+	echo_red "         The pull secret file can also be created and verified using 'aba password'" >&2
 	echo_red "         See the README.md for further instructions." >&2
 	echo 
 
@@ -51,7 +51,7 @@ if [ "$reg_code" = "200" ]; then
 	echo_red "Warning: Endpoint found at $reg_url/." >&2
 	echo_red "         If this is your existing registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." >&2
 	echo_red "         The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." >&2
-	echo_red "         The pull secret file can also be created and verified using 'make password'" >&2
+	echo_red "         The pull secret file can also be created and verified using 'aba password'" >&2
 	echo_red "         See the README.md for further instructions." >&2
 	echo 
 

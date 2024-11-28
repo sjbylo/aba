@@ -24,8 +24,8 @@ fi
 echo_magenta "Creating '$name/cluster.conf' file for cluster type '$cluster_type'."
 scripts/create-cluster-conf.sh $name $cluster_type
 
-msg="Install the cluster with 'cd $name; make'"
-[ "$target" ] && msg="Make the target '$target' with 'cd $name; make $target'"
+msg="Install the cluster with 'cd $name; aba'"
+[ "$target" ] && msg="Make the target '$target' with 'cd $name; aba $target'"
 
 # adding "exit 0" here to give best practise instuctions to cd into the cluster dir!
 if [ "$ask" ]; then
@@ -44,11 +44,11 @@ make -s $target
 #
 #	echo 
 #	[ "$target" ] && 
-#	echo_cyan "To continue working on this cluster, change into the directory '$name'. Example: cd $name; make $target"
+#	echo_cyan "To continue working on this cluster, change into the directory '$name'. Example: cd $name; aba $target"
 #	echo
 #else
 #	echo 
-#	echo_cyan "To continue working on this cluster, change into the directory '$name' and run 'make'.  Example: cd $name; make"
+#	echo_cyan "To continue working on this cluster, change into the directory '$name' and run 'aba'.  Example: cd $name; aba"
 #	echo
 #fi
 

@@ -43,9 +43,10 @@ cd ..
 touch aba/.bundle  # Flag this archive as a bundle
 rm -f aba/.aba.conf.seen   # Ensure user can be offered to edit this conf file again on the internal network
 
+#	aba/aba			\
+
 # All 'find expr' below are by default "and"
 file_list=$(find		\
-	aba/aba			\
 	aba/aba-*		\
 	aba/.bundle		\
 	aba/aba.conf		\
@@ -126,7 +127,7 @@ if [ "$dest" != "-" ]; then
 		echo_white "  cd aba"
 		echo_white "  ./aba"
 		echo
-		echo_white "Run 'make help' for all options."
+		echo_white "Run 'aba help' for all options."
 		echo
 	else
 		echo
@@ -145,7 +146,7 @@ if [ "$dest" != "-" ]; then
 		echo_white "  cd aba"
 		echo_white "  ./aba"
 		echo
-		echo_white "Run 'make help' for all options."
+		echo_white "Run 'aba help' for all options."
 		echo
 	fi
 fi

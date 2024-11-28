@@ -16,7 +16,7 @@ source <(normalize-mirror-conf)
 if [ -s save/mirror_seq1_000000.tar ]; then
 	echo 
 	echo_red "Warning: Existing image set archive files found at $PWD/save." >&2
-	echo_red "         Note that you also have the option to load them into the mirror registry at $reg_host (make load)?" >&2
+	echo_red "         Note that you also have the option to load them into the mirror registry at $reg_host (aba load)?" >&2
 	echo 
 
 	##ask "Continue with 'sync'" || exit 1
@@ -80,7 +80,7 @@ failed=1
 while [ $try -le $try_tot ]
 do
 	echo_cyan -n "Attempt ($try/$try_tot)."
-	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'make sync retry=<number>'" || echo
+	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba sync retry=<number>'" || echo
 	echo "Running: $(cat sync-mirror.sh)"
 	echo
 
@@ -105,6 +105,6 @@ echo_green -n "Images synchronized successfully!"
 echo 
 echo "OpenShift can now be installed with the command:"
 echo "  cd aba"
-echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."
+echo "  aba cluster --name mycluster [--type <sno|compact|standard>]   # and follow the instructions."
 
 exit 0

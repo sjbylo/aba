@@ -7,7 +7,7 @@ if [ ! "$1" = "--exec" ]; then
 
 	# This will run locally and will copy and exec the rescue script (below)
 	if [ ! -f iso-agent-based/rendezvousIP ]; then
-		echo_red "Error: iso-agent-based/rendezvousIP file missing.  Run 'make' or 'make iso' to create it." >&2
+		echo_red "Error: iso-agent-based/rendezvousIP file missing.  Run 'aba' or 'aba iso' to create it." >&2
 
 		exit 1
 	fi

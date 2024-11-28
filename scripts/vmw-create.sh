@@ -13,7 +13,7 @@ NO_MAC=
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
-	echo_red "vmware.conf file not defined. Run 'make vmw' to create it if needed" >&2
+	echo_red "vmware.conf file not defined. Run 'aba vmw' to create it if needed" >&2
 
 	exit 0
 fi
@@ -186,4 +186,4 @@ for name in $WORKER_NAMES ; do
 done
 
 echo
-echo Now run: make mon
+echo Now run: aba mon

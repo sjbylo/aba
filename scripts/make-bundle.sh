@@ -31,7 +31,7 @@ echo >&2
 force=1 # FIXME
 if [ ! "$force" ]; then
 	if [ -s mirror/save/imageset-config-save.yaml -o -f mirror/mirror.conf ]; then
-		echo_red "This repo is already in use!  Use a fresh Aba repo or run 'make distclean' and try again!" >&2 >&2
+		echo_red "This repo is already in use!  Use a fresh Aba repo or run 'aba distclean' and try again!" >&2 >&2
 
 		exit 1
 	fi

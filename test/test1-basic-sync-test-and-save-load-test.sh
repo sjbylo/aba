@@ -32,7 +32,7 @@ source scripts/include_all.sh no-trap  # Need for below normalize fn() calls
 source test/include.sh
 trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 
-[ ! "$target_full" ] && default_target="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
+[ ! "$target_full" ] && default_target="--step iso"   # Default is to generate 'iso' only   # Default is to only create iso
 mylog default_target=$default_target
 
 mylog ============================================================
@@ -45,39 +45,41 @@ ntp_ip=10.0.1.8,10.0.1.8 # If available
 
 which make || sudo dnf install make -y
 
+./install 
+
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
-echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
-## this is wrong # make -C ~/aba distclean force=1
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
-#make clean
+echo ocp_version=$v > aba.conf  # needed so distclean works without calling aba (interactive). aba.conf is created below. 
+## this is wrong # aba --dir ~/aba distclean --force
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
+#aba clean
 
 # Set up aba.conf properly
 rm -f aba.conf
 vf=~/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
-test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" ./aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
+test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
 
 # Set up govc 
 cp $vf vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 
-test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." make noask
+test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noask
 
 #mylog "Setting ntp_servers=$ntp_ip" 
 #[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip    #\2/g" aba.conf
-[ "$ntp_ip" ] && test-cmd -m "Setting ntp_servers=$ntp_ip in aba.conf" ./aba --ntp $ntp_ip
+[ "$ntp_ip" ] && test-cmd -m "Setting ntp_servers=$ntp_ip in aba.conf" aba --ntp $ntp_ip
 
 #mylog "Setting op_sets=\"abatest\" in aba.conf"
 #sed -i "s/^op_sets=.*/op_sets=\"abatest\" /g" aba.conf
 echo kiali-ossm > templates/operator-set-abatest 
-test-cmd -m "Setting op_sets=\"abatest\" in aba.conf" ./aba --op-sets abatest
+test-cmd -m "Setting op_sets=\"abatest\" in aba.conf" aba --op-sets abatest
 
 source <(normalize-aba-conf)
 
 reg_ssh_user=$(whoami)
 
-make -C cli ~/bin/govc
+aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
 echo GOVC_URL=$GOVC_URL
 echo GOVC_DATASTORE=$GOVC_DATASTORE
@@ -139,7 +141,7 @@ ssh -i ~/.ssh/testy_rsa testy@$int_bastion whoami
 mylog "Confgure mirror to install registry on internal (remote) $int_bastion"
 
 # Create and edit mirror.conf 
-make -C mirror mirror.conf
+aba --dir mirror mirror.conf
 
 mylog "Setting 'reg_host' to '$int_bastion' in file 'mirror/mirror.conf'"
 sed -i "s/registry.example.com/$int_bastion /g" ./mirror/mirror.conf	# Install on registry2 
@@ -177,7 +179,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 ######################
 # This will install mirror and sync images
 mylog "Installing Quay mirror registry at $reg_host:$reg_port and then ..."
-test-cmd -r 20 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync
+test-cmd -r 20 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync
 
 # Install yq for below test only!
 which yq || (
@@ -202,10 +204,10 @@ do
 
         rm -rf $cname
 
-	test-cmd -m "Creating cluster.conf for $cname cluster with 'make $cname target=cluster.conf'" "make $cname target=cluster.conf"
+	test-cmd -m "Creating cluster.conf for $cname cluster with 'aba $cname --step cluster.conf'" "aba $cname --step cluster.conf"
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # make sure all mac addr are the same, not random
-        test-cmd -m "Creating install-config.yaml for $cname cluster" "make -C $cname install-config.yaml"
-        test-cmd -m "Creating agent-config.yaml for $cname cluster" "make -C $cname agent-config.yaml"
+        test-cmd -m "Creating install-config.yaml for $cname cluster" "aba --dir $cname install-config.yaml"
+        test-cmd -m "Creating agent-config.yaml for $cname cluster" "aba --dir $cname agent-config.yaml"
 
 	# There are only run on the very first run to generate the valis files
 	# Note that the files test/{sno,compact,standrd}/{install,agent}-config.yaml.example have all been committed into git 
@@ -238,7 +240,7 @@ do
                 exit 1
         fi
 
-        test-cmd -m "Generate iso file for cluster type '$cname'" "make -C $cname iso"
+        test-cmd -m "Generate iso file for cluster type '$cname'" "aba --dir $cname iso"
 done
 
 #####################################################################################################################
@@ -247,17 +249,17 @@ done
 
 ######################
 rm -rf sno
-test-cmd -m "Installing SNO cluster with 'make sno $default_target'" make sno $default_target
-test-cmd -i -m "Deleting sno cluster (if it was created)" make -C sno delete 
+test-cmd -m "Installing SNO cluster with 'aba sno $default_target'" aba sno $default_target
+test-cmd -i -m "Deleting sno cluster (if it was created)" aba --dir sno delete 
 
 #######################
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 20 3 -m "Saving and then loading cluster images into mirror" "make -C mirror save load" 
+test-cmd -r 20 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
 
 rm -rf sno
-test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
-test-cmd -m "Delete cluster (if needed)" make -C sno delete 
-test-cmd -m "Uninstall mirror" make -C mirror uninstall 
+test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
+test-cmd -m "Delete cluster (if needed)" aba --dir sno delete 
+test-cmd -m "Uninstall mirror" aba --dir mirror uninstall 
 test-cmd -h steve@$int_bastion -m "Verify mirror uninstalled" podman ps 
 test-cmd -h steve@$int_bastion -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
@@ -287,7 +289,7 @@ sed -i "s#reg_ssh_user=[^ \t]*#reg_ssh_user=testy   #g" ./mirror/mirror.conf	   
 mylog "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" 
 sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/testy_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
-# FIXME: no need? or use 'make clean' or?
+# FIXME: no need? or use 'aba clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
 
 #####################################################################################################################
@@ -300,14 +302,14 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 ######################
 # This will install the reg. and sync the images
-test-cmd -r 20 3 -m "Syncing images from external network to internal mirror registry" make -C mirror sync 
+test-cmd -r 20 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync 
 
-make -C sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
+aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and make should start from scratch next time
 
 ####mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 201"
 mylog "Testing install with smaller CIDR 10.0.1.200/30 with start ip 201"
-test-cmd -m "Configuring SNO cluster with 'make sno target=cluster.conf" make sno target=cluster.conf
+test-cmd -m "Configuring SNO cluster with 'aba sno --step cluster.conf" aba sno --step cluster.conf
 ###mylog "Setting CIDR 10.0.1.128/25"
 mylog "Setting CIDR 10.0.1.200/30"
 ###sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.128/25 #g" sno/cluster.conf
@@ -316,7 +318,7 @@ sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g" sno/cluster
 
 mylog "Setting starting_ip=201"
 sed -i "s/^starting_ip=[^ \t]*/starting_ip=201 /g" sno/cluster.conf
-test-cmd -m "Installing sno cluster" make sno
+test-cmd -m "Installing sno cluster" aba sno
 
 #####################################################################################################################
 #####################################################################################################################
@@ -324,13 +326,13 @@ test-cmd -m "Installing sno cluster" make sno
 
 #######################
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 20 3 -m "Saving and loading images into mirror" make -C mirror save load 
+test-cmd -r 20 3 -m "Saving and loading images into mirror" aba --dir mirror save load 
 
-make -C sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
-test-cmd -m "Installing sno cluster with 'make sno $default_target'" make sno $default_target
+aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
+test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
 
-### Let it be ## test-cmd -m "Deleting cluster" make -C sno delete.  -i ignore the return value, i.e. if cluster not running/accessible 
-test-cmd -i -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown wait=1"
+### Let it be ## test-cmd -m "Deleting cluster" aba --dir sno delete.  -i ignore the return value, i.e. if cluster not running/accessible 
+test-cmd -i -m "If cluster up, stopping cluster" ". <(aba -sC sno shell) && . <(aba -sC sno login) && yes|aba shutdown --dir sno --wait"
 
 ### FIXME mylog "Removing vmware config file to simulate 'bare metal' and iso creation"
 mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' file to simulate 'bare metal' and iso creation"
@@ -339,11 +341,11 @@ mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' fi
 sed -i "s/^platform=.*/platform=bm/g" aba.conf
 ####> vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
-####test-cmd -m "Creating standard iso file with 'make standard target=iso'" make standard target=iso # Since we're simulating bare-metal, only create iso
-test-cmd -m "Bare-metal simulation: Creating agent config files" make standard   	# Since we're simulating bare-metal, *make will stop* after creating agent configs 
-test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso        	# Since we're simulating bare-metal, only create iso
+####test-cmd -m "Creating standard iso file with 'aba standard --step iso'" aba standard --step iso # Since we're simulating bare-metal, only create iso
+test-cmd -m "Bare-metal simulation: Creating agent config files" aba standard   	# Since we're simulating bare-metal, *make will stop* after creating agent configs 
+test-cmd -m "Bare-metal simulation: Creating iso file" aba --dir standard iso        	# Since we're simulating bare-metal, only create iso
 
-#test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
+#test-cmd -m "Uninstalling mirror registry" aba --dir mirror uninstall 
 #test-cmd -h steve@$int_bastion -m "Verify mirror uninstalled" podman ps 
 #test-cmd -h steve@$int_bastion -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
@@ -352,8 +354,8 @@ test-cmd -m "Bare-metal simulation: Creating iso file" make -C standard iso     
 #####################################################################################################################
 
 # Must remove the old files under mirror/save 
-##make distclean force=1
-# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
+##make distclean --force
+# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean --force; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"

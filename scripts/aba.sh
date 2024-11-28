@@ -7,7 +7,7 @@ interactive_mode=1
 
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
 	if [ ! "$*" ]; then
-		aba -i	
+		exec aba -i
 	fi
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
 	#if [ ! "$*" ]; then
@@ -16,14 +16,26 @@ elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
 	interactive_mode=
 	:
 else
-	echo "Remember to change into Aba's top-level directory and try again: cd aba"
-	echo "Otherwise, clone Aba from GitHub: git clone https://github.com/sjbylo/aba.git && cd aba && ./install"
+	echo "Please run Aba from the top of its repository."
+	echo "For example: cd aba; aba --help"
+	echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
+	echo "Change into the Aba repository:       cd aba"
+	echo "Install Aba:                          ./install"
+	echo "Run Aba:                              aba --help" 
+
 	exit 1
 fi
 
 #dir=$(dirname $0)
 #cd $dir
 
+if [ ! -s scripts/include_all.sh -a -s ../scripts/include_all.sh ]; then
+	orig_dir=$PWD
+	cd .. 
+#else
+#	echo Abort
+#	exit 1
+fi
 source scripts/include_all.sh
 
 OTHER_OPTS=
@@ -55,10 +67,10 @@ Install & manage air-gapped OpenShift.
    a bootstrap node or even require DHCP.
 
 Usage:
-   ./aba				# Interactive mode.  Let Aba lead you through the process.
+   aba				# Interactive mode.  Let Aba lead you through the process.
 
 Usage:
-   ./$(basename $0) bundle \\	
+   $(basename $0) bundle \\	
 	[--channel <channel>] \\
 	 --version <version> \\
 	 --out </path/to/mybundle|-> \\
@@ -70,8 +82,12 @@ Usage:
    The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
    in air-gapped/fully disconnected environments. See below for other <<options>>.
 
+   $(basename $0) mirror 
+
+   $(basename $0) cluster --name <mycluster> [--type <sno|compact|standard>] [--step <step>] 
+
 Usage:
-   ./$(basename $0) <<options>>         # Update provided values in aba.conf
+   $(basename $0) <<options>>         # Update provided values in aba.conf
 
    <<options>>:
 	 --pull-secret <path/to/file>	# Location of your pull secret (json) file here. 
@@ -109,6 +125,7 @@ do
 		exit 0
 	elif [ "$1" = "-i" ]; then
 		interactive_mode=1
+		shift
 #	elif [ "$1" = "--debug" ]; then
 #		export DEBUG_ABA=1
 #		shift 
@@ -247,30 +264,33 @@ fi
 if [ ! "$interactive_mode" ]; then
 	# Translate the options not recognized above
 	echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS
-	args=$(echo "$OTHER_OPTS" | sed \
-		-e "s/--dir/-C/g" \
-		-e "s/\b-d/-C/g" \
-		-e "s/--name[ \t]*/name=/g" \
-		-e "s/\b-n[ \t]*/name=/g" \
-		-e "s/--type[ \t]*/type=/g" \
-		-e "s/\b-t[ \t]*/type=/g" \
-		-e "s/--step[ \t]*/target=/g" \
-		-e "s/\b-s[ \t]*/target=/g" \
-		-e "s/--out[ \t]*/out=/g" \
-		-e "s/\b-o[ \t]*/out=/g" \
-		-e "s/--force[ \t]*/force=/g" \
-		-e "s/\b-f[ \t]*/force=/g" \
-		-e "s/--cmd[ \t]*/cmd=/g" \
-		-e "s/\b-c[ \t]*/cmd=/g" \
-		-e "s/--retry[ \t]*/retry=/g" \
-		-e "s/\b-r[ \t]*/retry=/g" \
-		-e "s/--debug/debug=1/g" \
+
+	# Use sed -E -e 's/ --retry\s*/ retry=/' -e  's/ -r\s*/ retry=/g' 
+	args=$(echo "$OTHER_OPTS" | sed -E \
+		-e "s/ --dir\s*/ -C /g" \
+		-e "s/ -d\s*/ -C /g" \
+		-e "s/ --name\s*/ name=/g" \
+		-e "s/ -n\s*/ name=/g" \
+		-e "s/ --type\s*/ type=/g" \
+		-e "s/ -t\s*/ type=/g" \
+		-e "s/ --step\s*/ target=/g" \
+		-e "s/ -s\s*/ target=/g" \
+		-e "s/ --out\s*/ out=/g" \
+		-e "s/ -o\s*/ out=/g" \
+		-e "s/ --force\s*/ force=1/g" \
+		-e "s/ -f\s*/ force=1/g" \
+		-e "s/ --cmd\s*/ cmd=/g" \
+		-e "s/ -c\s*/ cmd=/g" \
+		-e "s/ --retry\s*/ retry=/g" \
+		-e "s/ -r\s*/ retry=/g" \
+		-e "s/ --debug\s*/ debug=1/g" \
 
 	)
 
-	echo $args | grep -e " -[a-z]" && echo Unknown ergs $args && exit 1
+	echo $args | grep -e " -[a-z]" && echo Unknown args $args && exit 1
 
 	echo DEBUG: Running: make -s $args
+	[ "$orig_dir" ] && cd $orig_dir
 	make -s $args
 	exit 
 fi
@@ -393,7 +413,7 @@ if [ ! -f .bundle ]; then
 	fi
 
 	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
-	# FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
+	# FIXME: Any better way to do this?! .. or just keep this check in 'aba sync' and 'aba save' (i.e. before we d/l the images
 	(
 		install_rpms make || exit 1
 		make -s -C mirror checkversion 
@@ -471,11 +491,11 @@ if [ ! -f .bundle ]; then
 		echo
 		echo_yellow Instructions
 		echo
-		echo "Run: make bundle out=/path/to/portable/media             # to save all images to local disk & then create the bundle archive"
-		echo "                                                         # (size ~20-30GB for a base installation)."
-		echo "     make bundle out=- | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
-		echo "     make bundle out=- | split -b 10G - ocp_             # Stream the archive and split it into several more managable files."
-		echo "                                                         # Unpack the files with: cat ocp_* | tar xvf - "
+		echo "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the bundle archive"
+		echo "                                                          # (size ~20-30GB for a base installation)."
+		echo "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
+		echo "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several more managable files."
+		echo "                                                          # Unpack the files with: cat ocp_* | tar xvf - "
 		echo
 
 		exit 0
@@ -490,7 +510,7 @@ if [ ! -f .bundle ]; then
 		echo 
 		echo_yellow Instructions
 		echo 
-		echo "Run: make cluster name=myclustername"
+		echo "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>]"
 		echo 
 
 		exit 1
@@ -504,11 +524,11 @@ if [ ! -f .bundle ]; then
 	echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 	echo
 	echo "Run:"
-	echo "  make mirror                 # to configure and/or install Quay."
-	echo "  make sync [retry=N]         # to sychnonize all container images - from the Internet - into your registry."
+	echo "  aba mirror                  # to configure and/or install Quay."
+	echo "  aba sync --retry N          # to sychnonize all container images - from the Internet - into your registry."
 	echo
 	echo "Or run:"
-	echo "  make mirror sync retry=8    # to complete both actions and ensure any image sync issues are retried."
+	echo "  aba mirror sync --retry 8   # to complete both actions and ensure any image sync issues are retried."
 	echo
 
 else
@@ -523,7 +543,7 @@ else
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_seq*tar 2>/dev/null)" ]; then
 		echo
-		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'make save') are copied to the 'aba/mirror/save' directory before following the instructions below!" >&2
+		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'aba save') are copied to the 'aba/mirror/save' directory before following the instructions below!" >&2
 		echo_red "         For example, run the command: cp /path/to/portable/media/mirror_seq*tar mirror/save" >&2
 	fi
 
@@ -535,10 +555,10 @@ else
 	echo "To store container images, Aba can install the Quay mirror appliance or you can utilize an existing container registry."
 	echo
 	echo "Run:"
-	echo "  make mirror                  # to configure and/or install Quay."
-	echo "  make load [retry=N]          # to set up the mirror registry (configure or install quay) and load it."
+	echo "  aba mirror                   # to configure and/or install Quay."
+	echo "  aba load --retry N           # to set up the mirror registry (configure or install quay) and load it."
 	echo "Or run:"
-	echo "  make mirror load retry=8     # to complete both actions and ensure any image load issues are retried."
+	echo "  aba mirror load --retry 8    # to complete both actions and ensure any image load issues are retried."
 	echo
 fi
 

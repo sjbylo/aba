@@ -35,7 +35,7 @@ fi
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
 if [ ! -d save ]; then
-	echo_red "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'make save' first on an external (Internet connected) bastion/laptop" >&2
+	echo_red "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'aba save' first on an external (Internet connected) bastion/laptop" >&2
 
 	exit 1
 fi
@@ -62,7 +62,7 @@ failed=1
 while [ $try -le $try_tot ]
 do
 	echo_cyan -n "Attempt ($try/$try_tot)."
-	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'make load retry=<number>'" || echo
+	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba load retry=<number>'" || echo
 	echo "Running: $(cat load-mirror.sh)"
 	echo
 
@@ -87,6 +87,6 @@ echo_green -n "Images loaded successfully!"
 echo 
 echo "OpenShift can now be installed with the command:"
 echo "  cd aba"
-echo "  make cluster name=mycluster [type=sno|compact|standard]   # and follow the instructions."
+echo "  aba cluster --name mycluster [--type <sno|compact|standard>]   # and follow the instructions."
 
 exit 0

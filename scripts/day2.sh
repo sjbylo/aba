@@ -20,7 +20,7 @@ export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 echo_white "What this 'day2' script does:"
 echo_white "- Add the internal mirror registry's Root CA to the cluster trust store."
 echo_white "- Configure OperatorHub to integrate with the internal mirror registry."
-echo_white "- Apply any/all imageContentSourcePolicy resource files under mirror/{save,sync}/oc-mirror-workspace that were created by oc-mirror (make sync/load)."
+echo_white "- Apply any/all imageContentSourcePolicy resource files under mirror/{save,sync}/oc-mirror-workspace that were created by oc-mirror (aba sync/load)."
 echo_white "- For fully disconnected environments, disable online public catalog sources."
 echo_white "- Install any CatalogSources found under mirror/{save,sync}/oc-mirror-workspace."
 echo_white "- Apply any release image signatures found under mirror/{save,sync}/oc-mirror-workspace."
@@ -95,7 +95,7 @@ if [ ! "$file_list" ]; then
 fi
 
 echo
-echo "Applying any imageContentSourcePolicy resource files that were created by oc-mirror under mirror/{save,sync}/oc-mirror-workspace* (make sync/load)"
+echo "Applying any imageContentSourcePolicy resource files that were created by oc-mirror under mirror/{save,sync}/oc-mirror-workspace* (aba sync/load)"
 echo
 
 # If one should clash with an existing ICSP resource, change its name by incrementing the value (-x) and try to apply it again.
@@ -171,7 +171,7 @@ if [ "$file_list" ]; then
 else
 	echo
 	echo_cyan "No Operator CatalogSources found under mirror/{save,sync}/oc-mirror-workspace (no operators mirrored?)."
-	echo_cyan "Operator images can be loaded into the mirror registry first by a) editing the mirror/save/imageset-config-save.yaml file and b) running 'make save/load'. See the README for more."
+	echo_cyan "Operator images can be loaded into the mirror registry first by a) editing the mirror/save/imageset-config-save.yaml file and b) running 'aba save/load'. See the README for more."
 	echo
 fi
 
