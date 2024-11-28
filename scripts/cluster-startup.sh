@@ -5,7 +5,7 @@ source scripts/include_all.sh
 
 [ "$1" ] && set -x
 
-[ ! -d iso-agent-based ] && echo_white "Cluster not installed!  Try running 'make clean; make' to install this cluster!" >&2 && exit 1
+[ ! -d iso-agent-based ] && echo_white "Cluster not installed!  Try running 'aba clean; aba' to install this cluster!" >&2 && exit 1
 
 unset KUBECONFIG
 cp iso-agent-based/auth.backup/kubeconfig iso-agent-based/auth/kubeconfig

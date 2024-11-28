@@ -36,7 +36,7 @@ if [ ! -s sync/imageset-config-sync.yaml ]; then
 	touch sync/.created
 else
 	echo_cyan "Using existing image set config file (save/imageset-config-sync.yaml)"
-	echo_cyan "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'make sync' again."
+	echo_cyan "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'aba sync' again."
 fi
 
 # This is needed since sometimes an existing registry may already be available
