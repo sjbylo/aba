@@ -74,7 +74,7 @@ vmware.conf: .init ## Use VMW vCenter or ESXi to create cluster.
 	@make -sC ../cli ~/bin/govc
 	@make -sC .. vmw
 	@#test -f ../vmware.conf &&                          ln -fs ../vmware.conf || true
-	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf || true
+	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo vmware.conf initialized || true
 
 cluster.conf: .init  ## Set up the OpenShift cluster.conf file.
 	$(SCRIPTS)/create-cluster-conf.sh $(name) $(type)
@@ -137,22 +137,22 @@ upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images
 
 # This target is a duplicate of .autorefresh below, except for the touch command.  'make refresh' is for interactive use and should always run.
 .PHONY: refresh
-refresh:  ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
+refresh: vmw agentconf  ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
 	$(SCRIPTS)/vmw-refresh.sh
 
 # This target is the same as 'refresh' but should only run once.
-.autorefresh: .init .autoupload vmware.conf 
+.autorefresh: .init .autoupload vmware.conf
 	$(SCRIPTS)/vmw-refresh.sh
 	@touch .autorefresh
 
 .PHONY: create
 #create: vmware.conf iso  ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
-create: .init vmware.conf      ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
+create: vmw agentconf      ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
 	@$(SCRIPTS)/vmw-exists.sh || $(SCRIPTS)/vmw-create.sh $(debug) && exit 0
 
 ###ls: vmware.conf  ## List VMs and their power state.
 .PHONY: ls
-ls: .init vmware.conf                     agent-config.yaml ## List all VMs and their power state.
+ls: vmw agentconf                 agent-config.yaml ## List all VMs and their power state.
 	@$(SCRIPTS)/vmw-ls.sh || echo "No vm(s).  Try running 'make' or 'make refresh'."
 
 .PHONY: shutdown 
@@ -229,9 +229,9 @@ remove-cdrom: vmware.conf  ## Remove the cdrom devide from all VMs
 	$(SCRIPTS)/vmw-remove-cdrom-device.sh
 
 .PHONY: vmw
-vmw: ## Configure vCenter/ESXi API credentials in vmware.conf file.
-	@[ ! -s ../vmware.conf ] && rm -f ../vmware.conf || true
-	@make -sC .. vmw
+vmw: vmware.conf ## Configure vCenter/ESXi API credentials in vmware.conf file.
+	#@[ ! -s ../vmware.conf ] && rm -f ../vmware.conf || true
+	#@make -sC .. vmw
 
 .PHONY: noask
 noask:  ## Set 'ask' in aba.conf to 'false'.  Aba will assume all defaults and not prompt you for anything which allows for fully automated installations.
