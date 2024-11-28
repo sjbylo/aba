@@ -11,10 +11,10 @@ SCRIPTS   = scripts
 
 .PHONY: aba
 aba:  ## Run the ./aba script to sert up 'aba.conf'
-	./aba
+	aba
 
 aba.conf:
-	./aba
+	aba
 
 .PHONY: interactive
 interactive:
@@ -42,6 +42,7 @@ cli:  ## Download and install the CLI binaries into ~/bin
 download:  ## Download all required CLI install files without installing. 
 	@make -sC cli download
 
+.PHONY: install
 mirror: install
 install: ## Set up the registry as per the settings in mirror/mirror.conf. Place credential file(s) into mirror/regcreds/ for existing registry.  See README.md.
 	@make -sC mirror install

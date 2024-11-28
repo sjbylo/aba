@@ -3,9 +3,17 @@
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." && exit 1
 
+interactive_mode=1
+
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
-	:
+	if [ ! "$*" ]; then
+		aba -i	
+	fi
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
+	#if [ ! "$*" ]; then
+		#cd ..
+	#fi
+	interactive_mode=
 	:
 else
 	echo "Remember to change into Aba's top-level directory and try again: cd aba"
@@ -18,7 +26,6 @@ fi
 
 source scripts/include_all.sh
 
-interactive_mode=1
 OTHER_OPTS=
 
 if [ ! -f aba.conf ]; then
@@ -102,9 +109,9 @@ do
 		exit 0
 	elif [ "$1" = "-i" ]; then
 		interactive_mode=1
-	elif [ "$1" = "--debug" ]; then
-		export DEBUG_ABA=1
-		shift 
+#	elif [ "$1" = "--debug" ]; then
+#		export DEBUG_ABA=1
+#		shift 
 	elif [ "$1" = "bundle" ]; then
 		ACTION=bundle
 		shift
@@ -239,28 +246,31 @@ fi
 
 if [ ! "$interactive_mode" ]; then
 	# Translate the options not recognized above
+	echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS
 	args=$(echo "$OTHER_OPTS" | sed \
 		-e "s/--dir/-C/g" \
-		-e "s/-d/-C/g" \
+		-e "s/\b-d/-C/g" \
 		-e "s/--name[ \t]*/name=/g" \
-		-e "s/-n[ \t]*/name=/g" \
+		-e "s/\b-n[ \t]*/name=/g" \
 		-e "s/--type[ \t]*/type=/g" \
-		-e "s/-t[ \t]*/type=/g" \
+		-e "s/\b-t[ \t]*/type=/g" \
 		-e "s/--step[ \t]*/target=/g" \
-		-e "s/-s[ \t]*/target=/g" \
+		-e "s/\b-s[ \t]*/target=/g" \
 		-e "s/--out[ \t]*/out=/g" \
-		-e "s/-o[ \t]*/out=/g" \
+		-e "s/\b-o[ \t]*/out=/g" \
 		-e "s/--force[ \t]*/force=/g" \
-		-e "s/-f[ \t]*/force=/g" \
+		-e "s/\b-f[ \t]*/force=/g" \
 		-e "s/--cmd[ \t]*/cmd=/g" \
-		-e "s/-c[ \t]*/cmd=/g" \
+		-e "s/\b-c[ \t]*/cmd=/g" \
 		-e "s/--retry[ \t]*/retry=/g" \
-		-e "s/-r[ \t]*/retry=/g" \
+		-e "s/\b-r[ \t]*/retry=/g" \
 		-e "s/--debug/debug=1/g" \
 
 	)
 
-	###echo Running: make -s $args
+	echo $args | grep -e " -[a-z]" && echo Unknown ergs $args && exit 1
+
+	echo DEBUG: Running: make -s $args
 	make -s $args
 	exit 
 fi
