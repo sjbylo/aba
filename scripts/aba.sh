@@ -3,12 +3,23 @@
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." && exit 1
 
-dir=$(dirname $0)
-cd $dir
+if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
+	:
+elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
+	:
+else
+	echo "Remember to change into Aba's top-level directory and try again: cd aba"
+	echo "Otherwise, clone Aba from GitHub: git clone https://github.com/sjbylo/aba.git && cd aba && ./install"
+	exit 1
+fi
+
+#dir=$(dirname $0)
+#cd $dir
 
 source scripts/include_all.sh
 
 interactive_mode=1
+OTHER_OPTS=
 
 if [ ! -f aba.conf ]; then
 	cp templates/aba.conf .
@@ -89,7 +100,9 @@ do
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		echo "$usage"
 		exit 0
-	elif [ "$1" = "--debug" -o "$1" = "-d" ]; then
+	elif [ "$1" = "-i" ]; then
+		interactive_mode=1
+	elif [ "$1" = "--debug" ]; then
 		export DEBUG_ABA=1
 		shift 
 	elif [ "$1" = "bundle" ]; then
@@ -126,7 +139,7 @@ do
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" aba.conf
 		target_ver=$ver
 		shift 
-	elif [ "$1" = "--domain" -o "$1" = "-d" ]; then
+	elif [ "$1" = "--domain" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 >&2 && exit 1
 		domain=$(echo $1 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
@@ -205,8 +218,11 @@ do
 		sed -i "s#^ask=[^ \t]*#ask=false #g" aba.conf
 		shift 
 	else
-		echo_red "Unknown option: $1" >&2
-		err=1
+		#echo_red "Unknown option: $1" >&2
+		#err=1
+		# Gather options and args not recognized above
+		OTHER_OPTS="$OTHER_OPTS $1"
+		#echo OTHER_OPTS=$OTHER_OPTS
 		shift 
 	fi
 done
@@ -219,7 +235,36 @@ if [ "$ACTION" = "bundle" ]; then
 	exit 
 fi
 
-[ ! "$interactive_mode" ] && exit 0
+#echo OTHER_OPTS=$OTHER_OPTS
+
+if [ ! "$interactive_mode" ]; then
+	# Translate the options not recognized above
+	args=$(echo "$OTHER_OPTS" | sed \
+		-e "s/--dir/-C/g" \
+		-e "s/-d/-C/g" \
+		-e "s/--name[ \t]*/name=/g" \
+		-e "s/-n[ \t]*/name=/g" \
+		-e "s/--type[ \t]*/type=/g" \
+		-e "s/-t[ \t]*/type=/g" \
+		-e "s/--step[ \t]*/target=/g" \
+		-e "s/-s[ \t]*/target=/g" \
+		-e "s/--out[ \t]*/out=/g" \
+		-e "s/-o[ \t]*/out=/g" \
+		-e "s/--force[ \t]*/force=/g" \
+		-e "s/-f[ \t]*/force=/g" \
+		-e "s/--cmd[ \t]*/cmd=/g" \
+		-e "s/-c[ \t]*/cmd=/g" \
+		-e "s/--retry[ \t]*/retry=/g" \
+		-e "s/-r[ \t]*/retry=/g" \
+		-e "s/--debug/debug=1/g" \
+
+	)
+
+	###echo Running: make -s $args
+	make -s $args
+	exit 
+fi
+
 # From now on it's all considered interactive
 
 source <(normalize-aba-conf)
