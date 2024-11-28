@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 # Start here, run this to get going!
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." && exit 1
@@ -341,7 +341,7 @@ if [ ! -f .bundle ]; then
 	# FIXME: Any better way to do this?! .. or just keep this check in 'make sync' and 'make save' (i.e. before we d/l the images
 	(
 		install_rpms make || exit 1
-		make -s -C mirror checkversion 2>/dev/null
+		make -s -C mirror checkversion 
 	) || exit 
 
 	##############################################################################################################################
