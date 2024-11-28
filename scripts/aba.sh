@@ -110,7 +110,8 @@ Usage:
 # for testing, if unset, testing will halt in edit_file()! 
 [ "$*" ] && \
 	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
-	interactive_mode=
+	interactive_mode= && \
+	args_processed=1
 
 # set defaults 
 ops_list=
@@ -294,6 +295,8 @@ if [ ! "$interactive_mode" ]; then
 	make -s $args
 	exit 
 fi
+
+[ "$args_processed" ] && exit 0
 
 # From now on it's all considered interactive
 
