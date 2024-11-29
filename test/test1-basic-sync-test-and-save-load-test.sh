@@ -45,6 +45,8 @@ ntp_ip=10.0.1.8,10.0.1.8 # If available
 
 which make || sudo dnf install make -y
 
+rm -f ~/bin/aba  # don't get mized up!
+rm -f /usr/local/bin/aba
 ./install 
 
 # clean up all, assuming reg. is not running (deleted)

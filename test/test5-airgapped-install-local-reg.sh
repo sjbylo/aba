@@ -30,7 +30,7 @@ source scripts/include_all.sh no-trap  # Need for below normalize fn() calls
 source test/include.sh
 trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 
-[ ! "$target_full" ] && default_target="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
+[ ! "$target_full" ] && default_target="--step iso"   # Default is to generate 'iso' only   # Default is to only create iso
 mylog default_target=$default_target
 
 ntp=10.0.1.8 # If available
@@ -42,9 +42,11 @@ rm -f ~/.aba.previous.backup
 
 which make || sudo dnf install make -y
 
-test-cmd -m "Cleaning up - make distclean force=1" 
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
-#test-cmd -m "Cleaning up mirror - clean" "make -s -C mirror clean" 
+./install 
+
+test-cmd -m "Cleaning up - aba distclean --force" 
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
+#test-cmd -m "Cleaning up mirror - clean" "aba -s -C mirror clean" 
 
 rm -rf sno compact standard 
 
@@ -60,7 +62,7 @@ mylog "Test to install a local reg. on $int_bastion and save + copy + load image
 rm -f aba.conf  # Set it up next
 vf=~/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
-test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" ./aba --channel fast --version $VER_OVERRIDE
+test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --channel fast --version $VER_OVERRIDE
 mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
 
 # Set up govc 
@@ -69,7 +71,7 @@ sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 
 # Do not ask to delete things
 mylog "Setting ask=false"
-make noask
+aba noask
 
 mylog "Setting ntp_servers=$ntp" 
 [ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
@@ -83,7 +85,7 @@ source <(normalize-aba-conf)
 mylog "Checking value of: ocp_version=$ocp_version"
 
 # Be sure this file exists
-test-cmd -m "Init test: download mirror-registry.tar.gz" "make -s -C test mirror-registry.tar.gz"
+test-cmd -m "Init test: download mirror-registry.tar.gz" "aba --dir test mirror-registry.tar.gz"
 
 #################################
 # Copy and edit mirror.conf 
@@ -91,7 +93,7 @@ test-cmd -m "Init test: download mirror-registry.tar.gz" "make -s -C test mirror
 rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
 # Simulate creation and edit of mirror.conf file
 scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
-# FIXME: Why not use 'make mirror.conf'?
+# FIXME: Why not use 'aba mirror.conf'?
 
 mylog "Test the internal bastion ($int_bastion) as mirror"
 
@@ -108,7 +110,7 @@ echo kiali-ossm > templates/operator-set-abatest
 #### test-cmd -m "Setting for local mirror" "sed -i 's/.*reg_ssh_key=/reg_ssh_key=/g' ./mirror/mirror.conf"
 
 # This is needed for below VM reset!
-make -C cli ~/bin/govc
+aba --dir cli ~/bin/govc
 
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
@@ -140,7 +142,7 @@ END
 
 # Delete images
 test-cmd -h steve@$int_bastion -m "Verify mirror uninstalled" podman ps 
-test-cmd -h steve@$int_bastion -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+test-cmd -i -h steve@$int_bastion -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 # This file is not needed in a fully air-gapped env. 
 ssh steve@$int_bastion -- "rm -fv ~/.pull-secret.json"
 # Want to test fully disconnected 
@@ -157,7 +159,7 @@ source <(cd mirror && normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-test-cmd -r 20 3 -m "Creating bundle for channel fast and versiono $ocp_version" "./aba bundle --channel fast --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion tar -C $subdir -xvf -"
+test-cmd -r 20 3 -m "Creating bundle for channel fast and versiono $ocp_version" "aba bundle --channel fast --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion tar -C $subdir -xvf -"
 
 # Smoke test!
 test-cmd -m  "Verifying existance of file 'mirror/save/mirror_seq1_000000.tar'" "ls -lh mirror/save/mirror_seq1_000000.tar" 
@@ -170,15 +172,15 @@ test-cmd -h $reg_ssh_user@$int_bastion -r 5 3 -m "Checking regcreds/ does not ex
 ######################
 mylog Runtest: START - airgap
 
-test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading cluster images into mirror on internal bastion" "make -s -C $subdir/aba load" 
+test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading cluster images into mirror on internal bastion" "cd $subdir/aba; aba load" 
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Delete already loaded image set file to make space: '$subdir/aba/mirror/save/mirror_seq1_000000.tar'" "rm -f $subdir/aba/mirror/save/mirror_seq1_000000.tar" 
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Tidying up internal bastion" "rm -rf $subdir/aba/sno" 
 
-mylog "Running 'make sno' on internal bastion"
+mylog "Running 'aba sno' on internal bastion"
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing sno/iso" "make -s -C $subdir/aba sno target=iso" 
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing sno/iso" "aba --dir $subdir/aba sno --step iso" 
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"
@@ -195,40 +197,40 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: registry.redhat.io/ubi9/ubi:latest
 END
 
-test-cmd -r 20 3 -m "Saving ubi images to local disk on `hostname`" "make -s -C mirror save" 
+test-cmd -r 20 3 -m "Saving ubi images to local disk on `hostname`" "aba --dir mirror save" 
 
 mylog Copy tar+ssh archives to internal bastion
-## make -s -C mirror inc out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir - xvf -
-make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
+## aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir - xvf -
+aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
 scp mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$int_bastion:$subdir/aba/mirror/save
 
-test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading UBI images into mirror" "make -s -C $subdir/aba/mirror load" 
+test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading UBI images into mirror" "cd $subdir/aba/mirror; aba load" 
 
 mylog Add vote-app image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-test-cmd -r 20 3 -m "Saving vote-app image to local disk" " make -s -C mirror save" 
+test-cmd -r 20 3 -m "Saving vote-app image to local disk" " aba --dir mirror save" 
 
 mylog Copy repo only to internal bastion
-make -s -C mirror tarrepo out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
+aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
 
 mylog Copy extra image set tar file to internal bastion
 scp mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$int_bastion:$subdir/aba/mirror/save
 
-test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading vote-app image into mirror" "make -s -C $subdir/aba/mirror load" 
+test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading vote-app image into mirror" "cd $subdir/aba/mirror; aba load" 
 
 cluster_type=sno  # Choose either sno, compact or standard
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing $cluster_type cluster, ready to deploy test app" "make -s -C $subdir/aba $cluster_type"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing $cluster_type cluster, ready to deploy test app" "aba --dir $subdir/aba $cluster_type"
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Listing VMs (should show 24G memory)" "make -s -C $subdir/aba/$cluster_type ls"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Listing VMs (should show 24G memory)" "aba --dir $subdir/aba/$cluster_type ls"
 
 myLog "Deploying test vote-app"
-test-cmd -h steve@$int_bastion -m "Create project 'demo'" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc new-project demo'" 
-test-cmd -h steve@$int_bastion -m "Launch vote-app" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
-test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "make -s -C $subdir/aba/$cluster_type cmd cmd='oc rollout status deployment vote-app -n demo'"
+test-cmd -h steve@$int_bastion -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type cmd cmd='oc new-project demo'" 
+test-cmd -h steve@$int_bastion -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type cmd cmd='oc rollout status deployment vote-app -n demo'"
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -257,19 +259,19 @@ grep -A2 -e "name: servicemeshoperator$"	mirror/imageset-config-operator-catalog
 grep -A2 -e "name: kiali-ossm$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
 ########
-test-cmd -r 20 3 -m "Saving mesh operators to local disk" "make -s -C mirror save"
+test-cmd -r 20 3 -m "Saving mesh operators to local disk" "aba --dir mirror save"
 
 mylog Create incremental tar and ssh to internal bastion
-make -s -C mirror inc out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
+aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
 
-test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading images to mirror" "make -s -C $subdir/aba/mirror load" 
+test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load" 
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Configuring day2 ops" "make -s -C $subdir/aba/$cluster_type day2"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Configuring day2 ops" "aba --dir $subdir/aba/$cluster_type day2"
 
 mylog Append jaeger operator to imageset conf
 grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
-test-cmd -r 20 3 -m "Saving jaeger operator to local disk" "make -s -C mirror save"
+test-cmd -r 20 3 -m "Saving jaeger operator to local disk" "aba --dir mirror save"
 
 mylog Downloading the mesh demo into test/mesh, for use by deploy script
 (
@@ -282,17 +284,17 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 
 mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
-make -s -C mirror inc out=- | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf - 
+aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf - 
 
-test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading jaeger operator images to mirror" "make -s -C $subdir/aba/mirror load" 
+test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading jaeger operator images to mirror" "cd $subdir/aba/mirror; aba load" 
 
 
 test-cmd -m "Pausing for 90s to let OCP settle" sleep 90    # For some reason, the cluster was still not fully ready in tests!
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all cluster operators to be available?" "make -s -C $subdir/aba/$cluster_type cmd; until make -s -C $subdir/aba/$cluster_type cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all cluster operators to be available?" "aba --dir $subdir/aba/$cluster_type cmd; until aba --dir $subdir/aba/$cluster_type cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
-# Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'make day2' ...
-test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m "Run 'day2'" "make -s -C $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
+# Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'aba day2' ...
+test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m "Run 'day2'" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
 test-cmd -m "Pausing for 60s to let OCP settle" sleep 60  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
@@ -300,29 +302,29 @@ test-cmd -m "Pausing for 60s to let OCP settle" sleep 60  # And wait for https:/
 test-cmd -h $reg_ssh_user@$int_bastion -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
 
 # Restart cluster test 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Log into cluster" ". <(make -s -C $subdir/aba/sno login)"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "make -s -C $subdir/aba/sno ls"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Shut cluster down gracefully and wait for poweroff (2/2)" "yes | make -s -C $subdir/aba/sno shutdown wait=1"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Log into cluster" ". <(aba --dir $subdir/aba/sno login)"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "aba --dir $subdir/aba/sno ls"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Shut cluster down gracefully and wait for poweroff (2/2)" "yes | aba --dir $subdir/aba/sno shutdown --wait"
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'poweredOff'" "until make -s -C $subdir/aba/sno ls | grep poweredOff | wc -l| grep ^1$ ; do sleep 10; echo -n .;done"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'poweredOff'" "until aba --dir $subdir/aba/sno ls | grep poweredOff | wc -l| grep ^1$ ; do sleep 10; echo -n .;done"
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "make -s -C $subdir/aba/sno ls"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "make -s -C $subdir/aba/sno startup"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "aba --dir $subdir/aba/sno ls"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "aba --dir $subdir/aba/sno startup"
 test-cmd -m "Wait for cluster to settle" sleep 30
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'Ready'" "cd $subdir/aba/sno; until oc get nodes| grep Ready|grep -v Not |wc -l| grep ^1$; do sleep 10; echo -n .; done"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd cmd='get nodes'"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd cmd='whoami' | grep system:admin"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd cmd='version'"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd cmd='get po -A | grep -v -e Running -e Complete'"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/sno cmd"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/sno cmd cmd='get nodes'"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/sno cmd cmd='whoami' | grep system:admin"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/sno cmd cmd='version'"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/sno cmd cmd='get po -A | grep -v -e Running -e Complete'"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/sno cmd"
 test-cmd -m "Wait for cluster to settle" sleep 30
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "make -s -C $subdir/aba/sno cmd; make -s -C $subdir/aba/sno cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "aba --dir $subdir/aba/sno cmd; aba --dir $subdir/aba/sno cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up and app running" "make -s -C $subdir/aba/sno cmd cmd='get po -A | grep ^travel-.*Running'"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up and app running" "aba --dir $subdir/aba/sno cmd cmd='get po -A | grep ^travel-.*Running'"
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Deleting sno cluster" "make -s -C $subdir/aba/sno delete" 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Running 'make clean' in $subdir/aba/sno" "make -s -C $subdir/aba/sno clean" 
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Deleting sno cluster" "aba --dir $subdir/aba/sno delete" 
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Running 'aba clean' in $subdir/aba/sno" "aba --dir $subdir/aba/sno clean" 
 
 rm -rf test/mesh 
 
@@ -335,7 +337,7 @@ build_and_test_cluster() {
 	cnt=$2  # Number of nodes to check/validate in the cluster
 
 	# Create cluster.conf
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating '$cluster_name' cluster.conf" "make -s -C $subdir/aba cluster name=$cluster_name type=$cluster_name target=cluster.conf || true" # || true
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating '$cluster_name' cluster.conf" "cd $subdir/aba; aba cluster --name $cluster_name type=$cluster_name --step cluster.conf || true" # || true
 
 	# Add more cpu/ram ... See if this will speed things up!
 	test-cmd -h $reg_ssh_user@$int_bastion -m "Adding master CPU" "sed -i 's/^master_cpu_count=.*/master_cpu_count=12/g' $subdir/aba/$cluster_name/cluster.conf"
@@ -343,55 +345,55 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$int_bastion -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating '$cluster_name' cluster" "make -s -C $subdir/aba/$cluster_name" || \
-		test-cmd -h $reg_ssh_user@$int_bastion -m  "Restarting nodes of failed cluster" "make -s -C $subdir/aba/$cluster_name stop; sleep 200; make -s -C $subdir/aba/$cluster_name start"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name" || \
+		test-cmd -h $reg_ssh_user@$int_bastion -m  "Restarting nodes of failed cluster" "aba --dir $subdir/aba/$cluster_name stop; sleep 200; aba --dir $subdir/aba/$cluster_name start"
 
-	if ! test-cmd -h $reg_ssh_user@$int_bastion -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "make -s -C $subdir/aba/$cluster_name mon"; then
+	if ! test-cmd -h $reg_ssh_user@$int_bastion -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "aba --dir $subdir/aba/$cluster_name mon"; then
 		mylog "CLUSTER INSTALL FAILED: REBOOTING ALL NODES ..."
 
 		set -x
 
 		# See if the agent is still running and fetch the logs
-		make -sC $subdir/aba/$cluster_name ssh cmd="agent-gather -O" | ssh 10.0.1.6 -- "cat > agent-gather-$cluster_name-.tar.xz || true" # || true
+		aba --dir $subdir/aba/$cluster_name ssh cmd="agent-gather -O" | ssh 10.0.1.6 -- "cat > agent-gather-$cluster_name-.tar.xz || true" # || true
 		scp $subdir/aba/$cluster_name/iso-agent-based/.openshift_install.log 10.0.1.6:${cluster_name}_openshift_install.log
 
-		make -C $subdir/aba/$cluster_name stop wait=1
-		make -C $subdir/aba/$cluster_name start
+		aba --dir $subdir/aba/$cluster_name stop --wait
+		aba --dir $subdir/aba/$cluster_name start
 		sleep 60
-		make -C $subdir/aba/$cluster_name mon
+		aba --dir $subdir/aba/$cluster_name mon
 	fi
 
 	#####
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all cluster operators available?" "make -s -C $subdir/aba/$cluster_name cmd; until make -s -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all cluster operators available?" "aba --dir $subdir/aba/$cluster_name cmd; until aba --dir $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all cluster operators fully available?" "make -s -C $subdir/aba/$cluster_name cmd; until make -s -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all cluster operators fully available?" "aba --dir $subdir/aba/$cluster_name cmd; until aba --dir $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Show all cluster operators" "make -s -C $subdir/aba/$cluster_name cmd"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Show all cluster operators" "aba --dir $subdir/aba/$cluster_name cmd"
 
 	# Restart cluster test 
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Log into cluster" ". <(make -s -C $subdir/aba/$cluster_name login)"
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "make -s -C $subdir/aba/$cluster_name ls"
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Shut cluster down gracefully and wait" "yes | make -s -C $subdir/aba/$cluster_name shutdown wait=1"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "aba --dir $subdir/aba/$cluster_name ls"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Shut cluster down gracefully and wait" "yes | aba --dir $subdir/aba/$cluster_name shutdown --wait"
 
 	####test-cmd -m "Wait for cluster to power down" sleep 30
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'poweredOff'" "until make -s -C $subdir/aba/$cluster_name ls |grep poweredOff |wc -l| grep ^$cnt$; do sleep 10; done"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'poweredOff'" "until aba --dir $subdir/aba/$cluster_name ls |grep poweredOff |wc -l| grep ^$cnt$; do sleep 10; done"
 
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "make -s -C $subdir/aba/$cluster_name ls"
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "make -s -C $subdir/aba/$cluster_name startup"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "aba --dir $subdir/aba/$cluster_name ls"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "aba --dir $subdir/aba/$cluster_name startup"
 	test-cmd -m "Wait for cluster to settle" sleep 30
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'Ready'" "until make -s -C $subdir/aba/$cluster_name cmd cmd='oc get nodes'| grep Ready|grep -v Not|wc -l| grep ^$cnt$; do sleep 10; done"
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/$cluster_name cmd cmd='get nodes'"
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/$cluster_name cmd cmd='whoami'"
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/$cluster_name cmd cmd='version'"
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/$cluster_name cmd cmd='get po -A | grep -v -e Running -e Complete'"
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/$cluster_name cmd"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'Ready'" "until aba --dir $subdir/aba/$cluster_name cmd cmd='oc get nodes'| grep Ready|grep -v Not|wc -l| grep ^$cnt$; do sleep 10; done"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/$cluster_name cmd cmd='get nodes'"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/$cluster_name cmd cmd='whoami'"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/$cluster_name cmd cmd='version'"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/$cluster_name cmd cmd='get po -A | grep -v -e Running -e Complete'"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/$cluster_name cmd"
 	test-cmd -m "Wait for cluster to settle" sleep 60
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "make -s -C $subdir/aba/$cluster_name cmd; until make -s -C $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "aba --dir $subdir/aba/$cluster_name cmd; until aba --dir $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 	# Deploy test app
-	test-cmd -h steve@$int_bastion -m "Create project 'demo'" "make -s -C $subdir/aba/$cluster_name cmd cmd='oc new-project demo' || true" # || true
-	test-cmd -h steve@$int_bastion -m "Launch vote-app" "make -s -C $subdir/aba/$cluster_name cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo' || true" # || true
-	test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "make -s -C $subdir/aba/$cluster_name cmd cmd='oc rollout status deployment vote-app -n demo'"
+	test-cmd -h steve@$int_bastion -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name cmd cmd='oc new-project demo' || true" # || true
+	test-cmd -h steve@$int_bastion -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo' || true" # || true
+	test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_name cmd cmd='oc rollout status deployment vote-app -n demo'"
 }
 
 #for c in sno compact standard
@@ -403,12 +405,12 @@ do
 	[ "$c" = "standard" ] && cnt=6
 	build_and_test_cluster $c $cnt
 
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Deleting '$c' cluster" "make -s -C $subdir/aba/$c delete" 
-	test-cmd -h $reg_ssh_user@$int_bastion -m  "Running 'make clean' in $subdir/aba/$c" "make -s -C $subdir/aba/$c clean" 
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Deleting '$c' cluster" "aba --dir $subdir/aba/$c delete" 
+	test-cmd -h $reg_ssh_user@$int_bastion -m  "Running 'aba clean' in $subdir/aba/$c" "aba --dir $subdir/aba/$c clean" 
 done
 
 # Test bare-metal with BYO macs
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating standard cluster dir" "cd $subdir/aba; rm -rf standard; mkdir -p standard; ln -s ../templates/Makefile standard; make -s -C standard init" 
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating standard cluster dir" "cd $subdir/aba; rm -rf standard; mkdir -p standard; ln -s ../templates/Makefile standard; aba --dir standard init" 
 echo "\
 00:50:56:1d:9e:01
 00:50:56:1d:9e:02
@@ -426,43 +428,43 @@ test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating cluster.conf" "cd $subdir/a
 	test-cmd -h $reg_ssh_user@$int_bastion -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$int_bastion -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Making iso" "make -s -C $subdir/aba/standard iso"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating standard cluster" "make -s -C $subdir/aba/standard"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Making iso" "aba --dir $subdir/aba/standard iso"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Creating standard cluster" "aba --dir $subdir/aba/standard"
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "make -s -C $subdir/aba/standard cmd; until make -s -C $subdir/aba/standard cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "aba --dir $subdir/aba/standard cmd; until aba --dir $subdir/aba/standard cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 # Restart cluster test 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Log into cluster" ". <(make -s -C $subdir/aba/standard login)"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "make -s -C $subdir/aba/standard ls"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Shut cluster down gracefully and wait (2/2)" "yes | make -s -C $subdir/aba/standard shutdown wait=1"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Log into cluster" ". <(aba --dir $subdir/aba/standard login)"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "aba --dir $subdir/aba/standard ls"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Shut cluster down gracefully and wait (2/2)" "yes | aba --dir $subdir/aba/standard shutdown --wait"
 
 #test-cmd -m "Wait for cluster to power down" sleep 60
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'poweredOff'" "until make -s -C $subdir/aba/standard ls |grep poweredOff |wc -l| grep ^6$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'poweredOff'" "until aba --dir $subdir/aba/standard ls |grep poweredOff |wc -l| grep ^6$; do sleep 10; echo -n .; done"
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "make -s -C $subdir/aba/standard ls"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "make -s -C $subdir/aba/standard startup"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "aba --dir $subdir/aba/standard ls"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "aba --dir $subdir/aba/standard startup"
 #test-cmd -m "Wait for cluster to settle" sleep 600
 test-cmd -m "Wait for cluster to settle" sleep 60
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'Ready'" "cd $subdir/aba/standard; until oc get nodes| grep Ready|grep -v Not|wc -l| grep ^6$; do sleep 10; echo -n .; done"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/standard cmd cmd='get nodes'"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/standard cmd cmd='whoami'"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/standard cmd cmd='version'"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/standard cmd cmd='get po -A | grep -v -e Running -e Complete'"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "make -s -C $subdir/aba/standard cmd"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/standard cmd cmd='get nodes'"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/standard cmd cmd='whoami'"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/standard cmd cmd='version'"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/standard cmd cmd='get po -A | grep -v -e Running -e Complete'"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/standard cmd"
 test-cmd -m "Wait for cluster to settle" sleep 60
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "make -s -C $subdir/aba/standard cmd; make -s -C $subdir/aba/standard cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "aba --dir $subdir/aba/standard cmd; aba --dir $subdir/aba/standard cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
-# keep it # test-cmd -h $reg_ssh_user@$int_bastion -m  "Deleting standard cluster" "make -s -C $subdir/aba/standard delete" 
-###test-cmd -h $reg_ssh_user@$int_bastion -m  "Stopping standard cluster and wait" "yes|make -s -C $subdir/aba/standard shutdown wait=1" 
+# keep it # test-cmd -h $reg_ssh_user@$int_bastion -m  "Deleting standard cluster" "aba --dir $subdir/aba/standard delete" 
+###test-cmd -h $reg_ssh_user@$int_bastion -m  "Stopping standard cluster and wait" "yes|aba --dir $subdir/aba/standard shutdown --wait" 
 
-test-cmd -h $reg_ssh_user@$int_bastion -m "If cluster up, shutting cluster down and wait" ". <(make -sC $subdir/aba/standard shell) && . <(make -sC $subdir/aba/standard login) && yes|make -sC $subdir/aba/standard shutdown wait=1 || echo cluster shutdown failure"
+test-cmd -h $reg_ssh_user@$int_bastion -m "If cluster up, shutting cluster down and wait" ". <(aba --dir $subdir/aba/standard shell) && . <(aba --dir $subdir/aba/standard login) && yes|aba --dir $subdir/aba/standard shutdown --wait || echo cluster shutdown failure"
 
-# keep it # test-cmd -h $reg_ssh_user@$int_bastion -m  "Running 'make clean' in $subdir/aba/stanadard" "make -s -C $subdir/aba/standard clean" 
+# keep it # test-cmd -h $reg_ssh_user@$int_bastion -m  "Running 'aba clean' in $subdir/aba/stanadard" "aba --dir $subdir/aba/standard clean" 
 
-#test-cmd "make distclean force=1"
-# keep it # make -C ~/aba distclean force=1
-# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
+#test-cmd "aba distclean --force"
+# keep it # aba --dir ~/aba distclean --force
+# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
 
 mylog "===> Completed test $0"
 
