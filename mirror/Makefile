@@ -38,10 +38,10 @@ cli-oc-mirror:
 imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the intial image set config file with all provided values and operators
 isconf: imagesetconf ## Same as imagesetconf
 
-sync/imageset-config-sync.yaml:
+sync/imageset-config-sync.yaml: ../aba.conf
 	$(SCRIPTS)/reg-create-imageset-config-sync.sh
 
-save/imageset-config-save.yaml:
+save/imageset-config-save.yaml: ../aba.conf
 	$(SCRIPTS)/reg-create-imageset-config-save.sh
 
 ## If vmware.conf does not exist, then create it
