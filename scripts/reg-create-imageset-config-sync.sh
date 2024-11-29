@@ -20,8 +20,8 @@ reg_code=$(curl --connect-timeout 10 --retry 3 -ILsk -o /dev/null -w "%{http_cod
 mkdir -p sync 
 
 # Generate first imageset-config file for syncing images.  
-# Do not overwrite the file. Allow users to add images and operators to imageset-config-sync.yaml and run "make sync" again. 
-if [ ! -s sync/imageset-config-sync.yaml ]; then
+# Do not overwrite the file if it has been modified. Allow users to add images and operators to imageset-config-sync.yaml and run "make sync" again. 
+if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-config-sync.yaml ]; then
 	###rm -rf sync/*
 
 	export ocp_ver=$ocp_version
