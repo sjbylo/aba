@@ -12,10 +12,10 @@ if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
 		exec aba -i
 	fi
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
-	#if [ ! "$*" ]; then
-		#cd ..
-	#fi
-	interactive_mode=
+	echo cd ..
+	orig_dir=$PWD
+	cd ..
+	#interactive_mode=
 else
 	echo "Please run Aba from the top of its repository."
 	echo "For example: cd aba; aba --help"
@@ -326,7 +326,7 @@ if [ ! "$interactive_mode" ]; then
 	echo $args | grep -q -e " -[a-z]" && echo Unknown args $args >&2 && exit 1
 
 	echo DEBUG: Running: make -s $args >&2
-	[ "$orig_dir" ] && cd $orig_dir
+	[ "$orig_dir" ] && echo cd $orig_dir && cd $orig_dir
 	make -s $args
 
 	exit 
