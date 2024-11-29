@@ -30,7 +30,7 @@ source scripts/include_all.sh no-trap  # Need for below normalize fn() calls
 source test/include.sh
 trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 
-[ ! "$target_full" ] && default_target="target=iso"   # Default is to generate 'iso' only   # Default is to only create iso
+[ ! "$target_full" ] && default_target="--step iso"   # Default is to generate 'iso' only   # Default is to only create iso
 mylog default_target=$default_target
 
 mylog ============================================================
@@ -43,19 +43,21 @@ ntp=10.0.1.8 # If available
 
 which make || sudo dnf install make -y
 
+./install 
+
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
-echo ocp_version=$v > aba.conf  # needed so distclean works without calling ../aba (interactive). aba.conf is created below. 
-### wrong # make -C ~/aba distclean force=1
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
-#make clean
+echo ocp_version=$v > aba.conf  # needed so distclean works without calling aba (interactive). aba.conf is created below. 
+### wrong # aba --dir ~/aba distclean --force
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
+#aba clean
 
 # Set up aba.conf properly
 rm -f aba.conf
 vf=~/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
-test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" ./aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
-#test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" ./aba --version latest ### --vmw $vf
+test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
+#test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ### --vmw $vf
 
 # Set up govc 
 cp $vf vmware.conf 
@@ -73,22 +75,22 @@ normalize-aba-conf
 
 reg_ssh_user=$(whoami)
 
-make -C cli ~/bin/govc
+aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
 
 rm -rf sno
-test-cmd -m "Creating sno/cluster.conf." make sno target=cluster.conf
+test-cmd -m "Creating sno/cluster.conf." aba sno --step cluster.conf
 test-cmd -m "Adding proxy=auto to sno/cluster.conf" "sed -i 's/^proxy=.*/proxy=auto/g' sno/cluster.conf"
 
-test-cmd -m "Installing SNO cluster from public registry, since no registry available." make sno 
-# keep it #test-cmd -m "Deleting sno cluster" make -C sno delete
-###test-cmd -m "Stopping sno cluster" "yes|make -C sno shutdown"
-#test-cmd -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|make -C sno shutdown || echo cluster shutdown failure"
-test-cmd -m "If cluster up, stopping cluster" "                                                      yes|make -C sno shutdown wait=1"
+test-cmd -m "Installing SNO cluster from public registry, since no registry available." aba sno 
+# keep it #test-cmd -m "Deleting sno cluster" aba --dir sno delete
+###test-cmd -m "Stopping sno cluster" "yes|aba --dir sno shutdown"
+#test-cmd -m "If cluster up, stopping cluster" ". <(aba --dir sno shell) && . <(aba --dir sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
+test-cmd -m "If cluster up, stopping cluster" "                                                      yes|aba --dir sno shutdown --wait"
 
-#test-cmd "make distclean force=1"
-#make -C ~/aba distclean force=1
-###mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean force=1; rm -rf cli && mv cli.m cli
+#test-cmd "aba distclean --force"
+#aba --dir ~/aba distclean --force
+###mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"

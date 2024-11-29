@@ -5,6 +5,8 @@ uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most te
 
 interactive_mode=1
 
+# All of the below options parsing is not pretty and needs a lot of work!
+
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
 	if [ ! "$*" ]; then
 		exec aba -i
@@ -14,7 +16,6 @@ elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
 		#cd ..
 	#fi
 	interactive_mode=
-	:
 else
 	echo "Please run Aba from the top of its repository."
 	echo "For example: cd aba; aba --help"
@@ -36,6 +37,7 @@ if [ ! -s scripts/include_all.sh -a -s ../scripts/include_all.sh ]; then
 #	echo Abort
 #	exit 1
 fi
+
 source scripts/include_all.sh
 
 OTHER_OPTS=
@@ -110,8 +112,7 @@ Usage:
 # for testing, if unset, testing will halt in edit_file()! 
 [ "$*" ] && \
 	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
-	interactive_mode= && \
-	args_processed=1
+	interactive_mode=
 
 # set defaults 
 ops_list=
@@ -126,6 +127,7 @@ do
 		exit 0
 	elif [ "$1" = "-i" ]; then
 		interactive_mode=1
+		args_processed=
 		shift
 #	elif [ "$1" = "--debug" ]; then
 #		export DEBUG_ABA=1
@@ -133,24 +135,27 @@ do
 	elif [ "$1" = "bundle" ]; then
 		ACTION=bundle
 		shift
+		args_processed=1
 	elif [ "$1" = "--out" ]; then
 		shift
-		echo "$1" | grep -q "^--" && echo_red "Error in parsing --out path argument" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^--" && echo_red "Error in parsing --out path argument" >&2 && exit 1
 		[ "$1" ] && [ ! -d $(dirname $1) ] && echo "File destination path [$(dirname $1)] incorrect or missing!" >&2 && exit 1
-		[ "$1" != "-" ] && [ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 >&2 && exit 1
+		[ "$1" != "-" ] && [ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
 		[ "$1" ] && bundle_dest_path="$1"
 		shift
+		args_processed=1
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 && exit 1
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
 		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" aba.conf
 		target_chan=$chan
 		shift 
+		args_processed=1
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		shift 
 		ver=$1
-		echo "$ver" | grep -q "^-" && echo_red "Error in parsing --version arguments" >&2 >&2 && exit 1
+		echo "$ver" | grep -q "^-" && echo_red "Error in parsing --version arguments" >&2 && exit 1
 		if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt > /tmp/.release.txt; then
 			echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
 			echo_red "To get started, run Aba on a connected workstation/laptop with Fedora or RHEL and try again." >&2
@@ -160,93 +165,109 @@ do
 
 		[ "$ver" = "latest" ] && ver=$(fetch_latest_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
-		[ ! "$ver" ] && echo_red "Missing value after --version. OpenShift version missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 >&2 && exit 1
+		[ ! "$ver" ] && echo_red "Missing value after --version. OpenShift version missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" aba.conf
 		target_ver=$ver
 		shift 
+		args_processed=1
 	elif [ "$1" = "--domain" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 && exit 1
 		domain=$(echo $1 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		sed -i "s/^domain=[^ \t]*/domain=$domain /g" aba.conf
 		target_domain=$domain
 		shift 
+		args_processed=1
 	elif [ "$1" = "--dns" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 && exit 1
 		dns_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ip /g" aba.conf
 		shift 
+		args_processed=1
 	elif [ "$1" = "--ntp" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 && exit 1
 		ntp_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_ip /g" aba.conf
 		shift 
+		args_processed=1
 	elif [ "$1" = "--default-route" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 && exit 1
 		def_route_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip /g" aba.conf
 		shift 
+		args_processed=1
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --platform arguments" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --platform arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red -e "Missing platform, see usage.\n$usage" >&2 && exit 1
 		platform="$1"
 		sed -i "s/^platform=[^ \t]*/platform=$platform /g" aba.conf
 		shift
+		args_processed=1
 	elif [ "$1" = "--op-sets" ]; then
 		shift
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Warning: Missing args when parsing op-sets" >&2 && exit 1
 		while ! echo "$1" | grep -q -e "^-"; do [ -s templates/operator-set-$1 ] && op_set_list="$op_set_list $1"; shift || break; done
 		op_set_list=$(echo "$op_set_list" | xargs)  # Trim white space
 		#echo ADDDING op_set_list=$op_set_list
 		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" aba.conf
+		args_processed=1
 	elif [ "$1" = "--ops" ]; then
 		shift
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Warning: Missing args when parsing '--ops'" >&2 && exit 1
 		while ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift || break; done
 		ops_list=$(echo "$ops_list" | xargs)  # Trim white space
 		#echo ADDING ops_list=$ops_list
 		sed -i "s/^ops=[^#$]*/ops=\"$ops_list\" /g" aba.conf
+		args_processed=1
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red -e "Missing editor, see usage.\n$usage" >&2 && exit 1
 		editor="$1"
 		sed -i "s/^editor=[^ \t]*/editor=$editor /g" aba.conf
 		shift
+		args_processed=1
 	elif [ "$1" = "--machine-network" -o "$1" = "-n" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 >&2 && exit 1
-		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 && exit 1
+		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 && exit 1
 		sed -i "s/^machine_network=[^ \t]*/machine_network=$1 /g" aba.conf
 		shift 
+		args_processed=1
 	elif [ "$1" = "--pull-secret" -o "$1" = "-ps" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 >&2 && exit 1
-		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
+		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
 		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1 #g" aba.conf
 		shift 
+		args_processed=1
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 >&2 && exit 1
+		echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 && exit 1
 		[ -s $1 ] && cp $1 vmware.conf
 		shift 
+		args_processed=1
 	elif [ "$1" = "--ask" ]; then
 		sed -i "s#^ask=[^ \t]*#ask=true #g" aba.conf
 		shift 
+		args_processed=1
 	elif [ "$1" = "--noask" ]; then
 		sed -i "s#^ask=[^ \t]*#ask=false #g" aba.conf
 		shift 
+		args_processed=1
 	else
 		#echo_red "Unknown option: $1" >&2
 		#err=1
-		# Gather options and args not recognized above
+		
+		# Gather options and args not recognized above and pass them to "make"... yes make! 
 		OTHER_OPTS="$OTHER_OPTS $1"
+
 		#echo OTHER_OPTS=$OTHER_OPTS
 		shift 
 	fi
@@ -260,13 +281,24 @@ if [ "$ACTION" = "bundle" ]; then
 	exit 
 fi
 
-#echo OTHER_OPTS=$OTHER_OPTS
+echo OTHER_OPTS=$OTHER_OPTS >&2
+
+[ "$args_processed" ] && echo args_processed=$args_processed >&2 && exit 0
+
+# Next part will "translate" the options into what make is expecting, eg. --force to force=1
 
 if [ ! "$interactive_mode" ]; then
 	# Translate the options not recognized above
-	echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS
+	echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
 
-	# Use sed -E -e 's/ --retry\s*/ retry=/' -e  's/ -r\s*/ retry=/g' 
+	# This is a HACK, so that make can receive out=file properly (---out is parsed earlier)
+	if [ "$bundle_dest_path" ]; then
+		echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
+		OTHER_OPTS="$OTHER_OPTS --out $bundle_dest_path"
+		echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
+	fi
+
+	# Translate options to make format
 	args=$(echo "$OTHER_OPTS" | sed -E \
 		-e "s/ --dir\s*/ -C /g" \
 		-e "s/ -d\s*/ -C /g" \
@@ -285,25 +317,28 @@ if [ ! "$interactive_mode" ]; then
 		-e "s/ --retry\s*/ retry=/g" \
 		-e "s/ -r\s*/ retry=/g" \
 		-e "s/ --debug\s*/ debug=1/g" \
+		-e "s/ --wait\s*/ wait=1/g" \
+		-e "s/ -w\s*/ wait=1/g" \
 
-	)
+	)  # Keep the empty line above!
 
-	echo $args | grep -e " -[a-z]" && echo Unknown args $args && exit 1
+	# No short options should get this far! 
+	echo $args | grep -q -e " -[a-z]" && echo Unknown args $args >&2 && exit 1
 
-	echo DEBUG: Running: make -s $args
+	echo DEBUG: Running: make -s $args >&2
 	[ "$orig_dir" ] && cd $orig_dir
 	make -s $args
+
 	exit 
 fi
 
-[ "$args_processed" ] && exit 0
-
-# From now on it's all considered interactive
+# ###########################################
+# From now on it's all considered INTERACTIVE
 
 source <(normalize-aba-conf)
 
 # Include aba bin path and common scripts
-export PATH=$PWD/bin:$PATH
+### export PATH=$PWD/bin:$PATH  # done in include.sh
 
 cat others/message.txt
 
