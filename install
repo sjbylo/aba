@@ -5,7 +5,7 @@ cd $(dirname $0)
 
 if [ -x scripts/aba.sh ]; then
 	if [[ "$PATH" =~ "/usr/local/bin:" ]]; then
-		sudo cp -vp scripts/aba.sh /usr/local/bin/aba && echo "aba has been installed to /usr/local/bin/aba" && exit 0
+		sudo cp -p scripts/aba.sh /usr/local/bin/aba && echo "aba has been installed to /usr/local/bin/aba" && exit 0
 	fi
 
 	if [[ "$PATH" =~ "$HOME/bin:" ]]; then
