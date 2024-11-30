@@ -334,7 +334,7 @@ aba --dir sno clean # This should clean up the cluster and make should start fro
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
 
 ### Let it be ## test-cmd -m "Deleting cluster" aba --dir sno delete.  -i ignore the return value, i.e. if cluster not running/accessible 
-test-cmd -i -m "If cluster up, stopping cluster" ". <(aba -sC sno shell) && . <(aba -sC sno login) && yes|aba shutdown --dir sno --wait"
+test-cmd -i -m "If cluster up, stopping cluster" ". <(aba -sC sno shell) && . <(aba -sC sno login) && yes|aba --dir sno shutdown --wait"
 
 ### FIXME mylog "Removing vmware config file to simulate 'bare metal' and iso creation"
 mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' file to simulate 'bare metal' and iso creation"

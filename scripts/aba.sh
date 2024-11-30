@@ -5,6 +5,13 @@ uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most te
 
 interactive_mode=1
 
+if [ "$1" = "--dir" -o "$1" = "-d" ]; then
+	[ ! -d $2 ] && echo_red "$2 not a directory!" >&2 && exit 1
+	echo cd $2
+	cd $2
+	shift 2
+fi
+
 # All of the below options parsing is not pretty and needs a lot of work!
 
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
@@ -133,6 +140,11 @@ do
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		echo "$usage"
 		exit 0
+#	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
+#		[ ! -d $2 ] && echo_red "$2 not a directory!" >&2 && exit 1
+#		echo cd $2
+#		cd $2
+#		shift 2
 	elif [ "$1" = "-i" ]; then
 		interactive_mode=1
 		args_processed=
@@ -270,6 +282,10 @@ do
 		sed -i "s#^ask=[^ \t]*#ask=false #g" aba.conf
 		shift 
 		args_processed=1
+#	elif [ "$1" = "--cmd" ]; then
+#		[ ! "$2" ] && echo_red "Missing command after --cmd" >&2 && exit 1
+#		cmd="$2"
+#		shift 2
 	else
 		#echo_red "Unknown option: $1" >&2
 		#err=1
@@ -305,9 +321,12 @@ if [ ! "$interactive_mode" ]; then
 		echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
 		OTHER_OPTS="$OTHER_OPTS --out $bundle_dest_path"
 		echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
+#	elif [ "$cmd" ]; then
+#		OTHER_OPTS="$OTHER_OPTS --cmd='$cmd'"
 	fi
 
 	# Translate options to make format
+	# FIXME: -d and --dir needed here?
 	args=$(echo "$OTHER_OPTS" | sed -E \
 		-e "s/ --dir\s*/ -C /g" \
 		-e "s/ -d\s*/ -C /g" \
@@ -321,8 +340,8 @@ if [ ! "$interactive_mode" ]; then
 		-e "s/ -o\s*/ out=/g" \
 		-e "s/ --force\s*/ force=1/g" \
 		-e "s/ -f\s*/ force=1/g" \
-		-e "s/ --cmd\s*/ cmd=/g" \
-		-e "s/ -c\s*/ cmd=/g" \
+		-e "s/ --cmd\s*'\(.*\)'/ cmd='\1'/g" \
+		-e "s/ -c\s*'\(.*\)'/ cmd='\1'/g" \
 		-e "s/ --retry\s*/ retry=/g" \
 		-e "s/ -r\s*/ retry=/g" \
 		-e "s/ --debug\s*/ debug=1/g" \
