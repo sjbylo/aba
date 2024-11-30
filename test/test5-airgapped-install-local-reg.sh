@@ -172,6 +172,8 @@ test-cmd -h $reg_ssh_user@$int_bastion -r 5 3 -m "Checking regcreds/ does not ex
 ######################
 mylog Runtest: START - airgap
 
+test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Install aba script" "cd $subdir/aba; ./install" 
+
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading cluster images into mirror on internal bastion" "cd $subdir/aba; aba load" 
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Delete already loaded image set file to make space: '$subdir/aba/mirror/save/mirror_seq1_000000.tar'" "rm -f $subdir/aba/mirror/save/mirror_seq1_000000.tar" 
