@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this to get going!
 
-uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." && exit 1
+uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
 interactive_mode=1
 
@@ -12,16 +12,24 @@ if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
 		exec aba -i
 	fi
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
-	echo cd ..
+	echo cd .. >&2
 	orig_dir=$PWD
 	cd ..
 	#interactive_mode=
 else
+	echo "  __   ____   __  "
+	echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
+	echo "/    \ ) _ (/    \    Follow the instructions below or see the README.md file for more."
+	echo "\_/\_/(____/\_/\_/"
+	echo
 	echo "Please run Aba from the top of its repository."
-	echo "For example: cd aba; aba --help"
+	echo
+	echo "For example:                          cd aba"
+	echo "                                      aba --help"
+	echo
 	echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
-	echo "Change into the Aba repository:       cd aba"
-	echo "Install Aba:                          ./install"
+	echo "Change to the Aba repo directory:     cd aba"
+	echo "Install latest Aba:                   ./install"
 	echo "Run Aba:                              aba --help" 
 
 	exit 1
@@ -34,7 +42,7 @@ if [ ! -s scripts/include_all.sh -a -s ../scripts/include_all.sh ]; then
 	orig_dir=$PWD
 	cd .. 
 #else
-#	echo Abort
+#	echo Abort >&2
 #	exit 1
 fi
 
@@ -139,11 +147,12 @@ do
 	elif [ "$1" = "--out" ]; then
 		shift
 		echo "$1" | grep -q "^--" && echo_red "Error in parsing --out path argument" >&2 && exit 1
-		[ "$1" ] && [ ! -d $(dirname $1) ] && echo "File destination path [$(dirname $1)] incorrect or missing!" >&2 && exit 1
+		[ "$1" ] && [ ! -d $(dirname $1) ] && echo_red "File destination path [$(dirname $1)] incorrect or missing!" >&2 && exit 1
 		[ "$1" != "-" ] && [ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
 		[ "$1" ] && bundle_dest_path="$1"
 		shift
-		args_processed=1
+		### args_processed=1 # Don't mark this as processed since we need make to run for this to work!
+		# FIXME: This is just one use-case where --all is an opewtion which *is* needed my make! ==> Simplify!!
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 && exit 1
@@ -268,7 +277,7 @@ do
 		# Gather options and args not recognized above and pass them to "make"... yes make! 
 		OTHER_OPTS="$OTHER_OPTS $1"
 
-		#echo OTHER_OPTS=$OTHER_OPTS
+		#echo OTHER_OPTS=$OTHER_OPTS >&2
 		shift 
 	fi
 done
@@ -323,9 +332,11 @@ if [ ! "$interactive_mode" ]; then
 	)  # Keep the empty line above!
 
 	# No short options should get this far! 
-	echo $args | grep -q -e " -[a-z]" && echo Unknown args $args >&2 && exit 1
+	echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
 
-	echo DEBUG: Running: make -s $args >&2
+	echo "DEBUG: Running: 'make -s $args'" >&2
+
+	# This needs to be simplified!
 	[ "$orig_dir" ] && echo cd $orig_dir && cd $orig_dir
 	make -s $args
 
