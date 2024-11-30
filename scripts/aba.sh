@@ -340,8 +340,8 @@ if [ ! "$interactive_mode" ]; then
 		-e "s/ -o\s*/ out=/g" \
 		-e "s/ --force\s*/ force=1/g" \
 		-e "s/ -f\s*/ force=1/g" \
-		-e "s/ --cmd\s*'\(.*\)'/ cmd='\1'/g" \
-		-e "s/ -c\s*'\(.*\)'/ cmd='\1'/g" \
+		-e "s/ --cmd\s*/ cmd=/g" \
+		-e "s/ -c\s*/ cmd=/g" \
 		-e "s/ --retry\s*/ retry=/g" \
 		-e "s/ -r\s*/ retry=/g" \
 		-e "s/ --debug\s*/ debug=1/g" \
