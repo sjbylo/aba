@@ -1,6 +1,8 @@
 #!/bin/bash -e
 # Simple Aba installer.  Copy aba command somewhere into the $PATH
 
+branch=wrapaba
+
 cd $(dirname $0)
 
 if ! which git 2>/dev/null >&2; then
@@ -11,7 +13,7 @@ fi
 
 # If we are installing by pipeing into bash
 if ! grep -q "Top level Makefile" Makefile; then
-	if ! git clone https://github.com/sjbylo/aba.git; then
+	if ! git clone -b $branch https://github.com/sjbylo/aba.git; then
 		echo "Error fetching git repo from https://github.com/sjbylo/aba.git" >&2
 
 		exit 1
