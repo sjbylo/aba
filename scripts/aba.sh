@@ -60,8 +60,9 @@ Usage:
 [ "$1" = "-h" -o "$1" = "--help" ] && echo "$usage" && exit 0
 
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
-	[ ! -d $2 ] && echo_red "$2 not a directory!" >&2 && exit 1
-	echo cd $2 >&2
+	[ ! "$2" ] && echo "Error: directory missing after $1" >&2 && exit 1
+	[ ! -e "$2" ] && echo "Error: directory $2 missing!" >&2 && exit 1
+	[ ! -d $2 ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
 	cd $2
 	shift 2
 fi
@@ -73,7 +74,7 @@ if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
 		exec aba -i
 	fi
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
-	echo cd .. >&2
+	#echo cd .. >&2
 	orig_dir=$PWD
 	cd ..
 	#interactive_mode=
@@ -317,7 +318,7 @@ if [ "$ACTION" = "bundle" ]; then
 	exit 
 fi
 
-echo OTHER_OPTS=$OTHER_OPTS >&2
+#echo OTHER_OPTS=$OTHER_OPTS >&2
 
 [ "$args_processed" ] && echo args_processed=$args_processed >&2 && exit 0
 
@@ -325,13 +326,13 @@ echo OTHER_OPTS=$OTHER_OPTS >&2
 
 if [ ! "$interactive_mode" ]; then
 	# Translate the options not recognized above
-	echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
+	#echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
 
 	# This is a HACK, so that make can receive out=file properly (---out is parsed earlier)
 	if [ "$bundle_dest_path" ]; then
-		echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
+		#echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
 		OTHER_OPTS="$OTHER_OPTS --out $bundle_dest_path"
-		echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
+		#echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
 #	elif [ "$cmd" ]; then
 #		OTHER_OPTS="$OTHER_OPTS --cmd='$cmd'"
 	fi
@@ -364,10 +365,11 @@ if [ ! "$interactive_mode" ]; then
 	# No short options should get this far! 
 	echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
 
-	echo "DEBUG: Running: 'make -s $args'" >&2
+	##echo "DEBUG: Running: 'make -s $args'" >&2
 
 	# This needs to be simplified!
-	[ "$orig_dir" ] && echo cd $orig_dir >&2 && cd $orig_dir
+	#[ "$orig_dir" ] && echo cd $orig_dir >&2 && cd $orig_dir
+	[ "$orig_dir" ] && cd $orig_dir
 	make -s $args
 
 	exit 
