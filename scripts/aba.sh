@@ -57,6 +57,8 @@ Usage:
 	 --out <file|->			# Bundle output destination, e.g. file or stadout (-).
 "
 
+[ "$1" = "--debug" ] && set - && shift
+
 [ "$1" = "-h" -o "$1" = "--help" ] && echo "$usage" && exit 0
 
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
@@ -100,6 +102,7 @@ fi
 #dir=$(dirname $0)
 #cd $dir
 
+# FIXME: Is this needed?  Same as above?
 if [ ! -s scripts/include_all.sh -a -s ../scripts/include_all.sh ]; then
 	orig_dir=$PWD
 	cd .. 
@@ -320,7 +323,8 @@ fi
 
 #echo OTHER_OPTS=$OTHER_OPTS >&2
 
-[ "$args_processed" ] && echo args_processed=$args_processed >&2 && exit 0
+#[ "$args_processed" ] && echo args_processed=$args_processed >&2 && exit 0
+[ "$args_processed" ] &&                                            exit 0
 
 # Next part will "translate" the options into what make is expecting, eg. --force to force=1
 
