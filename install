@@ -13,9 +13,6 @@ fi
 if ! grep -q "Top level Makefile" Makefile; then
 	echo "Cloning git repo ..."
 	if ! git clone https://github.com/sjbylo/aba.git; then
-		echo "Aba needs access to the Internet to clone the Aba repository."
-		exit 1
-	else
 		echo "Error fetching git repo from https://github.com/sjbylo/aba.git" >&2
 
 		exit 1
