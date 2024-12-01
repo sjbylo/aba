@@ -284,13 +284,13 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 	pwd && \
 	cd openshift-service-mesh-demo && \
 	pwd && \
-	sed -i "s#quay\.io#$reg_host:$reg_port/$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml && \ # required since other methods are messy
+	sed -i "s#quay\.io#$reg_host:$reg_port/$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml && \
 	sed -i "s/source: .*/source: cs-redhat-operator-index/g" operators/* 
 ) 
 
 mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
-aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf - 
+test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf - "
 
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading jaeger operator images to mirror" "cd $subdir/aba/mirror; aba load" 
 
