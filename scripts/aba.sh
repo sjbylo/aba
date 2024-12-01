@@ -2,8 +2,8 @@
 # Start here, run this to get going!
 
 # Redirect stdout to stderr
-exec 3>&1         # Save original stdout
-exec 1>&2         # Redirect stdout to stderr
+# CAUSING tar error exec 3>&1         # Save original stdout
+# CAUSING tar error exec 1>&2         # Redirect stdout to stderr
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -372,8 +372,8 @@ if [ ! "$interactive_mode" ]; then
 fi
 
 # Restore stdout
-exec 1>&3         # Restore original stdout
-exec 3>&-         # Close the saved file descriptor
+# CAUSING tar error exec 1>&3         # Restore original stdout
+# CAUSING tar error exec 3>&-         # Close the saved file descriptor
 
 # ###########################################
 # From now on it's all considered INTERACTIVE
