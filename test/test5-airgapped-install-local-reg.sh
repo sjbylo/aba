@@ -290,7 +290,7 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 
 mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry.tar.gz  # No need to copy this over!
-test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf - "
+test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion:$subdir" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf - "
 
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading jaeger operator images to mirror" "cd $subdir/aba/mirror; aba load" 
 

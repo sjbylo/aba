@@ -12,7 +12,9 @@ if ! which git 2>/dev/null >&2; then
 fi
 
 # If we are installing by pipeing into bash
-if ! grep -q "Top level Makefile" Makefile; then
+if grep -q "Top level Makefile" Makefile; then
+	:
+else
 	if ! git clone -b $branch https://github.com/sjbylo/aba.git; then
 		echo "Error fetching git repo from https://github.com/sjbylo/aba.git" >&2
 
@@ -22,13 +24,6 @@ if ! grep -q "Top level Makefile" Makefile; then
 	echo
 	echo "Cloned Aba into $PWD/aba"
 	cd aba
-elif [ -d .git ]; then
-	echo "Updating local Aba git repo ..."
-	git pull || true
-else
-	echo "Clone the git repo and install Ana with: git clone https://github.com/sjbylo/aba/git && aba/install."
-
-	exit 1
 fi
 
 if [ -x scripts/aba.sh ]; then
