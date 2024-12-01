@@ -12,7 +12,7 @@ fi
 # If we are installing by pipeing into bash
 if ! grep -q "Top level Makefile" Makefile; then
 	echo "Cloning git repo ..."
-	if ! git clone https://github.com/sjbylo/aba/git; then
+	if ! git clone https://github.com/sjbylo/aba.git; then
 		echo "Aba needs access to the Internet to clone the Aba repository."
 		exit 1
 	else
