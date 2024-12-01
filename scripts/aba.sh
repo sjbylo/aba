@@ -9,6 +9,56 @@ uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most te
 
 interactive_mode=1
 
+usage="\
+Install & manage air-gapped OpenShift. 
+
+   Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially disconnected environment,
+   either onto bare-metal, vSphere or ESXi. Because Aba uses the Agent-based installer there is no need to configure a load balancer,
+   a bootstrap node or even require DHCP.
+
+Usage:
+   aba				# Interactive mode.  Let Aba lead you through the process.
+
+Usage:
+   $(basename $0) bundle \\	
+	[--channel <channel>] \\
+	 --version <version> \\
+	 --out </path/to/mybundle|-> \\
+	[--pull-secret ~/.pull-secret.json] \\
+	[--op-sets <list of operator sets>] \\
+	[--ops <list of operator names>] \\
+	<<options>> 
+
+   The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
+   in air-gapped/fully disconnected environments. See below for other <<options>>.
+
+   $(basename $0) mirror 
+
+   $(basename $0) cluster --name <mycluster> [--type <sno|compact|standard>] [--step <step>] 
+
+Usage:
+   $(basename $0) <<options>>         # Update provided values in aba.conf
+
+   <<options>>:
+	 --pull-secret <path/to/file>	# Location of your pull secret (json) file here. 
+	 --channel <channel>		# Set the OpenShift installation channel, e.g. fast, stable (default), eus or candidate.
+	 --version <version>		# Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest'.
+	 --platform vmw|bm		# Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
+	 --domain <domain>		# Set the OpenShift base domain, e.g. company.com.
+	 --machine-network <cidr>	# Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24.
+	 --dns <ip address>		# Set one DNS IP address.
+	 --default-route <next hop ip>	# Set the default route of the internal network, if any (optional).
+	 --ntp <ntp ip>			# Set the NTP IP address (optional but recommended!). 
+	 --ops <list of operators>	# Add individual operators to your image set config file (for oc-mirror).
+	 --op-sets <operator set list>	# Add sets of operators to your image set config file, as defined in 'templates/operator-set.*' files.
+	 --editor <editor command>	# Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
+	 --ask				# Prompt user when needed.
+	 --noask			# Do not prompt, assume default answers.
+	 --out <file|->			# Bundle output destination, e.g. file or stadout (-).
+"
+
+[ "$1" = "-h" -o "$1" = "--help" ] && echo "$usage" && exit 0
+
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! -d $2 ] && echo_red "$2 not a directory!" >&2 && exit 1
 	echo cd $2 >&2
@@ -79,54 +129,6 @@ fetch_latest_version() {
 	stable_ver=$(cat /tmp/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 	[ "$stable_ver" ] && echo $stable_ver || return 1
 }
-
-usage="\
-Install & manage air-gapped OpenShift. 
-
-   Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially disconnected environment,
-   either onto bare-metal, vSphere or ESXi. Because Aba uses the Agent-based installer there is no need to configure a load balancer,
-   a bootstrap node or even require DHCP.
-
-Usage:
-   aba				# Interactive mode.  Let Aba lead you through the process.
-
-Usage:
-   $(basename $0) bundle \\	
-	[--channel <channel>] \\
-	 --version <version> \\
-	 --out </path/to/mybundle|-> \\
-	[--pull-secret ~/.pull-secret.json] \\
-	[--op-sets <list of operator sets>] \\
-	[--ops <list of operator names>] \\
-	<<options>> 
-
-   The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
-   in air-gapped/fully disconnected environments. See below for other <<options>>.
-
-   $(basename $0) mirror 
-
-   $(basename $0) cluster --name <mycluster> [--type <sno|compact|standard>] [--step <step>] 
-
-Usage:
-   $(basename $0) <<options>>         # Update provided values in aba.conf
-
-   <<options>>:
-	 --pull-secret <path/to/file>	# Location of your pull secret (json) file here. 
-	 --channel <channel>		# Set the OpenShift installation channel, e.g. fast, stable (default), eus or candidate.
-	 --version <version>		# Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest'.
-	 --platform vmw|bm		# Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
-	 --domain <domain>		# Set the OpenShift base domain, e.g. company.com.
-	 --machine-network <cidr>	# Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24.
-	 --dns <ip address>		# Set one DNS IP address.
-	 --default-route <next hop ip>	# Set the default route of the internal network, if any (optional).
-	 --ntp <ntp ip>			# Set the NTP IP address (optional but recommended!). 
-	 --ops <list of operators>	# Add individual operators to your image set config file (for oc-mirror).
-	 --op-sets <operator set list>	# Add sets of operators to your image set config file, as defined in 'templates/operator-set.*' files.
-	 --editor <editor command>	# Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
-	 --ask				# Prompt user when needed.
-	 --noask			# Do not prompt, assume default answers.
-	 --out <file|->			# Bundle output destination, e.g. file or stadout (-).
-"
 
 # for testing, if unset, testing will halt in edit_file()! 
 [ "$*" ] && \
