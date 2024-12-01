@@ -1,13 +1,17 @@
 #!/bin/bash
 # Start here, run this to get going!
 
+# Redirect stdout to stderr
+exec 3>&1         # Save original stdout
+exec 1>&2         # Redirect stdout to stderr
+
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
 interactive_mode=1
 
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! -d $2 ] && echo_red "$2 not a directory!" >&2 && exit 1
-	echo cd $2
+	echo cd $2 >&2
 	cd $2
 	shift 2
 fi
@@ -282,10 +286,15 @@ do
 		sed -i "s#^ask=[^ \t]*#ask=false #g" aba.conf
 		shift 
 		args_processed=1
-#	elif [ "$1" = "--cmd" ]; then
-#		[ ! "$2" ] && echo_red "Missing command after --cmd" >&2 && exit 1
-#		cmd="$2"
-#		shift 2
+	elif [ "$1" = "--cmd" ]; then
+		[ ! "$2" ] && echo_red "Missing command after --cmd" >&2 && exit 1
+		#cmd="$2"
+		[ "$orig_dir" ] && cd $orig_dir
+		make cmd cmd="$2"
+		exit
+		# Should process this: aba --dir /home/steve/subdir/aba/sno cmd cmd='oc new-project demo'
+		# Should process this: aba --dir /home/steve/subdir/aba/sno cmd cmd='oc new-project demo'
+		#shift 2
 	else
 		#echo_red "Unknown option: $1" >&2
 		#err=1
@@ -356,11 +365,15 @@ if [ ! "$interactive_mode" ]; then
 	echo "DEBUG: Running: 'make -s $args'" >&2
 
 	# This needs to be simplified!
-	[ "$orig_dir" ] && echo cd $orig_dir && cd $orig_dir
+	[ "$orig_dir" ] && echo cd $orig_dir >&2 && cd $orig_dir
 	make -s $args
 
 	exit 
 fi
+
+# Restore stdout
+exec 1>&3         # Restore original stdout
+exec 3>&-         # Close the saved file descriptor
 
 # ###########################################
 # From now on it's all considered INTERACTIVE

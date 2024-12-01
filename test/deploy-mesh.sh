@@ -5,7 +5,7 @@ cd $(dirname $0)
 cd ..
 pwd
 
-. <(cd sno; make shell)
+. <(make -sC sno shell)
 
 cd test/mesh/openshift-service-mesh-demo
 
