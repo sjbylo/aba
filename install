@@ -1,29 +1,68 @@
-#!/bin/bash
+#!/bin/bash -e
 # Simple Aba installer.  Copy aba command somewhere into the $PATH
 
 cd $(dirname $0)
 
-if [ -x scripts/aba.sh ]; then
-	if [[ "$PATH" =~ "/usr/local/bin:" ]]; then
-		sudo cp -p scripts/aba.sh /usr/local/bin/aba && echo "aba has been installed to /usr/local/bin/aba" && exit 0
-	fi
+if ! which git 2>/dev/null >&2; then
+	echo "Please install git and try again!"
 
-	if [[ "$PATH" =~ "$HOME/bin:" ]]; then
-		mkdir -p $HOME/bin
-		cp -p scripts/aba.sh $HOME/bin
-	fi
+	exit 1
+fi
 
-	if [ $? -eq 0 ]; then
-		echo "aba has been installed to $HOME/bin"
-
-		exit 0
+# If we are installing by pipeing into bash
+if ! grep -q "Top level Makefile" Makefile; then
+	echo "Cloning git repo ..."
+	if ! git clone https://github.com/sjbylo/aba/git; then
+		echo "Aba needs access to the Internet to clone the Aba repository."
+		exit 1
 	else
-		echo "Please copy aba into your PATH"
+		echo "Error fetching git repo from https://github.com" >&2
 
 		exit 1
 	fi
+
+	echo
+	echo "Cloned Aba into $PWD/aba"
+	cd aba
+elif [ -d .git ]; then
+	echo "Updating local Aba git repo ..."
+	git pull || true
 else
-	echo "aba file not found in $PWD"
+	echo "Clone the git repo and install Ana with: git clone https://github.com/sjbylo/aba/git && aba/install."
+
+	exit 1
+fi
+
+if [ -x scripts/aba.sh ]; then
+	if [[ "$PATH" =~ "/usr/local/bin:" ]]; then
+		[ -s "/usr/local/bin/aba" ] && action=updated || action=installed
+		sudo cp -p scripts/aba.sh /usr/local/bin/aba
+		echo "Aba has been $action to /usr/local/bin/aba"
+
+		exit 0
+	fi
+
+	if [[ "$PATH" =~ "$HOME/bin:" ]]; then
+		[ -s "$HOME/bin/aba" ] && action=updated || action=installed
+
+		mkdir -p $HOME/bin
+
+		if cp -p scripts/aba.sh $HOME/bin/aba; then
+			echo "Aba has been $action to $HOME/bin/aba"
+
+			exit 0
+		else
+			echo "Please copy Aba into your PATH"
+
+			exit 1
+		fi
+	fi
+
+	echo "Cannot install $PWD/scripts/aba.sh!  Please copy the script file into your PATH."
+
+	exit 1
+else
+	echo "Aba script not found in $PWD/scripts/aba.sh"
 
 	exit 1
 fi
