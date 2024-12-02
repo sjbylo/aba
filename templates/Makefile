@@ -214,7 +214,7 @@ ssh: ## Open ssh to the rendezvous host (node 0) for troubleshooting
 
 .PHONY: shell   
 shell:  ## Gain access to the installed cluster.  Run '. <(aba -s shell)'
-	@echo "export KUBECONFIG=$(PWD)/iso-agent-based/auth/kubeconfig"
+	@echo "export KUBECONFIG=$(CURDIR)/iso-agent-based/auth/kubeconfig"
 
 .PHONY:
 day2:  ## Set up OperatorHub, CatalogSources, imageContentSourcePolicy resources. Run this target after new Operators are loaded into the mirror registry. Requires access to 'mirror/.../oc-mirror-workspace' directory!
