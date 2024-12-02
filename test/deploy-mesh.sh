@@ -5,7 +5,8 @@ cd $(dirname $0)
 cd ..
 pwd
 
-. <(cd sno; aba -s shell)
+#. <(cd sno; aba -s shell)
+. <(aba --dir sno shell)
 
 cd test/mesh/openshift-service-mesh-demo
 
