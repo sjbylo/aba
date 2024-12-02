@@ -48,7 +48,7 @@ Aba automatically completes the following and more:
 For the very impatient:
 
   - Clone/download this git repository (https://github.com/sjbylo/aba.git) onto a workstation with an internet connection (RHEL 8/9 or Fedora).
-  - Run `./aba -h` or `./aba` and Aba will guide you through the process.
+  - Run `aba -h` or `aba [-i]` and Aba will guide you through the process.
 
 
 ## Installing OpenShift in a Disconnected Network
@@ -130,7 +130,7 @@ In a partially disconnected environment, the internal network has limited or pro
       - `mirror/regcreds/pull-secret-mirror.json`
       - `mirror/regcreds/rootCA.pem`
 
-After configuring these prerequisites, run `./aba` to start the OpenShift installation process.
+After configuring these prerequisites, run `aba` to start the OpenShift installation process.
 
 Note: that Aba also works in connected environments without a private mirror registry, e.g. by accessing public container registries via a proxy.  To do this, configure the proxy values in `cluster.conf`.
 
@@ -141,28 +141,37 @@ Note: that Aba also works in connected environments without a private mirror reg
 
 For those who are less impatient...
 
+Install Aba (method 1):
+
+```
+bash -c "$(repo=https://raw.githubusercontent.com/sjbylo/aba; branch=main; curl -fsSL $repo/refs/heads/$branch/install)"
+```
+
+Install Aba using 'git clone' (method 2):
+
 ```
 git clone https://github.com/sjbylo/aba.git
 cd aba
-./aba
+aba -h   # For help
+aba -i   # For interactive mode
 ```
 - clones the repo and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
 - If needed, add any required operators to the `aba.conf` file.
 - helps you decide if you have a partially disconnected or fully disconnected (air-gapped) environment and how you should proceed. 
 
 ```
-make mirror 
+aba mirror 
 ```
 - configures and connects to your existing container registry OR installs a fresh quay appliance registry.
 
 ```
-make sync
+aba sync
 ```
 - copies the required images directly to the mirror registry (for partially disconnected environments, e.g. via a proxy).
-- Fully disconnected (air-gapped) environments are also supported with `make save/load` (see below).
+- Fully disconnected (air-gapped) environments are also supported with `aba save/load` (see below).
 
 ```
-make cluster name=mycluster type=sno
+aba cluster --name mycluster --type sno
 ```
 - creates a directory `mycluster` and the file `mycluser/cluster.conf`.
 - Edit/verify the `mycluster/cluster.conf` file.
@@ -170,18 +179,18 @@ make cluster name=mycluster type=sno
 
 ```
 cd mycluster
-make
+aba
 ```
 - creates the Agent-based config files, generates the Agent-based iso file, creates and boots the VMs (if using VMware). 
 - monitors the installation progress.
 
 ```
-make day2
+aba day2
 ```
 - configures OpenShift to access the internal registry ready to install from the Operators Hub. 
 
 ```
-make help
+aba help
 ```
 - shows what other commands are available. 
 
@@ -217,7 +226,7 @@ v=4.17.3
 
 Create the bundle archive with this single command:
 ```
-./aba bundle --channel stable --version $v --op-sets ocp acm ocpv odf appdev --ops web-terminal --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
+aba bundle --channel stable --version $v --op-sets ocp acm ocpv odf appdev --ops web-terminal --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
 ```
 
 - This will generate several 10GB files: ocp_mycluster_4.17.3_aa|ab|ac... etc 
@@ -233,7 +242,7 @@ mkdir mycluster
 cd mycluster
 cat /path/to/ocp_mycluster_4.14.40_* | tar xvf -  # to check and extract the bundle archive
 cd aba
-./aba      # Run aba if you want Aba to install & load the mirror registry for you
+aba      # Run aba if you want Aba to install & load the mirror registry for you
 ```
 
 You will find the large image set file under `aba/mirror/save`.
@@ -246,7 +255,7 @@ You will find the large image set file under `aba/mirror/save`.
 To get started, run:
 
 ```
-./aba 
+aba 
 ```
 
 Note that this command will create the `aba.conf` file which contains some values that you *must change*, e.g. your preferred platform, your domain name, your network address (if known) and any operators you will require etc.
@@ -265,17 +274,17 @@ In this scenario, the connected bastion has access to both the Internet and the 
 
 
 ```
-make sync
+aba sync
 ```
 This command will:
-  - trigger `make mirror` (to configure the mirror registry), if needed. 
+  - trigger `aba mirror` (to configure the mirror registry), if needed. 
     - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `mirror/regcreds/` first! See above for more).
     - or, installs Quay registry on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `mirror/regcreds` directory for later use.
   - pull images from the Internet and store them in the registry.
 
 Now continue with "Installing OpenShift" below.
 
-Note that the above 'disconnected scenario' can be repeated, for example to download and install Operators as a day 2 operation or to upgrade OpenShift, by updating the `sync/imageset-sync.yaml` file and running `make sync/day2` again.
+Note that the above 'disconnected scenario' can be repeated, for example to download and install Operators as a day 2 operation or to upgrade OpenShift, by updating the `sync/imageset-sync.yaml` file and running `aba sync/day2` again.
 
 
 [Back to top](#who-should-use-aba)
@@ -286,12 +295,12 @@ In this scenario, your connected workstation has access to the Internet but no a
 You also require an bastion in a private subnet.
 
 ```
-make save
+aba save
 ```
 
 - pulls the images from the Internet and saves them into the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators)!
 
-Then, using one of `make inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repo (including templates, scripts, images, CLIs and other install files) to your bastion (in your private network) via a portable storage device, e.g. a thumb drive. 
+Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repo (including templates, scripts, images, CLIs and other install files) to your bastion (in your private network) via a portable storage device, e.g. a thumb drive. 
 
 Example:
 
@@ -299,12 +308,12 @@ Example:
 # On the connected workstation:
 # Mount your thumb drive and:
 
-make inc                                          # Write tar archive to /tmp
+aba inc                                          # Write tar archive to /tmp
 or
-make inc out=/dev/path/to/thumb-drive/aba.tgz     # Write archive 'aba.tgz' to the device 
+aba inc out=/dev/path/to/thumb-drive/aba.tgz     # Write archive 'aba.tgz' to the device 
                                                   # mounted at /dev/path/to/thumb-drive
 or
-make inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to internal host (if possible).
+aba inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to internal host (if possible).
 
 # Copy the file 'aba.tgz' to your bastion via your portable storage device.
 
@@ -312,7 +321,7 @@ make inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to interna
 tar xvf aba.tgz                                   # Extract the tar file. Ensure file timestamps are
                                                   # kept the same as on the connected workstation.
 cd aba             
-./aba
+aba
 ```
 
 For such cases where it is not possible to write directly to a portable storage device, e.g. due to restrictions or access is not possible, an alternative command can be used.
@@ -320,7 +329,7 @@ For such cases where it is not possible to write directly to a portable storage 
 Example:
 
 ```
-make tarrepo out=/dev/path/to/drive/aba.tgz
+aba tarrepo out=/dev/path/to/drive/aba.tgz
 ```
 - Write archive `aba.tgz` to the device mounted at /dev/path/to/drive, EXCEPT for the `seq#` tar files under save/
 - The `seq#` tar file(s) in the "mirror/save" directory and the repo tarball `aba.tgz` can be copied separately to a storage device, e.g. USB stick, S3 or other. 
@@ -331,13 +340,13 @@ Copy or move the "seq" tar file(s), as is, from the "mirror/save" directory to t
 ```
 sudo dnf install make -y     # If dnf does not work in the private environment (i.e. no Satalite),
                              # ensure all required RPMs are pre-installed, e.g. from a DVD drive at the time of installation. 
-make load
+aba load
 ```
 - will (if required) install Quay (from the bundle archive) and then load the images into Quay.
 - Required RPMs:
   - Note that the bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure `dnf` to use a proxy). 
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation. 
-  - If rpms are not readily available in your private network, the command `make rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your external bastion and internal bastions are running the exact same version of RHEL (at least, that was the experience when testing Aba!). 
+  - If rpms are not readily available in your private network, the command `aba rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your external bastion and internal bastions are running the exact same version of RHEL (at least, that was the experience when testing Aba!). 
 
 Now continue with "Installing OpenShift" below.
 
@@ -345,10 +354,10 @@ Note that the above 'air-gapped workflow' can be repeated in the *exact same way
 
 For example, by:
 - editing the `save/imageset-save.yaml` file on the connected workstation to add more images or to fetch the latest images
-- running `make save`
-- running `make inc` (or make tar or make tarrepo) to create a bundle archive (see above)
+- running `aba save`
+- running `aba inc` (or aba tar or aba tarrepo) to create a bundle archive (see above)
 - unpacking the tar archive on the bastion
-- running `make load` to load the images into the internal registry.
+- running `aba load` to load the images into the internal registry.
 
 Note that generated 'image sets' are sequential and must be pushed to the target mirror registry in order. You can derive the sequence number from the file name of the generated image set archive file in the mirror/save directory. 
 
@@ -365,19 +374,19 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 
 ```
 cd aba
-make cluster name=mycluster [type=sno|compact|standard] [target=xyz]
+aba cluster --name mycluster [--type sno|compact|standard] [--step xyz]
 ```
-- will create a directory `mycluster`, copy the Makefile into it and then prompt you to run `make` inside the directory.
+- will create a directory `mycluster`, copy the Makefile into it and then prompt you to run `aba` inside the directory.
 - Note, *all* advanced preset parameters at the bottom of the `aba.conf` configuration file must be completed for the optional "type" parameter to have any affect. 
 
  You should run the following command to monitor the progress of the Agent-based installer. For example: 
 
 ```
 cd <cluster dir>   # e.g. cd compact
-make mon
+aba mon
 ```
 
-Get help with `make help`.
+Get help with `aba help`.
 
 After OpenShift has been installed you will see the following output:
 
@@ -389,21 +398,21 @@ INFO Access the OpenShift web-console here: https://console-openshift-console.ap
 INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ" 
 
 The cluster has been successfully installed.
-Run '. <(make shell)' to access the cluster using the kubeconfig file (x509 cert), or
-Run '. <(make login)' to log into the cluster using the 'kubeadmin' password. 
-Run 'make help' for more options.
+Run '. <(aba shell)' to access the cluster using the kubeconfig file (x509 cert), or
+Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password. 
+Run 'aba help' for more options.
 
 ```
 You can get access to the cluster using one of the commands:
 
 ```
-. <(make shell) 
+. <(aba shell) 
 oc whoami
 ```
 - provides access via the kubeconfig file.
 
 ```
-. <(make login) 
+. <(aba login) 
 oc whoami
 ```
 - provides access via "oc login".
@@ -412,14 +421,14 @@ oc whoami
 You can run commands against the cluster, e.g. to show the installation progress:
 
 ```
-watch make cmd cmd="get co"
+watch aba --cmd "get co"
 ```
 
 If you want to create the agent-based config files, e.g. to make changes to `install-config.yaml` and `agent-config.yaml`, use:
 
 ```
 cd mycluster
-make agentconf
+aba agentconf
 # then, if needed,  manually edit the 'agent-config.yaml' file to set the appropriate mac addresses matching your bare-metal nodes, change drive and net interface hints etc.
 ```
 
@@ -427,34 +436,34 @@ If you want to create the agent-based iso file, e.g. to boot bare-metal nodes, u
 
 ```
 cd mycluster
-make iso
+aba iso
 # boot the bare-metal node(s) with the generated ISO file. 
 # This can be done using a USB stick or via the server's remote management interfaces (BMC etc).
-make mon
+aba mon
 ```
 
 If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme. 
 
-Other examples of commands (make <targets>):
+Other examples of commands (aba <command>):
 
 cd mycluster     # change to the directory with the agent-based install files, using `mycluster` as an example.
 
 | Target | Description |
 | :----- | :---------- |
-| `make day2`        | Integrate the private mirror into OpenShift. |
-| `make ls`          | Show list of VMs and their state. |
-| `make startup`     | Gracefully start up a cluster |
-| `make shutdown`    | Gracefully shut down (or hibernate) a cluster. `make shutdown wait=1` wait for power-off |
-| `make start`       | Power on all VMs |
-| `make stop`        | Gracefully shut down all VMs (guest shutdown only!) |
-| `make powerdown`   | Power down all VMs immediately |
-| `make kill`        | Same as `powerdown` |
-| `make create`      | Create all VMs  |
-| `make refresh`     | Delete & re-create the VMs causing the cluster to be re-installed. |
-| `make delete`      | Delete all the VMs  |
-| `make login`       | Display the `oc login` command for the cluster.  Use: . <(make login)  |
-| `make shell`       | Display the command to access the cluster using the kubeconfig file.  Use: . <(make shell) |
-| `make help`        | Help is available in all Makefiles (in `aba/Makefile`,  `aba/mirror/Makefile`,  `aba/cli/Makefile` and `aba/<mycluster>/Makefile`)  |
+| `aba day2`        | Integrate the private mirror into OpenShift. |
+| `aba ls`          | Show list of VMs and their state. |
+| `aba startup`     | Gracefully start up a cluster |
+| `aba shutdown`    | Gracefully shut down (or hibernate) a cluster. `aba shutdown --wait` wait for power-off |
+| `aba start`       | Power on all VMs |
+| `aba stop`        | Gracefully shut down all VMs (guest shutdown only!) |
+| `aba powerdown`   | Power down all VMs immediately |
+| `aba kill`        | Same as `powerdown` |
+| `aba create`      | Create all VMs  |
+| `aba refresh`     | Delete & re-create the VMs causing the cluster to be re-installed. |
+| `aba delete`      | Delete all the VMs  |
+| `aba login`       | Display the `oc login` command for the cluster.  Use: . <(aba login)  |
+| `aba shell`       | Display the command to access the cluster using the kubeconfig file.  Use: . <(aba shell) |
+| `aba help`        | Help is available in all Makefiles (in `aba/Makefile`,  `aba/mirror/Makefile`,  `aba/cli/Makefile` and `aba/<mycluster>/Makefile`)  |
 
 
 
@@ -474,15 +483,15 @@ cd mycluster     # change to the directory with the agent-based install files, u
 
 ## Customizing agent-config.yaml and/or openshift-install.yaml files
 
-- Once a cluster config directory has been created (e.g. `compact`) and Agent-based configuration has been created, some changes can be made to the `install-config.yaml` and `agent-config.yaml` files if needed. `make` can be run again to re-create the ISO and the VMs etc (if required).  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.  
+- Once a cluster config directory has been created (e.g. `compact`) and Agent-based configuration has been created, some changes can be made to the `install-config.yaml` and `agent-config.yaml` files if needed. `aba` can be run again to re-create the ISO and the VMs etc (if required).  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.  
 
 The workflow could look like this:
 ```
-make cluster name=mycluser target=agentconf       # Create the cluster dir and Makefile & generate the initial agent config files.
+aba cluster --name mycluser --step agentconf       # Create the cluster dir and Makefile & generate the initial agent config files.
 cd mycluster
 # Now manually edit the generated install-config.yaml and agent-config.yaml files (where needed, e.g. bare-metal mac addresses) and
 # start cluster installation:
-make
+aba
 ```
 
 The following script can be used to extract the cluster config from the agent-config yaml files. This script can be run to check that the correct information can be extracted to create the VMs (if required). 
@@ -517,18 +526,18 @@ Check `cluster-config.sh` is able to parse all the data it needs to create the a
 scripts/cluster-config.sh        # example execution to show the cluster configuration extracted from the agend-based files. 
 ```
 
-Run make again to rebuild the agent-based ISO and refresh the VMs, e.g.:
+Run aba again to rebuild the agent-based ISO and refresh the VMs, e.g.:
 
 ```
-make
+aba
 ...
-make iso
+aba iso
 ...
-make upload
+aba upload
 ...
-make refresh
+aba refresh
 ...
-make mon
+aba mon
 ```
 
 [Back to top](#who-should-use-aba)
@@ -562,6 +571,7 @@ make mon
 
 Be sure to set the correct (govc) values to access vCenter in the `vmware.conf` file.  Note that ESXi is also supported.
 
+Aba uses `make` to define and process all dependencies.  Due to this, Aba will usually know what to do next, so just run `aba` agian. 
 Why `make` was chosen to build Aba?
 
 The UNIX/Linux command "make" is a utility for automating tasks based on rules specified in a Makefile. It enhances efficiency by managing dependencies, 
@@ -576,16 +586,16 @@ execution of diverse tasks through predefined rules!
 Cluster presets are used mainly to automate the testing of Aba. 
 
 ```
-make sno
+aba sno
 ```
 - This will create a directory `sno` and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `aba.conf` must be completed for this to work).  If you are using VMware it will create the VMs for you.
 - Be sure to go through *all* the values in `aba/vmware.conf` and `sno/cluster.conf`.
 - Be sure your DNS entries have been set up in advance. See above on Prerequisites. 
-- Aba will show you the installation progress.  To troubleshoot cluster installation, run `make ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands and actions in Aba are idempotent.  If you hit a problem, fix it and try again should always be the right way forward!
+- Aba will show you the installation progress.  To troubleshoot cluster installation, run `aba ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands and actions in Aba are idempotent.  If you hit a problem, fix it and try again should always be the right way forward!
 
 ```
-make compact    # for a 3 node cluster topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
-make standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
+aba compact    # for a 3 node cluster topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
+aba standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
 ```
 - Run this to create a compact cluster (works in a similar way to the above). 
 
