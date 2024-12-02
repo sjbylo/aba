@@ -9,7 +9,7 @@ platform := $(strip $(shell echo $(platform)))
 
 # The next section is (unfortunatelly) needed because making a bare-metal cluster has a different flow, with interruptions!
 # 1. Before iso creation, the Agent-based installer config files need to be changed: mac addresses added, disk hints ... etc.
-# 2. And, after iso creation, the iso hosts need to be booted before 'make mon' target is run.
+# 2. And, after iso creation, the iso hosts need to be booted before 'aba mon' target is run.
 ifneq ($(platform),vmw)   # if platform is not 'vmw', i.e. bare-metal is assumed 
 	ifeq ($(wildcard .bm-message),)
 		# if .bm-message DOES NOT exists
@@ -99,9 +99,9 @@ agent-config.yaml: .init             cluster.conf mirror.conf  ## Create the age
 	@echo "   - agent-config.yaml:"
 	@echo "       You must modify the mac addresses to match your host's network interfaces."
 	@echo "       Optionally, add drive & NIC hints, vlan tag and any other network configurations, if needed."
-	@echo "3 Run 'make iso' to create the ISO file."
+	@echo "3 Run 'aba iso' to create the ISO file."
 	@echo "4 Power on all your hosts and boot them with the ISO file."
-	@echo "5 Run 'make mon' to monitor the installation progress."
+	@echo "5 Run 'aba mon' to monitor the installation progress."
 	@echo 
 	@touch .bm-message
 
@@ -118,7 +118,7 @@ iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note
 
 .bm-nextstep:
 	@echo "Next steps:"
-	@echo "  Boot your hosts with the ISO file and then run 'make mon' to monitor the installation progress."
+	@echo "  Boot your hosts with the ISO file and then run 'aba mon' to monitor the installation progress."
 	@touch .bm-nextstep
 	@exit 0
 
@@ -135,7 +135,7 @@ upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images
 
 # The following targets are meant for interactive use only
 
-# This target is a duplicate of .autorefresh below, except for the touch command.  'make refresh' is for interactive use and should always run.
+# This target is a duplicate of .autorefresh below, except for the touch command.  'aba refresh' is for interactive use and should always run.
 .PHONY: refresh
 refresh:  ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
 	$(SCRIPTS)/vmw-refresh.sh
@@ -146,14 +146,14 @@ refresh:  ## Delete & create the VMs. This will automatically start the cluster 
 	@touch .autorefresh
 
 .PHONY: create
-#create: vmware.conf iso  ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
-create: .init vmware.conf      ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
+#create: vmware.conf iso  ## Create the VMs based on the 'agent-based' config files. Use 'aba start' to start them. 
+create: .init vmware.conf      ## Create the VMs based on the 'agent-based' config files. Use 'aba start' to start them. 
 	@$(SCRIPTS)/vmw-exists.sh || $(SCRIPTS)/vmw-create.sh $(debug) && exit 0
 
 ###ls: vmware.conf  ## List VMs and their power state.
 .PHONY: ls
 ls: .init vmware.conf                     agent-config.yaml ## List all VMs and their power state.
-	@$(SCRIPTS)/vmw-ls.sh || echo "No vm(s).  Try running 'make' or 'make refresh'."
+	@$(SCRIPTS)/vmw-ls.sh || echo "No vm(s)."
 
 .PHONY: shutdown 
 shutdown: ## Trigger the cluster to gracefully shut itself down by draining all the nodes of pods and running shutdown command.
@@ -168,11 +168,11 @@ rescue: ## If a cluster does not start due to login/CSR issues, rescue the clust
 	@$(SCRIPTS)/cluster-rescue.sh 
 
 .PHONY: stop
-stop: .init vmware.conf                     agent-config.yaml ## Shut down all VMs gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again! Try using 'make shutdown' for graceful cluster shutdown.
+stop: .init vmware.conf                     agent-config.yaml ## Shut down all VMs gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again! Try using 'aba shutdown' for graceful cluster shutdown.
 	$(SCRIPTS)/vmw-stop.sh $(debug)
 
 .PHONY: start
-start: .init vmware.conf                     agent-config.yaml ## Power on all VMs.  Use 'make startup' to ensure all nodes are uncordoned. 
+start: .init vmware.conf                     agent-config.yaml ## Power on all VMs.  Use 'aba startup' to ensure all nodes are uncordoned. 
 	@$(SCRIPTS)/vmw-start.sh $(debug) || exit 0
 
 .PHONY: poweroff
@@ -213,7 +213,7 @@ ssh: ## Open ssh to the rendezvous host (node 0) for troubleshooting
 	@$(SCRIPTS)/ssh-rendezvous.sh $(cmd)
 
 .PHONY: shell   
-shell:  ## Gain access to the installed cluster.  Run '. <(make -s shell)'
+shell:  ## Gain access to the installed cluster.  Run '. <(aba -s shell)'
 	@echo "export KUBECONFIG=$(PWD)/iso-agent-based/auth/kubeconfig"
 
 .PHONY:
@@ -243,7 +243,7 @@ ask: ## Set 'ask' in aba.conf to 'true'  Aba will prompt you for certain actions
 
 # Note that only delete 'vmware.conf/regcreds/aba.conf' if they are symbolic links (i.e. not files/changed by user) 
 .PHONY: clean
-clean: ## Clean up files generated by 'aba', except your own configuration files. 'make clean && make' should re-build your cluster from scratch, using the same cluster.conf file. It is recommended to backup your important files first!
+clean: ## Clean up files generated by 'aba', except your own configuration files. 'aba clean && make' should re-build your cluster from scratch, using the same cluster.conf file. It is recommended to backup your important files first!
 	rm -f install-config.yaml agent-config.yaml 
 	rm -rf iso-agent-based*
 	rm -f .??*
