@@ -57,7 +57,7 @@ Usage:
 	 --out <file|->			# Bundle output destination, e.g. file or stadout (-).
 "
 
-[ "$1" = "--debug" ] && set - && shift
+[ "$1" = "--debug" ] && DEBUG_ABA=1 && shift
 
 [ "$1" = "-h" -o "$1" = "--help" ] && echo "$usage" && exit 0
 
@@ -79,7 +79,7 @@ elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
 	#echo cd .. >&2
 	orig_dir=$PWD
 	cd ..
-	#interactive_mode=
+	interactive_mode=
 else
 	echo "  __   ____   __  "
 	echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
@@ -102,14 +102,14 @@ fi
 #dir=$(dirname $0)
 #cd $dir
 
-# FIXME: Is this needed?  Same as above?
-if [ ! -s scripts/include_all.sh -a -s ../scripts/include_all.sh ]; then
-	orig_dir=$PWD
-	cd .. 
+## FIXME: Is this needed?  Same as above?
+#if [ ! -s scripts/include_all.sh -a -s ../scripts/include_all.sh ]; then
+#	orig_dir=$PWD
+#	cd .. 
 #else
 #	echo Abort >&2
 #	exit 1
-fi
+#fi
 
 source scripts/include_all.sh
 
@@ -134,7 +134,7 @@ fetch_latest_version() {
 	[ "$stable_ver" ] && echo $stable_ver || return 1
 }
 
-# for testing, if unset, testing will halt in edit_file()! 
+# FIXME: for testing, if unset, testing will halt in edit_file()! 
 [ "$*" ] && \
 	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
 	interactive_mode=
@@ -293,10 +293,12 @@ do
 		shift 
 		args_processed=1
 	elif [ "$1" = "--cmd" ]; then
-		[ ! "$2" ] && echo_red "Missing command after --cmd" >&2 && exit 1
+		cmd="$2"
+		#[ ! "$2" ] && echo_red "Missing command after --cmd" >&2 && exit 1
+		[ ! "$cmd" ] && cmd="get co"
 		#cmd="$2"
 		[ "$orig_dir" ] && cd $orig_dir
-		make cmd cmd="$2"
+		make cmd cmd="$cmd"
 		exit
 		# Should process this: aba --dir /home/steve/subdir/aba/sno cmd cmd='oc new-project demo'
 		# Should process this: aba --dir /home/steve/subdir/aba/sno cmd cmd='oc new-project demo'
@@ -323,20 +325,25 @@ fi
 
 #echo OTHER_OPTS=$OTHER_OPTS >&2
 
+[ "$DEBUG_ABA" ] && echo args_processed=$args_processed
+
 #[ "$args_processed" ] && echo args_processed=$args_processed >&2 && exit 0
+# FIXME: Why this?
 [ "$args_processed" ] &&                                            exit 0
+
+[ "$DEBUG_ABA" ] && echo interactive_mode=$interactive_mode
 
 # Next part will "translate" the options into what make is expecting, eg. --force to force=1
 
 if [ ! "$interactive_mode" ]; then
 	# Translate the options not recognized above
-	#echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
+	[ "$DEBUG_ABA" ] && echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
 
 	# This is a HACK, so that make can receive out=file properly (---out is parsed earlier)
 	if [ "$bundle_dest_path" ]; then
-		#echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
+		[ "$DEBUG_ABA" ] && echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
 		OTHER_OPTS="$OTHER_OPTS --out $bundle_dest_path"
-		#echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
+		[ "$DEBUG_ABA" ] && echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
 #	elif [ "$cmd" ]; then
 #		OTHER_OPTS="$OTHER_OPTS --cmd='$cmd'"
 	fi
@@ -369,11 +376,12 @@ if [ ! "$interactive_mode" ]; then
 	# No short options should get this far! 
 	echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
 
-	##echo "DEBUG: Running: 'make -s $args'" >&2
-
 	# This needs to be simplified!
 	#[ "$orig_dir" ] && echo cd $orig_dir >&2 && cd $orig_dir
 	[ "$orig_dir" ] && cd $orig_dir
+
+	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: 'make -s $args' from dir $PWD" >&2
+
 	make -s $args
 
 	exit 
