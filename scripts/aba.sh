@@ -65,7 +65,9 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! "$2" ] && echo "Error: directory missing after $1" >&2 && exit 1
 	[ ! -e "$2" ] && echo "Error: directory $2 missing!" >&2 && exit 1
 	[ ! -d $2 ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
+
 	cd $2
+
 	shift 2
 fi
 
@@ -325,13 +327,13 @@ fi
 
 #echo OTHER_OPTS=$OTHER_OPTS >&2
 
-[ "$DEBUG_ABA" ] && echo args_processed=$args_processed
+[ "$DEBUG_ABA" ] && echo DEBUG: args_processed=$args_processed >&2
 
 #[ "$args_processed" ] && echo args_processed=$args_processed >&2 && exit 0
 # FIXME: Why this?
 [ "$args_processed" ] &&                                            exit 0
 
-[ "$DEBUG_ABA" ] && echo interactive_mode=$interactive_mode
+[ "$DEBUG_ABA" ] && echo DEBUG: interactive_mode=$interactive_mode >&2
 
 # Next part will "translate" the options into what make is expecting, eg. --force to force=1
 
@@ -358,7 +360,6 @@ if [ ! "$interactive_mode" ]; then
 		-e "s/ --type\s*/ type=/g" \
 		-e "s/ -t\s*/ type=/g" \
 		-e "s/ --step\s*/ target=/g" \
-		-e "s/ -s\s*/ target=/g" \
 		-e "s/ --out\s*/ out=/g" \
 		-e "s/ -o\s*/ out=/g" \
 		-e "s/ --force\s*/ force=1/g" \
@@ -372,6 +373,9 @@ if [ ! "$interactive_mode" ]; then
 		-e "s/ -w\s*/ wait=1/g" \
 
 	)  # Keep the empty line above!
+
+	# -e "s/ -s\s*/ target=/g" \
+	# So, "-s" is also 'silent' for make.
 
 	# No short options should get this far! 
 	echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
