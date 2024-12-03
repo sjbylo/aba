@@ -53,8 +53,9 @@ if [ ! -s cluster.conf ]; then
 	[ "$type" = "sno" ] && sed -i -e "s/^api_vip=/#api_vip=/g" -e "s/^ingress_vip=/#ingress_vip=/g" cluster.conf
 
 	edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift" || exit 1
-else
-	echo_cyan "Keeping existing $name/cluster.conf file"
+# Unwanted output, e.g. for "make ls"
+#else
+#	echo_cyan "Keeping existing $name/cluster.conf file"
 fi
 
 exit 0
