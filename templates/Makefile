@@ -154,7 +154,6 @@ create: vmw agentconf      ## Create the VMs based on the 'agent-based' config f
 .PHONY: ls
 ls: vmw agentconf                 agent-config.yaml ## List all VMs and their power state.
 	@$(SCRIPTS)/vmw-ls.sh || echo "No vm(s)."
->>>>>>> dev
 
 .PHONY: shutdown 
 shutdown: ## Trigger the cluster to gracefully shut itself down by draining all the nodes of pods and running shutdown command.
