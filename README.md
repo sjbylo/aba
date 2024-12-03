@@ -241,10 +241,10 @@ Copy the files to a RHEL 9 machine wthin the private network.
 Unpack the bundle archive, e.g: 
 
 ```
-cat /path/to/ocp_mycluster_4.17.3_* | tar xvf -        # to check and extract the bundle archive
+cat /path/to/ocp_mycluster_4.17.3_* | tar xvf -        # to extract the bundle archive
 cd aba
 ./install
-aba           # Run aba if you want Aba to install & load the mirror registry for you
+aba           # Run aba if you want Aba to install & load the mirror registry
 ```
 
 You will find the large image set tar file under `aba/mirror/save`.
