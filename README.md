@@ -48,6 +48,7 @@ Aba automatically completes the following and more:
 For the very impatient:
 
   - Clone/download this git repository (https://github.com/sjbylo/aba.git) onto a workstation with an internet connection (RHEL 8/9 or Fedora).
+  - Run `./install`
   - Run `./aba -h` or `./aba` and Aba will guide you through the process.
 
 
