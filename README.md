@@ -152,11 +152,12 @@ Install Aba using 'git clone' (method 2):
 ```
 git clone https://github.com/sjbylo/aba.git
 cd aba
+./install
 aba -h   # For help
 aba -i   # For interactive mode
 ```
-- clones the repo and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
-- If needed, add any required operators to the `aba.conf` file.
+- clones the repo, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
+- If needed, add any required operators to the `aba.conf` file by setting 'op-sets' and/or 'ops' values. 
 - helps you decide if you have a partially disconnected or fully disconnected (air-gapped) environment and how you should proceed. 
 
 ```
@@ -215,6 +216,7 @@ Run these commands on a RHEL 9 or Fedora VM:
 ```
 git clone https://github.com/sjbylo/aba.git
 cd aba
+./install
 ```
 
 Connect your large USB media stick (or other device) into your VM and create/write the `bundle archive` onto it:

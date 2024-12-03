@@ -12,9 +12,7 @@ if ! which git 2>/dev/null >&2; then
 fi
 
 # If we are installing by pipeing into bash
-if grep -q "Top level Makefile" Makefile; then
-	:
-else
+if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
 	if ! git clone -b $branch https://github.com/sjbylo/aba.git; then
 		echo "Error fetching git repo from https://github.com/sjbylo/aba.git" >&2
 
@@ -31,7 +29,7 @@ if [ -x scripts/aba.sh ]; then
 		[ -s "/usr/local/bin/aba" ] && action=updated || action=installed
 		sudo cp -p scripts/aba.sh /usr/local/bin/aba
 		echo "Aba has been $action to /usr/local/bin/aba"
-		echo "Run: aba -h"
+		echo "Run: cd aba; aba -h"
 
 		exit 0
 	fi
@@ -43,7 +41,7 @@ if [ -x scripts/aba.sh ]; then
 
 		if cp -p scripts/aba.sh $HOME/bin/aba; then
 			echo "Aba has been $action to $HOME/bin/aba"
-			echo "Run: aba -h"
+			echo "Run: cd aba; aba -h"
 
 			exit 0
 		else
