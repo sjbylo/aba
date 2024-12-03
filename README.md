@@ -243,6 +243,7 @@ Unpack the bundle archive, e.g:
 ```
 cat /path/to/ocp_mycluster_4.17.3_* | tar xvf -        # to check and extract the bundle archive
 cd aba
+./install
 aba           # Run aba if you want Aba to install & load the mirror registry for you
 ```
 
