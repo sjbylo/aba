@@ -488,7 +488,7 @@ if [ ! -f .bundle ]; then
 		do
 			# Exit loop if release version exists
 			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-				if curl --connect-timeout 10 --retry 2 -sIL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
+				if curl --connect-timeout 10 --retry 2 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 					break
 				else
 					echo_red "Error: Failed to find release $target_ver" >&2
