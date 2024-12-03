@@ -5,10 +5,13 @@ branch=wrapaba
 
 cd $(dirname $0)
 
-if ! which git 2>/dev/null >&2; then
-	echo "Please install git and try again!"
+# Only want to use git on the workstation
+if [ ! -f .bundle ]; then
+	if ! which git 2>/dev/null >&2; then
+		echo "Please install git and try again!"
 
-	exit 1
+		exit 1
+	fi
 fi
 
 # If we are installing by pipeing into bash
