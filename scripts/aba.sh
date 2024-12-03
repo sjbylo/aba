@@ -17,7 +17,7 @@ Install & manage air-gapped OpenShift.
    a bootstrap node or even require DHCP.
 
 Usage:
-   aba				# Interactive mode.  Let Aba lead you through the process.
+   aba [-i]				# Interactive mode.  Let Aba lead you through the process.
 
 Usage:
    $(basename $0) bundle \\	
@@ -37,7 +37,7 @@ Usage:
    $(basename $0) cluster --name <mycluster> [--type <sno|compact|standard>] [--step <step>] 
 
 Usage:
-   $(basename $0) <<options>>         # Update provided values in aba.conf
+   $(basename $0) <<options>> 		# Update provided values in aba.conf
 
    <<options>>:
 	 --pull-secret <path/to/file>	# Location of your pull secret (json) file here. 
