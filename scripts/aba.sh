@@ -48,9 +48,11 @@ Usage:
 	[--op-sets <list of operator sets>] \\
 	[--ops <list of operator names>] \\
 	<<options>> 
+   Example:
+     aba --channel fast --version latest --op-sets ocp mesh3 --ops web-terminal --out /path/to/mybundle
 
    The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
-   in air-gapped/fully disconnected environments. See below for other <<options>>.
+   in fully disconnected (air-gapped) environments. See below for other <<options>>.
 
 Usage:
    ./$(basename $0) <<options>>         # Update provided values in aba.conf
