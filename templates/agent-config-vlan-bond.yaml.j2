@@ -41,7 +41,7 @@ hosts:
           ipv6:
             enabled: false
           link-aggregation:
-            mode: active-backup 
+            mode: active-backup   # mode=1 active-backup, mode=2 balance-xor or mode=4 802.3ad
             options:
               miimon: "150" 
             port:

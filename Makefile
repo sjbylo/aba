@@ -10,7 +10,7 @@ SCRIPTS   = scripts
 ##out    ?= /tmp
 
 .PHONY: aba
-aba:  ## Run the ./aba script to sert up 'aba.conf'
+aba:  ## Run aba to set up 'aba.conf'
 	aba
 
 aba.conf:

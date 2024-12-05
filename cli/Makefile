@@ -101,7 +101,7 @@ oc-mirror: ~/bin/oc-mirror
 ~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz ~/bin/oc   ## Install oc-mirror into ~/bin
 	@####grep -oP '(?<=VERSION_ID=")[^"]+' /etc/os-release | grep "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	@echo Extracting oc-mirror.tar.gz to ~bin/oc-mirror
-	@grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f2 | tr -d '"' | grep "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
+	@grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f2 | tr -d '"' | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
 
 oc-mirror.tar.gz: ## Download oc-mirror tarball
