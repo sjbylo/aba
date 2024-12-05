@@ -324,6 +324,7 @@ aba inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to internal
 tar xvf aba.tgz                                   # Extract the tar file. Ensure file timestamps are
                                                   # kept the same as on the connected workstation.
 cd aba             
+./install
 aba
 ```
 

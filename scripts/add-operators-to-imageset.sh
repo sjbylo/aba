@@ -21,7 +21,7 @@ add_op() {
 	if [ "$op_name" ]; then
 		# Skip if the operator has already been added
 		if [ -n "${added_operators[$op_name]}" ]; then
-			echo "Operator '$op_name' has already been added. Skipping..." >&2
+			echo "Operator '$op_name' already added. Skipping..." >&2
 			###echo "    # $op_name added above"
 			return
 		fi
@@ -43,28 +43,6 @@ add_op() {
 		echo_red "Warning: Operator '$1' not found in index file mirror/.redhat-operator-index-v$ocp_ver_major" >&2 >&2
 	fi
 }
-
-#add_op() {
-#	#line=$(grep "^$1 " .redhat-operator-index-v$ocp_ver_major | awk '{print $1,$NF}')
-#	#op_name=$(echo $line | awk '{print $1}')
-#	#op_default_channel=$(echo $line | awk '{print $2}')
-#
-#	read op_name op_default_channel < <(grep "^$1 " .redhat-operator-index-v$ocp_ver_major | awk '{print $1, $NF}')
-#
-#	if [ "$op_name" ]; then
-#		if [ "$op_default_channel" ]; then
-#		echo "\
-#    - name: $op_name
-#      channels:
-#      - name: $op_default_channel"
-#		else
-#		echo "\
-#    - name: $op_name"
-#		fi
-#	else
-#		echo_red "Warning: Operator '$1' not found in index file mirror/.redhat-operator-index-v$ocp_ver_major" >&2 >&2
-#	fi
-#}
 
 if [ ! "$op_sets" ]; then
 	echo_cyan "'op_sets' value not set in aba.conf or mirror.conf. Not adding operators to the image set config file." >&2
@@ -106,7 +84,7 @@ do
 			echo_cyan -n "$op " >&2
 			add_op $op
 		done
-		echo >&2
+		#echo >&2
 	else
 		echo_red "Missing operator set file: templates/operator-set-$set" >&2 >&2
 	fi
@@ -121,8 +99,7 @@ if [ "$ops" ]; then
 		echo_cyan -n "$op " >&2
 		add_op $op
 	done
-
-	echo >&2
+	#echo >&2
 else
 	echo_cyan "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image set config file." >&2
 fi

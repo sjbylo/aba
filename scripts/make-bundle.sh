@@ -58,10 +58,10 @@ fi
 
 if files_on_same_device mirror $bundle_dest_path; then
 	#make bundle out="$bundle_dest_path" retry=7  # Try 8 times!
-	echo_cyan "Creating minor bundle archive (because files are on same file system) ..."
+	echo_cyan "Creating 'minor' bundle archive (because the image set files are on the same file-system) ..."
 	make download save tarrepo out="$bundle_dest_path" retry=7	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
 else
-	echo_cyan "Creating full bundle archive (assuming destination file is on portable media) ..."
+	echo_cyan "Creating 'full' bundle archive (assuming destination file is on portable media or a different file-system) ..."
 	make download save tar out="$bundle_dest_path" retry=7    	# Try save 8 times, then create full archive, including all files. 
 fi
 
