@@ -30,7 +30,7 @@ hosts:
                 prefix-length: {{ prefix_length }}
             dhcp: false
           link-aggregation:
-            mode: active-backup
+            mode: active-backup  # mode=1 active-backup, mode=2 balance-xor or mode=4 802.3ad
             options:
               miimon: '140'
             port:

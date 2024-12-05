@@ -17,7 +17,7 @@ Install & manage air-gapped OpenShift.
    a bootstrap node or even require DHCP.
 
 Usage:
-   aba [-i]				# Interactive mode.  Let Aba lead you through the process.
+   aba [-i]				 # Interactive mode.  Let Aba lead you through the disconnected install process.
 
 Usage:
    $(basename $0) bundle \\	
@@ -30,7 +30,7 @@ Usage:
 	<<options>> 
 
    The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
-   in air-gapped/fully disconnected environments. See below for other <<options>>.
+   in air-gapped/fully disconnected environment. See below for other <<options>>.
 
    $(basename $0) mirror 
 
@@ -137,53 +137,6 @@ fetch_latest_version() {
 }
 
 # FIXME: for testing, if unset, testing will halt in edit_file()! 
-usage="\
-Install & manage air-gapped OpenShift. 
-
-   Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially disconnected environment,
-   either onto bare-metal, vSphere or ESXi. Because Aba uses the Agent-based installer there is no need to configure a load balancer,
-   a bootstrap node or even require DHCP.
-
-Usage:
-   ./aba				# Interactive mode.  Let Aba lead you through the process.
-
-Usage:
-   ./$(basename $0) bundle \\	
-	[--channel <channel>] \\
-	 --version <version> \\
-	 --out </path/to/mybundle|-> \\
-	[--pull-secret ~/.pull-secret.json] \\
-	[--op-sets <list of operator sets>] \\
-	[--ops <list of operator names>] \\
-	<<options>> 
-
-   Example:
-     aba --channel fast --version latest --op-sets ocp mesh3 --ops web-terminal --out /path/to/mybundle
-
-   The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which can be used to install OpenShift
-   in fully disconnected (air-gapped) environments. See below for other <<options>>.
-
-Usage:
-   ./$(basename $0) <<options>>         # Update provided values in aba.conf
-
-   <<options>>:
-	 --pull-secret <path/to/file>	# Location of your pull secret (json) file here. 
-	 --channel <channel>		# Set the OpenShift installation channel, e.g. fast, stable (default), eus or candidate.
-	 --version <version>		# Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest'.
-	 --platform vmw|bm		# Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
-	 --domain <domain>		# Set the OpenShift base domain, e.g. company.com.
-	 --machine-network <cidr>	# Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24.
-	 --dns <ip address>		# Set one DNS IP address.
-	 --default-route <next hop ip>	# Set the default route of the internal network, if any (optional).
-	 --ntp <ntp ip>			# Set the NTP IP address (optional but recommended!). 
-	 --ops <list of operators>	# Add individual operators to your image set config file (for oc-mirror).
-	 --op-sets <operator set list>	# Add sets of operators to your image set config file, as defined in 'templates/operator-set.*' files.
-	 --editor <editor command>	# Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
-	 --ask				# Prompt user when needed.
-	 --noask			# Do not prompt, assume default answers.
-	 --out <file|->			# Bundle output destination, e.g. file or stadout (-).
-"
-
 # for testing, if unset, testing will halt in edit_file()! 
 [ "$*" ] && \
 	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
@@ -249,6 +202,12 @@ do
 		[ ! "$ver" ] && echo_red "Missing value after --version. OpenShift version missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" aba.conf
 		target_ver=$ver
+
+		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
+		[ "$DEBUG_ABA" ] && echo Downloading operator index for version $ocp_version
+		make -s -C mirror init >/dev/null 2>&1
+		( cd mirror; date > .fetch-index.log; scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
+
 		shift 
 		args_processed=1
 	elif [ "$1" = "--domain" ]; then
@@ -613,14 +572,14 @@ if [ ! -f .bundle ]; then
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		make -s -C mirror init >/dev/null 2>&1
-		( cd mirror; scripts/download-operator-index.sh --background > .fetch-index.log 2>&1)
+		( cd mirror; date > .fetch-index.log; scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
 
 		sleep 0.5
 	else
 		echo
 		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
-		echo_white "To allow access to the Red Hat image registry, please download your Red Hat pull secret and store is in the file '$pull_secret_file' and try again!"
-		echo_white "Note that the location of your pull secret file can be changed in 'aba.conf'."
+		echo_white "To allow access to the Red Hat image registry, please download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!"
+		echo_white "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'."
 		echo
 
 		exit 1

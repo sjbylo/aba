@@ -122,11 +122,12 @@ if [ "$dest" != "-" ]; then
 		echo
 		echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
 		echo_white "Extract the bundle tar file anywhere under your home directory"
-		echo_white "and move the 'image set' files into the save/ dir & continue by running './aba', e.g. with the commands:"
+		echo_white "and move the 'image set' files into the save/ dir & continue by running 'aba', e.g. with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
 		echo_white "  mv mirror_seq*.tar aba/mirror/save"
 		echo_white "  cd aba"
-		echo_white "  ./aba"
+		echo_white "  ./install"
+		echo_white "  aba"
 		echo
 		echo_white "Run 'aba help' for all options."
 		echo
@@ -141,11 +142,12 @@ if [ "$dest" != "-" ]; then
 		echo
 		#echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
 		echo_white "Extract the bundle tar file anywhere under your home directory"
-		#echo_white "and move the 'image set' files into the save/ dir & continue by running './aba', e.g. with the commands:"
+		#echo_white "and move the 'image set' files into the save/ dir & continue by running 'aba', e.g. with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
 		#echo_white "  mv mirror_seq*.tar aba/mirror/save"
 		echo_white "  cd aba"
-		echo_white "  ./aba"
+		echo_white "  ./install"
+		echo_white "  aba"
 		echo
 		echo_white "Run 'aba help' for all options."
 		echo

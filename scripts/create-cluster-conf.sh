@@ -6,7 +6,7 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 
 if [ ! "$ocp_version" ]; then
-	echo "Please run ./aba first or see the README.md file!"
+	echo "Please run aba first or see the README.md file!"
 
 	exit 1
 fi

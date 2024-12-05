@@ -46,7 +46,7 @@ fi
 #fi
 
 # This is a special case where we want to only output the tar repo contents to stdout 
-# so we can do something like: ./aba bundle ... --bundle-file - | ssh host tar xvf - 
+# so we can do something like: aba bundle ... --bundle-file - | ssh host tar xvf - 
 if [ "$bundle_dest_path" = "-" ]; then
 	echo "Downloading binary data.  See logfile '.bundle.log' for details." >&2
 

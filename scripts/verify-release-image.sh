@@ -7,7 +7,7 @@ source scripts/include_all.sh
 
 if [ ! -x ~/bin/openshift-install ]; then
 	echo
-	echo_red "The ~/bin/openshift-install CLI is missing!  Please run ./aba first." >&2
+	echo_red "The ~/bin/openshift-install CLI is missing!  Please run aba first." >&2
 	echo
 
 	exit 1
