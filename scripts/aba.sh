@@ -448,7 +448,7 @@ if [ ! -f .bundle ]; then
 
 		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$ocp_channel /g" aba.conf
 		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
-		sleep 0.5
+		sleep 0.3
 	fi
 
 	##############################################################################################################################
@@ -486,7 +486,7 @@ if [ ! -f .bundle ]; then
 		[ "$cur_ver" ] && or_ret="or [current version] " && default_ver=$cur_ver
 
 		[ "$TERM" ] && tput el1 && tput cr
-		sleep 0.5
+		sleep 0.3
 
 		echo_cyan "Which version of OpenShift do you want to install?"
 
@@ -517,7 +517,7 @@ if [ ! -f .bundle ]; then
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver /g" aba.conf
 		echo_cyan "'ocp_version' set to '$target_ver' in aba.conf"
 
-		sleep 0.5
+		sleep 0.3
 	fi
 
 	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
@@ -549,7 +549,7 @@ if [ ! -f .bundle ]; then
 		export editor=$new_editor
 		echo_cyan "'editor' set to '$new_editor' in aba.conf"
 
-		sleep 0.5
+		sleep 0.3
 	fi
 
 	##############################################################################################################################
@@ -574,7 +574,7 @@ if [ ! -f .bundle ]; then
 		make -s -C mirror init >/dev/null 2>&1
 		( make -s -C cli ~/bin/oc-mirror >mirror/.log  2>&1 && cd mirror && date > .fetch-index.log && scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
 
-		sleep 0.5
+		sleep 0.3
 	else
 		echo
 		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
