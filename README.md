@@ -50,7 +50,7 @@ For the very impatient:
 Run the following command to clone the Aba repoitory (https://github.com/sjbylo/aba.git) and install the aba command:
 
 ```
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" ./install $gitrepo $gitbranch
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
 ```
 
 Then:
@@ -155,7 +155,7 @@ Installing Aba:
 ### Method 1: Install Aba in one command
 
 ```
-lash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" ./install $gitrepo $gitbranch
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
 ```
 
 cd aba
