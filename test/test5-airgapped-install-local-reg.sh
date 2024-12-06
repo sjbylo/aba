@@ -183,6 +183,7 @@ test-cmd -h $reg_ssh_user@$int_bastion -m  "Tidying up internal bastion" "rm -rf
 mylog "Running 'aba sno' on internal bastion"
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing sno/iso" "aba --dir $subdir/aba sno --step iso" 
+#test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking cluster operators" aba --dir $subdir/aba/sno cmd
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"
@@ -232,6 +233,8 @@ test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading vote-app image into 
 cluster_type=sno  # Choose either sno, compact or standard
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Installing $cluster_type cluster, ready to deploy test app" "aba --dir $subdir/aba $cluster_type"
+
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking cluster operators" aba --dir $subdir/aba/$cluster_type cmd
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Listing VMs (should show 24G memory)" "aba --dir $subdir/aba/$cluster_type ls"
 
