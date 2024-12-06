@@ -206,7 +206,16 @@ do
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo Downloading operator index for version $ocp_version
 		make -s -C mirror init >/dev/null 2>&1
-		( cd mirror; date > .fetch-index.log; scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
+		####( cd mirror; date > .fetch-index.log; scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
+		(
+			(
+				make -s -C cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
+				cd mirror && \
+				date > .fetch-index.log && \
+				scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
+			) &
+		) & 
+
 
 		shift 
 		args_processed=1
@@ -574,10 +583,12 @@ if [ ! -f .bundle ]; then
 		make -s -C mirror init >/dev/null 2>&1
 
 		(
-			make -s -C cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
-			cd mirror && \
-			date > .fetch-index.log && \
-			scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
+			(
+				make -s -C cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
+				cd mirror && \
+				date > .fetch-index.log && \
+				scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
+			) &
 		) & 
 
 		sleep 0.3
