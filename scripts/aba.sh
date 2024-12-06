@@ -572,7 +572,7 @@ if [ ! -f .bundle ]; then
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		make -s -C mirror init >/dev/null 2>&1
-		( cd mirror; date > .fetch-index.log; scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
+		( make -s -C cli ~/bin/oc-mirror && cd mirror && date > .fetch-index.log && scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
 
 		sleep 0.5
 	else
@@ -613,7 +613,7 @@ if [ ! -f .bundle ]; then
 	# Determine online installation (e.g. via a proxy)
 
 	echo
-	echo_white "OpenShift can be installed directly from the Internet, e.g. via a proxy."
+	echo_white "OpenShift can be installed directly from the Internet *without* using a mirror registry, e.g. via a proxy."
 	if ask "Install OpenShift directly from the Internet"; then
 		echo 
 		echo_yellow Instructions
