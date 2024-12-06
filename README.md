@@ -53,11 +53,16 @@ Run the following command to clone the Aba repoitory (https://github.com/sjbylo/
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
 ```
 
-Then:
+Install the aba command:
 
 ```
 cd aba         # Change into Aba's top-level directory to run all commands
 ./install      # Copy the aba script to your $PATH
+```
+
+Run Aba:
+
+```
 aba            # Let Aba guide you through the installation process
 ```
 
@@ -98,14 +103,14 @@ In a fully disconnected environment, where no internet access is available, two 
    - An x86 RHEL 8/9 or Fedora (e.g. VM) with internet access, typically on a laptop.
    - Clone or download this Git repository (https://github.com/sjbylo/aba.git) to any location in your home directory.
    - Download and store the Red Hat registry pull secret to `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
-   - Install required RPMs listed in `templates/rpms-external.txt` (or let Aba use dnf to install).
+   - Install required RPMs listed in `templates/rpms-external.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
-   - Password-less `sudo` access is highly recommended.
+   - Sudo root access is required.  Password-less sudo access is recommended.
 
 - **Internal Bastion**
    - A RHEL 9 VM or host within your private, air-gapped network.
-   - Install required RPMs as listed in `templates/rpms-internal.txt` (or let Aba use dnf to install, if available).
-   - Password-less `sudo` access is highly recommended.
+   - Install required RPMs as listed in `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
+   - Sudo root access is required.  Password-less sudo access is recommended.
 
 ### Partially Disconnected Prerequisites
 
@@ -115,9 +120,9 @@ In a partially disconnected environment, the internal network has limited or pro
    - A single RHEL 9 VM with internet access and connectivity to the private network.
    - Download and copy this Git repository to any location in your home directory on the bastion.
    - Download and store your Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
-   - Install required RPMs from `templates/rpms-external.txt` (or let Aba use dnf to install, if available).
+   - Install required RPMs from `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
-   - Password-less `sudo` access is highly recommended.
+   - Sudo root access is required.  Password-less sudo access is recommended.
 
 ### Common Requirements for Both Environments
 
@@ -125,7 +130,7 @@ In a partially disconnected environment, the internal network has limited or pro
    - Minimum of 30 GB is required for OpenShift base images, with additional Operators requiring more (500 GB or more).
 
 - **Network Configuration**
-   - **DNS**: Configure the following DNS A records (these are examples!):
+   - **DNS**: Configure the following DNS A records which match the intended cluster name and base domain ('ocp1' and 'example.com' are just examples!):
       - **OpenShift API**: `api.ocp1.example.com` pointing to a free IP in the private subnet.
       - **OpenShift Ingress**: `*.apps.ocp1.example.com` (wildcard A record) pointing to a free IP in the private subnet.
       - **Mirror Registry**: `registry.example.com` pointing to the IP address of your internal mirror registry (or where Aba should install it).
@@ -169,12 +174,12 @@ aba -h       # Get more help
 git clone https://github.com/sjbylo/aba.git
 cd aba
 ./install
-aba -h   # For help
-aba -i   # For interactive mode
+aba          # Let Aba guide you through the installation process
+aba -h       # For help
 ```
 - clones the repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
 - If needed, add any required operators to the `aba.conf` file by setting 'op-sets' and/or 'ops' values. 
-- helps you decide if you have a partially disconnected or fully disconnected (air-gapped) environment and how you should proceed. 
+- helps you decide the method of deployment and how you should proceed. 
 
 ```
 aba mirror 
@@ -185,7 +190,7 @@ aba mirror
 aba sync
 ```
 - copies the required images directly to the mirror registry (for partially disconnected environments, e.g. via a proxy).
-- Fully disconnected (air-gapped) environments are also supported with `aba save/load` (see below).
+- Fully disconnected (air-gapped) environments are also supported with `aba save` and `aba load` (see below).
 
 ```
 aba cluster --name mycluster --type sno
@@ -235,7 +240,7 @@ cd aba
 ./install
 ```
 
-Connect your large USB media stick (or other device) into your VM and create/write the `bundle archive` onto it:
+Connect a large USB media stick (or other device) to your VM and write the `bundle archive` to it:
 
 Set the version you want to install:
 ```
