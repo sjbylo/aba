@@ -157,6 +157,7 @@ Installing Aba:
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
 ```
 
+```
 cd aba
 aba          # Let Aba guide you through the installation process
 aba -h       # Get more help
