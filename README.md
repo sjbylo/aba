@@ -45,7 +45,7 @@ Aba automatically completes the following and more:
 1. Enables the integration with vSphere as a day 2 operation.
 1. Helps configure OpenShift with your NTP servers and many more. 
 
-For the very impatient:
+## Quick Start Guide for the Impatient:
 
 Run the following command to clone the Aba repoitory (https://github.com/sjbylo/aba.git) and install the aba command:
 
@@ -53,16 +53,10 @@ Run the following command to clone the Aba repoitory (https://github.com/sjbylo/
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
 ```
 
-Install the aba command:
-
-```
-cd aba         # Change into Aba's top-level directory to run all commands
-./install      # Copy the aba script to your $PATH
-```
-
 Run Aba:
 
 ```
+cd aba         # Change into Aba's top-level directory to run all commands
 aba            # Let Aba guide you through the installation process
 ```
 
