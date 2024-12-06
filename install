@@ -35,7 +35,8 @@ if [ -x scripts/aba.sh ]; then
 		[ -s "/usr/local/bin/aba" ] && action=updated || action=installed
 		sudo cp -p scripts/aba.sh /usr/local/bin/aba
 		echo "Aba has been $action to /usr/local/bin/aba"
-		echo "Run: cd aba; aba -h"
+		echo "Run: cd aba; aba"
+		echo "Run: cd aba -h for help or see the README.md file"
 
 		exit 0
 	fi
@@ -47,7 +48,8 @@ if [ -x scripts/aba.sh ]; then
 
 		if cp -p scripts/aba.sh $HOME/bin/aba; then
 			echo "Aba has been $action to $HOME/bin/aba"
-			echo "Run: cd aba; aba -h"
+			echo "Run: cd aba; aba"
+			echo "Run: cd aba -h for help or see the README.md file"
 
 			exit 0
 		else

@@ -105,7 +105,7 @@ if [ "$reg_ssh_key" ]; then
 
 			echo
 			echo_red "Error: FQDN '$reg_host' resolves to this host '`hostname`'!" >&2
-			echo_red "       By unsetting 'reg_ssh_key' in 'aba.conf', you have configued a *remote* mirror '$reg_host' (which resolves to '$fqdn_ip')." >&2
+			echo_red "       By unsetting 'reg_ssh_key' in 'mirror.conf', you have configued a *remote* mirror '$reg_host' (which resolves to '$fqdn_ip')." >&2
 			echo_red "       If that should be the local host, please undefine the 'reg_ssh_key' value in 'mirror.conf'." >&2
 			echo_red "       Otherwise, ensure the DNS record points to the correct *remote* host." >&2
 			echo_red "       Please correct the problem and try again." >&2
@@ -226,14 +226,14 @@ else
 	# Check if FQDN IP matches any local IP
 	if ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
 		echo
-		echo_red "Error: FQDN '$reg_host' does not resolve to an IP addr on this host '`hostname`'!" >&2
-		echo_red "       By setting 'reg_ssh_key' in 'aba.conf' you have configued the mirror to be on the local host '$reg_host' (which resolves to '$fqdn_ip')." >&2
-		echo_red "       If that should be a remote host, please define the 'reg_ssh_key' value in 'mirror.conf'." >&2
-		echo_red "       Otherwise, ensure the DNS record points to an IP address on this local host '`hostname`'." >&2
-		echo_red "       Please correct the problem and try again." >&2
+		echo_red "Warning: FQDN '$reg_host' does not resolve to an IP addr on this host '`hostname`'!" >&2
+		echo_red "         By setting 'reg_ssh_key' in 'mirror.conf' you have configued the mirror to be on the local host '$reg_host' (which resolves to '$fqdn_ip')." >&2
+		echo_red "         If that should be a remote host, please define the 'reg_ssh_key' value in 'mirror.conf'." >&2
+		echo_red "         Otherwise, ensure the DNS record points to an IP address that can reach this local host '`hostname`'." >&2
+		##echo_red "         Please correct the problem and try again." >&2
 		echo
 
-		exit 1
+		##exit 1  # We will leave this only as a warning, not an error since sometimes there is a NAT in use
 	fi
 
 #	if ! ssh -F .ssh.conf $reg_host touch $flag_file >/dev/null 2>&1; then
