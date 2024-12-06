@@ -255,6 +255,7 @@ else
 	# Run 'make -C mirror clean' here since we (might be) are re-installing another cluster *with the same mac addresses*! So, install might fail.
 	test-cmd -h steve@$int_bastion -m "Cleaning sno dir" "make -C $subdir/aba/sno clean"  # This does not remove the cluster.conf file, so cluster can be re-installed 
 	test-cmd -h steve@$int_bastion -m "Installing sno cluster" "make -C $subdir/aba/sno"  
+	test-cmd -h steve@$int_bastion -m "Checking cluster operators" aba --dir $subdir/aba/sno cmd
 fi
 
 test-cmd -h steve@$int_bastion -m "Checking cluster operator status on cluster sno" "make -C $subdir/aba/sno cmd"

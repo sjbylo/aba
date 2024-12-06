@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Simple Aba installer.  Copy aba command somewhere into the $PATH
 
-branch=wrapaba
+branch=main
 
 cd $(dirname $0)
 

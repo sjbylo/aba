@@ -47,9 +47,19 @@ Aba automatically completes the following and more:
 
 For the very impatient:
 
-  - Clone/download this git repository (https://github.com/sjbylo/aba.git) onto a workstation with an internet connection (RHEL 8/9 or Fedora).
-  - Run `./install`
-  - Run `aba -h` or `aba [-i]` and Aba will guide you through the process.
+Run the following command to clone the Aba repoitory (https://github.com/sjbylo/aba.git) and install the aba command:
+
+```
+bash -c "$(gitrepo=https://raw.githubusercontent.com/sjbylo/aba; branch=main; curl -fsSL $repo/refs/heads/$branch/install)"
+```
+
+Then:
+
+```
+cd aba         # Change into Aba's top-level directory to run all commands
+./install      # Copy the aba script to your $PATH
+aba            # Let Aba guide you through the installation process
+```
 
 
 ## Installing OpenShift in a Disconnected Network
@@ -140,15 +150,20 @@ Note: that Aba also works in connected environments without a private mirror reg
 
 ## A Very Quick Guide
 
-For those who are less impatient...
+Installing Aba:
 
-Install Aba (method 1):
+### Method 1: Install Aba in one command
 
 ```
-bash -c "$(repo=https://raw.githubusercontent.com/sjbylo/aba; branch=main; curl -fsSL $repo/refs/heads/$branch/install)"
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" $gitrepo $gitbranch
 ```
 
-Install Aba using 'git clone' (method 2):
+cd aba
+aba          # Let Aba guide you through the installation process
+aba -h       # Get more help
+```
+
+### Method 2: Install Aba using 'git clone'
 
 ```
 git clone https://github.com/sjbylo/aba.git
@@ -157,7 +172,7 @@ cd aba
 aba -h   # For help
 aba -i   # For interactive mode
 ```
-- clones the repo, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
+- clones the repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
 - If needed, add any required operators to the `aba.conf` file by setting 'op-sets' and/or 'ops' values. 
 - helps you decide if you have a partially disconnected or fully disconnected (air-gapped) environment and how you should proceed. 
 
@@ -229,7 +244,7 @@ v=4.17.3
 
 Create the bundle archive with this single command:
 ```
-aba bundle --channel stable --version $v --op-sets ocp acm ocpv odf appdev --ops web-terminal --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
+aba bundle --channel stable --version $v --op-sets ocp mesh3 --ops web-terminal --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
 ```
 
 - This will generate several 10GB files: ocp_mycluster_4.17.3_aa|ab|ac... etc 
@@ -303,7 +318,7 @@ aba save
 
 - pulls the images from the Internet and saves them into the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators)!
 
-Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repo (including templates, scripts, images, CLIs and other install files) to your bastion (in your private network) via a portable storage device, e.g. a thumb drive. 
+Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repository (including templates, scripts, images, CLIs and other install files) to your bastion (in your private network) via a portable storage device, e.g. a thumb drive. 
 
 Example:
 
@@ -336,7 +351,7 @@ Example:
 aba tarrepo out=/dev/path/to/drive/aba.tgz
 ```
 - Write archive `aba.tgz` to the device mounted at /dev/path/to/drive, EXCEPT for the `seq#` tar files under save/
-- The `seq#` tar file(s) in the "mirror/save" directory and the repo tarball `aba.tgz` can be copied separately to a storage device, e.g. USB stick, S3 or other. 
+- The `seq#` tar file(s) in the "mirror/save" directory and the repository tarball `aba.tgz` can be copied separately to a storage device, e.g. USB stick, S3 or other. 
 
 Copy the "aba.tgz" file to the bastion and unpack the archive. Note the directory "aba/mirror/save".
 Copy or move the "seq" tar file(s), as is, from the "mirror/save" directory to the  bastion, into the "mirror/save" directory on the bastion.
