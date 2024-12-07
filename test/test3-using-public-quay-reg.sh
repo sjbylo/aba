@@ -24,7 +24,7 @@ rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
 int_bastion=registry.example.com
-bastion_vm=bastion-internal-rhel9
+bastion_vm=bastion-internal-rhel8
 
 source scripts/include_all.sh no-trap  # Need for below normalize fn() calls
 source test/include.sh
@@ -38,6 +38,8 @@ mylog Starting test $(basename $0)
 mylog ============================================================
 mylog "Test to install sno directly from public registry."
 mylog
+
+set -ex
 
 ntp=10.0.1.8 # If available
 
