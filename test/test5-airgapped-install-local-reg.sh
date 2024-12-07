@@ -51,7 +51,7 @@ mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm 
 rm -rf sno compact standard 
 
 int_bastion=registry.example.com
-bastion_vm=bastion-internal-rhel9
+bastion_vm=bastion-internal-rhel8
 subdir=~/subdir
 
 mylog ============================================================

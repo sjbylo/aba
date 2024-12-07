@@ -25,7 +25,7 @@ rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
 int_bastion=registry.example.com
-bastion_vm=bastion-internal-rhel9
+bastion_vm=bastion-internal-rhel8
 ntp=10.0.1.8 # If available
 
 source scripts/include_all.sh no-trap # Need for below normalize fn() calls
