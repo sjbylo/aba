@@ -9,12 +9,12 @@ os     := $(strip $(shell uname -o))
 arch   := $(strip $(shell uname -m))
 os_ver := $(strip $(shell grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f2 | tr -d '"' | grep -o -E "[0-9]+\.[0-9]+"))
 
-# Normalize 'os_ver' variable, e.g. if Fedora, then we want to convert say "40" to 9.x
+# Check and set default version 'os_ver' variable, e.g. if Fedora version 40, then we want to convert "40" to 9.x
 ifeq ($(os_ver),)
 	os_ver := 9.4
 endif
 
-ifeq ($(shell echo "$(os_ver)" | grep -E "^8\."),8.)
+ifeq ($(shell echo "$(os_ver)" | grep -o -E "^8\."),8.)
 	rhel_ver := rhel8
 else
 	rhel_ver := rhel9
