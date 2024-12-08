@@ -63,7 +63,7 @@ else
   endif
 endif
 
-download: openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
+download: openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
 
 ##@ Help-related tasks
 .PHONY: help
@@ -96,6 +96,11 @@ openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz:  ## Downlaod oc 
 	echo Downlaoding openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
 	@echo https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
+
+openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz:  ## Downlaod oc tarball 
+	echo Downlaoding openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
+	@echo https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
 
 ########################################
 # Be sure that the correct version is installed by creating .*installed flag file
