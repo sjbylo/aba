@@ -5,8 +5,21 @@
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 
-os   := $(strip $(shell uname -o))
-arch := $(strip $(shell uname -m))
+os     := $(strip $(shell uname -o))
+arch   := $(strip $(shell uname -m))
+os_ver := $(strip $(shell grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f2 | tr -d '"' | grep -o -E "[0-9]+\.[0-9]+"))
+
+# Normalize 'os_ver' variable, e.g. if Fedora, then we want to convert say "40" to 9.x
+ifeq ($(os_ver),)
+	os_ver := 9.4
+endif
+
+ifeq ($(shell echo "$(os_ver)" | grep -E "^8\."),8.)
+	rhel_ver := rhel8
+else
+	rhel_ver := rhel9
+endif
+
 
 # Normalize 'os' variable
 ifeq ($(os),GNU/Linux)
@@ -33,6 +46,10 @@ ocp_version := $(strip $(shell echo $(ocp_version)))
 #all:             ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc ~/bin/butane
 all:             oc openshift-install oc-mirror govc butane
 
+test:
+	echo os_ver=$(os_ver)
+	$(abort)
+
 # If 'distclean' found in $MAKECMDGOALS, i.e. no distclean provided
 ifneq ($(filter distclean,$(MAKECMDGOALS)),)
   # distclean not given
@@ -46,7 +63,7 @@ else
   endif
 endif
 
-download: openshift-client-$(os)-$(ocp_version).tar.gz openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
+download: openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
 
 ##@ Help-related tasks
 .PHONY: help
@@ -67,18 +84,18 @@ help: ## Help
 # Be sure that the correct version is installed by creating .*installed flag file
 
 oc: ~/bin/oc
-~/bin/oc: .init .$(ocp_version)-openshift-client-$(os)-installed  ## Install oc into ~/bin
-	@echo Extracting openshift-client-$(os)-$(ocp_version).tar.gz to ~/bin/oc
-	tar -C ~/bin -xmzf openshift-client-$(os)-$(ocp_version).tar.gz oc kubectl
+~/bin/oc: .init .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed  ## Install oc into ~/bin
+	@echo Extracting openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz to ~/bin/oc
+	tar -C ~/bin -xmzf openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz oc kubectl
 
-.$(ocp_version)-openshift-client-$(os)-installed: openshift-client-$(os)-$(ocp_version).tar.gz
-	@rm -f .??*-openshift-client-$(os)-installed
-	@touch .$(ocp_version)-openshift-client-$(os)-installed 
+.$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed: openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
+	@rm -f .??*-openshift-client-$(os)-amd64-$(rhel_ver)-installed
+	@touch .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed 
 
-openshift-client-$(os)-$(ocp_version).tar.gz:  ## Downlaod oc tarball 
-	echo Downlaoding openshift-client-$(os)-$(ocp_version).tar.gz
-	@echo https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-$(ocp_version).tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-$(ocp_version).tar.gz
+openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz:  ## Downlaod oc tarball 
+	echo Downlaoding openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
+	@echo https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
 
 ########################################
 # Be sure that the correct version is installed by creating .*installed flag file
@@ -101,7 +118,7 @@ oc-mirror: ~/bin/oc-mirror
 ~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz ~/bin/oc   ## Install oc-mirror into ~/bin
 	@####grep -oP '(?<=VERSION_ID=")[^"]+' /etc/os-release | grep "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	@echo Extracting oc-mirror.tar.gz to ~bin/oc-mirror
-	@grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f2 | tr -d '"' | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
+	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
 
 oc-mirror.tar.gz: ## Download oc-mirror tarball
