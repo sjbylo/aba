@@ -131,6 +131,7 @@ ssh steve@$int_bastion -- "date" || sleep 8
 cat <<END | ssh steve@$int_bastion -- sudo bash
 set -ex
 timedatectl
+dnf install chrony podman -y
 chronyc sources -v
 chronyc add server 10.0.1.8 iburst
 timedatectl set-timezone Asia/Singapore
