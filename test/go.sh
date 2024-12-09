@@ -5,6 +5,7 @@
 [ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
 
 #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
+export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 
 # This is for testing a specific branch ($1) directly from "git clone", otherwise it will test
 # the local dir. ($PWD)

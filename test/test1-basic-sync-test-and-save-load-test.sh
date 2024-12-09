@@ -26,7 +26,7 @@ rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
 int_bastion=registry.example.com
-bastion_vm=bastion-internal-rhel8
+bastion_vm=bastion-internal-$internal_bastion_rhel_ver
 
 source scripts/include_all.sh no-trap  # Need for below normalize fn() calls
 source test/include.sh
@@ -94,6 +94,8 @@ echo VC_FOLDER=$VC_FOLDER
 
 mylog Revert internal bastion vm to snapshot and powering on ...
 (
+	govc vm.power -off bastion-internal-rhel8
+	govc vm.power -off bastion-internal-rhel9
 	govc snapshot.revert -vm $bastion_vm aba-test
 	sleep 8
 	govc vm.power -on $bastion_vm
