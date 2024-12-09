@@ -79,7 +79,7 @@ Each scenario includes two main network zones:
 Bastion Requirements
 
 - **Connected Bastion**: Can be a workstation or virtual machine (VM) running on a laptop, configured with RHEL 8/9 or Fedora.
-- **Internal Bastion**: Must be running RHEL 9 to support OpenShift installation in the private network.
+- **Internal Bastion**: Must be running RHEL 8/9 to support OpenShift installation in the private network.
 
 These configurations ensure that each network zone meets OpenShift’s requirements for disconnected or fully air-gapped installations.
 
@@ -102,7 +102,7 @@ In a fully disconnected environment, where no internet access is available, two 
    - Sudo root access is required.  Password-less sudo access is recommended.
 
 - **Internal Bastion**
-   - A RHEL 9 VM or host within your private, air-gapped network.
+   - A RHEL 8/9 VM or host within your private, air-gapped network.
    - Install required RPMs as listed in `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Sudo root access is required.  Password-less sudo access is recommended.
 
@@ -111,7 +111,7 @@ In a fully disconnected environment, where no internet access is available, two 
 In a partially disconnected environment, the internal network has limited or proxy-based internet access, allowing data synchronization directly.
 
 - **Bastion**
-   - A single RHEL 9 VM with internet access and connectivity to the private network.
+   - A single RHEL 8/9 VM with internet access and connectivity to the private network.
    - Download and copy this Git repository to any location in your home directory on the bastion.
    - Download and store your Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs from `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
@@ -227,7 +227,7 @@ Store your pull secret in this file:
 ~/.pull-secret.json
 ```
 
-Run these commands on a RHEL 9 or Fedora VM: 
+Run these commands on a RHEL 8/9 or Fedora VM: 
 
 ```
 git clone https://github.com/sjbylo/aba.git
@@ -251,7 +251,7 @@ aba bundle --channel stable --version $v --op-sets ocp mesh3 --ops web-terminal 
 - The --op-sets option refers to predefined operator sets in `templates/operator-set-*`.
 - If needed, add individual operators after "--ops"
 
-Copy the files to a RHEL 9 machine wthin the private network. 
+Copy the files to a RHEL 8/9 machine wthin the private network. 
 
 Unpack the bundle archive, e.g: 
 
