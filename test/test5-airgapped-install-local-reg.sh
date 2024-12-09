@@ -51,7 +51,7 @@ mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm 
 rm -rf sno compact standard 
 
 int_bastion=registry.example.com
-bastion_vm=bastion-internal-rhel8
+bastion_vm=bastion-internal-$internal_bastion_rhel_ver
 subdir=~/subdir
 
 mylog ============================================================
@@ -118,6 +118,8 @@ source <(normalize-vmware-conf)
 #################################
 mylog Revert vm snapshot of the internal bastion vm and power on
 (
+	govc vm.power -off bastion-internal-rhel8
+	govc vm.power -off bastion-internal-rhel9
 	govc snapshot.revert -vm $bastion_vm aba-test
 	sleep 8
 	govc vm.power -on $bastion_vm
