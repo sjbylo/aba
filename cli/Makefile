@@ -92,12 +92,12 @@ oc: ~/bin/oc
 	@rm -f .??*-openshift-client-$(os)-amd64-$(rhel_ver)-installed
 	@touch .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed 
 
-openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz:  ## Downlaod oc tarball 
-	echo Downlaoding openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
-	@echo https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
+openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz:  ## Downlaod oc tarball for rhel9
+	echo Downlaoding openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz
+	@echo https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz
 
-openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz:  ## Downlaod oc tarball 
+openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz:  ## Downlaod oc tarball for rhel8
 	echo Downlaoding openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
 	@echo https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz

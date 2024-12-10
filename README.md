@@ -262,7 +262,7 @@ cd aba
 aba           # Run aba if you want Aba to install & load the mirror registry
 ```
 
-You will find the large image set tar file under `aba/mirror/save`.
+Note: You will find the large image set tar file under `aba/mirror/save`.
 
 
 [Back to top](#who-should-use-aba)
