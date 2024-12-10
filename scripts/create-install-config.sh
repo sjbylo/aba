@@ -72,24 +72,10 @@ export ssh_key_pub=$(cat $ssh_key_file.pub)
 #	export http_proxy=$set_http_proxy
 #	export https_proxy=$set_https_proxy
 #	export no_proxy=$set_no_proxy
-if [ "$http_proxy" -a "$https_proxy" ]; then
-	#export http_proxy=$http_proxy
-	#export https_proxy=$https_proxy
-	#export no_proxy=$no_proxy
-
-	echo_green "Configuring 'cluster wide proxy' using values defined in config.conf:"
-	echo_white "  http_proxy=$http_proxy"
-	echo_white "  https_proxy=$https_proxy"
-	echo_white "  no_proxy=$no_proxy"
-
-	export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
-
-	# Using proxy! No need for this
-	image_content_sources=
-	additional_trust_bundle=
-elif [ "$proxy" = "auto" ]; then
+#if [ "$http_proxy" -a "$https_proxy" ]; then
+if [ "$proxy" ]; then
 	if [ "$http_proxy" -a "$https_proxy" ]; then
-		echo_green "Configuring 'cluster wide proxy' using your environment variables:"
+		echo_green "Configuring 'cluster wide proxy' using the following proxy settings:"
 		echo_white "  http_proxy=$http_proxy"
 		echo_white "  https_proxy=$https_proxy"
 		echo_white "  no_proxy=$no_proxy"
@@ -100,9 +86,9 @@ elif [ "$proxy" = "auto" ]; then
 		image_content_sources=
 		additional_trust_bundle=
 	else
-		echo_red "Warning: proxy value is set to 'auto' but not all env proxy vars set. Ignoring." >&2
-		echo_red "If you want to configure the cluster wide proxy, either set 'proxy=auto' or" >&2
-		echo_red "set the '*_proxy' values in 'cluster.conf'" >&2
+		echo_red "Warning: The proxy value in cluster.conf is set but not all proxy vars are set. Ignoring." >&2
+		echo_red "If you want to configure the cluster wide proxy, set 'proxy=1' or override by" >&2
+		echo_red "setting the '*_proxy' values in 'cluster.conf'" >&2
 	fi
 else
 	echo_white "Not configuring the cluster wide proxy since proxy values not set in cluster.conf."
