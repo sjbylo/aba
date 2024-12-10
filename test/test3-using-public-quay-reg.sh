@@ -82,7 +82,7 @@ source <(normalize-vmware-conf)
 
 rm -rf sno
 test-cmd -m "Creating sno/cluster.conf." aba sno --step cluster.conf
-test-cmd -m "Adding proxy=auto to sno/cluster.conf" "sed -i 's/^proxy=.*/proxy=auto/g' sno/cluster.conf"
+test-cmd -m "Adding proxy=true to sno/cluster.conf" "sed -i 's/^#proxy=.*/proxy=true/g' sno/cluster.conf"
 
 test-cmd -m "Installing SNO cluster from public registry, since no registry available." aba sno 
 test-cmd -m "Checking cluster operators" aba --dir sno cmd
