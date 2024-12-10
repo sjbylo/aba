@@ -1,6 +1,11 @@
 apiVersion: v1
 baseDomain: {{ base_domain }}
-{{ insert_proxy }}
+{%- if proxy %}
+proxy:
+  httpProxy: {{ http_proxy }}
+  httpsProxy: {{ https_proxy }}
+  noProxy: {{ no_proxy -}}
+{% endif %}
 metadata:
   name: {{ cluster_name }}
 compute:

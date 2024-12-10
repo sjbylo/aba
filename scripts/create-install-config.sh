@@ -18,7 +18,7 @@ export pull_secret=
 export ssh_key_pub=
 export additional_trust_bundle=
 export image_content_sources=
-export insert_proxy=
+###export insert_proxy=
 
 # Change the default of bare-metal host prefix
 if [ "$platform" = "bm" -a $hostPrefix -eq 23 ]; then
@@ -80,11 +80,13 @@ if [ "$proxy" ]; then
 		echo_white "  https_proxy=$https_proxy"
 		echo_white "  no_proxy=$no_proxy"
 
-		export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
+		###export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
 
 		# Using proxy! No need for this
 		image_content_sources=
 		additional_trust_bundle=
+
+		insert_proxy=1
 	else
 		echo_red "Warning: The proxy value in cluster.conf is set but not all proxy vars are set. Ignoring." >&2
 		echo_red "If you want to configure the cluster wide proxy, set 'proxy=1' or override by" >&2
@@ -107,7 +109,7 @@ else
 		# Should check accessibility to registry.redhat.io?
 		echo
 		echo_red "Warning: No private mirror registry configured & no proxy settings provided!" >&2
-		echo_red "         If this is *unexpected* you likely need to set up a mirror registry! See the Readme.md file for more." >&2
+		echo_red "         If this is *unexpected* you likely need to set up a mirror registry! See the README.md for more." >&2
 		echo_red "         Root CA file 'regcreds/rootCA.pem' not found. Not adding 'additionalTrustBundle' to install-config.yaml!" >&2
 		echo
 	fi
