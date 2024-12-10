@@ -128,7 +128,7 @@ clean: ## Clean up all temporary files.
 	rm -f .aba.conf.seen
 
 .PHONY: distclean
-distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this dies not run 'make uninstall' (uninstall the reg.)
+distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this does not run 'make uninstall' (uninstall the reg.)
 	$(SCRIPTS)/distclean-gate.sh $(force)
 	make clean
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
