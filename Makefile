@@ -16,9 +16,9 @@ aba:  ## Run aba to set up 'aba.conf'
 aba.conf:
 	aba
 
-.PHONY: interactive
-interactive:
-	$(SCRIPTS)/aba-interactive.sh
+##.PHONY: interactive
+##interactive:
+##	$(SCRIPTS)/aba-interactive.sh
 
 ##@ Help-related tasks
 

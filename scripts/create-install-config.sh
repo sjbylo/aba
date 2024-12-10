@@ -68,10 +68,14 @@ export ssh_key_pub=$(cat $ssh_key_file.pub)
 
 
 # See if the cluster wide proxy should be added
-if [ "$set_http_proxy" -a "$set_https_proxy" ]; then
-	export http_proxy=$set_http_proxy
-	export https_proxy=$set_https_proxy
-	export no_proxy=$set_no_proxy
+#if [ "$set_http_proxy" -a "$set_https_proxy" ]; then
+#	export http_proxy=$set_http_proxy
+#	export https_proxy=$set_https_proxy
+#	export no_proxy=$set_no_proxy
+if [ "$http_proxy" -a "$https_proxy" ]; then
+	#export http_proxy=$http_proxy
+	#export https_proxy=$https_proxy
+	#export no_proxy=$no_proxy
 
 	echo_green "Configuring 'cluster wide proxy' using values defined in config.conf:"
 	echo_white "  http_proxy=$http_proxy"
