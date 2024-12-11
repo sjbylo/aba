@@ -81,7 +81,7 @@ ConnectTimeout=15
 LogLevel=ERROR
 END
 
-flag_file=/tmp/.$RANDOM
+flag_file=/tmp/.$(whoami).$RANDOM
 
 # Install Quay mirror on **remote host** if ssh key defined 
 if [ "$reg_ssh_key" ]; then
