@@ -1,6 +1,6 @@
 # Makefile to download and install oc, openshift-install, oc-mirror and govc 
 
-#.SILENT:
+.SILENT:
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
