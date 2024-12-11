@@ -56,7 +56,8 @@ echo "$image_content_sources" | sed 's/^/  /' >> .idms.yaml
 
 echo Extracting openshift-install from $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha
 #oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images:${release_ver}-x86_64
-oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha --insecure=true
+# FIXME: this fails for oc versions up to v4.14 since the wrong version of 'oc' is used (i.e. 'idms' not supported).  So, I added || true to ignore errors
+oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha --insecure=true || true
 [ -s openshift-install ] && mv openshift-install ~/bin
 rm -f .idms.yaml
 

@@ -63,7 +63,7 @@ else
   endif
 endif
 
-download: openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
+#download: openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz openshift-client-$(os)-$(ocp_version).tar.gz openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
 
 ##@ Help-related tasks
 .PHONY: help
@@ -81,29 +81,61 @@ help: ## Help
 	@exit 1
 
 ########################################
-# Be sure that the correct version is installed by creating .*installed flag file
 
-oc: ~/bin/oc  ## Install oc into ~/bin
-~/bin/oc: .init .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed
-	@echo Extracting openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz to ~/bin/oc
-	tar -C ~/bin -xmzf openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz oc kubectl 2>/dev/null || tar -C ~/bin -xmzf openshift-client-$(os)-$(ocp_version).tar.gz oc kubectl
+#SB oc: ~/bin/oc  ## Install oc into ~/bin
+#SB # This will fall back on the older versions of oc without the 'amd64-rhel8'
+#SB ~/bin/oc: .init .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed
+# TIDY UP 	@echo Extracting openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz to ~/bin/oc
+# TIDY UP 	tar -C ~/bin -xmzf openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz oc kubectl || tar -C ~/bin -xmzf openshift-client-$(os)-$(ocp_version).tar.gz oc kubectl
+# TIDY UP 
+# TIDY UP .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed: openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
+# TIDY UP 	@rm -f .??*-openshift-client-$(os)-amd64-$(rhel_ver)-installed
+# TIDY UP 	@touch .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed 
+# TIDY UP 
 
-.$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed: openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
-	@rm -f .??*-openshift-client-$(os)-amd64-$(rhel_ver)-installed
-	@touch .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed 
+# The preference to download the oc tar files is for rhel9, then rhel8 and then the generic taer file.
 
-openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz:  ## Downlaod oc tarball for rhel9
-	echo Downlaoding openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz
-	@echo https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz
-	curl --fail --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz 2>/dev/null || curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-$(ocp_version).tar.gz
+oc_tar_file       := openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
+oc_url            := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(oc_tar_file)
+rhel9_oc_tar_file := openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz
+rhel8_oc_tar_file := openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
+rhel9_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
+rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
+gen_oc_tar_file   := openshift-client-$(os)-$(ocp_version).tar.gz
+gen_url           := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
 
-openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz:  ## Downlaod oc tarball for rhel8
-	echo Downlaoding openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
-	@echo https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
+download: $(rhel9_oc_tar_file) $(rhel8_oc_tar_file) $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
 
 ########################################
-# Be sure that the correct version is installed by creating .*installed flag file
+# Extract the oc file with priority on the rhel8/9 version, then the generic version
+oc: ~/bin/oc  ## Install oc into ~/bin
+~/bin/oc: .init $(gen_oc_tar_file)
+	@echo Extracting $(oc_tar_file) or $(gen_oc_tar_file) to ~/bin/oc
+	@tar -C ~/bin -xmzf $(oc_tar_file) oc kubectl 2>/dev/null || tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl
+
+$(oc_tar_file):  ## Downlaod oc tarball for "this" host, otherwise the fallback tar file
+	@echo Downlaoding $(oc_url) or $(gen_url) ...
+	@curl -sfkLI $(oc_url) >/dev/null && curl --f --progress-bar -O -L $(oc_url) || (echo "Downloading fallback file $(gen_url) ..."; curl --progress-bar -O -L $(gen_url))
+	touch $(oc_tar_file)
+
+octars: $(gen_oc_tar_file) $(rhel9_oc_tar_file) $(rhel8_oc_tar_file)
+$(gen_oc_tar_file):  ## Downlaod fallback oc tar file, if available
+	@echo Downlaoding $(gen_url) ...
+	@curl -sfkLI $(gen_url) >/dev/null && curl -f --progress-bar -O -L $(gen_url) || > $(gen_oc_tar_file)
+
+# Ensure all possible tarballs are downloaded
+$(rhel9_oc_tar_file):  ## Downlaod oc tarball for rhel9, if available
+	@echo Downloading $(rhel9_oc_url)
+	@curl -sfkLI $(rhel9_oc_url) >/dev/null && curl -f --progress-bar -OL $(rhel9_oc_url) || > $(rhel9_oc_tar_file)
+
+# Ensure all possible tarballs are downloaded
+$(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
+	@echo Downloading $(rhel8_oc_url)
+	@curl -sfkLI $(rhel8_oc_url) >/dev/null && curl -f --progress-bar -OL $(rhel8_oc_url) || > $(rhel8_oc_tar_file)
+
+
+########################################
+# Be sure that the correct version is installed by creating .*installed flag file # FIXME as no need!
 
 openshift-install: ~/bin/openshift-install
 ~/bin/openshift-install: .init .$(ocp_version)-openshift-install-$(os)-installed ## Install openshift-install into ~/bin
@@ -115,7 +147,7 @@ openshift-install: ~/bin/openshift-install
 	@touch .$(ocp_version)-openshift-install-$(os)-installed 
 
 openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install tarball
-	echo Downlaoding openshift-install-$(os)-$(ocp_version).tar.gz
+	@echo Downlaoding openshift-install-$(os)-$(ocp_version).tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
 
 ########################################
