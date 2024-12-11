@@ -267,10 +267,17 @@ cat >> mirror/save/imageset-config-save.yaml <<END
     packages:
 END
 
+mylog "Checking for file mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
+test -s mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml
+mylog "Checking for servicemeshoperator in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
+cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep servicemeshoperator$
+mylog "Checking for kiali-ossm in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
+cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep kiali-ossm$
+
 # Append the correct values for each operator
 mylog Append sm and kiali operators to imageset conf
-grep -A2 -e "name: servicemeshoperator$"	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
-grep -A2 -e "name: kiali-ossm$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+grep -A2 -e "name: servicemeshoperator$"  mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+grep -A2 -e "name: kiali-ossm$"	          mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
 ########
 test-cmd -r 20 3 -m "Saving mesh operators to local disk" "aba --dir mirror save"
@@ -281,6 +288,9 @@ aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir 
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load" 
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Configuring day2 ops" "aba --dir $subdir/aba/$cluster_type day2"
+
+mylog "Checking for jaeger-product in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
+cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep jaeger-product$
 
 mylog Append jaeger operator to imageset conf
 grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
