@@ -251,7 +251,7 @@ aba bundle --channel stable --version $v --op-sets ocp mesh3 --ops web-terminal 
 - The --op-sets option refers to predefined operator sets in `templates/operator-set-*`.
 - If needed, add individual operators after "--ops"
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.3_* | tar tvf -`
-- Generate a checksum for the files, e.g. cksum ocp_mycluster_4.17.3_* and use the checksum to verify the files after transferring them to the internal network. 
+- Generate a checksum for the files, e.g. `cksum ocp_mycluster_4.17.3_*` and use the checksum to verify the files after transferring them to the internal network. 
 
 Copy the files to a RHEL 8/9 machine wthin the private internal network. 
 
