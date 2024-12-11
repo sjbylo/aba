@@ -6,7 +6,7 @@
 
 source scripts/include_all.sh
 
-dest=/tmp/aba-backup.tar	# Default file to write to
+dest=/tmp/.$(whoami).ba-backup.tar	# Default file to write to
 inc= 				# Full backup by default
 repo_only=			# Also include the save/mirror_seq*.tar files (for some use-cases it's more efficient to keep them seperate) 
 
