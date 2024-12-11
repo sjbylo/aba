@@ -274,6 +274,13 @@ mylog "Adding advanced-cluster-management operator images to mirror/save/imagese
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
+mylog "Checking for file mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
+test -s mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml
+mylog "Checking for advanced-cluster-management in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
+cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep advanced-cluster-management$ 
+mylog "Checking for multicluster-engine         in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
+cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep multicluster-engine$ 
+
 cat >> mirror/save/imageset-config-save.yaml <<END
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
@@ -281,8 +288,8 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 # Append the correct values for each operator
-grep -A2 -e "name: advanced-cluster-management$"	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
-grep -A2 -e "name: multicluster-engine$"  	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
+grep -A2 -e "name: advanced-cluster-management$" mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
+grep -A2 -e "name: multicluster-engine$"         mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
 
 #      - name: multicluster-engine
 #        channels:

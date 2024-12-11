@@ -40,7 +40,7 @@ add_op() {
     - name: $op_name"
 		fi
 	else
-		echo_red "Warning: Operator '$1' not found in index file mirror/.redhat-operator-index-v$ocp_ver_major" >&2 >&2
+		echo_red "Warning: Operator '$1' not found in index file mirror/.redhat-operator-index-v$ocp_ver_major" >&2
 	fi
 }
 
@@ -53,7 +53,7 @@ op_sets=$(echo $op_sets | tr -s " ")
 if [ "$ops" -o "$op_sets" ]; then
 	# Check for the index file
 	if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
-		echo_red "Missing operator index file: .redhat-operator-index-v$ocp_ver_major ... not adding your selected operators to the image set config!" >&2 >&2
+		echo_red "Missing operator index file: .redhat-operator-index-v$ocp_ver_major ... not adding your selected operators to the image set config!" >&2
 
 		exit 0
 	fi
@@ -84,7 +84,7 @@ do
 		done
 		#echo >&2
 	else
-		echo_red "Missing operator set file: templates/operator-set-$set" >&2 >&2
+		echo_red "Missing operator set file: templates/operator-set-$set" >&2
 	fi
 done
 
