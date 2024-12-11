@@ -79,6 +79,7 @@ echo $$ > $pid_file
 echo_cyan "Downloading Operator index v$ocp_ver_major to $index_file, please wait a few minutes ..."
 
 # Fetch latest operator catalog and default channels
+echo Running: oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >&2
 if ! oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major > $index_file; then
 	echo_red "Error: oc-mirror returned $? whilst downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major." >&2
 	rm -f $lock_file $pid_file

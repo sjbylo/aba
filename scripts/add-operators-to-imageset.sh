@@ -51,22 +51,20 @@ fi
 op_sets=$(echo $op_sets | tr -s " ")
 
 if [ "$ops" -o "$op_sets" ]; then
+	# Check for the index file
+	if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
+		echo_red "Missing operator index file: .redhat-operator-index-v$ocp_ver_major ... not adding your selected operators to the image set config!" >&2 >&2
+
+		exit 0
+	fi
+
 cat <<END
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
     packages:
 END
 else
-	#echo_cyan "No individual operators defined in 'aba.conf'.  Not adding any individual operators to the image set config file." >&2
 	echo_cyan "No 'op*' values set in aba.conf. Not adding operators to the image set config file." >&2
-	#echo_cyan "No operators to add to the catalog index.  No 'op*' values set in aba.conf" >&2
-
-	exit 0
-fi
-
-# Check for the index file
-if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
-	echo_red "Missing operator index file: .redhat-operator-index-v$ocp_ver_major ..." >&2 >&2
 
 	exit 0
 fi
