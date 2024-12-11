@@ -250,10 +250,18 @@ aba bundle --channel stable --version $v --op-sets ocp mesh3 --ops web-terminal 
 - This will generate several 10GB files: ocp_mycluster_4.17.3_aa|ab|ac... etc 
 - The --op-sets option refers to predefined operator sets in `templates/operator-set-*`.
 - If needed, add individual operators after "--ops"
+- Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.3_* | tar tvf -`
+- Generate a checksum for the files, e.g. cksum ocp_mycluster_4.17.3_* and use the checksum to verify the files after transferring them to the internal network. 
 
-Copy the files to a RHEL 8/9 machine wthin the private network. 
+Copy the files to a RHEL 8/9 machine wthin the private internal network. 
 
-Unpack the bundle archive, e.g: 
+Verify the files are intact by comparing the checksum values with the original files:
+
+```
+cksum ocp_mycluster_4.17.3_*
+```
+
+Unpack the bundle archive:
 
 ```
 cat /path/to/ocp_mycluster_4.17.3_* | tar xvf -        # to extract the bundle archive
