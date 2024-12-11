@@ -317,8 +317,10 @@ Note that the above 'disconnected scenario' can be repeated, for example to down
 
 ### Fully disconnected (air-gapped) Scenario
 
+**Please note that it is now recommended to use the above `aba bundle` command to initiate a fully air-gapped installation which will complete the below for you.**
+
 In this scenario, your connected workstation has access to the Internet but no access to the private network.
-You also require an bastion in a private subnet.
+You also require a bastion in a private subnet.
 
 ```
 aba save
