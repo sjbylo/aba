@@ -58,7 +58,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
 	echo "Running: oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
-	try_cmd 5 5 10 "oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
+	try_cmd 5 5 15 "oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
 
 	# Sometimes see the error 'error: the server doesn't have a resource type "imagestream"' ... so , need to check and wait...
 	echo "Ensuring 'imagestream' resource is available!" 
@@ -66,7 +66,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 
 	# The above workaround describes re-creating the is/oauth-proxy 
 	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
-		try_cmd 5 5 10 oc delete imagestream -n openshift oauth-proxy
+		try_cmd 5 5 15 oc delete imagestream -n openshift oauth-proxy
 
 		echo Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 2-3 minutes.
 

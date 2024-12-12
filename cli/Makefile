@@ -95,44 +95,43 @@ help: ## Help
 
 # The preference to download the oc tar files is for rhel9, then rhel8 and then the generic taer file.
 
-oc_tar_file       := openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
-oc_url            := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(oc_tar_file)
-rhel9_oc_tar_file := openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz
-rhel8_oc_tar_file := openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
-rhel9_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
-rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
+full_oc_tar_file       := openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
+full_oc_url            := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
+
 gen_oc_tar_file   := openshift-client-$(os)-$(ocp_version).tar.gz
 gen_url           := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
 
-download: $(rhel9_oc_tar_file) $(rhel8_oc_tar_file) $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
+rhel9_oc_tar_file := openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz
+rhel9_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
+
+rhel8_oc_tar_file := openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
+rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
+
+download: $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
 
 ########################################
-# Extract the oc file with priority on the rhel8/9 version, then the generic version
+# Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
 oc: ~/bin/oc  ## Install oc into ~/bin
-~/bin/oc: .init $(gen_oc_tar_file)
-	@echo Extracting $(oc_tar_file) or $(gen_oc_tar_file) to ~/bin/oc
-	@tar -C ~/bin -xmzf $(oc_tar_file) oc kubectl 2>/dev/null || tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl
+~/bin/oc: .init $(full_oc_tar_file)
+	([ -s $(full_oc_tar_file) ] && echo Extracting $(full_oc_tar_file) ... && tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl) || ([ -s $(gen_oc_tar_file) ] && echo Extracting $(gen_oc_tar_file) ...; tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl)
 
-octars: $(gen_oc_tar_file) $(rhel9_oc_tar_file) $(rhel8_oc_tar_file)
-$(gen_oc_tar_file):  ## Downlaod fallback oc tar file, if available
-	@echo Downlaoding $(gen_url) ...
-	@curl -sfkLI $(gen_url) >/dev/null && curl -f --progress-bar -O -L $(gen_url) || > $(gen_oc_tar_file)
+octars: $(gen_oc_tar_file) $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download
+$(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
+	@curl -sfkLI $(gen_url) >/dev/null && echo Downlaoding $(gen_url) ... && curl -f --progress-bar -O -L $(gen_url) || (echo $(gen_oc_tar_file) not available; > $(gen_oc_tar_file))
 
-# Ensure all possible tarballs are downloaded
-$(rhel9_oc_tar_file):  ## Downlaod oc tarball for rhel9, if available
-	@echo Downloading $(rhel9_oc_url)
-	@curl -sfkLI $(rhel9_oc_url) >/dev/null && curl -f --progress-bar -OL $(rhel9_oc_url) || > $(rhel9_oc_tar_file)
+$(full_oc_tar_file):  ## Downlaod oc tarball for this hosts rhel version, otherwise download the fallback tarball.
+	@curl -sfkLI $(full_oc_url) >/dev/null && echo Downlaoding $(full_oc_url) ... && curl -f --progress-bar -O -L $(full_oc_url) || (echo "Downloading fallback file $(gen_url) ..."; curl --progress-bar -O -L $(gen_url))
+	touch $(full_oc_tar_file)
 
 # Ensure all possible tarballs are downloaded
-$(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
-	@echo Downloading $(rhel8_oc_url)
-	@curl -sfkLI $(rhel8_oc_url) >/dev/null && curl -f --progress-bar -OL $(rhel8_oc_url) || > $(rhel8_oc_tar_file)
+$(rhel9_oc_tar_file)-download:  ## Downlaod oc tarball for rhel9, if available
+	@curl -sfkLI $(rhel9_oc_url) >/dev/null && echo Downloading $(rhel9_oc_url) ... && curl -f --progress-bar -OL $(rhel9_oc_url) || (echo $(rhel9_oc_tar_file) not available; > $(rhel9_oc_tar_file))
+	touch $(rhel9_oc_tar_file)-download
 
-# This rule has priority over the above rule (which can be matching, causing "warning: overriding recipe for target")
-$(oc_tar_file):  ## Downlaod oc tarball for "this" host, otherwise the fallback tar file
-	@echo Downlaoding $(oc_url) or $(gen_url) ...
-	@curl -sfkLI $(oc_url) >/dev/null && curl --f --progress-bar -O -L $(oc_url) || (echo "Downloading fallback file $(gen_url) ..."; curl --progress-bar -O -L $(gen_url))
-	touch $(oc_tar_file)
+# Ensure all possible tarballs are downloaded
+$(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
+	@curl -sfkLI $(rhel8_oc_url) >/dev/null && echo Downloading $(rhel8_oc_url) ... && curl -f --progress-bar -OL $(rhel8_oc_url) || (echo $(rhel8_oc_tar_file) not available; > $(rhel8_oc_tar_file))
+	touch $(rhel8_oc_tar_file)-download
 
 
 ########################################
@@ -152,8 +151,8 @@ openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install ta
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
 
 ########################################
-oc-mirror: ~/bin/oc-mirror
-~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz ~/bin/oc   ## Install oc-mirror into ~/bin
+oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
+~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz ~/bin/oc
 	@####grep -oP '(?<=VERSION_ID=")[^"]+' /etc/os-release | grep "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	@echo Extracting oc-mirror.tar.gz to ~bin/oc-mirror
 	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
@@ -168,8 +167,8 @@ oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.rhel9.tar.gz
 
 ########################################
-govc: ~/bin/govc
-~/bin/govc: .init govc_Linux_x86_64.tar.gz    ## Install govc into ~/bin
+govc: ~/bin/govc  ## Install govc to ~/bin/govc
+~/bin/govc: .init govc_Linux_x86_64.tar.gz
 	@echo Extracting govc_Linux_x86_64.tar.gz to ~/bin/govc
 	tar -C ~/bin -xmzf govc_Linux_x86_64.tar.gz govc
 
@@ -177,13 +176,13 @@ govc_Linux_x86_64.tar.gz:   ## Download govc tarball
 	echo Downlaoding govc_Linux_x86_64.tar.gz
 	curl --progress-bar -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz"
 
-butane: ~/bin/butane
+butane: ~/bin/butane ## Install butane to ~/bin/butane
 ~/bin/butane: butane-binary
 	@echo Copying butane-binary to ~/bin/butane
 	cp butane-binary ~/bin/butane
 	chmod +x ~/bin/butane
 
-butane-binary:
+butane-binary: ## Download butane binary 
 	curl -s --connect-timeout 10 --retry 3 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane-binary
 
 
