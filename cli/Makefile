@@ -113,11 +113,6 @@ oc: ~/bin/oc  ## Install oc into ~/bin
 	@echo Extracting $(oc_tar_file) or $(gen_oc_tar_file) to ~/bin/oc
 	@tar -C ~/bin -xmzf $(oc_tar_file) oc kubectl 2>/dev/null || tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl
 
-$(oc_tar_file):  ## Downlaod oc tarball for "this" host, otherwise the fallback tar file
-	@echo Downlaoding $(oc_url) or $(gen_url) ...
-	@curl -sfkLI $(oc_url) >/dev/null && curl --f --progress-bar -O -L $(oc_url) || (echo "Downloading fallback file $(gen_url) ..."; curl --progress-bar -O -L $(gen_url))
-	touch $(oc_tar_file)
-
 octars: $(gen_oc_tar_file) $(rhel9_oc_tar_file) $(rhel8_oc_tar_file)
 $(gen_oc_tar_file):  ## Downlaod fallback oc tar file, if available
 	@echo Downlaoding $(gen_url) ...
@@ -132,6 +127,12 @@ $(rhel9_oc_tar_file):  ## Downlaod oc tarball for rhel9, if available
 $(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
 	@echo Downloading $(rhel8_oc_url)
 	@curl -sfkLI $(rhel8_oc_url) >/dev/null && curl -f --progress-bar -OL $(rhel8_oc_url) || > $(rhel8_oc_tar_file)
+
+# This rule has priority over the above rule (which can be matching, causing "warning: overriding recipe for target")
+$(oc_tar_file):  ## Downlaod oc tarball for "this" host, otherwise the fallback tar file
+	@echo Downlaoding $(oc_url) or $(gen_url) ...
+	@curl -sfkLI $(oc_url) >/dev/null && curl --f --progress-bar -O -L $(oc_url) || (echo "Downloading fallback file $(gen_url) ..."; curl --progress-bar -O -L $(gen_url))
+	touch $(oc_tar_file)
 
 
 ########################################

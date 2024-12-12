@@ -242,6 +242,8 @@ Set the version you want to install:
 v=4.17.3
 ```
 
+Note: It is recommended to run `aba bundle` on a fresh install of Aba or run: `cd aba/mirror; aba clean; cd ..` before continuing.
+
 Create the bundle archive with this single command:
 ```
 aba bundle --channel stable --version $v --op-sets ocp mesh3 --ops web-terminal --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
