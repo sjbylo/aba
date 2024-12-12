@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=202412122300
+ABA_VERSION=202412122303
 
 if [ -s scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" scripts/aba.sh; then
 	REPO_VER=$(grep "^ABA_VERSION=" scripts/aba.sh | cut -d= -f2)
