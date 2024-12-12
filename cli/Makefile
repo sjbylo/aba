@@ -35,7 +35,7 @@ ifeq ($(os),mac)
 	endif
 endif
 
-#ifneq ($(filter distclean,$(MAKECMDGOALS)),)
+#ifneq ($(filter reset,$(MAKECMDGOALS)),)
 
 # Include aba.conf if it exists
 -include ../aba.conf
@@ -50,9 +50,9 @@ test:
 	echo os_ver=$(os_ver)
 	$(abort)
 
-# If 'distclean' found in $MAKECMDGOALS, i.e. no distclean provided
-ifneq ($(filter distclean,$(MAKECMDGOALS)),)
-  # distclean not given
+# If 'reset' found in $MAKECMDGOALS, i.e. no reset provided
+ifneq ($(filter reset,$(MAKECMDGOALS)),)
+  # reset not given
 else
   ifeq ($(ocp_version),)
     # ocp_version is empty!
@@ -190,7 +190,7 @@ butane-binary: ## Download butane binary
 clean: ## Clean up installed binaries
 	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} .*installed
 
-.PHONY: distclean
-distclean: clean # Clean up everything. Only use if you know what you are doing!
-	rm -f *.tar.gz .init butane-binary
+.PHONY: reset
+reset: clean # Clean up everything. Only use if you know what you are doing!
+	rm -f *.tar.gz .init butane-binary *-download
 
