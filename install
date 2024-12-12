@@ -3,6 +3,7 @@
 
 repo=sjbylo/aba
 branch=main
+[ "$1" = "-q" ] && quiet=1 && shift
 [ "$1" ] && repo="$1"
 [ "$2" ] && branch="$2"
 
@@ -25,8 +26,8 @@ if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
 		exit 1
 	fi
 
-	echo
-	echo "Cloned Aba into $PWD/aba"
+	[ ! "$quiet" ] && echo
+	[ ! "$quiet" ] && echo "Cloned Aba into $PWD/aba"
 	cd aba
 fi
 
@@ -34,9 +35,9 @@ if [ -x scripts/aba.sh ]; then
 	if [[ "$PATH" =~ "/usr/local/bin:" ]]; then
 		[ -s "/usr/local/bin/aba" ] && action=updated || action=installed
 		sudo cp -p scripts/aba.sh /usr/local/bin/aba
-		echo "Aba has been $action to /usr/local/bin/aba"
-		echo "Run: cd aba; aba"
-		echo "Run: cd aba -h for help or see the README.md file"
+		[ ! "$quiet" ] && echo "Aba has been $action to /usr/local/bin/aba"
+		[ ! "$quiet" ] && echo "Run: cd aba; aba"
+		[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file"
 
 		exit 0
 	fi
@@ -47,23 +48,23 @@ if [ -x scripts/aba.sh ]; then
 		mkdir -p $HOME/bin
 
 		if cp -p scripts/aba.sh $HOME/bin/aba; then
-			echo "Aba has been $action to $HOME/bin/aba"
-			echo "Run: cd aba; aba"
-			echo "Run: cd aba -h for help or see the README.md file"
+			[ ! "$quiet" ] && echo "Aba has been $action to $HOME/bin/aba"
+			[ ! "$quiet" ] && echo "Run: cd aba; aba"
+			[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file"
 
 			exit 0
 		else
-			echo "Please copy Aba into your PATH"
+			echo "Please copy Aba into your PATH" >&2
 
 			exit 1
 		fi
 	fi
 
-	echo "Cannot install $PWD/scripts/aba.sh!  Please copy the script file into your PATH."
+	echo "Cannot install $PWD/scripts/aba.sh!  Please copy the script file into your PATH." >&2
 
 	exit 1
 else
-	echo "Aba script not found in $PWD/scripts/aba.sh"
+	echo "Aba script not found in $PWD/scripts/aba.sh" >&2
 
 	exit 1
 fi

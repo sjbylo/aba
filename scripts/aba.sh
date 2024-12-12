@@ -1,9 +1,12 @@
 #!/bin/bash
-# Start here, run this to get going!
+# Start here, run this script to get going!
 
-# Redirect stdout to stderr
-# CAUSING tar error exec 3>&1         # Save original stdout
-# CAUSING tar error exec 1>&2         # Redirect stdout to stderr
+ABA_VERSION=202412122300
+
+if [ -s scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" scripts/aba.sh; then
+	REPO_VER=$(grep "^ABA_VERSION=" scripts/aba.sh | cut -d= -f2)
+	[ "$REPO_VER" -a $REPO_VER -gt $ABA_VERSION ] && echo "Updating aba script .." && [ -x ./install ] && ./install -q
+fi
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 

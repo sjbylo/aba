@@ -133,7 +133,7 @@ distclean: # Clean up *everything*.  Only use if you know what you are doing! No
 	make clean
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
-	make -sC cli distclean 
+	make -sC cli reset
 	make -sC mirror distclean 
 	rm -f aba.conf ~/.aba.conf*
 
