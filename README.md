@@ -242,7 +242,7 @@ Set the version you want to install:
 v=4.17.3
 ```
 
-Note: It is recommended to run `aba bundle` on a fresh install of Aba or run: `cd aba/mirror; aba clean; cd ..` before continuing.
+Note: It is recommended to run `aba bundle` on a fresh install of Aba or run: `cd aba/mirror; rm -rf save; cd ..` before continuing.
 
 Create the bundle archive with this single command:
 ```
