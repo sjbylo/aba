@@ -270,9 +270,9 @@ END
 mylog "Checking for file mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
 test -s mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml
 mylog "Checking for servicemeshoperator in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
-cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep servicemeshoperator$
+cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 servicemeshoperator$
 mylog "Checking for kiali-ossm in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
-cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep kiali-ossm$
+cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 kiali-ossm$
 
 # Append the correct values for each operator
 mylog Append sm and kiali operators to imageset conf

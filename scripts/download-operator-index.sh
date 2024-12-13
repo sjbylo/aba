@@ -3,23 +3,21 @@
 
 source scripts/include_all.sh
 
-# Only background for the opertor index to be downloaded, e.g. if it liekly will be needed!
+# Only background for the opertor index to be downloaded, e.g. if it likely will be needed!
 if [ "$1" = "--background" ]; then
 	shift
 	# Daemon the script!
-	( $0 $* & ) & 
+	( $0 --bg $* & ) & 
+
 	exit 0
 fi
 
+[ "$1" = "--bg" ] && bg=1
 [ "$1" ] && set -x
-
-# Clean up on INT
-handle_interupt() { echo_red "Aborting download." >&2; rm -f $lock_file $pid_file; [ ! -s $index_file ] && rm -f $index_file; exit 0;}
-trap 'handle_interupt' INT
 
 source <(normalize-aba-conf)
 
-[ ! "$ocp_version" ] && echo_red "Error, ocp_version not defined in aba.conf!" >&2 >&2 && exit 1
+[ ! "$ocp_version" ] && echo_red "Error, ocp_version not defined in aba.conf!" >&2 && exit 1
 
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
@@ -29,8 +27,13 @@ lock_file=.redhat-operator-index-v$ocp_ver_major.lock
 log_file=.redhat-operator-index-v$ocp_ver_major.log
 pid_file=.redhat-operator-index-v$ocp_ver_major.pid
 
+# Clean up on INT
+handle_interupt() { echo_red "Aborting download." >&2; [ ! -s $index_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0;}
+trap 'handle_interupt' INT
+
 # Check if this script is running in the background, if it is then output to a log file
-if [ ! -t 0 ]; then
+#if [ ! -t 0 ]; then
+if [ "$bg" ]; then
 	echo "Downloading operator index in the background from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major (see $log_file) ..." >&2
 
 	exec > $log_file 
@@ -39,8 +42,8 @@ else
 	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major ..."
 fi
 
-if ! curl --connect-timeout 15 --retry 3 -kIL https://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >/dev/null 2>&1; then
-	echo_red "Error: while fetching the operator index from https://registry.redhat.io/.  Aborting." >&2 >&2
+if ! curl --fail --connect-timeout 15 --retry 3 -kIL https://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >/dev/null 2>&1; then
+	echo_red "Error: while fetching the operator index from https://registry.redhat.io/.  Aborting." >&2
 
 	exit 1
 fi
