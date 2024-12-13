@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20241213110519
+ABA_VERSION=20241213224647
 
 # Check if aba script needs to be updated
 if [ -s scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" scripts/aba.sh; then
