@@ -1,12 +1,12 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20241213224647
+ABA_VERSION=20241213224905
 
 # Check if aba script needs to be updated
 if [ -s scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" scripts/aba.sh; then
 	REPO_VER=$(grep "^ABA_VERSION=" scripts/aba.sh | cut -d= -f2)
-	[ "$REPO_VER" -a $REPO_VER -gt $ABA_VERSION ] && echo "Updating aba script .." >&2 && [ -x install ] && ./install -q >&2 && exec "$0" "$@"
+	[ "$REPO_VER" -a $REPO_VER -gt $ABA_VERSION -a -x install ] && echo "Updating aba script .." >&2 && ./install -q >&2 && exec "$0" "$@"
 fi
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
