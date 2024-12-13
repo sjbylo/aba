@@ -14,49 +14,53 @@ fi
 # jinja2 module is needed
 scripts/install-rpms.sh internal
 
+[ -s cluster.conf ] && exit 0
+
 name=standard
 type=standard
 [ "$1" ] && name=$1 && shift
 [ "$1" ] && type=$1
 
+# Set defaults 
+export mac_prefix=00:50:56:2x:xx:
+export num_masters=3
+export num_workers=3
+export starting_ip="<add>"
+export port0=ens160
+export port1=ens192
 
-if [ ! -s cluster.conf ]; then
-	if [ "$type" = "sno" ]; then
-		export cluster_name=$name
-		export api_vip=not-required
-		export ingress_vip=not-required
-		export starting_ip=$sno_starting_ip
-		export mac_prefix=00:50:56:0x:xx:
-		export num_masters=1
-		export num_workers=0
-	elif [ "$type" = "compact" ]; then
-		export cluster_name=$name
-		export api_vip=$compact_api_vip
-		export ingress_vip=$compact_ingress_vip
-		export starting_ip=$compact_starting_ip
-		export mac_prefix=00:50:56:1x:xx:
-		export num_masters=3
-		export num_workers=0
-	else # 'name=mycluster'
-		export cluster_name=$name
-		export api_vip=$standard_api_vip
-		export ingress_vip=$standard_ingress_vip
-		export starting_ip=$standard_starting_ip
-		export mac_prefix=00:50:56:2x:xx:
-		export num_masters=3
-		export num_workers=3
-	fi
+# Now, need to create cluster.conf
+export cluster_name=$name
 
-	scripts/j2 templates/cluster.conf > cluster.conf 
+# Set any shortcuts, if they are set
+[ "${shortcuts["$name:api_vip"]}" ]     && export api_vip=${shortcuts["$name:api_vip"]}
+[ "${shortcuts["$name:ingress_vip"]}" ] && export ingress_vip=${shortcuts["$name:ingress_vip"]}
+[ "${shortcuts["$name:starting_ip"]}" ] && export starting_ip=${shortcuts["$name:starting_ip"]}
+[ "${shortcuts["$name:num_masters"]}" ] && export num_masters=${shortcuts["$name:num_masters"]}
+[ "${shortcuts["$name:num_workers"]}" ] && export num_workers=${shortcuts["$name:num_workers"]}
+[ "${shortcuts["$name:mac_prefix"]}" ]  && export mac_prefix=${shortcuts["$name:mac_prefix"]}
+[ "${shortcuts["$name:port0"]}" ]       && export port0=${shortcuts["$name:port0"]}
+[ "${shortcuts["$name:port1"]}" ]       && export port1=${shortcuts["$name:port1"]}
 
-	# For sno, ensure these values are commented out as they are not needed!
-	[ "$type" = "sno" ] && sed -i -e "s/^api_vip=/#api_vip=/g" -e "s/^ingress_vip=/#ingress_vip=/g" cluster.conf
+[ ! "$api_vip" ] && export api_vip=not-required
+[ ! "$ingress_vip" ] && export ingress_vip=not-required
 
-	edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift" || exit 1
-# Unwanted output, e.g. for "make ls"
-#else
-#	echo_cyan "Keeping existing $name/cluster.conf file"
+if [ "$type" = "sno" ]; then
+	export num_masters=1
+	export num_workers=0
+	export mac_prefix=00:50:56:0x:xx:
+elif [ "$type" = "compact" ]; then
+	export num_masters=3
+	export num_workers=0
+	export mac_prefix=00:50:56:1x:xx:
 fi
+
+scripts/j2 templates/cluster.conf > cluster.conf 
+
+# For sno, ensure these values are commented out as they are not needed!
+[ "$type" = "sno" ] && sed -i -e "s/^api_vip=/#api_vip=/g" -e "s/^ingress_vip=/#ingress_vip=/g" cluster.conf
+
+edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift" || exit 1
 
 exit 0
 

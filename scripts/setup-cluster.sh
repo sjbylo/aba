@@ -21,8 +21,9 @@ else
 	make -s clean init
 fi
 
-echo_magenta "Creating '$name/cluster.conf' file for cluster type '$cluster_type'."
-scripts/create-cluster-conf.sh $name $cluster_type
+echo_cyan "Creating '$name/cluster.conf' file for cluster type '$cluster_type'."
+# source is needed, otherwise assoc array shortcuts fails
+source scripts/create-cluster-conf.sh $name $cluster_type
 
 msg="Install the cluster with 'cd $name; aba'"
 [ "$target" ] && msg="Make the target '$target' with 'cd $name; aba $target'"
@@ -38,17 +39,4 @@ if [ "$ask" ]; then
 fi
 
 make -s $target
-
-#if ask $msg; then
-#	make $target
-#
-#	echo 
-#	[ "$target" ] && 
-#	echo_cyan "To continue working on this cluster, change into the directory '$name'. Example: cd $name; aba $target"
-#	echo
-#else
-#	echo 
-#	echo_cyan "To continue working on this cluster, change into the directory '$name' and run 'aba'.  Example: cd $name; aba"
-#	echo
-#fi
 
