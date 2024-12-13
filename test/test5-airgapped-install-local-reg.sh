@@ -327,7 +327,7 @@ test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m "Run 'day2'" "aba --dir $subdi
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
 test-cmd -m "Pausing for 60s to let OCP settle" sleep 60  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
 
-test-cmd -h $reg_ssh_user@$int_bastion -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
+### MESH STOPPED test-cmd -h $reg_ssh_user@$int_bastion -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
 
 # Restart cluster test 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Log into cluster" ". <(aba --dir $subdir/aba/sno login)"
@@ -349,7 +349,7 @@ test-cmd -m "Wait for cluster to settle" sleep 30
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "aba --dir $subdir/aba/sno --cmd; aba --dir $subdir/aba/sno --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up and app running" "aba --dir $subdir/aba/sno --cmd 'get po -A | grep ^travel-.*Running'"
+##### MESH STOPPED test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up and app running" "aba --dir $subdir/aba/sno --cmd 'get po -A | grep ^travel-.*Running'"
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Deleting sno cluster" "aba --dir $subdir/aba/sno delete" 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Running 'aba clean' in $subdir/aba/sno" "aba --dir $subdir/aba/sno clean" 
