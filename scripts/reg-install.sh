@@ -182,7 +182,7 @@ if [ "$reg_ssh_key" ]; then
 	# Fetch root CA from remote host 
 	scp -i $reg_ssh_key -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
 
-	reg_user=init
+	[ ! "$reg_user" ] && reg_user=init
 
 	# Check if the cert needs to be updated
 	sudo diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
@@ -288,7 +288,7 @@ else
 
 	#################
 
-	reg_user=init
+	[ ! "$reg_user" ] && reg_user=init
 
 	# Configure the pull secret for this mirror registry 
 	## export reg_url=https://$reg_host:$reg_port

@@ -106,6 +106,19 @@ ssh $reg_ssh_user@$int_bastion -- "date" || sleep 2
 ssh $reg_ssh_user@$int_bastion -- "date" || sleep 3
 ssh $reg_ssh_user@$int_bastion -- "date" || sleep 8
 
+cat <<END | ssh $reg_ssh_user@$int_bastion -- sudo bash
+set -ex
+timedatectl
+dnf install chrony podman -y
+chronyc sources -v
+chronyc add server 10.0.1.8 iburst
+timedatectl set-timezone Asia/Singapore
+chronyc -a makestep
+sleep 3
+timedatectl
+chronyc sources -v
+END
+
 # Delete images
 ssh $reg_ssh_user@$int_bastion -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 # This file is not needed in a fully air-gapped env. 

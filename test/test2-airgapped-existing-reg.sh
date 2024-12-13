@@ -123,6 +123,19 @@ if [ ! "$1" ]; then
 	ssh steve@$int_bastion -- "date" || sleep 8
 	#################################
 
+cat <<END | ssh steve@$int_bastion -- sudo bash
+set -ex
+timedatectl
+dnf install chrony podman -y
+chronyc sources -v
+chronyc add server 10.0.1.8 iburst
+timedatectl set-timezone Asia/Singapore
+chronyc -a makestep
+sleep 3
+timedatectl
+chronyc sources -v
+END
+
 	# Delete images
 	ssh steve@$int_bastion -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 	# This file is not needed in a fully air-gapped env. 
@@ -319,12 +332,14 @@ test-cmd -h steve@$int_bastion -r 20 3 -m "Checking available Operators on sno c
 # Need to fetch the actual channel name from the operator catalog that's in use
 acm_channel=$(cat mirror/.redhat-operator-index-v*[0-9] | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
 ###[ "$acm_channel" ] && sed -i "s/channel: release-.*/channel: $acm_channel/g" ../test/acm-subs.yaml
-[ "$acm_channel" ] && test-cmd -h steve@$int_bastion -r 5 3 "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" subdir/aba/test/acm-subs.yaml"
+[ "$acm_channel" ] && test-cmd -h steve@$int_bastion -r 5 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" subdir/aba/test/acm-subs.yaml"
 test-cmd -h steve@$int_bastion -r 5 3 -m "Install ACM Operator" "make -C $subdir/aba/sno cmd cmd='oc apply -f ../test/acm-subs.yaml'"
-sleep 60
+
+test-cmd sleep 60
 
 test-cmd -h steve@$int_bastion -r 5 3 -m "Install Multiclusterhub" "make -C $subdir/aba/sno cmd cmd='oc apply -f ../test/acm-mch.yaml'"
-sleep 300
+test-cmd -m "Leave time for ACM to deploy ..." sleep 300
+
 # THIS TEST ALWAYS EXIT 0 # test-cmd -h steve@$int_bastion -r 15 1 -m "Check Multiclusterhub status is 'Running'" "make -C $subdir/aba/sno cmd cmd='oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
 test-cmd -h steve@$int_bastion -r 15 1 -m "Check hub status is 'running'" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 test-cmd -h steve@$int_bastion -r 15 1 -m "Output hub status" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status}| grep -i running"
