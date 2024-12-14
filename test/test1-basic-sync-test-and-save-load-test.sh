@@ -25,6 +25,10 @@ cd ..
 rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
+# Need this so this test script can be run standalone
+[ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
+[ ! "$internal_bastion_rhel_ver" ] && export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
+
 int_bastion=registry.example.com
 bastion_vm=bastion-internal-$internal_bastion_rhel_ver
 
