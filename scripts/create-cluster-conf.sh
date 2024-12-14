@@ -36,19 +36,27 @@ export num_workers=3
 export starting_ip="<add>"
 export port0=ens160
 export port1=ens192
+export master_cpu_count=8
+export master_mem=16
+export worker_cpu_count=4
+export worker_mem=8
 
 # Now, need to create cluster.conf
 export cluster_name=$name
 
-# Set any shortcuts, if they are set
-[ "${shortcuts["$name:api_vip"]}" ]     && export api_vip=${shortcuts["$name:api_vip"]}
-[ "${shortcuts["$name:ingress_vip"]}" ] && export ingress_vip=${shortcuts["$name:ingress_vip"]}
-[ "${shortcuts["$name:starting_ip"]}" ] && export starting_ip=${shortcuts["$name:starting_ip"]}
-[ "${shortcuts["$name:num_masters"]}" ] && export num_masters=${shortcuts["$name:num_masters"]}
-[ "${shortcuts["$name:num_workers"]}" ] && export num_workers=${shortcuts["$name:num_workers"]}
-[ "${shortcuts["$name:mac_prefix"]}" ]  && export mac_prefix=${shortcuts["$name:mac_prefix"]}
-[ "${shortcuts["$name:port0"]}" ]       && export port0=${shortcuts["$name:port0"]}
-[ "${shortcuts["$name:port1"]}" ]       && export port1=${shortcuts["$name:port1"]}
+# Set any shortcuts, but only if they exist, otherwise use the above default value
+[ "${shortcuts["$name:api_vip"]}" ]		&& export api_vip=${shortcuts["$name:api_vip"]}
+[ "${shortcuts["$name:ingress_vip"]}" ]		&& export ingress_vip=${shortcuts["$name:ingress_vip"]}
+[ "${shortcuts["$name:starting_ip"]}" ]		&& export starting_ip=${shortcuts["$name:starting_ip"]}
+[ "${shortcuts["$name:num_masters"]}" ]		&& export num_masters=${shortcuts["$name:num_masters"]}
+[ "${shortcuts["$name:num_workers"]}" ]		&& export num_workers=${shortcuts["$name:num_workers"]}
+[ "${shortcuts["$name:mac_prefix"]}" ]		&& export mac_prefix=${shortcuts["$name:mac_prefix"]}
+[ "${shortcuts["$name:master_cpu_count"]}" ]	&& export master_cpu_count=${shortcuts["$name:master_cpu_count"]}
+[ "${shortcuts["$name:master_mem"]}" ]		&& export master_mem=${shortcuts["$name:master_mem"]}
+[ "${shortcuts["$name:worker_cpu_count"]}" ]	&& export worker_cpu_count=${shortcuts["$name:worker_cpu_count"]}
+[ "${shortcuts["$name:worker_mem"]}" ]		&& export worker_mem=${shortcuts["$name:worker_mem"]}
+[ "${shortcuts["$name:port0"]}" ]		&& export port0=${shortcuts["$name:port0"]}
+[ "${shortcuts["$name:port1"]}" ]		&& export port1=${shortcuts["$name:port1"]}
 
 #[ ! "$api_vip" ] && export api_vip=not-required
 #[ ! "$ingress_vip" ] && export ingress_vip=not-required

@@ -22,7 +22,6 @@ else
 fi
 
 echo_cyan "Creating '$name/cluster.conf' file for cluster type '$cluster_type'."
-# source is needed, otherwise assoc array shortcuts fails
 scripts/create-cluster-conf.sh $name $cluster_type
 
 msg="Install the cluster with 'cd $name; aba'"

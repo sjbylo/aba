@@ -11,7 +11,7 @@ SCRIPTS   = scripts
 
 .PHONY: aba
 aba:  ## Run aba to set up 'aba.conf'
-	aba
+	aba -i
 
 aba.conf:
 	aba

@@ -70,11 +70,11 @@ test-cmd() {
 	do
 		[ "$1" = "-i" ] && local ignore_result=1 && shift
 
-		[ "$1" = "-h" ] && local host="$2" && shift && shift 
+		[ "$1" = "-h" ] && local host="$2" && shift 2
 
-		[ "$1" = "-r" ] && local tot_cnt="$2" && backoff=$3 && shift && shift && shift 
+		[ "$1" = "-r" ] && local tot_cnt="$2" && local backoff=$3 && shift 3
 
-		[ "$1" = "-m" ] && local msg="$2" && shift && shift 
+		[ "$1" = "-m" ] && local msg="$2" && shift 2
 	done
 
 	local cmd="$@"
