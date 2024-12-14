@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20241214213208
+ABA_VERSION=20241214213457
 
 # Check if aba script needs to be updated
 if [ -s scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" scripts/aba.sh; then
@@ -103,7 +103,8 @@ fetch_latest_version() {
 # FIXME: for testing, if unset, testing will halt in edit_file()! 
 # for testing, if unset, testing will halt in edit_file()! 
 [ "$*" ] && \
-	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf
+	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
+	sed -i "s/^ask=[^ \t]*/ask= /g" aba.conf
 
 ###	interactive_mode=
 
