@@ -49,6 +49,7 @@ rm -f aba/.aba.conf.seen   # Ensure user can be offered to edit this conf file a
 file_list=$(find		\
 	aba/aba-*		\
 	aba/install		\
+	aba/shortcuts.conf	\
 	aba/.bundle		\
 	aba/aba.conf		\
 	aba/cli			\
