@@ -1,12 +1,53 @@
-#!/bin/bash
+#!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241214213457
+ABA_VERSION=20241215002244
+
+# This is an exception, $1 can point to the repo dir only
+if [ "$1" = "--dir" -o "$1" = "-d" ]; then
+	[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
+	[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
+	[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
+
+	#BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
+	#WORK_DIR="$2"
+	#ABA_PATH=.
+
+	[ "$DEBUG_ABA" ] && echo "cd \"$WORK_DIR\"" >&2
+	cd "$2"
+	shift 2
+fi
+
+ABA_PATH=.
+if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
+	ABA_PATH=.
+elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
+	ABA_PATH=..
+elif [ -s ../../Makefile ] && grep -q "Top level Makefile" ../../Makefile; then
+	ABA_PATH=../..
+else
+	echo "  __   ____   __  "
+	echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
+	echo "/    \ ) _ (/    \    Follow the instructions below or see the README.md file for more."
+	echo "\_/\_/(____/\_/\_/"
+	echo
+	echo "Please run Aba from the top of its repository."
+	echo
+	echo "For example:                          cd aba"
+	echo "                                      aba --help"
+	echo
+	echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
+	echo "Change to the Aba repo directory:     cd aba"
+	echo "Install latest Aba:                   ./install"
+	echo "Run Aba:                              aba --help" 
+
+	exit 1
+fi
 
 # Check if aba script needs to be updated
-if [ -s scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" scripts/aba.sh; then
-	REPO_VER=$(grep "^ABA_VERSION=" scripts/aba.sh | cut -d= -f2)
-	[ "$REPO_VER" -a $REPO_VER -gt $ABA_VERSION -a -x install ] && echo "Updating aba script .." >&2 && ./install -q >&2 && exec "$0" "$@"
+if [ -s $ABA_PATH/scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" $ABA_PATH/scripts/aba.sh; then
+	REPO_VER=$(grep "^ABA_VERSION=" $ABA_PATH/scripts/aba.sh | cut -d= -f2)
+	[ "$REPO_VER" -a $REPO_VER -gt $ABA_VERSION -a -x $ABA_PATH/install ] && echo "Updating aba script .." >&2 && $ABA_PATH/install -q >&2 && exec "$0" "$@"
 fi
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
@@ -69,7 +110,7 @@ Usage:
 #cd $dir
 
 ### FIXME: Is this needed?  Same as above?
-#if [ ! -s scripts/include_all.sh -a -s ../scripts/include_all.sh ]; then
+#if [ ! -s $ABA_PATH/scripts/include_all.sh -a -s ../$ABA_PATH/scripts/include_all.sh ]; then
 #	orig_dir=$PWD
 #	cd .. 
 #else
@@ -77,12 +118,13 @@ Usage:
 #	exit 1
 #fi
 
-source scripts/include_all.sh
+# FIXME: only found from the top level dir!
+source $ABA_PATH/scripts/include_all.sh
 
 BUILD_COMMAND=
 
 if [ ! -f aba.conf ]; then
-	cp templates/aba.conf .
+	cp $ABA_PATH/templates/aba.conf .
 
 	# Initial prep for interactive mode
 	sed -i "s/^ocp_version=[^ \t]*/ocp_version= /g" aba.conf
@@ -134,9 +176,11 @@ do
 			[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
 			[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
+			#BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
 			WORK_DIR="$2"
-			cd "$WORK_DIR"
-			[ "$DEBUG_ABA" ] && echo cd "$WORK_DIR" >&2
+			[ "$DEBUG_ABA" ] && echo "-C \"$WORK_DIR\"" >&2
+			#cd "$WORK_DIR"
+			#ABA_PATH=.
 			shift 2
 		else
 			# We only act on the first --dir <dir> option and ignore all others
@@ -197,14 +241,14 @@ do
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo Downloading operator index for version $ver >&2
-		make -s -C mirror init >/dev/null 2>&1
-		####( cd mirror; date > .fetch-index.log; scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
+		make -s -C $ABA_PATH/mirror init >/dev/null 2>&1
+		####( cd $ABA_PATH/mirror; date > .fetch-index.log; $ABA_PATH/scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
 		(
 			(
-				make -s -C cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
-				cd mirror && \
+				make -s -C $ABA_PATH/cli ~/bin/oc-mirror >$ABA_PATH/mirror/.log  2>&1 && \
+				cd $ABA_PATH/mirror && \
 				date > .fetch-index.log && \
-				scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
+				$ABA_PATH/scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
 			) &
 		) & 
 
@@ -252,7 +296,7 @@ do
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Warning: Missing args when parsing op-sets" >&2 && exit 1
-		while ! echo "$1" | grep -q -e "^-"; do [ -s templates/operator-set-$1 ] && op_set_list="$op_set_list $1"; shift || break; done
+		while ! echo "$1" | grep -q -e "^-"; do [ -s $ABA_PATH/templates/operator-set-$1 ] && op_set_list="$op_set_list $1"; shift || break; done
 		op_set_list=$(echo "$op_set_list" | xargs)  # Trim white space
 		#echo ADDDING op_set_list=$op_set_list
 		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" aba.conf
@@ -323,7 +367,7 @@ do
 	elif [ "$1" = "--step" -o "$1" = "-s" ]; then
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 			BUILD_COMMAND="$BUILD_COMMAND target='$2'"
-			shift 2
+			shift
 		else
 			echo_red "Error: Missing argument after option [$1]" >&2 && exit 1
 		fi
@@ -418,48 +462,18 @@ if [ ! "$interactive_mode" ]; then
 
 	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
 	[ "$DEBUG_ABA" ] && echo "RUNNNING: eval make -s $BUILD_COMMAND" in $PWD >&2
-	eval  make -s $BUILD_COMMAND
+	eval make -s $BUILD_COMMAND
 
 	exit 
 fi
 
-
-if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
-	##if [ ! "$*" ]; then
-		##exec aba -i
-	##fi
-	:
-elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
-	#echo cd .. >&2
-	####orig_dir=$PWD
-
-	[ "$interactive_mode_force" ] && cd ..
-	####interactive_mode=
-else
-	echo "  __   ____   __  "
-	echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
-	echo "/    \ ) _ (/    \    Follow the instructions below or see the README.md file for more."
-	echo "\_/\_/(____/\_/\_/"
-	echo
-	echo "Please run Aba from the top of its repository."
-	echo
-	echo "For example:                          cd aba"
-	echo "                                      aba --help"
-	echo
-	echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
-	echo "Change to the Aba repo directory:     cd aba"
-	echo "Install latest Aba:                   ./install"
-	echo "Run Aba:                              aba --help" 
-
-	exit 1
-fi
 
 # ###########################################
 # From now on it's all considered INTERACTIVE
 
 source <(normalize-aba-conf)
 
-# Include aba bin path and common scripts
+# Include aba bin path and common $ABA_PATH/scripts
 ### export PATH=$PWD/bin:$PATH  # done in include.sh
 
 cat others/message.txt
@@ -627,10 +641,10 @@ if [ ! -f .bundle ]; then
 
 		(
 			(
-				make -s -C cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
-				cd mirror && \
+				make -s -C $ABA_PATH/cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
+				cd $ABA_PATH/mirror && \
 				date > .fetch-index.log && \
-				scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
+				$ABA_PATH/scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
 			) &
 		) & 
 
@@ -647,7 +661,7 @@ if [ ! -f .bundle ]; then
 
 	# make & jq are needed below and in the next steps 
 	#install_rpms make jq python3-pyyaml
-	scripts/install-rpms.sh external 
+	$ABA_PATH/scripts/install-rpms.sh external 
 
 	##############################################################################################################################
 	# Determine air-gapped
@@ -704,7 +718,7 @@ else
 
 	# make & jq are needed below and in the next steps 
 	#install_rpms make jq python3-pyyaml
-	scripts/install-rpms.sh internal
+	$ABA_PATH/scripts/install-rpms.sh internal
 
 	echo_cyan "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version', assuming this is running on an internal RHEL bastion!"
 	
