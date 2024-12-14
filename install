@@ -34,37 +34,36 @@ fi
 if [ -x scripts/aba.sh ]; then
 	if [[ "$PATH" =~ "/usr/local/bin:" ]]; then
 		[ -s "/usr/local/bin/aba" ] && action=updated || action=installed
-		sudo cp -p scripts/aba.sh /usr/local/bin/aba
-		[ ! "$quiet" ] && echo "Aba has been $action to /usr/local/bin/aba"
-		[ ! "$quiet" ] && echo "Run: cd aba; aba"
-		[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file"
 
-		exit 0
-	fi
+		if ! sudo cp -p scripts/aba.sh /usr/local/bin/aba; then
+			echo "Cannot install $PWD/scripts/aba.sh!  Please copy the script file into your \$PATH." >&2
 
-	if [[ "$PATH" =~ "$HOME/bin:" ]]; then
+			exit 1
+		fi
+
+	elif [[ "$PATH" =~ "$HOME/bin:" ]]; then
 		[ -s "$HOME/bin/aba" ] && action=updated || action=installed
 
 		mkdir -p $HOME/bin
 
-		if cp -p scripts/aba.sh $HOME/bin/aba; then
-			[ ! "$quiet" ] && echo "Aba has been $action to $HOME/bin/aba"
-			[ ! "$quiet" ] && echo "Run: cd aba; aba"
-			[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file"
-
-			exit 0
-		else
-			echo "Please copy Aba into your PATH" >&2
+		if ! cp -p scripts/aba.sh $HOME/bin/aba; then
+			echo "Cannot install $PWD/scripts/aba.sh!  Please copy the script file into your \$PATH." >&2
 
 			exit 1
 		fi
+	else
+		echo "Cannot install $PWD/scripts/aba.sh!  Please copy the script file into your \$PATH." >&2
+
+		exit 1
 	fi
 
-	echo "Cannot install $PWD/scripts/aba.sh!  Please copy the script file into your PATH." >&2
+	[ ! "$quiet" ] && echo "Aba has been $action to /usr/local/bin/aba"
+	[ ! "$quiet" ] && echo "Run: cd aba; aba"
+	[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file"
 
-	exit 1
+	exit 0
 else
-	echo "Aba script not found in $PWD/scripts/aba.sh" >&2
+	echo "Abort: Aba script not found in $PWD/scripts/aba.sh" >&2
 
 	exit 1
 fi

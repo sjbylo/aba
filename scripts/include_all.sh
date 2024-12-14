@@ -48,7 +48,6 @@ normalize-aba-conf() {
 			-e "s/ask=1\b/ask=true/g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
 		sed	-e "s/^/export /g";
-	###[ -s shortcuts.conf ] && cat shortcuts.conf
 
 }
 

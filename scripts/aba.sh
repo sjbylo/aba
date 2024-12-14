@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20241214105133
+ABA_VERSION=20241214212728
 
 # Check if aba script needs to be updated
 if [ -s scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" scripts/aba.sh; then
@@ -10,8 +10,6 @@ if [ -s scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" scripts/aba.sh; then
 fi
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
-
-interactive_mode=1
 
 usage="\
 Install & manage air-gapped OpenShift. 
@@ -63,52 +61,14 @@ Usage:
 
 [ "$1" = "--debug" ] && export DEBUG_ABA=1 && shift
 
-[ "$1" = "-h" -o "$1" = "--help" ] && echo "$usage" && exit 0
-
-if [ "$1" = "--dir" -o "$1" = "-d" ]; then
-	[ ! "$2" ] && echo "Error: directory missing after $1" >&2 && exit 1
-	[ ! -e "$2" ] && echo "Error: directory $2 missing!" >&2 && exit 1
-	[ ! -d $2 ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
-
-	cd $2
-
-	shift 2
-fi
+###[ "$1" = "-h" -o "$1" = "--help" ] && echo "$usage" && exit 0
 
 # All of the below options parsing is not pretty and needs a lot of work!
-
-if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
-	if [ ! "$*" ]; then
-		exec aba -i
-	fi
-elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
-	#echo cd .. >&2
-	orig_dir=$PWD
-	cd ..
-	interactive_mode=
-else
-	echo "  __   ____   __  "
-	echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
-	echo "/    \ ) _ (/    \    Follow the instructions below or see the README.md file for more."
-	echo "\_/\_/(____/\_/\_/"
-	echo
-	echo "Please run Aba from the top of its repository."
-	echo
-	echo "For example:                          cd aba"
-	echo "                                      aba --help"
-	echo
-	echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
-	echo "Change to the Aba repo directory:     cd aba"
-	echo "Install latest Aba:                   ./install"
-	echo "Run Aba:                              aba --help" 
-
-	exit 1
-fi
 
 #dir=$(dirname $0)
 #cd $dir
 
-## FIXME: Is this needed?  Same as above?
+### FIXME: Is this needed?  Same as above?
 #if [ ! -s scripts/include_all.sh -a -s ../scripts/include_all.sh ]; then
 #	orig_dir=$PWD
 #	cd .. 
@@ -119,7 +79,7 @@ fi
 
 source scripts/include_all.sh
 
-OTHER_OPTS=
+BUILD_COMMAND=
 
 if [ ! -f aba.conf ]; then
 	cp templates/aba.conf .
@@ -142,45 +102,71 @@ fetch_latest_version() {
 
 # FIXME: for testing, if unset, testing will halt in edit_file()! 
 # for testing, if unset, testing will halt in edit_file()! 
-[ "$*" ] && \
-	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
-	interactive_mode=
+###[ "$*" ] && \
+###	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
+###	interactive_mode=
 
 # set defaults 
 ops_list=
 op_set_list=
 chan=stable
 
+[ ! "$*" ] && interactive_mode=
+
 while [ "$*" ] 
 do
-	####echo "\$* = " $*
+	interactive_mode=
+	[ "$DEBUG_ABA" ] && echo "\$* = " $* >&2
+
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		echo "$usage"
+
 		exit 0
-#	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
-#		[ ! -d $2 ] && echo_red "$2 not a directory!" >&2 && exit 1
-#		echo cd $2
-#		cd $2
-#		shift 2
 	elif [ "$1" = "-i" ]; then
 		interactive_mode=1
-		args_processed=
+		interactive_mode_force=1
 		shift
+	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
+		if [ ! "$WORK_DIR" ]; then
+			[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
+			[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
+			[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
+
+			WORK_DIR="$2"
+			cd "$WORK_DIR"
+			[ "$DEBUG_ABA" ] && echo cd "$WORK_DIR" >&2
+			shift 2
+		else
+			# We only act on the first --dir <dir> option and ignore all others
+			if [ "$2" ] && echo "$2" | grep -q "^-"; then
+				shift   # shift over the --dir only
+			else
+				# Check if it's a dir
+				[ "$2" -a -e "$2" -a -d "$2" ] && shift  # shift only if it's really a dir
+				#shift  # shift the option after the --dir
+			fi
+		fi
 #	elif [ "$1" = "--debug" ]; then
 #		export DEBUG_ABA=1
 #		shift 
-	elif [ "$1" = "bundle" ]; then
-		ACTION=bundle
+	#elif [ "$1" = "bundle" ]; then
+		#ACTION=bundle
+		#shift
+		#args_processed=1
+	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
 		shift
-		args_processed=1
-	elif [ "$1" = "--out" ]; then
+		[ ! "$1" ] && echo_red "Error: Argument to "--out <file|->" is missing!" >&2 && exit 1
+		if [ "$1" = "-" ]; then
+			BUILD_COMMAND="$BUILD_COMMAND out=-"
+		else
+			echo "$1" | grep -q "^-" && echo_red "Error in parsing --out path argument" >&2 && exit 1
+			[ "$1" ] && [ ! -d $(dirname $1) ] && echo_red "Directory: [$(dirname $1)] incorrect or missing!" >&2 && exit 1
+			#[ "$1" != "-" ] && [ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
+				[ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
+			###[ "$1" ] && bundle_dest_path="$1"
+			BUILD_COMMAND="$BUILD_COMMAND out='$1'"
+		fi
 		shift
-		echo "$1" | grep -q "^--" && echo_red "Error in parsing --out path argument" >&2 && exit 1
-		[ "$1" ] && [ ! -d $(dirname $1) ] && echo_red "File destination path [$(dirname $1)] incorrect or missing!" >&2 && exit 1
-		[ "$1" != "-" ] && [ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
-		[ "$1" ] && bundle_dest_path="$1"
-		shift
-		### args_processed=1 # Don't mark this as processed since we need make to run for this to work!
 		# FIXME: This is just one use-case where --all is an opewtion which *is* needed my make! ==> Simplify!!
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
 		shift 
@@ -208,7 +194,7 @@ do
 		target_ver=$ver
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-		[ "$DEBUG_ABA" ] && echo Downloading operator index for version $ocp_version
+		[ "$DEBUG_ABA" ] && echo Downloading operator index for version $ver >&2
 		make -s -C mirror init >/dev/null 2>&1
 		####( cd mirror; date > .fetch-index.log; scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
 		(
@@ -314,106 +300,157 @@ do
 		sed -i "s#^ask=[^ \t]*#ask=false #g" aba.conf
 		shift 
 		args_processed=1
-	elif [ "$1" = "--cmd" ]; then
-		cmd="$2"
-		#[ ! "$2" ] && echo_red "Missing command after --cmd" >&2 && exit 1
-		[ ! "$cmd" ] && cmd="get co"
-		#cmd="$2"
-		[ "$orig_dir" ] && cd $orig_dir
-		make cmd cmd="$cmd"
-		exit
-		# Should process this: aba --dir /home/steve/subdir/aba/sno cmd cmd='oc new-project demo'
-		# Should process this: aba --dir /home/steve/subdir/aba/sno cmd cmd='oc new-project demo'
-		#shift 2
-	else
-		#echo_red "Unknown option: $1" >&2
-		#err=1
-		
-		# Gather options and args not recognized above and pass them to "make"... yes make! 
-		OTHER_OPTS="$OTHER_OPTS $1"
+	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
+		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+			BUILD_COMMAND="$BUILD_COMMAND name='$2'"
+			shift 2
+		else
+			echo_red "Error: Missing or incorrect argument after option [$1]" >&2 && exit 1
+		fi
 
-		#echo OTHER_OPTS=$OTHER_OPTS >&2
+		args_processed=1
+	elif [ "$1" = "--type" -o "$1" = "-t" ]; then
+		if echo "$2" | grep -qE "^sno$|^compact$|^standard$"; then
+			BUILD_COMMAND="$BUILD_COMMAND type='$2'"
+			shift 2
+		else
+			echo_red "Error: Missing or incorrect argument (sno|compact|standard) after option [$1]" >&2 && exit 1
+		fi
+
+		args_processed=1
+	elif [ "$1" = "--step" -o "$1" = "-s" ]; then
+		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+			BUILD_COMMAND="$BUILD_COMMAND target='$2'"
+			shift 2
+		else
+			echo_red "Error: Missing argument after option [$1]" >&2 && exit 1
+		fi
+		shift
+
+		args_processed=1
+	elif [ "$1" = "--retry" -o "$1" = "-r" ]; then
+		if [ "$2" ] && echo "$2" | grep -qE "^[0-9]+"; then
+			BUILD_COMMAND="$BUILD_COMMAND retry='$2'"
+			shift 2
+		else
+			echo_red "Error: Missing argument after option [$1]" >&2 && exit 1
+		fi
+		shift
+		BUILD_COMMAND="$BUILD_COMMAND retry=1"
+		args_processed=1
+	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
+		if [ "$2" ] && echo "$2" | grep -q "^-"; then
+		       	:
+		else
+			echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
+		fi
+		shift
+		BUILD_COMMAND="$BUILD_COMMAND force=1"
+		args_processed=1
+	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
+		if [ "$2" ] && echo "$2" | grep -q "^-"; then
+		       	:
+		else
+			echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
+		fi
+		shift
+		BUILD_COMMAND="$BUILD_COMMAND wait=1"
+		args_processed=1
+	elif [ "$1" = "--cmd" -o "$1" = "-c" ]; then
+		shift 
+		echo "$1" | grep -q "^-" || cmd="$1"
+		[ "$cmd" ] && shift || cmd="get co" # Set default comamnd
+
+		#####[ "$orig_dir" ] && cd $orig_dir # FIXME: Why is this here?!
+
+		if [[ "$BUILD_COMMAND" =~ "ssh" ]]; then
+			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
+			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
+		elif [[ "$BUILD_COMMAND" =~ "cmd" ]]; then
+			BUILD_COMMAND="$BUILD_COMMAND     cmd='$cmd'"
+			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
+		else
+			# Assume it's a kube command
+			BUILD_COMMAND="$BUILD_COMMAND cmd cmd='$cmd'"
+			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
+		fi
+
+		args_processed=1
+	else
+		##echo_red "Unknown option: $1" >&2
+		##err=1
+		
+		# Assume any other args are "commands", e.g. cluster, verify, mirror etc 
+		# Gather options and args not recognized above and pass them to "make"... yes make! 
+		BUILD_COMMAND="$BUILD_COMMAND $1"
+		[ "$DEBUG_ABA" ] && echo Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
 		shift 
 	fi
 done
 
 [ "$err" ] && echo_red "An error has occurred, aborting!" >&2 && exit 1
 
-if [ "$ACTION" = "bundle" ]; then
-	make -s bundle out="$bundle_dest_path"
-
-	exit 
-fi
-
-#echo OTHER_OPTS=$OTHER_OPTS >&2
-
 [ "$DEBUG_ABA" ] && echo DEBUG: args_processed=$args_processed >&2
 
 #[ "$args_processed" ] && echo args_processed=$args_processed >&2 && exit 0
 # FIXME: Why this?
-[ "$args_processed" ] &&                                            exit 0
+##### REMOVED [ "$args_processed" ] &&                                            exit 0
 
 [ "$DEBUG_ABA" ] && echo DEBUG: interactive_mode=$interactive_mode >&2
 
 # Next part will "translate" the options into what make is expecting, eg. --force to force=1
 
 if [ ! "$interactive_mode" ]; then
-	# Translate the options not recognized above
-	[ "$DEBUG_ABA" ] && echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
-
-	# This is a HACK, so that make can receive out=file properly (---out is parsed earlier)
-	if [ "$bundle_dest_path" ]; then
-		[ "$DEBUG_ABA" ] && echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
-		OTHER_OPTS="$OTHER_OPTS --out $bundle_dest_path"
-		[ "$DEBUG_ABA" ] && echo DEBUG: fixing args OTHER_OPTS=$OTHER_OPTS >&2
-#	elif [ "$cmd" ]; then
-#		OTHER_OPTS="$OTHER_OPTS --cmd='$cmd'"
-	fi
-
-	# Translate options to make format
-	# FIXME: -d and --dir needed here?
-	args=$(echo "$OTHER_OPTS" | sed -E \
-		-e "s/ --dir\s*/ -C /g" \
-		-e "s/ -d\s*/ -C /g" \
-		-e "s/ --name\s*/ name=/g" \
-		-e "s/ -n\s*/ name=/g" \
-		-e "s/ --type\s*/ type=/g" \
-		-e "s/ -t\s*/ type=/g" \
-		-e "s/ --step\s*/ target=/g" \
-		-e "s/ --out\s*/ out=/g" \
-		-e "s/ -o\s*/ out=/g" \
-		-e "s/ --force\s*/ force=1/g" \
-		-e "s/ -f\s*/ force=1/g" \
-		-e "s/ --cmd\s*/ cmd=/g" \
-		-e "s/ -c\s*/ cmd=/g" \
-		-e "s/ --retry\s*/ retry=/g" \
-		-e "s/ -r\s*/ retry=/g" \
-		-e "s/ --debug\s*/ debug=1/g" \
-		-e "s/ --wait\s*/ wait=1/g" \
-		-e "s/ -w\s*/ wait=1/g" \
-
-	)  # Keep the empty line above!
-
-	# -e "s/ -s\s*/ target=/g" \
-	# So, "-s" is also 'silent' for make.
+	[ "$DEBUG_ABA" ] && echo DEBUG: fixing args BUILD_COMMAND=$BUILD_COMMAND >&2
 
 	# No short options should get this far! 
-	echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
+	##echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
+	# Not correct!  How abou this? => aba --debug --dir /home/steve/subdir/aba/sno --cmd 'get po -A | grep -v -e Running -e Complete'
 
-	# This needs to be simplified!
+# This needs to be simplified!
 	#[ "$orig_dir" ] && echo cd $orig_dir >&2 && cd $orig_dir
-	[ "$orig_dir" ] && cd $orig_dir
+##if [ "$BUILD_COMMAND" ]; then
+	####[ "$orig_dir" ] && cd $orig_dir
 
-	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: 'make -s $args' from dir $PWD" >&2
+	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make -s $BUILD_COMMAND\" from dir $PWD" >&2
 
-	make -s $args
+	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
+	[ "$DEBUG_ABA" ] && echo "RUNNNING: eval make -s $BUILD_COMMAND" in $PWD >&2
+	eval  make -s $BUILD_COMMAND
 
 	exit 
 fi
 
-# Restore stdout
-# CAUSING tar error exec 1>&3         # Restore original stdout
-# CAUSING tar error exec 3>&-         # Close the saved file descriptor
+
+if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
+	##if [ ! "$*" ]; then
+		##exec aba -i
+	##fi
+	:
+elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
+	#echo cd .. >&2
+	####orig_dir=$PWD
+
+	[ "$interactive_mode_force" ] && cd ..
+	####interactive_mode=
+else
+	echo "  __   ____   __  "
+	echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
+	echo "/    \ ) _ (/    \    Follow the instructions below or see the README.md file for more."
+	echo "\_/\_/(____/\_/\_/"
+	echo
+	echo "Please run Aba from the top of its repository."
+	echo
+	echo "For example:                          cd aba"
+	echo "                                      aba --help"
+	echo
+	echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
+	echo "Change to the Aba repo directory:     cd aba"
+	echo "Install latest Aba:                   ./install"
+	echo "Run Aba:                              aba --help" 
+
+	exit 1
+fi
 
 # ###########################################
 # From now on it's all considered INTERACTIVE

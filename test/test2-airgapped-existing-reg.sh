@@ -283,7 +283,11 @@ test-cmd -h steve@$int_bastion -m "Checking cluster operator status on cluster s
 
 ###test-cmd -h steve@$int_bastion -m "Deploying vote-app on cluster" $subdir/aba/test/deploy-test-app.sh $subdir
 test-cmd -h steve@$int_bastion -m "Create project 'demo'" "aba --dir $subdir/aba/sno --cmd 'oc new-project demo'"
-test-cmd -h steve@$int_bastion -m "Launch vote-app" "aba --dir $subdir/aba/sno --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+
+test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" sleep 30
+# error: Post "https://api.sno.example.com:6443/api/v1/namespaces/demo/services": dial tcp 10.0.1.201:6443: connect: connection refused
+test-cmd -r 5 10 -h steve@$int_bastion -m "Launch vote-app" "aba --dir $subdir/aba/sno --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+
 test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "aba --dir $subdir/aba/sno --cmd 'oc rollout status deployment vote-app -n demo'"
 test-cmd -h steve@$int_bastion -m "Deleting vote-app" "aba --dir $subdir/aba/sno --cmd 'oc delete project demo'"
 
