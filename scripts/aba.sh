@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20241214081927
+ABA_VERSION=20241214083951
 
 # Check if aba script needs to be updated
 if [ -s scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" scripts/aba.sh; then
@@ -61,7 +61,7 @@ Usage:
 	 --out <file|->			# Bundle output destination, e.g. file or stadout (-).
 "
 
-[ "$1" = "--debug" ] && DEBUG_ABA=1 && shift
+[ "$1" = "--debug" ] && export DEBUG_ABA=1 && shift
 
 [ "$1" = "-h" -o "$1" = "--help" ] && echo "$usage" && exit 0
 
