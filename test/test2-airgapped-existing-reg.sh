@@ -36,7 +36,7 @@ source scripts/include_all.sh no-trap # Need for below normalize fn() calls
 source test/include.sh
 trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 
-[ ! "$target_full" ] && default_target="target=iso"   # Default is to generate 'iso' only on some tests
+[ ! "$target_full" ] && default_target="--step iso"   # Default is to generate 'iso' only on some tests
 mylog default_target=$default_target
 
 mylog
@@ -153,7 +153,7 @@ END
 	scp $vf steve@$int_bastion: 
 	##scp ~/.vmware.conf testy@$int_bastion: 
 
-	#uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("make save") when Operators need to be saved!
+	#uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("aba save") when Operators need to be saved!
 	# Try to fix "out of space" error when generating the op. index
 	cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
 
@@ -184,12 +184,12 @@ mylog
 source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
-test-cmd -r 20 3 -m "Saving images to local disk on `hostname`" make save 
+test-cmd -r 20 3 -m "Saving images to local disk on `hostname`" aba save 
 
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 
-mylog "'make tar' and copy (ssh) files over to internal bastion: steve@$int_bastion"
+mylog "'aba tar' and copy (ssh) files over to internal bastion: steve@$int_bastion"
 test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion" "aba -d mirror tar --out - | ssh steve@$int_bastion -- tar -C $subdir -xvf -"
 test-cmd -h steve@$int_bastion -m "Install aba" "$subdir/aba/install"
 
@@ -217,7 +217,7 @@ ssh steve@$int_bastion "rm -rf $subdir/aba/sno"
 
 #### TESTING ACM + MCH 
 # Adjust size of SNO cluster for ACM install 
-test-cmd -h steve@$int_bastion -m "Generate cluster.conf" "aba --dir $subdir/aba cluster name=sno type=sno target=cluster.conf"
+test-cmd -h steve@$int_bastion -m "Generate cluster.conf" "aba --dir $subdir/aba cluster --name sno --type sno --step cluster.conf"
 test-cmd -h steve@$int_bastion -m "Check cluster.conf exists" "test -s $subdir/aba/sno/cluster.conf"
 test-cmd -h steve@$int_bastion -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/master_mem=40/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h steve@$int_bastion -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
@@ -241,8 +241,8 @@ END
 
 test-cmd -r 20 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save"
 
-### mylog "'make inc' and ssh files over to internal bastion: steve@$int_bastion"
-### make -s -C mirror inc out=- | ssh steve@$int_bastion -- tar xvf -
+### mylog "'aba inc' and ssh files over to internal bastion: steve@$int_bastion"
+### aba --dir mirror inc out=- | ssh steve@$int_bastion -- tar xvf -
 #
 ### mylog "'scp mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: steve@$int_bastion"
 ### scp mirror/save/mirror_seq2.tar steve@$int_bastion $subdir/aba/mirror/save
@@ -250,7 +250,7 @@ test-cmd -r 20 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror sa
 mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: steve@$int_bastion"
 test-cmd -m "Create tmp dir" mkdir -p ~/tmp
 test-cmd -m "rm and old tar file" rm -f ~/tmp/file.tar
-test-cmd -m "Create the tar file.  Should only contain (more-or-less) the seq2 file" make -s -C mirror inc out=~/tmp/file.tar
+test-cmd -m "Create the tar file.  Should only contain (more-or-less) the seq2 file" aba --dir mirror inc out=~/tmp/file.tar
 test-cmd -m "Check size of tar file" "ls -l ~/tmp/file.tar"
 test-cmd -m "Copy tar file over to $int_bastion" scp ~/tmp/file.tar steve@$int_bastion:
 test-cmd -m "Remove local tar file" rm -f ~/tmp/file.tar  # Remove file on client side
@@ -263,10 +263,10 @@ test-cmd -h steve@$int_bastion -m "Verifying access to mirror registry $reg_host
 test-cmd -h steve@$int_bastion -r 20 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load" 
 
 # Is the cluster can be reached ... use existing cluster
-#if test-cmd -i -h steve@$int_bastion -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
+#if test-cmd -i -h steve@$int_bastion -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno --cmd 'oc get clusterversion'"; then
 # Do not use test-cmd here since that will never retiurn the true result!
 mylog "Cecking if cluster was installed or not, if error, then not!"
-if ssh steve@$int_bastion "aba --dir $subdir/aba/sno cmd cmd='oc get clusterversion'"; then
+if ssh steve@$int_bastion "aba --dir $subdir/aba/sno --cmd 'oc get clusterversion'"; then
 	mylog "Using existing sno cluster"
 else
 	mylog "Creating the sno cluster"
@@ -282,10 +282,10 @@ test-cmd -h steve@$int_bastion -m "Checking cluster operator status on cluster s
 ######################
 
 ###test-cmd -h steve@$int_bastion -m "Deploying vote-app on cluster" $subdir/aba/test/deploy-test-app.sh $subdir
-test-cmd -h steve@$int_bastion -m "Create project 'demo'" "aba --dir $subdir/aba/sno cmd cmd='oc new-project demo'"
-test-cmd -h steve@$int_bastion -m "Launch vote-app" "aba --dir $subdir/aba/sno cmd cmd='oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
-test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "aba --dir $subdir/aba/sno cmd cmd='oc rollout status deployment vote-app -n demo'"
-test-cmd -h steve@$int_bastion -m "Deleting vote-app" "aba --dir $subdir/aba/sno cmd cmd='oc delete project demo'"
+test-cmd -h steve@$int_bastion -m "Create project 'demo'" "aba --dir $subdir/aba/sno --cmd 'oc new-project demo'"
+test-cmd -h steve@$int_bastion -m "Launch vote-app" "aba --dir $subdir/aba/sno --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "aba --dir $subdir/aba/sno --cmd 'oc rollout status deployment vote-app -n demo'"
+test-cmd -h steve@$int_bastion -m "Deleting vote-app" "aba --dir $subdir/aba/sno --cmd 'oc delete project demo'"
 
 mylog "Adding advanced-cluster-management operator images to mirror/save/imageset-config-save.yaml file on `hostname`"
 
@@ -316,7 +316,7 @@ grep -A2 -e "name: multicluster-engine$"         mirror/imageset-config-operator
 test-cmd -r 20 3 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
 
 ### mylog Tar+ssh files from `hostname` over to internal bastion: steve@$int_bastion 
-### make -s -C mirror inc out=- | ssh steve@$int_bastion -- tar xvf -
+### aba --dir mirror inc out=- | ssh steve@$int_bastion -- tar xvf -
 mylog "'scp mirror/save/mirror_seq3.tar' file from `hostname` over to internal bastion: steve@$int_bastion"
 scp mirror/save/mirror_seq3*.tar steve@$int_bastion:$subdir/aba/mirror/save
 
@@ -328,7 +328,7 @@ test-cmd -h steve@$int_bastion -r 20 3 -m "Run 'day2' on sno cluster" "aba --dir
 
 test-cmd -m "Pausing 30s" sleep 30
 
-test-cmd -h steve@$int_bastion -r 20 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno cmd cmd='oc get packagemanifests -n openshift-marketplace'" | grep advanced-cluster-management
+test-cmd -h steve@$int_bastion -r 20 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests -n openshift-marketplace'" | grep advanced-cluster-management
 
 #### TESTING ACM + MCH 
 # 30 attempts, always waiting 20s (fixed value) secs between attempts
@@ -337,14 +337,14 @@ test-cmd -h steve@$int_bastion -r 20 3 -m "Checking available Operators on sno c
 acm_channel=$(cat mirror/.redhat-operator-index-v*[0-9] | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
 ###[ "$acm_channel" ] && sed -i "s/channel: release-.*/channel: $acm_channel/g" ../test/acm-subs.yaml
 [ "$acm_channel" ] && test-cmd -h steve@$int_bastion -r 5 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" subdir/aba/test/acm-subs.yaml"
-test-cmd -h steve@$int_bastion -r 5 3 -m "Install ACM Operator" "aba --dir $subdir/aba/sno cmd cmd='oc apply -f ../test/acm-subs.yaml'"
+test-cmd -h steve@$int_bastion -r 5 3 -m "Install ACM Operator" "aba --dir $subdir/aba/sno --cmd 'oc apply -f ../test/acm-subs.yaml'"
 
 test-cmd sleep 60
 
-test-cmd -h steve@$int_bastion -r 5 3 -m "Install Multiclusterhub" "aba --dir $subdir/aba/sno cmd cmd='oc apply -f ../test/acm-mch.yaml'"
+test-cmd -h steve@$int_bastion -r 5 3 -m "Install Multiclusterhub" "aba --dir $subdir/aba/sno --cmd 'oc apply -f ../test/acm-mch.yaml'"
 test-cmd -m "Leave time for ACM to deploy ..." sleep 300
 
-# THIS TEST ALWAYS EXIT 0 # test-cmd -h steve@$int_bastion -r 15 1 -m "Check Multiclusterhub status is 'Running'" "aba --dir $subdir/aba/sno cmd cmd='oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
+# THIS TEST ALWAYS EXIT 0 # test-cmd -h steve@$int_bastion -r 15 1 -m "Check Multiclusterhub status is 'Running'" "aba --dir $subdir/aba/sno --cmd 'oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
 test-cmd -h steve@$int_bastion -r 15 1 -m "Check hub status is 'running'" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 test-cmd -h steve@$int_bastion -r 15 1 -m "Output hub status" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status}| grep -i running"
 #### TESTING ACM + MCH 
@@ -354,16 +354,16 @@ test-cmd -h steve@$int_bastion -m "Initiate NTP config but not wait for completi
 
 # Keep it # test-cmd -h steve@$int_bastion -m "Deleting sno cluster" "aba --dir $subdir/aba/sno delete" 
 ####test-cmd -h steve@$int_bastion -m "Stopping sno cluster" "yes|aba --dir $subdir/aba/sno shutdown" 
-test-cmd -h steve@$int_bastion -m "If cluster up, stopping cluster" ". <(make -sC sno shell) && . <(make -sC sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
+test-cmd -h steve@$int_bastion -m "If cluster up, stopping cluster" "cd $subdir/aba/;. <(aba -d sno shell) && . <(aba --dir sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
 
 ######################
 
 ## keep it up # test-cmd -m "Clean up 'existing' mirror registry on internal bastion" test/reg-test-uninstall-remote.sh $int_bastion
 
-#test-cmd "make distclean --force"
+#test-cmd "aba distclean --force"
 
 ## keep it up # aba --dir ~/aba distclean --force
-## keep it up # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean --force; rm -rf cli && mv cli.m cli
+## keep it up # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"
