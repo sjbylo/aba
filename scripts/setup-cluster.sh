@@ -23,7 +23,7 @@ fi
 
 echo_cyan "Creating '$name/cluster.conf' file for cluster type '$cluster_type'."
 # source is needed, otherwise assoc array shortcuts fails
-source scripts/create-cluster-conf.sh $name $cluster_type
+scripts/create-cluster-conf.sh $name $cluster_type
 
 msg="Install the cluster with 'cd $name; aba'"
 [ "$target" ] && msg="Make the target '$target' with 'cd $name; aba $target'"

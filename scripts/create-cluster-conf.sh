@@ -4,6 +4,7 @@
 source scripts/include_all.sh
 
 source <(normalize-aba-conf)
+source ../shortcuts.conf
 
 if [ ! "$ocp_version" ]; then
 	echo "Please run aba first or see the README.md file!"
@@ -20,6 +21,13 @@ name=standard
 type=standard
 [ "$1" ] && name=$1 && shift
 [ "$1" ] && type=$1
+
+# Override type from shortcuts?
+[ "${shortcuts["$name:type"]}" ] && export type=${shortcuts["$name:type"]}
+
+if [ "$DEBUG_ABA" ]; then
+	echo_cyan "Creating cluster directory for [$name] of type [$type]"
+fi
 
 # Set defaults 
 export mac_prefix=00:50:56:2x:xx:
