@@ -50,8 +50,8 @@ export cluster_name=$name
 [ "${shortcuts["$name:port0"]}" ]       && export port0=${shortcuts["$name:port0"]}
 [ "${shortcuts["$name:port1"]}" ]       && export port1=${shortcuts["$name:port1"]}
 
-[ ! "$api_vip" ] && export api_vip=not-required
-[ ! "$ingress_vip" ] && export ingress_vip=not-required
+#[ ! "$api_vip" ] && export api_vip=not-required
+#[ ! "$ingress_vip" ] && export ingress_vip=not-required
 
 if [ "$type" = "sno" ]; then
 	export num_masters=1
@@ -66,7 +66,7 @@ fi
 scripts/j2 templates/cluster.conf > cluster.conf 
 
 # For sno, ensure these values are commented out as they are not needed!
-[ "$type" = "sno" ] && sed -i -e "s/^api_vip=/#api_vip=/g" -e "s/^ingress_vip=/#ingress_vip=/g" cluster.conf
+[ "$type" = "sno" ] && sed -E -i -e "s/^api_vip=[^ \t]*/#api_vip=not-required/g" -e "s/^ingress_vip=[^ \t]*/#ingress_vip=not-required/g" cluster.conf
 
 edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift" || exit 1
 
