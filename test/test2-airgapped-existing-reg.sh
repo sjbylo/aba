@@ -65,7 +65,7 @@ if [ ! "$1" ]; then
 	# clean up all, assuming reg. is not running (deleted)
 	#test-cmd "echo ocp_version=$v > aba.conf"
 	####make -C ~/aba distclean --force
-	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force 1; rm -rf cli && mv cli.m cli
+	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
 
