@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241215002244
+ABA_VERSION=20241215084326
 
 # This is an exception, $1 can point to the repo dir only
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
@@ -385,19 +385,19 @@ do
 		BUILD_COMMAND="$BUILD_COMMAND retry=1"
 		args_processed=1
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
-		if [ "$2" ] && echo "$2" | grep -q "^-"; then
-		       	:
-		else
-			echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
+		if [ "$2" ]; then
+			if ! echo "$2" | grep -q "^-"; then
+				echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
+			fi
 		fi
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND force=1"
 		args_processed=1
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
-		if [ "$2" ] && echo "$2" | grep -q "^-"; then
-		       	:
-		else
-			echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
+		if [ "$2" ]; then
+			if ! echo "$2" | grep -q "^-"; then
+				echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
+			fi
 		fi
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND wait=1"
