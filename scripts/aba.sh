@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241215174542
+ABA_VERSION=20241215184841
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -110,20 +110,20 @@ source $ABA_PATH/scripts/include_all.sh
 BUILD_COMMAND=
 
 # Init aba.conf
-if [ ! -f aba.conf ]; then
-	cp $ABA_PATH/templates/aba.conf .
+if [ ! -f $ABA_PATH/aba.conf ]; then
+	cp $ABA_PATH/templates/aba.conf $ABA_PATH
 
 	# Initial prep for interactive mode
-	sed -i "s/^ocp_version=[^ \t]*/ocp_version= /g" aba.conf
-	sed -i "s/^ocp_channel=[^ \t]*/ocp_channel= /g" aba.conf
-	sed -i "s/^editor=[^ \t]*/editor= /g" aba.conf
+	sed -i "s/^ocp_version=[^ \t]*/ocp_version= /g" $ABA_PATH/aba.conf
+	sed -i "s/^ocp_channel=[^ \t]*/ocp_channel= /g" $ABA_PATH/aba.conf
+	sed -i "s/^editor=[^ \t]*/editor= /g" $ABA_PATH/aba.conf
 fi
 
 # FIXME: for testing, if unset, testing will halt in edit_file()! 
 # for testing, if unset, testing will halt in edit_file()! 
 #[ "$*" ] && \
-#	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
-#	sed -i "s/^ask=[^ \t]*/ask= /g" aba.conf
+#	sed -i "s/^editor=[^ \t]*/editor=vi /g" $ABA_PATH/aba.conf && \
+#	sed -i "s/^ask=[^ \t]*/ask= /g" $ABA_PATH/aba.conf
 
 
 # Set defaults 
@@ -133,7 +133,6 @@ chan=stable
 
 interactive_mode=
 [ "$*" ] && interactive_mode_none=1
-#interactive_mode=
 
 while [ "$*" ] 
 do
@@ -145,6 +144,8 @@ do
 		exit 0
 	elif [ "$1" = "-i" ]; then
 		interactive_mode=1
+		interactive_mode_none=
+		sed -i "s/^ask=[^ \t]*/ask=true /g" $ABA_PATH/aba.conf
 
 		shift
 	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
@@ -194,7 +195,7 @@ do
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 && exit 1
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
-		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" aba.conf
+		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" $ABA_PATH/aba.conf
 		target_chan=$chan
 		shift 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
@@ -211,7 +212,7 @@ do
 		[ "$ver" = "latest" ] && ver=$(fetch_latest_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
 		[ ! "$ver" ] && echo_red "Missing value after --version. OpenShift version missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
-		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" aba.conf
+		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" $ABA_PATH/aba.conf
 		target_ver=$ver
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
@@ -233,33 +234,33 @@ do
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 && exit 1
 		domain=$(echo $1 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
-		sed -i "s/^domain=[^ \t]*/domain=$domain /g" aba.conf
+		sed -i "s/^domain=[^ \t]*/domain=$domain /g" $ABA_PATH/aba.conf
 		target_domain=$domain
 		shift 
 	elif [ "$1" = "--dns" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 && exit 1
 		dns_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ip /g" aba.conf
+		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ip /g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--ntp" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 && exit 1
 		ntp_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_ip /g" aba.conf
+		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_ip /g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--default-route" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 && exit 1
 		def_route_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip /g" aba.conf
+		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip /g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --platform arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red -e "Missing platform, see usage.\n$usage" >&2 && exit 1
 		platform="$1"
-		sed -i "s/^platform=[^ \t]*/platform=$platform /g" aba.conf
+		sed -i "s/^platform=[^ \t]*/platform=$platform /g" $ABA_PATH/aba.conf
 		shift
 	elif [ "$1" = "--op-sets" ]; then
 		shift
@@ -268,7 +269,7 @@ do
 		while ! echo "$1" | grep -q -e "^-"; do [ -s $ABA_PATH/templates/operator-set-$1 ] && op_set_list="$op_set_list $1"; shift || break; done
 		op_set_list=$(echo "$op_set_list" | xargs)  # Trim white space
 		#echo ADDDING op_set_list=$op_set_list
-		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" aba.conf
+		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" $ABA_PATH/aba.conf
 	elif [ "$1" = "--ops" ]; then
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
@@ -276,25 +277,25 @@ do
 		while ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift || break; done
 		ops_list=$(echo "$ops_list" | xargs)  # Trim white space
 		#echo ADDING ops_list=$ops_list
-		sed -i "s/^ops=[^#$]*/ops=\"$ops_list\" /g" aba.conf
+		sed -i "s/^ops=[^#$]*/ops=\"$ops_list\" /g" $ABA_PATH/aba.conf
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red -e "Missing editor, see usage.\n$usage" >&2 && exit 1
 		editor="$1"
-		sed -i "s/^editor=[^ \t]*/editor=$editor /g" aba.conf
+		sed -i "s/^editor=[^ \t]*/editor=$editor /g" $ABA_PATH/aba.conf
 		shift
 	elif [ "$1" = "--machine-network" -o "$1" = "-n" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 && exit 1
-		sed -i "s/^machine_network=[^ \t]*/machine_network=$1 /g" aba.conf
+		sed -i "s/^machine_network=[^ \t]*/machine_network=$1 /g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--pull-secret" -o "$1" = "-ps" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
 		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
-		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1 #g" aba.conf
+		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1 #g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
 		shift 
@@ -302,10 +303,10 @@ do
 		[ -s $1 ] && cp $1 vmware.conf
 		shift 
 	elif [ "$1" = "--ask" ]; then
-		sed -i "s#^ask=[^ \t]*#ask=true #g" aba.conf
+		sed -i "s#^ask=[^ \t]*#ask=true #g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--noask" ]; then
-		sed -i "s#^ask=[^ \t]*#ask=false #g" aba.conf
+		sed -i "s#^ask=[^ \t]*#ask=false #g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		# If there's another arg and it's not an option (^-), use it, otherwise error.
@@ -400,47 +401,38 @@ BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $
 [ "$DEBUG_ABA" ] &&  echo ABA_PATH=$ABA_PATH
 [ "$DEBUG_ABA" ] &&  echo "BUILD_COMMAND=[$BUILD_COMMAND]"
 
-#[ ! "$BUILD_COMMAND" -a ! $interactive_mode ] && exit 0
-#[ "$BUILD_COMMAND" ] && interactive_mode=
-
 [ ! "$BUILD_COMMAND" -a "$ABA_PATH" = "." ] && interactive_mode=1
 
 if [ ! "$interactive_mode" ]; then
-#	if [ "$ABA_PATH" != "." ]; then
-	#if [ "$BUILD_COMMAND" ]; then
-		
-		[ "$DEBUG_ABA" ] &&  echo "ABA_PATH != ."
+	[ "$DEBUG_ABA" ] &&  echo "ABA_PATH != ."
 
-		# No short options should get this far! 
-		##echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
-		# Not correct!  How abou this? => aba --debug --dir /home/steve/subdir/aba/sno --cmd 'get po -A | grep -v -e Running -e Complete'
+	# No short options should get this far! 
+	##echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
+	# Not correct!  How abou this? => aba --debug --dir /home/steve/subdir/aba/sno --cmd 'get po -A | grep -v -e Running -e Complete'
 
-		# This needs to be simplified!
-		#[ "$orig_dir" ] && echo cd $orig_dir >&2 && cd $orig_dir
-		##if [ "$BUILD_COMMAND" ]; then
-		####[ "$orig_dir" ] && cd $orig_dir
+	# This needs to be simplified!
+	#[ "$orig_dir" ] && echo cd $orig_dir >&2 && cd $orig_dir
+	##if [ "$BUILD_COMMAND" ]; then
+	####[ "$orig_dir" ] && cd $orig_dir
 
-		[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make -s $BUILD_COMMAND\" from dir $PWD" >&2
+	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make -s $BUILD_COMMAND\" from dir $PWD" >&2
 
-		# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
-		eval make -s $BUILD_COMMAND
+	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
+	eval make -s $BUILD_COMMAND
 
-		exit 
-#	else
-		#echo "Non-interactive mode and at top"
-		#exit
-#		:
-#	fi
+	exit 
 fi
 
 [ "$interactive_mode_none" ] && exit 
+
+cd $ABA_PATH
 
 # ###########################################
 # From now on it's all considered INTERACTIVE
 
 source <(normalize-aba-conf)
 
-# Include aba bin path and common $ABA_PATH/scripts
+# Include aba bin path and common scripts
 ### export PATH=$PWD/bin:$PATH  # done in include.sh
 
 cat others/message.txt
@@ -608,10 +600,10 @@ if [ ! -f .bundle ]; then
 
 		(
 			(
-				make -s -C $ABA_PATH/cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
-				cd $ABA_PATH/mirror && \
+				make -s -C cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
+				cd mirror && \
 				date > .fetch-index.log && \
-				$ABA_PATH/scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
+				scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
 			) &
 		) & 
 
@@ -628,7 +620,7 @@ if [ ! -f .bundle ]; then
 
 	# make & jq are needed below and in the next steps 
 	#install_rpms make jq python3-pyyaml
-	$ABA_PATH/scripts/install-rpms.sh external 
+	scripts/install-rpms.sh external 
 
 	##############################################################################################################################
 	# Determine air-gapped
@@ -685,7 +677,7 @@ else
 
 	# make & jq are needed below and in the next steps 
 	#install_rpms make jq python3-pyyaml
-	$ABA_PATH/scripts/install-rpms.sh internal
+	scripts/install-rpms.sh internal
 
 	echo_cyan "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version', assuming this is running on an internal RHEL bastion!"
 	
