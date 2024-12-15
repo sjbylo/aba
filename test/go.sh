@@ -11,7 +11,7 @@ export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 # the local dir. ($PWD)
 if [ "$1" ]; then
 	# Used for testing from git
-#	make -C mirror distclean yes=1 # Remove old big tar files. Need all space on disk!
+#	make -C mirror reset yes=1 # Remove old big tar files. Need all space on disk!
 	rm -rf ~/testing && mkdir -p ~/testing
 	cd ~/testing
 	rm -rf aba

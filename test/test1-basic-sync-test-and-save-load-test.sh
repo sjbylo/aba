@@ -57,9 +57,9 @@ test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noa
 
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
-echo ocp_version=$v > aba.conf  # needed so distclean works without calling aba (interactive). aba.conf is created below. 
-## this is wrong # aba --dir ~/aba distclean --force
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
+echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
+## this is wrong # aba --dir ~/aba reset --force
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 #aba clean
 
 # Set up aba.conf properly
@@ -376,8 +376,8 @@ test-cmd -m "Bare-metal simulation: Creating iso file" aba --dir standard iso   
 #####################################################################################################################
 
 # Must remove the old files under mirror/save 
-##make distclean --force
-# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make distclean --force; rm -rf cli && mv cli.m cli
+##make reset --force
+# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make reset --force; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"
