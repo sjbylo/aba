@@ -1,24 +1,23 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241215084326
+ABA_VERSION=20241215101604
 
-# This is an exception, $1 can point to the repo dir only
+uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
+
+# Having $1 = --dir is an exception only, $1 can point to the top-level repo dir only
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
 	[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
 	[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
-
-	#BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
-	#WORK_DIR="$2"
-	#ABA_PATH=.
 
 	[ "$DEBUG_ABA" ] && echo "cd \"$WORK_DIR\"" >&2
 	cd "$2"
 	shift 2
 fi
 
-ABA_PATH=.
+# Check the rpo location
+# Need to be sure location of the top of the repo in order to find the important files
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
 	ABA_PATH=.
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
@@ -26,20 +25,22 @@ elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
 elif [ -s ../../Makefile ] && grep -q "Top level Makefile" ../../Makefile; then
 	ABA_PATH=../..
 else
-	echo "  __   ____   __  "
-	echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
-	echo "/    \ ) _ (/    \    Follow the instructions below or see the README.md file for more."
-	echo "\_/\_/(____/\_/\_/"
-	echo
-	echo "Please run Aba from the top of its repository."
-	echo
-	echo "For example:                          cd aba"
-	echo "                                      aba --help"
-	echo
-	echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
-	echo "Change to the Aba repo directory:     cd aba"
-	echo "Install latest Aba:                   ./install"
-	echo "Run Aba:                              aba --help" 
+	(
+		echo "  __   ____   __  "
+		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
+		echo "/    \ ) _ (/    \    Follow the instructions below or see the README.md file for more."
+		echo "\_/\_/(____/\_/\_/"
+		echo
+		echo "Please run Aba from the top of its repository."
+		echo
+		echo "For example:                          cd aba"
+		echo "                                      aba --help"
+		echo
+		echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
+		echo "Change to the Aba repo directory:     cd aba"
+		echo "Install latest Aba:                   ./install"
+		echo "Run Aba:                              aba --help" 
+	) >&2
 
 	exit 1
 fi
@@ -50,8 +51,7 @@ if [ -s $ABA_PATH/scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" $ABA_PATH/s
 	[ "$REPO_VER" -a $REPO_VER -gt $ABA_VERSION -a -x $ABA_PATH/install ] && echo "Updating aba script .." >&2 && $ABA_PATH/install -q >&2 && exec "$0" "$@"
 fi
 
-uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
-
+# FIXME: Get this from a file instead?
 usage="\
 Install & manage air-gapped OpenShift. 
 
@@ -102,27 +102,14 @@ Usage:
 
 [ "$1" = "--debug" ] && export DEBUG_ABA=1 && shift
 
-###[ "$1" = "-h" -o "$1" = "--help" ] && echo "$usage" && exit 0
-
-# All of the below options parsing is not pretty and needs a lot of work!
-
-#dir=$(dirname $0)
-#cd $dir
-
-### FIXME: Is this needed?  Same as above?
-#if [ ! -s $ABA_PATH/scripts/include_all.sh -a -s ../$ABA_PATH/scripts/include_all.sh ]; then
-#	orig_dir=$PWD
-#	cd .. 
-#else
-#	echo Abort >&2
-#	exit 1
-#fi
-
 # FIXME: only found from the top level dir!
+# "Repo checking" above should ensure this always works
 source $ABA_PATH/scripts/include_all.sh
 
+# This will be the actual 'make' command that will eventually be run
 BUILD_COMMAND=
 
+# Init aba.conf
 if [ ! -f aba.conf ]; then
 	cp $ABA_PATH/templates/aba.conf .
 
@@ -132,25 +119,14 @@ if [ ! -f aba.conf ]; then
 	sed -i "s/^editor=[^ \t]*/editor= /g" aba.conf
 fi
 
-fetch_latest_version() {
-	# $1 must be one of 'stable', 'fast' or 'candidate'
-	local c=$1
-	[ "$c" = "eus" ] && c=stable   # .../ocp/eus/release.txt does not exist
-	curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$c/release.txt > /tmp/.$(whoami)-release.txt || return 1
-	# Get the latest stable OCP version number, e.g. 4.14.6
-	stable_ver=$(cat /tmp/.$(whoami)-release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
-	[ "$stable_ver" ] && echo $stable_ver || return 1
-}
-
 # FIXME: for testing, if unset, testing will halt in edit_file()! 
 # for testing, if unset, testing will halt in edit_file()! 
-[ "$*" ] && \
-	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
-	sed -i "s/^ask=[^ \t]*/ask= /g" aba.conf
+#[ "$*" ] && \
+#	sed -i "s/^editor=[^ \t]*/editor=vi /g" aba.conf && \
+#	sed -i "s/^ask=[^ \t]*/ask= /g" aba.conf
 
-###	interactive_mode=
 
-# set defaults 
+# Set defaults 
 ops_list=
 op_set_list=
 chan=stable
@@ -198,7 +174,6 @@ do
 	#elif [ "$1" = "bundle" ]; then
 		#ACTION=bundle
 		#shift
-		#args_processed=1
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
 		shift
 		[ ! "$1" ] && echo_red "Error: Argument to "--out <file|->" is missing!" >&2 && exit 1
@@ -221,7 +196,6 @@ do
 		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" aba.conf
 		target_chan=$chan
 		shift 
-		args_processed=1
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		shift 
 		ver=$1
@@ -254,7 +228,6 @@ do
 
 
 		shift 
-		args_processed=1
 	elif [ "$1" = "--domain" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 && exit 1
@@ -262,28 +235,24 @@ do
 		sed -i "s/^domain=[^ \t]*/domain=$domain /g" aba.conf
 		target_domain=$domain
 		shift 
-		args_processed=1
 	elif [ "$1" = "--dns" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 && exit 1
 		dns_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ip /g" aba.conf
 		shift 
-		args_processed=1
 	elif [ "$1" = "--ntp" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 && exit 1
 		ntp_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_ip /g" aba.conf
 		shift 
-		args_processed=1
 	elif [ "$1" = "--default-route" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 && exit 1
 		def_route_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip /g" aba.conf
 		shift 
-		args_processed=1
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --platform arguments" >&2 && exit 1
@@ -291,7 +260,6 @@ do
 		platform="$1"
 		sed -i "s/^platform=[^ \t]*/platform=$platform /g" aba.conf
 		shift
-		args_processed=1
 	elif [ "$1" = "--op-sets" ]; then
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 && exit 1
@@ -300,7 +268,6 @@ do
 		op_set_list=$(echo "$op_set_list" | xargs)  # Trim white space
 		#echo ADDDING op_set_list=$op_set_list
 		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" aba.conf
-		args_processed=1
 	elif [ "$1" = "--ops" ]; then
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
@@ -309,7 +276,6 @@ do
 		ops_list=$(echo "$ops_list" | xargs)  # Trim white space
 		#echo ADDING ops_list=$ops_list
 		sed -i "s/^ops=[^#$]*/ops=\"$ops_list\" /g" aba.conf
-		args_processed=1
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 && exit 1
@@ -317,36 +283,31 @@ do
 		editor="$1"
 		sed -i "s/^editor=[^ \t]*/editor=$editor /g" aba.conf
 		shift
-		args_processed=1
 	elif [ "$1" = "--machine-network" -o "$1" = "-n" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 && exit 1
 		sed -i "s/^machine_network=[^ \t]*/machine_network=$1 /g" aba.conf
 		shift 
-		args_processed=1
 	elif [ "$1" = "--pull-secret" -o "$1" = "-ps" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
 		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
 		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1 #g" aba.conf
 		shift 
-		args_processed=1
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 && exit 1
 		[ -s $1 ] && cp $1 vmware.conf
 		shift 
-		args_processed=1
 	elif [ "$1" = "--ask" ]; then
 		sed -i "s#^ask=[^ \t]*#ask=true #g" aba.conf
 		shift 
-		args_processed=1
 	elif [ "$1" = "--noask" ]; then
 		sed -i "s#^ask=[^ \t]*#ask=false #g" aba.conf
 		shift 
-		args_processed=1
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
+		# If there's another arg and it's not an option (^-), use it, otherwise error.
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 			BUILD_COMMAND="$BUILD_COMMAND name='$2'"
 			shift 2
@@ -354,8 +315,8 @@ do
 			echo_red "Error: Missing or incorrect argument after option [$1]" >&2 && exit 1
 		fi
 
-		args_processed=1
 	elif [ "$1" = "--type" -o "$1" = "-t" ]; then
+		# If there's another arg and it's an expected cluster type, use it, otherwise error.
 		if echo "$2" | grep -qE "^sno$|^compact$|^standard$"; then
 			BUILD_COMMAND="$BUILD_COMMAND type='$2'"
 			shift 2
@@ -363,8 +324,8 @@ do
 			echo_red "Error: Missing or incorrect argument (sno|compact|standard) after option [$1]" >&2 && exit 1
 		fi
 
-		args_processed=1
 	elif [ "$1" = "--step" -o "$1" = "-s" ]; then
+		# If there's another arg and it's NOT an option (^-) then use it, otherwise error
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 			BUILD_COMMAND="$BUILD_COMMAND target='$2'"
 			shift
@@ -373,8 +334,8 @@ do
 		fi
 		shift
 
-		args_processed=1
 	elif [ "$1" = "--retry" -o "$1" = "-r" ]; then
+		# If there's another arg and it's a number then use it
 		if [ "$2" ] && echo "$2" | grep -qE "^[0-9]+"; then
 			BUILD_COMMAND="$BUILD_COMMAND retry='$2'"
 			shift 2
@@ -383,25 +344,19 @@ do
 		fi
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND retry=1"
-		args_processed=1
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
-		if [ "$2" ]; then
-			if ! echo "$2" | grep -q "^-"; then
-				echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
-			fi
+		# If there's another arg and it's NOT an option (^-) then error
+		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+			echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
 		fi
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND force=1"
-		args_processed=1
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
-		if [ "$2" ]; then
-			if ! echo "$2" | grep -q "^-"; then
-				echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
-			fi
+		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+			echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
 		fi
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND wait=1"
-		args_processed=1
 	elif [ "$1" = "--cmd" -o "$1" = "-c" ]; then
 		shift 
 		echo "$1" | grep -q "^-" || cmd="$1"
@@ -421,7 +376,6 @@ do
 			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
 		fi
 
-		args_processed=1
 	else
 		##echo_red "Unknown option: $1" >&2
 		##err=1
@@ -435,12 +389,6 @@ do
 done
 
 [ "$err" ] && echo_red "An error has occurred, aborting!" >&2 && exit 1
-
-[ "$DEBUG_ABA" ] && echo DEBUG: args_processed=$args_processed >&2
-
-#[ "$args_processed" ] && echo args_processed=$args_processed >&2 && exit 0
-# FIXME: Why this?
-##### REMOVED [ "$args_processed" ] &&                                            exit 0
 
 [ "$DEBUG_ABA" ] && echo DEBUG: interactive_mode=$interactive_mode >&2
 

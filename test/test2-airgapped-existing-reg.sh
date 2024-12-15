@@ -59,6 +59,8 @@ if [ ! "$1" ]; then
 
 	which make || sudo dnf install make -y
 
+	test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noask
+
 	v=4.16.3
 	#v=4.15.22
 

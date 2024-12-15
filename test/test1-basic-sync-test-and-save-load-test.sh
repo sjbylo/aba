@@ -53,6 +53,8 @@ rm -f ~/bin/aba  # don't get mized up!
 rm -f /usr/local/bin/aba
 ./install 
 
+test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noask
+
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
 echo ocp_version=$v > aba.conf  # needed so distclean works without calling aba (interactive). aba.conf is created below. 
@@ -69,8 +71,6 @@ test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba 
 # Set up govc 
 cp $vf vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
-
-test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noask
 
 #mylog "Setting ntp_servers=$ntp_ip" 
 #[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip    #\2/g" aba.conf
