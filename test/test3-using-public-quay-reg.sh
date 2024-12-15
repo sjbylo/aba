@@ -53,9 +53,9 @@ which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
-echo ocp_version=$v > aba.conf  # needed so distclean works without calling aba (interactive). aba.conf is created below. 
-### wrong # aba --dir ~/aba distclean --force
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
+echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
+### wrong # aba --dir ~/aba reset --force
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 #aba clean
 
 # Set up aba.conf properly
@@ -95,9 +95,9 @@ test-cmd -m "Checking cluster operators" aba --dir sno cmd
 #test-cmd -m "If cluster up, stopping cluster" ". <(aba --dir sno shell) && . <(aba --dir sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
 test-cmd -m "If cluster up, stopping cluster" "                                                      yes|aba --dir sno shutdown --wait"
 
-#test-cmd "aba distclean --force"
-#aba --dir ~/aba distclean --force
-###mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
+#test-cmd "aba reset --force"
+#aba --dir ~/aba reset --force
+###mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"

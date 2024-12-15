@@ -44,8 +44,8 @@ which make || sudo dnf install make -y
 
 ./install 
 
-test-cmd -m "Cleaning up - aba distclean --force" 
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
+test-cmd -m "Cleaning up - aba reset --force" 
+mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 #test-cmd -m "Cleaning up mirror - clean" "aba -s -C mirror clean" 
 
 rm -rf sno compact standard 
@@ -494,9 +494,9 @@ test-cmd -h $reg_ssh_user@$int_bastion -m "If cluster up, shutting cluster down 
 
 # keep it # test-cmd -h $reg_ssh_user@$int_bastion -m  "Running 'aba clean' in $subdir/aba/stanadard" "aba --dir $subdir/aba/standard clean" 
 
-#test-cmd "aba distclean --force"
-# keep it # aba --dir ~/aba distclean --force
-# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba distclean --force; rm -rf cli && mv cli.m cli
+#test-cmd "aba reset --force"
+# keep it # aba --dir ~/aba reset --force
+# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 
 mylog "===> Completed test $0"
 
