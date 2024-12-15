@@ -185,9 +185,9 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 
 # Note that reg-uninstall.sh script will delete registry and regcreds/ dir.
 # Backup regcreds/ and anything that should not be lost
-.PHONY: distclean
-#distclean: .init  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
-distclean:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
+.PHONY: reset
+#reset: .init  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
+reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@[ -f .installed ] && echo "Important: to uninstall the registry, you must run 'make uninstall' first!" || true
 	make clean
 	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true

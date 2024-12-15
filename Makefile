@@ -11,7 +11,7 @@ SCRIPTS   = scripts
 
 .PHONY: aba
 aba:  ## Run aba to set up 'aba.conf'
-	aba -i
+	aba --debug -i
 
 aba.conf:
 	aba
@@ -127,13 +127,13 @@ clean: ## Clean up all temporary files.
 	rm -f ~/.aba.conf.created
 	rm -f .aba.conf.seen
 
-.PHONY: distclean
-distclean: # Clean up *everything*.  Only use if you know what you are doing! Note that this does not run 'make uninstall' (uninstall the reg.)
-	$(SCRIPTS)/distclean-gate.sh $(force)
+.PHONY: reset
+reset: # Clean up *everything*.  Only use if you know what you are doing! Note that this does not run 'make uninstall' (uninstall the reg.)
+	$(SCRIPTS)/reset-gate.sh $(force)
 	make clean
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
 	make -sC cli reset
-	make -sC mirror distclean 
+	make -sC mirror reset 
 	rm -f aba.conf ~/.aba.conf*
 
