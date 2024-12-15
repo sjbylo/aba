@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241215224212
+ABA_VERSION=20241216001740
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -11,7 +11,7 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
 	[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
-	[ "$DEBUG_ABA" ] && echo "cd \"$WORK_DIR\"" >&2
+	[ "$DEBUG_ABA" ] && echo "cd \"$2\"" >&2
 	cd "$2"
 	shift 2
 fi
@@ -100,7 +100,7 @@ Usage:
 	 --out <file|->			# Bundle output destination, e.g. file or stadout (-).
 "
 
-[ "$1" = "--debug" ] && export DEBUG_ABA=1 && shift
+##[ "$1" = "--debug" ] && export DEBUG_ABA=1 && shift
 
 # FIXME: only found from the top level dir!
 # "Repo checking" above should ensure this always works
@@ -154,7 +154,8 @@ do
 			[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
 			[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
-			#BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
+			# make will take one -C option only
+			BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
 			WORK_DIR="$2"
 			[ "$DEBUG_ABA" ] && echo "-C \"$WORK_DIR\"" >&2
 			#cd "$WORK_DIR"
@@ -163,16 +164,15 @@ do
 		else
 			# We only act on the first --dir <dir> option and ignore all others
 			if [ "$2" ] && echo "$2" | grep -q "^-"; then
-				shift   # shift over the --dir only
+				shift   # shift over the '--dir' only
 			else
 				# Check if it's a dir
 				[ "$2" -a -e "$2" -a -d "$2" ] && shift  # shift only if it's really a dir
-				#shift  # shift the option after the --dir
 			fi
 		fi
-#	elif [ "$1" = "--debug" ]; then
-#		export DEBUG_ABA=1
-#		shift 
+	elif [ "$1" = "--debug" ]; then
+		export DEBUG_ABA=1
+		shift 
 	#elif [ "$1" = "bundle" ]; then
 		#ACTION=bundle
 		#shift
@@ -191,12 +191,12 @@ do
 		fi
 		shift
 		# FIXME: This is just one use-case where --all is an opewtion which *is* needed my make! ==> Simplify!!
-	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
+	elif [ "$1" = "--channel" -o "$1" = "-l" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 && exit 1
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
 		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" $ABA_PATH/aba.conf
-		target_chan=$chan
+		target_chan=$chal
 		shift 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		shift 
@@ -230,25 +230,25 @@ do
 
 
 		shift 
-	elif [ "$1" = "--domain" ]; then
+	elif [ "$1" = "--domain" -o "$1" = "-D" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 && exit 1
 		domain=$(echo $1 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		sed -i "s/^domain=[^ \t]*/domain=$domain /g" $ABA_PATH/aba.conf
 		target_domain=$domain
 		shift 
-	elif [ "$1" = "--dns" ]; then
+	elif [ "$1" = "--dns" -o "$1" = "-N" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 && exit 1
 		dns_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ip /g" $ABA_PATH/aba.conf
 		shift 
-	elif [ "$1" = "--ntp" ]; then
+	elif [ "$1" = "--ntp" -o "$1" = "-P" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 && exit 1
 		ntp_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
 		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_ip /g" $ABA_PATH/aba.conf
-		shift 
+P#	shift 
 	elif [ "$1" = "--default-route" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 && exit 1
@@ -285,7 +285,7 @@ do
 		editor="$1"
 		sed -i "s/^editor=[^ \t]*/editor=$editor /g" $ABA_PATH/aba.conf
 		shift
-	elif [ "$1" = "--machine-network" -o "$1" = "-n" ]; then
+	elif [ "$1" = "--machine-network" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 && exit 1
@@ -309,7 +309,7 @@ do
 		sed -i "s#^ask=[^ \t]*#ask=false #g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
-		# If there's another arg and it's not an option (^-), use it, otherwise error.
+		# If there's another arg and it's not an option (^-), accept it, otherwise error.
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 			BUILD_COMMAND="$BUILD_COMMAND name='$2'"
 			shift 2
@@ -318,7 +318,7 @@ do
 		fi
 
 	elif [ "$1" = "--type" -o "$1" = "-t" ]; then
-		# If there's another arg and it's an expected cluster type, use it, otherwise error.
+		# If there's another arg and it's an expected cluster type, accept it, otherwise error.
 		if echo "$2" | grep -qE "^sno$|^compact$|^standard$"; then
 			BUILD_COMMAND="$BUILD_COMMAND type='$2'"
 			shift 2
@@ -327,7 +327,7 @@ do
 		fi
 
 	elif [ "$1" = "--step" -o "$1" = "-s" ]; then
-		# If there's another arg and it's NOT an option (^-) then use it, otherwise error
+		# If there's another arg and it's NOT an option (^-) then accept it, otherwise error
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 			BUILD_COMMAND="$BUILD_COMMAND target='$2'"
 			shift
@@ -337,15 +337,19 @@ do
 		shift
 
 	elif [ "$1" = "--retry" -o "$1" = "-r" ]; then
-		# If there's another arg and it's a number then use it
+		# If there's another arg and it's a number then accept it
 		if [ "$2" ] && echo "$2" | grep -qE "^[0-9]+"; then
 			BUILD_COMMAND="$BUILD_COMMAND retry='$2'"
+			[ "$DEBUG_ABA" ] && echo Adding retry=$2 to BUILD_COMMAND >&2
 			shift 2
+		# If there's no another arg then assume '1'
+		elif [ ! "$2" ]; then
+			BUILD_COMMAND="$BUILD_COMMAND retry=1"
+			[ "$DEBUG_ABA" ] && echo Adding retry=1 to BUILD_COMMAND >&2
+			shift
 		else
 			echo_red "Error: Missing argument after option [$1]" >&2 && exit 1
 		fi
-		shift
-		BUILD_COMMAND="$BUILD_COMMAND retry=1"
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
 		# If there's another arg and it's NOT an option (^-) then error
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
@@ -354,66 +358,58 @@ do
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND force=1"
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
+		# If there is another arg, it must be an option, otherwise error
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 			echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
 		fi
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND wait=1"
 	elif [ "$1" = "--cmd" -o "$1" = "-c" ]; then
+		cmd=
 		shift 
 		echo "$1" | grep -q "^-" || cmd="$1"
-		[ "$cmd" ] && shift || cmd="get co" # Set default comamnd
-
-		#####[ "$orig_dir" ] && cd $orig_dir # FIXME: Why is this here?!
+		[ "$cmd" ] && shift || cmd="get co" # Set default comamnd here
 
 		if [[ "$BUILD_COMMAND" =~ "ssh" ]]; then
 			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
 			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
 		elif [[ "$BUILD_COMMAND" =~ "cmd" ]]; then
-			BUILD_COMMAND="$BUILD_COMMAND     cmd='$cmd'"
+			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
 			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
 		else
-			# Assume it's a kube command
+			# Assume it's a kube command by default
 			BUILD_COMMAND="$BUILD_COMMAND cmd cmd='$cmd'"
 			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
 		fi
-
 	else
-		##echo_red "Unknown option: $1" >&2
-		##err=1
-		
-		# Assume any other args are "commands", e.g. cluster, verify, mirror etc 
-		# Gather options and args not recognized above and pass them to "make"... yes make! 
+		# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
+		# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
 		BUILD_COMMAND="$BUILD_COMMAND $1"
 		[ "$DEBUG_ABA" ] && echo Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
 		shift 
 	fi
 done
 
-[ "$err" ] && echo_red "An error has occurred, aborting!" >&2 && exit 1
+####[ "$err" ] && echo_red "An error has occurred, aborting!" >&2 && exit 1
 
 [ "$DEBUG_ABA" ] && echo DEBUG: interactive_mode=$interactive_mode >&2
 
-# Next part will "translate" the options into what make is expecting, eg. --force to force=1
-
+# Sanitize $BUILD_COMMAND
 BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
 
-[ "$DEBUG_ABA" ] &&  echo ABA_PATH=$ABA_PATH
+[ "$DEBUG_ABA" ] &&  echo "ABA_PATH=[$ABA_PATH]"
 [ "$DEBUG_ABA" ] &&  echo "BUILD_COMMAND=[$BUILD_COMMAND]"
 
+# We want interactive mode if aba is running at the top of the repo and without any args
 [ ! "$BUILD_COMMAND" -a "$ABA_PATH" = "." ] && interactive_mode=1
 
 if [ ! "$interactive_mode" ]; then
 	[ "$DEBUG_ABA" ] &&  echo "ABA_PATH != ."
 
 	# No short options should get this far! 
-	##echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
+	#unknown_args=$(echo $BUILD_COMMAND | grep -q -o -e " -[a-z]")
+	#[ "$unknown_args" ] && echo "Unknown args in request: [$unknown_args]" >&2 && exit 1
 	# Not correct!  How abou this? => aba --debug --dir /home/steve/subdir/aba/sno --cmd 'get po -A | grep -v -e Running -e Complete'
-
-	# This needs to be simplified!
-	#[ "$orig_dir" ] && echo cd $orig_dir >&2 && cd $orig_dir
-	##if [ "$BUILD_COMMAND" ]; then
-	####[ "$orig_dir" ] && cd $orig_dir
 
 	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make -s $BUILD_COMMAND\" from dir $PWD" >&2
 
@@ -423,8 +419,10 @@ if [ ! "$interactive_mode" ]; then
 	exit 
 fi
 
-[ "$interactive_mode_none" ] && exit 
+# We don't want interactive mode if there were args in the command
+[ "$interactive_mode_none" ] && echo Exiting ... >&2 && exit 
 
+# Change to the top level repo directory
 cd $ABA_PATH
 
 # ###########################################
