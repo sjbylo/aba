@@ -66,8 +66,9 @@ mylog "Test to install a local reg. on $int_bastion and save + copy + load image
 rm -f aba.conf  # Set it up next
 vf=~/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
-test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --channel fast --version $VER_OVERRIDE
+test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba noask --channel fast --version $VER_OVERRIDE
 mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
+mylog "ask set to $(grep -o '^ask=[^ ]*' aba.conf) in $PWD/aba.conf"
 
 # Set up govc 
 cp $vf vmware.conf 
@@ -216,7 +217,7 @@ test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file does not ex
 scp mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$int_bastion:$subdir/aba/mirror/save
 test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
 
-test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading UBI images into mirror" "cd $subdir/aba/mirror; aba load" 
+test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading UBI images into mirror" "cd $subdir/aba; aba load" 
 
 mylog Add vote-app image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
@@ -341,8 +342,8 @@ test-cmd -h $reg_ssh_user@$int_bastion -m  "Shut cluster down gracefully and wai
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'poweredOff'" "until aba --dir $subdir/aba/sno ls | grep poweredOff | wc -l| grep ^1$ ; do sleep 10; echo -n .;done"
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "aba --dir $subdir/aba/sno ls"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "aba --dir $subdir/aba/sno startup"
-test-cmd -m "Wait for cluster to settle" sleep 30
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "aba --dir $subdir/aba/sno startup --wait"
+###test-cmd -m "Wait for cluster to settle" sleep 30
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'Ready'" "cd $subdir/aba/sno; until oc get nodes| grep Ready|grep -v Not |wc -l| grep ^1$; do sleep 10; echo -n .; done"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/sno --cmd 'get nodes'"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/sno --cmd 'whoami' | grep system:admin"
@@ -412,7 +413,7 @@ build_and_test_cluster() {
 
 	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "aba --dir $subdir/aba/$cluster_name ls"
 	test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "aba --dir $subdir/aba/$cluster_name startup"
-	test-cmd -m "Wait for cluster to settle" sleep 30
+	####test-cmd -m "Wait for cluster to settle" sleep 30
 	test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'Ready'" "until aba --dir $subdir/aba/$cluster_name --cmd 'oc get nodes'| grep Ready|grep -v Not|wc -l| grep ^$cnt$; do sleep 10; done"
 	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/$cluster_name --cmd 'get nodes'"
 	test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/$cluster_name --cmd 'whoami'"
@@ -474,8 +475,7 @@ test-cmd -h $reg_ssh_user@$int_bastion -m  "Shut cluster down gracefully and wai
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'poweredOff'" "until aba --dir $subdir/aba/standard ls |grep poweredOff |wc -l| grep ^6$; do sleep 10; echo -n .; done"
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check node status" "aba --dir $subdir/aba/standard ls"
-test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "aba --dir $subdir/aba/standard startup"
-#test-cmd -m "Wait for cluster to settle" sleep 600
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Start cluster gracefully" "aba --dir $subdir/aba/standard startup --wait"
 test-cmd -m "Wait for cluster to settle" sleep 60
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking for all nodes 'Ready'" "cd $subdir/aba/standard; until oc get nodes| grep Ready|grep -v Not|wc -l| grep ^6$; do sleep 10; echo -n .; done"
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Check cluster up" "aba --dir $subdir/aba/standard --cmd 'get nodes'"
