@@ -17,6 +17,6 @@ install: ## Install all rpms in aba/rpms dir
 clean: ## Clean up 
 	rm -f *.rpm
 
-.PHONY: distclean
-distclean: clean ## Clean up everything
+.PHONY: reset
+reset: clean ## Clean up everything
 

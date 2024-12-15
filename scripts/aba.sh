@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241215101604
+ABA_VERSION=20241215174542
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -131,11 +131,12 @@ ops_list=
 op_set_list=
 chan=stable
 
-[ ! "$*" ] && interactive_mode=
+interactive_mode=
+[ "$*" ] && interactive_mode_none=1
+#interactive_mode=
 
 while [ "$*" ] 
 do
-	interactive_mode=
 	[ "$DEBUG_ABA" ] && echo "\$* = " $* >&2
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
@@ -144,7 +145,7 @@ do
 		exit 0
 	elif [ "$1" = "-i" ]; then
 		interactive_mode=1
-		interactive_mode_force=1
+
 		shift
 	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
 		if [ ! "$WORK_DIR" ]; then
@@ -394,27 +395,45 @@ done
 
 # Next part will "translate" the options into what make is expecting, eg. --force to force=1
 
+BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
+
+[ "$DEBUG_ABA" ] &&  echo ABA_PATH=$ABA_PATH
+[ "$DEBUG_ABA" ] &&  echo "BUILD_COMMAND=[$BUILD_COMMAND]"
+
+#[ ! "$BUILD_COMMAND" -a ! $interactive_mode ] && exit 0
+#[ "$BUILD_COMMAND" ] && interactive_mode=
+
+[ ! "$BUILD_COMMAND" -a "$ABA_PATH" = "." ] && interactive_mode=1
+
 if [ ! "$interactive_mode" ]; then
-	[ "$DEBUG_ABA" ] && echo DEBUG: fixing args BUILD_COMMAND=$BUILD_COMMAND >&2
+#	if [ "$ABA_PATH" != "." ]; then
+	#if [ "$BUILD_COMMAND" ]; then
+		
+		[ "$DEBUG_ABA" ] &&  echo "ABA_PATH != ."
 
-	# No short options should get this far! 
-	##echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
-	# Not correct!  How abou this? => aba --debug --dir /home/steve/subdir/aba/sno --cmd 'get po -A | grep -v -e Running -e Complete'
+		# No short options should get this far! 
+		##echo $args | grep -q -e " -[a-z]" && echo "Unknown args '$args'" >&2 && exit 1
+		# Not correct!  How abou this? => aba --debug --dir /home/steve/subdir/aba/sno --cmd 'get po -A | grep -v -e Running -e Complete'
 
-# This needs to be simplified!
-	#[ "$orig_dir" ] && echo cd $orig_dir >&2 && cd $orig_dir
-##if [ "$BUILD_COMMAND" ]; then
-	####[ "$orig_dir" ] && cd $orig_dir
+		# This needs to be simplified!
+		#[ "$orig_dir" ] && echo cd $orig_dir >&2 && cd $orig_dir
+		##if [ "$BUILD_COMMAND" ]; then
+		####[ "$orig_dir" ] && cd $orig_dir
 
-	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make -s $BUILD_COMMAND\" from dir $PWD" >&2
+		[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make -s $BUILD_COMMAND\" from dir $PWD" >&2
 
-	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
-	[ "$DEBUG_ABA" ] && echo "RUNNNING: eval make -s $BUILD_COMMAND" in $PWD >&2
-	eval make -s $BUILD_COMMAND
+		# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
+		eval make -s $BUILD_COMMAND
 
-	exit 
+		exit 
+#	else
+		#echo "Non-interactive mode and at top"
+		#exit
+#		:
+#	fi
 fi
 
+[ "$interactive_mode_none" ] && exit 
 
 # ###########################################
 # From now on it's all considered INTERACTIVE

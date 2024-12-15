@@ -19,6 +19,6 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 clean: ## Clean up files
 	rm -rf *.tar.gz
 
-.PHONY: distclean
-distclean: clean ## Clean up repo for distribution
+.PHONY: reset
+reset: clean ## Clean up repo for distribution
 
