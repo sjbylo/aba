@@ -226,7 +226,7 @@ do
         rm -rf $cname
 
 	test-cmd -m "Creating cluster.conf for $cname cluster with 'aba $cname --step cluster.conf'" "aba $cname --step cluster.conf"
-        sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # make sure all mac addr are the same, not random
+        sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # Make sure all mac addr are the same, not random
         test-cmd -m "Creating install-config.yaml for $cname cluster" "aba --dir $cname install-config.yaml"
         test-cmd -m "Creating agent-config.yaml for $cname cluster" "aba --dir $cname agent-config.yaml"
 
@@ -326,7 +326,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 test-cmd -r 20 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync 
 
 aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
-rm sno/cluster.conf   # This should 100% reset the cluster and make should start from scratch next time
+rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should start from scratch next time
 
 ####mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 201"
 mylog "Testing install with smaller CIDR 10.0.1.200/30 with start ip 201"
@@ -347,10 +347,12 @@ test-cmd -m "Checking cluster operators" aba --dir sno cmd
 #####################################################################################################################
 
 #######################
+#  Delete the reg. first!
+test-cmd -m "Delete the registry so it will be re-created again during 'aba save load' next" aba --dir mirror uninstall 
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 20 3 -m "Saving and loading images into mirror" aba --dir mirror save load 
+test-cmd -r 20 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
 
-aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
+aba --dir sno clean # This should clean up the cluster and 'make' should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
 
 ### Let it be ## test-cmd -m "Deleting cluster" aba --dir sno delete.  -i ignore the return value, i.e. if cluster not running/accessible 
@@ -374,10 +376,6 @@ test-cmd -m "Bare-metal simulation: Creating iso file" aba --dir standard iso   
 #####################################################################################################################
 #####################################################################################################################
 #####################################################################################################################
-
-# Must remove the old files under mirror/save 
-##make reset --force
-# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && make reset --force; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"
