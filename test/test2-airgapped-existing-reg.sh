@@ -59,8 +59,6 @@ if [ ! "$1" ]; then
 
 	which make || sudo dnf install make -y
 
-	test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noask
-
 	v=4.16.3
 	#v=4.15.22
 
@@ -75,6 +73,9 @@ if [ ! "$1" ]; then
 	vf=~/.vmware.conf
 	[ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 	test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
+
+	test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noask
+
 	#test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ## --vmw $vf
 	# Set up govc 
 	cp $vf vmware.conf 

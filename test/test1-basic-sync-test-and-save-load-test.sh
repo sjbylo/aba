@@ -53,8 +53,6 @@ rm -f ~/bin/aba  # don't get mized up!
 rm -f /usr/local/bin/aba
 ./install 
 
-test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noask
-
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
 echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
@@ -67,6 +65,8 @@ rm -f aba.conf
 vf=~/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
+
+test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noask
 
 # Set up govc 
 cp $vf vmware.conf 
