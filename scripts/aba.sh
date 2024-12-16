@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241216104247
+ABA_VERSION=20241216114125
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -427,7 +427,8 @@ if [ ! "$interactive_mode" ]; then
 fi
 
 # We don't want interactive mode if there were args in the command
-[ "$interactive_mode_none" ] && echo Exiting ... >&2 && exit 
+#[ "$interactive_mode_none" ] && echo Exiting ... >&2 && exit 
+[ "$interactive_mode_none" ]                          && exit 
 
 # Change to the top level repo directory
 cd $ABA_PATH

@@ -69,8 +69,9 @@ test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba 
 cp $vf vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 
-mylog "Setting 'ask='"
-sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
+#mylog "Setting 'ask='"
+#sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
+test-cmd -m "Set ask to false" aba noask
 
 mylog "Setting ntp_servers=$ntp" 
 [ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
