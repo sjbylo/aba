@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241216001740
+ABA_VERSION=20241216102933
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -244,11 +244,17 @@ do
 		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ip /g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--ntp" -o "$1" = "-P" ]; then
-		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --ntp arguments" >&2 && exit 1
-		ntp_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
+		# Check arg after --ntp, if "empty" then remove value from aba.conf, otherwise add valid value
+		if echo "$2" | grep -q "^-"; then
+			ntp_ip=""   # Remove value from aba.conf
+		else
+			# Check format of ip addr
+			ntp_ip=$(echo $2 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
+			[ ! "$ntp_ip" ] && echo_red "IP address missing or incorrect after option $1" >&2 && exit 1
+			shift
+		fi
 		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_ip /g" $ABA_PATH/aba.conf
-P#	shift 
+		shift 
 	elif [ "$1" = "--default-route" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 && exit 1
