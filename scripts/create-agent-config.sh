@@ -58,6 +58,10 @@ rm -f .macs.conf
 export arr_dns_servers=$(echo $dns_servers | tr -d "[:space:]" | tr "," " ")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
 echo_cyan "Adding DNS server(s): $arr_dns_servers"
 
+# Set up the ntp server(s)
+export arr_ntp_servers=$(echo $ntp_servers | tr -d "[:space:]" | tr "," " ")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
+echo_cyan "Adding NTP server(s): $arr_ntp_servers"
+
 # Use j2cli to render the templates
 echo
 echo Generating Agent-based configuration file: $PWD/agent-config.yaml 

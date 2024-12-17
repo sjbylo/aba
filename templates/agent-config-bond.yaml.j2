@@ -37,12 +37,15 @@ hosts:
             - {{ port0 }}
             - {{ port1 }}
 
+      {%- if arr_dns_servers %}
       dns-resolver:
         config:
           server:
             {%- for dns in arr_dns_servers %}
             - {{ dns }}
             {%- endfor %}
+      {%- endif %}
+
       routes:
         config:
           - destination: 0.0.0.0/0
