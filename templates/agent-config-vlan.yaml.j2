@@ -30,12 +30,16 @@ hosts:
             - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int - 1 + (3 if role == 'worker' else 0)) }}
               prefix-length: {{ prefix_length }}
           dhcp: false
+
+      {%- if arr_dns_servers %}
       dns-resolver:
         config:
           server:
             {%- for dns in arr_dns_servers %}
             - {{ dns }}
             {%- endfor %}
+      {%- endif %}
+
       routes:
         config:
           - destination: 0.0.0.0/0
