@@ -215,9 +215,11 @@ else
 
 	if [ ! "$fqdn_ip" ]; then
 		echo
-		echo_red "Warning: '$reg_host' does not resolve to an IP addr!" >&2
-		echo_red "         Please correct the problem and try again!" >&2
+		echo_red "Error: '$reg_host' does not resolve to an IP addr!" >&2
+		echo_red "       Please correct the problem and try again!" >&2
 		echo
+
+		exit 1
 	fi
 
 	# Get local IP addresses
