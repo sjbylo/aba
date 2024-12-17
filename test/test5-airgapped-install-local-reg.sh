@@ -245,6 +245,7 @@ test-cmd -h $reg_ssh_user@$int_bastion -m  "Checking cluster operators" aba --di
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Listing VMs (should show 24G memory)" "aba --dir $subdir/aba/$cluster_type ls"
 
 myLog "Deploying test vote-app"
+test-cmd -h steve@$int_bastion -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
 test-cmd -h steve@$int_bastion -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
 test-cmd -h steve@$int_bastion -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
@@ -422,8 +423,9 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion -m  "Waiting for all co available?" "aba --dir $subdir/aba/$cluster_name --cmd; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 	# Deploy test app
+	test-cmd -h steve@$int_bastion -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name --cmd 'oc delete project demo || true'" 
 	test-cmd -h steve@$int_bastion -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name --cmd 'oc new-project demo' || true" # || true
-	test-cmd -h steve@$int_bastion -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo' || true" # || true
+	test-cmd -h steve@$int_bastion -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 	test-cmd -h steve@$int_bastion -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_name --cmd 'oc rollout status deployment vote-app -n demo'"
 }
 

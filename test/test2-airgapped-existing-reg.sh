@@ -65,6 +65,7 @@ if [ ! "$1" ]; then
 	# clean up all, assuming reg. is not running (deleted)
 	#test-cmd "echo ocp_version=$v > aba.conf"
 	####make -C ~/aba reset --force
+	./install
 	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
@@ -194,7 +195,7 @@ test-cmd -r 20 3 -m "Saving images to local disk on `hostname`" aba save
 
 mylog "'aba tar' and copy (ssh) files over to internal bastion: steve@$int_bastion"
 test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion" "aba -d mirror tar --out - | ssh steve@$int_bastion -- tar -C $subdir -xvf -"
-test-cmd -h steve@$int_bastion -m "Install aba" "$subdir/aba/install"
+test-cmd -h steve@$int_bastion -m "Install aba on the remote host $int_bastion" "$subdir/aba/install"
 
 test-cmd -i -h steve@$int_bastion -m "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "aba --dir $subdir/aba load" # This user's action is expected to fail since there are no login credentials for the "existing reg."
 
@@ -285,6 +286,7 @@ test-cmd -h steve@$int_bastion -m "Checking cluster operator status on cluster s
 ######################
 
 ###test-cmd -h steve@$int_bastion -m "Deploying vote-app on cluster" $subdir/aba/test/deploy-test-app.sh $subdir
+test-cmd -h steve@$int_bastion -m "Delete project 'demo'" "aba --dir $subdir/aba/sno --cmd 'oc delete project demo || true'"
 test-cmd -h steve@$int_bastion -m "Create project 'demo'" "aba --dir $subdir/aba/sno --cmd 'oc new-project demo'"
 
 test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" sleep 30
@@ -341,19 +343,19 @@ test-cmd -h steve@$int_bastion -r 20 3 -m "Checking available Operators on sno c
 # 30 attempts, always waiting 20s (fixed value) secs between attempts
 
 # Need to fetch the actual channel name from the operator catalog that's in use
-acm_channel=$(cat mirror/.redhat-operator-index-v*[0-9] | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
-###[ "$acm_channel" ] && sed -i "s/channel: release-.*/channel: $acm_channel/g" ../test/acm-subs.yaml
-[ "$acm_channel" ] && test-cmd -h steve@$int_bastion -r 5 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" subdir/aba/test/acm-subs.yaml"
+acm_channel=$(cat mirror/.redhat-operator-index-v$ocp_ver_major | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
+[ "$acm_channel" ] && test-cmd -h steve@$int_bastion -r 5 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" $subdir/aba/test/acm-subs.yaml"
 test-cmd -h steve@$int_bastion -r 5 3 -m "Install ACM Operator" "aba --dir $subdir/aba/sno --cmd 'oc apply -f ../test/acm-subs.yaml'"
 
 test-cmd sleep 60
 
 test-cmd -h steve@$int_bastion -r 5 3 -m "Install Multiclusterhub" "aba --dir $subdir/aba/sno --cmd 'oc apply -f ../test/acm-mch.yaml'"
-test-cmd -m "Leave time for ACM to deploy ..." sleep 300
+
+test-cmd -m "Leave time for ACM to deploy ..." sleep 30
 
 # THIS TEST ALWAYS EXIT 0 # test-cmd -h steve@$int_bastion -r 15 1 -m "Check Multiclusterhub status is 'Running'" "aba --dir $subdir/aba/sno --cmd 'oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
-test-cmd -h steve@$int_bastion -r 15 1 -m "Check hub status is 'running'" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
-test-cmd -h steve@$int_bastion -r 15 1 -m "Output hub status" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status}| grep -i running"
+test-cmd -h steve@$int_bastion -r 15 1 -m "Wait for hub status is 'Running'" "while ! oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; echo -n .; sleep 10; done"
+###test-cmd -h steve@$int_bastion -r 15 1 -m "Output hub status" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 #### TESTING ACM + MCH 
 
 # Apply config, but don't wait for it to complete!
