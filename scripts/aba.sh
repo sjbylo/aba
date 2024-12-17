@@ -228,39 +228,52 @@ do
 			) &
 		) & 
 
-
 		shift 
+
 	elif [ "$1" = "--domain" -o "$1" = "-D" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --domain arguments" >&2 && exit 1
 		domain=$(echo $1 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		sed -i "s/^domain=[^ \t]*/domain=$domain /g" $ABA_PATH/aba.conf
 		target_domain=$domain
+
 		shift 
+
 	elif [ "$1" = "--dns" -o "$1" = "-N" ]; then
+		dns_ips=""
+		while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
+		do
+			# Skip invalid values (ip)
+			if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+				[ "$dns_ips" ] && dns_ips="$dns_ips,$2" || dns_ips="$2"
+			else
+				echo_red "Skipping invalid IP address [$2]" >&2
+			fi
+			shift
+		done
+		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ips /g" $ABA_PATH/aba.conf
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --dns arguments" >&2 && exit 1
-		dns_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ip /g" $ABA_PATH/aba.conf
-		shift 
+
 	elif [ "$1" = "--ntp" -o "$1" = "-P" ]; then
 		# Check arg after --ntp, if "empty" then remove value from aba.conf, otherwise add valid ip addr
-		ntp_ip=""
-		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-			# Check format of ip addr
-			ntp_ip=$(echo $2 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-			[ ! "$ntp_ip" ] && echo_red "IP address missing or incorrect after option $1" >&2 && exit 1
-			shift
-		fi
-		set -x
-		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_ip /g" $ABA_PATH/aba.conf
-		set +x
+		ntp_vals=""
+		# While there is a valid arg...
+		while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
+		do
+			[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
+			shift	
+		done
+		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_vals /g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--default-route" ]; then
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --default-route arguments" >&2 && exit 1
-		def_route_ip=$(echo $1 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
+		def_route_ip=
+		if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
+			def_route_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+		fi
+
 		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip /g" $ABA_PATH/aba.conf
+
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		shift 
@@ -389,10 +402,15 @@ do
 			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
 		fi
 	else
-		# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
-		# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
-		BUILD_COMMAND="$BUILD_COMMAND $1"
-		[ "$DEBUG_ABA" ] && echo Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
+		if echo "$1" | grep -q "^-"; then
+			echo_red "Error: invaid option [$1]" >&2
+			exit 1
+		else
+			# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
+			# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
+			BUILD_COMMAND="$BUILD_COMMAND $1"
+			[ "$DEBUG_ABA" ] && echo Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
+		fi
 		shift 
 	fi
 done
