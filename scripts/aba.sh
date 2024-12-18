@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241216114125
+ABA_VERSION=20241218164757
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -53,7 +53,7 @@ if [ -s $ABA_PATH/scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" $ABA_PATH/s
 	[ "$REPO_VER" -a $REPO_VER -gt $ABA_VERSION -a -x $ABA_PATH/install ] && echo "Updating aba script .." >&2 && $ABA_PATH/install -q >&2 && exec "$0" "$@"
 fi
 
-usage=$(cat others/help.txt)
+usage=$(cat $ABA_PATH/others/help.txt)
 
 ##[ "$1" = "--debug" ] && export DEBUG_ABA=1 && shift
 
@@ -351,10 +351,10 @@ do
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND force=1"
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
-		# If there is another arg, it must be an option, otherwise error
-		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-			echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
-		fi
+		## NOT TRUE # If there is another arg, it must be an option, otherwise error
+		## NOT TRUE if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+			## NOT TRUE echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
+		## NOT TRUE fi
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND wait=1"
 	elif [ "$1" = "--cmd" -o "$1" = "-c" ]; then
