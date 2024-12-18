@@ -56,6 +56,7 @@ v=4.16.3
 echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
 ### wrong # aba --dir ~/aba reset --force
 mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
+test-cmd -m "Show content of mirror/" ls -l mirror mirror/save || true
 #aba clean
 
 # Set up aba.conf properly
