@@ -46,7 +46,7 @@ which make || sudo dnf install make -y
 
 test-cmd -m "Cleaning up - aba reset --force" 
 mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
-test-cmd -m "Show content of mirror/" ls -l mirror mirror/save || true
+test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 #test-cmd -m "Cleaning up mirror - clean" "aba -s -C mirror clean" 
 
 rm -rf sno compact standard 
