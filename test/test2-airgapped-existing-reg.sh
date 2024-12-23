@@ -355,7 +355,7 @@ test-cmd -h steve@$int_bastion -r 5 3 -m "Install Multiclusterhub" "aba --dir $s
 test-cmd -m "Leave time for ACM to deploy ..." sleep 30
 
 # THIS TEST ALWAYS EXIT 0 # test-cmd -h steve@$int_bastion -r 15 1 -m "Check Multiclusterhub status is 'Running'" "aba --dir $subdir/aba/sno --cmd 'oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
-test-cmd -h steve@$int_bastion -r 15 1 -m "Wait for hub status is 'Running'" "while ! oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; echo -n .; sleep 10; done"
+test-cmd -h steve@$int_bastion -r 15 1 -m "Wait for hub status is 'Running'" "while ! oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; sleep 10; done"
 ###test-cmd -h steve@$int_bastion -r 15 1 -m "Output hub status" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 #### TESTING ACM + MCH 
 
