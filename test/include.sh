@@ -126,6 +126,8 @@ test-cmd() {
 			sleep_time=`expr $sleep_time + $backoff \* 8`
 
 			echo_cyan "Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
+
+			which notify.sh 2>/dev/null >&2 && notify.sh "Failed: $cmd <<`tail -10 test/test.log`>>" || true
 		done
 
 		[ "$reset_xtrace" ] && set -x
@@ -137,6 +139,8 @@ test-cmd() {
 			sub_pid=
 		fi
 			
+		which notify.sh 2>/dev/null >&2 && notify.sh "Aborting: $cmd" || true
+
 		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N) OR ENTER NEW COMMAND OR Ctrl-C? (Y/n/<cmd>): "
 		read ans
 
