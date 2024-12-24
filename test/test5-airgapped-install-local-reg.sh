@@ -203,24 +203,22 @@ mylog Now adding more images to the mirror registry
 
 mylog Runtest: vote-app
 
-# This next section no longer needed since ubi saved by default
+mylog Add ubi9 image to imageset conf file 
+cat >> mirror/save/imageset-config-save.yaml <<END
+  additionalImages:
+  - name: registry.redhat.io/ubi9/ubi:latest
+END
 
-#mylog Add ubi9 image to imageset conf file 
-#cat >> mirror/save/imageset-config-save.yaml <<END
-#  additionalImages:
-#  - name: registry.redhat.io/ubi9/ubi:latest
-#END
+test-cmd -r 20 3 -m "Saving ubi images to local disk on `hostname`" "aba --dir mirror save" 
 
-#test-cmd -r 20 3 -m "Saving ubi images to local disk on `hostname`" "aba --dir mirror save" 
+mylog Copy tar+ssh archives to internal bastion
+## aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir - xvf -
+aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
+test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
+scp mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$int_bastion:$subdir/aba/mirror/save
+test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
 
-#mylog Copy tar+ssh archives to internal bastion
-### aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir - xvf -
-#aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
-#test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
-#scp mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$int_bastion:$subdir/aba/mirror/save
-#test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
-#
-#test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load" 
+test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load" 
 
 mylog Add vote-app image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
@@ -232,10 +230,10 @@ test-cmd -r 20 3 -m "Saving vote-app image to local disk" "aba --dir mirror save
 mylog Copy repo only to internal bastion
 aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
 
-test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
+test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq3_000000.tar"
 mylog "Copy extra image set tar file to internal bastion"
-scp mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$int_bastion:$subdir/aba/mirror/save
-test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
+scp mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$int_bastion:$subdir/aba/mirror/save
+test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_seq3_000000.tar"
 
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading vote-app image into mirror" "aba -d $subdir/aba/mirror load" 
 
@@ -289,12 +287,8 @@ grep -A2 -e "name: kiali-ossm$"	          mirror/imageset-config-operator-catalo
 ########
 test-cmd -r 20 3 -m "Saving mesh operators to local disk" "aba --dir mirror save"
 
-test-cmd "Ensure image set tar file exists" "test -f mirror/save/mirror_seq3_000000.tar"
-
 mylog Create incremental tar and ssh to internal bastion
 aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion -- tar -C $subdir -xvf -
-
-test-cmd -h $reg_ssh_user@$int_bastion -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_seq3_000000.tar"
 
 test-cmd -h $reg_ssh_user@$int_bastion -r 20 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load" 
 
