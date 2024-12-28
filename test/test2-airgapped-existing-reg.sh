@@ -172,7 +172,7 @@ END
 
 	test-cmd -m "Cleaning mirror dir" aba --dir mirror clean
 
-	test-cmd -h steve@$int_bastion -m "Create sub dir on remote host" "rm -rf $subdir && mkdir $subdir"
+	test-cmd -h steve@$int_bastion -m "Delete and create sub dir on remote host" "rm -rf $subdir && mkdir $subdir"
 else
 	echo
 	echo Skipping setting up of test $(basename $0)
