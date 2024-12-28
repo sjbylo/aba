@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241223205122
+ABA_VERSION=20241228233619
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -125,7 +125,7 @@ do
 				[ "$2" -a -e "$2" -a -d "$2" ] && shift  # shift only if it's really a dir
 			fi
 		fi
-	elif [ "$1" = "--debug" ]; then
+	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
 		export DEBUG_ABA=1
 		shift 
 	#elif [ "$1" = "bundle" ]; then
@@ -185,26 +185,29 @@ do
 
 		shift 
 
-	elif [ "$1" = "--target-hostname" -o "$1" = "-T" ]; then
+	elif [ "$1" = "--target-hostname" -o "$1" = "-H" ]; then
 		echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
+		[ ! "$2" ] && echo_red "Missing argument for [$1]" >&2 && exit 1
 		make -sC $ABA_PATH/mirror mirror.conf
 		sed -i "s/^reg_host=[^ \t]*/reg_host=$2 /g" $ABA_PATH/mirror/mirror.conf
 
 		shift 2
 
-	elif [ "$1" = "--reg-ssh-key" ]; then
+	elif [ "$1" = "--reg-ssh-key" -o "$1" = "-k" ]; then
 		echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
+		[ ! "$2" ] && echo_red "Missing argument for [$1]" >&2 && exit 1
 		sed -i "s|^#*reg_ssh_key=[^ \t]*|reg_ssh_key=$2 |g" $ABA_PATH/mirror/mirror.conf
 
 		shift 2
 
-	elif [ "$1" = "--reg-ssh-user" ]; then
+	elif [ "$1" = "--reg-ssh-user" -o "$1" = "-U" ]; then
 		echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
+		[ ! "$2" ] && echo_red "Missing argument for [$1]" >&2 && exit 1
 		sed -i "s/^reg_ssh_user=[^ \t]*/reg_ssh_user=$2 /g" $ABA_PATH/mirror/mirror.conf
 
 		shift 2
 
-	elif [ "$1" = "--base-domain" -o "$1" = "-D" ]; then
+	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
 		echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
 		domain=$(echo $2 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		sed -i "s/^domain=[^ \t]*/domain=$domain /g" $ABA_PATH/aba.conf
@@ -227,7 +230,7 @@ do
 		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ips /g" $ABA_PATH/aba.conf
 		shift 
 
-	elif [ "$1" = "--ntp" -o "$1" = "-P" ]; then
+	elif [ "$1" = "--ntp" -o "$1" = "-T" ]; then
 		# Check arg after --ntp, if "empty" then remove value from aba.conf, otherwise add valid ip addr
 		ntp_vals=""
 		# While there is a valid arg...
@@ -238,7 +241,7 @@ do
 		done
 		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_vals /g" $ABA_PATH/aba.conf
 		shift 
-	elif [ "$1" = "--default-route" ]; then
+	elif [ "$1" = "--default-route" -o "$1" = "-R" ]; then
 		shift 
 		def_route_ip=
 		if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
@@ -255,7 +258,7 @@ do
 		platform="$1"
 		sed -i "s/^platform=[^ \t]*/platform=$platform /g" $ABA_PATH/aba.conf
 		shift
-	elif [ "$1" = "--op-sets" ]; then
+	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Warning: Missing args when parsing op-sets" >&2 && exit 1
@@ -263,7 +266,7 @@ do
 		op_set_list=$(echo "$op_set_list" | xargs)  # Trim white space
 		#echo ADDDING op_set_list=$op_set_list
 		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" $ABA_PATH/aba.conf
-	elif [ "$1" = "--ops" ]; then
+	elif [ "$1" = "--ops" -o "$1" = "-O" ]; then
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Warning: Missing args when parsing '--ops'" >&2 && exit 1
@@ -278,27 +281,27 @@ do
 		editor="$1"
 		sed -i "s/^editor=[^ \t]*/editor=$editor /g" $ABA_PATH/aba.conf
 		shift
-	elif [ "$1" = "--machine-network" ]; then
+	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 && exit 1
 		sed -i "s/^machine_network=[^ \t]*/machine_network=$1 /g" $ABA_PATH/aba.conf
 		shift 
-	elif [ "$1" = "--pull-secret" -o "$1" = "-ps" ]; then
+	elif [ "$1" = "--pull-secret" -o "$1" = "-S" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
 		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
 		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1 #g" $ABA_PATH/aba.conf
 		shift 
-	elif [ "$1" = "--vmware" -o "$1" = "--vmw" ]; then
+	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 && exit 1
 		[ -s $1 ] && cp $1 vmware.conf
 		shift 
-	elif [ "$1" = "--ask" ]; then
+	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
 		sed -i "s#^ask=[^ \t]*#ask=true #g" $ABA_PATH/aba.conf
 		shift 
-	elif [ "$1" = "--noask" ]; then
+	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then
 		sed -i "s#^ask=[^ \t]*#ask=false #g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
@@ -412,7 +415,7 @@ if [ ! "$interactive_mode" ]; then
 	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make -s $BUILD_COMMAND\" from dir $PWD" >&2
 
 	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
-	eval make -s $BUILD_COMMAND
+	[ "$DEBUG_ABA" ] && eval make $BUILD_COMMAND || eval make -s $BUILD_COMMAND
 
 	exit 
 fi
