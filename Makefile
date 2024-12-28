@@ -1,5 +1,5 @@
 # Top level Makefile
-.SILENT:
+#.SILENT:
 
 TEMPLATES = templates
 SCRIPTS   = scripts
