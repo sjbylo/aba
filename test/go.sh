@@ -50,7 +50,13 @@ time (
 	exit $? || exit $?
 ) 2>&1 | tee output.log
 ret=$?
-[ $ret -eq 0 ] && echo SUCCESS || echo FAILED | tee -a test/test.log
+if [ $ret -eq 0 ]; then
+	echo SUCCESS
+	doNotify "SUCCESS (`date`)"
+else
+	echo FAILED | tee -a test/test.log
+	doNotify "FAILED (`date`)"
+fi
 
 date 
 
