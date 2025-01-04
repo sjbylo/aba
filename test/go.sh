@@ -30,7 +30,7 @@ export target_full=    # Build only iso
 echo "Removing all traces of images from this host!"
 podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage
 
-doNotify() { which notify.sh 2>> test/output.log >&2 && notify.sh "$*" >> test/output.log || true; }
+doNotify() { which notify.sh >/dev/null 2>&1 && notify.sh "$*" || true; }
 
 time (
 	echo "=========================================================================="  	>> test/test.log
@@ -40,13 +40,13 @@ time (
 	echo "START TESTS @ $(date)" 								>> test/test.log
 	echo "==========================================================================" 	>> test/test.log
 	time test/test2-airgapped-existing-reg.sh && \
-	doNotify "Success (`date`)" && \
+	doNotify "Success test2 (`date`)" && \
 	time test/test5-airgapped-install-local-reg.sh && \
-	doNotify "Success (`date`)" && \
+	doNotify "Success test5 (`date`)" && \
 	time test/test1-basic-sync-test-and-save-load-test.sh && \
-	doNotify "Success (`date`)" && \
+	doNotify "Success test1 (`date`)" && \
 	time test/test3-using-public-quay-reg.sh && \
-	doNotify "Success (`date`)" && \
+	doNotify "Success test3 (`date`)" && \
 	exit $? || exit $?
 ) 2>&1 | tee test/output.log
 ret=$?
