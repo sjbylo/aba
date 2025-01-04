@@ -75,10 +75,10 @@ export ssh_key_pub=$(cat $ssh_key_file.pub)
 #if [ "$http_proxy" -a "$https_proxy" ]; then
 if [ "$proxy" ]; then
 	if [ "$http_proxy" -a "$https_proxy" ]; then
-		echo_green "Configuring 'cluster wide proxy' using the following proxy settings:"
-		echo_white "  http_proxy=$http_proxy"
-		echo_white "  https_proxy=$https_proxy"
-		echo_white "  no_proxy=$no_proxy"
+		[ "$INFO_ABA" ] && echo_green "Configuring 'cluster wide proxy' using the following proxy settings:"
+		[ "$INFO_ABA" ] && echo_white "  http_proxy=$http_proxy"
+		[ "$INFO_ABA" ] && echo_white "  https_proxy=$https_proxy"
+		[ "$INFO_ABA" ] && echo_white "  no_proxy=$no_proxy"
 
 		###export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
 

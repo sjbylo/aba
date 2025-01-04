@@ -1,4 +1,6 @@
+ifndef DEBUG_ABA
 .SILENT:
+endif
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
@@ -19,11 +21,10 @@ init: .init
 	mkdir -p regcreds
 	touch regcreds/.dummy  # Needed only so tar includes the *empty* regcreds dir
 	touch .init
-	@##echo Initialized `pwd`
 
 # If aba.conf does not exist, must abort!
 ../aba.conf:
-	@echo "aba.conf missing! Please read the README on how to get started!"
+	echo "aba.conf missing! Please read the README on how to get started!"
 	@exit 1
 
 .PHONY: cli-download
@@ -106,7 +107,7 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
 #mirror.conf: .init                     ../aba.conf   ## Configure the mirror.conf file.
 mirror.conf: ../aba.conf .init                        ## Configure the mirror.conf file.
-	@$(SCRIPTS)/create-mirror-conf.sh $(debug)
+	$(SCRIPTS)/create-mirror-conf.sh $(debug)
 
 mirror: install
 install: .installed
@@ -153,7 +154,7 @@ index: init catalog
 # -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
 catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
 	@make -sC ../cli ~/bin/oc-mirror
-	@$(SCRIPTS)/download-operator-index.sh
+	$(SCRIPTS)/download-operator-index.sh
 
 #uninstall: .init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
 uninstall: .init             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
@@ -164,7 +165,7 @@ uninstall: .init             mirror-registry .uninstalled     ## Uninstall any p
 
 .PHONY: checkversion
 checkversion: init
-	@$(SCRIPTS)/check-version-mismatch.sh
+	$(SCRIPTS)/check-version-mismatch.sh
 
 # Note that 'mirror-registry.tar.gz' is needed to 'uninstall' the registry.
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.

@@ -45,10 +45,10 @@ add_op() {
 }
 
 if [ ! "$op_sets" ]; then
-	echo_cyan "'op_sets' value not set in aba.conf or mirror.conf. Not adding operators to the image set config file." >&2
+	[ "$INFO_ABA" ] && echo_cyan "'op_sets' value not set in aba.conf or mirror.conf. Not adding operators to the image set config file." >&2
 fi
 
-op_sets=$(echo $op_sets | tr -s " ")
+###op_sets=$(echo $op_sets | tr -s " ")
 
 if [ "$ops" -o "$op_sets" ]; then
 	# Check for the index file
@@ -64,22 +64,22 @@ cat <<END
     packages:
 END
 else
-	echo_cyan "No 'op*' values set in aba.conf. Not adding operators to the image set config file." >&2
+	[ "$INFO_ABA" ] && echo_cyan "No 'op*' values set in aba.conf. Not adding operators to the image set config file." >&2
 
 	exit 0
 fi
 
-echo_cyan "Adding operators to the image set config file ..." >&2
+[ "$INFO_ABA" ] && echo_cyan "Adding operators to the image set config file ..." >&2
 
-for set in $op_sets
+for set in $(echo $op_sets | tr "," " ")
 do
 	# read in op list from template
 	if [ -s templates/operator-set-$set ]; then
 		echo "# $set operators"
-		echo_cyan -n "$set: " >&2
+		[ "$INFO_ABA" ] && echo_cyan -n "$set: " >&2
 		for op in $(cat templates/operator-set-$set)
 		do
-			echo_cyan -n "$op " >&2
+			[ "$INFO_ABA" ] && echo_cyan -n "$op " >&2
 			add_op $op
 		done
 		#echo >&2
@@ -90,15 +90,15 @@ done
 
 if [ "$ops" ]; then
 	echo "# misc operators"
-	echo_cyan -n "Op: " >&2
+	[ "$INFO_ABA" ] && echo_cyan -n "Op: " >&2
 
-	for op in $ops
+	for op in $(echo $ops | tr "," " ")
 	do
-		echo_cyan -n "$op " >&2
+		[ "$INFO_ABA" ] && echo_cyan -n "$op " >&2
 		add_op $op
 	done
 	#echo >&2
 else
-	echo_cyan "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image set config file." >&2
+	[ "$INFO_ABA" ] && echo_cyan "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image set config file." >&2
 fi
 

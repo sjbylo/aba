@@ -181,7 +181,7 @@ rm -f aba/.bundle  # We don't want this repo to be labelled as 'bundle', only th
 # NOTE: ONLY INC BACKUPS USE THIS FILE!!! See above. 
 #if [ ! "$repo_only" ]; then
 	# Upon success, make a note of the time
-	echo_white "Touching file ~/.aba.previous.backup" >&2
+	[ "$INFO_ABA" ] && echo_white "Touching file ~/.aba.previous.backup" >&2
 	#[ "$inc" ] && touch ~/.aba.previous.backup
 	touch ~/.aba.previous.backup
 #fi

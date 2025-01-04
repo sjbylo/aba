@@ -26,7 +26,7 @@ SNO=
 [ $num_masters -eq 1 -a $num_workers -eq 0 ] && SNO=1 && echo_white "Configuration is for Single Node Openshift (SNO) ..."
 [ $num_masters -ne 1 -a $num_masters -ne 3 ] && echo_red "Error: number of masters can only be 1 or 3!" >&2 && exit 1
 
-echo_white "Master count: $num_masters is valid."
+[ "$INFO_ABA" ] && echo_white "Master count: $num_masters is valid."
 
 # Checking for invalid config 
 if [ $num_masters -eq 1 -a $num_workers -ne 0 ]; then
@@ -35,7 +35,7 @@ if [ $num_masters -eq 1 -a $num_workers -ne 0 ]; then
 	exit 1
 fi
 
-echo_white "Worker count: $num_workers is valid."
+[ "$INFO_ABA" ] && echo_white "Worker count: $num_workers is valid."
 
 # If not SNO, then ensure api_vip and ingress_vip are defined 
 if [ ! "$SNO" ]; then
@@ -62,14 +62,14 @@ if [ ! "$SNO" ]; then
 		echo_red "Error: DNS record $cl_api_domain does not resolve to $api_vip, it resolves to $ip_of_api!" >&2 && \
 		exit 1
 
-	echo_white "DNS record for OCP api ($cl_api_domain) is valid: $ip_of_api."
+	[ "$INFO_ABA" ] && echo_white "DNS record for OCP api ($cl_api_domain) is valid: $ip_of_api."
 
 	# Ensure apps DNS exists and points to correct ip
 	[ "$ip_of_apps" != "$ingress_vip" ] && \
 		echo_red "Error: DNS record $cl_apps_domain does not resolve to $ingress_vip, it resolves to $ip_of_apps!" >&2 && \
 		exit 1
 
-	echo_white "DNS record for apps ingress ($cl_apps_domain) is valid: $ip_of_apps."
+	[ "$INFO_ABA" ] && echo_white "DNS record for apps ingress ($cl_apps_domain) is valid: $ip_of_apps."
 else
 	# For SNO...
 	# Check values are both pointing to "rendezvous_ip"
@@ -78,14 +78,14 @@ else
 		echo_red "Error: DNS record $cl_api_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $ip_of_api!" >&2 && \
 		exit 1
 
-	echo_white "DNS record for OCP api ($cl_api_domain) is valid: $ip_of_api"
+	[ "$INFO_ABA" ] && echo_white "DNS record for OCP api ($cl_api_domain) is valid: $ip_of_api"
 
 	# Ensure apps DNS exists 
 	[ "$ip_of_apps" != "$rendezvous_ip" ] && \
 		echo_red "Error: DNS record $cl_apps_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $ip_of_apps!" >&2 && \
 		exit 1
 
-	echo_white "DNS record for apps ingress ($cl_apps_domain) is valid: $ip_of_apps"
+	[ "$INFO_ABA" ] && echo_white "DNS record for apps ingress ($cl_apps_domain) is valid: $ip_of_apps"
 fi
 
 echo_green "Cluster configuration is valid."

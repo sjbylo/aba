@@ -1,5 +1,7 @@
-# Top level Makefile
-#.SILENT:
+# Top level Makefile  # DO NOT remove this line!
+ifndef DEBUG_ABA
+.SILENT:
+endif
 
 TEMPLATES = templates
 SCRIPTS   = scripts
