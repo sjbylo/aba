@@ -48,7 +48,7 @@ time (
 	time test/test3-using-public-quay-reg.sh && \
 	doNotify "Success (`date`)" && \
 	exit $? || exit $?
-) 2>&1 | tee output.log
+) 2>&1 | tee test/output.log
 ret=$?
 if [ $ret -eq 0 ]; then
 	echo SUCCESS
