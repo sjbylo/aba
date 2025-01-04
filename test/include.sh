@@ -127,7 +127,7 @@ test-cmd() {
 
 			echo_cyan "Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
 
-			which notify.sh 2>/dev/null >&2 && notify.sh "Failed cmd: $cmd`tail -3 test/test.log``tail -10 test/output.log`" >/dev/null || true
+			which notify.sh >/dev/null 2>&1 && notify.sh "Failed cmd: $cmd  [ `tail -3 test/test.log` ] [ `tail -10 test/output.log` ]" >/dev/null || true
 		done
 
 		[ "$reset_xtrace" ] && set -x
@@ -139,7 +139,7 @@ test-cmd() {
 			sub_pid=
 		fi
 			
-		which notify.sh 2>/dev/null >&2 && notify.sh "Aborting: $cmd`tail -3 test/test.log``tail -10 test/output.log`" >/dev/null || true
+		which notify.sh >/dev/null 2>&1 && notify.sh "Aborting: $cmd [ `tail -3 test/test.log` ] [ `tail -10 test/output.log` ]" >/dev/null || true
 
 		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N) OR ENTER NEW COMMAND OR Ctrl-C? (Y/n/<cmd>): "
 		read ans
