@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250104231331
+ABA_VERSION=20250104234138
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -148,7 +148,7 @@ do
 		fi
 		shift
 		# FIXME: This is just one use-case where --all is an opewtion which *is* needed my make! ==> Simplify!!
-	elif [ "$1" = "--channel" -o "$1" = "-l" ]; then
+	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 && exit 1
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
@@ -363,7 +363,8 @@ do
 		## NOT TRUE fi
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND wait=1"
-	elif [ "$1" = "--cmd" -o "$1" = "-c" ]; then
+	elif [ "$1" = "--cmd" ]; then
+		# Note, -c used for --channel
 		cmd=
 		shift 
 		echo "$1" | grep -q "^-" || cmd="$1"

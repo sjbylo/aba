@@ -38,8 +38,9 @@ if [ "$bg" ]; then
 
 	exec > $log_file 
 	exec 2> $log_file
-else
-	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major ..."
+#else
+# This message is one too many!
+#	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major ..."
 fi
 
 if ! curl --connect-timeout 15 --retry 3 -kIL https://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >/dev/null 2>&1; then
@@ -65,7 +66,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 		echo_magenta "Waiting for operator index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
 		try_cmd -q 2 0 150 test -s $index_file || true  # keep checking file does not have content, for max 300s (2 x 150s)
 	else
-		echo_white "Operator index v$ocp_ver_major already downloaded at $index_file"
+		echo_white "Operator index v$ocp_ver_major already downloaded to file mirror/$index_file"
 	fi
 
 	exit 0
