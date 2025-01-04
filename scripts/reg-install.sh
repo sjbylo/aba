@@ -28,7 +28,7 @@ fi
 
 # Check for Quay...
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
-echo_white Probing $reg_url/health/instance
+[ "$INFO_ABA" ] && echo_white Probing $reg_url/health/instance
 reg_code=$(curl --retry 2 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
 if [ "$reg_code" = "200" ]; then
@@ -44,7 +44,7 @@ if [ "$reg_code" = "200" ]; then
 fi
 
 # Check for any endpoint ...
-echo_white Probing $reg_url/
+[ "$INFO_ABA" ] && echo_white Probing $reg_url/
 reg_code=$(curl --retry 2 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/ || true)
 
 if [ "$reg_code" = "200" ]; then
@@ -66,12 +66,12 @@ if [ "$reg_root" ]; then
 		reg_root=$(echo "$reg_root" | sed "s#~#/home/$reg_ssh_user#g")
 	fi
 
-	echo_white "Using registry root dir: $reg_root"
+	[ "$INFO_ABA" ] && echo_white "Using registry root dir: $reg_root"
 	reg_root_opt="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --pgStorage $reg_root/pg-data"
 else
 	# The default path
 	reg_root=/home/$reg_ssh_user/quay-install  # This must be the path *where Quay will be installed*
-	echo_white "Using default registry root dir: $reg_root"
+	[ "$INFO_ABA" ] && echo_white "Using default registry root dir: $reg_root"
 fi
 
 
@@ -99,8 +99,8 @@ fi
 # Install Quay mirror on **remote host** if ssh key defined 
 if [ "$reg_ssh_key" ]; then
 	# First, ensure the reg host points to a remote host and not this localhost
-	echo_cyan "You have configured the mirror to be a remote host (since 'reg_ssh_key' is defined in 'aba.conf')."
-	echo_cyan "Verifying FQDN '$reg_host' points to a remote host ..."
+	[ "$INFO_ABA" ] && echo_cyan "You have configured the mirror to be a remote host (since 'reg_ssh_key' is defined in 'aba.conf')."
+	[ "$INFO_ABA" ] && echo_cyan "Verifying FQDN '$reg_host' points to a remote host ..."
 
 	# try to create a random file on the host and check the file does not exist on this localhost 
 	if ! ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host touch $flag_file; then
@@ -218,8 +218,8 @@ else
 	# First, ensure the reg host points to this localhost and not a remote host
 	# Sanity check to see if the correct host was defined
 	# Resolve FQDN
-	echo_cyan "You have configured the mirror to be on this localhost (since 'reg_ssh_key' is undefined in 'aba.conf')."
-	echo_cyan "Verifying FQDN '$reg_host' (IP: fqdn_ip) points to this localhost ..."
+	[ "$INFO_ABA" ] && echo_cyan "You have configured the mirror to be on this localhost (since 'reg_ssh_key' is undefined in 'aba.conf')."
+	[ "$INFO_ABA" ] && echo_cyan "Verifying FQDN '$reg_host' (IP: fqdn_ip) points to this localhost ..."
 
 	# Get local IP addresses
 	local_ips=$(hostname -I)

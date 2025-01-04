@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20241228233619
+ABA_VERSION=20250104230500
 
 uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -54,8 +54,6 @@ if [ -s $ABA_PATH/scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" $ABA_PATH/s
 fi
 
 usage=$(cat $ABA_PATH/others/help.txt)
-
-##[ "$1" = "--debug" ] && export DEBUG_ABA=1 && shift
 
 # FIXME: only found from the top level dir!
 # "Repo checking" above should ensure this always works
@@ -125,8 +123,12 @@ do
 				[ "$2" -a -e "$2" -a -d "$2" ] && shift  # shift only if it's really a dir
 			fi
 		fi
+	elif [ "$1" = "--info" ]; then
+		export INFO_ABA=1
+		shift 
 	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
 		export DEBUG_ABA=1
+		export INFO_ABA=1
 		shift 
 	#elif [ "$1" = "bundle" ]; then
 		#ACTION=bundle
@@ -262,18 +264,19 @@ do
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Warning: Missing args when parsing op-sets" >&2 && exit 1
-		while ! echo "$1" | grep -q -e "^-"; do [ -s $ABA_PATH/templates/operator-set-$1 ] && op_set_list="$op_set_list $1"; shift || break; done
-		op_set_list=$(echo "$op_set_list" | xargs)  # Trim white space
-		#echo ADDDING op_set_list=$op_set_list
-		sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" $ABA_PATH/aba.conf
+		while [ "$1" ] && ! echo "$1" | grep -q -e "^-"; do [ -s "$ABA_PATH/templates/operator-set-$1" ] && op_set_list="$op_set_list $1" || echo "Missing op. set: $1" >&2; shift; done
+		op_set_list=$(echo $op_set_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
+		op_set_list=$(echo $op_set_list | tr -s " " | tr " " ",")
+		#sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" $ABA_PATH/aba.conf
+		sed -i "s/^op_sets=[^#$]*/op_sets=$op_set_list /g" $ABA_PATH/aba.conf
 	elif [ "$1" = "--ops" -o "$1" = "-O" ]; then
 		shift
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
 		[ ! "$1" ] && echo_red "Warning: Missing args when parsing '--ops'" >&2 && exit 1
-		while ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift || break; done
-		ops_list=$(echo "$ops_list" | xargs)  # Trim white space
-		#echo ADDING ops_list=$ops_list
-		sed -i "s/^ops=[^#$]*/ops=\"$ops_list\" /g" $ABA_PATH/aba.conf
+		while [ "$1" ] && ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift; done
+		ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
+		##sed -i "s/^ops=[^#$]*/ops=\"$ops_list\" /g" $ABA_PATH/aba.conf
+		sed -i "s/^ops=[^#$]*/ops=$ops_list /g" $ABA_PATH/aba.conf
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 && exit 1
@@ -591,7 +594,7 @@ if [ ! -f .bundle ]; then
 	# Determine pull secret
 
 	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
-		echo_cyan "Pull secret found at '$pull_secret_file'."
+		[ "$INFO_ABA" ] && echo_cyan "Pull secret found at '$pull_secret_file'."
 
 		install_rpms make || exit 1
 

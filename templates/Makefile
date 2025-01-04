@@ -1,4 +1,6 @@
+ifndef DEBUG_ABA
 .SILENT:
+endif
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
@@ -42,7 +44,7 @@ all: $(TARGET_DEPENDENCIES)
 .PHONY: check
 check:
 	ln -sf ../scripts
-	@$(SCRIPTS)/check-cluster-installed.sh
+	$(SCRIPTS)/check-cluster-installed.sh
 
 ##@ Help-related tasks
 .PHONY: help
@@ -124,13 +126,13 @@ iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note
 	@exit 0
 
 .autopoweroff: iso-agent-based/agent.x86_64.iso
-	@$(SCRIPTS)/vmw-kill.sh $(debug) || true 
+	$(SCRIPTS)/vmw-kill.sh $(debug) || true 
 	@touch .autopoweroff
 
 upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images/agent-<cluster-name>.iso
 #.autoupload: vmware.conf .autorefresh
 .autoupload: vmware.conf .autopoweroff
-	@$(SCRIPTS)/vmw-upload.sh $(debug) 
+	$(SCRIPTS)/vmw-upload.sh $(debug) 
 	@touch .autoupload
 
 
@@ -149,24 +151,24 @@ refresh: vmw agentconf  ## Delete & create the VMs. This will automatically star
 .PHONY: create
 #create: vmware.conf iso  ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
 create: vmw agentconf      ## Create the VMs based on the 'agent-based' config files. Use 'make start' to start them. 
-	@$(SCRIPTS)/vmw-exists.sh || $(SCRIPTS)/vmw-create.sh $(debug) && exit 0
+	$(SCRIPTS)/vmw-exists.sh || $(SCRIPTS)/vmw-create.sh $(debug) && exit 0
 
 ###ls: vmware.conf  ## List VMs and their power state.
 .PHONY: ls
 ls: vmw agentconf                 agent-config.yaml ## List all VMs and their power state.
-	@$(SCRIPTS)/vmw-ls.sh || echo "No vm(s)."
+	$(SCRIPTS)/vmw-ls.sh || echo "No vm(s)."
 
 .PHONY: shutdown 
 shutdown: ## Trigger the cluster to gracefully shut itself down by draining all the nodes of pods and running shutdown command.
-	@$(SCRIPTS)/cluster-graceful-shutdown.sh 
+	$(SCRIPTS)/cluster-graceful-shutdown.sh 
 
 .PHONY: startup
 startup: vmware.conf ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
-	@$(SCRIPTS)/cluster-startup.sh 
+	$(SCRIPTS)/cluster-startup.sh 
 
 .PHONY: rescue
 rescue: ## If a cluster does not start due to login/CSR issues, rescue the cluster using ssh, if available. 
-	@$(SCRIPTS)/cluster-rescue.sh 
+	$(SCRIPTS)/cluster-rescue.sh 
 
 .PHONY: stop
 stop: .init vmware.conf                     agent-config.yaml ## Shut down all VMs gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again! Try using 'aba shutdown' for graceful cluster shutdown.
@@ -174,32 +176,32 @@ stop: .init vmware.conf                     agent-config.yaml ## Shut down all V
 
 .PHONY: start
 start: .init vmware.conf                     agent-config.yaml ## Power on all VMs.  Use 'aba startup' to ensure all nodes are uncordoned. 
-	@$(SCRIPTS)/vmw-start.sh $(debug) || exit 0
+	$(SCRIPTS)/vmw-start.sh $(debug) || exit 0
 
 .PHONY: poweroff
 poweroff: .init vmware.conf                     agent-config.yaml ## Power off all VMs immediately.  This will stop the cluster abruptly. 
-	@$(SCRIPTS)/vmw-kill.sh $(debug) || exit 0
+	$(SCRIPTS)/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: kill
 kill:  .init vmware.conf                     agent-config.yaml ## Kill or power off the VMs immediately.  This will stop the cluster abruptly. 
-	@$(SCRIPTS)/vmw-kill.sh $(debug) || exit 0
+	$(SCRIPTS)/vmw-kill.sh $(debug) || exit 0
 
 .PHONY: delete
 delete: .init vmware.conf                     agent-config.yaml ## Delete all VMs. This will delete the cluster!
-	@$(SCRIPTS)/vmw-delete.sh $(debug) || exit 0
+	$(SCRIPTS)/vmw-delete.sh $(debug) || exit 0
 
 .install-complete: .autorefresh
-	@$(SCRIPTS)/monitor-install.sh $(debug)
+	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 
 .PHONY: mon
 mon:  ## Monitor the agent-based installation of OpenShift.
-	@$(SCRIPTS)/monitor-install.sh $(debug)
+	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 
 .PHONY: login
 login: 
-	@$(SCRIPTS)/show-cluster-login.sh
+	$(SCRIPTS)/show-cluster-login.sh
 
 .PHONY: getco
 getco: ## Run 'oc get co' command on the cluster.
@@ -207,11 +209,11 @@ getco: ## Run 'oc get co' command on the cluster.
 
 .PHONY: cmd
 cmd: ## Run any oc command on the cluster. Must provide command, e.g. cmd="oc get pods -A", default is 'oc get co'.
-	@$(SCRIPTS)/oc-command.sh $(cmd)
+	$(SCRIPTS)/oc-command.sh $(cmd)
 
 .PHONY: ssh
 ssh: ## Open ssh to the rendezvous host (node 0) for troubleshooting
-	@$(SCRIPTS)/ssh-rendezvous.sh $(cmd)
+	$(SCRIPTS)/ssh-rendezvous.sh $(cmd)
 
 .PHONY: shell   
 shell:  ## Gain access to the installed cluster.  Run '. <(aba -s shell)'
@@ -219,11 +221,11 @@ shell:  ## Gain access to the installed cluster.  Run '. <(aba -s shell)'
 
 .PHONY:
 day2:  ## Set up OperatorHub, CatalogSources, imageContentSourcePolicy resources. Run this target after new Operators are loaded into the mirror registry. Requires access to 'mirror/.../oc-mirror-workspace' directory!
-	@$(SCRIPTS)/day2.sh $(debug)
+	$(SCRIPTS)/day2.sh $(debug)
 
 .PHONY:
 day2-ntp:  ## Configure OpenShift with your NTP server
-	@$(SCRIPTS)/day2-config-ntp.sh $(debug)
+	$(SCRIPTS)/day2-config-ntp.sh $(debug)
 
 .PHONY: remove-cdrom
 remove-cdrom: vmware.conf  ## Remove the cdrom devide from all VMs

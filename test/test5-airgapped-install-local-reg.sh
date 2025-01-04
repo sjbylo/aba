@@ -82,8 +82,8 @@ aba noask
 mylog "Setting ntp_servers=$ntp" 
 [ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
 
-mylog "Setting op_sets=\"abatest\" in aba.conf"
-sed -i "s/^op_sets=.*/op_sets=\"abatest\" /g" aba.conf
+mylog "Setting op_sets=abatest in aba.conf"
+sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
 echo kiali-ossm > templates/operator-set-abatest 
 
 # Needed for $ocp_version below
@@ -107,8 +107,7 @@ mylog "Setting reg_host=$int_bastion"
 sed -i "s/registry.example.com/$int_bastion /g" ./mirror/mirror.conf
 
 # This is also a test that overriding vakues works ok, e.g. this is an override in the mirror.connf gile, overriding from aba.conf file
-####mylog "Setting op_sets=\"abatest\" in mirror/mirror.conf"
-test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_sets=.*/op_sets='abatest' /g' ./mirror/mirror.conf"
+test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_sets=.*/op_sets=abatest /g' ./mirror/mirror.conf"
 echo kiali-ossm > templates/operator-set-abatest 
 
 # Uncomment this line

@@ -56,11 +56,11 @@ rm -f .macs.conf
 
 # Set up the dns server(s)
 export arr_dns_servers=$(echo $dns_servers | tr -d "[:space:]" | tr "," " ")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
-echo_cyan "Adding DNS server(s): $arr_dns_servers"
+[ "$INFO_ABA" ] && echo_cyan "Adding DNS server(s): $arr_dns_servers"
 
 # Set up the ntp server(s)
 export arr_ntp_servers=$(echo $ntp_servers | tr -d "[:space:]" | tr "," " ")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
-echo_cyan "Adding NTP server(s): $arr_ntp_servers"
+[ "$INFO_ABA" ] && echo_cyan "Adding NTP server(s): $arr_ntp_servers"
 
 # Use j2cli to render the templates
 echo
@@ -69,16 +69,16 @@ echo
 
 if [ "$port0" -a "$port1" -a "$vlan" ]; then
 	template_file=agent-config-vlan-bond.yaml.j2
-	echo_white "Using vlan and bonding agent config template '$template_file' (port0=$port0 port1=$port1 vlan=$vlan)"
+	[ "$INFO_ABA" ] && echo_white "Using vlan and bonding agent config template '$template_file' (port0=$port0 port1=$port1 vlan=$vlan)"
 elif [ "$port0" -a "$port1" -a ! "$vlan" ]; then
 	template_file=agent-config-bond.yaml.j2
-	echo_white "Using access mode bonding agent config template '$template_file' (port0=$port0 port1=$port1)"
+	[ "$INFO_ABA" ] && echo_white "Using access mode bonding agent config template '$template_file' (port0=$port0 port1=$port1)"
 elif [ "$port0" -a ! "$port1" -a "$vlan" ]; then
 	template_file=agent-config-vlan.yaml.j2
-	echo_white "Using vlan agent config template '$template_file' (port0=$port0 port1=$port1)"
+	[ "$INFO_ABA" ] && echo_white "Using vlan agent config template '$template_file' (port0=$port0 port1=$port1)"
 else
 	template_file=agent-config.yaml.j2
-	echo_white "Using standard agent config template '$template_file'"
+	[ "$INFO_ABA" ] && echo_white "Using standard agent config template '$template_file'"
 fi
 
 # Note that machine_ip_prefix, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 
