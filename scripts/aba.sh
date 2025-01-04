@@ -282,11 +282,11 @@ do
 		sed -i "s/^editor=[^ \t]*/editor=$editor /g" $ABA_PATH/aba.conf
 		shift
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
-		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --machine-network arguments" >&2 && exit 1
-		[ ! "$1" ] && echo_red "Missing machine network value $1" >&2 && exit 1
-		sed -i "s/^machine_network=[^ \t]*/machine_network=$1 /g" $ABA_PATH/aba.conf
-		shift 
+		#shift 
+		echo "$2" | grep -q "^-" && echo_red "Error in parsing argument of [$1]" >&2 && exit 1
+		[ ! "$2" ] && echo_red "Missing machine network value after [$1]" >&2 && exit 1
+		sed -i "s#^machine_network=[^ \t]*#machine_network=$2 #g" $ABA_PATH/aba.conf
+		shift 2
 	elif [ "$1" = "--pull-secret" -o "$1" = "-S" ]; then
 		shift 
 		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
@@ -412,10 +412,10 @@ if [ ! "$interactive_mode" ]; then
 	#[ "$unknown_args" ] && echo "Unknown args in request: [$unknown_args]" >&2 && exit 1
 	# Not correct!  How abou this? => aba --debug --dir /home/steve/subdir/aba/sno --cmd 'get po -A | grep -v -e Running -e Complete'
 
-	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make -s $BUILD_COMMAND\" from dir $PWD" >&2
+	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
 
 	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
-	[ "$DEBUG_ABA" ] && eval make $BUILD_COMMAND || eval make -s $BUILD_COMMAND
+	[ ! "$DEBUG_ABA" ] && eval make -s $BUILD_COMMAND || eval make $BUILD_COMMAND
 
 	exit 
 fi
