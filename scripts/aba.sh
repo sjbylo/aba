@@ -1,9 +1,12 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250104234138
+ABA_VERSION=20250105002230
 
-uname -o | grep -q "^Darwin$" && echo "Please run Aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
+uname -o | grep -q "^Darwin$" && echo "Please run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
+
+# Check sudo or root access 
+[ "$(sudo id -run)" != "root" ] && echo "Please run aba as root or configure passwordless sudo, then try again." >&2 && exit 1
 
 # Having $1 = --dir is an exception only, $1 can point to the top-level repo dir only
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
