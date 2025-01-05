@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250105094822
+ABA_VERSION=20250105103219
 
 uname -o | grep -q "^Darwin$" && echo "Please run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -354,9 +354,9 @@ do
 		fi
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
 		# If there's another arg and it's NOT an option (^-) then error
-		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-			echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
-		fi
+		###if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+		###	echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
+		###fi
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND force=1"
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
@@ -412,8 +412,6 @@ BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $
 [ ! "$BUILD_COMMAND" -a "$ABA_PATH" = "." ] && interactive_mode=1
 
 if [ ! "$interactive_mode" ]; then
-	[ "$DEBUG_ABA" ] &&  echo "ABA_PATH != ."
-
 	# No short options should get this far! 
 	#unknown_args=$(echo $BUILD_COMMAND | grep -q -o -e " -[a-z]")
 	#[ "$unknown_args" ] && echo "Unknown args in request: [$unknown_args]" >&2 && exit 1
@@ -422,7 +420,11 @@ if [ ! "$interactive_mode" ]; then
 	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
 
 	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
-	[ ! "$DEBUG_ABA" ] && eval make -s $BUILD_COMMAND || eval make $BUILD_COMMAND
+	if [ "$DEBUG_ABA" ]; then
+		eval make    $BUILD_COMMAND
+	else
+		eval make -s $BUILD_COMMAND
+	fi
 
 	exit 
 fi
@@ -565,7 +567,7 @@ if [ ! -f .bundle ]; then
 	if [ ! "$editor" ]; then
 		echo
 		echo    "Aba can use an editor to aid in the workflow."
-		echo -n "Enter your preferred editor or set to 'none' if you prefer to edit the configuration files yourself ('vi', 'nano' etc or 'none')? [vi]: "
+		echo -n "Enter your preferred editor or set to 'none' if you prefer to edit the configuration files manually ('vi', 'nano' etc or 'none')? [vi]: "
 		read new_editor
 
 		[ ! "$new_editor" ] && new_editor=vi  # default
