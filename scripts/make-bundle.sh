@@ -27,14 +27,16 @@ echo Bundle output file = $bundle_dest_path >&2
 echo >&2
 
 # Check if the repo is alreay in use, e.g. we don't want mirror.conf in the bundle
-# "force" would mean that "make bundle" can be run again and again.
-force=1 # FIXME
+# "-f, --force" means that "make bundle" can be run again & again and the image set config file will be re-created every time
+#force=1 # $force now comes from "--force" option
 if [ ! "$force" ]; then
 	if [ -s mirror/save/imageset-config-save.yaml -o -f mirror/mirror.conf ]; then
-		echo_red "This repo is already in use!  Use a fresh Aba repo or run 'aba reset' and try again!" >&2 >&2
+		echo_red "This repo is already in use!  Use the '--force' flag or use a fresh Aba repo or run 'aba reset' and try again!" >&2 >&2
 
 		exit 1
 	fi
+else
+	rm -f mirror/save/imageset-config-save.yaml
 fi
 
 #if [ -s mirror/save/imageset-config-save.yaml ]; then

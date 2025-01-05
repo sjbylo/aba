@@ -121,7 +121,7 @@ if [ "$dest" != "-" ]; then
 		echo_white "After the bundle has been written, copy it to your *internal bastion*, e.g. with:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/thumbdrive>"
 		echo_white "Remember to copy over the 'image set' tar files also, e.g. with the command:"
-		echo_white " cp mirror/save/mirror_seq*.tar <path/to/your/portable/media/usb-stick/thumbdrive>"
+		echo_white " cp mirror/save/mirror_seq*.tar </path/to/your/portable/media/usb-stick/thumbdrive>"
 		echo
 		echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
 		echo_white "Extract the bundle tar file anywhere under your home directory"
@@ -132,7 +132,7 @@ if [ "$dest" != "-" ]; then
 		echo_white "  ./install"
 		echo_white "  aba"
 		echo
-		echo_white "Run 'aba help' for all options."
+		echo_white "Run 'aba -h' for all options."
 		echo
 	else
 		echo
@@ -140,19 +140,14 @@ if [ "$dest" != "-" ]; then
 		echo
 		echo_white "If not already ... after the bundle has been written, copy it to your *internal bastion*, e.g. with:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/thumbdrive>"
-		#echo_white "Remember to copy over the 'image set' tar files also, e.g. with the command:"
-		#echo_white " cp mirror/save/mirror_seq*.tar <path/to/your/portable/media/usb-stick/thumbdrive>"
 		echo
-		#echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
 		echo_white "Extract the bundle tar file anywhere under your home directory"
-		#echo_white "and move the 'image set' files into the save/ dir & continue by running 'aba', e.g. with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
-		#echo_white "  mv mirror_seq*.tar aba/mirror/save"
 		echo_white "  cd aba"
 		echo_white "  ./install"
 		echo_white "  aba"
 		echo
-		echo_white "Run 'aba help' for all options."
+		echo_white "Run 'aba -h' for all options."
 		echo
 	fi
 fi

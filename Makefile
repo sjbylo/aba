@@ -60,7 +60,7 @@ sync: ## Sync images from the Internet directly to an internal registry (as defi
 .PHONY: bundle
 # Note: '@' used to ensure tar format is not corrupted when using out=-
 bundle:  ## Create a bundle archive of content to be carried into the air-gapped env. Example: make bundle out=/path/to/archive/bundle
-	@$(SCRIPTS)/make-bundle.sh $(out)
+	@$(SCRIPTS)/make-bundle.sh $(out) $(force)
 
 .PHONY: save
 save: ## Save images from the Internet to mirror/save. 
@@ -79,10 +79,6 @@ tarrepo:  ## Archive the full repo *excluding* the mirror/mirror_seq*tar files. 
 inc:  ## Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'make tar'.
 	$(SCRIPTS)/backup.sh --inc $(out)
 
-## .PHONY: increpo
-## increpo:  ## Create an incremental archive of the repo, e.g. make inc out=/dev/path/to/thumbdrive.  Default output is /tmp/aba-backup.tar. Can also use out=- to send tar data to stdout.  The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup
-## 	@$(SCRIPTS)/backup.sh --inc --repo $(out)
-
 .PHONY: load
 load: ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf') 
 	@make -sC mirror load
@@ -93,11 +89,11 @@ sno: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make sno 
 
 .PHONY: compact
 compact: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make compact target=iso' to make that target.
-	@$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
+	$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: standard
 standard: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make standard target=iso' to make that target.
-	@$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
+	$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: cluster
 cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. make cluster name=mycluster [type=sno|compact|standard] [target=<target>]

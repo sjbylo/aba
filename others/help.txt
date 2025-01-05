@@ -15,8 +15,9 @@ Usage: Create a install 'bundle archive'
      -v, --version <version>
      -o, --out </path/to/mybundle|->
      -S, --pull-secret ~/.pull-secret.json
-     -P, --op-sets "<list of operator sets>"
-     -O, --ops "<list of operator names>"
+     -P, --op-sets <list of operator sets>
+     -O, --ops <list of operator names>
+     -f, --force
         <<other options>> 
 
    The 'bundle' command creates an install 'bundle archive' file which is used to install OpenShift in a
@@ -87,20 +88,20 @@ Examples:
     cd aba
 
   Create install bundle for fully disconnected:
-    aba -c fast -v latest -S ~/.my-pull-secret.json -P "ocp ocpv mesh3" -O "web-terminal" -o /path/to/portable/media/ocp-install-bundle
+    aba bundle --force -c fast -v latest -S ~/.pull-secret.json -P ocp ocpv mesh3 -O web-terminal -o /path/to/portable/media/ocp-install-bundle
     # Now transfer the ocp-install-bundle* file to air-gapped env. Then unpack and run 'aba/install'.
 
   Configure mirror on localhost with FQDN registry.example.com:
     aba mirror -H registry.example.com 
 
   Configure mirror on remote host with FQDN registry.example.com:
-    aba mirror -H registry.example.com -k ~/.ssh/my-ssh-key -U remote-ssh-user
+    aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
 
   Configure mirror on localhost with FQDN registry.example.com and sync the images to the mirror:
     aba sync -H registry.example.com 
 
   Configure mirror on localhost with FQDN registry.example.com and sync the images & operators to the mirror:
-    aba sync -H registry.example.com -P "ocpv odf"
+    aba sync -H registry.example.com -P ocpv odf
 
   Save images to local disk:
     aba save

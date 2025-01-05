@@ -137,11 +137,19 @@ if [ "$reg_ssh_key" ]; then
 	# Check for known issue where images need to be loaded on the remote host first
 	# This will load the needed images and fix the problem 
 	# Only need to do this workaround once
-	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "ip a"
-	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "rpm -q podman || sudo dnf install podman jq -y" || exit 1
-	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "rpm -q jq 	|| sudo dnf install podman jq -y" || exit 1
-	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "podman images" || exit 1
-	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause || \
+	echo_cyan "Running checks on remote host: $reg_host.  See $PWD/.remote_host_check.out file for output."
+
+	> .remote_host_check.out
+	err=
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "set -x; ip a" >> .remote_host_check.out 2>&1
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "set -x; rpm -q podman || sudo dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "set -x; rpm -q jq 	|| sudo dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "set -x; podman images" >> .remote_host_check.out 2>&1 || err=1
+
+	[ "$err" ] && echo_red "Please install 'podman' and 'jq' on the remote host '$reg_host' and try again." && exit 1
+
+	# Check if the workaround needs to be run:
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause >> .remote_host_check.out 2>&1 || \
 	(
 		echo "Implementing workaround to install Quay on remote host ... see https://access.redhat.com/solutions/7040517 for more."
 		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host mkdir -p .abatmp
