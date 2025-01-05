@@ -186,9 +186,8 @@ if [ "$reg_ssh_key" ]; then
 	if [ -d regcreds ]; then
 		rm -rf regcreds.bk
 		mv regcreds regcreds.bk
-	else
-		mkdir regcreds
 	fi
+	mkdir regcreds
 
 	# Fetch root CA from remote host 
 	scp -i $reg_ssh_key -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
@@ -283,9 +282,8 @@ else
 	if [ -d regcreds ]; then
 		rm -rf regcreds.bk
 		mv regcreds regcreds.bk
-	else
-		mkdir regcreds
 	fi
+	mkdir regcreds
 
 	# Fetch root CA from localhost 
 	cp $reg_root/quay-rootCA/rootCA.pem regcreds/
