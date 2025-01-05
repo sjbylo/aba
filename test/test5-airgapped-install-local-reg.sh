@@ -169,7 +169,8 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
 test-cmd -r 20 3 -m "Creating bundle for channel fast and versiono $ocp_version" "aba bundle --channel fast --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion tar -C $subdir -xvf -"
 
-# Smoke test!
+# Smoke tests!
+test-cmd -h $reg_ssh_user@$int_bastion -m  "Verifying existance of file '$subdir/aba/mirror/save/mirror_seq1_000000.tar' on remote host" "ls -lh $subdir/aba/mirror/save/mirror_seq1_000000.tar" 
 test-cmd -m  "Verifying existance of file 'mirror/save/mirror_seq1_000000.tar'" "ls -lh mirror/save/mirror_seq1_000000.tar" 
 test-cmd -m  "Delete this file that's already been copied to internal bastion: 'mirror/save/mirror_seq1_000000.tar'" "rm -f mirror/save/mirror_seq1_000000.tar" 
 
