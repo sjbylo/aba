@@ -57,7 +57,6 @@ if [ "$bundle_dest_path" = "-" ]; then
 fi
 
 if files_on_same_device mirror $bundle_dest_path; then
-	#make bundle out="$bundle_dest_path" retry=7  # Try 8 times!
 	echo_cyan "Creating 'minor' bundle archive (because the image set files are on the same file-system) ..."
 	make download save tarrepo out="$bundle_dest_path" retry=7	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
 else
