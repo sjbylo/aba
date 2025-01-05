@@ -82,6 +82,7 @@ file_list=$(find		\
 	! -path "aba/*/iso-agent-based*"  			\
 	! -path "aba/mirror/sync/oc-mirror-workspace*"  	\
 	! -path "aba/mirror/save/oc-mirror-workspace*"		\
+	! -path "aba/test/output.log" 				\
 								\
 	\( -type f -o -type l \)				\
 								\
@@ -92,6 +93,7 @@ file_list=$(find		\
 # Don't include/compress the 'image set' tar files since we have them compressed already.
 # Don't need to copy over the oc-mirror-workspace dirs.  The needed yaml files for 'make day2' are created at 'make load'. THIS IS WRONG
 # FIXME: Need to consider how to copy over the meta date (oc-mirror-workspace), or we leave it to the user to do.
+# Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop.
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
 [ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_seq.*.tar$") || true  # 'true' needed!
