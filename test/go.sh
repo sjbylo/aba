@@ -2,7 +2,8 @@
 # Simple top level script to run all tests
 
 # Clear the tmux screen buffer
-[ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
+#[ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
+[ "$TMUX" ] && tmux clear-history 
 
 #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
 export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
@@ -39,14 +40,10 @@ time (
 	echo "=========================================================================="  	>> test/test.log
 	echo "START TESTS @ $(date)" 								>> test/test.log
 	echo "==========================================================================" 	>> test/test.log
-	time test/test2-airgapped-existing-reg.sh && \
-	doNotify "Success test2 (`date`)" && \
-	time test/test5-airgapped-install-local-reg.sh && \
-	doNotify "Success test5 (`date`)" && \
-	time test/test1-basic-sync-test-and-save-load-test.sh && \
-	doNotify "Success test1 (`date`)" && \
-	time test/test3-using-public-quay-reg.sh && \
-	doNotify "Success test3 (`date`)" && \
+	time test/test2-airgapped-existing-reg.sh &&			doNotify "Success test2 (`date`)" && \
+	time test/test5-airgapped-install-local-reg.sh &&		doNotify "Success test5 (`date`)" && \
+	time test/test1-basic-sync-test-and-save-load-test.sh &&	doNotify "Success test1 (`date`)" && \
+	time test/test3-using-public-quay-reg.sh &&			doNotify "Success test3 (`date`)" && \
 	exit $? || exit $?
 ) 2>&1 | tee test/output.log
 ret=$?
