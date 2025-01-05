@@ -167,7 +167,7 @@ source <(cd mirror && normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-test-cmd -r 20 3 -m "Creating bundle for channel fast and versiono $ocp_version" "aba bundle --channel fast --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion tar -C $subdir -xvf -"
+test-cmd -r 20 3 -m "Creating bundle for channel fast and versiono $ocp_version" "aba -f bundle --channel fast --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion tar -C $subdir -xvf -"
 
 # Smoke tests!
 test-cmd -h $reg_ssh_user@$int_bastion -m  "Verifying existance of file '$subdir/aba/mirror/save/mirror_seq1_000000.tar' on remote host" "ls -lh $subdir/aba/mirror/save/mirror_seq1_000000.tar" 
