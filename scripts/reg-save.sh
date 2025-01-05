@@ -39,8 +39,8 @@ try=1
 failed=1
 while [ $try -le $try_tot ]
 do
-	[ "$INFO_ABA" ] && echo_cyan -n "Attempt ($try/$try_tot)."
-	[ $try_tot -le 1 ] && [ "$INFO_ABA" ] && echo_white " Set number of retries with 'aba save --retry <number>'" || echo
+	echo_cyan -n "Attempt ($try/$try_tot)."
+	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba save --retry <number>'" || echo
 	echo_cyan "Running: $(cat save-mirror.sh)"
 	echo
 

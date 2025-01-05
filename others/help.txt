@@ -1,13 +1,14 @@
 Install & manage air-gapped OpenShift. 
 
-   Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially disconnected environment,
-   either onto bare-metal, vSphere or ESXi. Because Aba uses the Agent-based installer there is no need to configure a load balancer,
-   a bootstrap node or require DHCP.
+   Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially
+   disconnected environment, either onto bare-metal, vSphere or ESXi. Because Aba uses the Agent-based
+   installer there is no need to configure a load balancer, a bootstrap node or require DHCP.
 
 Usage: Interactive
-   aba [-i]                               # Interactive mode.  Let Aba lead you through the disconnected install process.
+   aba [-i]                               # Interactive mode.
+                                          # Let Aba lead you through the disconnected install process.
 
-Usage: Create a 'bundle archive'
+Usage: Create a install 'bundle archive'
    aba bundle \
     <<options>>:
      -c, --channel <channel>
@@ -18,8 +19,9 @@ Usage: Create a 'bundle archive'
      -O, --ops "<list of operator names>"
         <<other options>> 
 
-   The 'bundle' command writes the provided args to 'aba.conf' and then creates a 'bundle archive' file which is used to install OpenShift
-   in a fully disconnected (air-gapped) environment. See below for <<other options>>.
+   The 'bundle' command creates an install 'bundle archive' file which is used to install OpenShift in a
+   fully disconnected (air-gapped) environment.  The above command also writes the provided args (channel,
+   version, operators ...) to 'aba.conf'.  See below for <<other options>>.
 
 Usage: Set up and load mirror registry
    aba mirror                            # Connect to existing, or create a, mirror registry. 
@@ -46,7 +48,8 @@ Usage: Provision OpenShift cluster
      -n, --name <cluster name>           # The name of the cluster to create. 
    <<options>>:
      -t, --type <sno|compact|standard>   # Set type of cluster.
-         --step <step>                   # Process up to this step or command.  See commands with "aba -d mycluster help".
+         --step <step>                   # Process up to this step or command.  
+                                         # See commands with "aba -d mycluster help".
 
    aba --cmd "oc command"                # Run this oc command on the current cluster.
 
@@ -60,7 +63,7 @@ Usage:
      -d, --dir <directory>               # Run Aba in this directory.
      -h, --help                          # Show this help information.
      -S, --pull-secret <path/to/file>    # Location of your pull secret (json) file here. 
-     -c, --channel <channel>             # Set the OpenShift installation channel, e.g. fast, stable (default), eus or candidate.
+     -c, --channel <channel>             # Set the OpenShift installation channel, e.g. fast, stable, eus or candidate.
      -v, --version <version>             # Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest'.
      -p, --platform vmw|bm               # Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
      -b, --base-domain <domain>          # Set the OpenShift base domain, e.g. company.com.
@@ -83,9 +86,9 @@ Examples:
     bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
     cd aba
 
-  Create bundle for fully disconnected:
-    aba -c fast -v latest -S ~/.my-pull-secret.json -P "ocp ocpv mesh3" -O "web-terminal" -o /dev/path/to/large/portable/media/device/ocp-install-bundle
-    # Now transfer to air-gapped env. and unpack, run: aba/install
+  Create install bundle for fully disconnected:
+    aba -c fast -v latest -S ~/.my-pull-secret.json -P "ocp ocpv mesh3" -O "web-terminal" -o /path/to/portable/media/ocp-install-bundle
+    # Now transfer the ocp-install-bundle* file to air-gapped env. Then unpack and run 'aba/install'.
 
   Configure mirror on localhost with FQDN registry.example.com:
     aba mirror -H registry.example.com 
@@ -93,10 +96,10 @@ Examples:
   Configure mirror on remote host with FQDN registry.example.com:
     aba mirror -H registry.example.com -k ~/.ssh/my-ssh-key -U remote-ssh-user
 
-  Configure mirror on localhost with FQDN registry.example.com, also sync the images to the mirror:
+  Configure mirror on localhost with FQDN registry.example.com and sync the images to the mirror:
     aba sync -H registry.example.com 
 
-  Configure mirror on localhost with FQDN registry.example.com, also sync the images and operators to the mirror:
+  Configure mirror on localhost with FQDN registry.example.com and sync the images & operators to the mirror:
     aba sync -H registry.example.com -P "ocpv odf"
 
   Save images to local disk:
