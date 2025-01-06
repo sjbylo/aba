@@ -3,11 +3,34 @@
 
 repo=sjbylo/aba
 branch=main
-[ "$1" = "-q" ] && quiet=1 && shift
+
+# Check options
+while echo "$1" | grep -q "^-"
+do
+	[ "$1" = "-q" ] && quiet=1 && shift
+	[ "$1" = "-v" ] && curr_ver=$2 && shift 2
+done
+
+# Required args
 [ "$1" ] && repo="$1"
 [ "$2" ] && branch="$2"
 
 cd $(dirname $0)
+
+# Check if aba script needs to be updated (only aba calls install using -v opt to set $curr_ver)
+if [ "$curr_ver" ]; then
+	if [ -s ./scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" ./scripts/aba.sh; then
+		REPO_VER=$(grep "^ABA_VERSION=" ./scripts/aba.sh | cut -d= -f2)
+		# if the version of aba in the repo is newer than the aba installed/called
+		if [ "$REPO_VER" -a $REPO_VER -gt $curr_ver -a -x ./install ]; then
+			#echo Aba needs to be updated ...
+			:
+		else
+		       [ ! "$quiet" ] && echo "Aba is already up to date"
+		       exit 2
+		fi
+	fi
+fi
 
 # Only want to use git on the workstation with Internet access
 if [ ! -f .bundle ]; then
@@ -32,27 +55,25 @@ if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
 fi
 
 if [ -x scripts/aba.sh ]; then
-	if [[ "$PATH" =~ "/usr/local/bin:" ]]; then
-		[ -s "/usr/local/bin/aba" ] && action="updated to /usr/local/bin" || action="installed to /usr/local/bin"
+	for d in /usr/local/bin /usr/local/sbin $HOME/bin
+	do
+		###if [[ "$PATH" =~ "$d:" -o "$PATH" =~ "$d$" ]]; then
+		action=
+		if echo $PATH | grep -q -e "$d:" -e "$d$"; then
+			[ -s "$d/aba" ] && action="updated to $d" || action="installed to $d"
 
-		if ! sudo cp -p scripts/aba.sh /usr/local/bin/aba; then
-			echo "Cannot install $PWD/scripts/aba.sh!  Please copy the script file into your \$PATH." >&2
+			if ! sudo cp -p scripts/aba.sh $d/aba; then
+				echo "Cannot install $PWD/scripts/aba.sh to $d!  Please copy it into your \$PATH and name it aba." >&2
 
-			exit 1
+				exit 1
+			else
+				break
+			fi
 		fi
+	done
 
-	elif [[ "$PATH" =~ "$HOME/bin:" ]]; then
-		[ -s "$HOME/bin/aba" ] && action="updated to ~/bin" || action="installed to ~/bin"
-
-		mkdir -p $HOME/bin
-
-		if ! cp -p scripts/aba.sh $HOME/bin/aba; then
-			echo "Cannot install $PWD/scripts/aba.sh!  Please copy the script file into your \$PATH." >&2
-
-			exit 1
-		fi
-	else
-		echo "Cannot install $PWD/scripts/aba.sh!  Please copy the script file into your \$PATH." >&2
+	if [ ! "$action" ]; then
+		echo "Cannot install $PWD/scripts/aba.sh!  Please copy it into your \$PATH and name it 'aba'." >&2
 
 		exit 1
 	fi
