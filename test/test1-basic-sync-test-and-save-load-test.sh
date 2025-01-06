@@ -14,6 +14,8 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
+[ ! "$TEST_USER" ] && TEST_USER=$(whoami)
+
 # On Fedora, Try to fix "out of space" error when generating the op. index
 cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
 
@@ -51,7 +53,16 @@ which make || sudo dnf install make -y
 
 rm -f ~/bin/aba  # don't get mixed up!
 rm -f /usr/local/bin/aba
-./install 
+sudo rm -f /usr/local/sbin/aba
+
+test-cmd -m "Install aba" ./install 
+# Test update of aba script
+mylog Testing update of aba script
+sleep 1
+new_v=$(date +%Y%m%d%H%M%S)
+test-cmd -m "Testing update of aba script, update version" sed -i "s/^ABA_VERSION=.*/ABA_VERSION=$new_v/g" scripts/aba.sh
+test-cmd -m "Testing update of aba script, run aba" "aba -h | head -8"
+test-cmd -m "Testing update of aba script, grep aba" "grep ^ABA_VERSION=$new_v `which aba`"
 
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
@@ -93,6 +104,7 @@ echo GOVC_DATACENTER=$GOVC_DATACENTER
 echo GOVC_CLUSTER=$GOVC_CLUSTER
 echo VC_FOLDER=$VC_FOLDER
 
+export subdir=~/subdir  # init_bastion() needs this to create 'subdir' dir! though test1 does not use it! #FIXME
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
 init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 
