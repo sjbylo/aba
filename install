@@ -8,21 +8,22 @@ branch=main
 while echo "$1" | grep -q "^-"
 do
 	[ "$1" = "-q" ] && quiet=1 && shift
-	[ "$1" = "-v" ] && curr_ver=$2 && shift 2
+	[ "$1" = "-v" ] && cur_ver=$2 && shift 2
 done
 
 # Required args
 [ "$1" ] && repo="$1"
 [ "$2" ] && branch="$2"
 
+cur_dir=$PWD
 cd $(dirname $0)
 
-# Check if aba script needs to be updated (only aba calls install using -v opt to set $curr_ver)
-if [ "$curr_ver" ]; then
+# Check if aba script needs to be updated (only aba calls install using -v opt to set $cur_ver)
+if [ "$cur_ver" ]; then
 	if [ -s ./scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" ./scripts/aba.sh; then
 		REPO_VER=$(grep "^ABA_VERSION=" ./scripts/aba.sh | cut -d= -f2)
 		# if the version of aba in the repo is newer than the aba installed/called
-		if [ "$REPO_VER" -a $REPO_VER -gt $curr_ver -a -x ./install ]; then
+		if [ "$REPO_VER" -a $REPO_VER -gt $cur_ver -a -x ./install ]; then
 			echo aba script needs updating ...
 		else
 		       [ ! "$quiet" ] && echo "aba is already up to date"
@@ -53,6 +54,8 @@ if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
 	#[ ! "$quiet" ] && echo
 	#[ ! "$quiet" ] && echo "Cloned aba into $PWD/aba"
 	cd aba
+else
+	[ "$cur_dir" = "$PWD" ] && quite=  # Since we're in the aba dir, no neeed to output instructions
 fi
 
 if [ -x scripts/aba.sh ]; then
@@ -61,7 +64,12 @@ if [ -x scripts/aba.sh ]; then
 		###if [[ "$PATH" =~ "$d:" -o "$PATH" =~ "$d$" ]]; then
 		action=
 		if echo $PATH | grep -q -e "$d:" -e "$d$"; then
-			[ -s "$d/aba" ] && action="updated to $d" || action="installed to $d"
+			if [ -s "$d/aba" ]; then
+				action="updated to $d"
+				quiet=1  # since has been updated, no need to guidance below
+			else
+				action="installed to $d"
+			fi
 
 			if ! sudo cp -p scripts/aba.sh $d/aba; then
 				echo "Cannot install $PWD/scripts/aba.sh to $d!  Please copy it into your \$PATH and name it aba." >&2
