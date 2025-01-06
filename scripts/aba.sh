@@ -109,6 +109,8 @@ do
 	elif [ "$1" = "-i" ]; then
 		interactive_mode=1
 		interactive_mode_none=
+
+		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
 		sed -i "s/^ask=[^ \t]*/ask=true /g" $ABA_PATH/aba.conf
 
 		shift
@@ -118,7 +120,7 @@ do
 			[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
 			[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
-			# make will take one -C option only
+			# Note that make will take one -C option only #FIXME
 			BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
 			WORK_DIR="$2"
 			[ "$DEBUG_ABA" ] && echo "-C \"$WORK_DIR\"" >&2
@@ -141,37 +143,35 @@ do
 		export DEBUG_ABA=1
 		export INFO_ABA=1
 		shift 
-	#elif [ "$1" = "bundle" ]; then
-		#ACTION=bundle
-		#shift
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		shift
-		[ ! "$1" ] && echo_red "Error: Argument to "--out <file|->" is missing!" >&2 && exit 1
 		if [ "$1" = "-" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND out=-"
 		else
 			echo "$1" | grep -q "^-" && echo_red "Error in parsing --out path argument" >&2 && exit 1
 			[ "$1" ] && [ ! -d $(dirname $1) ] && echo_red "Directory: [$(dirname $1)] incorrect or missing!" >&2 && exit 1
-			#[ "$1" != "-" ] && [ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
-				[ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
-			###[ "$1" ] && bundle_dest_path="$1"
+			[ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
+
 			BUILD_COMMAND="$BUILD_COMMAND out='$1'"
 		fi
 		shift
-		# FIXME: This is just one use-case where --all is an opewtion which *is* needed my make! ==> Simplify!!
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --channel arguments" >&2 && exit 1
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
 		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" $ABA_PATH/aba.conf
-		target_chan=$chal
+		####target_chan=$chal
 		shift 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
-		shift 
-		ver=$1
-		echo "$ver" | grep -q "^-" && echo_red "Error in parsing --version arguments" >&2 && exit 1
-		if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt > /tmp/.$(whoami)-release.txt; then
-			echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		ver=$2
+
+		url="https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt"
+
+		if ! curl -f --connect-timeout 10 --retry 2 -sL "$url" > /tmp/.$(whoami)-release.txt; then
+			echo_red "Cannot access $url." >&2
+			echo_red "Ensure you have Internet access to download the required images." >&2
 			echo_red "To get started, run Aba on a connected workstation/laptop with Fedora or RHEL and try again." >&2
 
 			exit 1
@@ -179,14 +179,13 @@ do
 
 		[ "$ver" = "latest" ] && ver=$(fetch_latest_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
-		[ ! "$ver" ] && echo_red "Missing value after --version. OpenShift version missing or wrong format!" >&2 && echo >&2 && echo "$usage" >&2 && exit 1
+		[ ! "$ver" ] && echo_red "Missing or wrong value after $1 option" >&2 && exit 1
 		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" $ABA_PATH/aba.conf
 		target_ver=$ver
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo Downloading operator index for version $ver >&2
 		make -s -C $ABA_PATH/mirror init >/dev/null 2>&1
-		####( cd $ABA_PATH/mirror; date > .fetch-index.log; $ABA_PATH/scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1)
 		(
 			(
 				make -s -C $ABA_PATH/cli ~/bin/oc-mirror >$ABA_PATH/mirror/.log  2>&1 && \
@@ -196,39 +195,45 @@ do
 			) &
 		) & 
 
-		shift 
+		shift 2
 
 	elif [ "$1" = "--target-hostname" -o "$1" = "-H" ]; then
-		echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
-		[ ! "$2" ] && echo_red "Missing argument for [$1]" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		##echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
+		##[ ! "$2" ] && echo_red "Missing argument for [$1]" >&2 && exit 1
 		make -sC $ABA_PATH/mirror mirror.conf
 		sed -i "s/^reg_host=[^ \t]*/reg_host=$2 /g" $ABA_PATH/mirror/mirror.conf
 
 		shift 2
 
 	elif [ "$1" = "--reg-ssh-key" -o "$1" = "-k" ]; then
-		echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
-		[ ! "$2" ] && echo_red "Missing argument for [$1]" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
+		#[ ! "$2" ] && echo_red "Missing argument for [$1]" >&2 && exit 1
 		sed -i "s|^#*reg_ssh_key=[^ \t]*|reg_ssh_key=$2 |g" $ABA_PATH/mirror/mirror.conf
 
 		shift 2
 
 	elif [ "$1" = "--reg-ssh-user" -o "$1" = "-U" ]; then
-		echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
-		[ ! "$2" ] && echo_red "Missing argument for [$1]" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
+		#[ ! "$2" ] && echo_red "Missing argument for [$1]" >&2 && exit 1
 		sed -i "s/^reg_ssh_user=[^ \t]*/reg_ssh_user=$2 /g" $ABA_PATH/mirror/mirror.conf
 
 		shift 2
 
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
-		echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
 		domain=$(echo $2 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
+		[ ! "$domain" ] && echo_red "Error: Domain format incorrect [$2]" >&2 && exit 1
 		sed -i "s/^domain=[^ \t]*/domain=$domain /g" $ABA_PATH/aba.conf
 		###target_domain=$domain
 
 		shift 2
 
 	elif [ "$1" = "--dns" -o "$1" = "-N" ]; then
+		# If arg missing remove from aba.conf
 		dns_ips=""
 		while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
 		do
@@ -244,6 +249,7 @@ do
 		shift 
 
 	elif [ "$1" = "--ntp" -o "$1" = "-T" ]; then
+		# If arg missing remove from aba.conf
 		# Check arg after --ntp, if "empty" then remove value from aba.conf, otherwise add valid ip addr
 		ntp_vals=""
 		# While there is a valid arg...
@@ -255,6 +261,7 @@ do
 		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_vals /g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--default-route" -o "$1" = "-R" ]; then
+		# If arg missing remove from aba.conf
 		shift 
 		def_route_ip=
 		if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
@@ -265,53 +272,73 @@ do
 
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
-		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --platform arguments" >&2 && exit 1
-		[ ! "$1" ] && echo_red -e "Missing platform, see usage.\n$usage" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#echo "$2" | grep -q "^-" && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#[ ! "$1" ] && echo_red -e "Error: Missing argument after $1" >&2 && exit 1
 		platform="$1"
 		sed -i "s/^platform=[^ \t]*/platform=$platform /g" $ABA_PATH/aba.conf
-		shift
+		shift 2
 	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#echo "$2" | grep -q "^-" && echo_red "Error: Missing argument(s) after $1" >&2 && exit 1
+		#[ ! "$2" ] && echo_red "Error: Missing arg(s) after $1" >&2 && exit 1
 		shift
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--op-sets' arguments" >&2 && exit 1
-		[ ! "$1" ] && echo_red "Warning: Missing args when parsing op-sets" >&2 && exit 1
-		while [ "$1" ] && ! echo "$1" | grep -q -e "^-"; do [ -s "$ABA_PATH/templates/operator-set-$1" ] && op_set_list="$op_set_list $1" || echo "Missing op. set: $1" >&2; shift; done
+		# Step through non-opt params, check the set exists and add to the list ...
+		while [ "$1" ] && ! echo "$1" | grep -q -e "^-"
+		do
+			if [ -s "$ABA_PATH/templates/operator-set-$1" ]; then
+				op_set_list="$op_set_list $1"
+			else
+				echo "No such operator set: $1" >&2
+				echo -n "Available operator sets are: " >&2
+				ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
+				echo >&2
+			fi
+			shift
+		done
 		op_set_list=$(echo $op_set_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
-		op_set_list=$(echo $op_set_list | tr -s " " | tr " " ",")
+		#op_set_list=$(echo $op_set_list | tr -s " " | tr " " ",")
 		#sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" $ABA_PATH/aba.conf
 		sed -i "s/^op_sets=[^#$]*/op_sets=$op_set_list /g" $ABA_PATH/aba.conf
 	elif [ "$1" = "--ops" -o "$1" = "-O" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
+		#[ ! "$1" ] && echo_red "Warning: Missing args when parsing '--ops'" >&2 && exit 1
 		shift
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
-		[ ! "$1" ] && echo_red "Warning: Missing args when parsing '--ops'" >&2 && exit 1
-		while [ "$1" ] && ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift; done
+		#while [ "$1" ] && ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift; done
+		while [[ "$1" && "$1" != -* ]]; do ops_list="$ops_list $1"; shift; done
 		ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
 		##sed -i "s/^ops=[^#$]*/ops=\"$ops_list\" /g" $ABA_PATH/aba.conf
 		sed -i "s/^ops=[^#$]*/ops=$ops_list /g" $ABA_PATH/aba.conf
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
-		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 && exit 1
-		[ ! "$1" ] && echo_red -e "Missing editor, see usage.\n$usage" >&2 && exit 1
-		editor="$1"
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 && exit 1
+		#[ ! "$1" ] && echo_red -e "Missing editor, see usage.\n$usage" >&2 && exit 1
+		editor="$2"
 		sed -i "s/^editor=[^ \t]*/editor=$editor /g" $ABA_PATH/aba.conf
-		shift
+		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
-		#shift 
-		echo "$2" | grep -q "^-" && echo_red "Error in parsing argument of [$1]" >&2 && exit 1
-		[ ! "$2" ] && echo_red "Missing machine network value after [$1]" >&2 && exit 1
-		sed -i "s#^machine_network=[^ \t]*#machine_network=$2 #g" $ABA_PATH/aba.conf
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#echo "$2" | grep -q "^-" && echo_red "Error in parsing argument of [$1]" >&2 && exit 1
+		#[ ! "$2" ] && echo_red "Missing machine network value after [$1]" >&2 && exit 1
+		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,3}$'; then
+			sed -i "s#^machine_network=[^ \t]*#machine_network=$2 #g" $ABA_PATH/aba.conf
+		else
+			echo_red "Error: Invalid CIDR [$2]" >&2
+			exit 1
+		fi
 		shift 2
 	elif [ "$1" = "--pull-secret" -o "$1" = "-S" ]; then
-		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
-		[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
-		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$1 #g" $ABA_PATH/aba.conf
-		shift 
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
+		#[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
+		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$2 #g" $ABA_PATH/aba.conf
+		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
-		shift 
-		echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 && exit 1
-		[ -s $1 ] && cp $1 vmware.conf
-		shift 
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		#echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 && exit 1
+		[ -s $1 ] && cp $2 vmware.conf
+		shift 2
 	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
 		sed -i "s#^ask=[^ \t]*#ask=true #g" $ABA_PATH/aba.conf
 		shift 
@@ -319,46 +346,43 @@ do
 		sed -i "s#^ask=[^ \t]*#ask=false #g" $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		# If there's another arg and it's not an option (^-), accept it, otherwise error.
-		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-			BUILD_COMMAND="$BUILD_COMMAND name='$2'"
-			shift 2
-		else
-			echo_red "Error: Missing or incorrect argument after option [$1]" >&2 && exit 1
-		fi
-
+		#if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+		BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
+		shift 2
+		#else
+		#	echo_red "Error: Missing or incorrect argument after option [$1]" >&2 && exit 1
+		#fi
 	elif [ "$1" = "--type" -o "$1" = "-t" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		# If there's another arg and it's an expected cluster type, accept it, otherwise error.
 		if echo "$2" | grep -qE "^sno$|^compact$|^standard$"; then
 			BUILD_COMMAND="$BUILD_COMMAND type='$2'"
 			shift 2
 		else
-			echo_red "Error: Missing or incorrect argument (sno|compact|standard) after option [$1]" >&2 && exit 1
+			echo_red "Error: Missing or incorrect argument (sno|compact|standard) after option [$1]" >&2
+			exit 1
 		fi
 
 	elif [ "$1" = "--step" -o "$1" = "-s" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		# If there's another arg and it's NOT an option (^-) then accept it, otherwise error
-		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-			BUILD_COMMAND="$BUILD_COMMAND target='$2'"
-			shift
-		else
-			echo_red "Error: Missing argument after option [$1]" >&2 && exit 1
-		fi
-		shift
-
+		BUILD_COMMAND="$BUILD_COMMAND target='$2'"  # FIXME: Also confusing, similar to --name
+		shift 2
 	elif [ "$1" = "--retry" -o "$1" = "-r" ]; then
 		# If there's another arg and it's a number then accept it
 		if [ "$2" ] && echo "$2" | grep -qE "^[0-9]+"; then
 			BUILD_COMMAND="$BUILD_COMMAND retry='$2'"
 			[ "$DEBUG_ABA" ] && echo Adding retry=$2 to BUILD_COMMAND >&2
 			shift 2
-		# If there's no another arg then assume '1'
+		# If there's no another arg then assume '3'
 		elif [ ! "$2" ]; then
-			BUILD_COMMAND="$BUILD_COMMAND retry=1"
-			[ "$DEBUG_ABA" ] && echo Adding retry=1 to BUILD_COMMAND >&2
+			BUILD_COMMAND="$BUILD_COMMAND retry=3"  # FIXME: Also confusing, similar to --name
+			[ "$DEBUG_ABA" ] && echo Setting $1 to 3 >&2
 			shift
-		else
-			echo_red "Error: Missing argument after option [$1]" >&2 && exit 1
+		#else
+		#	echo_red "Error: Missing argument after option [$1]" >&2 && exit 1
 		fi
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
 		# If there's another arg and it's NOT an option (^-) then error
@@ -366,20 +390,20 @@ do
 		###	echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
 		###fi
 		shift
-		BUILD_COMMAND="$BUILD_COMMAND force=1"
+		BUILD_COMMAND="$BUILD_COMMAND force=1"  # FIXME: Should only allow force=1 after the appropriate target
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
 		## NOT TRUE # If there is another arg, it must be an option, otherwise error
 		## NOT TRUE if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 			## NOT TRUE echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
 		## NOT TRUE fi
 		shift
-		BUILD_COMMAND="$BUILD_COMMAND wait=1"
+		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target
 	elif [ "$1" = "--cmd" ]; then
-		# Note, -c used for --channel
+		# Note, -c is used for --channel
 		cmd=
 		shift 
 		echo "$1" | grep -q "^-" || cmd="$1"
-		[ "$cmd" ] && shift || cmd="get co" # Set default comamnd here
+		[ "$cmd" ] && shift || cmd="get co" # Set default command here
 
 		if [[ "$BUILD_COMMAND" =~ "ssh" ]]; then
 			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
@@ -394,7 +418,7 @@ do
 		fi
 	else
 		if echo "$1" | grep -q "^-"; then
-			echo_red "Error: invaid option [$1]" >&2
+			echo_red "Error: no such option [$1]" >&2
 			exit 1
 		else
 			# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
@@ -457,7 +481,7 @@ if [ ! -f .bundle ]; then
 	# Fresh GitHub clone of Aba repo detected!
 
 	echo -n "Checking Internet connectivity ..."
-	if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.$(whoami)-release.txt; then
+	if ! curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.$(whoami)-release.txt; then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
 		echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again." >&2
@@ -491,7 +515,7 @@ if [ ! -f .bundle ]; then
 	##############################################################################################################################
 	# Fetch release.txt
 
-	if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt > /tmp/.$(whoami)-release.txt; then
+	if ! curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt > /tmp/.$(whoami)-release.txt; then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Failed to access https://mirror.openshift.com" >&2
 
@@ -532,7 +556,7 @@ if [ ! -f .bundle ]; then
 		do
 			# Exit loop if release version exists
 			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-				if curl --connect-timeout 10 --retry 2 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
+				if curl -f --connect-timeout 10 --retry 2 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 					break
 				else
 					echo_red "Error: Failed to find release $target_ver" >&2
