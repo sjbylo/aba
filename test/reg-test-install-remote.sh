@@ -12,7 +12,7 @@ END
 
 reg_host=$1
 
-reg_ssh_user=steve
+reg_ssh_user=$TEST_USER
 
 ssh -F .ssh.conf $reg_ssh_user@$reg_host "mkdir -p test"
 
