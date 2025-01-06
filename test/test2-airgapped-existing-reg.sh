@@ -47,8 +47,7 @@ mylog
 ######################
 # Set up test 
 
-#subdir=~/
-subdir=~/subdir   # Unpack repo tar into this dir on internal bastion
+export subdir=~/subdir   # Unpack repo tar into this dir on internal bastion
 
 # Exec script with any arg to skip reg. install and load
 ##if [ ! "$1" ] && ! ssh steve@$int_bastion_hostname -- make -C $subdir/aba/mirror verify; then
