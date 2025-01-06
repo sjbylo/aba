@@ -158,6 +158,9 @@ test-cmd -r 20 3 -m "Saving images to local disk on `hostname`" aba save
 
 mylog "'aba tar' and copy (ssh) files over to internal bastion: $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname" "aba -d mirror tar --out - | ssh $TEST_USER@$int_bastion_hostname -- tar -C $subdir -xvf -"
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_seq1_000000.tar'" ls -lh $subdir/aba/mirror/save/mirror_seq1_000000.tar
+
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
 
 test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "aba --dir $subdir/aba load" # This user's action is expected to fail since there are no login credentials for the "existing reg."
@@ -176,6 +179,8 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror 
 
 # Now, this works
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 3 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load" 
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq1 file" rm -f $subdir/aba/mirror/save/mirror_seq1_000000.tar
 
 ssh $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba compact $default_target" 
@@ -226,9 +231,13 @@ mylog "The following untar command should unpack the file aba/mirror/save/mirror
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Removing tar file" "rm -f file.tar"
 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_seq2_000000.tar'" ls -lh $subdir/aba/mirror/save/mirror_seq2_000000.tar
+
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load" 
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file" rm -f $subdir/aba/mirror/save/mirror_seq2_000000.tar
 
 # Is the cluster can be reached ... use existing cluster
 #if test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno --cmd 'oc get clusterversion'"; then
@@ -291,11 +300,15 @@ test-cmd -r 20 3 -m "Saving advanced-cluster-management images to local disk" "a
 ### mylog Tar+ssh files from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname 
 ### aba --dir mirror inc out=- | ssh $TEST_USER@$int_bastion_hostname -- tar xvf -
 mylog "'scp mirror/save/mirror_seq3.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
-scp mirror/save/mirror_seq3*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Copy seq3 file to $int_bastion_hostname" scp mirror/save/mirror_seq3*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file 'mirror/save/mirror_seq3_000000.tar'" ls -lh $subdir/aba/mirror/save/mirror_seq3_000000.tar
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load" 
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file" rm -f $subdir/aba/mirror/save/mirror_seq3_000000.tar
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2" 
 
