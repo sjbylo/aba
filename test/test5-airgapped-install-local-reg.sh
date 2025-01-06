@@ -58,7 +58,7 @@ rm -rf sno compact standard
 [ ! "$internal_bastion_rhel_ver" ] && export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 
 int_bastion_hostname=registry.example.com
-bastion_vm=bastion-internal-$internal_bastion_rhel_ver
+int_bastion_vm_name=bastion-internal-$internal_bastion_rhel_ver
 export subdir=~/subdir
 
 mylog ============================================================
@@ -122,45 +122,7 @@ aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
 
-#################################
-mylog Revert vm snapshot of the internal bastion vm and power on
-(
-	govc vm.power -off bastion-internal-rhel8
-	govc vm.power -off bastion-internal-rhel9
-	govc snapshot.revert -vm $bastion_vm aba-test
-	sleep 8
-	govc vm.power -on $bastion_vm
-	sleep 5
-)
-# Wait for host to come up
-ssh $TEST_USER@$int_bastion_hostname -- "date" || sleep 2
-ssh $TEST_USER@$int_bastion_hostname -- "date" || sleep 3
-ssh $TEST_USER@$int_bastion_hostname -- "date" || sleep 8
-
-cat <<END | ssh $TEST_USER@$int_bastion_hostname -- sudo bash
-set -ex
-timedatectl
-dnf install chrony podman -y
-chronyc sources -v
-chronyc add server 10.0.1.8 iburst
-timedatectl set-timezone Asia/Singapore
-chronyc -a makestep
-sleep 3
-timedatectl
-chronyc sources -v
-END
-
-# Delete images
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" podman ps 
-test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
-# This file is not needed in a fully air-gapped env. 
-ssh $TEST_USER@$int_bastion_hostname -- "rm -fv ~/.pull-secret.json"
-# Want to test fully disconnected 
-ssh $TEST_USER@$int_bastion_hostname -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
-# Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
-ssh $TEST_USER@$int_bastion_hostname -- "rm -rfv ~/*"
-# Just be sure a valid govc config file exists
-scp $vf $TEST_USER@$int_bastion_hostname: 
+init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 
 #################################
 

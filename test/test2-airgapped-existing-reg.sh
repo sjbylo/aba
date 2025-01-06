@@ -31,7 +31,7 @@ rm -f ~/.aba.previous.backup
 [ ! "$internal_bastion_rhel_ver" ] && export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 
 int_bastion_hostname=registry.example.com
-bastion_vm=bastion-internal-$internal_bastion_rhel_ver
+int_bastion_vm_name=bastion-internal-$internal_bastion_rhel_ver
 ntp=10.0.1.8 # If available
 
 source scripts/include_all.sh no-trap # Need for below normalize fn() calls
@@ -118,62 +118,7 @@ if [ ! "$1" ]; then
 	#################################
 	source <(normalize-vmware-conf)  # Needed for govc below
 
-	mylog Revert a snapshot and power on the internal bastion vm
-	(
-		govc vm.power -off bastion-internal-rhel8
-		govc vm.power -off bastion-internal-rhel9
-		govc snapshot.revert -vm $bastion_vm aba-test
-		sleep 8
-		govc vm.power -on $bastion_vm
-		sleep 5
-	)
-	# Wait for host to come up
-	ssh $TEST_USER@$int_bastion_hostname -- "date" || sleep 2
-	ssh $TEST_USER@$int_bastion_hostname -- "date" || sleep 3
-	ssh $TEST_USER@$int_bastion_hostname -- "date" || sleep 8
-	#################################
-
-cat <<END | ssh $TEST_USER@$int_bastion_hostname -- sudo bash
-set -ex
-timedatectl
-dnf install chrony podman -y
-chronyc sources -v
-chronyc add server 10.0.1.8 iburst
-timedatectl set-timezone Asia/Singapore
-chronyc -a makestep
-sleep 3
-timedatectl
-chronyc sources -v
-END
-
-	# Delete images
-	ssh $TEST_USER@$int_bastion_hostname -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
-	# This file is not needed in a fully air-gapped env. 
-	ssh $TEST_USER@$int_bastion_hostname -- "rm -fv ~/.pull-secret.json"
-	# Want to test fully disconnected 
-	ssh $TEST_USER@$int_bastion_hostname -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
-	# Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
-	ssh $TEST_USER@$int_bastion_hostname -- "rm -rfv ~/*"
-
-	# Just be sure a valid govc config file exists on internal bastion
-	scp $vf $TEST_USER@$int_bastion_hostname: 
-	##scp ~/.vmware.conf testy@$int_bastion_hostname: 
-
-	#uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("aba save") when Operators need to be saved!
-	# Try to fix "out of space" error when generating the op. index
-	cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
-
-
-	ssh $TEST_USER@$int_bastion_hostname "rpm -q make  || sudo yum install make -y"
-
-	mylog "Install 'existing' test mirror registry on internal bastion: $int_bastion_hostname"
-	test-cmd test/reg-test-install-remote.sh $int_bastion_hostname
-
-	################################
-
-	test-cmd -m "Cleaning mirror dir" aba --dir mirror clean
-
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete and create sub dir on remote host" "rm -rf $subdir && mkdir $subdir"
+	init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 else
 	echo
 	echo Skipping setting up of test $(basename $0)
