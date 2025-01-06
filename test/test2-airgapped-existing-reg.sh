@@ -119,6 +119,22 @@ if [ ! "$1" ]; then
 	source <(normalize-vmware-conf)  # Needed for govc below
 
 	init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
+
+	#####
+
+	#uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("aba save") when Operators need to be saved!
+	# Try to fix "out of space" error when generating the op. index
+	cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
+
+
+	ssh $TEST_USER@$int_bastion_hostname "rpm -q make  || sudo yum install make -y"
+
+	mylog "Install 'existing' test mirror registry on internal bastion: $int_bastion_hostname"
+	test-cmd test/reg-test-install-remote.sh $int_bastion_hostname
+
+	################################
+
+	test-cmd -m "Cleaning mirror dir" aba --dir mirror clean
 else
 	echo
 	echo Skipping setting up of test $(basename $0)
@@ -150,6 +166,7 @@ test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror r
 mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $TEST_USER@$int_bastion_hostname"
 
 ssh $TEST_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror"  
+ssh $TEST_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror/regcreds"  
 ssh $TEST_USER@$int_bastion_hostname "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
 ssh $TEST_USER@$int_bastion_hostname "cp -v ~/.containers/auth.json $subdir/aba/mirror/regcreds/pull-secret-mirror.json"
 

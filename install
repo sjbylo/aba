@@ -23,10 +23,9 @@ if [ "$curr_ver" ]; then
 		REPO_VER=$(grep "^ABA_VERSION=" ./scripts/aba.sh | cut -d= -f2)
 		# if the version of aba in the repo is newer than the aba installed/called
 		if [ "$REPO_VER" -a $REPO_VER -gt $curr_ver -a -x ./install ]; then
-			#echo Aba needs to be updated ...
-			:
+			echo aba script needs updating ...
 		else
-		       [ ! "$quiet" ] && echo "Aba is already up to date"
+		       [ ! "$quiet" ] && echo "aba is already up to date"
 		       exit 2
 		fi
 	fi
@@ -49,8 +48,10 @@ if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
 		exit 1
 	fi
 
-	[ ! "$quiet" ] && echo
-	[ ! "$quiet" ] && echo "Cloned Aba into $PWD/aba"
+	echo
+	echo "Cloned aba into $PWD/aba"
+	#[ ! "$quiet" ] && echo
+	#[ ! "$quiet" ] && echo "Cloned aba into $PWD/aba"
 	cd aba
 fi
 
@@ -78,13 +79,15 @@ if [ -x scripts/aba.sh ]; then
 		exit 1
 	fi
 
-	[ ! "$quiet" ] && echo "Aba has been $action"
+	echo "aba has been $action"
+	[ ! "$quiet" ] && echo "aba has been $action"
+
 	[ ! "$quiet" ] && echo "Run: cd aba; aba"
 	[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file"
 
 	exit 0
 else
-	echo "Abort: Aba script not found in $PWD/scripts/aba.sh" >&2
+	echo "Abort: aba script not found in $PWD/scripts/aba.sh" >&2
 
 	exit 1
 fi
