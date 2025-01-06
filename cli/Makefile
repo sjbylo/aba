@@ -115,14 +115,14 @@ download: $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download $(gen_oc_t
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
 oc: ~/bin/oc  ## Install oc into ~/bin
 ~/bin/oc: .init $(full_oc_tar_file)
-	([ -s $(full_oc_tar_file) ] && echo Extracting $(full_oc_tar_file) ... && tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl) || ([ -s $(gen_oc_tar_file) ] && echo Extracting $(gen_oc_tar_file) ...; tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl)
+	@(file $(full_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(full_oc_tar_file) ... && tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl) || (file $(gen_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(gen_oc_tar_file) ... && tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl) || echo ERROR: Invalid files: $(full_oc_tar_file) or $(gen_oc_tar_file)
 
 octars: $(gen_oc_tar_file) $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download
 $(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
-	@curl -sfkLI $(gen_url) >/dev/null && echo Downlaoding $(gen_url) ... && curl -f --progress-bar -O -L $(gen_url) || (echo $(gen_oc_tar_file) not available; > $(gen_oc_tar_file))
+	@curl -sfkLI $(gen_url) >/dev/null && echo Downloading $(gen_url) ... && curl -f --progress-bar -O -L $(gen_url) || (echo $(gen_oc_tar_file) not available; > $(gen_oc_tar_file))
 
 $(full_oc_tar_file):  ## Downlaod oc tarball for this hosts rhel version, otherwise download the fallback tarball.
-	@curl -sfkLI $(full_oc_url) >/dev/null && echo Downlaoding $(full_oc_url) ... && curl -f --progress-bar -O -L $(full_oc_url) || (echo "Downloading fallback file $(gen_url) ..."; curl --progress-bar -O -L $(gen_url))
+	@curl -sfkLI $(full_oc_url) >/dev/null && echo Downloading $(full_oc_url) ... && curl -f --progress-bar -O -L $(full_oc_url) || (echo "Downloading fallback file $(gen_url) ..."; curl --progress-bar -O -L $(gen_url))
 	touch $(full_oc_tar_file)
 
 # Ensure all possible tarballs are downloaded
@@ -141,6 +141,7 @@ $(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
 
 openshift-install: ~/bin/openshift-install
 ~/bin/openshift-install: .init .$(ocp_version)-openshift-install-$(os)-installed ## Install openshift-install into ~/bin
+	@file openshift-install-$(os)-$(ocp_version).tar.gz | grep -q "gzip compressed data" || { echo ERROR: Invalid file: openshift-install-$(os)-$(ocp_version).tar.gz; exit 1;}
 	@echo Extracting  openshift-install-$(os)-$(ocp_version).tar.gz to ~/bin/openshift-install
 	tar -C ~/bin -xmzf openshift-install-$(os)-$(ocp_version).tar.gz openshift-install
 
@@ -149,7 +150,7 @@ openshift-install: ~/bin/openshift-install
 	@touch .$(ocp_version)-openshift-install-$(os)-installed 
 
 openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install tarball
-	@echo Downlaoding openshift-install-$(os)-$(ocp_version).tar.gz
+	@echo Downloading openshift-install-$(os)-$(ocp_version).tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
 
 ########################################
@@ -161,11 +162,11 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 	chmod +x ~/bin/oc-mirror
 
 oc-mirror.tar.gz: ## Download oc-mirror tarball
-	echo Downlaoding oc-mirror.tar.gz
+	echo Downloading oc-mirror.tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.tar.gz	
 
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
-	echo Downlaoding oc-mirror.rhel9.tar.gz
+	echo Downloading oc-mirror.rhel9.tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.rhel9.tar.gz
 
 ########################################
@@ -175,7 +176,7 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 	tar -C ~/bin -xmzf govc_Linux_x86_64.tar.gz govc
 
 govc_Linux_x86_64.tar.gz:   ## Download govc tarball
-	echo Downlaoding govc_Linux_x86_64.tar.gz
+	echo Downloading govc_Linux_x86_64.tar.gz
 	curl --progress-bar -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz"
 
 butane: ~/bin/butane ## Install butane to ~/bin/butane
