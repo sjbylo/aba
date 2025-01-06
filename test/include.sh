@@ -173,3 +173,79 @@ mylog() {
 	return 0
 }
 
+init_bastion() {
+	local int_bastion_hostname=$1
+	local int_bastion_vm_name=$2
+	local snap_name=$3
+
+	local def_user=steve  # This is the intial user to use
+
+	mylog Revert internal bastion vm to snapshot and powering on ...
+
+	govc vm.power -off bastion-internal-rhel8
+	govc vm.power -off bastion-internal-rhel9
+	govc snapshot.revert -vm $int_bastion_vm_name aba-test
+	sleep 8
+	govc vm.power -on $int_bastion_vm_name
+	sleep 5
+
+	# Wait for host to come up
+	while ! ssh $def_user@$int_bastion_hostname -- "date"
+	do
+		sleep 3
+	done
+
+	pub_key=$(cat ~/.ssh/id_rsa.pub)
+
+cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
+set -ex
+timedatectl
+dnf install chrony podman -y
+chronyc sources -v
+chronyc add server 10.0.1.8 iburst
+timedatectl set-timezone Asia/Singapore
+chronyc -a makestep
+sleep 8
+timedatectl
+chronyc sources -v
+mkdir -p /root/.ssh
+echo $pub_key > /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+END
+
+	test-cmd -m "Verify ssh to root@$int_bastion_hostname" ssh root@$int_bastion_hostname whoami
+
+	# Delete images
+	ssh $def_user@$int_bastion_hostname -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+	# This file is not needed in a fully air-gapped env. 
+	ssh $def_user@$int_bastion_hostname -- "rm -fv ~/.pull-secret.json"
+	# Want to test fully disconnected 
+	ssh $def_user@$int_bastion_hostname -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
+	# Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
+	ssh $def_user@$int_bastion_hostname -- "rm -rfv ~/*"
+
+	# Just be sure a valid govc config file exists on internal bastion
+	scp $vf $def_user@$int_bastion_hostname: 
+
+	# Test install mirror with other user
+	rm -f ~/.ssh/testy_rsa*
+	ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N ''
+	pub_key=$(cat ~/.ssh/testy_rsa.pub)   # This must be different key
+	u=testy
+
+cat << END  | ssh $def_user@$int_bastion_hostname -- sudo bash 
+set -ex
+userdel $u -r -f || true
+useradd $u -p not-used
+mkdir ~$u/.ssh 
+chmod 700 ~$u/.ssh
+#cp -p ~steve/.pull-secret.json ~$u 
+echo $pub_key > ~$u/.ssh/authorized_keys
+echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
+chmod 600 ~$u/.ssh/authorized_keys
+chown -R $u.$u ~$u
+END
+
+	test-cmd -m "Verify ssh to testy@$int_bastion_hostname" ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname whoami
+
+}

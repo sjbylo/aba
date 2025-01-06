@@ -14,7 +14,7 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
-# Try to fix "out of space" error when generating the op. index
+# On Fedora, Try to fix "out of space" error when generating the op. index
 cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
 
 #uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=16G /tmp
@@ -26,11 +26,11 @@ rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
 # Need this so this test script can be run standalone
-[ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
+###[ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
 [ ! "$internal_bastion_rhel_ver" ] && export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 
-int_bastion=registry.example.com
-bastion_vm=bastion-internal-$internal_bastion_rhel_ver
+int_bastion_hostname=registry.example.com
+int_bastion_vm_name=bastion-internal-$internal_bastion_rhel_ver
 
 source scripts/include_all.sh no-trap  # Need for below normalize fn() calls
 source test/include.sh
@@ -42,7 +42,7 @@ mylog default_target=$default_target
 mylog ============================================================
 mylog Starting test $(basename $0)
 mylog ============================================================
-mylog "Test to install remote reg. on $int_bastion and then sync and save/load images.  Install sno ocp + test app."
+mylog "Test to install remote reg. on $int_bastion_hostname and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
 ntp_ip=10.0.1.8,10.0.1.8 # If available
@@ -94,77 +94,19 @@ echo GOVC_CLUSTER=$GOVC_CLUSTER
 echo VC_FOLDER=$VC_FOLDER
 
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
-
-mylog Revert internal bastion vm to snapshot and powering on ...
-(
-	govc vm.power -off bastion-internal-rhel8
-	govc vm.power -off bastion-internal-rhel9
-	govc snapshot.revert -vm $bastion_vm aba-test
-	sleep 8
-	govc vm.power -on $bastion_vm
-	sleep 5
-)
-# Wait for host to come up
-ssh $reg_ssh_user@$int_bastion -- "date" || sleep 2
-ssh $reg_ssh_user@$int_bastion -- "date" || sleep 3
-ssh $reg_ssh_user@$int_bastion -- "date" || sleep 8
-
-cat <<END | ssh $reg_ssh_user@$int_bastion -- sudo bash
-set -ex
-timedatectl
-dnf install chrony podman -y
-chronyc sources -v
-chronyc add server 10.0.1.8 iburst
-timedatectl set-timezone Asia/Singapore
-chronyc -a makestep
-sleep 3
-timedatectl
-chronyc sources -v
-END
-
-# Delete images
-ssh $reg_ssh_user@$int_bastion -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
-# This file is not needed in a fully air-gapped env. 
-ssh $reg_ssh_user@$int_bastion -- "rm -fv ~/.pull-secret.json"
-# Want to test fully disconnected 
-ssh $reg_ssh_user@$int_bastion -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
-# Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
-ssh steve@$int_bastion -- "rm -rfv ~/*"
-
-# Just be sure a valid govc config file exists on internal bastion
-scp $vf steve@$int_bastion: 
-
-# Test install mirror with other user
-rm -f ~/.ssh/testy_rsa*
-ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N ''
-pub_key=$(cat ~/.ssh/testy_rsa.pub)   # This must be different key
-u=testy
-cat << END  | ssh steve@$int_bastion -- sudo bash 
-set -ex
-userdel $u -r -f || true
-useradd $u -p not-used
-mkdir ~$u/.ssh 
-chmod 700 ~$u/.ssh
-#cp -p ~steve/.pull-secret.json ~$u 
-echo $pub_key > ~$u/.ssh/authorized_keys
-echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
-chmod 600 ~$u/.ssh/authorized_keys
-chown -R $u.$u ~$u
-END
-test-cmd -m "Verify ssh to testy@$int_bastion" ssh -i ~/.ssh/testy_rsa testy@$int_bastion whoami
-
+init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test
 
 #####################################################################################################################
 #####################################################################################################################
 #####################################################################################################################
 
-mylog "Confgure mirror to install registry on internal (remote) $int_bastion"
+mylog "Confgure mirror to install registry on internal (remote) $int_bastion_hostname"
 
 # Create and edit mirror.conf 
 aba --dir mirror mirror.conf
 
-mylog "Setting 'reg_host' to '$int_bastion' in file 'mirror/mirror.conf'"
-sed -i "s/registry.example.com/$int_bastion /g" ./mirror/mirror.conf	# Install on registry2 
+mylog "Setting 'reg_host' to '$int_bastion_hostname' in file 'mirror/mirror.conf'"
+sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
 sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
@@ -280,8 +222,8 @@ rm -rf sno
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
 test-cmd -m "Delete cluster (if needed)" aba --dir sno delete 
 test-cmd -m "Uninstall mirror" aba --dir mirror uninstall 
-test-cmd -h steve@$int_bastion -m "Verify mirror uninstalled" podman ps 
-test-cmd -h steve@$int_bastion -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" podman ps 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 #####################################################################################################################
 #####################################################################################################################
@@ -290,7 +232,7 @@ test-cmd -h steve@$int_bastion -m "Deleting all podman images" "podman system pr
 ## FIXME INSTALL FAILURE mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 mylog "Configure mirror to install on internal (remote) bastion in default dir, with random password to '/my/path'"
 
-#sed -i "s/registry.example.com/$int_bastion /g" ./mirror/mirror.conf	# Install on registry2 
+#sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 ## FIXME INSTALL FAILURE mylog "Setting reg_root=~/my-quay-mirror"
@@ -369,8 +311,8 @@ test-cmd -m "Bare-metal simulation: Creating agent config files" aba standard   
 test-cmd -m "Bare-metal simulation: Creating iso file" aba --dir standard iso        	# Since we're simulating bare-metal, only create iso
 
 #test-cmd -m "Uninstalling mirror registry" aba --dir mirror uninstall 
-#test-cmd -h steve@$int_bastion -m "Verify mirror uninstalled" podman ps 
-#test-cmd -h steve@$int_bastion -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" podman ps 
+#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 #####################################################################################################################
 #####################################################################################################################
