@@ -190,8 +190,11 @@ init_bastion() {
 	govc vm.power -on $int_bastion_vm_name
 	sleep 5
 
-	# Copy over the ssh config to /root, in case this is running as root!
-	[ "$test_user" = "root" ] && eval cp ~$def_user/.ssh/config /root/.ssh/config
+	# Copy over the - already working - default user's ssh config to /root
+	if [ "$test_user" = "root" ]; then
+		eval cp ~$def_user/.ssh/config /root/.ssh
+		eval cp ~$def_user/.ssh/id_rsa* /root/.ssh
+	fi
 
 	# Wait for host to come up
 	while ! ssh $def_user@$int_bastion_hostname -- "date"
@@ -211,8 +214,8 @@ chronyc add server 10.0.1.8 iburst
 timedatectl set-timezone Asia/Singapore
 chronyc -a makestep
 sleep 8
-timedatectl
 chronyc sources -v
+timedatectl
 mkdir -p /root/.ssh
 echo $pub_key > /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
@@ -256,5 +259,6 @@ END
 
 	test-cmd -m "Verify ssh to testy@$int_bastion_hostname" ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname whoami
 
-	test-cmd -h $u@$int_bastion_hostname -m "Delete and create sub dir on remote host for user $u" "rm -rf $subdir && mkdir $subdir"
+	###test-cmd -h testy@$int_bastion_hostname -m "Delete and create sub dir on remote host for user $u" "rm -rf $subdir && mkdir $subdir"
+	test-cmd -h $test_user@$int_bastion -m "Delete and create sub dir on remote host" "rm -rf $subdir && mkdir $subdir"
 }
