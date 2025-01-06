@@ -18,6 +18,8 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
+[ ! "$TEST_USER" ] && TEST_USER=$(whoami)
+
 # Try to fix "out of space" error when generating the op. index
 cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
 
@@ -65,7 +67,7 @@ mylog ============================================================
 mylog "Test to install a local reg. on $int_bastion_hostname and save + copy + load images.  Install sno ocp and a test app and svc mesh."
 
 rm -f aba.conf  # Set it up next
-vf=~/.vmware.conf
+vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba noask --channel fast --version $VER_OVERRIDE
 mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
@@ -131,11 +133,11 @@ mylog Revert vm snapshot of the internal bastion vm and power on
 	sleep 5
 )
 # Wait for host to come up
-ssh steve@$int_bastion_hostname -- "date" || sleep 2
-ssh steve@$int_bastion_hostname -- "date" || sleep 3
-ssh steve@$int_bastion_hostname -- "date" || sleep 8
+ssh $TEST_USER@$int_bastion_hostname -- "date" || sleep 2
+ssh $TEST_USER@$int_bastion_hostname -- "date" || sleep 3
+ssh $TEST_USER@$int_bastion_hostname -- "date" || sleep 8
 
-cat <<END | ssh steve@$int_bastion_hostname -- sudo bash
+cat <<END | ssh $TEST_USER@$int_bastion_hostname -- sudo bash
 set -ex
 timedatectl
 dnf install chrony podman -y
@@ -149,16 +151,16 @@ chronyc sources -v
 END
 
 # Delete images
-test-cmd -h steve@$int_bastion_hostname -m "Verify mirror uninstalled" podman ps 
-test-cmd -i -h steve@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" podman ps 
+test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 # This file is not needed in a fully air-gapped env. 
-ssh steve@$int_bastion_hostname -- "rm -fv ~/.pull-secret.json"
+ssh $TEST_USER@$int_bastion_hostname -- "rm -fv ~/.pull-secret.json"
 # Want to test fully disconnected 
-ssh steve@$int_bastion_hostname -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
+ssh $TEST_USER@$int_bastion_hostname -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
 # Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
-ssh steve@$int_bastion_hostname -- "rm -rfv ~/*"
+ssh $TEST_USER@$int_bastion_hostname -- "rm -rfv ~/*"
 # Just be sure a valid govc config file exists
-scp $vf steve@$int_bastion_hostname: 
+scp $vf $TEST_USER@$int_bastion_hostname: 
 
 #################################
 
@@ -246,10 +248,10 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking cluster operators"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Listing VMs (should show 24G memory)" "aba --dir $subdir/aba/$cluster_type ls"
 
 myLog "Deploying test vote-app"
-test-cmd -h steve@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
-test-cmd -h steve@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
-test-cmd -h steve@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
-test-cmd -h steve@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -424,10 +426,10 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all co available?" "aba --dir $subdir/aba/$cluster_name --cmd; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 	# Deploy test app
-	test-cmd -h steve@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name --cmd 'oc delete project demo || true'" 
-	test-cmd -h steve@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name --cmd 'oc new-project demo' || true" # || true
-	test-cmd -h steve@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
-	test-cmd -h steve@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_name --cmd 'oc rollout status deployment vote-app -n demo'"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name --cmd 'oc delete project demo || true'" 
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name --cmd 'oc new-project demo' || true" # || true
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_name --cmd 'oc rollout status deployment vote-app -n demo'"
 }
 
 #for c in sno compact standard

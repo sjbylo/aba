@@ -14,6 +14,8 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
+[ ! "$TEST_USER" ] && TEST_USER=$(whoami)
+
 # Try to fix "out of space" error when generating the op. index
 cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
 
@@ -61,7 +63,7 @@ test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 
 # Set up aba.conf properly
 rm -f aba.conf
-vf=~/.vmware.conf
+vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
 #test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ### --vmw $vf
