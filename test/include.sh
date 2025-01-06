@@ -189,6 +189,8 @@ init_bastion() {
 	govc vm.power -on $int_bastion_vm_name
 	sleep 5
 
+	eval cp ~$def_user/.ssh/config /root/.ssh/config
+
 	# Wait for host to come up
 	while ! ssh $def_user@$int_bastion_hostname -- "date"
 	do
@@ -212,6 +214,7 @@ mkdir -p /root/.ssh
 echo $pub_key > /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 END
+	scp ~steve/.ssh/config root@$int_bastion_hostname:.ssh/config
 
 	test-cmd -m "Verify ssh to root@$int_bastion_hostname" ssh root@$int_bastion_hostname whoami
 
