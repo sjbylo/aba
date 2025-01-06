@@ -20,7 +20,7 @@ reg_port=8443
 echo Allowing firewall access to the registry at $reg_host/$reg_port ...
 sudo firewall-cmd --state && sudo firewall-cmd --add-port=$reg_port/tcp --permanent && sudo firewall-cmd --reload
 
-echo "Installing mirror registry on the host [$reg_host] with user $reg_ssh_user ..."
+echo "Installing mirror registry on the host [$reg_host] with user `whoami`@`hostname` ..."
 
 ./mirror-registry install --quayHostname $reg_host --initPassword $reg_pw 
 
