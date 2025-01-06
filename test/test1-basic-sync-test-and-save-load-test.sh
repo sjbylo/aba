@@ -134,12 +134,12 @@ ssh steve@$int_bastion -- "rm -rfv ~/*"
 # Just be sure a valid govc config file exists on internal bastion
 scp $vf steve@$int_bastion: 
 
-# Test with other use
+# Test install mirror with other user
 rm -f ~/.ssh/testy_rsa*
 ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N ''
 pub_key=$(cat ~/.ssh/testy_rsa.pub)   # This must be different key
 u=testy
-cat << END  | ssh $int_bastion -- sudo bash 
+cat << END  | ssh steve@$int_bastion -- sudo bash 
 set -ex
 userdel $u -r -f || true
 useradd $u -p not-used
@@ -151,7 +151,7 @@ echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
 chmod 600 ~$u/.ssh/authorized_keys
 chown -R $u.$u ~$u
 END
-ssh -i ~/.ssh/testy_rsa testy@$int_bastion whoami
+test-cmd -m "Verify ssh to testy@$int_bastion" ssh -i ~/.ssh/testy_rsa testy@$int_bastion whoami
 
 
 #####################################################################################################################

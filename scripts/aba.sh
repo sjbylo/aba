@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250106080702
+ABA_VERSION=20250106115329
 
 uname -o | grep -q "^Darwin$" && echo "Please run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -412,11 +412,6 @@ BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $
 [ ! "$BUILD_COMMAND" -a "$ABA_PATH" = "." ] && interactive_mode=1
 
 if [ ! "$interactive_mode" ]; then
-	# No short options should get this far! 
-	#unknown_args=$(echo $BUILD_COMMAND | grep -q -o -e " -[a-z]")
-	#[ "$unknown_args" ] && echo "Unknown args in request: [$unknown_args]" >&2 && exit 1
-	# Not correct!  How abou this? => aba --debug --dir /home/steve/subdir/aba/sno --cmd 'get po -A | grep -v -e Running -e Complete'
-
 	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
 
 	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
