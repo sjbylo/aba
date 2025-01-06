@@ -29,8 +29,8 @@ rm -f ~/.aba.previous.backup
 [ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
 [ ! "$internal_bastion_rhel_ver" ] && export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 
-int_bastion_hostname=registry.example.com
-bastion_vm=bastion-internal-$internal_bastion_rhel_ver
+###int_bastion_hostname=registry.example.com
+###int_bastion_vm_name=bastion-internal-$internal_bastion_rhel_ver
 
 source scripts/include_all.sh no-trap  # Need for below normalize fn() calls
 source test/include.sh
