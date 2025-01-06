@@ -62,11 +62,11 @@ if [ -x scripts/aba.sh ]; then
 	for d in /usr/local/bin /usr/local/sbin $HOME/bin
 	do
 		###if [[ "$PATH" =~ "$d:" -o "$PATH" =~ "$d$" ]]; then
-		action=
 		if echo $PATH | grep -q -e "$d:" -e "$d$"; then
+			action=
 			if [ -s "$d/aba" ]; then
 				action="updated to $d"
-				quiet=1  # since has been updated, no need to guidance below
+				quiet=1  # since aba has been updated, no need for guidance below
 			else
 				action="installed to $d"
 			fi
