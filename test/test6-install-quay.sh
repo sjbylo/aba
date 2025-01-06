@@ -18,7 +18,7 @@ cd ..
 rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
 
-int_bastion=registry.example.com
+int_bastion_hostname=registry.example.com
 bastion_vm=bastion-internal-rhel9
 
 source scripts/include_all.sh && trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
@@ -73,16 +73,16 @@ mylog Revert internal bastion vm to snapshot and powering on ...
 	sleep 5
 )
 # Wait for host to come up
-ssh $reg_ssh_user@$int_bastion -- "date" || sleep 2
-ssh $reg_ssh_user@$int_bastion -- "date" || sleep 3
-ssh $reg_ssh_user@$int_bastion -- "date" || sleep 8
+ssh $reg_ssh_user@$int_bastion_hostname -- "date" || sleep 2
+ssh $reg_ssh_user@$int_bastion_hostname -- "date" || sleep 3
+ssh $reg_ssh_user@$int_bastion_hostname -- "date" || sleep 8
 
 # This file is not needed in a fully air-gapped env. 
-ssh $reg_ssh_user@$int_bastion -- "rm -f ~/.pull-secret.json"
+ssh $reg_ssh_user@$int_bastion_hostname -- "rm -f ~/.pull-secret.json"
 
 pub_key=$(cat ~/.ssh/id_rsa.pub)
 u=testy
-cat << END  | ssh $int_bastion -- sudo bash 
+cat << END  | ssh $int_bastion_hostname -- sudo bash 
 set -ex
 userdel $u -r -f || true
 useradd $u -p not-used
@@ -94,20 +94,20 @@ echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
 chmod 600 ~$u/.ssh/authorized_keys
 chown -R $u.$u ~$u
 END
-ssh testy@$int_bastion whoami
+ssh testy@$int_bastion_hostname whoami
 
 
 #####################################################################################################################
 #####################################################################################################################
 #####################################################################################################################
 
-mylog "Confgure mirror to install registry on internal (remote) $int_bastion"
+mylog "Confgure mirror to install registry on internal (remote) $int_bastion_hostname"
 
 # Create and edit mirror.conf 
 make -C mirror mirror.conf
 
-mylog "Setting 'reg_host' to '$int_bastion' in file 'mirror/mirror.conf'"
-sed -i "s/^reg_host.*/reg_host=$int_bastion/g" ./mirror/mirror.conf	# Install on internal bastion
+mylog "Setting 'reg_host' to '$int_bastion_hostname' in file 'mirror/mirror.conf'"
+sed -i "s/^reg_host.*/reg_host=$int_bastion_hostname/g" ./mirror/mirror.conf	# Install on internal bastion
 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
 sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
@@ -166,8 +166,8 @@ make -C mirror mirror.conf
 ## FIXME INSTALL FAILURE mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 mylog "Configure mirror to install on internal (remote) bastion in default dir, with random password to '/my/path'"
 
-mylog "Setting 'reg_host' to '$int_bastion' in file 'mirror/mirror.conf'"
-sed -i "s/^reg_host.*/reg_host=$int_bastion/g" ./mirror/mirror.conf	# Install on internal bastion
+mylog "Setting 'reg_host' to '$int_bastion_hostname' in file 'mirror/mirror.conf'"
+sed -i "s/^reg_host.*/reg_host=$int_bastion_hostname/g" ./mirror/mirror.conf	# Install on internal bastion
 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
 sed -i "s#reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost

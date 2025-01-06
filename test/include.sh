@@ -177,8 +177,9 @@ init_bastion() {
 	local int_bastion_hostname=$1
 	local int_bastion_vm_name=$2
 	local snap_name=$3
+	local test_user=$4
 
-	local def_user=steve  # This is the intial user to use
+	local def_user=steve  # This is the intial, pre-configured user to use
 
 	mylog Revert internal bastion vm to snapshot and powering on ...
 
@@ -189,7 +190,8 @@ init_bastion() {
 	govc vm.power -on $int_bastion_vm_name
 	sleep 5
 
-	eval cp ~$def_user/.ssh/config /root/.ssh/config
+	# Copy over the ssh config to /root, in case this is running as root!
+	[ "$test_user" = "root" ] && eval cp ~$def_user/.ssh/config /root/.ssh/config
 
 	# Wait for host to come up
 	while ! ssh $def_user@$int_bastion_hostname -- "date"
@@ -199,6 +201,7 @@ init_bastion() {
 
 	pub_key=$(cat ~/.ssh/id_rsa.pub)
 
+	# General bastion config, e.g. date/time/timezone and also root ssh
 cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
 set -ex
 timedatectl
@@ -214,23 +217,25 @@ mkdir -p /root/.ssh
 echo $pub_key > /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 END
-	scp ~steve/.ssh/config root@$int_bastion_hostname:.ssh/config
+
+	# Copy over the ssh config to /root on bastion (in case test_user = root)
+	eval scp ~$def_user/.ssh/config root@$int_bastion_hostname:.ssh/config
 
 	test-cmd -m "Verify ssh to root@$int_bastion_hostname" ssh root@$int_bastion_hostname whoami
 
 	# Delete images
-	ssh $def_user@$int_bastion_hostname -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+	ssh $test_user@$int_bastion_hostname -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 	# This file is not needed in a fully air-gapped env. 
-	ssh $def_user@$int_bastion_hostname -- "rm -fv ~/.pull-secret.json"
+	ssh $test_user@$int_bastion_hostname -- "rm -fv ~/.pull-secret.json"
 	# Want to test fully disconnected 
-	ssh $def_user@$int_bastion_hostname -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
+	ssh $test_user@$int_bastion_hostname -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
 	# Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
-	ssh $def_user@$int_bastion_hostname -- "rm -rfv ~/*"
+	ssh $test_user@$int_bastion_hostname -- "rm -rfv ~/*"
 
 	# Just be sure a valid govc config file exists on internal bastion
-	scp $vf $def_user@$int_bastion_hostname: 
+	scp $vf $test_user@$int_bastion_hostname: 
 
-	# Test install mirror with other user
+	# Set up test to install mirror with other user, "testy"
 	rm -f ~/.ssh/testy_rsa*
 	ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N ''
 	pub_key=$(cat ~/.ssh/testy_rsa.pub)   # This must be different key
@@ -251,4 +256,5 @@ END
 
 	test-cmd -m "Verify ssh to testy@$int_bastion_hostname" ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname whoami
 
+	test-cmd -h $u@$int_bastion_hostname -m "Delete and create sub dir on remote host for user $u" "rm -rf $subdir && mkdir $subdir"
 }

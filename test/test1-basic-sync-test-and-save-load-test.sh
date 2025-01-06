@@ -94,7 +94,7 @@ echo GOVC_CLUSTER=$GOVC_CLUSTER
 echo VC_FOLDER=$VC_FOLDER
 
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
-init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test
+init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 
 #####################################################################################################################
 #####################################################################################################################
