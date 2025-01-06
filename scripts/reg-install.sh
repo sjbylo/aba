@@ -59,19 +59,24 @@ if [ "$reg_code" = "200" ]; then
 	exit 1
 fi
 
+# Hack to get the home path right
+fix_home=/home/$reg_ssh_user
+[ "$reg_ssh_user" = "root" ] && fix_home=/root
+
 # Is registry root dir value defined?
 if [ "$reg_root" ]; then
 	if echo "$reg_root" | grep -q ^~; then
-		# Must replace ~ with /home/$reg_ssh_user
-		reg_root=$(echo "$reg_root" | sed "s#~#/home/$reg_ssh_user#g")
+		# Must replace ~ with the remote user's home dir
+		reg_root=$(echo "$reg_root" | sed "s#~#$fix_home#g")
 	fi
 
-	[ "$INFO_ABA" ] && echo_white "Using registry root dir: $reg_root"
-	reg_root_opt="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --pgStorage $reg_root/pg-data"
+	reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --pgStorage $reg_root/pg-data"
+	echo_white "Using registry root dir: $reg_root and options: $reg_root_opts"
 else
 	# The default path
-	reg_root=/home/$reg_ssh_user/quay-install  # This must be the path *where Quay will be installed*
-	[ "$INFO_ABA" ] && echo_white "Using default registry root dir: $reg_root"
+	# This must be the path *where Quay will be installed*
+	reg_root=$fix_home/quay-install
+	echo_white "Using default registry root dir: $reg_root"
 fi
 
 
@@ -178,14 +183,14 @@ if [ "$reg_ssh_key" ]; then
 	fi
 
 	# Generate the script to be used to delete this registry
-	uninstall_cmd="./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opt --autoApprove -v"
+	uninstall_cmd="./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts --autoApprove -v"
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
-  	#	-k $reg_ssh_key --initPassword $reg_pw $reg_root_opt"
+  	#	-k $reg_ssh_key --initPassword $reg_pw $reg_root_opts"
 	cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
-  		-k $reg_ssh_key $reg_root_opt"
+  		-k $reg_ssh_key $reg_root_opts"
 
 	echo_cyan "Running command: \"$cmd --initPassword <hidden>\""
 
@@ -198,6 +203,7 @@ if [ "$reg_ssh_key" ]; then
 	mkdir regcreds
 
 	# Fetch root CA from remote host 
+	echo "Fetching root CA from remote host: $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem"
 	scp -i $reg_ssh_key -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
 
 	[ ! "$reg_user" ] && reg_user=init
@@ -276,12 +282,12 @@ else
 	fi
 
 	# Generate the script to be used to delete this registry
-	uninstall_cmd="./mirror-registry uninstall --autoApprove $reg_root_opt -v"
+	uninstall_cmd="./mirror-registry uninstall --autoApprove $reg_root_opts -v"
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 
-	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opt"
-	cmd="./mirror-registry install -v --quayHostname $reg_host $reg_root_opt"
+	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opts"
+	cmd="./mirror-registry install -v --quayHostname $reg_host $reg_root_opts"
 
 	echo_cyan "Running command: \"$cmd --initPassword <hidden>\""
 
