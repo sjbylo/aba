@@ -57,7 +57,7 @@ rm -rf sno compact standard
 
 int_bastion_hostname=registry.example.com
 bastion_vm=bastion-internal-$internal_bastion_rhel_ver
-subdir=~/subdir
+export subdir=~/subdir
 
 mylog ============================================================
 mylog Starting test $(basename $0)

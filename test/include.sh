@@ -260,5 +260,5 @@ END
 	test-cmd -m "Verify ssh to testy@$int_bastion_hostname" ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname whoami
 
 	###test-cmd -h testy@$int_bastion_hostname -m "Delete and create sub dir on remote host for user $u" "rm -rf $subdir && mkdir $subdir"
-	test-cmd -h $int_bastion -m "Delete and create sub dir on remote host" "rm -rf subdir && mkdir subdir"  # FIXME: $subdir not avail!
+	test-cmd -h $test_user@$int_bastion_hostname -m "Delete and create sub dir on remote host" "rm -rf $subdir && mkdir $subdir"
 }
