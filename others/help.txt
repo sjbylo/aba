@@ -36,11 +36,11 @@ Usage: Set up and load mirror registry
    <<options>>:
      -r, --retry <number>                # Retry <number> times on oc-mirror error.
 
-   abd save                              # Copy images from the Internet to disk.
+   aba save                              # Copy images from the Internet to disk.
    <<options>>:
      -r, --retry <number>                # Retry <number> times on oc-mirror error.
 
-   abd load                              # Copy images from disk to the mirror registry.
+   aba load                              # Copy images from disk to the mirror registry.
    <<options>>:
      -r, --retry <number>                # Retry <number> times on oc-mirror error.
 
@@ -77,36 +77,37 @@ Usage:
      -e, --editor <editor command>       # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
      -a, --ask                           # Prompt user when needed.
      -A, --noask                         # Do not prompt, assume default answers.
-     -o, --out <file|->                  # Bundle archive output destination, e.g. file or stadout (-).
+     -o, --out <file|->                  # Bundle archive output destination, e.g. file or stdout (-).
      -f, --force                         # Only used for 'aba reset --force'
      -V, --vmware                        # Apply this VMware config file (for govc).
-     -D, --debug                         # Increace output
+     -D, --debug                         # Increase output
 
 Examples:
+
   Install Aba:
     bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
     cd aba
 
   Create install bundle for fully disconnected:
     aba bundle --force -c fast -v latest -S ~/.pull-secret.json -P ocp ocpv mesh3 -O web-terminal -o /path/to/portable/media/ocp-install-bundle
-    # Now transfer the ocp-install-bundle* file to air-gapped env. Then unpack and run 'aba/install'.
+    # Now transfer the ocp-install-bundle* tar file to air-gapped env. Then unpack the tar and run 'aba/install'.
 
-  Configure mirror on localhost with FQDN registry.example.com:
+  Configure mirror registry on localhost with FQDN registry.example.com:
     aba mirror -H registry.example.com 
 
-  Configure mirror on remote host with FQDN registry.example.com:
+  Configure mirror registry on remote host with FQDN registry.example.com:
     aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
 
-  Configure mirror on localhost with FQDN registry.example.com and sync the images to the mirror:
+  Configure mirror registry on localhost with FQDN registry.example.com and sync the images to the mirror:
     aba sync -H registry.example.com 
 
-  Configure mirror on localhost with FQDN registry.example.com and sync the images & operators to the mirror:
-    aba sync -H registry.example.com -P ocpv odf
+  Configure mirror on localhost with FQDN registry.example.com and sync the images & operators ('operator sets' & individual operators) to the mirror:
+    aba sync -H registry.example.com --op-sets ocpv odf --ops web-terminal
 
-  Save images to local disk:
+  Save images to local disk (use above 'bundle' command instead):
     aba save
 
-  Configure mirror on localhost with FQDN registry.example.com, also load the images to the mirror:
+  Configure mirror registry on localhost with FQDN registry.example.com and load the (previously saved) images to the mirror:
     aba load -H registry.example.com 
 
   Install OpenShift:
