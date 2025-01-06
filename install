@@ -80,7 +80,7 @@ if [ -x scripts/aba.sh ]; then
 	fi
 
 	echo "aba has been $action"
-	[ ! "$quiet" ] && echo "aba has been $action"
+	###[ ! "$quiet" ] && echo "aba has been $action"
 
 	[ ! "$quiet" ] && echo "Run: cd aba; aba"
 	[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file"
