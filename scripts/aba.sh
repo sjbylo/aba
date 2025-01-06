@@ -1,7 +1,9 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250106115329
+ABA_VERSION=20250106162351
+# Sanity check
+echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
 
 uname -o | grep -q "^Darwin$" && echo "Please run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
@@ -50,11 +52,17 @@ else
 	exit 1
 fi
 
-# Check if aba script needs to be updated
-if [ -s $ABA_PATH/scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" $ABA_PATH/scripts/aba.sh; then
-	REPO_VER=$(grep "^ABA_VERSION=" $ABA_PATH/scripts/aba.sh | cut -d= -f2)
-	[ "$REPO_VER" -a $REPO_VER -gt $ABA_VERSION -a -x $ABA_PATH/install ] && echo "Updating aba script .." >&2 && $ABA_PATH/install -q >&2 && exec "$0" "$@"
+# install will check if aba needs to be updated, if so it will return 0 ... so we re-execute it!
+if $ABA_PATH/install -v $ABA_VERSION -q; then
+	exec "$0" "$@"
 fi
+
+# FIXME: delete?
+### Check if aba script needs to be updated
+##if [ -s $ABA_PATH/scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" $ABA_PATH/scripts/aba.sh; then
+##	REPO_VER=$(grep "^ABA_VERSION=" $ABA_PATH/scripts/aba.sh | cut -d= -f2)
+##	[ "$REPO_VER" -a $REPO_VER -gt $ABA_VERSION -a -x $ABA_PATH/install ] && echo "Updating aba script .." >&2 && $ABA_PATH/install -q >&2 && exec "$0" "$@"
+##fi
 
 usage=$(cat $ABA_PATH/others/help.txt)
 

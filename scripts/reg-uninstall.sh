@@ -39,6 +39,7 @@ if [ "$reg_root" ]; then
 else
 	# The default path
 	reg_root=/home/$reg_ssh_user/quay-install   # Not used in thie script!
+	[ "$reg_ssh_user" = "root" ] && reg_root=/root/quay-install
 fi
 
 if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registry; then
