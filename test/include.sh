@@ -81,9 +81,11 @@ test-cmd() {
 
 	draw-line
 	if [ "$msg" ]; then
-		echo "$host: $msg ($cmd) ($(pwd)) ($(date))" | tee -a test/test.log
+		##echo "$host: $msg ($cmd) ($(pwd)) ($(date))" | tee -a test/test.log
+		echo "> $msg ($cmd) ($host) ($PWD) ($(date))" | tee -a test/test.log
 	else
-		echo "$host: $cmd ($(pwd)) ($(date))" | tee -a test/test.log
+		##echo "$host: $cmd ($(pwd)) ($(date))" | tee -a test/test.log
+		echo "> $cmd ($host) ($PWD) ($(date))" | tee -a test/test.log
 	fi
 	draw-line
 
@@ -127,7 +129,7 @@ test-cmd() {
 
 			echo_cyan "Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
 
-			which notify.sh >/dev/null 2>&1 && notify.sh "Failed cmd: $cmd  [ `tail -3 test/test.log` ] [ `tail -10 test/output.log` ]" >/dev/null || true
+			( echo -e "test.log:\n"; tail -3 test/test.log; echo -e "\noutput.log:\n"; tail -10 test/output.log ) | notify.sh "Failed cmd: $cmd" || true
 		done
 
 		[ "$reset_xtrace" ] && set -x
@@ -139,7 +141,8 @@ test-cmd() {
 			sub_pid=
 		fi
 			
-		which notify.sh >/dev/null 2>&1 && notify.sh "Aborting: $cmd [ `tail -3 test/test.log` ] [ `tail -10 test/output.log` ]" >/dev/null || true
+		###which notify.sh >/dev/null 2>&1 && notify.sh "Aborting: $cmd [ `tail -3 test/test.log` ] [ `tail -10 test/output.log` ]" >/dev/null || true
+		( echo -e "test.log:\n"; tail -3 test/test.log; echo -e "\noutput.log:\n"; tail -10 test/output.log ) | notify.sh "Aborting cmd: $cmd" || true
 
 		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N) OR ENTER NEW COMMAND OR Ctrl-C? (Y/n/<cmd>): "
 		read ans

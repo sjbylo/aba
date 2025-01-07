@@ -23,7 +23,7 @@ release_ver=$(echo "$out" | grep "^openshift-install" | cut -d" " -f2)
 if [ "$ocp_version" != "$release_ver" ]; then
 	echo
 	echo_red "Warning: The OpenShift version set in 'aba.conf' is not the same as the version of the 'openshift-install' CLI." >&2 
-	echo_red "         Please run 'aba --dir cli' to refresh the CLIs and try again." >&2 
+	echo_red "         Please run 'aba clean && aba' in the cli/ directory to refresh the CLIs and try again." >&2 
 	echo
 
 	exit 1

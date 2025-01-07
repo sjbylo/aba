@@ -30,12 +30,8 @@ echo export ASSETS_DIR=$ASSETS_DIR
 ##echo export MANIFEST_SRC_DIR=$MANIFEST_SRC_DIR
 
 ICONF=$MANIFEST_SRC_DIR/install-config.yaml  
-#ICONF_TMP=/tmp/.$(whoami).$RANDOM.install-config.yaml
-#ICONF_TMP=$(mktemp /tmp/.$(whoami).XXXXX.install-conf.yaml)
 
 ACONF=$MANIFEST_SRC_DIR/agent-config.yaml  
-#ACONF_TMP=/tmp/.$(whoami).$RANDOM.agent-config.yaml
-#ACONF_TMP=$(mktemp /tmp/.$(whoami).XXXXX.agent-config.yaml)
 
 # If the files don't exist, nothing to do but exit!
 if [ ! -s $ICONF -o ! -s $ACONF ]; then
