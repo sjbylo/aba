@@ -19,6 +19,16 @@ fi
 
 umask 077
 
+tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
+mkdir -p $tmp_dir 
+cleanup() {
+  ##echo "Cleaning up temporary directory [$tmp_dir] ..."
+  rm -rf "$tmp_dir"
+}
+
+# Set up the trap to call cleanup on script exit or termination
+trap cleanup EXIT
+
 # Function to display an error message and the last executed command
 show_error() {
 	local exit_code=$?
@@ -282,9 +292,9 @@ fetch_latest_version() {
 	# $1 must be one of 'stable', 'fast' or 'candidate'
 	local c=$1
 	[ "$c" = "eus" ] && c=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
-	curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$c/release.txt > /tmp/.$(whoami)-release.txt || return 1
+	curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$c/release.txt > $tmp_dir/release.txt || return 1
 	# Get the latest stable OCP version number, e.g. 4.14.6
-	stable_ver=$(cat /tmp/.$(whoami)-release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+	stable_ver=$(cat $tmp_dir/release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 	[ "$stable_ver" ] && echo $stable_ver || return 1
 }
 

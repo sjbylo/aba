@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250106183737
+ABA_VERSION=20250107170527
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
 
@@ -144,10 +144,10 @@ do
 		export INFO_ABA=1
 		shift 
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		### '-' is also valid! ## [[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		shift
 		if [ "$1" = "-" ]; then
-			BUILD_COMMAND="$BUILD_COMMAND out=-"
+			BUILD_COMMAND="$BUILD_COMMAND out=-"  # FIXME: This only works if command=bundle
 		else
 			echo "$1" | grep -q "^-" && echo_red "Error in parsing --out path argument" >&2 && exit 1
 			[ "$1" ] && [ ! -d $(dirname $1) ] && echo_red "Directory: [$(dirname $1)] incorrect or missing!" >&2 && exit 1
@@ -169,7 +169,7 @@ do
 
 		url="https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt"
 
-		if ! curl -f --connect-timeout 10 --retry 2 -sL "$url" > /tmp/.$(whoami)-release.txt; then
+		if ! curl -f --connect-timeout 10 --retry 2 -sL "$url" > $tmp_dir/release.txt; then
 			echo_red "Cannot access $url." >&2
 			echo_red "Ensure you have Internet access to download the required images." >&2
 			echo_red "To get started, run Aba on a connected workstation/laptop with Fedora or RHEL and try again." >&2
@@ -481,7 +481,7 @@ if [ ! -f .bundle ]; then
 	# Fresh GitHub clone of Aba repo detected!
 
 	echo -n "Checking Internet connectivity ..."
-	if ! curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > /tmp/.$(whoami)-release.txt; then
+	if ! curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > $tmp_dir/release.txt; then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
 		echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again." >&2
@@ -515,7 +515,7 @@ if [ ! -f .bundle ]; then
 	##############################################################################################################################
 	# Fetch release.txt
 
-	if ! curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt > /tmp/.$(whoami)-release.txt; then
+	if ! curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt > $tmp_dir/release.txt; then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Failed to access https://mirror.openshift.com" >&2
 
@@ -531,14 +531,14 @@ if [ ! -f .bundle ]; then
 		echo_cyan "OpenShift version is defined in aba.conf as '$ocp_version'."
 	else
 		## Get the latest stable OCP version number, e.g. 4.14.6
-		stable_ver=$(cat /tmp/.$(whoami)-release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+		stable_ver=$(cat $tmp_dir/release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 		default_ver=$stable_ver
 
 		# Extract the previous stable point version, e.g. 4.13.23
 		major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
 		stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
 		[ "$stable_ver_point" ] && \
-			stable_ver_prev=$(cat /tmp/.$(whoami)-release.txt| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+			stable_ver_prev=$(cat $tmp_dir/release.txt| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
 
 		# Determine any already installed tool versions
 		which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")

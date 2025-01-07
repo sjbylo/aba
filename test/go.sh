@@ -32,7 +32,7 @@ export target_full=    # Build only iso
 echo "Removing all traces of images from this host!"
 podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage
 
-doNotify() { which notify.sh >/dev/null 2>&1 && notify.sh "$*" || true; }
+doNotify() { notify.sh "$*" >/dev/null || true; }
 
 time (
 	echo "=========================================================================="  	>> test/test.log

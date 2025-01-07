@@ -131,6 +131,8 @@ if [ "$reg_ssh_key" ]; then
 			exit 1
 		fi
 
+		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host rm -f $flag_file
+
 		echo "Ssh access to remote host ($reg_host) is working ..."
 	fi
 
