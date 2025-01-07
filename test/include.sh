@@ -129,7 +129,7 @@ test-cmd() {
 
 			echo_cyan "Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
 
-			( echo -e "test.log:\n"; tail -3 test/test.log; echo -e "\noutput.log:\n"; tail -10 test/output.log ) | notify.sh "Failed cmd: $cmd" || true
+			( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Failed cmd: $cmd" || true
 		done
 
 		[ "$reset_xtrace" ] && set -x
@@ -141,8 +141,7 @@ test-cmd() {
 			sub_pid=
 		fi
 			
-		###which notify.sh >/dev/null 2>&1 && notify.sh "Aborting: $cmd [ `tail -3 test/test.log` ] [ `tail -10 test/output.log` ]" >/dev/null || true
-		( echo -e "test.log:\n"; tail -3 test/test.log; echo -e "\noutput.log:\n"; tail -10 test/output.log ) | notify.sh "Aborting cmd: $cmd" || true
+		( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Aborting cmd: $cmd" || true
 
 		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N) OR ENTER NEW COMMAND OR Ctrl-C? (Y/n/<cmd>): "
 		read ans
@@ -167,8 +166,8 @@ mylog() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
 	echo "---------------------------------------------------------------------------------------"
-	echo $@
-	echo $@ >> test/test.log
+	echo \> $@
+	echo \> $@ >> test/test.log
 	draw-line
 
 	[ "$reset_xtrace" ] && set -x

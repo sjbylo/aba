@@ -77,7 +77,7 @@ if [ ! "$1" ]; then
 	[ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 	test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
 
-	test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noask
+	test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba -A  # noask
 
 	#test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ## --vmw $vf
 	# Set up govc 
@@ -151,7 +151,7 @@ mylog
 source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
-test-cmd -r 20 3 -m "Saving images to local disk on `hostname`" aba save 
+test-cmd -r 10 3 -m "Saving images to local disk on `hostname`" aba save
 
 # Smoke test!
 [ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
@@ -178,7 +178,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror 
 ######################
 
 # Now, this works
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 3 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq1 file" rm -f $subdir/aba/mirror/save/mirror_seq1_000000.tar
 
@@ -212,7 +212,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-test-cmd -r 20 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save"
+test-cmd -r 10 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save"
 
 ### mylog "'aba inc' and ssh files over to internal bastion: $TEST_USER@$int_bastion_hostname"
 ### aba --dir mirror inc out=- | ssh $TEST_USER@$int_bastion_hostname -- tar xvf -
@@ -235,7 +235,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file" rm -f $subdir/aba/mirror/save/mirror_seq2_000000.tar
 
@@ -295,7 +295,7 @@ grep -A2 -e "name: multicluster-engine$"         mirror/imageset-config-operator
 #        - name: stable-2.5
 #END
 
-test-cmd -r 20 3 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
+test-cmd -r 10 3 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
 
 ### mylog Tar+ssh files from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname 
 ### aba --dir mirror inc out=- | ssh $TEST_USER@$int_bastion_hostname -- tar xvf -
@@ -306,15 +306,15 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file 'mi
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file" rm -f $subdir/aba/mirror/save/mirror_seq3_000000.tar
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
 
 test-cmd -m "Pausing 30s" sleep 30
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests -n openshift-marketplace'" | grep advanced-cluster-management
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests -n openshift-marketplace'" | grep advanced-cluster-management
 
 #### TESTING ACM + MCH 
 # 30 attempts, always waiting 20s (fixed value) secs between attempts
