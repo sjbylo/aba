@@ -78,7 +78,7 @@ vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
 
-test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba noask
+test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba --noask
 
 # Set up govc 
 cp $vf vmware.conf 
@@ -112,14 +112,14 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 #####################################################################################################################
 #####################################################################################################################
 
-mylog "Confgure mirror to install registry on internal (remote) $int_bastion_hostname"
-
 # Create and edit mirror.conf 
-aba --dir mirror mirror.conf
+test-cmd -m "Confgure mirror to install registry on (remote) $int_bastion_hostname" aba --dir mirror mirror.conf
 
+#test-cmd -m "Setting 'reg_host' to '$int_bastion_hostname' in file 'mirror/mirror.conf'" aba -H $int_bastion_hostname
 mylog "Setting 'reg_host' to '$int_bastion_hostname' in file 'mirror/mirror.conf'"
 sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
 
+##test-cmd -m "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" aba -k "~/.ssh/id_rsa"
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
 sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
@@ -145,7 +145,7 @@ source <(cd mirror; normalize-mirror-conf)
 
 echo
 echo mirror-conf:
-(cd mirror; normalize-mirror-conf)
+(cd mirror; normalize-mirror-conf | awk '(print $2}')
 echo
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
@@ -153,7 +153,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 ######################
 # This will install mirror and sync images
 mylog "Installing Quay mirror registry at $reg_host:$reg_port and then ..."
-test-cmd -r 20 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync
+test-cmd -r 10 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync
 
 # Install yq for below test only!
 which yq || (
@@ -228,7 +228,7 @@ test-cmd -i -m "Deleting sno cluster (if it was created)" aba --dir sno delete
 
 #######################
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 20 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
+test-cmd -r 10 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
 
 rm -rf sno
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
@@ -276,7 +276,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 ######################
 # This will install the reg. and sync the images
-test-cmd -r 20 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync 
+test-cmd -r 10 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync 
 
 aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should start from scratch next time
@@ -303,7 +303,7 @@ test-cmd -m "Checking cluster operators" aba --dir sno cmd
 #  Delete the reg. first!
 test-cmd -m "Delete the registry so it will be re-created again during 'aba save load' next" aba --dir mirror uninstall 
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 20 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
+test-cmd -r 10 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
 
 aba --dir sno clean # This should clean up the cluster and 'make' should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target

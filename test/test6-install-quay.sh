@@ -148,7 +148,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 ######################
 # This will install mirror 
 mylog "Installing Quay mirror registry at $reg_host:$reg_port"
-test-cmd -r 20 3 -m "Install mirror registry" make -C mirror install
+test-cmd -r 10 3 -m "Install mirror registry" make -C mirror install
 
 #####################################################################################################################
 #####################################################################################################################
@@ -185,7 +185,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 ######################
 # This will install the reg. and sync the images
-test-cmd -r 20 3 -m "Install quay internal mirror registry" make -C mirror install
+test-cmd -r 10 3 -m "Install quay internal mirror registry" make -C mirror install
 
 #####################################################################################################################
 #####################################################################################################################
@@ -193,7 +193,7 @@ test-cmd -r 20 3 -m "Install quay internal mirror registry" make -C mirror insta
 
 #######################
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 20 3 -m "Saving and loading images into mirror" make -C mirror sync
+test-cmd -r 10 3 -m "Saving and loading images into mirror" make -C mirror sync
 
 ## KEEP test-cmd -m "Uninstalling mirror registry" make -C mirror uninstall 
 
