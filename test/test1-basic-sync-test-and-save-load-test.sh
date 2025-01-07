@@ -148,7 +148,7 @@ echo mirror-conf:
 (cd mirror; normalize-mirror-conf | awk '{print $2}')
 echo
 
-mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
+mylog "Using remote container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 ######################
 # This will install mirror and sync images
