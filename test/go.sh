@@ -32,7 +32,7 @@ export target_full=    # Build only iso
 echo "Removing all traces of images from this host!"
 podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage
 
-doNotify() { notify.sh "$*" >/dev/null || true; }
+###doNotify() { which notify.sh >/dev/null && notify.sh "$*" || true; }
 
 time (
 	echo "=========================================================================="  	>> test/test.log
@@ -41,19 +41,19 @@ time (
 	echo "=========================================================================="  	>> test/test.log
 	echo "START TESTS @ $(date)" 								>> test/test.log
 	echo "==========================================================================" 	>> test/test.log
+	time test/test3-using-public-quay-reg.sh &&			doNotify "Success test3 (`date`)" && \
 	time test/test1-basic-sync-test-and-save-load-test.sh &&	doNotify "Success test1 (`date`)" && \
 	time test/test2-airgapped-existing-reg.sh &&			doNotify "Success test2 (`date`)" && \
 	time test/test5-airgapped-install-local-reg.sh &&		doNotify "Success test5 (`date`)" && \
-	time test/test3-using-public-quay-reg.sh &&			doNotify "Success test3 (`date`)" && \
 	exit $? || exit $?
 ) 2>&1 | tee test/output.log
 ret=$?
 if [ $ret -eq 0 ]; then
 	echo SUCCESS
-	doNotify "SUCCESS (`date`)"
+	notify.sh "SUCCESS (`date`)" || true
 else
 	echo FAILED | tee -a test/test.log
-	doNotify "FAILED (`date`)"
+	notify.sh "FAILED (`date`)" || true
 fi
 
 date 
