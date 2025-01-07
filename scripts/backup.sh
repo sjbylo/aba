@@ -162,14 +162,20 @@ out_file_list=$(echo $file_list | cut -c-90)
 
 echo_cyan "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
 echo >&2
+set +e   # Needed so we can capture the return code from tar and not just exit (bash -e) 
 tar cf $dest $file_list
 ret=$?
 if [ $ret -ne 0 ]; then
-	echo_red "tar command failed with return code $ret" >&2 >&2
+	echo
+	echo_red "Error: The tar command failed with return code $ret!" >&2
+	echo_red "       The archive is very likely incomplete!  Fix the problem and try again!" >&2
+	echo 
 	rm -f aba/.bundle
 
 	exit $ret
 fi
+
+set -e
 
 rm -f aba/.bundle  # We don't want this repo to be labelled as 'bundle', only the tar archive should be
 

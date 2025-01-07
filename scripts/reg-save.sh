@@ -31,8 +31,9 @@ echo
 
 # Set up script to help for re-sync
 # --continue-on-error : do not use this option. In testing the registry became unusable! 
-cmd="oc-mirror --config=./imageset-config-save.yaml file://."
-echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
+cmd="oc-mirror --config=save/imageset-config-save.yaml file://save"
+#echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
+echo "umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 
 # This loop is based on the "retry=?" value
 try=1

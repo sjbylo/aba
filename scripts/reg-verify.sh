@@ -11,7 +11,7 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 if [ ! "$reg_host" -o ! "$reg_port" ]; then
-	echo_red "Error: No registry is configured in 'mirror.conf'.  Run: 'aba mirror.conf' and edit it." >&2 >&2
+	echo_red "Error: No registry is configured in 'mirror.conf'.  Run: 'aba mirror.conf' and edit it." >&2
 
 	exit 1
 fi

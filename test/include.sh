@@ -82,12 +82,12 @@ test-cmd() {
 	draw-line
 	if [ "$msg" ]; then
 		##echo "$host: $msg ($cmd) ($(pwd)) ($(date))" | tee -a test/test.log
-		echo "> $msg ($cmd) ($host) ($PWD) ($(date))" | tee -a test/test.log
+		echo "$(date "+%b %e %H:%M:%S") $msg ($cmd) ($host) ($PWD)" | tee -a test/test.log
 	else
 		##echo "$host: $cmd ($(pwd)) ($(date))" | tee -a test/test.log
-		echo "> $cmd ($host) ($PWD) ($(date))" | tee -a test/test.log
+		echo "$(date "+%b %e %H:%M:%S") ($cmd) ($host) ($PWD)" | tee -a test/test.log
 	fi
-	draw-line
+	##draw-line
 
 	# Loop to repeat the command if user requests
 	while true
