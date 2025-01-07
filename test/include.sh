@@ -81,11 +81,11 @@ test-cmd() {
 
 	draw-line
 	if [ "$msg" ]; then
-		##echo "$host: $msg ($cmd) ($(pwd)) ($(date))" | tee -a test/test.log
-		echo "$(date "+%b %e %H:%M:%S") $msg ($cmd) ($host) ($PWD)" | tee -a test/test.log
+		#echo "$(date "+%b %e %H:%M:%S") $msg ($cmd) ($host) ($PWD)" | tee -a test/test.log
+		log-test -t "$msg ($cmd) ($host) ($PWD)"
 	else
-		##echo "$host: $cmd ($(pwd)) ($(date))" | tee -a test/test.log
-		echo "$(date "+%b %e %H:%M:%S") ($cmd) ($host) ($PWD)" | tee -a test/test.log
+		#echo "$(date "+%b %e %H:%M:%S") ($cmd) ($host) ($PWD)" | tee -a test/test.log
+		log-test -t "($cmd) ($host) ($PWD)"
 	fi
 	##draw-line
 
@@ -127,7 +127,8 @@ test-cmd() {
 			#trap cleanup SIGINT
 			sleep_time=`expr $sleep_time + $backoff \* 8`
 
-			echo_cyan "Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
+			#echo_cyan "$(date "+%b %e %H:%M:%S") Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
+			log-test -t "Attempting command again ($i/$tot_cnt) - ($cmd)"
 
 			( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Failed cmd: $cmd" || true
 		done
@@ -143,6 +144,8 @@ test-cmd() {
 			
 		( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Aborting cmd: $cmd" || true
 
+		#echo $(date "+%b %e %H:%M:%S") COMMAND FAILED WITH RET=$ret >> test/test.log
+		log-test COMMAND FAILED WITH RET=$ret
 		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N) OR ENTER NEW COMMAND OR Ctrl-C? (Y/n/<cmd>): "
 		read ans
 
@@ -162,13 +165,21 @@ test-cmd() {
 	return $ret
 }
 
+log-test() {
+	if [ "$1" = "-t" ]; then
+		shift
+		echo $(date "+%b %e %H:%M:%S") "$@" | tee -a test/test.log
+	else
+		echo $(date "+%b %e %H:%M:%S") "$@" >> test/test.log
+	fi
+}
+
 mylog() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
 	##echo "---------------------------------------------------------------------------------------"
 	draw-line
 	echo $(date "+%b %e %H:%M:%S") $@ | tee -a test/test.log
-	##echo $@ >> test/test.log
 	##draw-line
 
 	[ "$reset_xtrace" ] && set -x
