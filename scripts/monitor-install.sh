@@ -10,24 +10,10 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval $(scripts/cluster-config.sh $@ || exit 1)
 fi
 
-##echo 
-##echo =================================================================================
-##echo Running wait-for command ...
-##echo "openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR"
-##openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR 
-
-##if [ $? -ne 0 ]; then
-##	echo 
-##	echo_red "Something went wrong with the installation.  Fix the problem and try again!" >&2
-##
-##	exit $?
-##fi
-
 echo
 echo =================================================================================
-echo Running wait-for command ...
-echo "openshift-install agent wait-for install-complete --dir $ASSETS_DIR"
-openshift-install agent wait-for install-complete --dir $ASSETS_DIR    # --log-level=debug
+echo_yellow "Running: openshift-install agent wait-for install-complete --dir $ASSETS_DIR"
+openshift-install agent wait-for install-complete --dir $ASSETS_DIR --log-level=debug
 ret=$?
 
 if [ $ret -ne 0 ]; then

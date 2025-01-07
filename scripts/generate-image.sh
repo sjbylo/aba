@@ -39,7 +39,7 @@ mkdir -p $ASSETS_DIR
 cp install-config.yaml agent-config.yaml $ASSETS_DIR 
 
 echo_yellow "Running: openshift-install agent create image --dir $ASSETS_DIR "
-openshift-install agent create image --dir $ASSETS_DIR 
+openshift-install agent create image --dir $ASSETS_DIR --log-level debug
 
 # FIXME: to implement PXE 
 #openshift-install agent create pxe-files --dir $ASSETS_DIR

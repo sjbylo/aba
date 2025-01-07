@@ -14,7 +14,7 @@ source <(normalize-aba-conf)
 [ ! "$bundle_dest_path" ] && echo_red "Error: missing bundle archive filename! Example: /mnt/usb-media/my-bundle" >&2 && exit 1
 
 if [ "$bundle_dest_path" = "-" ]; then
-	echo_cyan "The bundle archive will be generated and written to standard output using the following parameters" >&2
+	echo_cyan "The bundle archive will be generated and written to standard output using the following parameters:" >&2
 else
 	echo_cyan "The bundle archive file will be created on disk using the following parameters:" >&2
 	bundle_dest_path="$bundle_dest_path-$ocp_version"
@@ -30,13 +30,25 @@ echo >&2
 # "-f, --force" means that "make bundle" can be run again & again and the image set config file will be re-created every time
 #force=1 # $force now comes from "--force" option
 if [ ! "$force" ]; then
+	ls mirror/save/mirror*seq*tar >/dev/null 2>&1 && image_set_files_exist=1
+
 	if [ -s mirror/save/imageset-config-save.yaml -o -f mirror/mirror.conf ]; then
-		echo_red "This repo is already in use!  Use the '--force' flag or use a fresh Aba repo or run 'aba reset' and try again!" >&2 >&2
+		echo_red "Warning: This repo is already in use!  Files exist under: mirror/save" >&2
+		echo -n "         "; ls mirror/save >&2
+		[ "$image_set_files_exist" ] && echo_red "         Image set 'seq' files also exist!" >&2
+		echo_red "         Back up any required files and try again with the '--force' flag to delete all existing files under mirror/save" >&2
+		echo_red "         Or, use a fresh Aba repo and try again!" >&2 
+		echo >&2
 
 		exit 1
 	fi
 else
-	rm -f mirror/save/imageset-config-save.yaml
+	if [ "$(ls mirror/save)" ]; then
+		echo_red "Deleteing all files under mirror/save! (force=true)" >&2
+		##ls mirror/save >&2
+		echo >&2
+		rm -rf mirror/save/*
+	fi
 fi
 
 #if [ -s mirror/save/imageset-config-save.yaml ]; then
