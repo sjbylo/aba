@@ -88,8 +88,8 @@ sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 #[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip    #\2/g" aba.conf
 [ "$ntp_ip" ] && test-cmd -m "Setting ntp_servers=$ntp_ip in aba.conf" aba --ntp $ntp_ip
 
-echo kiali-ossm > templates/operator-set-abatest 
-test-cmd -m "Setting op_sets=abatest in aba.conf" aba --op-sets abatest
+#echo kiali-ossm > templates/operator-set-abatest 
+#test-cmd -m "Setting op_sets=abatest in aba.conf" aba --op-sets abatest
 
 source <(normalize-aba-conf)
 
@@ -123,9 +123,9 @@ sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# 
 mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
 sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
-mylog "Setting op_sets=abatest in mirror/mirror.conf"
-sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
-echo kiali-ossm > templates/operator-set-abatest 
+#mylog "Setting op_sets=abatest in mirror/mirror.conf"
+#sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
+#echo kiali-ossm > templates/operator-set-abatest 
 
 ##mylog "Setting reg_root=~/my-quay-mirror"
 ##sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
@@ -145,7 +145,7 @@ source <(cd mirror; normalize-mirror-conf)
 
 echo
 echo mirror-conf:
-(cd mirror; normalize-mirror-conf | awk '(print $2}')
+(cd mirror; normalize-mirror-conf | awk '{print $2}')
 echo
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"

@@ -109,9 +109,9 @@ if [ ! "$1" ]; then
 	sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
 	#sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
 
-	mylog "Setting op_sets=abatest"
-	sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
-	echo kiali-ossm > templates/operator-set-abatest 
+	#mylog "Setting op_sets=abatest"
+	#sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
+	#echo kiali-ossm > templates/operator-set-abatest 
 
 	aba --dir cli ~/bin/govc
 
