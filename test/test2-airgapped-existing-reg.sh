@@ -180,7 +180,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror 
 # Now, this works
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq1 file" rm -f $subdir/aba/mirror/save/mirror_seq1_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq1 file" rm mirror/save/mirror_seq1_000000.tar
 
 ssh $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba compact $default_target" 
@@ -205,7 +205,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster with 'aba -
 # Now simulate adding more images to the mirror registry
 ######################
 
-mylog Adding ubi images to imageset conf file on `hostname`
+mylog Adding vote-app image to imageset conf file on `hostname`
 
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
@@ -222,7 +222,7 @@ test-cmd -r 10 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror sa
 
 mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Create tmp dir" mkdir -p ~/tmp
-test-cmd -m "rm and old tar file" rm -f ~/tmp/file.tar
+test-cmd -m "Delete the old tar file" rm -f ~/tmp/file.tar
 test-cmd -m "Create the tar file.  Should only contain (more-or-less) the seq2 file" aba --dir mirror inc out=~/tmp/file.tar
 test-cmd -m "Check size of tar file" "ls -l ~/tmp/file.tar"
 test-cmd -m "Copy tar file over to $int_bastion_hostname" scp ~/tmp/file.tar $TEST_USER@$int_bastion_hostname:
@@ -237,7 +237,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror regi
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file" rm -f $subdir/aba/mirror/save/mirror_seq2_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file" rm mirror/save/mirror_seq2_000000.tar
 
 # Is the cluster can be reached ... use existing cluster
 #if test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno --cmd 'oc get clusterversion'"; then
@@ -280,6 +280,8 @@ cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep advanc
 mylog "Checking for multicluster-engine         in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
 cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep multicluster-engine$ 
 
+mylog Appending redhat-operator-index:v$ocp_ver_major header into mirror/save/imageset-config-save.yaml on `hostname`
+
 cat >> mirror/save/imageset-config-save.yaml <<END
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
@@ -287,13 +289,11 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 # Append the correct values for each operator
+mylog Adding advanced-cluster-management  operator to mirror/save/imageset-config-save.yaml on `hostname`
 grep -A2 -e "name: advanced-cluster-management$" mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
+mylog Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`
 grep -A2 -e "name: multicluster-engine$"         mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
 
-#      - name: multicluster-engine
-#        channels:
-#        - name: stable-2.5
-#END
 
 test-cmd -r 10 3 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
 
@@ -308,7 +308,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry acces
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file" rm -f $subdir/aba/mirror/save/mirror_seq3_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file" rm mirror/save/mirror_seq3_000000.tar
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
 
