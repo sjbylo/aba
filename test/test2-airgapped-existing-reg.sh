@@ -167,7 +167,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
 
 # This user's action is expected to fail since there are no login credentials for the "existing reg."
-test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "aba --dir $subdir/aba load"
+test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba load"
 
 # But, now regcreds/ is created...
 mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $TEST_USER@$int_bastion_hostname"
@@ -185,7 +185,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load"
 
 test-cmd                                     -m "Delete loaded seq1 file" rm -v mirror/save/mirror_seq1_000000.tar
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq1 file on registry" rm -v subdir/aba/mirror/save/mirror_seq1_000000.tar
+##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq1 file on registry" rm -v subdir/aba/mirror/save/mirror_seq1_000000.tar
 
 ssh $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba compact $default_target" 
@@ -245,7 +245,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror regi
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
 test-cmd                                     -m "Delete loaded seq2 file" rm -v mirror/save/mirror_seq2_000000.tar
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file on registry" rm -v subdir/aba/mirror/save/mirror_seq2_000000.tar
+##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file on registry" rm -v subdir/aba/mirror/save/mirror_seq2_000000.tar
 
 # Is the cluster can be reached ... use existing cluster
 #if test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno --cmd 'oc get clusterversion'"; then
@@ -316,7 +316,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry acces
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load"
 
 test-cmd                                     -m "Delete loaded seq3 file" rm -v mirror/save/mirror_seq3_000000.tar
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file on registry" rm -v subdir/aba/mirror/save/mirror_seq3_000000.tar
+##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file on registry" rm -v subdir/aba/mirror/save/mirror_seq3_000000.tar
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
 
