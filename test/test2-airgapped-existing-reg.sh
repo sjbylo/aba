@@ -90,9 +90,9 @@ if [ ! "$1" ]; then
 	mylog "Setting ntp_servers=$ntp" 
 	[ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
 
-	mylog "Setting op_sets=abatest in aba.conf"
-	sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
-	echo kiali-ossm > templates/operator-set-abatest 
+	# Temp disabled mylog "Setting op_sets=abatest in aba.conf"
+	# Temp disabled sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
+	# Temp disabled echo kiali-ossm > templates/operator-set-abatest 
 
 	source <(normalize-aba-conf)
 
@@ -109,9 +109,11 @@ if [ ! "$1" ]; then
 	sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
 	#sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf
 
-	#mylog "Setting op_sets=abatest"
-	#sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
-	#echo kiali-ossm > templates/operator-set-abatest 
+	# Repeated here? ########## See above!
+	####mylog "Setting op_sets=abatest"
+	####sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
+	####echo kiali-ossm > templates/operator-set-abatest 
+	# Repeated here? ##########
 
 	aba --dir cli ~/bin/govc
 
@@ -154,7 +156,8 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 test-cmd -r 10 3 -m "Saving images to local disk on `hostname`" aba save
 
 # Smoke test!
-[ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
+###[ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
+test-cmd -m "Checking existance of file mirror/save/mirror_seq1_000000.tar" test -s mirror/save/mirror_seq1_000000.tar 
 
 mylog "'aba tar' and copy (ssh) files over to internal bastion: $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname" "aba -d mirror tar --out - | ssh $TEST_USER@$int_bastion_hostname -- tar -C $subdir -xvf -"
@@ -163,7 +166,8 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
 
-test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "aba --dir $subdir/aba load" # This user's action is expected to fail since there are no login credentials for the "existing reg."
+# This user's action is expected to fail since there are no login credentials for the "existing reg."
+test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Not a directory')" "aba --dir $subdir/aba load"
 
 # But, now regcreds/ is created...
 mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $TEST_USER@$int_bastion_hostname"
@@ -180,7 +184,8 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror 
 # Now, this works
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq1 file" rm mirror/save/mirror_seq1_000000.tar
+test-cmd                                     -m "Delete loaded seq1 file" rm -v mirror/save/mirror_seq1_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq1 file on registry" rm -v subdir/aba/mirror/save/mirror_seq1_000000.tar
 
 ssh $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba compact $default_target" 
@@ -220,16 +225,18 @@ test-cmd -r 10 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror sa
 ### mylog "'scp mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
 ### scp mirror/save/mirror_seq2.tar $TEST_USER@$int_bastion_hostname $subdir/aba/mirror/save
 
+test-cmd -m "Checking existance of file mirror/save/mirror_seq2_000000.tar" test -s mirror/save/mirror_seq2_000000.tar 
+
 mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Create tmp dir" mkdir -p ~/tmp
-test-cmd -m "Delete the old tar file" rm -f ~/tmp/file.tar
+test-cmd -m "Delete the old tar file (if any)" rm -v -f ~/tmp/file.tar
 test-cmd -m "Create the tar file.  Should only contain (more-or-less) the seq2 file" aba --dir mirror inc out=~/tmp/file.tar
 test-cmd -m "Check size of tar file" "ls -l ~/tmp/file.tar"
 test-cmd -m "Copy tar file over to $int_bastion_hostname" scp ~/tmp/file.tar $TEST_USER@$int_bastion_hostname:
-test-cmd -m "Remove local tar file" rm -f ~/tmp/file.tar  # Remove file on client side
+test-cmd -m "Remove local tar file" rm -v ~/tmp/file.tar  # Remove file on client side
 mylog "The following untar command should unpack the file aba/mirror/save/mirror_seq2.tar only"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Removing tar file" "rm -f file.tar"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Removing tar file" "rm -v file.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_seq2_000000.tar'" ls -lh $subdir/aba/mirror/save/mirror_seq2_000000.tar
 
@@ -237,7 +244,8 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror regi
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file" rm mirror/save/mirror_seq2_000000.tar
+test-cmd                                     -m "Delete loaded seq2 file" rm -v mirror/save/mirror_seq2_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file on registry" rm -v subdir/aba/mirror/save/mirror_seq2_000000.tar
 
 # Is the cluster can be reached ... use existing cluster
 #if test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno --cmd 'oc get clusterversion'"; then
@@ -289,10 +297,9 @@ cat >> mirror/save/imageset-config-save.yaml <<END
 END
 
 # Append the correct values for each operator
-mylog Adding advanced-cluster-management  operator to mirror/save/imageset-config-save.yaml on `hostname`
-grep -A2 -e "name: advanced-cluster-management$" mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
-mylog Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`
-grep -A2 -e "name: multicluster-engine$"         mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml >> mirror/save/imageset-config-save.yaml
+test-cmd -m "Adding advanced-cluster-management  operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: advanced-cluster-management$' mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
+
+test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
 
 
 test-cmd -r 10 3 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
@@ -302,22 +309,20 @@ test-cmd -r 10 3 -m "Saving advanced-cluster-management images to local disk" "a
 mylog "'scp mirror/save/mirror_seq3.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Copy seq3 file to $int_bastion_hostname" scp mirror/save/mirror_seq3*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file 'mirror/save/mirror_seq3_000000.tar'" ls -lh $subdir/aba/mirror/save/mirror_seq3_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file 'mirror/save/mirror_seq3_000000.tar' on remote host" ls -lh $subdir/aba/mirror/save/mirror_seq3_000000.tar
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file" rm mirror/save/mirror_seq3_000000.tar
+test-cmd                                     -m "Delete loaded seq3 file" rm -v mirror/save/mirror_seq3_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file on registry" rm -v subdir/aba/mirror/save/mirror_seq3_000000.tar
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
 
 test-cmd -m "Pausing 30s" sleep 30
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests -n openshift-marketplace'" | grep advanced-cluster-management
-
-#### TESTING ACM + MCH 
-# 30 attempts, always waiting 20s (fixed value) secs between attempts
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
 
 # Need to fetch the actual channel name from the operator catalog that's in use
 acm_channel=$(cat mirror/.redhat-operator-index-v$ocp_ver_major | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
@@ -330,26 +335,16 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub"
 
 test-cmd -m "Leave time for ACM to deploy ..." sleep 30
 
-# THIS TEST ALWAYS EXIT 0 # test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Check Multiclusterhub status is 'Running'" "aba --dir $subdir/aba/sno --cmd 'oc get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase} | grep -i running'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Wait for hub status is 'Running'" "while ! oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; sleep 10; done"
-###test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Output hub status" "oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 #### TESTING ACM + MCH 
 
-# Apply config, but don't wait for it to complete!
+# Apply NTP config, but don't wait for it to complete!
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Initiate NTP config but not wait for completion" "aba --dir $subdir/aba/sno day2-ntp"
 
 # Keep it # test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting sno cluster" "aba --dir $subdir/aba/sno delete" 
-####test-cmd -h $TEST_USER@$int_bastion_hostname -m "Stopping sno cluster" "yes|aba --dir $subdir/aba/sno shutdown" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "If cluster up, stopping cluster" "cd $subdir/aba/;. <(aba -d sno shell) && . <(aba --dir sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
 
 ######################
-
-## keep it up # test-cmd -m "Clean up 'existing' mirror registry on internal bastion" test/reg-test-uninstall-remote.sh $int_bastion_hostname
-
-#test-cmd "aba reset --force"
-
-## keep it up # aba --dir ~/aba reset --force
-## keep it up # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 
 mylog
 mylog "===> Completed test $0"
