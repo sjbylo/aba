@@ -53,9 +53,8 @@ echo
 # Set up script to help for manual re-sync
 # --continue-on-error : do not use this option. In testing the registry became unusable! 
 # Note: If 'make save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
-cmd="oc-mirror $tls_verify_opts --from=save docker://$reg_host:$reg_port/$reg_path"
-#echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
-echo "umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
+cmd="oc-mirror $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
+echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
 
 # This loop is based on the "retry=?" value
 try=1
