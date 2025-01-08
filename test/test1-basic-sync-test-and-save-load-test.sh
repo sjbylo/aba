@@ -230,6 +230,8 @@ test-cmd -i -m "Deleting sno cluster (if it was created)" aba --dir sno delete
 #  This will save the images, install (the reg.) then load the images
 test-cmd -r 10 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
 
+# Should we delete the seq file here? #FIXME
+
 rm -rf sno
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
 test-cmd -m "Delete cluster (if needed)" aba --dir sno delete 
