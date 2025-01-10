@@ -18,7 +18,7 @@ scripts/create-containers-auth.sh
 # Generate first imageset-config file for saving images.  
 # Do not overwrite the file if it has been modified. Allow users to add images and operators to imageset-config-save.yaml and run "make save" again. 
 if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-config-save.yaml ]; then
-	#rm -rf save/*  # Do not do this.  There may be image set files in thie dir which are still needed. 
+	#rm -rf save/*  # Do not do this.  There may be image set archive files in thie dir which are still needed. 
 
 	# Check disk space under save/. 
 	avail=$(df -m save | awk '{print $4}' | tail -1)

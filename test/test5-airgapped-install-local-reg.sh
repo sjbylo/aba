@@ -148,7 +148,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Install aba script"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Loading cluster images into mirror on internal bastion" "aba -d $subdir/aba load" 
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set file to make space: '$subdir/aba/mirror/save/mirror_seq1_000000.tar'" "rm -f $subdir/aba/mirror/save/mirror_seq1_000000.tar" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set archive file to make space: '$subdir/aba/mirror/save/mirror_seq1_000000.tar'" "rm -f $subdir/aba/mirror/save/mirror_seq1_000000.tar" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Tidying up internal bastion" "rm -rf $subdir/aba/sno" 
 

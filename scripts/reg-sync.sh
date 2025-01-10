@@ -70,8 +70,8 @@ echo
 
 # Set up script to help for manual re-sync
 # --continue-on-error : do not use this option. In testing the registry became unusable! 
-#cmd="oc-mirror $tls_verify_opts --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
-cmd="oc-mirror                  --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
+#cmd="oc-mirror --v1 $tls_verify_opts --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
+cmd="oc-mirror --v1                  --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
 echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 
 # This loop is based on the "retry=?" value

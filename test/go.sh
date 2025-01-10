@@ -47,7 +47,7 @@ time (
 	time test/test5-airgapped-install-local-reg.sh &&		notify.sh "Success test5 (`date`)" && \
 	true
 ) | tee -a test/output.log
-ret=${PIPESTATUS[0]}
+ret=${PIPESTATUS[0]}  # Catpure only the result of the first command in the previous pipeline, i.e. not the "tee" command
 if [ $ret -eq 0 ]; then
 	echo SUCCESS
 	notify.sh "SUCCESS (`date`)" || true

@@ -587,7 +587,7 @@ aba mon
 
 - Use PXE boot as alternative to ISO upload.
 
-- ~~Make it easier to populate the imageset config file with current values, i.e. download the values from the latest catalog and insert them into the image set file.~~
+- ~~Make it easier to populate the imageset config file with current values, i.e. download the values from the latest catalog and insert them into the image set archive file.~~
 
 
 [Back to top](#who-should-use-aba)
