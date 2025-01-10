@@ -29,25 +29,28 @@ echo >&2
 # Check if the repo is alreay in use, e.g. we don't want mirror.conf in the bundle
 # "-f, --force" means that "make bundle" can be run again & again and the image set config file will be re-created every time
 #force=1 # $force now comes from "--force" option
-if [ ! "$force" ]; then
-	ls mirror/save/mirror*seq*tar >/dev/null 2>&1 && image_set_files_exist=1
+if [ -d mirror/save ]; then
+	if [ ! "$force" ]; then
+		# Detect if any image set archive files exist
+		ls mirror/save/mirror*seq*tar >/dev/null 2>&1 && image_set_files_exist=1
 
-	if [ -s mirror/save/imageset-config-save.yaml -o -f mirror/mirror.conf ]; then
-		echo_red "Warning: This repo is already in use!  Files exist under: mirror/save" >&2
-		echo -n "         "; ls mirror/save >&2
-		[ "$image_set_files_exist" ] && echo_red "         Image set 'seq' files also exist!" >&2
-		echo_red "         Back up any required files and try again with the '--force' flag to delete all existing files under mirror/save" >&2
-		echo_red "         Or, use a fresh Aba repo and try again!" >&2 
-		echo >&2
+		if [ -s mirror/save/imageset-config-save.yaml -o -f mirror/mirror.conf -o "$image_set_files_exist" ]; then
+			echo_red "Warning: This repo is already in use!  Files exist under: mirror/save" >&2
+			echo -n "         "; ls mirror/save >&2
+			[ "$image_set_files_exist" ] && echo_red "         Image set 'seq' files also exist!" >&2
+			echo_red "         Back up any required files and try again with the '--force' flag to delete all existing files under mirror/save" >&2
+			echo_red "         Or, use a fresh Aba repo and try again!" >&2 
+			echo >&2
 
-		exit 1
-	fi
-else
-	if [ "$(ls mirror/save)" ]; then
-		echo_red "Deleteing all files under mirror/save! (force=true)" >&2
-		##ls mirror/save >&2
-		echo >&2
-		rm -rf mirror/save/*
+			exit 1
+		fi
+	else
+		if [ "$(ls mirror/save)" ]; then
+			echo_red "Deleteing all files under mirror/save! (force=true)" >&2
+			##ls mirror/save >&2
+			echo >&2
+			rm -rf mirror/save/*
+		fi
 	fi
 fi
 
@@ -71,7 +74,7 @@ if [ "$bundle_dest_path" = "-" ]; then
 fi
 
 if files_on_same_device mirror $bundle_dest_path; then
-	echo_cyan "Creating 'minor' bundle archive (because the image set files are on the same file-system) ..."
+	echo_cyan "Creating 'minor' bundle archive (because the image set archive files are on the same file-system) ..."
 	make download save tarrepo out="$bundle_dest_path" retry=7	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
 else
 	echo_cyan "Creating 'full' bundle archive (assuming destination file is on portable media or a different file-system) ..."
