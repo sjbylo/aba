@@ -41,7 +41,7 @@ draw-line() {
 cleanup() {
 	if [[ -n "$sub_pid" ]]; then
 		echo Process is:
-		ps -ef | grep $sub_pid
+		ps -p $sub_pid -o cmd=
 		echo "Interrupt received. Terminating command $sub_pid ..."
 		kill "$sub_pid" 2>/dev/null
 		wait "$sub_pid" 2>/dev/null
@@ -52,6 +52,9 @@ cleanup() {
 		exit 1
 	fi
 }
+
+# Trap Ctrl-C (SIGINT) and call cleanup function
+trap cleanup SIGINT
 
 # -h remote <host or ip> to run the test on (optional)
 # -r <count> <backoff>  (optional)
@@ -64,9 +67,6 @@ test-cmd() {
 	local host=localhost	# def. host to run on
 
 	#trap - ERR  # FIXME: needed?
-
-	# Trap Ctrl-C (SIGINT) and call cleanup function
-	trap cleanup SIGINT
 
 	while echo $1 | grep -q ^-
 	do
@@ -110,6 +110,7 @@ test-cmd() {
 				eval "$cmd" &
 			fi
 			sub_pid=$!  # Capture the PID of the subprocess
+			echo "> waiting for $(ps -p $sub_pid -o cmd=)"
 			wait "$sub_pid"
 			ret=$?
 
@@ -119,8 +120,17 @@ test-cmd() {
 			echo Return value = $ret
 
 			echo_cyan "Attempt ($i/$tot_cnt) failed with error $ret for command \"$cmd\""
+			[ $i -ge $tot_cnt ] && echo "Giving up with command \"$cmd\"!" && break
+
+			
+			# For first failure, send all logs 
+			if [ $i -eq 1 ]; then
+				( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Failed cmd: $cmd" || true
+			else
+				( notify.sh "Failed cmd: $cmd" || true )
+			fi
+
 			let i=$i+1
-			[ $i -gt $tot_cnt ] && echo "Giving up with command \"$cmd\"!" && break
 
 			echo "Next attempt will be ($i/$tot_cnt)"
 			echo "Sleeping $sleep_time seconds ..."
@@ -129,10 +139,7 @@ test-cmd() {
 			#trap cleanup SIGINT
 			sleep_time=`expr $sleep_time + $backoff \* 8`
 
-			#echo_cyan "$(date "+%b %e %H:%M:%S") Attempting command again ($i/$tot_cnt) - ($cmd)" | tee -a test/test.log
 			log-test -t "Attempting command again ($i/$tot_cnt) - ($cmd)"
-
-			( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Failed cmd: $cmd" || true
 		done
 
 		[ "$reset_xtrace" ] && set -x

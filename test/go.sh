@@ -34,19 +34,24 @@ podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/sh
 
 ###doNotify() { which notify.sh >/dev/null && notify.sh "$*" || true; }
 
-time (
+# This output is picked up for any error notifications
+script test/output.log
+
+time {
 	echo "=========================================================================="  	>> test/test.log
 	echo "=========================================================================="  	>> test/test.log
 	echo "Running: $0 $*                                                            "  	>> test/test.log
 	echo "=========================================================================="  	>> test/test.log
 	echo "START TESTS @ $(date)" 								>> test/test.log
 	echo "==========================================================================" 	>> test/test.log
+
+	# If any of these following scripts fail, then this section will exit 1
 	time test/test3-using-public-quay-reg.sh &&			doNotify "Success test3 (`date`)" && \
 	time test/test1-basic-sync-test-and-save-load-test.sh &&	doNotify "Success test1 (`date`)" && \
 	time test/test2-airgapped-existing-reg.sh &&			doNotify "Success test2 (`date`)" && \
 	time test/test5-airgapped-install-local-reg.sh &&		doNotify "Success test5 (`date`)" && \
-	exit $? || exit $?
-) 2>&1 | tee test/output.log
+	true
+}
 ret=$?
 if [ $ret -eq 0 ]; then
 	echo SUCCESS
