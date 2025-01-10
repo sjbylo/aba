@@ -32,9 +32,6 @@ export target_full=    # Build only iso
 echo "Removing all traces of images from this host!"
 podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage
 
-# This output is picked up for any error notifications
-script test/output.log
-
 time (
 	echo "=========================================================================="  	>> test/test.log
 	echo "=========================================================================="  	>> test/test.log
