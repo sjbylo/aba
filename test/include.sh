@@ -40,7 +40,9 @@ draw-line() {
 # Define a cleanup function to handle Ctrl-C
 cleanup() {
 	if [[ -n "$sub_pid" ]]; then
-		echo "Interrupt received. Terminating command ..."
+		echo Process is:
+		ps -ef | grep $sub_pid
+		echo "Interrupt received. Terminating command $sub_pid ..."
 		kill "$sub_pid" 2>/dev/null
 		wait "$sub_pid" 2>/dev/null
 		echo "Test command terminated."
@@ -50,9 +52,6 @@ cleanup() {
 		exit 1
 	fi
 }
-
-# Trap Ctrl-C (SIGINT) and call cleanup function
-trap cleanup SIGINT
 
 # -h remote <host or ip> to run the test on (optional)
 # -r <count> <backoff>  (optional)
@@ -65,6 +64,9 @@ test-cmd() {
 	local host=localhost	# def. host to run on
 
 	#trap - ERR  # FIXME: needed?
+
+	# Trap Ctrl-C (SIGINT) and call cleanup function
+	trap cleanup SIGINT
 
 	while echo $1 | grep -q ^-
 	do
@@ -160,6 +162,9 @@ test-cmd() {
 			echo "Running new command: $cmd"
 		fi
 	done
+
+	# Remember we don't to process this signal after command execution.
+	trap - SIGINT
 
 	echo Returning val $ret
 	return $ret
