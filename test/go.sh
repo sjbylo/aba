@@ -32,12 +32,10 @@ export target_full=    # Build only iso
 echo "Removing all traces of images from this host!"
 podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage
 
-###doNotify() { which notify.sh >/dev/null && notify.sh "$*" || true; }
-
 # This output is picked up for any error notifications
 script test/output.log
 
-time {
+time (
 	echo "=========================================================================="  	>> test/test.log
 	echo "=========================================================================="  	>> test/test.log
 	echo "Running: $0 $*                                                            "  	>> test/test.log
@@ -46,13 +44,13 @@ time {
 	echo "==========================================================================" 	>> test/test.log
 
 	# If any of these following scripts fail, then this section will exit 1
-	time test/test3-using-public-quay-reg.sh &&			doNotify "Success test3 (`date`)" && \
-	time test/test1-basic-sync-test-and-save-load-test.sh &&	doNotify "Success test1 (`date`)" && \
-	time test/test2-airgapped-existing-reg.sh &&			doNotify "Success test2 (`date`)" && \
-	time test/test5-airgapped-install-local-reg.sh &&		doNotify "Success test5 (`date`)" && \
+	time test/test3-using-public-quay-reg.sh &&			notify.sh "Success test3 (`date`)" && \
+	time test/test1-basic-sync-test-and-save-load-test.sh &&	notify.sh "Success test1 (`date`)" && \
+	time test/test2-airgapped-existing-reg.sh &&			notify.sh "Success test2 (`date`)" && \
+	time test/test5-airgapped-install-local-reg.sh &&		notify.sh "Success test5 (`date`)" && \
 	true
-}
-ret=$?
+) | tee -a test/output.log
+ret=${PIPESTATUS[0]}
 if [ $ret -eq 0 ]; then
 	echo SUCCESS
 	notify.sh "SUCCESS (`date`)" || true
