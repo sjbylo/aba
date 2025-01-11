@@ -38,7 +38,7 @@ draw-line() {
 }
 
 # Define a cleanup function to handle Ctrl-C
-cleanup() {
+cleanup_tests() {
 	if [[ -n "$sub_pid" ]]; then
 		echo Process is:
 		ps -p $sub_pid -o cmd=
@@ -53,8 +53,8 @@ cleanup() {
 	fi
 }
 
-# Trap Ctrl-C (SIGINT) and call cleanup function
-trap cleanup SIGINT
+# Trap Ctrl-C (SIGINT) and call cleanup_tests function
+trap cleanup_tests SIGINT
 
 # -h remote <host or ip> to run the test on (optional)
 # -r <count> <backoff>  (optional)
@@ -136,7 +136,7 @@ test-cmd() {
 			echo "Sleeping $sleep_time seconds ..."
 			#trap - SIGINT  # This will cause Ctl-C to quit everything during sleep $sleep_time
 			sleep $sleep_time
-			#trap cleanup SIGINT
+			#trap cleanup_tests SIGINT
 			sleep_time=`expr $sleep_time + $backoff \* 8`
 
 			log-test -t "Attempting command again ($i/$tot_cnt) - ($cmd)"
