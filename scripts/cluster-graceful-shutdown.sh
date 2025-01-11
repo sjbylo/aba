@@ -122,3 +122,4 @@ if [ "$wait" -a -s vmware.conf ]; then
 	until make -s ls | grep poweredOn | wc -l | grep -q ^0$; do sleep 10; done
 fi
 
+exit 0
