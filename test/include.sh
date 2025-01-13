@@ -127,7 +127,8 @@ test-cmd() {
 			if [ $i -eq 1 ]; then
 				( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Failed cmd: $cmd" || true
 			else
-				( notify.sh "Failed cmd: $cmd" || true )
+				( echo -e "test.log:\n"; tail -1 test/test.log; echo -e "\noutput.log:\n"; tail -1 test/output.log ) | notify.sh "Failed cmd: $cmd" || true
+				#( notify.sh "Failed cmd: $cmd" || true )
 			fi
 
 			let i=$i+1
@@ -235,6 +236,7 @@ cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
 set -ex
 timedatectl
 dnf install chrony podman -y
+systemctl start chronyd
 chronyc sources -v
 chronyc add server 10.0.1.8 iburst
 timedatectl set-timezone Asia/Singapore
