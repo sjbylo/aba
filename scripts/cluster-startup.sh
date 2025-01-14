@@ -88,10 +88,18 @@ all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditi
 check_and_approve_csrs() {
 	# Check any pending CSRs
 	CSRs=$($OC get csr -A --no-headers 2>/dev/null | grep -i pending | awk '{print $1}')
-	while [ "$CSRs" ]
+	[ ! "$CSRs" ] && return 0
+
+	# Ensure CSRs are checked for at least about 3 mins (180s) 
+	t=0
+	while [ $t -lt 180 ]
 	do
-		$OC adm certificate approve $CSRs
-		sleep 30
+		if [ "$CSRs" ]; then
+			$OC adm certificate approve $CSRs
+			t=0
+		fi
+			let t=$t+10
+		sleep 10
 		CSRs=$($OC get csr -A --no-headers 2>/dev/null | grep -i pending | awk '{print $1}')
 	done
 }
@@ -134,10 +142,12 @@ if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
 	if ! try_cmd -q 5 0 60 "curl --retry 2 -skL $console | grep 'Red Hat OpenShift'"; then
 		echo "Giving up waiting for the console!"
 		#exit 0
+	else
+		echo_green "Cluster console is accessible at $console"
 	fi
+else
+	echo_green "Cluster console is accessible at $console"
 fi
-
-echo_green "Cluster console is accessible at $console"
 
 if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
 	echo "Waiting for all cluster operators ..."

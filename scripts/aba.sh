@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250114115045
+ABA_VERSION=20250115074701
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
 
@@ -14,7 +14,7 @@ uname -o | grep -q "^Darwin$" && echo "Please run aba on RHEL or Fedora. Most te
 export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
 mkdir -p $tmp_dir 
 cleanup() {
-	[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..."
+	[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..." >&2
 	rm -rf "$tmp_dir"
 }
 # Set up the trap to call cleanup on script exit or termination

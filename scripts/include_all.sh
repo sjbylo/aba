@@ -23,7 +23,7 @@ if [ ! "$tmp_dir" ]; then
 	export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
 	mkdir -p $tmp_dir 
 	cleanup() {
-		[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..."
+		[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..." >&2
 		rm -rf "$tmp_dir"
 	}
 	
