@@ -7,7 +7,7 @@
 
 #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
 export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
-export TEST_USER=root
+export TEST_USER=$(whoami)
 
 # This is for testing a specific branch ($1) directly from "git clone", otherwise it will test
 # the local dir. ($PWD)
@@ -46,7 +46,7 @@ time (
 	time test/test2-airgapped-existing-reg.sh &&			notify.sh "Success test2 (`date`)" && \
 	time test/test5-airgapped-install-local-reg.sh &&		notify.sh "Success test5 (`date`)" && \
 	true
-) | tee -a test/output.log
+) 2>&1 | stdbuf -oL -eL tee -a test/output.log    # stdbuf tries to put tee into line buffer mode to ensure output is written to disk
 ret=${PIPESTATUS[0]}  # Catpure only the result of the first command in the previous pipeline, i.e. not the "tee" command
 if [ $ret -eq 0 ]; then
 	echo SUCCESS

@@ -5,6 +5,7 @@ endif
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 debug   ?=
+force   ?= no
 
 all: mirror
 
@@ -107,7 +108,7 @@ mirror-registry.tar.gz: ## Download the mirror-registry tarball
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
 #mirror.conf: .init                     ../aba.conf   ## Configure the mirror.conf file.
 mirror.conf: ../aba.conf .init                        ## Configure the mirror.conf file.
-	$(SCRIPTS)/create-mirror-conf.sh $(debug)
+	$(SCRIPTS)/create-mirror-conf.sh -f $(force) $(debug)
 
 mirror: install
 install: .installed
