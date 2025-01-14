@@ -89,8 +89,18 @@ Examples:
     cd aba
 
   Create install bundle for fully disconnected:
-    aba bundle --force -c fast -v latest -S ~/.pull-secret.json -P ocp ocpv mesh3 -O web-terminal -o /path/to/portable/media/ocp-install-bundle
+    aba bundle --force -c stable -v latest -S ~/.pull-secret.json -P ocp ocpv mesh3 -O web-terminal -o /path/to/portable/media/ocp-install-bundle
     # Now transfer the ocp-install-bundle* tar file to air-gapped env. Then unpack the tar and run 'aba/install'.
+
+ Fully disconnected mode:
+
+  Extracting the bundle on internal bastion:
+    tar xvf ocp-install-bundle-4.17.11.tar 
+    cd aba
+    ./install
+    aba 
+
+ Connected or fully disconnected mode:
 
   Configure mirror registry on localhost with FQDN registry.example.com:
     aba mirror -H registry.example.com 
@@ -98,17 +108,23 @@ Examples:
   Configure mirror registry on remote host with FQDN registry.example.com:
     aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
 
+ Connected mode:
+
   Configure mirror registry on localhost with FQDN registry.example.com and sync the images to the mirror:
     aba sync -H registry.example.com 
 
   Configure mirror on localhost with FQDN registry.example.com and sync the images & operators ('operator sets' & individual operators) to the mirror:
-    aba sync -H registry.example.com --op-sets ocpv odf --ops web-terminal
+    aba sync -H registry.example.com --op-sets ocp ocpv --ops web-terminal
+
+ Fully disconnected mode:
 
   Save images to local disk (use above 'bundle' command instead):
     aba save
 
   Configure mirror registry on localhost with FQDN registry.example.com and load the (previously saved) images to the mirror:
     aba load -H registry.example.com 
+
+ Connected or fully disconnected mode:
 
   Install OpenShift:
     aba cluster --name mycluster --type standard 
