@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250107224313
+ABA_VERSION=20250114093611
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
 
@@ -9,6 +9,16 @@ uname -o | grep -q "^Darwin$" && echo "Please run aba on RHEL or Fedora. Most te
 
 # Check sudo or root access 
 [ "$(sudo id -run)" != "root" ] && echo "Please run aba as root or configure passwordless sudo, then try again." >&2 && exit 1
+
+# Set up a temp directory
+export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
+mkdir -p $tmp_dir 
+cleanup() {
+	echo "$0: Cleaning up temporary directory [$tmp_dir] ..."
+	rm -rf "$tmp_dir"
+}
+# Set up the trap to call cleanup on script exit or termination
+trap cleanup EXIT
 
 # Having $1 = --dir is an exception only, $1 can point to the top-level repo dir only
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
@@ -482,7 +492,6 @@ if [ ! -f .bundle ]; then
 	# Fresh GitHub clone of Aba repo detected!
 
 	echo -n "Checking Internet connectivity ..."
-	#if ! curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > $tmp_dir/release.txt; then
 	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
@@ -517,7 +526,6 @@ if [ ! -f .bundle ]; then
 	##############################################################################################################################
 	# Fetch release.txt
 
-	#if ! curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt > $tmp_dir/release.txt; then
 	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Failed to access https://mirror.openshift.com" >&2
@@ -723,7 +731,8 @@ else
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_seq*tar 2>/dev/null)" ]; then
 		echo
-		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'aba save') are copied to the 'aba/mirror/save' directory before following the instructions below!" >&2
+		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'aba save' or 'aba bundle') are" >&2
+		echo_red "         copied to the 'aba/mirror/save' directory before following the instructions below!" >&2
 		echo_red "         For example, run the command: cp /path/to/portable/media/mirror_seq*tar mirror/save" >&2
 	fi
 

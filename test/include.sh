@@ -114,6 +114,7 @@ test-cmd() {
 			wait "$sub_pid"
 			ret=$?
 
+			[ $i -gt 1 ] && notify.sh "Command ok: $cmd (`date`)" || true  # Only success after failure
 			[ $ret -eq 0 ] && return 0 # Command successful 
 			[ $ret -eq 130 ] && break  # on Ctrl-C *during command execution*
 
@@ -125,9 +126,9 @@ test-cmd() {
 			
 			# For first failure, send all logs 
 			if [ $i -eq 1 ]; then
-				( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Failed cmd: $cmd" || true
+				( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Command failed: $cmd" || true
 			else
-				( echo -e "test.log:\n"; tail -1 test/test.log; echo -e "\noutput.log:\n"; tail -1 test/output.log ) | notify.sh "Failed cmd: $cmd" || true
+				( echo -e "test.log:\n"; tail -1 test/test.log; echo -e "\noutput.log:\n"; tail -1 test/output.log ) | notify.sh "Command failed: $cmd" || true
 				#( notify.sh "Failed cmd: $cmd" || true )
 			fi
 
