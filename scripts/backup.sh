@@ -89,11 +89,12 @@ file_list=$(find		\
 	-newer ~/.aba.previous.backup 				\
 )
 
+# See the "tar cf" command below and consider....
 # Note, don't copy over any of the ".init", ".installed", ".rpms" flag files etc, since these components are needed on the internal bastion
-# Don't include/compress the 'image set' tar files since we have them compressed already.
-# Don't need to copy over the oc-mirror-workspace dirs.  The needed yaml files for 'make day2' are created at 'make load'. THIS IS WRONG
+# Don't include/compress the 'image set' tar files since they are compressed already!
+# Don't need to copy over the oc-mirror-workspace dirs.  The needed yaml files for 'make day2' are created at 'make load'. THIS IS WRONG?: #FIXME
 # FIXME: Need to consider how to copy over the meta date (oc-mirror-workspace), or we leave it to the user to do.
-# Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop.
+# Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop since it's activly written to. 
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
 [ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_seq.*.tar$") || true  # 'true' needed!

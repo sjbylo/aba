@@ -104,7 +104,7 @@ test-cmd() {
 		do
 			if [ "$host" != "localhost" ]; then
 				echo "Running command: \"$cmd\" on host $host"
-				ssh -o LogLevel=ERROR $host -- "export TERM=xterm; $cmd" &    # TERM set just for testing purposes
+				ssh -o LogLevel=ERROR $host -- "export TERM=xterm; $cmd" &    # For testing, TERM sometimes needs to be set to anything
 			else
 				echo "Running command: \"$cmd\" on localhost"
 				eval "$cmd" &
