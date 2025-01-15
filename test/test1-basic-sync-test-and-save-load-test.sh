@@ -113,15 +113,15 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 #####################################################################################################################
 
 # Create and edit mirror.conf 
-test-cmd -m "Confgure mirror to install registry on (remote) $int_bastion_hostname" aba --dir mirror mirror.conf
+# TEST ADDING ONE-LINER # test-cmd -m "Confgure mirror to install registry on (remote) $int_bastion_hostname" aba --dir mirror mirror.conf
 
 #test-cmd -m "Setting 'reg_host' to '$int_bastion_hostname' in file 'mirror/mirror.conf'" aba -H $int_bastion_hostname
-mylog "Setting 'reg_host' to '$int_bastion_hostname' in file 'mirror/mirror.conf'"
-sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
+# TEST ADDING ONE-LINER # mylog "Setting 'reg_host' to '$int_bastion_hostname' in file 'mirror/mirror.conf'"
+# TEST ADDING ONE-LINER # sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
 
 ##test-cmd -m "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" aba -k "~/.ssh/id_rsa"
-mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
-sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
+# TEST ADDING ONE-LINER # mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
+# TEST ADDING ONE-LINER # sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 #mylog "Setting op_sets=abatest in mirror/mirror.conf"
 #sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
@@ -141,19 +141,25 @@ sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	  
 #####################################################################################################################
 #####################################################################################################################
 
-source <(cd mirror; normalize-mirror-conf)
+# TEST ADDING ONE-LINER # source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* calues (see below)
 
-echo
-echo mirror-conf:
-(cd mirror; normalize-mirror-conf | awk '{print $2}')
-echo
+# TEST ADDING ONE-LINER # echo
+# TEST ADDING ONE-LINER # echo mirror-conf:
+# TEST ADDING ONE-LINER # (cd mirror; normalize-mirror-conf | awk '{print $2}')
+# TEST ADDING ONE-LINER # echo
 
-mylog "Using remote container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
+# TEST ADDING ONE-LINER # mylog "Using remote container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 ######################
 # This will install mirror and sync images
-mylog "Installing Quay mirror registry at $reg_host:$reg_port and then ..."
-test-cmd -r 10 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync
+mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key ~/.ssh/id_rsa and then ..."
+test-cmd -r 10 3 -m "Syncing images from external network to internal mirror registry (one command)" aba --dir mirror sync -H $int_bastion_hostname -k ~/.ssh/id_rsa
+
+source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* calues (see below)
+echo
+echo mirror.conf values:
+(cd mirror; normalize-mirror-conf | awk '{print $2}')
+echo
 
 # Install yq for below test only!
 which yq || (
@@ -311,7 +317,8 @@ aba --dir sno clean # This should clean up the cluster and 'make' should start f
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
 
 ### Let it be ## test-cmd -m "Deleting cluster" aba --dir sno delete.  -i ignore the return value, i.e. if cluster not running/accessible 
-test-cmd -i -m "If cluster up, stopping cluster" ". <(aba -sC sno shell) && . <(aba -sC sno login) && yes|aba --dir sno shutdown --wait"
+#test-cmd -i -m "If cluster up, stopping cluster" ". <(aba -sC sno shell) && . <(aba -sC sno login) && yes|aba --dir sno shutdown --wait"
+test-cmd -i -m "If cluster up, stopping cluster" "yes|aba --dir sno shutdown --wait"
 
 ### FIXME mylog "Removing vmware config file to simulate 'bare metal' and iso creation"
 mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' file to simulate 'bare metal' and iso creation"

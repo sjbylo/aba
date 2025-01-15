@@ -327,11 +327,14 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Checking available Oper
 # Need to fetch the actual channel name from the operator catalog that's in use
 acm_channel=$(cat mirror/.redhat-operator-index-v$ocp_ver_major | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
 [ "$acm_channel" ] && test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" $subdir/aba/test/acm-subs.yaml"
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install ACM Operator" "aba --dir $subdir/aba/sno --cmd 'oc apply -f ../test/acm-subs.yaml'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install ACM Operator" "i=0; until oc apply -f $subdir/aba/test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n "$i "; sleep 10; done"
+#test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install ACM Operator" "aba --dir $subdir/aba/sno --cmd 'i=0; until oc apply -f ../test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n "$i "; sleep 10; done'"
 
-test-cmd sleep 60
+###test-cmd sleep 60
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub" "aba --dir $subdir/aba/sno --cmd 'oc apply -f ../test/acm-mch.yaml'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub" "i=0; until oc apply -f $subdir/aba/test/acm-mch.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n "$i "; sleep 10; done"
+#test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub" "aba --dir $subdir/aba/sno --cmd 'i=0; until oc apply -f ../test/acm-mch.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n "$i "; sleep 10; done'"
 
 test-cmd -m "Leave time for ACM to deploy ..." sleep 30
 

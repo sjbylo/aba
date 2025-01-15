@@ -291,7 +291,14 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Loading jaeger oper
 
 test-cmd -m "Pausing for 90s to let OCP settle" sleep 90    # For some reason, the cluster was still not fully ready in tests!
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all cluster operators to be available?" "aba --dir $subdir/aba/$cluster_type --cmd; until aba --dir $subdir/aba/$cluster_type --cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator status" aba --dir $subdir/aba/$cluster_type --cmd
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/$cluster_type login)"
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all cluster operators to be available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+
+#i=0;until [ $i -ge 5 ] || date | grep 2; do let i=$i+1; echo $i; sleep 1; done
+#i=0;while [ $i -lt 5 ] && date | grep 2; do let i=$i+1; echo $i; sleep 1; done
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'aba day2' ...
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m "Run 'day2'" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
@@ -364,14 +371,18 @@ build_and_test_cluster() {
 	fi
 
 	#####
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator status" aba --dir $subdir/aba/$cluster_type --cmd
+
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
+
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all cluster operators available?" "aba --dir $subdir/aba/$cluster_name --cmd; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all cluster operators fully available?" "aba --dir $subdir/aba/$cluster_name --cmd; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all cluster operators fully available?" "i=0; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$' |wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+########test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all cluster operators to be available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n "\$i "; done"
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Show all cluster operators" "aba --dir $subdir/aba/$cluster_name --cmd"
 
 	# Restart cluster test 
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check node status" "aba --dir $subdir/aba/$cluster_name ls"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Shut cluster down gracefully and wait" "yes | aba --dir $subdir/aba/$cluster_name shutdown --wait"
 
