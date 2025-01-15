@@ -40,14 +40,14 @@ draw-line() {
 # Define a cleanup function to handle Ctrl-C
 cleanup_tests() {
 	if [[ -n "$sub_pid" ]]; then
-		echo Process is:
+		echo -n "Process is: "
 		ps -p $sub_pid -o cmd=
-		echo "Interrupt received. Terminating command $sub_pid ..."
-		kill "$sub_pid" 2>/dev/null
-		wait "$sub_pid" 2>/dev/null
+		echo "Interrupt received. Terminating pid "$sub_pid" ..."
+		kill "$sub_pid" #2>/dev/null
+		wait "$sub_pid" #2>/dev/null
 		echo "Test command terminated."
 	else
-		echo Stopping
+		echo Stopping $0
 		echo
 		exit 1
 	fi
@@ -113,10 +113,12 @@ test-cmd() {
 			echo "> waiting for $(ps -p $sub_pid -o cmd=)"
 			wait "$sub_pid"
 			ret=$?
+			sub_pid=
 
-			[ $i -gt 1 ] && notify.sh "Command ok: $cmd (`date`)" || true  # Only success after failure
-			[ $ret -eq 0 ] && return 0 # Command successful 
 			[ $ret -eq 130 ] && break  # on Ctrl-C *during command execution*
+
+			[ $ret -eq 0 -a $i -gt 1 ] && notify.sh "Command ok: $cmd (`date`)" || true  # Only success after failure
+			[ $ret -eq 0 ] && return 0 # Command successful 
 
 			echo Return value = $ret
 
