@@ -5,7 +5,7 @@
 #[ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
 [ "$TMUX" ] && tmux clear-history 
 
-#export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
+export VER_OVERRIDE=4.17.9 # Uncomment to use the 'latest' stable version of OCP
 export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 export TEST_USER=$(whoami)
 
@@ -41,13 +41,14 @@ time (
 	echo "==========================================================================" 	>> test/test.log
 
 	# If any of these following scripts fail, then this section will exit 1
-	time test/test3-using-public-quay-reg.sh &&			notify.sh "Success test3 (`date`)" && \
-	time test/test1-basic-sync-test-and-save-load-test.sh &&	notify.sh "Success test1 (`date`)" && \
-	time test/test2-airgapped-existing-reg.sh &&			notify.sh "Success test2 (`date`)" && \
-	time test/test5-airgapped-install-local-reg.sh &&		notify.sh "Success test5 (`date`)" && \
+	time test/test1-basic-sync-test-and-save-load-test.sh 	2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test1 (`date`)" && \
+	time test/test3-using-public-quay-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test3 (`date`)" && \
+	time test/test5-airgapped-install-local-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test5 (`date`)" && \
+	time test/test2-airgapped-existing-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log	&& notify.sh "Success test2 (`date`)" && \
 	true
-) 2>&1 | stdbuf -oL -eL tee -a test/output.log    # stdbuf tries to put tee into line buffer mode to ensure output is written to disk
-ret=${PIPESTATUS[0]}  # Catpure only the result of the first command in the previous pipeline, i.e. not the "tee" command
+) ## 2>&1 | stdbuf -oL -eL tee -a test/output.log    # stdbuf tries to put tee into line buffer mode to ensure output is written to disk
+##ret=${PIPESTATUS[0]}  # Catpure only the result of the first command in the previous pipeline, i.e. not the "tee" command
+ret=$?
 if [ $ret -eq 0 ]; then
 	echo SUCCESS
 	notify.sh "SUCCESS (`date`)" || true
