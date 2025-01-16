@@ -239,7 +239,9 @@ cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
 set -ex
 timedatectl
 dnf install chrony podman -y
+# Next line needed by RHEL8
 systemctl start chronyd
+sleep 1
 chronyc sources -v
 chronyc add server 10.0.1.8 iburst
 timedatectl set-timezone Asia/Singapore
