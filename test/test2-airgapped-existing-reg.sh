@@ -90,9 +90,9 @@ if [ ! "$1" ]; then
 	mylog "Setting ntp_servers=$ntp" 
 	[ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
 
-	# Temp disabled mylog "Setting op_sets=abatest in aba.conf"
-	# Temp disabled sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
-	# Temp disabled echo kiali-ossm > templates/operator-set-abatest 
+	mylog "Setting op_sets=abatest in aba.conf"
+	sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
+	echo kiali-ossm > templates/operator-set-abatest 
 
 	source <(normalize-aba-conf)
 

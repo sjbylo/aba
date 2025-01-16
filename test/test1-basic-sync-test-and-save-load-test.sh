@@ -88,8 +88,8 @@ sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 #[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip    #\2/g" aba.conf
 [ "$ntp_ip" ] && test-cmd -m "Setting ntp_servers=$ntp_ip in aba.conf" aba --ntp $ntp_ip
 
-#echo kiali-ossm > templates/operator-set-abatest 
-#test-cmd -m "Setting op_sets=abatest in aba.conf" aba --op-sets abatest
+echo kiali-ossm > templates/operator-set-abatest 
+test-cmd -m "Setting op_sets=abatest in aba.conf" aba --op-sets abatest
 
 source <(normalize-aba-conf)
 

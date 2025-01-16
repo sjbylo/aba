@@ -88,43 +88,39 @@ Examples:
     bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
     cd aba
 
-  Create install bundle for fully disconnected:
+  Run aba in interactive mode:
+    aba
+
+  Create install bundle for fully disconnected mode:
     aba bundle --force -c stable -v latest -S ~/.pull-secret.json -P ocp ocpv mesh3 -O web-terminal -o /path/to/portable/media/ocp-install-bundle
-    # Now transfer the ocp-install-bundle* tar file to air-gapped env. Then unpack the tar and run 'aba/install'.
+    # Now transfer the "ocp-install-bundle*" tar file to the air-gapped env.
 
- Fully disconnected mode:
-
-  Extracting the bundle on internal bastion:
+  Extracting the bundle on internal bastion (fully disconnected mode):
     tar xvf ocp-install-bundle-4.17.11.tar 
     cd aba
     ./install
     aba 
 
- Connected or fully disconnected mode:
-
-  Configure mirror registry on localhost with FQDN registry.example.com:
+  Configure mirror registry on localhost (ensure FQDN registry.example.com points to the mirror registry):
     aba mirror -H registry.example.com 
 
-  Configure mirror registry on remote host with FQDN registry.example.com:
+  Configure mirror registry on *remote host* with FQDN registry.example.com:
     aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
 
- Connected mode:
-
-  Configure mirror registry on localhost with FQDN registry.example.com and sync the images to the mirror:
+  Configure mirror registry on localhost with FQDN registry.example.com AND sync the images to the mirror:
     aba sync -H registry.example.com 
 
-  Configure mirror on localhost with FQDN registry.example.com and sync the images & operators ('operator sets' & individual operators) to the mirror:
+  Configure mirror registry on localhost with FQDN registry.example.com AND sync the images/operators ('operator sets' & individual operators) to the mirror:
     aba sync -H registry.example.com --op-sets ocp ocpv --ops web-terminal
 
- Fully disconnected mode:
-
-  Save images to local disk (use above 'bundle' command instead):
+  Save images to local disk (note, it's recommended to run the above 'bundle' command which will run 'save' for you):
     aba save
+
+  Save images and operators to local disk:
+    aba save --op-sets ocp ocpv mesh3 --ops web-terminal
 
   Configure mirror registry on localhost with FQDN registry.example.com and load the (previously saved) images to the mirror:
     aba load -H registry.example.com 
-
- Connected or fully disconnected mode:
 
   Install OpenShift:
     aba cluster --name mycluster --type standard 
