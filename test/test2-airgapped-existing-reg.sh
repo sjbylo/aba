@@ -349,7 +349,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "If cluster up, stopping cluster
 
 ######################
 
-trap - SIGINT
+###trap - SIGINT
 
 mylog
 mylog "===> Completed test $0"
