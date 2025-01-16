@@ -99,12 +99,14 @@ In a fully disconnected environment, where no internet access is available, two 
    - Download and store the Red Hat registry pull secret to `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs listed in `templates/rpms-external.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
-   - Sudo root access is required.  Password-less sudo access is recommended.
+   - Password-less sudo root access is recommended.
+   - Aba has also been tested with root user.
 
 - **Internal Bastion**
    - A RHEL 8/9 VM or host within your private, air-gapped network.
    - Install required RPMs as listed in `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
-   - Sudo root access is required.  Password-less sudo access is recommended.
+   - Password-less sudo root access is recommended.
+   - Aba has also been tested with root user.
 
 ### Partially Disconnected Prerequisites
 
@@ -116,7 +118,8 @@ In a partially disconnected environment, the internal network has limited or pro
    - Download and store your Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs from `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
-   - Sudo root access is required.  Password-less sudo access is recommended.
+   - Password-less sudo root access is recommended.
+   - Aba has also been tested with root user.
 
 ### Common Requirements for Both Environments
 
