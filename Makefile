@@ -99,9 +99,9 @@ standard: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make
 cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. make cluster name=mycluster [type=sno|compact|standard] [target=<target>]
 	$(SCRIPTS)/setup-cluster.sh $(name) $(type)
 
-.PHONY: rsync
-rsync:  ## Copy (rsync) all required files to internal bastion for testing purposes only.  ip=hostname is required. 
-	$(SCRIPTS)/test-airgapped.sh $(ip)
+#.PHONY: rsync
+#rsync:  ## Copy (rsync) all required files to internal bastion for testing purposes only.  ip=hostname is required. 
+#	$(SCRIPTS)/test-airgapped.sh $(ip)
 
 .PHONY: ask
 ask: ## Set 'ask' in aba.conf to 'true'
