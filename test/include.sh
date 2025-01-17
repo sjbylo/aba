@@ -128,9 +128,9 @@ test-cmd() {
 			
 			# For first failure, send all logs 
 			if [ $i -eq 1 ]; then
-				( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Command failed: $cmd" || true
+				( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh -i "Command failed: $cmd" || true
 			else
-				( echo -e "test.log:\n"; tail -1 test/test.log; echo -e "\noutput.log:\n"; tail -1 test/output.log ) | notify.sh "Command failed: $cmd" || true
+				( echo -e "test.log:\n"; tail -1 test/test.log; echo -e "\noutput.log:\n"; tail -3 test/output.log ) | notify.sh -i "Command failed: $cmd" || true
 				#( notify.sh "Failed cmd: $cmd" || true )
 			fi
 
@@ -155,7 +155,7 @@ test-cmd() {
 			sub_pid=
 		fi
 			
-		( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Aborting cmd: $cmd" || true
+		( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh -i "Aborting cmd: $cmd" || true
 
 		#echo $(date "+%b %e %H:%M:%S") COMMAND FAILED WITH RET=$ret >> test/test.log
 		log-test COMMAND FAILED WITH RET=$ret
