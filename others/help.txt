@@ -73,7 +73,7 @@ Usage:
      -R, --default-route <next hop ip>   # Set the default route of the internal network, if any (optional).
      -T, --ntp <hostname(s) or IPs>      # Set the NTP hostname(s) or IP address(es) (optional but recommended!). 
      -O, --ops <list of operators>       # Add individual operators to your image set config file (for oc-mirror).
-     -P, --op-sets <operator set list>   # Add sets of operators to your image set config file, as defined in 'templates/operator-set.*' files.
+     -P, --op-sets <operator set list>   # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted.
      -e, --editor <editor command>       # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
      -a, --ask                           # Prompt user when needed.
      -A, --noask                         # Do not prompt, assume default answers.
@@ -125,6 +125,9 @@ Examples of partially disconnected mode (e.g. via a proxy)
 
   Configure mirror registry on localhost with 'registry.example.com' AND sync the images/operators ('operator sets' & individual operators) to the mirror:
     aba sync -H registry.example.com --op-sets ocp ocpv mesh3 --ops web-terminal --retry
+
+  Configure mirror registry on localhost with 'registry.example.com' AND sync all operators:
+    aba sync -H registry.example.com --op-sets all --retry
 
   Save images to local disk (note, it's recommended to run the above 'bundle' command which will run 'save' for you):
     aba save --retry

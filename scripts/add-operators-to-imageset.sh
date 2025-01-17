@@ -48,8 +48,6 @@ if [ ! "$op_sets" ]; then
 	[ "$INFO_ABA" ] && echo_cyan "'op_sets' value not set in aba.conf or mirror.conf. Not adding operators to the image set config file." >&2
 fi
 
-###op_sets=$(echo $op_sets | tr -s " ")
-
 if [ "$ops" -o "$op_sets" ]; then
 	# Check for the index file
 	if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
@@ -70,6 +68,9 @@ else
 fi
 
 [ "$INFO_ABA" ] && echo_cyan "Adding operators to the image set config file ..." >&2
+
+# 'all' is a special operator set which allows all operators to be downloaded!  The above "operators->catalog" entry will enable all op.
+echo $op_sets | grep -e "^all$" -e "^all," -e ",all$ -e ",all,"" && echo_yello "Adding all operators to your image set config file!" && exit 0
 
 for set in $(echo $op_sets | tr "," " ")
 do
