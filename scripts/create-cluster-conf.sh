@@ -25,9 +25,7 @@ type=standard
 # Override type from shortcuts?
 [ "${shortcuts["$name:type"]}" ] && export type=${shortcuts["$name:type"]}
 
-if [ "$DEBUG_ABA" ]; then
-	echo_cyan "Creating cluster directory for [$name] of type [$type]"
-fi
+[ "$DEBUG_ABA" ] && echo_cyan "$0: Creating cluster directory for [$name] of type [$type]" >&2
 
 # Set defaults 
 export mac_prefix=00:50:56:2x:xx:
