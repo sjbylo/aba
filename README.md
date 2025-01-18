@@ -26,6 +26,8 @@ Use Aba if you want to get OpenShift up and running quickly in an air-gapped env
 1. [Advanced](#advanced)
 
 
+![Demo](./images/aba-bundle-demo.gif)
+
 
 ## What does Aba do for me?
 
