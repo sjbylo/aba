@@ -50,4 +50,4 @@ else
 	echo_cyan "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'aba save' again to update the images."
 fi
 
-echo_green "Image set config file created: save/imageset-config-save.yaml"
+echo_green "Image set config file created: mirror/save/imageset-config-save.yaml"

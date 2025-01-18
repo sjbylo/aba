@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250115074701
+ABA_VERSION=20250118084655
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
 
@@ -297,8 +297,8 @@ do
 		# Step through non-opt params, check the set exists and add to the list ...
 		while [ "$1" ] && ! echo "$1" | grep -q -e "^-"
 		do
-			if [ -s "$ABA_PATH/templates/operator-set-$1" ]; then
-				op_set_list="$op_set_list $1"
+			if [ -s "$ABA_PATH/templates/operator-set-$1" -o "$1" = "all" ]; then
+				[ "$op_set_list" ] && op_set_list="$op_set_list,$1" || op_set_list=$1
 			else
 				echo "No such operator set: $1" >&2
 				echo -n "Available operator sets are: " >&2
@@ -307,9 +307,7 @@ do
 			fi
 			shift
 		done
-		op_set_list=$(echo $op_set_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
-		#op_set_list=$(echo $op_set_list | tr -s " " | tr " " ",")
-		#sed -i "s/^op_sets=[^#$]*/op_sets=\"$op_set_list\" /g" $ABA_PATH/aba.conf
+		##op_set_list=$(echo $op_set_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
 		sed -i "s/^op_sets=[^#$]*/op_sets=$op_set_list /g" $ABA_PATH/aba.conf
 	elif [ "$1" = "--ops" -o "$1" = "-O" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
