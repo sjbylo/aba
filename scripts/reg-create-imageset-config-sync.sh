@@ -42,4 +42,4 @@ fi
 # This is needed since sometimes an existing registry may already be available
 scripts/create-containers-auth.sh
 
-echo_green "Image set config file created: sync/imageset-config-sync.yaml"
+echo_green "Image set config file created: mirror/sync/imageset-config-sync.yaml"
