@@ -14,7 +14,8 @@ cat_cyan()	{ [ "$TERM" ] && tput setaf 6; cat; [ "$TERM" ] && tput sgr0; }
 cat_red()	{ [ "$TERM" ] && tput setaf 1; cat; [ "$TERM" ] && tput sgr0; }
 
 if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
-    PATH="$HOME/bin:$PATH"
+	[ "$DEBUG_ABA" ] && echo "$0: Adding $HOME/bin to \$PATH for user $(whoami)" >&2
+	PATH="$HOME/bin:$PATH"
 fi
 
 umask 077
