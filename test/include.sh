@@ -104,7 +104,8 @@ test-cmd() {
 		do
 			if [ "$host" != "localhost" ]; then
 				echo "Running command: \"$cmd\" on host $host"
-				ssh -o LogLevel=ERROR $host -- "export TERM=xterm; $cmd" &    # For testing, TERM sometimes needs to be set to anything
+				# Added ". ~/.bash_profile" for RHEL8!
+				ssh -o LogLevel=ERROR $host -- "export TERM=xterm;. \$HOME/.bash_profile;$cmd" &    # For testing, TERM sometimes needs to be set to anything
 			else
 				echo "Running command: \"$cmd\" on localhost"
 				eval "$cmd" &
