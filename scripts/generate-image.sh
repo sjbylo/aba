@@ -38,8 +38,10 @@ mkdir -p $ASSETS_DIR
 
 cp install-config.yaml agent-config.yaml $ASSETS_DIR 
 
+opts=
+[ "$DEBUG_ABA" ] && opts="--log-level debug"
 echo_yellow "Running: openshift-install agent create image --dir $ASSETS_DIR "
-openshift-install agent create image --dir $ASSETS_DIR --log-level debug
+openshift-install agent create image --dir $ASSETS_DIR $opts
 
 # FIXME: to implement PXE 
 #openshift-install agent create pxe-files --dir $ASSETS_DIR

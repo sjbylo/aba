@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250118115947
+ABA_VERSION=20250119020415
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
 
@@ -284,10 +284,7 @@ do
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
-		#echo "$2" | grep -q "^-" && echo_red "Error: Missing argument after $1" >&2 && exit 1
-		#[ ! "$1" ] && echo_red -e "Error: Missing argument after $1" >&2 && exit 1
-		platform="$1"
-		sed -i "s/^platform=[^ \t]*/platform=$platform /g" $ABA_PATH/aba.conf
+		sed -i "s/^platform=[^ \t]*/platform=$2 /g" $ABA_PATH/aba.conf
 		shift 2
 	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
