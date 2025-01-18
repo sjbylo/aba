@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250118084655
+ABA_VERSION=20250118115947
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
 
@@ -26,7 +26,7 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
 	[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
-	[ "$DEBUG_ABA" ] && echo "cd \"$2\"" >&2
+	[ "$DEBUG_ABA" ] && echo "$0: cd \"$2\"" >&2
 	cd "$2"
 	shift 2
 fi
@@ -110,7 +110,7 @@ interactive_mode=
 
 while [ "$*" ] 
 do
-	[ "$DEBUG_ABA" ] && echo "\$* = " $* >&2
+	[ "$DEBUG_ABA" ] && echo "$0: \$* = " $* >&2
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		echo "$usage"
@@ -133,7 +133,7 @@ do
 			# Note that make will take one -C option only #FIXME
 			BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
 			WORK_DIR="$2"
-			[ "$DEBUG_ABA" ] && echo "-C \"$WORK_DIR\"" >&2
+			[ "$DEBUG_ABA" ] && echo "$0: -C \"$WORK_DIR\"" >&2
 			#cd "$WORK_DIR"
 			#ABA_PATH=.
 			shift 2
@@ -195,7 +195,7 @@ do
 		target_ver=$ver
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-		[ "$DEBUG_ABA" ] && echo Downloading operator index for version $ver >&2
+		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
 		make -s -C $ABA_PATH/mirror init >/dev/null 2>&1
 		(
 			(
@@ -383,12 +383,12 @@ do
 		# If there's another arg and it's a number then accept it
 		if [ "$2" ] && echo "$2" | grep -qE "^[0-9]+"; then
 			BUILD_COMMAND="$BUILD_COMMAND retry='$2'"
-			[ "$DEBUG_ABA" ] && echo Adding retry=$2 to BUILD_COMMAND >&2
+			[ "$DEBUG_ABA" ] && echo $0: Adding retry=$2 to BUILD_COMMAND >&2
 			shift 2
 		# If there's no another arg then assume '3'
 		elif [ ! "$2" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND retry=3"  # FIXME: Also confusing, similar to --name
-			[ "$DEBUG_ABA" ] && echo Setting $1 to 3 >&2
+			[ "$DEBUG_ABA" ] && echo $0: Setting $1 to 3 >&2
 			shift
 		#else
 		#	echo_red "Error: Missing argument after option [$1]" >&2 && exit 1
@@ -416,14 +416,14 @@ do
 
 		if [[ "$BUILD_COMMAND" =~ "ssh" ]]; then
 			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
-			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
+			[ "$DEBUG_ABA" ] && echo $0: BUILD_COMMAND=$BUILD_COMMAND >&2
 		elif [[ "$BUILD_COMMAND" =~ "cmd" ]]; then
 			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
-			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
+			[ "$DEBUG_ABA" ] && echo $0: BUILD_COMMAND=$BUILD_COMMAND >&2
 		else
 			# Assume it's a kube command by default
 			BUILD_COMMAND="$BUILD_COMMAND cmd cmd='$cmd'"
-			[ "$DEBUG_ABA" ] && echo BUILD_COMMAND=$BUILD_COMMAND >&2
+			[ "$DEBUG_ABA" ] && echo $0: BUILD_COMMAND=$BUILD_COMMAND >&2
 		fi
 	else
 		if echo "$1" | grep -q "^-"; then
@@ -433,7 +433,7 @@ do
 			# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
 			# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
 			BUILD_COMMAND="$BUILD_COMMAND $1"
-			[ "$DEBUG_ABA" ] && echo Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
+			[ "$DEBUG_ABA" ] && echo $0: Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
 		fi
 		shift 
 	fi
@@ -441,26 +441,22 @@ done
 
 ####[ "$err" ] && echo_red "An error has occurred, aborting!" >&2 && exit 1
 
-[ "$DEBUG_ABA" ] && echo DEBUG: interactive_mode=$interactive_mode >&2
+[ "$DEBUG_ABA" ] && echo DEBUG: $0: interactive_mode=$interactive_mode >&2
 
 # Sanitize $BUILD_COMMAND
 BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
 
-[ "$DEBUG_ABA" ] &&  echo "ABA_PATH=[$ABA_PATH]"
-[ "$DEBUG_ABA" ] &&  echo "BUILD_COMMAND=[$BUILD_COMMAND]"
+[ "$DEBUG_ABA" ] &&  echo "$0: ABA_PATH=[$ABA_PATH]" >&2
+[ "$DEBUG_ABA" ] &&  echo "$0: BUILD_COMMAND=[$BUILD_COMMAND]" >&2
 
 # We want interactive mode if aba is running at the top of the repo and without any args
 [ ! "$BUILD_COMMAND" -a "$ABA_PATH" = "." ] && interactive_mode=1
 
 if [ ! "$interactive_mode" ]; then
-	[ "$DEBUG_ABA" ] && echo "DEBUG: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
+	[ "$DEBUG_ABA" ] && echo "DEBUG: $0: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
 
 	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
-	if [ "$DEBUG_ABA" ]; then
-		eval make    $BUILD_COMMAND
-	else
-		eval make -s $BUILD_COMMAND
-	fi
+	[ "$DEBUG_ABA" ] && eval make $BUILD_COMMAND || eval make -s $BUILD_COMMAND
 
 	exit 
 fi
