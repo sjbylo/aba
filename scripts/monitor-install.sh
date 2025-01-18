@@ -12,8 +12,11 @@ fi
 
 echo
 echo =================================================================================
+
+opts=
+[ "$DEBUG_ABA" ] && opts="--log-level debug"
 echo_yellow "Running: openshift-install agent wait-for install-complete --dir $ASSETS_DIR"
-openshift-install agent wait-for install-complete --dir $ASSETS_DIR --log-level=debug
+openshift-install agent wait-for install-complete --dir $ASSETS_DIR $opts
 ret=$?
 
 if [ $ret -ne 0 ]; then
