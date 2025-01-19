@@ -33,16 +33,13 @@ echo "Removing all traces of images from this host!"
 podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage
 
 all_tests="\
+test2 \
 test1 \
 test3 \
 test5 \
-test2 \
 "
 
-set -x
 all_tests=$(echo $all_tests| sed "s/ $//g")
-echo all_tests=$all_tests
-set +x
 
 time (
 	echo "=========================================================================="  	>> test/test.log
@@ -56,12 +53,13 @@ time (
 
 	for t in $all_tests
 	do
-	# If any of these following scripts fail, then this section will exit 1
+		# If any of these following scripts fail, then this section will exit 1
 	#time test/test1-basic-sync-test-and-save-load-test.sh 	2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test1 (`date`)" && \
 	#time test/test3-using-public-quay-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test3 (`date`)" && \
 	#time test/test5-airgapped-install-local-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test5 (`date`)" && \
 	#time test/test2-airgapped-existing-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log	&& notify.sh "Success test2 (`date`)" && \
-		eval time test/$t-*.sh 2>&1 | stdbuf -oL -eL tee -a test/output.log && notify.sh "Success $t (`date`)" && true
+		#eval time test/$t-*.sh 2>&1 | stdbuf -oL -eL tee -a test/output.log && notify.sh "Success $t (`date`)" e || exit 1
+		eval time test/$t-*.sh 2>&1 | tee -a test/output.log && notify.sh "Success $t (`date`)" || exit 1
 	#	true
 	done
 ) ## 2>&1 | stdbuf -oL -eL tee -a test/output.log    # stdbuf tries to put tee into line buffer mode to ensure output is written to disk

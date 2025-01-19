@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250119080222
+ABA_VERSION=20250119231242
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
 
@@ -387,14 +387,8 @@ do
 			BUILD_COMMAND="$BUILD_COMMAND retry=3"  # FIXME: Also confusing, similar to --name
 			[ "$DEBUG_ABA" ] && echo $0: Setting $1 to 3 >&2
 			shift
-		#else
-		#	echo_red "Error: Missing argument after option [$1]" >&2 && exit 1
 		fi
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
-		# If there's another arg and it's NOT an option (^-) then error
-		###if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-		###	echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
-		###fi
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND force=1"  # FIXME: Should only allow force=1 after the appropriate target
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
