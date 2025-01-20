@@ -289,13 +289,13 @@ test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion_h
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Loading jaeger operator images to mirror" "cd $subdir/aba/mirror; aba load" 
 
 
-test-cmd -m "Pausing for 90s to let OCP settle" sleep 90    # For some reason, the cluster was still not fully ready in tests!
+#test-cmd -m "Pausing for 90s to let OCP settle" sleep 90    # For some reason, the cluster was still not fully ready in tests!
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator status" aba --dir $subdir/aba/$cluster_type --cmd
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/$cluster_type login)"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30 mins for all cluster operators to be fully available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v -e '^True False False$' -e VSphereCSIDriverOperatorCRProgressing|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30 mins for all cluster operators to be fully available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
 #i=0;until [ $i -ge 5 ] || date | grep 2; do let i=$i+1; echo $i; sleep 1; done
 #i=0;while [ $i -lt 5 ] && date | grep 2; do let i=$i+1; echo $i; sleep 1; done
@@ -304,7 +304,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30 mins for all cl
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m "Run 'day2'" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
-test-cmd -m "Pausing for 60s to let OCP settle" sleep 60  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
+#test-cmd -m "Pausing for 60s to let OCP settle" sleep 60  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
 
 ### MESH STOPPED test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
 
@@ -377,7 +377,7 @@ build_and_test_cluster() {
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all cluster operators available?" "aba --dir $subdir/aba/$cluster_name --cmd; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30 mins for all cluster operators fully available?" "i=0; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v -e '^True False False$' -e VSphereCSIDriverOperatorCRProgressing |wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30 mins for all cluster operators fully available?" "i=0; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$'|wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 ########test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all cluster operators to be available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n "\$i "; done"
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Show all cluster operators" "aba --dir $subdir/aba/$cluster_name --cmd"
