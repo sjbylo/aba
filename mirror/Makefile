@@ -98,11 +98,13 @@ rpmsclean:
 ###	@mkdir regcreds 
 
 mirror-registry: mirror-registry.tar.gz ## Extract the mirror-registry binary 
-	tar xmvzf mirror-registry.tar.gz
+	@#tar xmvzf mirror-registry.tar.gz
+	tar xmvzf mirror-registry-amd64.tar.gz
 
 mirror-registry.tar.gz: ## Download the mirror-registry tarball
-	echo "Downloading mirror-registry.tar.gz ..."
-	$(SCRIPTS)/download-mirror-registry.sh
+	echo "Downloading mirror-registry-amd64.tar.gz ..."
+	curl --progress-bar -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
+	@#$(SCRIPTS)/download-mirror-registry.sh  # FIXME: delete script
 
 # mirror.conf depends on aba.conf for the 'domain aalue
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
