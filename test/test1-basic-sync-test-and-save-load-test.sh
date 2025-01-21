@@ -93,7 +93,8 @@ test-cmd -m "Setting op_sets=abatest in aba.conf" aba --op-sets abatest
 
 source <(normalize-aba-conf)
 
-reg_ssh_user=$(whoami)
+#reg_ssh_user=$(whoami)
+reg_ssh_user=$TEST_USER
 
 aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
