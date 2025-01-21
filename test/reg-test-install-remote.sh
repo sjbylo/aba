@@ -20,7 +20,7 @@ ssh $reg_ssh_user@$reg_host "rpm -q rsync || sudo yum install make rsync -y"
 rpm -q rsync || sudo yum install make rsync -y
 
 # Copy needed files
-rsync --progress --partial -avz reg-install.sh mirror-registry.tar.gz  $reg_ssh_user@$reg_host:test
+rsync --progress --partial -avz reg-install.sh mirror-registry-amd64.tar.gz  $reg_ssh_user@$reg_host:test
 
 ssh -F .ssh.conf $reg_ssh_user@$reg_host "bash -e test/reg-install.sh"
 

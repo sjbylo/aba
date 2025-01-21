@@ -97,7 +97,7 @@ if [ ! "$1" ]; then
 	source <(normalize-aba-conf)
 
 	# Be sure this file exists
-	test-cmd "make -C test mirror-registry.tar.gz"
+	test-cmd "make -C test mirror-registry-amd64.tar.gz"
 
 	#################################
 	# Set up mirror.conf 

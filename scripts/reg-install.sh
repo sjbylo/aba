@@ -161,8 +161,8 @@ if [ "$reg_ssh_key" ]; then
 	(
 		echo "Implementing workaround to install Quay on remote host ... see https://access.redhat.com/solutions/7040517 for more."
 		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host mkdir -p .abatmp
-		scp -i $reg_ssh_key -F .ssh.conf mirror-registry.tar.gz $reg_ssh_user@$reg_host:.abatmp/
-		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && tar xmzf mirror-registry.tar.gz"
+		scp -i $reg_ssh_key -F .ssh.conf mirror-registry-amd64.tar.gz $reg_ssh_user@$reg_host:.abatmp/
+		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && tar xmzf mirror-registry-amd64.tar.gz"
 		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry install"
 		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
 		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host rm -rf .abatmp/*

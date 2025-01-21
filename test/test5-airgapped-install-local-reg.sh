@@ -92,7 +92,7 @@ source <(normalize-aba-conf)
 mylog "Checking value of: ocp_version=$ocp_version"
 
 # Be sure this file exists
-test-cmd -m "Init test: download mirror-registry.tar.gz" "aba --dir test mirror-registry.tar.gz"
+test-cmd -m "Init test: download mirror-registry-amd64.tar.gz" "aba --dir test mirror-registry-amd64.tar.gz"
 
 #################################
 # Copy and edit mirror.conf 
@@ -283,7 +283,7 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 ) 
 
 mylog Copy tar+ssh archives to internal bastion
-rm -f test/mirror-registry.tar.gz  # No need to copy this over!
+rm -f test/mirror-registry-amd64.tar.gz  # No need to copy this over!
 test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion_hostname:$subdir" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf - "
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Loading jaeger operator images to mirror" "cd $subdir/aba/mirror; aba load" 
