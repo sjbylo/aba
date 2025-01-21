@@ -281,7 +281,7 @@ rm -rf mirror/save   # The process will halt, otherwise with "You already have i
 
 source <(cd mirror; normalize-mirror-conf)
 
-mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
+mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=testy reg_ssh_key=$reg_ssh_key"
 
 ######################
 # This will install the reg. and sync the images
