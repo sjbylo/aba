@@ -5,9 +5,9 @@
 #[ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
 [ "$TMUX" ] && tmux clear-history 
 
-export VER_OVERRIDE=4.17.9 # Uncomment to use the 'latest' stable version of OCP
-export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
-export TEST_USER=$(whoami)
+export VER_OVERRIDE=4.14.30 # Uncomment to use the 'latest' stable version of OCP
+export internal_bastion_rhel_ver=rhel8  # rhel8 or rhel9
+export TEST_USER=root   # This can be any user or $(whoami) 
 
 # This is for testing a specific branch ($1) directly from "git clone", otherwise it will test
 # the local dir. ($PWD)
@@ -33,13 +33,14 @@ echo "Removing all traces of images from this host!"
 podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage
 
 all_tests="\
-test2 \
 test1 \
 test3 \
 test5 \
+test2 \
 "
 
 all_tests=$(echo $all_tests| sed "s/ $//g")
+echo all_tests=$all_tests
 
 time (
 	echo "=========================================================================="  	>> test/test.log
@@ -53,12 +54,11 @@ time (
 
 	for t in $all_tests
 	do
-		# If any of these following scripts fail, then this section will exit 1
+	# If any of these following scripts fail, then this section will exit 1
 	#time test/test1-basic-sync-test-and-save-load-test.sh 	2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test1 (`date`)" && \
 	#time test/test3-using-public-quay-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test3 (`date`)" && \
 	#time test/test5-airgapped-install-local-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test5 (`date`)" && \
 	#time test/test2-airgapped-existing-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log	&& notify.sh "Success test2 (`date`)" && \
-		#eval time test/$t-*.sh 2>&1 | stdbuf -oL -eL tee -a test/output.log && notify.sh "Success $t (`date`)" e || exit 1
 		eval time test/$t-*.sh 2>&1 | tee -a test/output.log && notify.sh "Success $t (`date`)" || exit 1
 	#	true
 	done
