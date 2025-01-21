@@ -9,7 +9,7 @@ if ! rpm -q podman || ! rpm -q rsync; then
 	sudo dnf install podman rsync -y
 fi
 
-[ ! -x ./mirror-registry ] && tar xvmzf mirror-registry.tar.gz
+[ ! -x ./mirror-registry ] && tar xvmzf mirror-registry-amd64.tar.gz
 
 reg_root=~/quay-install
 reg_pw=p4ssw0rd

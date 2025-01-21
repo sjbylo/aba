@@ -65,8 +65,8 @@ sync: .init .rpmsint ~/.pull-secret.json index cli-download install sync/imagese
 # oc-mirror is idempotent so no need for 'dot' flag files here
 .PHONY: save
 # Note that for a connected laptop or bastion there is no need to install all the required packages (i.e. only 'rpmsext') 
-# mirror-registry.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
-save: .init .rpmsext ~/.pull-secret.json index cli-download mirror-registry.tar.gz save/imageset-config-save.yaml  ## Save images from the Internet to mirror/save/ & download 'mirror-registry.tar.gz' for later installation into your private network. Use retry=# to retry after failure.
+# mirror-registry-amd64.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
+save: .init .rpmsext ~/.pull-secret.json index cli-download mirror-registry-amd64.tar.gz save/imageset-config-save.yaml  ## Save images from the Internet to mirror/save/ & download 'mirror-registry-amd64.tar.gz' for later installation into your private network. Use retry=# to retry after failure.
 	###
 	### Save images from the Internet to local disk 
 	###
@@ -97,11 +97,11 @@ rpmsclean:
 ### regcreds:
 ###	@mkdir regcreds 
 
-mirror-registry: mirror-registry.tar.gz ## Extract the mirror-registry binary 
+mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry binary 
 	@#tar xmvzf mirror-registry.tar.gz
 	tar xmvzf mirror-registry-amd64.tar.gz
 
-mirror-registry.tar.gz: ## Download the mirror-registry tarball
+mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball
 	echo "Downloading mirror-registry-amd64.tar.gz ..."
 	curl --progress-bar -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
 	@#$(SCRIPTS)/download-mirror-registry.sh  # FIXME: delete script
@@ -170,7 +170,7 @@ uninstall: .init             mirror-registry .uninstalled     ## Uninstall any p
 checkversion: init
 	$(SCRIPTS)/check-version-mismatch.sh
 
-# Note that 'mirror-registry.tar.gz' is needed to 'uninstall' the registry.
+# Note that 'mirror-registry-amd64.tar.gz' is needed to 'uninstall' the registry.
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
