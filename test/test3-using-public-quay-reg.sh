@@ -83,7 +83,8 @@ source <(normalize-aba-conf)
 echo Check aba.conf:
 normalize-aba-conf
 
-reg_ssh_user=$(whoami)
+#reg_ssh_user=$(whoami)
+reg_ssh_user=$TEST_USER
 
 aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
