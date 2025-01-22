@@ -156,18 +156,18 @@ if [ "$reg_ssh_key" ]; then
 
 	[ "$err" ] && echo_red "Please install 'podman' and 'jq' on the remote host '$reg_host' and try again." && exit 1
 
-	# Check if the workaround needs to be run:
-	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause >> .remote_host_check.out 2>&1 || \
-	(
-		echo "Implementing workaround to install Quay on remote host ... see https://access.redhat.com/solutions/7040517 for more."
-		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host mkdir -p .abatmp
-		scp -i $reg_ssh_key -F .ssh.conf mirror-registry-amd64.tar.gz $reg_ssh_user@$reg_host:.abatmp/
-		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && tar xmzf mirror-registry-amd64.tar.gz"
-		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry install"
-		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
-		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host rm -rf .abatmp/*
-	)
-	# Workaround END ########
+#	# Check if the workaround needs to be run:
+#	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause >> .remote_host_check.out 2>&1 || \
+#	(
+#		echo "Implementing workaround to install Quay on remote host ... see https://access.redhat.com/solutions/7040517 for more."
+#		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host mkdir -p .abatmp
+#		scp -i $reg_ssh_key -F .ssh.conf mirror-registry-amd64.tar.gz $reg_ssh_user@$reg_host:.abatmp/
+#		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && tar xmzf mirror-registry-amd64.tar.gz"
+#		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry install"
+#		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
+#		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host rm -rf .abatmp/*
+#	)
+#	# Workaround END ########
 			
 	# FIXME: this is not used
 	# If the key is missing, then generate one
