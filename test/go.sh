@@ -42,7 +42,7 @@ test2 \
 all_tests=$(echo $all_tests| sed "s/ $//g")
 echo all_tests=$all_tests
 
-time (
+#time (
 	echo "=========================================================================="  	>> test/test.log
 	echo "=========================================================================="  	>> test/test.log
 	echo "Running: $0 $*                                                            "  	>> test/test.log
@@ -52,19 +52,21 @@ time (
 
 	echo $all_tests | notify.sh -i Starting tests:
 
-	for t in $all_tests
+	time for t in $all_tests
 	do
+		ret=0
 	# If any of these following scripts fail, then this section will exit 1
 	#time test/test1-basic-sync-test-and-save-load-test.sh 	2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test1 (`date`)" && \
 	#time test/test3-using-public-quay-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test3 (`date`)" && \
 	#time test/test5-airgapped-install-local-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log 	&& notify.sh "Success test5 (`date`)" && \
 	#time test/test2-airgapped-existing-reg.sh 		2>&1 | stdbuf -oL -eL tee -a test/output.log	&& notify.sh "Success test2 (`date`)" && \
-		eval time test/$t-*.sh 2>&1 | tee -a test/output.log && notify.sh "Success $t (`date`)" || exit 1
+		eval time test/$t-*.sh 2>&1 | tee -a test/output.log && notify.sh "Success $t (`date`)" || ret=1
+		[ $ret -ne 0 ] && break
 	#	true
 	done
-) ## 2>&1 | stdbuf -oL -eL tee -a test/output.log    # stdbuf tries to put tee into line buffer mode to ensure output is written to disk
+#) ## 2>&1 | stdbuf -oL -eL tee -a test/output.log    # stdbuf tries to put tee into line buffer mode to ensure output is written to disk
 ##ret=${PIPESTATUS[0]}  # Catpure only the result of the first command in the previous pipeline, i.e. not the "tee" command
-ret=$?
+#ret=$?
 if [ $ret -eq 0 ]; then
 	echo SUCCESS
 	notify.sh "SUCCESS (`date`)" || true

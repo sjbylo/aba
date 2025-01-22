@@ -128,8 +128,8 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 #sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
 #echo kiali-ossm > templates/operator-set-abatest 
 
-##mylog "Setting reg_root=~/my-quay-mirror"
-##sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
+#mylog "Setting reg_root=~/my-quay-mirror"
+#sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
 
 #sed -i "s#channel=.*#channel=fast          #g" ./mirror/mirror.conf	    	# test channel
 #sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
@@ -154,7 +154,7 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 ######################
 # This will install mirror and sync images
 mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key ~/.ssh/id_rsa and then ..."
-test-cmd -r 10 3 -m "Syncing images from external network to internal mirror registry (one command)" aba --dir mirror sync -H $int_bastion_hostname -k ~/.ssh/id_rsa
+test-cmd -r 10 3 -m "Syncing images from external network to internal mirror registry (one command)" aba --dir mirror sync -H $int_bastion_hostname -k ~/.ssh/id_rsa --reg-root ~/my-quay-root
 
 source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* calues (see below)
 echo
@@ -256,8 +256,8 @@ mylog "Configure mirror to install on internal (remote) bastion in default dir, 
 #sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
-## FIXME INSTALL FAILURE mylog "Setting reg_root=~/my-quay-mirror"
-## FIXME INSTALL FAILURE sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
+mylog "Setting reg_root=~/my-quay-mirror"
+sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
 
 mylog "Setting reg_pw="
 sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test random password 

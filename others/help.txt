@@ -27,10 +27,11 @@ Usage: Create a install 'bundle archive'
 Usage: Set up and load mirror registry
    aba mirror                            # Connect to existing, or create a, mirror registry. 
    <<options>>:
-     -H, --target-hostname <hostname>    # The hostname of the target mirror registry.
+     -H, --mirror-hostname <hostname>    # The hostname of the target mirror registry.
      -u, --reg-user <username>           # The username used to access the registry (default it 'init').
      -k, --reg-ssh-key "~/.ssh/mykey"    # Path to ssh key to use to install Quay to a remote host.
      -U, --reg-ssh-user myuser           # Username to use to access the remote host via ssh.
+         --reg-root /path/to/dir         # Install Quay files/images to this directory.
 
    aba sync                              # Copy images from the Internet into the mirror registry.
    <<options>>:
@@ -126,8 +127,8 @@ Examples of partially disconnected mode (e.g. via a proxy)
   Configure mirror registry on localhost with 'registry.example.com' AND sync the images/operators ('operator sets' & individual operators) to the mirror:
     aba sync -H registry.example.com --op-sets ocp ocpv mesh3 --ops web-terminal --retry
 
-  Configure mirror registry on localhost with 'registry.example.com' AND sync all operators:
-    aba sync -H registry.example.com --op-sets all --retry
+  Configure mirror registry on localhost with 'registry.example.com', sync *all* operators and install Quay files into custom directory:
+    aba sync -H registry.example.com --op-sets all --retry --quay-root ~/my-quay-dir
 
   Save images to local disk (note, it's recommended to run the above 'bundle' command which will run 'save' for you):
     aba save --retry

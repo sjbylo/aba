@@ -26,6 +26,7 @@ hosts:
         config:
           server:
             - 10.0.1.8
+            - 10.0.2.8
       routes:
         config:
           - destination: 0.0.0.0/0
@@ -53,6 +54,7 @@ hosts:
         config:
           server:
             - 10.0.1.8
+            - 10.0.2.8
       routes:
         config:
           - destination: 0.0.0.0/0
@@ -80,6 +82,7 @@ hosts:
         config:
           server:
             - 10.0.1.8
+            - 10.0.2.8
       routes:
         config:
           - destination: 0.0.0.0/0
