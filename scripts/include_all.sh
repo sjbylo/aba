@@ -51,6 +51,7 @@ normalize-aba-conf() {
 	# Normalize or sanitize the config file
 	# Correct ask=? which must be either =1 or = (empty)
 	# Extract machine_network and prefix_length from the CIDR notation
+	# Ensure only one arg after 'export'
 	# Prepend "export "
 	[ ! -s aba.conf ] && echo "ask=true" && return 0  # if aba.conf is missing, output a safe default, "ask=true"
 
@@ -60,6 +61,7 @@ normalize-aba-conf() {
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
+		awk '{print $1}' | \
 		sed	-e "s/^/export /g";
 
 }
@@ -69,6 +71,7 @@ normalize-mirror-conf()
 	# Normalize or sanitize the config file
 	# Ensure any ~/ is masked, e.g. \~/
 	# Ensrue reg_ssh_user has a value
+	# Ensure only one arg after 'export'
 	# Prepend "export "
 
 	[ ! -s mirror.conf ] &&                                                              return 0
@@ -80,6 +83,7 @@ normalize-mirror-conf()
 			-e "s/^tls_verify=0\b/tls_verify= /g" -e "s/tls_verify=false/tls_verify= /g" \
 			-e "s/^tls_verify=1\b/tls_verify=true /g" \
 			-e 's/^reg_root=~/reg_root=\\~/g' | \
+		awk '{print $1}' | \
 		sed	-e "s/^/export /g"
 }
 
@@ -88,6 +92,7 @@ normalize-cluster-conf()
 	# Normalize or sanitize the config file
 	# Prepend "export "
 	# Extract machine_network and prefix_length from the CIDR notation
+	# Ensure only one arg after 'export'
 
 	[ ! -s cluster.conf ] &&                                                               return 0
 
@@ -95,7 +100,8 @@ normalize-cluster-conf()
 		sed -E	-e "s/^\s*#.*//g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
-			sed -e "s/^/export /g";
+		awk '{print $1}' | \
+		sed -e "s/^/export /g";
 
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
@@ -106,6 +112,7 @@ normalize-vmware-conf()
 {
         # Normalize or sanitize the config file
 	# Determine if ESXi or vCenter
+	# Ensure only one arg after 'export'
 	# Prepend "export "
 	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
 
@@ -115,6 +122,7 @@ normalize-vmware-conf()
 		sed -E	-e "s/^\s*#.*//g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e "s/^VMW_FOLDER=/VC_FOLDER=/g" | \
+		awk '{print $1}' | \
                 sed	-e "s/^/export /g")
 	eval "$vars"
 	# Detect if ESXi is used and set the VC_FOLDER that ESXi prefers, and ignore GOVC_DATACENTER and GOVC_CLUSTER. 

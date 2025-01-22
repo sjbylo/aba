@@ -257,20 +257,20 @@ mylog "Configure mirror to install on internal (remote) bastion in default dir, 
 #sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 mylog "Setting reg_root=~/my-quay-mirror"
-sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
+sed -i "s#^reg_root=[^ \t]*#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
 
-mylog "Setting reg_pw="
-sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test random password 
+mylog "Setting reg_pw=  (empty)"
+sed -i "s#^reg_pw=[^ \t]*#reg_pw= #g" ./mirror/mirror.conf	    	# test random password 
 ### sed -i "s#tls_verify=true#tls_verify=            #g" ./mirror/mirror.conf  	# test tlsverify = false # sno install fails 
 
 mylog "Setting reg_path=my/path"
-sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
+sed -i "s#^reg_path=[^ \t]*#reg_path=my/path #g" ./mirror/mirror.conf	    	# test path
 
 mylog "Setting reg_ssh_user=testy for remote installation" 
-sed -i "s#reg_ssh_user=[^ \t]*#reg_ssh_user=testy   #g" ./mirror/mirror.conf	     	# If remote, set user
+sed -i "s#^reg_ssh_user=[^ \t]*#reg_ssh_user=testy #g" ./mirror/mirror.conf	     	# If remote, set user
 
 mylog "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" 
-sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/testy_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
+sed -i "s#^\#reg_ssh_key=[^ \t]*#reg_ssh_key=~/.ssh/testy_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 # FIXME: no need? or use 'aba clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
