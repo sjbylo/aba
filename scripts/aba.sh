@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250119231242
+ABA_VERSION=20250122170042
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
 
@@ -171,7 +171,6 @@ do
 		shift 
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
 		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" $ABA_PATH/aba.conf
-		####target_chan=$chal
 		shift 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
@@ -208,7 +207,7 @@ do
 
 		shift 2
 
-	elif [ "$1" = "--target-hostname" -o "$1" = "-H" ]; then
+	elif [ "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 
 		# force will skip over asking to edit the conf file
@@ -230,6 +229,15 @@ do
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
 		sed -i "s/^reg_ssh_user=[^ \t]*/reg_ssh_user=$2 /g" $ABA_PATH/mirror/mirror.conf
+
+		shift 2
+
+	elif [ "$1" = "--reg-root" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+
+		# force will skip over asking to edit the conf file
+		make -sC $ABA_PATH/mirror mirror.conf force=yes
+		sed -i "s#^reg_root=[^ \t]*#reg_root=$2 #g" $ABA_PATH/mirror/mirror.conf
 
 		shift 2
 
