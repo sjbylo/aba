@@ -9,7 +9,7 @@ source <(normalize-mirror-conf)
 
 [ ! "$cluster_name" ] && echo_red "Error: missing cluster_name value in cluster.conf!" >&2 && exit 1
 [ ! "$base_domain" ] && echo_red "Error: missing base_domain value in cluster.conf!" >&2 && exit 1
-[ ! "$machine_ip_prefix" ] && echo_red "Error: missing machine_ip_prefix value in cluster.conf!" >&2 && exit 1
+###[ ! "$machine_ip_prefix" ] && echo_red "Error: missing machine_ip_prefix value in cluster.conf!" >&2 && exit 1
 [ ! "$starting_ip" ] && echo_red "Error: missing starting_ip value in cluster.conf!" >&2 && exit 1
 [ ! "$num_masters" ] && echo_red "Error: missing num_masters value in cluster.conf!" >&2 && exit 1
 [ ! "$num_workers" ] && echo_red "Error: missing num_workers value in cluster.conf!" >&2 && exit 1
@@ -19,8 +19,9 @@ cl_apps_domain="*.apps.$cl_domain"
 cl_api_domain="api.$cl_domain"
 
 # Set the rendezvous_ip to the first master's ip
-export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
-export rendezvous_ip=$machine_ip_prefix$starting_ip
+###export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
+#export rendezvous_ip=$machine_ip_prefix$starting_ip
+export rendezvous_ip=$starting_ip
 
 SNO=
 [ $num_masters -eq 1 -a $num_workers -eq 0 ] && SNO=1 && echo_white "Configuration is for Single Node Openshift (SNO) ..."

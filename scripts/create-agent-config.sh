@@ -9,6 +9,70 @@ source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
 
+
+##############
+# Functions for manipulating IP addresses and CIDRs
+
+# Function to convert an IP address to a numeric value
+to_numeric() {
+  local ip=$1
+  local a b c d
+  IFS='.' read -r a b c d <<< "$ip"
+  echo $((a * 256 ** 3 + b * 256 ** 2 + c * 256 + d))
+}
+
+# Function to convert a numeric value back to an IP address
+from_numeric() {
+  local num=$1
+  echo "$((num >> 24 & 255)).$((num >> 16 & 255)).$((num >> 8 & 255)).$((num & 255))"
+}
+
+# Function to calculate the first and last usable IPs in the CIDR range
+calculate_cidr_range() {
+  local cidr=$1
+  local ip prefix
+  IFS='/' read -r ip prefix <<< "$cidr"
+
+  local ip_num=$(to_numeric "$ip")
+  local mask=$((0xFFFFFFFF << (32 - prefix) & 0xFFFFFFFF))
+  local network=$((ip_num & mask))
+  local broadcast=$((network | ~mask & 0xFFFFFFFF))
+
+  local first_usable=$((network + 1))
+  local last_usable=$((broadcast - 1))
+
+  echo "$first_usable $last_usable"
+}
+
+# Generate an array of IP addresses from a CIDR range
+generate_ip_array() {
+  local cidr=$1
+  local start_ip=$2
+  local count=$3
+
+  # Calculate the CIDR range
+  read -r first_usable last_usable <<< $(calculate_cidr_range "$cidr")
+
+  # Convert the starting IP to a numeric value
+  local current_ip=$(to_numeric "$start_ip")
+  
+  # Initialize IP array
+  local -a ip_array=()
+
+  for ((i = 0; i < count; i++)); do
+    if ((current_ip > last_usable)); then
+      echo "Reached the end of the CIDR range." >&2
+      break
+    fi
+    ip_array+=("$(from_numeric "$current_ip")")
+    ((current_ip++))
+  done
+
+  echo "${ip_array[@]}"
+}
+
+##############
+
 # Function to generate a random HEX digit
 generate_random_hex() {
     printf "%x" $((RANDOM%16))
@@ -35,10 +99,15 @@ mac_prefix=$(replace_hash_with_random_hex "$mac_prefix")
 
 
 # Set the rendezvous_ip to the the first master's ip
-export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
-export rendezvous_ip=$machine_ip_prefix$starting_ip
+#export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
+#export rendezvous_ip=$machine_ip_prefix$starting_ip
+ip_cnt=$(expr $num_masters + $num_workers)
+export rendezvous_ip=$starting_ip
 
 scripts/verify-config.sh || exit 1
+
+# Generate list of ip addresses from the CIDR and starting ip address
+export arr_ips=$(generate_ip_array "$machine_network/$prefix_length" "$starting_ip" "$ip_cnt")
 
 # Generate the mac addresses or get them from 'macs.conf'
 # Goal is to allow user to BYO mac addresses for bare-metal use-case. So, we generate the addresses in advance into an array "arr_". scripts/j2 will create a python list.
@@ -81,7 +150,12 @@ else
 	[ "$INFO_ABA" ] && echo_white "Using standard agent config template '$template_file'"
 fi
 
-# Note that machine_ip_prefix, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 
+echo "arr_ips=${arr_ips[@]}"
+# DEBUG # echo "arr_dns_servers=${arr_dns_servers[@]}"
+# DEBUG # echo "arr_ntp_servers=${arr_ntp_servers[@]}"
+# DEBUG # echo "arr_macs=${arr_macs[@]}"
+
+# Note that arr_ips, arr_dns_servers, arr_ntp_servers, arr_macs, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
 scripts/j2 templates/$template_file > agent-config.yaml
 
