@@ -299,8 +299,8 @@ mylog "Setting CIDR 10.0.1.200/30"
 sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g" sno/cluster.conf
 ##sed -i "s/^prefix_length=[^ \t]*/prefix_length=25 /g" sno/cluster.conf
 
-mylog "Setting starting_ip=201"
-sed -i "s/^starting_ip=[^ \t]*/starting_ip=201 /g" sno/cluster.conf
+mylog "Setting starting_ip=10.0.1.201"
+sed -i "s/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g" sno/cluster.conf
 test-cmd -m "Installing sno cluster" aba sno
 test-cmd -m "Checking cluster operators" aba --dir sno cmd
 

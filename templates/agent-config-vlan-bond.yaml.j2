@@ -29,7 +29,7 @@ hosts:
           ipv4:
             enabled: true
             address:
-              - ip: {{ machine_ip_prefix }}{{ '%d' % ( loop.index + starting_ip|int + ip_offset - 1 ) }}
+              - ip: {{ arr_ips[hostcnt + ip_offset] }}
                 prefix-length: 24
             dhcp: false
         - name: bond0 
