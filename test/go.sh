@@ -5,9 +5,9 @@
 #[ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
 [ "$TMUX" ] && tmux clear-history 
 
-export VER_OVERRIDE=4.14.30 # Uncomment to use the 'latest' stable version of OCP
-export internal_bastion_rhel_ver=rhel8  # rhel8 or rhel9
-export TEST_USER=root   # This can be any user or $(whoami) 
+#export VER_OVERRIDE=4.17.10 # Uncomment to use the 'latest' stable version of OCP
+export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
+export TEST_USER=$(whoami)   # This can be any user or $(whoami) 
 
 # This is for testing a specific branch ($1) directly from "git clone", otherwise it will test
 # the local dir. ($PWD)
