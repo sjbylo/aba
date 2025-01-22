@@ -13,8 +13,8 @@ hosts:
 {% endif %}
     role: {{ role }}
     interfaces:
-     - name: {{ port0 }}
-       macAddress: {{ arr_macs[hostcnt + mac_offset] }}
+      - name: {{ port0 }}
+        macAddress: {{ arr_macs[hostcnt + mac_offset] }}
     networkConfig:
       interfaces:
         - name: {{ port0 }}
