@@ -49,10 +49,9 @@ mylog
 ######################
 # Set up test 
 
-export subdir=~/subdir   # Unpack repo tar into this dir on internal bastion
+export subdir=\~/subdir   # Unpack repo tar into this dir on internal bastion
 
 # Exec script with any arg to skip reg. install and load
-##if [ ! "$1" ] && ! ssh $TEST_USER@$int_bastion_hostname -- make -C $subdir/aba/mirror verify; then
 if [ ! "$1" ]; then
 	echo
 	echo Setting up test $(basename $0)
@@ -155,14 +154,12 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 test-cmd -r 10 3 -m "Saving images to local disk on `hostname`" aba save
 
-# Smoke test!
-###[ ! -s mirror/save/mirror_seq1_000000.tar ] && echo "Aborting test as there is no save/mirror_seq1_000000.tar file" && exit 1
 test-cmd -m "Checking existance of file mirror/save/mirror_seq1_000000.tar" test -s mirror/save/mirror_seq1_000000.tar 
 
 mylog "'aba tar' and copy (ssh) files over to internal bastion: $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname" "aba -d mirror tar --out - | ssh $TEST_USER@$int_bastion_hostname -- tar -C $subdir -xvf -"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_seq1_000000.tar'" ls -lh $subdir/aba/mirror/save/mirror_seq1_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_seq1_000000.tar'" "ls -lh $subdir/aba/mirror/save/mirror_seq1_000000.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
 
@@ -184,19 +181,17 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror 
 # Now, this works
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load"
 
-test-cmd                                     -m "Delete loaded seq1 file" rm -v mirror/save/mirror_seq1_000000.tar
-##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq1 file on registry" rm -v subdir/aba/mirror/save/mirror_seq1_000000.tar
+test-cmd                                             -m "Delete loaded seq1 file" rm -v mirror/save/mirror_seq1_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded seq1 file on registry" rm -v subdir/aba/mirror/save/mirror_seq1_000000.tar
 
 ssh $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba compact $default_target" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)" "aba --dir $subdir/aba/compact delete" 
 
-ssh $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/sno" 
-
 #############
 ### Tests for standard cluster configs, e.g. bonding and vlan
 mylog "Starting tests to check out agent config files for various cluster configs, e.g. bonding and vlan"
-tast-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete standard dir: $subdir/aba/standard" rm -rf $subdir/aba/standard
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete standard dir: $subdir/aba/standard" rm -rf $subdir/aba/standard
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster --name standard --type standard --step cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i 's#^machine_network=.*#machine_network=10.0.0.0/22 #g' $subdir/aba/standard/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting starting_ip" "sed -i 's/^starting_ip=.*/starting_ip=10.0.2.253 /g' $subdir/aba/standard/cluster.conf"
@@ -205,22 +200,24 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config fil
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding" "sed -i 's/^.*port1=.*/port1=ens192 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | cut -d ' ' -f1"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan=.*/vlan=888 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | cut -d ' ' -f1"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface, port1" "sed -i 's/^port1=.*/#port1= /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | cut -d ' ' -f1"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
 mylog "Completed tests to check out agent config files for various cluster configs, e.g. bonding and vlan"
 #############
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Cleaning up $subdir/aba/sno" "rm -rf $subdir/aba/sno" 
 
 #### TESTING ACM + MCH 
 # Adjust size of SNO cluster for ACM install 
@@ -249,12 +246,6 @@ END
 
 test-cmd -r 10 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save"
 
-### mylog "'aba inc' and ssh files over to internal bastion: $TEST_USER@$int_bastion_hostname"
-### aba --dir mirror inc out=- | ssh $TEST_USER@$int_bastion_hostname -- tar xvf -
-#
-### mylog "'scp mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
-### scp mirror/save/mirror_seq2.tar $TEST_USER@$int_bastion_hostname $subdir/aba/mirror/save
-
 test-cmd -m "Checking existance of file mirror/save/mirror_seq2_000000.tar" test -s mirror/save/mirror_seq2_000000.tar 
 
 mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_seq2.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
@@ -275,7 +266,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror regi
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
 test-cmd                                     -m "Delete loaded seq2 file" rm -v mirror/save/mirror_seq2_000000.tar
-##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file on registry" rm -v subdir/aba/mirror/save/mirror_seq2_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file on registry" rm -v subdir/aba/mirror/save/mirror_seq2_000000.tar
 
 # Is the cluster can be reached ... use existing cluster
 #if test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno --cmd 'oc get clusterversion'"; then
@@ -334,8 +325,6 @@ test-cmd -m "Adding multicluster-engine          operator to mirror/save/imagese
 
 test-cmd -r 10 3 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
 
-### mylog Tar+ssh files from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname 
-### aba --dir mirror inc out=- | ssh $TEST_USER@$int_bastion_hostname -- tar xvf -
 mylog "'scp mirror/save/mirror_seq3.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Copy seq3 file to $int_bastion_hostname" scp mirror/save/mirror_seq3*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
@@ -346,7 +335,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry acces
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load"
 
 test-cmd                                     -m "Delete loaded seq3 file" rm -v mirror/save/mirror_seq3_000000.tar
-##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file on registry" rm -v subdir/aba/mirror/save/mirror_seq3_000000.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file on registry" rm -v subdir/aba/mirror/save/mirror_seq3_000000.tar
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
 

@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250122170042
+ABA_VERSION=20250124002739
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
 
@@ -333,9 +333,7 @@ do
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
-		#echo "$2" | grep -q "^-" && echo_red "Error in parsing argument of [$1]" >&2 && exit 1
-		#[ ! "$2" ] && echo_red "Missing machine network value after [$1]" >&2 && exit 1
-		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,3}$'; then
+		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
 			sed -i "s#^machine_network=[^ \t]*#machine_network=$2 #g" $ABA_PATH/aba.conf
 		else
 			echo_red "Error: Invalid CIDR [$2]" >&2

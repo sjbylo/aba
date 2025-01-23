@@ -7,8 +7,8 @@ hosts:
   - hostname: sno
     role: master
     interfaces:
-     - name: ens160
-       macAddress: 88:88:88:88:88:01
+      - name: ens160
+        macAddress: 88:88:88:88:88:01
     networkConfig:
       interfaces:
         - name: ens160
