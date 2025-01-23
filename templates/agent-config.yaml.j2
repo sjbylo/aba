@@ -4,7 +4,7 @@ metadata:
   name: {{ cluster_name }}
 rendezvousIP: {{ rendezvous_ip }}
 hosts:
-{%- for role, prefix, count, mac_offset, ip_offset in [("master", master_prefix, num_masters|int, 0, 0), ("worker", worker_prefix, num_workers|int, 6, 3)] %}
+{%- for role, prefix, count, mac_offset, ip_offset in [("master", master_prefix, num_masters|int, 0, 0), ("worker", worker_prefix, num_workers|int, 3, 3)] %}
 {%- for hostcnt in range(count) %}
 {%- if role == 'master' and num_workers == '0' and num_masters == '1' %}
   - hostname: {{ cluster_name }}
