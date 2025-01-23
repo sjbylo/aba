@@ -40,10 +40,10 @@ cli-oc-mirror:
 imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the intial image set config file with all provided values and operators
 isconf: imagesetconf ## Same as imagesetconf
 
-sync/imageset-config-sync.yaml: ../aba.conf
+sync/imageset-config-sync.yaml: ../aba.conf catalog
 	$(SCRIPTS)/reg-create-imageset-config-sync.sh
 
-save/imageset-config-save.yaml: ../aba.conf
+save/imageset-config-save.yaml: ../aba.conf catalog
 	$(SCRIPTS)/reg-create-imageset-config-save.sh
 
 ## If vmware.conf does not exist, then create it
@@ -55,7 +55,7 @@ save/imageset-config-save.yaml: ../aba.conf
 #sync: .init .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 sync: .init .rpmsint ~/.pull-secret.json index cli-download install sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf') Use retry=# to retry after failure.
 	###
-	### Upload images to the mirror registry from the Internet 
+	### Upload images to the mirror registry from the Internet (mirror-to-mirror)
 	###
 	$(SCRIPTS)/reg-sync.sh $(debug) $(retry)
 
@@ -68,7 +68,7 @@ sync: .init .rpmsint ~/.pull-secret.json index cli-download install sync/imagese
 # mirror-registry-amd64.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
 save: .init .rpmsext ~/.pull-secret.json index cli-download mirror-registry-amd64.tar.gz save/imageset-config-save.yaml  ## Save images from the Internet to mirror/save/ & download 'mirror-registry-amd64.tar.gz' for later installation into your private network. Use retry=# to retry after failure.
 	###
-	### Save images from the Internet to local disk 
+	### Save images from the Internet to local disk (mirror-to-disk)
 	###
 	$(SCRIPTS)/reg-save.sh $(debug) $(retry)
 
@@ -76,7 +76,7 @@ save: .init .rpmsext ~/.pull-secret.json index cli-download mirror-registry-amd6
 .PHONY: load
 load: .init cli-oc-mirror .rpmsint install  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf')  Use retry=# to retry after failure.
 	###
-	### Load images from local disk to mirror registry
+	### Load images from local disk to mirror registry (disk-to-mirror)
 	###
 	$(SCRIPTS)/reg-load.sh $(debug) $(retry)
 
@@ -94,11 +94,7 @@ testload: save install load     # Test the save, install, load process on a conn
 rpmsclean:
 	@rm -f .rpms*
 
-### regcreds:
-###	@mkdir regcreds 
-
 mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry binary 
-	@#tar xmvzf mirror-registry.tar.gz
 	tar xmvzf mirror-registry-amd64.tar.gz
 
 mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball

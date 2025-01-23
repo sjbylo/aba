@@ -138,19 +138,19 @@ echo
 
 if [ "$port0" -a "$port1" -a "$vlan" ]; then
 	template_file=agent-config-vlan-bond.yaml.j2
-	[ "$INFO_ABA" ] && echo_white "Using vlan and bonding agent config template '$template_file' (port0=$port0 port1=$port1 vlan=$vlan)"
+	[ "$INFO_ABA" ] && echo_white "Using vlan and bonding agent config template: templates/$template_file (port0=$port0 port1=$port1 vlan=$vlan)"
 elif [ "$port0" -a "$port1" -a ! "$vlan" ]; then
 	template_file=agent-config-bond.yaml.j2
-	[ "$INFO_ABA" ] && echo_white "Using access mode bonding agent config template '$template_file' (port0=$port0 port1=$port1)"
+	[ "$INFO_ABA" ] && echo_white "Using access mode bonding agent config template: templates/$template_file (port0=$port0 port1=$port1)"
 elif [ "$port0" -a ! "$port1" -a "$vlan" ]; then
 	template_file=agent-config-vlan.yaml.j2
-	[ "$INFO_ABA" ] && echo_white "Using vlan agent config template '$template_file' (port0=$port0 port1=$port1)"
+	[ "$INFO_ABA" ] && echo_white "Using vlan agent config template: templates/$template_file (port0=$port0 vlan=$vlan)"
 else
 	template_file=agent-config.yaml.j2
-	[ "$INFO_ABA" ] && echo_white "Using standard agent config template '$template_file'"
+	[ "$INFO_ABA" ] && echo_white "Using standard agent config template: templates/$template_file (port0=$port0)"
 fi
 
-echo "arr_ips=${arr_ips[@]}"
+# echo "arr_ips=${arr_ips[@]}"
 # DEBUG # echo "arr_dns_servers=${arr_dns_servers[@]}"
 # DEBUG # echo "arr_ntp_servers=${arr_ntp_servers[@]}"
 # DEBUG # echo "arr_macs=${arr_macs[@]}"
