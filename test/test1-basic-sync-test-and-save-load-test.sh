@@ -105,7 +105,7 @@ echo GOVC_DATACENTER=$GOVC_DATACENTER
 echo GOVC_CLUSTER=$GOVC_CLUSTER
 echo VC_FOLDER=$VC_FOLDER
 
-export subdir=~/subdir  # init_bastion() needs this to create 'subdir' dir! though test1 does not use it! #FIXME
+export subdir=\~/subdir  # init_bastion() needs this to create 'subdir' dir! though test1 does not use it! #FIXME
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
 init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 
@@ -296,7 +296,9 @@ test-cmd -m "Configuring SNO cluster with 'aba sno --step cluster.conf" aba sno 
 ###mylog "Setting CIDR 10.0.1.128/25"
 mylog "Setting CIDR 10.0.1.200/30"
 ###sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.128/25 #g" sno/cluster.conf
-sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g" sno/cluster.conf
+###sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g" sno/cluster.conf
+sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.0/20 #g" sno/cluster.conf
+aba --machine-network 10.0.1.0/20
 ##sed -i "s/^prefix_length=[^ \t]*/prefix_length=25 /g" sno/cluster.conf
 
 mylog "Setting starting_ip=10.0.1.201"
