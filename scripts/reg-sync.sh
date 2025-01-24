@@ -5,7 +5,7 @@ source scripts/include_all.sh
 
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Will try $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
+[ "$1" ] && [ $1 -gt 0 ] && r=1 && try_tot=`expr $1 + 1` && echo "Will try $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
 
 umask 077
 
@@ -94,6 +94,7 @@ if [ "$failed" ]; then
 	echo_red -n "Image synchronization aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes can fail! Resolve any issues (if needed) and try again." >&2
+	[ ! "$r" ] && echo_red "Consider using --retry option" >&2
 
 	exit 1
 fi

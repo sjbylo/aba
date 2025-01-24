@@ -74,7 +74,7 @@ if [ ! "$1" ]; then
 	rm -f aba.conf
 	vf=~steve/.vmware.conf
 	[ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
-	test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel fast --version $VER_OVERRIDE ### --vmw $vf
+	test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel stable --version $VER_OVERRIDE ### --vmw $vf
 
 	test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba -A  # noask
 
@@ -358,9 +358,9 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub"
 
 test-cmd -m "Leave time for ACM to deploy ..." sleep 30
 
-##test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait for hub status is 'Running'" "while ! \$HOME/bin/oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; sleep 10; done"
 # Need 'cd' here due to '=$subdir' not 'resolving' ok
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait for hub status is 'Running'" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait 3m for acm hub status is 'Running'" "cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=$i+1; [ $i -gt 24 ] && exit 1; sleep 10; done"
+##test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait for hub status is 'Running'" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 #### TESTING ACM + MCH 
 
 # Apply NTP config, but don't wait for it to complete!

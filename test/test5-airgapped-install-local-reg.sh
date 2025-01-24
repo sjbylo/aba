@@ -69,7 +69,7 @@ mylog "Test to install a local reg. on $int_bastion_hostname and save + copy + l
 rm -f aba.conf  # Set it up next
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
-test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --channel fast --version $VER_OVERRIDE
+test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --channel stable --version $VER_OVERRIDE
 mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
 mylog "ask set to $(grep -o '^ask=[^ ]*' aba.conf) in $PWD/aba.conf"
 
@@ -130,7 +130,7 @@ source <(cd mirror && normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-test-cmd -r 10 3 -m "Creating bundle for channel fast and versiono $ocp_version" "aba -f bundle --channel fast --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
+test-cmd -r 10 3 -m "Creating bundle for channel stable and version $ocp_version" "aba -f bundle --channel stable --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
 # Smoke tests!
 test-cmd -m  "Verifying existance of file 'mirror/save/mirror_seq1_000000.tar'" "ls -lh mirror/save/mirror_seq1_000000.tar" 
@@ -172,7 +172,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: registry.redhat.io/ubi9/ubi:latest
 END
 
-test-cmd -r 10 3 -m "Saving ubi images to local disk on `hostname`" "aba --dir mirror save" 
+test-cmd -r 12 1 -m "Saving ubi images to local disk on `hostname`" "aba --dir mirror save" 
 
 mylog Copy tar+ssh archives to internal bastion
 ## aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir - xvf -
