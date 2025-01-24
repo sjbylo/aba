@@ -357,7 +357,9 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub"
 
 test-cmd -m "Leave time for ACM to deploy ..." sleep 30
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Wait for hub status is 'Running'" "while ! \$HOME/bin/oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; sleep 10; done"
+##test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait for hub status is 'Running'" "while ! \$HOME/bin/oc --kubeconfig=$subdir/aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; sleep 10; done"
+# Need 'cd' here due to '=$subdir' not 'resolving' ok
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait for hub status is 'Running'" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 #### TESTING ACM + MCH 
 
 # Apply NTP config, but don't wait for it to complete!
