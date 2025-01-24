@@ -6,7 +6,7 @@ source scripts/include_all.sh
 # Script called with args "debug" and/or "retry"
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Will try $try_tot times to save the images to disk."    # If the retry value exists and it's a number
+[ "$1" ] && [ $1 -gt 0 ] && r=1 && try_tot=`expr $1 + 1` && echo "Will try $try_tot times to save the images to disk."    # If the retry value exists and it's a number
 
 umask 077
 
@@ -56,6 +56,7 @@ if [ "$failed" ]; then
 	echo_red -n "Image saving aborted ..." >&2
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes can fail! Resolve any issues (if needed) and try again." >&2
+	[ ! "$r" ] && echo_red "Consider using --retry option" >&2
 	# CHANGE echo_red Error output: >&2
 	# CHANGE cat_red .oc-mirror-error.log >&2
 
