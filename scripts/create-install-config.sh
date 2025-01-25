@@ -51,7 +51,7 @@ else
 		export pull_secret=$(cat $pull_secret_file)
 		echo Found pull secret file at $pull_secret_file.  Assuming online installation using public RH registry.
 	else
-		echo_red "Error: No pull secrets found. Aborting!  See the README for help!" >&2 
+		echo_red "Error: No pull secret found in mirror/regcreds dir. Aborting!  See the README.md file for help!" >&2 
 
 		exit 1
 	fi
@@ -109,9 +109,6 @@ else
 	else
 		# Should check accessibility to registry.redhat.io?
 		echo
-		##echo_red "Warning: No private mirror registry configured & no proxy settings provided!" >&2
-		##echo_red "         If this is *unexpected* you likely need to set up a mirror registry! See the README.md for more." >&2
-		##echo_red "         Root CA file 'regcreds/rootCA.pem' not found. Not adding 'additionalTrustBundle' to install-config.yaml!" >&2
 		echo_red "Warning: No private mirror registry is configured, and no proxy settings have been provided!" >&2
 		echo_red "         If this is *unexpected*, setting up a mirror registry may be necessary. Refer to the README.md for detailed instructions." >&2
 		echo_red "         Root CA file 'regcreds/rootCA.pem' is missing. As a result, the 'additionalTrustBundle' will not be added to 'install-config.yaml'." >&2

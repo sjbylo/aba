@@ -142,20 +142,20 @@ if [ "$file_list" ]; then
 
 	if oc create -f $cs_file 2>/dev/null; then
 		# Setting: displayName: Private Catalog (registry.example.com)
-		echo "Patching registry display name: 'Private Catalog ($reg_host)' for CatalogSource cs-redhat-operator-index"
-		oc patch CatalogSource cs-redhat-operator-index  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "Private Catalog ('$reg_host')"}}'
+		echo "Patching registry display name: 'Private Catalog ($reg_host)' for CatalogSource redhat-operators"
+		oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "Private Catalog ('$reg_host')"}}'
 
-		echo "Patching registry poll interval for CatalogSource cs-redhat-operator-index"
-		oc patch CatalogSource cs-redhat-operator-index  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
+		echo "Patching registry poll interval for CatalogSource redhat-operators"
+		oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
 		echo Pausing ...
 		sleep 60
 	else
 		:
 	fi
 
-	echo "Waiting for CatalogSource 'cs-redhat-operator-index' to become 'ready' ..."
+	echo "Waiting for CatalogSource 'redhat-operators' to become 'ready' ..."
 	i=2
-	time while ! oc get catalogsources.operators.coreos.com  cs-redhat-operator-index -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$
+	time while ! oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$
 	do
 		echo -n .
 		sleep $i
@@ -171,7 +171,7 @@ if [ "$file_list" ]; then
 else
 	echo
 	echo_cyan "No Operator CatalogSources found under mirror/{save,sync}/oc-mirror-workspace (no operators mirrored?)."
-	echo_cyan "Operator images can be loaded into the mirror registry first by a) editing the mirror/save/imageset-config-save.yaml file and b) running 'aba save/load'. See the README for more."
+	echo_cyan "Operator images can be loaded into the mirror registry first by a) editing the mirror/save/imageset-config-save.yaml file and b) running 'aba save/load'. See the README.md for more."
 	echo
 fi
 

@@ -12,8 +12,8 @@ source <(normalize-aba-conf)
 
 # $domain is used as input in below j2 command
 if [ ! "$ocp_version" -o ! "$domain" ]; then
-	echo_red "Values 'domain' and/or 'ocp_version' missing in aba.conf." >&2
-	echo_red "Please see the README on how to get started!" >&2  # Should never need to reach here
+	echo_red "Values 'domain' and/or 'ocp_version' missing in aba/aba.conf." >&2
+	echo_red "Please see the README.md on how to get started!" >&2  # Should never need to reach here
 
 	exit 1
 fi

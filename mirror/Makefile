@@ -25,7 +25,7 @@ init: .init
 
 # If aba.conf does not exist, must abort!
 ../aba.conf:
-	echo "aba.conf missing! Please read the README on how to get started!"
+	echo "aba/aba.conf file missing! Please read the README.md on how to get started!"
 	@exit 1
 
 .PHONY: cli-download

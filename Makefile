@@ -1,4 +1,5 @@
 # Top level Makefile  # DO NOT remove this line!
+
 ifndef DEBUG_ABA
 .SILENT:
 endif
@@ -6,24 +7,14 @@ endif
 TEMPLATES = templates
 SCRIPTS   = scripts
 
-##ocp_target_ver   ?= 4.13.19
-##d        ?= 
-##DEBUG     = $d
-##out    ?= /tmp
-
 .PHONY: aba
 aba:  ## Run aba to set up 'aba.conf'
-	aba --debug -i
+	aba -i
 
 aba.conf:
 	aba
 
-##.PHONY: interactive
-##interactive:
-##	$(SCRIPTS)/aba-interactive.sh
-
 ##@ Help-related tasks
-
 .PHONY: help
 help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  aba \033[36mcommand\033[0m\n"} /^(\s|[a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
@@ -59,7 +50,7 @@ sync: ## Sync images from the Internet directly to an internal registry (as defi
 # These are the targets needed to create the 'bundle' archive
 .PHONY: bundle
 # Note: '@' used to ensure tar format is not corrupted when using out=-
-bundle:  ## Create a bundle archive of content to be carried into the air-gapped env. Example: make bundle out=/path/to/archive/bundle
+bundle:  ## Create a bundle archive of content to be carried into the air-gapped env. Example: aba bundle out=/path/to/archive/bundle
 	@$(SCRIPTS)/make-bundle.sh $(out) $(force)
 
 .PHONY: save
@@ -67,16 +58,16 @@ save: ## Save images from the Internet to mirror/save.
 	@make -sC mirror save 
 
 .PHONY: tar
-tar:  ## Archive the full repo, e.g. make tar out=/dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use out=- to send tar output to stdout.
+tar:  ## Archive the full repo, e.g. aba tar out=/dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use out=- to send tar output to stdout.
 	$(SCRIPTS)/backup.sh $(out)
 
 # Note, the '@' is required for valid tar format output!
 .PHONY: tarrepo
-tarrepo:  ## Archive the full repo *excluding* the mirror/mirror_seq*tar files. Works in the same way as 'make tar'.
+tarrepo:  ## Archive the full repo *excluding* the mirror/mirror_seq*tar files. Works in the same way as 'aba tar'.
 	@$(SCRIPTS)/backup.sh --repo $(out)
 
 .PHONY: inc
-inc:  ## Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'make tar'.
+inc:  ## Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'aba tar'.
 	$(SCRIPTS)/backup.sh --inc $(out)
 
 .PHONY: load
@@ -84,19 +75,19 @@ load: ## Load the saved images into a registry on the internal bastion (as defin
 	@make -sC mirror load
 
 .PHONY: sno
-sno: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make sno target=iso' to make that target.
+sno: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'aba sno target=iso' to make that target.
 	$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: compact
-compact: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make compact target=iso' to make that target.
+compact: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'aba compact target=iso' to make that target.
 	$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: standard
-standard: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'make standard target=iso' to make that target.
+standard: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'aba standard target=iso' to make that target.
 	$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: cluster
-cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. make cluster name=mycluster [type=sno|compact|standard] [target=<target>]
+cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. aba cluster name=mycluster [type=sno|compact|standard] [target=<target>]
 	$(SCRIPTS)/setup-cluster.sh $(name) $(type)
 
 #.PHONY: rsync
@@ -126,7 +117,7 @@ clean: ## Clean up all temporary files.
 	rm -f .aba.conf.seen
 
 .PHONY: reset
-reset: # Clean up *everything*.  Only use if you know what you are doing! Note that this does not run 'make uninstall' (uninstall the reg.)
+reset: # Clean up *everything*.  Only use if you know what you are doing! Note that this does not run 'aba uninstall' (uninstall the reg.)
 	$(SCRIPTS)/reset-gate.sh $(force)
 	make clean
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
