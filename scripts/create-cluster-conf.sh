@@ -4,7 +4,7 @@
 source scripts/include_all.sh
 
 source <(normalize-aba-conf)
-source ../shortcuts.conf  # Values can be set in this file for testing 
+[ -s ../shortcuts.conf ] && source ../shortcuts.conf  # Values can be set in this file for testing 
 
 if [ ! "$ocp_version" ]; then
 	echo "Value 'ocp_version' not set in aba/aba.conf file. Please run aba for interactive mode or see the README.md file!"
@@ -31,7 +31,7 @@ type=standard
 export mac_prefix=00:50:56:2x:xx:
 export num_masters=3
 export num_workers=3
-export starting_ip="<add>"
+export starting_ip="ADD-IP-ADDR-HERE"
 export port0=ens160
 export port1=ens192
 export master_cpu_count=8
@@ -72,7 +72,7 @@ scripts/j2 templates/cluster.conf > cluster.conf
 # For sno, ensure these values are commented out as they are not needed!
 [ "$type" = "sno" ] && sed -E -i -e "s/^api_vip=[^ \t]*/#api_vip=not-required/g" -e "s/^ingress_vip=[^ \t]*/#ingress_vip=not-required/g" cluster.conf
 
-edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift" || exit 1
+edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift" #### don't want error here, just stop || exit 1
 
 exit 0
 

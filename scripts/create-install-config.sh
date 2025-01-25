@@ -8,7 +8,9 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
-[ -s vmware.conf ] && source <(normalize-vmware-conf)
+[ -s vmware.conf ] && source <(normalize-vmware-conf)  # Some values needed for install-config.yaml
+
+##scripts/verify-config.sh || exit 1  # Added to Makefile
 
 # Set the rendezvous_ip to the the first master's ip
 ##export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
@@ -49,7 +51,7 @@ else
 	# This means we will do an ONLINE install, using the public RH registry. 
 	if [ -s $pull_secret_file ]; then
 		export pull_secret=$(cat $pull_secret_file)
-		echo Found pull secret file at $pull_secret_file.  Assuming online installation using public RH registry.
+		[ "$INFO_ABA" ] && echo Found pull secret file at $pull_secret_file.  Assuming online installation using public RH registry.
 	else
 		echo_red "Error: No pull secret found in mirror/regcreds dir. Aborting!  See the README.md file for help!" >&2 
 
@@ -60,7 +62,7 @@ fi
 
 # Check for ssh key files 
 if [ -s $ssh_key_file.pub ]; then
-	echo Using existing ssh key files: $ssh_key_file ... 
+	[ "$INFO_ABA" ] && echo Using existing ssh key files: $ssh_key_file ... 
 else
 	echo Creating ssh key files for $ssh_key_file ... 
 	ssh-keygen -t rsa -f $ssh_key_file -N ''
@@ -94,7 +96,7 @@ if [ "$proxy" ]; then
 		echo_red "setting the '*_proxy' values in 'cluster.conf'" >&2
 	fi
 else
-	echo_white "Not configuring the cluster wide proxy since proxy values not set in cluster.conf."
+	[ "$INFO_ABA" ] && echo_white "Not configuring the cluster wide proxy since proxy values not set in cluster.conf."
 fi
 
 # ... we also, need a root CA... if using our own registry.
@@ -126,9 +128,11 @@ if [ "$additional_trust_bundle" -a "$image_content_sources" ]; then
 	scripts/verify-release-image.sh
 fi
 
-echo
-echo Generating Agent-based configuration file: $PWD/install-config.yaml 
-echo
+if [ "$INFO_ABA" ]; then
+	echo
+	echo Generating Agent-based configuration file: $PWD/install-config.yaml 
+	echo
+fi
 # Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret, insert_proxy ...
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml

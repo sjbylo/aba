@@ -87,6 +87,7 @@ agentconf: install-config.yaml agent-config.yaml  ## Convenient target to only g
 # Note that install-config.yaml can be configured with vSphere params (need 'vmware.conf')
 install-config.yaml: .init vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
 	make -sC ../cli 
+	$(SCRIPTS)/verify-config.sh
 	$(SCRIPTS)/create-install-config.sh $(debug)
 
 #agent-config.yaml: .init vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
@@ -189,6 +190,8 @@ delete: .init vmware.conf                     agent-config.yaml ## Delete all VM
 	@touch .install-complete
 
 .PHONY: mon
+# install and mon and the same
+install: mon  ## Install the cluster using the cluster.conf file
 mon:  ## Monitor the agent-based installation of OpenShift.
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete

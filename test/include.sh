@@ -285,13 +285,13 @@ useradd $u -p not-used
 mkdir ~$u/.ssh 
 chmod 700 ~$u/.ssh
 #cp -p ~steve/.pull-secret.json ~$u 
-echo $pub_key > ~$u/.ssh/authorized_keys
-echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
+echo "$pub_key" > ~$u/.ssh/authorized_keys
 chmod 600 ~$u/.ssh/authorized_keys
 chown -R $u.$u ~$u
+echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
 END
 
-	test-cmd -m "Verify ssh to testy@$int_bastion_hostname" ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname whoami
+	test-cmd -m "Verify ssh to testy@$int_bastion_hostname" "ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname whoami | grep testy"
 
 	###test-cmd -h testy@$int_bastion_hostname -m "Delete and create sub dir on remote host for user $u" "rm -rf $subdir && mkdir $subdir"
 	if [ "$test_user" = "root" ]; then

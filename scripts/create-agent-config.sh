@@ -9,6 +9,7 @@ source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
 
+###scripts/verify-config.sh || exit 1  # Added to Makefile
 
 ##############
 # Functions for manipulating IP addresses and CIDRs
@@ -102,9 +103,12 @@ mac_prefix=$(replace_hash_with_random_hex "$mac_prefix")
 #export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
 #export rendezvous_ip=$machine_ip_prefix$starting_ip
 ip_cnt=$(expr $num_masters + $num_workers)
-export rendezvous_ip=$starting_ip
+if ! echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+	echo_red "Error: value 'starting_ip' [$starting_ip] is missing or invalid. Should be ip address." >&2 
+	exit 1
+fi
 
-scripts/verify-config.sh || exit 1
+export rendezvous_ip=$starting_ip
 
 # Generate list of ip addresses from the CIDR and starting ip address
 export arr_ips=$(generate_ip_array "$machine_network/$prefix_length" "$starting_ip" "$ip_cnt")
@@ -132,9 +136,11 @@ export arr_ntp_servers=$(echo $ntp_servers | tr -d "[:space:]" | tr "," " ")  # 
 [ "$INFO_ABA" ] && echo_cyan "Adding NTP server(s): $arr_ntp_servers"
 
 # Use j2cli to render the templates
-echo
-echo Generating Agent-based configuration file: $PWD/agent-config.yaml 
-echo
+if [ "$INFO_ABA" ]; then
+	echo
+	echo Generating Agent-based configuration file: $PWD/agent-config.yaml 
+	echo
+fi
 
 if [ "$port0" -a "$port1" -a "$vlan" ]; then
 	template_file=agent-config-vlan-bond.yaml.j2
