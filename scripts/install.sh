@@ -52,18 +52,19 @@ fi
 # If we are installing by piping into bash
 if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
 	if ! git clone -b $branch https://github.com/${repo}.git; then
+		echo "Error fetching git repo from https://github.com/${repo}.git (branch: $branch)" >&2
+		exit 1
+	else
 		cd aba
 		if ! git checkout $branch; then
 			echo "Error checking out git branch $branch" >&2
 			exit 1
 		fi
-		echo "Error fetching git repo from https://github.com/${repo}.git (branch: $branch)" >&2
-		exit 1
 	fi
 
 	echo
-	echo "Cloned aba into $PWD/aba" >&2
-	cd aba
+	echo "Cloned aba branch $branch into $PWD/aba" >&2
+	##cd aba
 else
 	[ "$cur_dir" = "$PWD" ] && quite=  # Since we're in the aba dir, no neeed to output instructions
 fi
