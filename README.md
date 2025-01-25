@@ -638,6 +638,11 @@ aba standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must b
 ```
 - Run this to create a compact cluster (works in a similar way to the above). 
 
+To install aba from the dev branch run the following:
+
+```
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+```
 
 [Back to top](#who-should-use-aba)
 
