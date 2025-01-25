@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250125160310
+ABA_VERSION=20250125162220
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Please fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -73,7 +73,8 @@ fi
 
 # install will check if aba needs to be updated, if so it will return 0 ... so we re-execute it!
 if $ABA_PATH/install -v $ABA_VERSION -q; then
-	exec "$0" "$@"
+	#exec "$0" "$@"
+	aba "$@"
 fi
 
 usage=$(cat $ABA_PATH/others/help.txt)
