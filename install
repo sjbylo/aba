@@ -11,12 +11,12 @@ do
 	[ "$1" = "-v" ] && cur_ver=$2 && shift 2
 done
 
-repo=sjbylo/aba
 branch=main
+repo=sjbylo/aba
 
 # Required args
-[ "$1" ] && repo="$1"
-[ "$2" ] && branch="$2"
+[ "$1" ] && branch="$1"
+[ "$2" ] && repo="$2"
 
 cur_dir=$PWD
 #cd $(dirname $0)
