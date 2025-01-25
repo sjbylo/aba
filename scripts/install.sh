@@ -52,6 +52,7 @@ fi
 # If we are installing by piping into bash
 if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
 	if ! git clone -b $branch https://github.com/${repo}.git; then
+		cd aba
 		if ! git checkout $branch; then
 			echo "Error checking out git branch $branch" >&2
 			exit 1
