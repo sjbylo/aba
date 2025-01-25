@@ -1,14 +1,14 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250124002739
+ABA_VERSION=20250125160310
 # Sanity check
-echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]!" && exit 1; }
+echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Please fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
 uname -o | grep -q "^Darwin$" && echo "Please run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
 
 # Check sudo or root access 
-[ "$(sudo id -run)" != "root" ] && echo "Please run aba as root or configure passwordless sudo, then try again." >&2 && exit 1
+[ "$(sudo id -run)" != "root" ] && echo "Please configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
 
 # Set up a temp directory
 export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
@@ -31,6 +31,14 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	shift 2
 fi
 
+# If aba is called with relative path, e.g. aba/aba then why not try cd to the top-level dir?
+#if echo $0 | grep -q / && cd $(dirname $0); then
+if [[ "$0" != /* ]]; then
+	cd $(dirname $0)
+	# If we are not at the top level repo dir then change back again
+	[ -s Makefile ] && grep -q "Top level Makefile" Makefile || cd - >/dev/null
+fi
+
 # Check the rpo location
 # Need to be sure location of the top of the repo in order to find the important files
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
@@ -42,6 +50,7 @@ elif [ -s ../../Makefile ] && grep -q "Top level Makefile" ../../Makefile; then
 elif [ -s ../../../Makefile ] && grep -q "Top level Makefile" ../../../Makefile; then
 	ABA_PATH=../../..
 else
+	# Give an error to change to the top level dir
 	(
 		echo "  __   ____   __  "
 		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
@@ -66,13 +75,6 @@ fi
 if $ABA_PATH/install -v $ABA_VERSION -q; then
 	exec "$0" "$@"
 fi
-
-# FIXME: delete?
-### Check if aba script needs to be updated
-##if [ -s $ABA_PATH/scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" $ABA_PATH/scripts/aba.sh; then
-##	REPO_VER=$(grep "^ABA_VERSION=" $ABA_PATH/scripts/aba.sh | cut -d= -f2)
-##	[ "$REPO_VER" -a $REPO_VER -gt $ABA_VERSION -a -x $ABA_PATH/install ] && echo "Updating aba script .." >&2 && $ABA_PATH/install -q >&2 && exec "$0" "$@"
-##fi
 
 usage=$(cat $ABA_PATH/others/help.txt)
 
@@ -561,7 +563,7 @@ if [ ! -f .bundle ]; then
 				if curl -f --connect-timeout 10 --retry 2 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 					break
 				else
-					echo_red "Error: Failed to find release $target_ver" >&2
+					echo_red "Error: Failed to find release: $target_ver" >&2
 				fi
 			fi
 
@@ -674,7 +676,7 @@ if [ ! -f .bundle ]; then
 		echo "                                                          # (size ~20-30GB for a base installation)."
 		echo "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
 		echo "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several more managable files."
-		echo "                                                          # Unpack the files with: cat ocp_* | tar xvf - "
+		echo "                                                          # Unpack the files on the internal bastion with: cat ocp_* | tar xvf - "
 		echo
 
 		exit 0
