@@ -72,7 +72,7 @@ if [ -x scripts/aba.sh ]; then
 			action=
 			if [ -s "$d/aba" ]; then
 				INSTALLED_VER=$(grep "^ABA_VERSION=" $d/aba | cut -d= -f2)
-				if [ "$INSTALLED_VER" -a $INSTALLED_VER -ne $REPO_VER ]; then
+				if [ "$INSTALLED_VER" -a "$REPO_VER" -a $INSTALLED_VER -ne $REPO_VER ]; then
 					action="updated to $d"
 					quiet=1  # since aba has been updated, no need for guidance below
 				else

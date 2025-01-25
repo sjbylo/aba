@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250125162220
+ABA_VERSION=20250125233544
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Please fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -33,10 +33,12 @@ fi
 
 # If aba is called with relative path, e.g. aba/aba then why not try cd to the top-level dir?
 #if echo $0 | grep -q / && cd $(dirname $0); then
-if [[ "$0" != /* ]]; then
-	cd $(dirname $0)
+#if [[ "$0" != /* ]]; then
+if echo "$0" | grep -qe /; then
+	d=$(dirname $0)
+	#cd $(dirname $0)
 	# If we are not at the top level repo dir then change back again
-	[ -s Makefile ] && grep -q "Top level Makefile" Makefile || cd - >/dev/null
+	[ -s $d/Makefile ] && grep -q "Top level Makefile" $d/Makefile && cd $d #|| cd - >/dev/null
 fi
 
 # Check the rpo location
