@@ -19,7 +19,7 @@ branch=main
 [ "$2" ] && branch="$2"
 
 cur_dir=$PWD
-cd $(dirname $0)
+#cd $(dirname $0)
 
 # Only want to use git on the workstation with Internet access
 if [ ! -f .bundle ]; then
