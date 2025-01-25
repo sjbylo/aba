@@ -299,8 +299,8 @@ test-cmd -m "Configuring SNO cluster with 'aba sno --step cluster.conf" aba sno 
 mylog "Setting CIDR 10.0.1.200/30"
 ###sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.128/25 #g" sno/cluster.conf
 ###sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g" sno/cluster.conf
-sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.0/20 #g" sno/cluster.conf
-aba --machine-network 10.0.1.0/20
+sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g" sno/cluster.conf
+aba --machine-network 10.0.0.0/20
 ##sed -i "s/^prefix_length=[^ \t]*/prefix_length=25 /g" sno/cluster.conf
 
 mylog "Setting starting_ip=10.0.1.201"
