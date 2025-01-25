@@ -7,8 +7,8 @@ hosts:
   - hostname: master1
     role: master
     interfaces:
-     - name: ens160
-       macAddress: 88:88:88:88:88:01
+      - name: ens160
+        macAddress: 88:88:88:88:88:01
     networkConfig:
       interfaces:
         - name: ens160
@@ -35,8 +35,8 @@ hosts:
   - hostname: master2
     role: master
     interfaces:
-     - name: ens160
-       macAddress: 88:88:88:88:88:02
+      - name: ens160
+        macAddress: 88:88:88:88:88:02
     networkConfig:
       interfaces:
         - name: ens160
@@ -63,8 +63,8 @@ hosts:
   - hostname: master3
     role: master
     interfaces:
-     - name: ens160
-       macAddress: 88:88:88:88:88:03
+      - name: ens160
+        macAddress: 88:88:88:88:88:03
     networkConfig:
       interfaces:
         - name: ens160

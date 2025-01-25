@@ -4,10 +4,10 @@
 source scripts/include_all.sh
 
 source <(normalize-aba-conf)
-source ../shortcuts.conf
+source ../shortcuts.conf  # Values can be set in this file for testing 
 
 if [ ! "$ocp_version" ]; then
-	echo "Please run aba first or see the README.md file!"
+	echo "Value 'ocp_version' not set in aba/aba.conf file. Please run aba for interactive mode or see the README.md file!"
 
 	exit 1
 fi
@@ -27,7 +27,7 @@ type=standard
 
 [ "$DEBUG_ABA" ] && echo_cyan "$0: Creating cluster directory for [$name] of type [$type]" >&2
 
-# Set defaults 
+# Set reasonable defaults
 export mac_prefix=00:50:56:2x:xx:
 export num_masters=3
 export num_workers=3
@@ -42,7 +42,7 @@ export worker_mem=8
 # Now, need to create cluster.conf
 export cluster_name=$name
 
-# Set any shortcuts, but only if they exist, otherwise use the above default value
+# Set any values from the shortcuts.conf file, but only if they exist, otherwise use the above default value
 [ "${shortcuts["$name:api_vip"]}" ]		&& export api_vip=${shortcuts["$name:api_vip"]}
 [ "${shortcuts["$name:ingress_vip"]}" ]		&& export ingress_vip=${shortcuts["$name:ingress_vip"]}
 [ "${shortcuts["$name:starting_ip"]}" ]		&& export starting_ip=${shortcuts["$name:starting_ip"]}
@@ -56,9 +56,7 @@ export cluster_name=$name
 [ "${shortcuts["$name:port0"]}" ]		&& export port0=${shortcuts["$name:port0"]}
 [ "${shortcuts["$name:port1"]}" ]		&& export port1=${shortcuts["$name:port1"]}
 
-#[ ! "$api_vip" ] && export api_vip=not-required
-#[ ! "$ingress_vip" ] && export ingress_vip=not-required
-
+# Set reasonable defaults for sno and compact
 if [ "$type" = "sno" ]; then
 	export num_masters=1
 	export num_workers=0

@@ -23,6 +23,6 @@ spec:
   channel: release-2.12
   installPlanApproval: Automatic
   name: advanced-cluster-management
-  source: cs-redhat-operator-index
+  source: redhat-operators
   sourceNamespace: openshift-marketplace
 

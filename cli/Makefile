@@ -13,7 +13,7 @@ os_ver := $(strip $(shell grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f2 |
 
 # Check and set default version 'os_ver' variable, e.g. if Fedora version 40, then we want to convert "40" to 9.x
 ifeq ($(os_ver),)
-	os_ver := 9.4
+	os_ver := 9.5
 endif
 
 ifeq ($(shell echo "$(os_ver)" | grep -o -E "^8\."),8.)
@@ -21,7 +21,6 @@ ifeq ($(shell echo "$(os_ver)" | grep -o -E "^8\."),8.)
 else
 	rhel_ver := rhel9
 endif
-
 
 # Normalize 'os' variable
 ifeq ($(os),GNU/Linux)
@@ -37,35 +36,21 @@ ifeq ($(os),mac)
 	endif
 endif
 
-#ifneq ($(filter reset,$(MAKECMDGOALS)),)
-
 # Include aba.conf if it exists
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
 
-#endif
-
-#all:             ~/bin/oc ~/bin/openshift-install ~/bin/oc-mirror ~/bin/govc ~/bin/butane
-all:             oc openshift-install oc-mirror govc butane
-
-test:
-	echo os_ver=$(os_ver)
-	$(abort)
+all: oc openshift-install oc-mirror govc butane
 
 # If 'reset' found in $MAKECMDGOALS, i.e. no reset provided
 ifneq ($(filter reset,$(MAKECMDGOALS)),)
   # reset not given
 else
   ifeq ($(ocp_version),)
-    # ocp_version is empty!
-    $(error "Value ocp_version not set in aba.conf!  Please set ocp_version in aba.conf and try again. Read the README on how to get started!")
-#  else
-#    # ocp_version ok
-#    $(warning "MAKECMDGOALS = $(MAKECMDGOALS)")
+    # ocp_version is missing!
+    $(error "Value 'ocp_version' not set in aba.conf!  Please set 'ocp_version' and try again or run 'aba' for interactive mode. Read the README.md file on how to get started!")
   endif
 endif
-
-#download: openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz openshift-client-$(os)-$(ocp_version).tar.gz openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
 
 ##@ Help-related tasks
 .PHONY: help
@@ -79,23 +64,10 @@ help: ## Help
 
 # aba.conf should never be missing!
 ../aba.conf:
-	@echo "aba.conf missing! Please read the README on how to get started!"
+	@echo "aba/aba.conf missing! Run 'aba' for interactive mode or read the README.md file on how to get started!"
 	@exit 1
 
-########################################
-
-#SB oc: ~/bin/oc  ## Install oc into ~/bin
-#SB # This will fall back on the older versions of oc without the 'amd64-rhel8'
-#SB ~/bin/oc: .init .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed
-# TIDY UP 	@echo Extracting openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz to ~/bin/oc
-# TIDY UP 	tar -C ~/bin -xmzf openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz oc kubectl || tar -C ~/bin -xmzf openshift-client-$(os)-$(ocp_version).tar.gz oc kubectl
-# TIDY UP 
-# TIDY UP .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed: openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
-# TIDY UP 	@rm -f .??*-openshift-client-$(os)-amd64-$(rhel_ver)-installed
-# TIDY UP 	@touch .$(ocp_version)-openshift-client-$(os)-amd64-$(rhel_ver)-installed 
-# TIDY UP 
-
-# The preference to download the oc tar files is for rhel9, then rhel8 and then the generic taer file.
+# The preference to download the oc tar files is for rhel9, then rhel8 and then the generic tar file.
 
 full_oc_tar_file       := openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
 full_oc_url            := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
@@ -109,7 +81,9 @@ rhel9_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clien
 rhel8_oc_tar_file := openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
 rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
 
+# Only download *all* the tar files to use in the disconnected env
 download: $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
+
 
 ########################################
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
@@ -137,7 +111,7 @@ $(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
 
 
 ########################################
-# Be sure that the correct version is installed by creating .*installed flag file # FIXME as no need!
+# Be sure that the correct version is installed by creating .*installed flag file
 
 openshift-install: ~/bin/openshift-install
 ~/bin/openshift-install: .init .$(ocp_version)-openshift-install-$(os)-installed ## Install openshift-install into ~/bin
@@ -152,6 +126,7 @@ openshift-install: ~/bin/openshift-install
 openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install tarball
 	@echo Downloading openshift-install-$(os)-$(ocp_version).tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
+
 
 ########################################
 oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
@@ -168,6 +143,7 @@ oc-mirror.tar.gz: ## Download oc-mirror tarball
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 	echo Downloading oc-mirror.rhel9.tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.rhel9.tar.gz
+
 
 ########################################
 govc: ~/bin/govc  ## Install govc to ~/bin/govc
@@ -189,6 +165,7 @@ butane-binary: ## Download butane binary
 	curl -s --connect-timeout 10 --retry 3 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane-binary
 
 
+########################################
 .PHONY: clean 
 clean: ## Clean up installed binaries
 	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} .*installed
