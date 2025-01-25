@@ -59,7 +59,7 @@ if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
 
 	echo
 	echo "Cloned aba branch $branch into $PWD/aba" >&2
-	##cd aba
+	cd aba
 else
 	[ "$cur_dir" = "$PWD" ] && quite=  # Since we're in the aba dir, no neeed to output instructions
 fi
