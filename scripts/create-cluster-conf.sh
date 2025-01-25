@@ -7,7 +7,7 @@ source <(normalize-aba-conf)
 [ -s ../shortcuts.conf ] && source ../shortcuts.conf  # Values can be set in this file for testing 
 
 if [ ! "$ocp_version" ]; then
-	echo "Value 'ocp_version' not set in aba/aba.conf file. Please run aba for interactive mode or see the README.md file!"
+	echo "Value 'ocp_version' not set in aba/aba.conf file. Please run aba for interactive mode or see the aba/README.md file!"
 
 	exit 1
 fi
