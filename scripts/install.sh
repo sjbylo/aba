@@ -1,6 +1,9 @@
 #!/bin/bash -e
 # Simple Aba installer.  Copy aba command somewhere into the $PATH
 
+# Check sudo or root access 
+[ "$(sudo id -run)" != "root" ] && echo "Please configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+
 # Check options
 while echo "$1" | grep -q "^-"
 do
@@ -18,28 +21,31 @@ branch=main
 cur_dir=$PWD
 cd $(dirname $0)
 
-# Check if aba script needs to be updated (only aba calls install using -v opt to set $cur_ver)
-if [ -s ./scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" ./scripts/aba.sh; then
-	REPO_VER=$(grep "^ABA_VERSION=" ./scripts/aba.sh | cut -d= -f2)
-	REPO_VER=$(echo $REPO_VER | grep -oE "^[0-9]{14}$")
-fi
-
-if [ "$cur_ver" ]; then
-	# if the version of aba in the repo is newer than the aba installed/called
-	if [ "$REPO_VER" -a $REPO_VER -gt $cur_ver -a -x ./install ]; then
-		echo aba script will update ... >&2
-	else
-	       [ ! "$quiet" ] && echo "aba is already up to date" >&2
-	       exit 2
-	fi
-fi
-
 # Only want to use git on the workstation with Internet access
 if [ ! -f .bundle ]; then
 	if ! which git 2>/dev/null >&2; then
 		echo "Please install git and try again!" >&2
 
 		exit 1
+	fi
+fi
+
+# Check if aba script needs to be updated (only aba calls install using -v opt to set $cur_ver)
+if [ -s ./scripts/aba.sh ] && grep -Eq "^ABA_VERSION=[0-9]+" ./scripts/aba.sh; then
+	REPO_VER=$(grep "^ABA_VERSION=" ./scripts/aba.sh | cut -d= -f2)
+	REPO_VER=$(echo $REPO_VER | grep -oE "^[0-9]{14}$")
+fi
+
+# if aba is not installed then consider no current ver
+which aba >/dev/null 2>&1 || cur_ver=
+
+if [ "$cur_ver" ]; then
+	# if the version of aba in the repo is newer than the aba installed/called
+	if [ "$REPO_VER" -a $REPO_VER -gt $cur_ver -a -x ./install ]; then
+		echo aba script will update ... >&2  # Aba will update and re-execute itself (from aba script)
+	else
+	       [ ! "$quiet" ] && echo "aba is already up to date" >&2
+	       exit 2 # This will cause aba to continue to run
 	fi
 fi
 
