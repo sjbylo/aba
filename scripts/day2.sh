@@ -137,10 +137,12 @@ echo
 file_list=$(find mirror/{save,sync}/oc-mirror-workspace/results-* -type f -name catalogSource*.yaml 2>/dev/null || true)
 if [ "$file_list" ]; then
 	cs_file=$(ls -tr $file_list | tail -1)
+	##sed -i "s/name: cs-redhat-operator-index/name: redhat-operators/g" $cs_file  # Change to a better name
 	echo Looking for latest CatalogSource file:
 	echo "Running: oc apply -f $cs_file"
 
-	if oc create -f $cs_file 2>/dev/null; then
+	##if oc create -f $cs_file 2>/dev/null; then
+	if cat $cs_file | sed "s/name: cs-redhat-operator-index/name: redhat-operators/g" | oc create -f - 2>/dev/null; then
 		# Setting: displayName: Private Catalog (registry.example.com)
 		echo "Patching registry display name: 'Private Catalog ($reg_host)' for CatalogSource redhat-operators"
 		oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "Private Catalog ('$reg_host')"}}'
