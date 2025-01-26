@@ -255,6 +255,9 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "po
 ## FIXME INSTALL FAILURE mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 mylog "Configure mirror to install on internal (remote) bastion in default dir, with random password to '/my/path'"
 
+reg_ssh_user=testy
+reg_ssh_key=${reg_ssh_user}_rsa
+
 #sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
@@ -268,11 +271,11 @@ sed -i "s#^reg_pw=[^ \t]*#reg_pw= #g" ./mirror/mirror.conf	    	# test random pa
 mylog "Setting reg_path=my/path"
 sed -i "s#^reg_path=[^ \t]*#reg_path=my/path #g" ./mirror/mirror.conf	    	# test path
 
-mylog "Setting reg_ssh_user=testy for remote installation" 
-sed -i "s#^reg_ssh_user=[^ \t]*#reg_ssh_user=testy #g" ./mirror/mirror.conf	     	# If remote, set user
+mylog "Setting reg_ssh_user=$reg_ssh_user for remote installation" 
+sed -i "s#^reg_ssh_user=[^ \t]*#reg_ssh_user=$reg_ssh_user #g" ./mirror/mirror.conf	     	# If remote, set user
 
 mylog "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" 
-sed -i "s#^\#reg_ssh_key=[^ \t]*#reg_ssh_key=~/.ssh/testy_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
+sed -E -i "s|^^#{,1}reg_ssh_key=[^ \t]*|reg_ssh_key=~/.ssh/$reg_ssh_key |g" ./mirror/mirror.conf	     	# Remote or localhost
 
 # FIXME: no need? or use 'aba clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
@@ -283,7 +286,7 @@ rm -rf mirror/save   # The process will halt, otherwise with "You already have i
 
 source <(cd mirror; normalize-mirror-conf)
 
-mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=testy reg_ssh_key=$reg_ssh_key"
+mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 ######################
 # This will install the reg. and sync the images
