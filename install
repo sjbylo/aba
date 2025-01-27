@@ -20,8 +20,7 @@ repo=sjbylo/aba
 
 cur_dir=$PWD
 [ "$DEBUG_ABA" ] && "echo \0=$0" >&2
-set -x
-cd $(dirname $0)
+[ "$0" != "--" && cd $(dirname $0)
 
 # Only want to run "git clone" on the workstation with Internet access
 # Assume .repo marked as ".bundle" has no Internet access
