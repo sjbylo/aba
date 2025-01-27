@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250126002153
+ABA_VERSION=20250127225347
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Please fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -26,7 +26,7 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
 	[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
-	[ "$DEBUG_ABA" ] && echo "$0: cd \"$2\"" >&2
+	[ "$DEBUG_ABA" ] && echo "$0: change dir to: \"$2\"" >&2
 	cd "$2"
 	shift 2
 fi
@@ -93,17 +93,13 @@ if [ ! -f $ABA_PATH/aba.conf ]; then
 	cp $ABA_PATH/templates/aba.conf $ABA_PATH
 
 	# Initial prep for interactive mode
-	sed -i "s/^ocp_version=[^ \t]*/ocp_version= /g" $ABA_PATH/aba.conf
-	sed -i "s/^ocp_channel=[^ \t]*/ocp_channel= /g" $ABA_PATH/aba.conf
+	#sed -i "s/^ocp_version=[^ \t]*/ocp_version= /g" $ABA_PATH/aba.conf
+	replace-value-conf $ABA_PATH/aba.conf ocp_version 
+	#sed -i "s/^ocp_channel=[^ \t]*/ocp_channel= /g" $ABA_PATH/aba.conf
+	replace-value-conf $ABA_PATH/aba.conf ocp_channel
 	sed -i "s/^editor=[^ \t]*/editor= /g" $ABA_PATH/aba.conf
+	replace-value-conf $ABA_PATH/aba.conf editor
 fi
-
-# FIXME: for testing, if unset, testing will halt in edit_file()! 
-# for testing, if unset, testing will halt in edit_file()! 
-#[ "$*" ] && \
-#	sed -i "s/^editor=[^ \t]*/editor=vi /g" $ABA_PATH/aba.conf && \
-#	sed -i "s/^ask=[^ \t]*/ask= /g" $ABA_PATH/aba.conf
-
 
 # Set defaults 
 ops_list=
@@ -126,7 +122,8 @@ do
 		interactive_mode_none=
 
 		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
-		sed -i "s/^ask=[^ \t]*/ask=true /g" $ABA_PATH/aba.conf
+		#sed -i "s/^ask=[^ \t]*/ask=true /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf ask true
 
 		shift
 	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
@@ -175,7 +172,8 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		shift 
 		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
-		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" $ABA_PATH/aba.conf
+		#sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$chan /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf ocp_channel $chan
 		shift 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
@@ -195,7 +193,8 @@ do
 		[ "$ver" = "latest" ] && ver=$(fetch_latest_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
 		[ ! "$ver" ] && echo_red "Missing or wrong value after $1 option" >&2 && exit 1
-		sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" $ABA_PATH/aba.conf
+		#sed -i "s/ocp_version=[^ \t]*/ocp_version=$ver /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf ocp_version $ver
 		target_ver=$ver
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
@@ -217,7 +216,8 @@ do
 
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		sed -i "s/^reg_host=[^ \t]*/reg_host=$2 /g" $ABA_PATH/mirror/mirror.conf
+		#sed -i "s/^reg_host=[^ \t]*/reg_host=$2 /g" $ABA_PATH/mirror/mirror.conf
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_host "$2"
 
 		shift 2
 	elif [ "$1" = "--reg-ssh-key" -o "$1" = "-k" ]; then
@@ -225,7 +225,8 @@ do
 
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		sed -i "s|^#*reg_ssh_key=[^ \t]*|reg_ssh_key=$2 |g" $ABA_PATH/mirror/mirror.conf
+		#sed -i "s|^#*reg_ssh_key=[^ \t]*|reg_ssh_key=$2 |g" $ABA_PATH/mirror/mirror.conf
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_key "$2"
 
 		shift 2
 	elif [ "$1" = "--reg-ssh-user" -o "$1" = "-U" ]; then
@@ -233,7 +234,8 @@ do
 
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		sed -i "s/^reg_ssh_user=[^ \t]*/reg_ssh_user=$2 /g" $ABA_PATH/mirror/mirror.conf
+		#sed -i "s/^reg_ssh_user=[^ \t]*/reg_ssh_user=$2 /g" $ABA_PATH/mirror/mirror.conf
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_user "$2"
 
 		shift 2
 
@@ -242,16 +244,18 @@ do
 
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		sed -i "s#^reg_root=[^ \t]*#reg_root=$2 #g" $ABA_PATH/mirror/mirror.conf
+		#sed -i "s#^reg_root=[^ \t]*#reg_root=$2 #g" $ABA_PATH/mirror/mirror.conf
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_root "$2"
 
 		shift 2
 
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		#echo "$2" | grep -q "^-" && echo_red "Error in parsing [$1] arguments" >&2 && exit 1
-		domain=$(echo $2 | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
+		domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		[ ! "$domain" ] && echo_red "Error: Domain format incorrect [$2]" >&2 && exit 1
-		sed -i "s/^domain=[^ \t]*/domain=$domain /g" $ABA_PATH/aba.conf
+		#sed -i "s/^domain=[^ \t]*/domain=$domain /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf domain "$domain"
 		###target_domain=$domain
 
 		shift 2
@@ -269,7 +273,8 @@ do
 			fi
 			shift
 		done
-		sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ips /g" $ABA_PATH/aba.conf
+		#sed -i "s/^dns_servers=[^ \t]*/dns_servers=$dns_ips /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf dns_servers "$dns_ips"
 		shift 
 
 	elif [ "$1" = "--ntp" -o "$1" = "-T" ]; then
@@ -282,7 +287,8 @@ do
 			[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
 			shift	
 		done
-		sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_vals /g" $ABA_PATH/aba.conf
+		#sed -i "s/^ntp_servers=[^ \t]*/ntp_servers=$ntp_vals /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf ntp_servers "$ntp_vals"
 		shift 
 	elif [ "$1" = "--default-route" -o "$1" = "-R" ]; then
 		# If arg missing remove from aba.conf
@@ -292,12 +298,14 @@ do
 			def_route_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
 		fi
 
-		sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip /g" $ABA_PATH/aba.conf
+		#sed -i "s/^next_hop_address=[^ \t]*/next_hop_address=$def_route_ip /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf next_hop_address "$def_route_ip"
 
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
-		sed -i "s/^platform=[^ \t]*/platform=$2 /g" $ABA_PATH/aba.conf
+		#sed -i "s/^platform=[^ \t]*/platform=$2 /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf platform "$2"
 		shift 2
 	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
@@ -318,7 +326,8 @@ do
 			shift
 		done
 		##op_set_list=$(echo $op_set_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
-		sed -i "s/^op_sets=[^#$]*/op_sets=$op_set_list /g" $ABA_PATH/aba.conf
+		#sed -i "s/^op_sets=[^#$]*/op_sets=$op_set_list /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf op_sets $op_set_list
 	elif [ "$1" = "--ops" -o "$1" = "-O" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		#echo "$1" | grep -q "^-" && echo_red "Error in parsing '--ops' arguments" >&2 && exit 1
@@ -327,19 +336,21 @@ do
 		#while [ "$1" ] && ! echo "$1" | grep -q -e "^-"; do ops_list="$ops_list $1"; shift; done
 		while [[ "$1" && "$1" != -* ]]; do ops_list="$ops_list $1"; shift; done
 		ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
-		##sed -i "s/^ops=[^#$]*/ops=\"$ops_list\" /g" $ABA_PATH/aba.conf
-		sed -i "s/^ops=[^#$]*/ops=$ops_list /g" $ABA_PATH/aba.conf
+		#sed -i "s/^ops=[^#$]*/ops=$ops_list /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf ops $ops_list
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		#echo "$1" | grep -q "^-" && echo_red "Error in parsing --editor arguments" >&2 && exit 1
 		#[ ! "$1" ] && echo_red -e "Missing editor, see usage.\n$usage" >&2 && exit 1
 		editor="$2"
-		sed -i "s/^editor=[^ \t]*/editor=$editor /g" $ABA_PATH/aba.conf
+		#sed -i "s/^editor=[^ \t]*/editor=$editor /g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf editor $editor
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
-			sed -i "s#^machine_network=[^ \t]*#machine_network=$2 #g" $ABA_PATH/aba.conf
+			#sed -i "s#^machine_network=[^ \t]*#machine_network=$2 #g" $ABA_PATH/aba.conf
+			replace-value-conf $ABA_PATH/aba.conf machine_network "$2"
 		else
 			echo_red "Error: Invalid CIDR [$2]" >&2
 			exit 1
@@ -349,18 +360,21 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		#echo "$1" | grep -q "^-" && echo_red "Error in parsing --pull-secret arguments" >&2 && exit 1
 		#[ ! -s $1 ] && echo_red "Missing pull secret file [$1]" >&2 && exit 1
-		sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$2 #g" $ABA_PATH/aba.conf
+		#sed -i "s#^pull_secret_file=[^ \t]*#pull_secret_file=$2 #g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf pull_secret_file "$2"
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		#echo "$1" | grep -q "^-" && echo_red "Error in parsing --vmware arguments" >&2 && exit 1
-		[ -s $1 ] && cp $2 vmware.conf
+		[ -s $1 ] && cp "$2" vmware.conf
 		shift 2
 	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
-		sed -i "s#^ask=[^ \t]*#ask=true #g" $ABA_PATH/aba.conf
+		##sed -i "s#^ask=[^ \t]*#ask=true #g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.conf ask true
 		shift 
 	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then
-		sed -i "s#^ask=[^ \t]*#ask=false #g" $ABA_PATH/aba.conf
+		##sed -i "s#^ask=[^ \t]*#ask=false #g" $ABA_PATH/aba.conf
+		replace-value-conf $ABA_PATH/aba.con fask false 
 		shift 
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
@@ -514,7 +528,8 @@ if [ ! -f .bundle ]; then
 		#[ "$ans" = "e" ] && ocp_channel=eus
 		[ "$ans" = "c" ] && ocp_channel=candidate
 
-		sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$ocp_channel /g" aba.conf
+		#sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$ocp_channel /g" aba.conf
+		replace-value-conf aba.conf ocp_channel $ocp_channel
 		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
 		sleep 0.3
 	fi
@@ -582,7 +597,8 @@ if [ ! -f .bundle ]; then
 		done
 
 		# Update the conf file
-		sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver /g" aba.conf
+		#sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver /g" aba.conf
+		replace-value-conf aba.conf ocp_version $target_ver
 		echo_cyan "'ocp_version' set to '$target_ver' in aba.conf"
 
 		sleep 0.3

@@ -47,7 +47,8 @@ if [ ! "$SNO" ]; then
 	else
 		if echo "$actual_ip_of_api" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			# Add into cluster.conf
-			sed -E -i "s/^^#{,1}api_vip=[^ \t]*/api_vip=$actual_ip_of_api /g" cluster.conf
+			###sed -E -i "s/^^#{,1}api_vip=[^ \t]*/api_vip=$actual_ip_of_api /g" cluster.conf
+			replace-value-conf cluster.conf api_vip $actual_ip_of_api
 			echo_red "Warning: adding in actual IP address ($actual_ip_of_api) into cluster.conf" >&2
 			echo_red "         Please verify this is correct! If not, edit cluster.conf file and try again!" >&2
 			api_vip=$actual_ip_of_api
@@ -63,7 +64,8 @@ if [ ! "$SNO" ]; then
 		# If ingress_vip not defined or an IP address
 		if echo "$actual_ip_of_ingress" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			# Add into cluster.conf
-			sed -E -i "s/^^#{,1}ingress_vip=[^ \t]*/ingress_vip=$actual_ip_of_ingress /g" cluster.conf
+			###sed -E -i "s/^^#{,1}ingress_vip=[^ \t]*/ingress_vip=$actual_ip_of_ingress /g" cluster.conf
+			replace-value-conf cluster.conf ingress_vip $actual_ip_of_ingress
 			echo_red "Warning: adding in actual IP address ($actual_ip_of_ingress) into cluster.conf" >&2
 			echo_red "         Please verify this is correct! If not, edit cluster.conf file and try again!" >&2
 			ingress_vip=$actual_ip_of_ingress

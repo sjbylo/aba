@@ -77,5 +77,6 @@ do
 done
 
 # Update the conf file
-sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
+#sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
+replace-value-conf aba.conf ocp_version $target_ver
 

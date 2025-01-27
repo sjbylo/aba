@@ -152,7 +152,7 @@ mylog
 source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
-test-cmd -r 10 3 -m "Saving images to local disk on `hostname`" aba save
+test-cmd -r 15 3 -m "Saving images to local disk on `hostname`" aba save
 
 test-cmd -m "Checking existance of file mirror/save/mirror_seq1_000000.tar" test -s mirror/save/mirror_seq1_000000.tar 
 
@@ -179,7 +179,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror 
 ######################
 
 # Now, this works
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load"
 
 test-cmd                                             -m "Delete loaded seq1 file" rm -v mirror/save/mirror_seq1_000000.tar
 test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded seq1 file on registry" rm -v subdir/aba/mirror/save/mirror_seq1_000000.tar
@@ -244,7 +244,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-test-cmd -r 10 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save"
+test-cmd -r 15 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save"
 
 test-cmd -m "Checking existance of file mirror/save/mirror_seq2_000000.tar" test -s mirror/save/mirror_seq2_000000.tar 
 
@@ -263,7 +263,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
 test-cmd                                     -m "Delete loaded seq2 file" rm -v mirror/save/mirror_seq2_000000.tar
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq2 file on registry" rm -v subdir/aba/mirror/save/mirror_seq2_000000.tar
@@ -324,7 +324,7 @@ test-cmd -m "Adding advanced-cluster-management  operator to mirror/save/imagese
 test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
 
 
-test-cmd -r 10 3 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
+test-cmd -r 15 3 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
 
 mylog "'scp mirror/save/mirror_seq3.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Copy seq3 file to $int_bastion_hostname" scp mirror/save/mirror_seq3*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
@@ -333,16 +333,16 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file 'mi
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load"
 
 test-cmd                                     -m "Delete loaded seq3 file" rm -v mirror/save/mirror_seq3_000000.tar
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded seq3 file on registry" rm -v subdir/aba/mirror/save/mirror_seq3_000000.tar
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
 
 test-cmd -m "Pausing 30s" sleep 30
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 10 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
 
 # Need to fetch the actual channel name from the operator catalog that's in use
 acm_channel=$(cat mirror/.redhat-operator-index-v$ocp_ver_major | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
@@ -359,12 +359,14 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub"
 test-cmd -m "Leave time for ACM to deploy ..." sleep 30
 
 # Need 'cd' here due to '=$subdir' not 'resolving' ok
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait 3m for acm hub status is 'Running'" "cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=$i+1; [ $i -gt 24 ] && exit 1; sleep 10; done"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait 3m for acm hub status is 'Running'" 'cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=$i+1; [ $i -gt 24 ] && exit 1; sleep 10; done'
 ##test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait for hub status is 'Running'" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 #### TESTING ACM + MCH 
 
 # Apply NTP config, but don't wait for it to complete!
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Initiate NTP config but not wait for completion" "aba --dir $subdir/aba/sno day2-ntp"
+
+test-cmd -m "Pausing 5s ..." sleep 5
 
 # Keep it # test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting sno cluster" "aba --dir $subdir/aba/sno delete" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "If cluster up, stopping cluster" "cd $subdir/aba/;. <(aba -d sno shell) && . <(aba --dir sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
