@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Start here, run this script to get going!
 
-ABA_VERSION=20250127225347
+ABA_VERSION=20250127232850
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Please fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -374,7 +374,7 @@ do
 		shift 
 	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then
 		##sed -i "s#^ask=[^ \t]*#ask=false #g" $ABA_PATH/aba.conf
-		replace-value-conf $ABA_PATH/aba.con fask false 
+		replace-value-conf $ABA_PATH/aba.conf ask false 
 		shift 
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
