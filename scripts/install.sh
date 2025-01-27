@@ -43,7 +43,7 @@ if [ ! -f .bundle ]; then
 
 	if [ "$cur_ver" ]; then
 		# if the version of aba in the repo is different to the aba installed/called
-		if [ "$REPO_VER" -a $REPO_VER -ne $cur_ver -a -x ./install ]; then
+		if [ "$REPO_VER" ] && [ $REPO_VER -ne $cur_ver -a -x ./install ]; then
 			echo aba script will update ... >&2  # Aba will update and re-execute itself (from aba script)
 		else
 		       	[ ! "$quiet" ] && echo "aba is already up to date" >&2
@@ -77,7 +77,7 @@ if [ -x scripts/aba.sh ]; then
 			if [ -s "$d/aba" ]; then
 				INSTALLED_VER=$(grep "^ABA_VERSION=" $d/aba | cut -d= -f2)
 				[ "$DEBUG_ABA" ] && echo INSTALLED_VER=$INSTALLED_VER and REPO_VER=$REPO_VER >&2
-				if [ "$INSTALLED_VER" -a "$REPO_VER" -a $INSTALLED_VER -ne $REPO_VER ]; then
+				if [ "$INSTALLED_VER" -a "$REPO_VER" ] && [ $INSTALLED_VER -ne $REPO_VER ]; then
 					action="updated to $d"
 					quiet=1  # since aba has been updated, no need for guidance below
 				else
