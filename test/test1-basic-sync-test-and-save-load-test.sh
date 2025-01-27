@@ -3,8 +3,6 @@
 # ... then savd/load images and install clusters. 
 # This test requires a valid ~/.vmware.conf file.
 
-exit 1
-
 ### TEST for clean start with or without the rpms.  
 if false; then
 	# Assuming user will NOT install all rpms in advance and aba will install them.
