@@ -130,7 +130,7 @@ source <(cd mirror && normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-test-cmd -r 10 3 -m "Creating bundle for channel stable and version $ocp_version" "aba -f bundle --channel stable --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
+test-cmd -r 15 3 -m "Creating bundle for channel stable and version $ocp_version" "aba -f bundle --channel stable --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
 # Smoke tests!
 test-cmd -m  "Verifying existance of file 'mirror/save/mirror_seq1_000000.tar'" "ls -lh mirror/save/mirror_seq1_000000.tar" 
@@ -144,9 +144,9 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 5 3 -m "Checking regcreds/ do
 ######################
 mylog Runtest: START - airgap
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Install aba script" "cd $subdir/aba; ./install" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Install aba script" "cd $subdir/aba; ./install" 
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Loading cluster images into mirror on internal bastion" "aba -d $subdir/aba load" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading cluster images into mirror on internal bastion" "aba -d $subdir/aba load" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set archive file to make space: '$subdir/aba/mirror/save/mirror_seq1_000000.tar'" "rm -f $subdir/aba/mirror/save/mirror_seq1_000000.tar" 
 
@@ -172,7 +172,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: registry.redhat.io/ubi9/ubi:latest
 END
 
-test-cmd -r 12 1 -m "Saving ubi images to local disk on `hostname`" "aba --dir mirror save" 
+test-cmd -r 15 1 -m "Saving ubi images to local disk on `hostname`" "aba --dir mirror save" 
 
 mylog Copy tar+ssh archives to internal bastion
 ## aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir - xvf -
@@ -181,7 +181,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file do
 test-cmd -m "Copy over seq2 file" scp mirror/save/mirror_seq2_000000.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded seq2 file" rm -f $subdir/aba/mirror/save/mirror_seq2_000000.tar
 
@@ -190,7 +190,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-test-cmd -r 10 3 -m "Saving vote-app image to local disk" "aba --dir mirror save" 
+test-cmd -r 15 3 -m "Saving vote-app image to local disk" "aba --dir mirror save" 
 
 mylog Copy repo only to internal bastion
 aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
@@ -200,7 +200,7 @@ mylog "Copy extra image set tar file to internal bastion"
 scp mirror/save/mirror_seq3_000000.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_seq3_000000.tar"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Loading vote-app image into mirror" "aba -d $subdir/aba/mirror load" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading vote-app image into mirror" "aba -d $subdir/aba/mirror load" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded seq3 file" rm -f $subdir/aba/mirror/save/mirror_seq3_000000.tar
 
@@ -249,12 +249,12 @@ grep -A2 -e "name: servicemeshoperator$"  mirror/imageset-config-operator-catalo
 grep -A2 -e "name: kiali-ossm$"	          mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
 ########
-test-cmd -r 10 3 -m "Saving mesh operators to local disk" "aba --dir mirror save"
+test-cmd -r 15 3 -m "Saving mesh operators to local disk" "aba --dir mirror save"
 
 mylog Create incremental tar and ssh to internal bastion
 aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/$cluster_type day2"
 
@@ -264,7 +264,7 @@ cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep jaeger
 mylog Append jaeger operator to imageset conf
 grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
-test-cmd -r 10 3 -m "Saving jaeger operator to local disk" "aba --dir mirror save"
+test-cmd -r 15 3 -m "Saving jaeger operator to local disk" "aba --dir mirror save"
 
 mylog Downloading the mesh demo into test/mesh, for use by deploy script
 
@@ -283,7 +283,7 @@ mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry-amd64.tar.gz  # No need to copy this over!
 test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion_hostname:$subdir" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf - "
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m  "Loading jaeger operator images to mirror" "cd $subdir/aba/mirror; aba load" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading jaeger operator images to mirror" "cd $subdir/aba/mirror; aba load" 
 
 
 #test-cmd -m "Pausing for 90s to let OCP settle" sleep 90    # For some reason, the cluster was still not fully ready in tests!
@@ -294,11 +294,8 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "s
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30 mins for all cluster operators to be fully available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
-#i=0;until [ $i -ge 5 ] || date | grep 2; do let i=$i+1; echo $i; sleep 1; done
-#i=0;while [ $i -lt 5 ] && date | grep 2; do let i=$i+1; echo $i; sleep 1; done
-
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'aba day2' ...
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 10 3 -m "Run 'day2'" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m "Run 'day2'" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
 #test-cmd -m "Pausing for 60s to let OCP settle" sleep 60  # And wait for https://access.redhat.com/solutions/5514331 to take effect 

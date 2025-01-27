@@ -310,3 +310,13 @@ fetch_latest_version() {
 	[ "$ver" ] && echo $ver || return 1
 }
 
+# Replace a value in a conf file, taking care of white-space and optional commented ("#") values
+replace-value-conf() {
+	# $1 file
+	# $2 is name of value to change
+	# $3 new value (optional)
+	[ ! -s $1 ] && echo "Error: No such file: $PWD/$1" >&2 && exit 1
+	[ ! "$2" ] && echo "Error: missing value!" >&2 && exit 1
+	[ "$DEBUG_ABA" ] && echo "Replacing config value [$2] with [$3] in file: $1" >&2
+	sed -i "s|^[# \t]*${2}=[^ \t#]*\(.*\)|${2}=${3}\1|g" $1
+}

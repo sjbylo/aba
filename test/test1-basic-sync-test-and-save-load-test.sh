@@ -154,7 +154,7 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 ######################
 # This will install mirror and sync images
 mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key ~/.ssh/id_rsa and then ..."
-test-cmd -r 10 3 -m "Syncing images from external network to internal mirror registry (one command)" aba --dir mirror sync -H $int_bastion_hostname -k ~/.ssh/id_rsa --reg-root ~/my-quay-root
+test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (one command)" aba --dir mirror sync -H $int_bastion_hostname -k ~/.ssh/id_rsa --reg-root ~/my-quay-root
 
 source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* calues (see below)
 echo
@@ -237,7 +237,7 @@ test-cmd -i -m "Deleting sno cluster (if it was created)" aba --dir sno delete
 
 #######################
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 10 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
+test-cmd -r 15 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
 
 # Should we delete the seq file here? #FIXME
 
@@ -290,7 +290,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 ######################
 # This will install the reg. and sync the images
-test-cmd -r 10 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync 
+test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync 
 
 aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should start from scratch next time
@@ -319,7 +319,7 @@ test-cmd -m "Checking cluster operators" aba --dir sno cmd
 #  Delete the reg. first!
 test-cmd -m "Delete the registry so it will be re-created again during 'aba save load' next" aba --dir mirror uninstall 
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 10 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
+test-cmd -r 15 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
 
 aba --dir sno clean # This should clean up the cluster and 'make' should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
