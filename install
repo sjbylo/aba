@@ -53,7 +53,7 @@ if [ ! -f .bundle ]; then
 
 	# If we are installing by piping into bash
 	if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
-		echo Cloning with "git clone -b $branch https://github.com/${repo}.git"
+		echo Cloning into $PWD with "git clone -b $branch https://github.com/${repo}.git"
 		if ! git clone -b $branch https://github.com/${repo}.git; then
 			echo "Error fetching git repo from https://github.com/${repo}.git (branch: $branch)" >&2
 			exit 1
@@ -63,7 +63,7 @@ if [ ! -f .bundle ]; then
 		echo "Cloned aba branch $branch into $PWD/aba" >&2
 		cd aba
 	else
-		[ "$cur_dir" = "$PWD" ] && quite=  # Since we're in the aba dir, no neeed to output instructions
+		[ "$cur_dir" = "$PWD" ] && quite=  # Since we are in the aba dir, no neeed to output instructions
 	fi
 fi
 
