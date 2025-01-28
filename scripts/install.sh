@@ -99,7 +99,8 @@ do
 		if sudo cp -p scripts/aba.sh $d/aba; then
 			sudo chmod +x $d/aba
 			[ ! "$quiet" ] && echo aba has been $action to $d/aba >&2
-			[ ! "$quiet" -a -n "$msg" ] && echo "$msg" >&2
+			source scripts/include_all.sh
+			[ ! "$quiet" -a -n "$msg" ] && echo_yellow "$msg" >&2
 
 			exit $ret  # Success
 		fi
