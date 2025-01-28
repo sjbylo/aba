@@ -19,10 +19,9 @@ repo=sjbylo/aba
 [ "$2" ] && repo="$2"
 
 is_repo_available() {
-	set -x
 	[ -s ./scripts/aba.sh -a -x ./scripts/aba.sh ] && return 0
 	[ "$0" != "--" -a "$0" != "bash" ] && cd $(dirname $0) && return 1
-	return 0
+	return 1
 }
 
 download_repo() {
