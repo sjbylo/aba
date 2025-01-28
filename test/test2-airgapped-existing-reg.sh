@@ -200,17 +200,17 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config fil
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding" "sed -i 's/^.*port1=.*/port1=ens192 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | cut -d ' ' -f1"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan=.*/vlan=888 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | cut -d ' ' -f1"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface, port1" "sed -i 's/^port1=.*/#port1= /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | cut -d ' ' -f1"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
@@ -348,18 +348,19 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Checking available Oper
 acm_channel=$(cat mirror/.redhat-operator-index-v$ocp_ver_major | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
 [ "$acm_channel" ] && test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" $subdir/aba/test/acm-subs.yaml"
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install ACM Operator" "i=0; until oc apply -f $subdir/aba/test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n "$i "; sleep 10; done"
-#test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install ACM Operator" "aba --dir $subdir/aba/sno --cmd 'i=0; until oc apply -f ../test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n "$i "; sleep 10; done'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install ACM Operator" "i=0; until oc apply -f $subdir/aba/test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done"
+#test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install ACM Operator" "aba --dir $subdir/aba/sno --cmd 'i=0; until oc apply -f ../test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done'"
 
 ###test-cmd sleep 60
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub" "i=0; until oc apply -f $subdir/aba/test/acm-mch.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n "$i "; sleep 10; done"
-#test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub" "aba --dir $subdir/aba/sno --cmd 'i=0; until oc apply -f ../test/acm-mch.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n "$i "; sleep 10; done'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub" "i=0; until oc apply -f $subdir/aba/test/acm-mch.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done"
+#test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Install Multiclusterhub" "aba --dir $subdir/aba/sno --cmd 'i=0; until oc apply -f ../test/acm-mch.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done'"
 
 test-cmd -m "Leave time for ACM to deploy ..." sleep 30
 
 # Need 'cd' here due to '=$subdir' not 'resolving' ok
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait 3m for acm hub status is 'Running'" 'cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=$i+1; [ $i -gt 24 ] && exit 1; sleep 10; done'
+# cd $subdir only works in "" .. and will work for root or user
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait 3m for acm hub status is 'Running'" "cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=\$i+1; [ \$i -gt 24 ] && exit 1; sleep 10; done"
 ##test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait for hub status is 'Running'" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 #### TESTING ACM + MCH 
 
