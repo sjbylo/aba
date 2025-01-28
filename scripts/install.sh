@@ -102,6 +102,9 @@ do
 		if sudo cp -p scripts/aba.sh $d/aba; then
 			sudo chmod +x $d/aba
 			[ ! "$quiet" ] && echo aba has been $action to $d/aba
+			[ ! "$quiet" ] && echo "Run: cd aba; aba" >&2
+			[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file" >&2
+
 			exit $ret  # Success
 		fi
 	fi
