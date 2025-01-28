@@ -61,7 +61,7 @@ get_repo_ver() {
 
 if ! is_repo_available; then
 	download_repo
-	msg="Run: cd aba; aba or see the README.md file"
+	msg="Run: 'cd aba; aba' or see the README.md file"
 fi
 
 # Sanity check ...
@@ -99,8 +99,7 @@ do
 		if sudo cp -p scripts/aba.sh $d/aba; then
 			sudo chmod +x $d/aba
 			[ ! "$quiet" ] && echo aba has been $action to $d/aba >&2
-			source scripts/include_all.sh
-			[ ! "$quiet" -a -n "$msg" ] && echo_yellow "$msg" >&2
+			[ ! "$quiet" -a -n "$msg" ] && source scripts/include_all.sh && echo_yellow "$msg" >&2
 
 			exit $ret  # Success
 		fi
