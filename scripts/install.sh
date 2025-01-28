@@ -36,7 +36,7 @@ download_repo() {
 	fi
 
 	if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
-		echo Cloning into $PWD with "git clone -b $branch https://github.com/${repo}.git"
+		echo Cloning into $PWD with "git clone -b $branch https://github.com/${repo}.git" >&2
 		if ! git clone -b $branch https://github.com/${repo}.git; then
 			echo "Error fetching git repo from https://github.com/${repo}.git (branch: $branch)" >&2
 
@@ -45,11 +45,7 @@ download_repo() {
 
 		echo
 		echo "Cloned aba branch $branch into $PWD/aba" >&2
-		msg="Run: cd aba; aba or see the README.md file"
-			#[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file" >&2
 		cd aba
-#	else
-#		[ "$cur_dir" = "$PWD" ] && quite=  # Since we are in the aba dir, no neeed to output instructions
 	fi
 }
 
@@ -64,6 +60,7 @@ get_repo_ver() {
 
 if ! is_repo_available; then
 	download_repo
+	msg="Run: cd aba; aba or see the README.md file"
 fi
 
 # Sanity check ...
@@ -85,8 +82,7 @@ do
 				#quiet=1  # since aba has been updated, no need for guidance below
 			else
 				# Nothing to do
-				#[ "$INFO_ABA" ] && echo "aba is already up-to-date and installed at $d/aba" >&2
-				[ ! "$quiet" ] && echo aba is already up-to-date
+				[ ! "$quiet" ] && echo aba is already up-to-date >&2
 
 				exit 0
 			fi
@@ -101,8 +97,8 @@ do
 		# Now, try to install aba
 		if sudo cp -p scripts/aba.sh $d/aba; then
 			sudo chmod +x $d/aba
-			[ ! "$quiet" ] && echo aba has been $action to $d/aba
-			[ ! "$quiet" -a "$msg" ] && echo "$msg" >&2
+			[ ! "$quiet" ] && echo aba has been $action to $d/aba >&2
+			[ ! "$quiet" -a -n "$msg" ] && echo "[$msg]" >&2
 
 			exit $ret  # Success
 		fi

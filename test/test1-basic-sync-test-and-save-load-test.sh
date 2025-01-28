@@ -51,18 +51,23 @@ ntp_ip=10.0.1.8,10.0.1.8 # If available
 
 which make || sudo dnf install make -y
 
+sudo rm -f `which aba`
 rm -f ~/bin/aba  # don't get mixed up!
 rm -f /usr/local/bin/aba
 sudo rm -f /usr/local/sbin/aba
 
-test-cmd -m "Install aba" ./install 
+(
+	cd ..
+	test-cmd -m "Install aba" './aba/install | grep " installed "'
+	test-cmd -m "Install aba" './aba/install | grep " up-to-date "'
+)
 # Test update of aba script
 mylog Testing update of aba script
 sleep 1
 new_v=$(date +%Y%m%d%H%M%S)
 test-cmd -m "Testing update of aba script, update version" sed -i "s/^ABA_VERSION=.*/ABA_VERSION=$new_v/g" scripts/aba.sh
-test-cmd -m "Testing update of aba script, run aba" "aba -h | head -8"
-test-cmd -m "Testing update of aba script, grep aba" "grep ^ABA_VERSION=$new_v `which aba`"
+test-cmd -m "Testing update of aba script, run (and update) aba" "aba -h | head -8"  # This will trigger an update of aba
+test-cmd -m "Testing update of aba script, grep aba version" "grep ^ABA_VERSION=$new_v `which aba`"
 
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
