@@ -20,8 +20,12 @@ repo=sjbylo/aba
 
 is_repo_available() {
 	[ -s ./scripts/aba.sh -a -x ./scripts/aba.sh ] && return 0
-	[ "$0" != "--" -a "$0" != "bash" ] && cd $(dirname $0) && return 1
-	return 1
+	# If curl is used...
+	[ "$0" = "--" -o "$0" = "bash" ] && return 1
+
+	# We must have the repo, cd into it...
+	cd $(dirname $0)
+	return 0
 }
 
 download_repo() {
