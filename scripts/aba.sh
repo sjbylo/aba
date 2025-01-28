@@ -1,7 +1,7 @@
-#!/bin/bash -e
+#!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250127232850
+ABA_VERSION=20250128163316
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Please fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -9,16 +9,6 @@ uname -o | grep -q "^Darwin$" && echo "Please run aba on RHEL or Fedora. Most te
 
 # Check sudo or root access 
 [ "$(sudo id -run)" != "root" ] && echo "Please configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
-
-# Set up a temp directory
-export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
-mkdir -p $tmp_dir 
-cleanup() {
-	[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..." >&2
-	rm -rf "$tmp_dir"
-}
-# Set up the trap to call cleanup on script exit or termination
-trap cleanup EXIT
 
 # Having $1 = --dir is an exception only, $1 can point to the top-level repo dir only
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
@@ -73,11 +63,27 @@ else
 	exit 1
 fi
 
-# install will check if aba needs to be updated, if so it will return 0 ... so we re-execute it!
-if $ABA_PATH/install -v $ABA_VERSION -q; then
-	#exec "$0" "$@"
-	aba "$@"
+## install will check if aba needs to be updated, if so it will return 0 ... so we re-execute it!
+#if $ABA_PATH/install -v $ABA_VERSION -q; then
+#if $ABA_PATH/install -q; then
+if [ ! "$ABA_DO_NOT_UPDATE" ]; then
+	$ABA_PATH/install -q
+	if [ $? -eq 2 ]; then
+		export ABA_DO_NOT_UPDATE=1
+		aba "$@"  # This means aba was updated and needs top be called again
+		exit
+	fi
 fi
+
+# Set up a temp directory
+export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
+mkdir -p $tmp_dir 
+cleanup() {
+	[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..." >&2
+	rm -rf "$tmp_dir"
+}
+# Set up the trap to call cleanup on script exit or termination
+trap cleanup EXIT
 
 usage=$(cat $ABA_PATH/others/help.txt)
 

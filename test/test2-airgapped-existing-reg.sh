@@ -169,10 +169,10 @@ test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror r
 # But, now regcreds/ is created...
 mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $TEST_USER@$int_bastion_hostname"
 
-ssh $TEST_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror"  
-ssh $TEST_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror/regcreds"  
-ssh $TEST_USER@$int_bastion_hostname "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
-ssh $TEST_USER@$int_bastion_hostname "cp -v ~/.containers/auth.json $subdir/aba/mirror/regcreds/pull-secret-mirror.json"
+test-cmd -h $TEST_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror"  
+test-cmd -h $TEST_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror/regcreds"  
+test-cmd -h $TEST_USER@$int_bastion_hostname "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
+test-cmd -h $TEST_USER@$int_bastion_hostname "cp -v ~/.containers/auth.json $subdir/aba/mirror/regcreds/pull-secret-mirror.json"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror registry $reg_host:$reg_port now succeeds" "aba --dir $subdir/aba/mirror verify"
 
@@ -184,7 +184,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Loading images into mir
 test-cmd                                             -m "Delete loaded seq1 file" rm -v mirror/save/mirror_seq1_000000.tar
 test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded seq1 file on registry" rm -v subdir/aba/mirror/save/mirror_seq1_000000.tar
 
-ssh $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
+test-cmd -h $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba compact $default_target" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)" "aba --dir $subdir/aba/compact delete" 
 
