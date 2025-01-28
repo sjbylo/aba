@@ -107,7 +107,7 @@ test-cmd() {
 				# Added ". ~/.bash_profile" for RHEL8!
 				ssh -o LogLevel=ERROR $host -- "export TERM=xterm;. \$HOME/.bash_profile;$cmd" &    # For testing, TERM sometimes needs to be set to anything
 			else
-				echo "Running command: \"$cmd\" on localhost"
+				echo "Running command: \"$cmd\" on localhost from $PWD"
 				eval "$cmd" &
 			fi
 			sub_pid=$!  # Capture the PID of the subprocess
