@@ -13,6 +13,7 @@ done
 
 branch=main
 repo=sjbylo/aba
+msg=
 
 # Required args
 [ "$1" ] && branch="$1"
@@ -98,7 +99,7 @@ do
 		if sudo cp -p scripts/aba.sh $d/aba; then
 			sudo chmod +x $d/aba
 			[ ! "$quiet" ] && echo aba has been $action to $d/aba >&2
-			[ ! "$quiet" -a -n "$msg" ] && echo "[$msg]" >&2
+			[ ! "$quiet" -a -n "$msg" ] && echo "$msg" >&2
 
 			exit $ret  # Success
 		fi
