@@ -45,6 +45,8 @@ download_repo() {
 
 		echo
 		echo "Cloned aba branch $branch into $PWD/aba" >&2
+		msg="Run: cd aba; aba or see the README.md file"
+			#[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file" >&2
 		cd aba
 #	else
 #		[ "$cur_dir" = "$PWD" ] && quite=  # Since we are in the aba dir, no neeed to output instructions
@@ -102,8 +104,7 @@ do
 		if sudo cp -p scripts/aba.sh $d/aba; then
 			sudo chmod +x $d/aba
 			[ ! "$quiet" ] && echo aba has been $action to $d/aba
-			[ ! "$quiet" ] && echo "Run: cd aba; aba" >&2
-			[ ! "$quiet" ] && echo "Run: cd aba -h for help or see the README.md file" >&2
+			[ ! "$quiet" -a "$msg" ] && echo "$msg" >&2
 
 			exit $ret  # Success
 		fi
