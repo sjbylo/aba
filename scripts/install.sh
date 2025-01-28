@@ -62,9 +62,7 @@ get_repo_ver() {
 	grep "^ABA_VERSION=" ./scripts/aba.sh | cut -d= -f2 | grep -oE "^[0-9]{14}$"
 }
 
-if is_repo_available; then
-	cd $(dirname $0) 
-else
+if ! is_repo_available; then
 	download_repo
 fi
 
