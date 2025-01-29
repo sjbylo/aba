@@ -52,15 +52,13 @@ ntp_ip=10.0.1.8,10.0.1.8 # If available
 which make || sudo dnf install make -y
 
 sudo rm -f `which aba`
-rm -f ~/bin/aba  # don't get mixed up!
-rm -f /usr/local/bin/aba
+sudo rm -f ~/bin/aba  # don't get mixed up!
+sudo rm -f /usr/local/bin/aba
 sudo rm -f /usr/local/sbin/aba
 
-(
-	cd ..
-	test-cmd -m "Install aba" './aba/install | grep " installed "'
-	test-cmd -m "Install aba" './aba/install | grep " up-to-date "'
-)
+test-cmd -m "Install aba (1)" '../aba/install 2>&1 | grep " installed to "'
+test-cmd -m "Install aba (2)" '../aba/install 2>&1 | grep "already up-to-date"'
+
 # Test update of aba script
 mylog Testing update of aba script
 sleep 1
@@ -300,19 +298,17 @@ test-cmd -r 15 3 -m "Syncing images from external network to internal mirror reg
 aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should start from scratch next time
 
-####mylog "Testing install with smaller CIDR 10.0.1.128/25 with start ip 201"
-mylog "Testing install with smaller CIDR 10.0.1.200/30 with start ip 201"
-test-cmd -m "Configuring SNO cluster with 'aba sno --step cluster.conf" aba sno --step cluster.conf
-###mylog "Setting CIDR 10.0.1.128/25"
-mylog "Setting CIDR 10.0.1.200/30"
-###sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.128/25 #g" sno/cluster.conf
-###sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g" sno/cluster.conf
-sed -i "s#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g" sno/cluster.conf
-aba --machine-network 10.0.0.0/20
-##sed -i "s/^prefix_length=[^ \t]*/prefix_length=25 /g" sno/cluster.conf
+mylog "Testing with smaller CIDR 10.0.1.200/30 with start ip 201"
+test-cmd -m "Configuring SNO cluster with" aba sno --step cluster.conf
+test-cmd -m "Setting machine_network=10.0.1.200/30" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g' sno/cluster.conf"
+test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
+test-cmd -m "Creating iso" aba sno --step iso
 
-mylog "Setting starting_ip=10.0.1.201"
-sed -i "s/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g" sno/cluster.conf
+mylog "Testing with larger CIDR 10.0.0.0/20 with start ip 10.0.2.253"
+test-cmd -m "Setting machine_network=10.0.0.0/20" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g' sno/cluster.conf"
+test-cmd -m "Setting in aba.conf machine_network=10.0.0.0/20" aba --machine-network 10.0.0.0/20
+
+test-cmd -m "Setting starting_ip=10.0.2.253" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.2.253 /g' sno/cluster.conf"
 test-cmd -m "Installing sno cluster" aba sno
 test-cmd -m "Checking cluster operators" aba --dir sno cmd
 
