@@ -429,43 +429,47 @@ echo "\
 scp macs.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/standard
 ##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating cluster.conf" "cd $subdir/aba/standard; scripts/create-cluster-conf.sh standard standard"
 
-	cluster_name=standard
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding master CPU" "sed -i 's/^master_cpu_count=.*/master_cpu_count=12/g' $subdir/aba/$cluster_name/cluster.conf"
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker CPU" "sed -i 's/^worker_cpu_count=.*/worker_cpu_count=8/g' $subdir/aba/$cluster_name/cluster.conf"
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
+cluster_name=standard
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding master CPU" "sed -i 's/^master_cpu_count=.*/master_cpu_count=12/g' $subdir/aba/$cluster_name/cluster.conf"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker CPU" "sed -i 's/^worker_cpu_count=.*/worker_cpu_count=8/g' $subdir/aba/$cluster_name/cluster.conf"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Making iso" "aba --dir $subdir/aba/standard iso"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating standard cluster" "aba --dir $subdir/aba/standard"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting cluster config: machine_network 10.0.0.0/20 and starting_ip=10.0.3.254" "aba -d $subdir/aba/$cluster_name -M 10.0.0.0/20"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting machine_network" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g' $subdir/aba/$cluster_name/cluster.conf"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting starting_ip" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.2.253 /g' $subdir/aba/$cluster_name/cluster.conf"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all cluster operators to become available?" "aba --dir $subdir/aba/standard --cmd; until aba --dir $subdir/aba/standard --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Making iso" "aba --dir $subdir/aba/$cluster_name iso"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name"
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all cluster operators to become available?" "aba --dir $subdir/aba/$cluster_name --cmd; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 # Restart cluster test 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/standard login)"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check node status" "aba --dir $subdir/aba/standard ls"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Shut cluster down gracefully and wait for powerdown" "yes | aba --dir $subdir/aba/standard shutdown --wait"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check node status" "aba --dir $subdir/aba/$cluster_name ls"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Shut cluster down gracefully and wait for powerdown" "yes | aba --dir $subdir/aba/$cluster_name shutdown --wait"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking for all nodes 'poweredOff'" "until aba --dir $subdir/aba/standard ls |grep poweredOff |wc -l| grep ^6$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking for all nodes 'poweredOff'" "until aba --dir $subdir/aba/$cluster_name ls |grep poweredOff |wc -l| grep ^6$; do sleep 10; echo -n .; done"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check node status" "aba --dir $subdir/aba/standard ls"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Start cluster gracefully" "aba --dir $subdir/aba/standard startup --wait"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check node status" "aba --dir $subdir/aba/$cluster_name ls"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Start cluster gracefully" "aba --dir $subdir/aba/$cluster_name startup --wait"
 test-cmd -m "Wait for cluster to settle" sleep 10
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking for all nodes 'Ready'" "cd $subdir/aba/standard; until oc get nodes| grep Ready|grep -v Not|wc -l| grep ^6$; do sleep 10; echo -n .; done"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster nodes" "aba --dir $subdir/aba/standard --cmd 'get nodes'"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster auth" "aba --dir $subdir/aba/standard --cmd 'whoami'"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster version" "aba --dir $subdir/aba/standard --cmd 'version'"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster pending pods" "aba --dir $subdir/aba/standard --cmd 'get po -A | grep -v -e Running -e Complete'"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster operators" "aba --dir $subdir/aba/standard --cmd"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking for all nodes 'Ready'" "cd $subdir/aba/$cluster_name; until oc get nodes| grep Ready|grep -v Not|wc -l| grep ^6$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster nodes" "aba --dir $subdir/aba/$cluster_name --cmd 'get nodes'"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster auth" "aba --dir $subdir/aba/$cluster_name --cmd 'whoami'"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster version" "aba --dir $subdir/aba/$cluster_name --cmd 'version'"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster pending pods" "aba --dir $subdir/aba/$cluster_name --cmd 'get po -A | grep -v -e Running -e Complete'"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster operators" "aba --dir $subdir/aba/$cluster_name --cmd"
 test-cmd -m "Wait for cluster to settle" sleep 10
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all co available?" "aba --dir $subdir/aba/standard --cmd; aba --dir $subdir/aba/standard --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all co available?" "aba --dir $subdir/aba/$cluster_name --cmd; aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
-# keep it # test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Deleting standard cluster" "aba --dir $subdir/aba/standard delete" 
-###test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Stopping standard cluster and wait" "yes|aba --dir $subdir/aba/standard shutdown --wait" 
+# keep it # test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Deleting $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name delete" 
+###test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Stopping $cluster_name cluster and wait" "yes|aba --dir $subdir/aba/$cluster_name shutdown --wait" 
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "If cluster up, shutting cluster down and wait" ". <(aba --dir $subdir/aba/standard shell) && . <(aba --dir $subdir/aba/standard login) && yes|aba --dir $subdir/aba/standard shutdown --wait || echo cluster shutdown failure"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "If cluster up, shutting cluster down and wait" ". <(aba --dir $subdir/aba/$cluster_name shell) && . <(aba --dir $subdir/aba/$cluster_name login) && yes|aba --dir $subdir/aba/$cluster_name shutdown --wait || echo cluster shutdown failure"
 
-# keep it # test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Running 'aba clean' in $subdir/aba/stanadard" "aba --dir $subdir/aba/standard clean" 
+# keep it # test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Running 'aba clean' in $subdir/aba/stanadard" "aba --dir $subdir/aba/$cluster_name clean" 
 
 #test-cmd "aba reset --force"
 # keep it # aba --dir ~/aba reset --force

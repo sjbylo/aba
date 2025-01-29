@@ -83,10 +83,8 @@ test-cmd() {
 
 	draw-line
 	if [ "$msg" ]; then
-		#echo "$(date "+%b %e %H:%M:%S") $msg ($cmd) ($host) ($PWD)" | tee -a test/test.log
 		log-test -t "$msg ($cmd) ($host) ($PWD)"
 	else
-		#echo "$(date "+%b %e %H:%M:%S") ($cmd) ($host) ($PWD)" | tee -a test/test.log
 		log-test -t "($cmd) ($host) ($PWD)"
 	fi
 	##draw-line
