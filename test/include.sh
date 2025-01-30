@@ -239,6 +239,9 @@ init_bastion() {
 cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
 set -ex
 whoami
+getenforce
+setenforce 0
+getenforce
 timedatectl
 nmcli con show
 ip a
