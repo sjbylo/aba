@@ -125,17 +125,17 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 
 ##test-cmd -m "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" aba -k "~/.ssh/id_rsa"
 # TEST ADDING ONE-LINER # mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
-# TEST ADDING ONE-LINER # sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
+# TEST ADDING ONE-LINER # sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=\~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 #mylog "Setting op_sets=abatest in mirror/mirror.conf"
 #sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
 #echo kiali-ossm > templates/operator-set-abatest 
 
 #mylog "Setting reg_root=~/my-quay-mirror"
-#sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
+#sed -i "s#reg_root=#reg_root=\~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
 
 #sed -i "s#channel=.*#channel=fast          #g" ./mirror/mirror.conf	    	# test channel
-#sed -i "s#reg_root=#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
+#sed -i "s#reg_root=#reg_root=\~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
 #sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test random password 
 ### sed -i "s#tls_verify=true#tls_verify=            #g" ./mirror/mirror.conf  	# test tlsverify = false # sno install fails 
 ### sed -i "s#reg_port=.*#reg_pw=443             #g" ./mirror/mirror.conf	    	# test port change
@@ -256,16 +256,16 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "po
 #####################################################################################################################
 
 ## FIXME INSTALL FAILURE mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
-mylog "Configure mirror to install on internal (remote) bastion in default dir, with random password to '/my/path'"
+mylog "Configure mirror to install on internal bastion (remote host) in custom dir, with random password to '/my/path'"
 
 reg_ssh_user=testy
 reg_ssh_key=${reg_ssh_user}_rsa
 
 #sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
-#sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
+#sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=\~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
 mylog "Setting reg_root=~/my-quay-mirror"
-sed -i "s#^reg_root=[^ \t]*#reg_root=~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
+sed -i "s#^reg_root=[^ \t]*#reg_root=\~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
 
 mylog "Setting reg_pw=  (empty)"
 sed -i "s#^reg_pw=[^ \t]*#reg_pw= #g" ./mirror/mirror.conf	    	# test random password 
@@ -278,7 +278,7 @@ mylog "Setting reg_ssh_user=$reg_ssh_user for remote installation"
 sed -i "s#^reg_ssh_user=[^ \t]*#reg_ssh_user=$reg_ssh_user #g" ./mirror/mirror.conf	     	# If remote, set user
 
 mylog "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" 
-sed -E -i "s|^^#{,1}reg_ssh_key=[^ \t]*|reg_ssh_key=~/.ssh/$reg_ssh_key |g" ./mirror/mirror.conf	     	# Remote or localhost
+sed -E -i "s|^^#{,1}reg_ssh_key=[^ \t]*|reg_ssh_key=\~/.ssh/$reg_ssh_key |g" ./mirror/mirror.conf	     	# Remote or localhost
 
 # FIXME: no need? or use 'aba clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
