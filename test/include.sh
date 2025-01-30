@@ -233,10 +233,25 @@ init_bastion() {
 
 	pub_key=$(cat ~/.ssh/id_rsa.pub)
 
+	net_if=ens192
+
 	# General bastion config, e.g. date/time/timezone and also root ssh
 cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
 set -ex
+whoami
 timedatectl
+nmcli con show
+#ifconfig $net_if
+nmcli con modify $net_if ipv4.method manual
+nmcli con modify $net_if ipv4.addresses 10.0.1.2/20
+nmcli con modify $net_if ipv4.dns 10.0.1.8
+(sleep 2; nmcli con up $net_if) &
+echo Running nmcli con down $net_if
+nmcli con down $net_if
+echo waiting to re-activate $net_if
+wait 
+nmcli con show
+#ifconfig $net_if
 dnf install chrony podman -y
 # Next line needed by RHEL8
 systemctl start chronyd
