@@ -304,11 +304,11 @@ test-cmd -m "Setting machine_network=10.0.1.200/30" "sed -i 's#^machine_network=
 test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
 test-cmd -m "Creating iso" aba sno --step iso
 
-mylog "Testing with larger CIDR 10.0.0.0/20 with start ip 10.0.2.253"
+mylog "Testing with larger CIDR 10.0.0.0/20 with start ip 10.0.1.201"
 test-cmd -m "Setting machine_network=10.0.0.0/20" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g' sno/cluster.conf"
 test-cmd -m "Setting in aba.conf machine_network=10.0.0.0/20" aba --machine-network 10.0.0.0/20
 
-test-cmd -m "Setting starting_ip=10.0.2.253" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.2.253 /g' sno/cluster.conf"
+test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
 test-cmd -m "Installing sno cluster" aba sno
 test-cmd -m "Checking cluster operators" aba --dir sno cmd
 

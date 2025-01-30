@@ -292,7 +292,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator st
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/$cluster_type login)"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30 mins for all cluster operators to be fully available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30 mins for all cluster operators to be fully available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'aba day2' ...
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m "Run 'day2'" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
@@ -371,8 +371,7 @@ build_and_test_cluster() {
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all cluster operators available?" "aba --dir $subdir/aba/$cluster_name --cmd; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30 mins for all cluster operators fully available?" "i=0; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$'|wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
-########test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all cluster operators to be available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 200 ] && exit 1; sleep 10; echo -n "\$i "; done"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30 mins for all cluster operators fully available?" "i=0; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$'|wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Show all cluster operators" "aba --dir $subdir/aba/$cluster_name --cmd"
 
@@ -415,9 +414,11 @@ do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Running 'aba clean' in $subdir/aba/$c" "aba --dir $subdir/aba/$c clean" 
 done
 
+cluster_name=standard
+
 # Test bare-metal with BYO macs
-##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating standard cluster dir" "cd $subdir/aba; rm -rf standard; mkdir -p standard; ln -s ../templates/Makefile standard; aba --dir standard init" 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating cluster.conf" "aba -d $subdir/aba cluster --name standard --type standard --step cluster.conf"
+##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster dir" "cd $subdir/aba; rm -rf $cluster_name; mkdir -p $cluster_name; ln -s ../templates/Makefile $cluster_name; aba --dir $cluster_name init" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating cluster.conf" "aba -d $subdir/aba cluster --name $cluster_name --type $cluster_name --step cluster.conf"
 echo "\
 00:50:56:1d:9e:01
 00:50:56:1d:9e:02
@@ -426,23 +427,22 @@ echo "\
 00:50:56:1d:9e:05
 00:50:56:1d:9e:06
 " > macs.conf
-scp macs.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/standard
-##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating cluster.conf" "cd $subdir/aba/standard; scripts/create-cluster-conf.sh standard standard"
+scp macs.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/$cluster_name
 
-cluster_name=standard
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding master CPU" "sed -i 's/^master_cpu_count=.*/master_cpu_count=12/g' $subdir/aba/$cluster_name/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker CPU" "sed -i 's/^worker_cpu_count=.*/worker_cpu_count=8/g' $subdir/aba/$cluster_name/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting cluster config: machine_network 10.0.0.0/20 and starting_ip=10.0.3.254" "aba -d $subdir/aba/$cluster_name -M 10.0.0.0/20"
+# Added agntconf here so the cluster is NOT created.  It's created below!  This failed since running aba with an already installed cluster shows error!
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting cluster config: machine_network 10.0.0.0/20 and starting_ip=10.0.3.254" "aba -d $subdir/aba/$cluster_name -M 10.0.0.0/20 agentconf"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting machine_network" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g' $subdir/aba/$cluster_name/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting starting_ip" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.2.253 /g' $subdir/aba/$cluster_name/cluster.conf"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Making iso" "aba --dir $subdir/aba/$cluster_name iso"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all cluster operators to become available?" "aba --dir $subdir/aba/$cluster_name --cmd; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30mins for all cluster operators to become available?" "aba --dir $subdir/aba/$cluster_name --cmd; i=0; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; echo -n .; sleep 10; done"
 
 # Restart cluster test 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
