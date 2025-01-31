@@ -53,7 +53,7 @@ save/imageset-config-save.yaml: ../aba.conf catalog
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
 #sync: .init .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
-sync: .init .rpmsint ~/.pull-secret.json index cli-download install sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf') Use retry=# to retry after failure.
+sync: .init .rpmsint ~/.pull-secret.json index cli-download install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf') Use retry=# to retry after failure.
 	###
 	### Upload images to the mirror registry from the Internet (mirror-to-mirror)
 	###
@@ -74,7 +74,7 @@ save: .init .rpmsext ~/.pull-secret.json index cli-download mirror-registry-amd6
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: .init cli-oc-mirror .rpmsint install  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf')  Use retry=# to retry after failure.
+load: .init cli-oc-mirror .rpmsint install verify  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf')  Use retry=# to retry after failure.
 	###
 	### Load images from local disk to mirror registry (disk-to-mirror)
 	###

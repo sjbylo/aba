@@ -296,7 +296,7 @@ test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" sleep 30
 # error: Post "https://api.sno.example.com:6443/api/v1/namespaces/demo/services": dial tcp 10.0.1.201:6443: connect: connection refused
 test-cmd -r 5 10 -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/sno --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/sno --cmd 'oc rollout status deployment vote-app -n demo'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for vote-app rollout" "aba --dir $subdir/aba/sno --cmd 'oc rollout status deployment vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting vote-app" "aba --dir $subdir/aba/sno --cmd 'oc delete project demo'"
 
 mylog "Adding advanced-cluster-management operator images to mirror/save/imageset-config-save.yaml file on `hostname`"
@@ -360,8 +360,8 @@ test-cmd -m "Leave time for ACM to deploy ..." sleep 30
 
 # Need 'cd' here due to '=$subdir' not 'resolving' ok
 # cd $subdir only works in "" .. and will work for root or user
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait 3m for acm hub status is 'Running'" "cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=\$i+1; [ \$i -gt 24 ] && exit 1; sleep 10; done"
-##test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Wait for hub status is 'Running'" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Waiting up to 6 mins for acm hub status is 'Running'" "cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=\$i+1; [ \$i -gt 36 ] && exit 1; sleep 10; done"
+##test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Waiting for hub status is 'Running'" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running"
 #### TESTING ACM + MCH 
 
 # Apply NTP config, but don't wait for it to complete!

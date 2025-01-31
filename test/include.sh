@@ -244,8 +244,8 @@ whoami
 getenforce
 #setenforce 0
 #getenforce
-# This is a hack for RHEL 9 where curl to registry.example.com:8443 fails on 10.0.1.2 host.
-echo "127.0.0.1 registry.example.com  # Hack for mirror-registry install on rhel9" >> /etc/hosts 
+#### This is a hack for RHEL 9 where curl to registry.example.com:8443 fails on 10.0.1.2 host.
+###echo "127.0.0.1 registry.example.com  # Hack for mirror-registry install on rhel9" >> /etc/hosts 
 # Set the subnet mask to /20
 # USING NEW DHCP # nmcli con show
 # USING NEW DHCP # ip a
