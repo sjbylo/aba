@@ -1,6 +1,8 @@
 #!/bin/bash
 # Simple Aba installer.  Copy aba command somewhere into the $PATH
 
+uname -o | grep -q "^Darwin$" && echo "Install aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
+
 # Check sudo or root access 
 # If user is not root
 if [ "$(id -run)" != "root" ]; then

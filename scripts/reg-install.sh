@@ -70,7 +70,6 @@ if [ "$reg_root" ]; then
 		reg_root=$(echo "$reg_root" | sed "s#~#$fix_home#g")
 	fi
 
-	#reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --pgStorage $reg_root/pg-data"
 	reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
 	echo_white "Using registry root dir: $reg_root and options: $reg_root_opts"
 else
