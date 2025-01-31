@@ -96,7 +96,7 @@ fqdn_ip=$(dig +short $reg_host | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}') || true
 if [ ! "$fqdn_ip" ]; then
 	echo
 	echo_red "Error: '$reg_host' does not resolve properly (IP address expected!)." >&2
-	echo_red "       Please correct the problem and try again!" >&2
+	echo_red "       Correct the problem and try again!" >&2
 	echo
 
 	exit 1
@@ -105,7 +105,7 @@ fi
 # Install Quay mirror on **remote host** if ssh key defined 
 if [ "$reg_ssh_key" ]; then
 	# First, ensure the reg host points to a remote host and not this localhost
-	[ "$INFO_ABA" ] && echo_cyan "You have configured the mirror to be a remote host (since 'reg_ssh_key' is defined in 'aba.conf')."
+	[ "$INFO_ABA" ] && echo_cyan "You have configured the mirror to be a remote host (since 'reg_ssh_key' is defined in 'mirror/mirror.conf')."
 	[ "$INFO_ABA" ] && echo_cyan "Verifying FQDN '$reg_host' points to a remote host ..."
 
 	# try to create a random file on the host and check the file does not exist on this localhost 
@@ -121,10 +121,10 @@ if [ "$reg_ssh_key" ]; then
 		if [ -f $flag_file ]; then
 			echo
 			echo_red "Error: FQDN '$reg_host' resolves to this host '`hostname`'!" >&2
-			echo_red "       By setting 'reg_ssh_key' in 'mirror.conf' you have defined the mirror to be on the remote host '$reg_host' (IP: '$fqdn_ip')." >&2
-			echo_red "       If that should be the localhost (`hostname`), please undefine the 'reg_ssh_key' value in 'mirror.conf'." >&2
+			echo_red "       By setting 'reg_ssh_key' in 'mirror/mirror.conf' you have defined the mirror to be on the remote host '$reg_host' (IP: '$fqdn_ip')." >&2
+			echo_red "       If that should be the localhost (`hostname`), undefine the 'reg_ssh_key' value in 'mirror/mirror.conf'." >&2
 			echo_red "       Otherwise, ensure the DNS record ($reg_host) points to the correct *remote* host." >&2
-			echo_red "       Please correct the problem and try again." >&2
+			echo_red "       Correct the problem and try again." >&2
 			echo
 
 			rm -f $flag_file
@@ -154,7 +154,7 @@ if [ "$reg_ssh_key" ]; then
 	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "set -x; rpm -q jq 	|| sudo dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
 	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "set -x; podman images" >> .remote_host_check.out 2>&1 || err=1
 
-	[ "$err" ] && echo_red "Please install 'podman' and 'jq' on the remote host '$reg_host' and try again." && exit 1
+	[ "$err" ] && echo_red "Install 'podman' and 'jq' on the remote host '$reg_host' and try again." && exit 1
 
 #	# Check if the workaround needs to be run:
 #	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause >> .remote_host_check.out 2>&1 || \
@@ -245,8 +245,8 @@ else
 	if ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
 		echo
 		echo_red "Warning: FQDN '$reg_host' does not resolve to an IP addr on this localhost '`hostname`'!" >&2
-		echo_red "         By not setting 'reg_ssh_key' in 'mirror.conf' you have defined a *remote* mirror '$reg_host' (IP: '$fqdn_ip')." >&2
-		echo_red "         If that should be a remote host, please define the 'reg_ssh_key' value in 'mirror.conf'." >&2
+		echo_red "         By not setting 'reg_ssh_key' in 'mirror/mirror.conf' you have defined a *remote* mirror '$reg_host' (IP: '$fqdn_ip')." >&2
+		echo_red "         If that should be a remote host, define the 'reg_ssh_key' value in 'mirror/mirror.conf'." >&2
 		echo_red "         Otherwise, ensure the DNS record points to an IP address that can reach this local host '`hostname`'." >&2
 		##echo_red "         Please correct the problem and try again." >&2
 		echo
@@ -261,7 +261,7 @@ else
 #	else
 #		if [ ! -f $flag_file ]; then
 #			echo
-#			echo_red "Error: $reg_host is a remote host! Correct the problem in mirror.conf (define reg_ssh_key?) and try again." >&2
+#			echo_red "Error: $reg_host is a remote host! Correct the problem in mirror/mirror.conf (define reg_ssh_key?) and try again." >&2
 #			echo
 #
 #			exit 1

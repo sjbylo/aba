@@ -110,8 +110,8 @@ Examples of fully disconnected mode (air-gapped):
   Configure mirror registry on localhost (ensure 'registry.example.com' points to the mirror registry):
     aba mirror -H registry.example.com 
 
-  Configure mirror registry on *remote host* with 'registry.example.com:
-    aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
+  Configure mirror registry on *remote host* with 'registry.example.com' using 'remote-ssh-user':
+    aba mirror -H registry.example.com -k "~/.ssh/id_rsa" -U remote-ssh-user
 
   Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
     aba load -H registry.example.com  --retry

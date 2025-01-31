@@ -247,20 +247,20 @@ getenforce
 # This is a hack for RHEL 9 where curl to registry.example.com:8443 fails on 10.0.1.2 host.
 echo "127.0.0.1 registry.example.com  # Hack for mirror-registry install on rhel9" >> /etc/hosts 
 # Set the subnet mask to /20
-nmcli con show
+# USING NEW DHCP # nmcli con show
+# USING NEW DHCP # ip a
+# USING NEW DHCP # #ifconfig $net_if
+# USING NEW DHCP # nmcli con modify $net_if ipv4.addresses 10.0.1.2/20
+# USING NEW DHCP # nmcli con modify $net_if ipv4.method manual
+# USING NEW DHCP # nmcli con modify $net_if ipv4.dns 10.0.1.8
+# USING NEW DHCP # (sleep 2; nmcli con up $net_if) &
+# USING NEW DHCP # echo Running nmcli con down $net_if
+# USING NEW DHCP # nmcli con down $net_if
+# USING NEW DHCP # echo waiting to re-activate $net_if
+# USING NEW DHCP # wait 
+# USING NEW DHCP # nmcli con show
+# USING NEW DHCP # #ifconfig $net_if
 ip a
-#ifconfig $net_if
-nmcli con modify $net_if ipv4.addresses 10.0.1.2/20
-nmcli con modify $net_if ipv4.method manual
-nmcli con modify $net_if ipv4.dns 10.0.1.8
-(sleep 2; nmcli con up $net_if) &
-echo Running nmcli con down $net_if
-nmcli con down $net_if
-echo waiting to re-activate $net_if
-wait 
-nmcli con show
-ip a
-#ifconfig $net_if
 timedatectl
 dnf install chrony podman -y
 # Next line needed by RHEL8
