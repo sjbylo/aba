@@ -233,18 +233,21 @@ init_bastion() {
 
 	pub_key=$(cat ~/.ssh/id_rsa.pub)
 
-	net_if=ens192
-
 	# General bastion config, e.g. date/time/timezone and also root ssh
 cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
 set -ex
 whoami
+#dnf update -y
+# Try to keep SELinux turned on
 getenforce
-setenforce 0
-getenforce
-timedatectl
+#setenforce 0
+#getenforce
+# This is a hack for RHEL 9 where curl to registry.example.com:8443 fails on 10.0.1.2 host.
+echo 10.0.1.2 registry.example.com >> /etc/hosts
+# Set the subnet mask to /20
 nmcli con show
 ip a
+net_if=ens192
 #ifconfig $net_if
 nmcli con modify $net_if ipv4.addresses 10.0.1.2/20
 nmcli con modify $net_if ipv4.method manual
@@ -257,6 +260,7 @@ wait
 nmcli con show
 ip a
 #ifconfig $net_if
+timedatectl
 dnf install chrony podman -y
 # Next line needed by RHEL8
 systemctl start chronyd

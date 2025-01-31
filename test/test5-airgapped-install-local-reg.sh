@@ -419,15 +419,15 @@ cluster_name=standard
 # Test bare-metal with BYO macs
 ##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster dir" "cd $subdir/aba; rm -rf $cluster_name; mkdir -p $cluster_name; ln -s ../templates/Makefile $cluster_name; aba --dir $cluster_name init" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating cluster.conf" "aba -d $subdir/aba cluster --name $cluster_name --type $cluster_name --step cluster.conf"
-echo "\
-00:50:56:1d:9e:01
-00:50:56:1d:9e:02
-00:50:56:1d:9e:03
-00:50:56:1d:9e:04
-00:50:56:1d:9e:05
-00:50:56:1d:9e:06
-" > macs.conf
-scp macs.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/$cluster_name
+echo -n "\
+00:50:56:20:xx:01
+00:50:56:20:xx:02
+00:50:56:20:xx:03
+00:50:56:20:xx:04
+00:50:56:20:xx:05
+00:50:56:20:xx:06
+" | sed -E "s/xx/$(printf '%02x' $((RANDOM%256)))/" | ssh $reg_ssh_user@$int_bastion_hostname -- "cat > $subdir/aba/$cluster_name"
+##scp macs.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/$cluster_name
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding master CPU" "sed -i 's/^master_cpu_count=.*/master_cpu_count=12/g' $subdir/aba/$cluster_name/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker CPU" "sed -i 's/^worker_cpu_count=.*/worker_cpu_count=8/g' $subdir/aba/$cluster_name/cluster.conf"
