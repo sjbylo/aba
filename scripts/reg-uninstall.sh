@@ -8,7 +8,7 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 if [ -s reg-uninstall.sh ]; then
-	source reg-uninstall.sh  # Source the reg_host_to_del var
+	source reg-uninstall.sh  # Source the reg_host_to_del var and reg_delete fn()
 
 	if ask "Uninstall the mirror registry from host $reg_host_to_del"; then
 		#echo Uninstalling mirror registry from host $reg_host ...

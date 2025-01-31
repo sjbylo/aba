@@ -145,7 +145,7 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 #####################################################################################################################
 #####################################################################################################################
 
-# TEST ADDING ONE-LINER # source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* calues (see below)
+# TEST ADDING ONE-LINER # source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* values (see below)
 
 # TEST ADDING ONE-LINER # echo
 # TEST ADDING ONE-LINER # echo mirror-conf:
@@ -157,9 +157,9 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 ######################
 # This will install mirror and sync images
 mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key ~/.ssh/id_rsa and then ..."
-test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (one command)" aba --dir mirror sync -H $int_bastion_hostname -k ~/.ssh/id_rsa --reg-root ~/my-quay-root
+test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (one command)" aba --dir mirror sync -H $int_bastion_hostname -k "~/.ssh/id_rsa" --reg-root "~/my-quay-home"
 
-source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* calues (see below)
+source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* values (see below)
 echo
 echo mirror.conf values:
 (cd mirror; normalize-mirror-conf | awk '{print $2}')
