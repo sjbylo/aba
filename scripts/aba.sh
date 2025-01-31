@@ -1,14 +1,14 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250131171850
+ABA_VERSION=20250131180526
 # Sanity check
-echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Please fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
+echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
-uname -o | grep -q "^Darwin$" && echo "Please run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS)." >&2 && exit 1
+uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 # Check sudo or root access 
-[ "$(sudo id -run)" != "root" ] && echo "Please configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+[ "$(sudo id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
 
 # Having $1 = --dir is an exception only, $1 can point to the top-level repo dir only
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
@@ -49,15 +49,17 @@ else
 		echo "/    \ ) _ (/    \    Follow the instructions below or see the aba/README.md file for more."
 		echo "\_/\_/(____/\_/\_/"
 		echo
-		echo "Please run Aba from the top of its repository."
+		echo "Run Aba from the top of its repository."
 		echo
 		echo "For example:                          cd aba"
-		echo "                                      aba --help"
+		echo "                                      aba"
+		echo "                                      aba -h"
 		echo
 		echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
 		echo "Change to the Aba repo directory:     cd aba"
 		echo "Install latest Aba:                   ./install"
-		echo "Run Aba:                              aba --help" 
+		echo "Run Aba:                              aba" 
+		echo "                                      aba -h" 
 	) >&2
 
 	exit 1
