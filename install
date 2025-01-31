@@ -2,7 +2,19 @@
 # Simple Aba installer.  Copy aba command somewhere into the $PATH
 
 # Check sudo or root access 
-[ "$(sudo id -run)" != "root" ] && echo "Please configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+# If user is not root
+if [ "$(id -run)" != "root" ]; then
+	# If sudo does not lead to root without using a password prompt (-n)
+	if [ "$(sudo -n whoami)" != "root" ]; then
+		echo "aba requires root access, directly or via sudo." >&2
+		# If there is no passwordless access
+		if ! sudo -ln 2>/dev/null | grep -q NOPASSWD; then
+			echo "Passwordless sudo access is recommended." >&2
+		fi
+		echo -n "You must enter your password to install and use aba: " >&2
+		[ "$(sudo -p "Enter %p's password" id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+	fi
+fi
 
 # Check options
 while echo "$1" | grep -q "^-"

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250128170140
+ABA_VERSION=20250131171850
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Please fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -133,6 +133,7 @@ do
 
 		shift
 	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
+		# Check id --fir already specified
 		if [ ! "$WORK_DIR" ]; then
 			[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
 			[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
