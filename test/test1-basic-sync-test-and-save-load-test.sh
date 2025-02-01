@@ -247,7 +247,7 @@ test-cmd -r 15 3 -m "Saving and then loading cluster images into mirror" "aba --
 rm -rf sno
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
 test-cmd -m "Delete cluster (if needed)" aba --dir sno delete 
-test-cmd -m "Uninstall mirror" aba --dir mirror uninstall 
+test-cmd -m "Delete the registry" aba --dir mirror uninstall 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" podman ps 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
@@ -343,6 +343,8 @@ test-cmd -m "Bare-metal simulation: Creating iso file" aba --dir standard iso   
 #test-cmd -m "Uninstalling mirror registry" aba --dir mirror uninstall 
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" podman ps 
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+
+test-cmd -m "Delete the registry" aba --dir mirror uninstall 
 
 #####################################################################################################################
 #####################################################################################################################
