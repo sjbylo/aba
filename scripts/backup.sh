@@ -43,15 +43,14 @@ cd ..
 touch aba/.bundle  # Flag this archive as a bundle
 rm -f aba/.aba.conf.seen   # Ensure user can be offered to edit this conf file again on the internal network
 
-#	aba/aba			\
-
 # All 'find expr' below are by default "and"
 file_list=$(find		\
-	aba/aba-*		\
 	aba/install		\
+	aba/aba-*		\
+	aba/aba			\
+	aba/aba.conf		\
 	aba/shortcuts.conf	\
 	aba/.bundle		\
-	aba/aba.conf		\
 	aba/cli			\
 	aba/rpms		\
 	aba/mirror		\

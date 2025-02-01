@@ -49,6 +49,9 @@ show_error() {
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
+	# Remove all chars from lines with <whitespace>#<anything>
+	# Remove all whitespace lines
+	# Remove all leading and trailing whitespace
 	# Correct ask=? which must be either =1 or = (empty)
 	# Extract machine_network and prefix_length from the CIDR notation
 	# Ensure only one arg after 'export'
@@ -90,9 +93,12 @@ normalize-mirror-conf()
 normalize-cluster-conf()
 {
 	# Normalize or sanitize the config file
-	# Prepend "export "
+	# Remove all chars from lines with <whitespace>#<anything>
+	# Remove all whitespace lines
+	# Remove all leading and trailing whitespace
 	# Extract machine_network and prefix_length from the CIDR notation
 	# Ensure only one arg after 'export'
+	# Prepend "export "
 
 	[ ! -s cluster.conf ] &&                                                               return 0
 
