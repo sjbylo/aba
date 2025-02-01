@@ -40,6 +40,10 @@ do
 			echo_red "Warning: The version of 'openshift-install' ($aba_ocp_ver) no longer matches the version defined in the imageset-config file." >&2
 			echo_red "         Settings in 'mirror/$f' are currently min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel" >&2
 			echo_red "         Before syncing or saving images (again), this mismatch must be corrected." >&2
+			echo_red "         Options are:" >&2
+			echo_red "          a) edit mirror/$f yourself to match the version in aba.conf ($aba_ocp_ver)" >&2
+			echo_red "          b) delete mirror/$f and have aba re-create it for you" >&2
+			echo_red "          c) edit the aba.conf file to match the version in the image set config file" >&2
 			echo_red "         Fix the mismatch and try again!" >&2 
 			echo
 
