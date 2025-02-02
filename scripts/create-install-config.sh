@@ -38,14 +38,14 @@ if [ -s regcreds/pull-secret-full.json ]; then
 	echo Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at $reg_host
 
 	# If we pull from the local reg. then we define the image content sources
-	export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
+	export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
 
 elif [ -s regcreds/pull-secret-mirror.json ]; then
 	export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
 	echo Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at $reg_host
 
 	# If we pull from the local reg. then we define the image content sources
-	export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
+	export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
 
 else
 	# This means we will do an ONLINE install, using the public RH registry. 

@@ -50,11 +50,17 @@ if [ -s ./reg-uninstall.sh ]; then
 fi
 echo
 
-# Set up script to help for manual re-sync
-# --continue-on-error : do not use this option. In testing the registry became unusable! 
-# Note: If 'make save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
-cmd="oc-mirror --v1 $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
-echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
+if [ "$oc_mirror_version" = "v1" ]; then
+	# Set up script to help for manual re-sync
+	# --continue-on-error : do not use this option. In testing the registry became unusable! 
+	# Note: If 'make save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
+	cmd="oc-mirror --v1 $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
+	echo "cd save && umask 0022 && $cmd"  > load-mirror.sh && chmod 700 load-mirror.sh
+else
+	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port/$reg_path"
+	echo "cd save && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
+	# disk-to-mirror: oc mirror -c <image_set_configuration> --from file://<file_path> docker://<mirror_registry_url> --v2
+fi
 
 # This loop is based on the "retry=?" value
 try=1

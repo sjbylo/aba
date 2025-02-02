@@ -5,7 +5,7 @@ source scripts/include_all.sh
 
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" ] && [ $1 -gt 0 ] && r=1 && try_tot=`expr $1 + 1` && echo "Attempting $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
+[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Attempting $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
 
 umask 077
 
@@ -13,7 +13,8 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 # Show warning if 'make save' has been used previously.
-if [ -s save/mirror_seq1_000000.tar ]; then
+#if [ -s save/mirror_seq1_000000.tar ]; then
+if [ -s save/mirror_*.tar ]; then
 	echo 
 	echo_red "Warning: Existing image set archive files found at $PWD/save." >&2
 	echo_red "         Note that you also have the option to load them into the mirror registry at $reg_host (aba load)?" >&2
@@ -66,13 +67,16 @@ if [ -s ./reg-uninstall.sh ]; then
 fi
 echo
 
-## [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
-
-# Set up script to help for manual re-sync
-# --continue-on-error : do not use this option. In testing the registry became unusable! 
-#cmd="oc-mirror --v1 $tls_verify_opts --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
-cmd="oc-mirror --v1                  --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
-echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+if [ "$oc_mirror_version" = "v1" ]; then
+	# Set up script to help for manual re-sync
+	# --continue-on-error : do not use this option. In testing the registry became unusable! 
+	cmd="oc-mirror --v1 --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
+	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+else
+	cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port/$reg_path"
+	echo "cd sync && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+	# mirror-to-mirror: oc mirror -c <image_set_configuration> --workspace file://<file_path> docker://<mirror_registry_url> --v2 
+fi
 
 # This loop is based on the "retry=?" value
 try=1
@@ -94,7 +98,8 @@ if [ "$failed" ]; then
 	echo_red -n "Image synchronization aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes can fail! Resolve any issues (if needed) and try again." >&2
-	[ ! "$r" ] && echo_red "Consider using --retry option" >&2
+	echo_red "         View https://status.redhat.com/ for any current issues or planned maintenance." >&2
+	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
 
 	exit 1
 fi

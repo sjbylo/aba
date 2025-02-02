@@ -75,6 +75,7 @@ normalize-mirror-conf()
 	# Ensure any ~/ is masked, e.g. \~/
 	# Ensrue reg_ssh_user has a value
 	# Ensure only one arg after 'export'
+	# Verify oc_mirror_version exists and is somewhat correct and defaults to v1
 	# Prepend "export "
 
 	[ ! -s mirror.conf ] &&                                                              return 0
@@ -85,7 +86,10 @@ normalize-mirror-conf()
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e "s/^tls_verify=0\b/tls_verify= /g" -e "s/tls_verify=false/tls_verify= /g" \
 			-e "s/^tls_verify=1\b/tls_verify=true /g" \
-			-e 's/^reg_root=~/reg_root=\\~/g' | \
+			-e 's/^reg_root=~/reg_root=\\~/g' \
+			-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
+			-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
+			| \
 		awk '{print $1}' | \
 		sed	-e "s/^/export /g"
 }

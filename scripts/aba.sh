@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250131180526
+ABA_VERSION=20250201211710
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -750,11 +750,11 @@ else
 	echo_cyan "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version', assuming this is running on an internal RHEL bastion!"
 	
 	# Check if tar files are already in place
-	if [ ! "$(ls mirror/save/mirror_seq*tar 2>/dev/null)" ]; then
+	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
 		echo
 		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'aba save' or 'aba bundle') are" >&2
 		echo_red "         copied to the 'aba/mirror/save' directory before following the instructions below!" >&2
-		echo_red "         For example, run the command: cp /path/to/portable/media/mirror_seq*tar mirror/save" >&2
+		echo_red "         For example, run the command: cp /path/to/portable/media/mirror_*tar mirror/save" >&2
 	fi
 
 	echo 

@@ -13,6 +13,7 @@ source scripts/include_all.sh
 
 umask 077
 
+source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
@@ -32,15 +33,15 @@ echo
 
 # This should really check the connectivity from the cluster, not from the bastion
 # E.g. ssh node "curl --connect-timeout 30 -s -kIL https://registry.redhat.io" or check for cluster proxy config?
-ret=$(curl --retry 3 -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/ || true)
-if [ "$ret" != "200" ]; then
+#ret=$(curl --retry 3 -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/ || true)
+#if [ "$ret" != "200" ]; then
 	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
        	echo "Patched OperatorHub, disabled Red Hat public catalog sources"
-
-else
-	echo "Access to the Internet from this host is working, not disabling public catalog sources"
-fi
+#
+#else
+	#echo "Access to the Internet from this host is working, not disabling public catalog sources"
+#fi
 
 
 echo_white "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
@@ -85,7 +86,11 @@ else
 	echo_cyan "Registry trust bundle already added (cm registry-config -n openshift-config). Assuming workaround has already been applied."
 fi
 
-#echo "############################"
+############### v2 ##################
+if [ "$oc_mirror_version" = "v1" ]; then
+############### v2 ##################
+
+echo Working on oc-mirror v1
 
 file_list=$(ls mirror/{sync,save}/oc-mirror-workspace 2>/dev/null || true)
 if [ ! "$file_list" ]; then
@@ -131,6 +136,64 @@ else
 	echo_cyan "No imageContentSourcePolicy.yaml files found under 'mirror/{save,sync}/oc-mirror-workspace*' (no operators mirrored?)."
 fi
 
+else
+############### v2 ##################
+
+	echo Working on oc-mirror v2
+
+	# For oc-mirror v2
+	# note for oc-mirror v2
+	# resources/idms-oc-mirror.yaml
+	#mirror/sync/working-dir/cluster-resources/itms-oc-mirror.yaml
+	#ls mirror/{save,sync}/working-dir/cluster-resources/{idms,itms}*yaml
+
+	latest_dir=$(ls -dt mirror/{save,sync} 2>/dev/null | head -1)  # One of these should exist!
+
+	if [ "$latest_dir" ]; then
+		for f in $(ls -t $latest_dir/working-dir/cluster-resources/{idms,itms}*yaml 2>/dev/null | head -1) 
+		do
+			echo oc apply -f $f
+			oc apply -f $f
+		done
+
+		f=$(ls -t1 $latest_dir/working-dir/cluster-resources/cs-redhat-operator-index*yaml | head -1)
+		echo "###########"
+		[ -s "$f" ] && cat $f | sed "s/name: cs-redhat-operator-index.*/name: redhat-operators/g" 
+		echo "###########"
+		#oc delete CatalogSource redhat-operators  -n openshift-marketplace 2>/dev/null || true
+		# FIXME: Can apply and need to delete?
+		if [ -s "$f" ] && cat $f | sed "s/name: cs-redhat-operator-index.*/name: redhat-operators/g" | oc apply -f - 2>/dev/null; then
+	
+			echo "Patching registry display name: 'Private Catalog ($reg_host)' for CatalogSource redhat-operators"
+			oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "Private Catalog ('$reg_host')"}}'
+	
+			echo "Patching registry poll interval for CatalogSource redhat-operators"
+			oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
+			echo Pausing ...
+			sleep 60
+		fi
+
+		echo "Waiting for CatalogSource 'redhat-operators' to become 'ready' ..."
+		i=2
+		time while ! oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$
+		do
+			echo -n .
+			sleep $i
+			let i=$i+1
+			[ $i -gt 40 ] && echo_red "Warning: Giving up waiting ..." >&2 && break
+		done
+
+		oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$ && \
+			echo "The CatalogSource is 'ready'"
+	else
+		echo_red "Warning: missing directory mirror/save and/or mirror/sync" >&2
+	fi
+
+
+############### v2 ##################
+fi
+
+
 echo
 echo "Applying any CatalogSources resources found under mirror/{save,sync}/oc-mirror-workspace/results-*"
 echo
@@ -142,7 +205,7 @@ if [ "$file_list" ]; then
 	echo "Running: oc apply -f $cs_file"
 
 	##if oc create -f $cs_file 2>/dev/null; then
-	if cat $cs_file | sed "s/name: cs-redhat-operator-index/name: redhat-operators/g" | oc create -f - 2>/dev/null; then
+	if cat $cs_file | sed "s/name: cs-redhat-operator-index/name: redhat-operators/g" | oc apply -f - 2>/dev/null; then
 		# Setting: displayName: Private Catalog (registry.example.com)
 		echo "Patching registry display name: 'Private Catalog ($reg_host)' for CatalogSource redhat-operators"
 		oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "Private Catalog ('$reg_host')"}}'
@@ -165,11 +228,13 @@ if [ "$file_list" ]; then
 		[ $i -gt 40 ] && echo_red "Warning: Giving up waiting ..." >&2 && break
 	done
 
-	echo "The CatalogSource is 'ready'"
+	oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$ && \
+		echo "The CatalogSource is 'ready'"
+	###echo "The CatalogSource is 'ready'"
 
-	# Force all default sources to be disabled, since we use the internal mirror.
-	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" 
-	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' 
+	#### Force all default sources to be disabled, since we use the internal mirror.
+	###echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" 
+	###oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' 
 else
 	echo
 	echo_cyan "No Operator CatalogSources found under mirror/{save,sync}/oc-mirror-workspace (no operators mirrored?)."

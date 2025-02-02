@@ -30,10 +30,18 @@ echo_cyan "Warning: Ensure there is enough disk space under $PWD/save.  "
 echo_cyan "This can take 5-20+ minutes to complete or even longer if Operator images are being saved!"
 echo 
 
-# Set up script to help for re-sync
-# --continue-on-error : do not use this option. In testing the registry became unusable! 
-cmd="oc-mirror --v1 --config=imageset-config-save.yaml file://."
-echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
+if [ "$oc_mirror_version" = "v1" ]; then
+	# Set up script to help for re-sync
+	# --continue-on-error : do not use this option. In testing the registry became unusable! 
+	cmd="oc-mirror --v1 --config=imageset-config-save.yaml file://."
+	echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
+else
+	cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://."
+	echo "cd save && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
+	# mirror-to-disk:  oc mirror -c <image_set_configuration> file://<file_path> --v2
+fi
+
+##oc mirror -c <image_set_configuration> file://<file_path> --v2
 
 # This loop is based on the "retry=?" value
 try=1
@@ -46,7 +54,6 @@ do
 	echo
 
 	./save-mirror.sh && failed= && break
-	# CHANGE /save-mirror.sh 2> >(tee .oc-mirror-error.log >&2) && failed= && break
 
 	let try=$try+1
 	[ $try -le $try_tot ] && echo_red -n "Image saving failed ... Trying again. " >&2
@@ -55,10 +62,9 @@ done
 if [ "$failed" ]; then
 	echo_red -n "Image saving aborted ..." >&2
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
-	echo_red "Warning: Long-running processes can fail! Resolve any issues (if needed) and try again." >&2
-	[ ! "$r" ] && echo_red "Consider using --retry option" >&2
-	# CHANGE echo_red Error output: >&2
-	# CHANGE cat_red .oc-mirror-error.log >&2
+	echo_red "Warning: Long-running processes sometimes fail! Resolve any issues (if needed) and try again." >&2
+	echo_red "         View https://status.redhat.com/ for any current issues or planned maintenance." >&2
+	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
 
 	exit 1
 fi

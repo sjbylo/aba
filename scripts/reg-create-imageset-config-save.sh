@@ -34,7 +34,7 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 
 	echo_cyan "Generating initial image set configuration: 'save/imageset-config-save.yaml' to save images to local disk for OpenShift 'v$ocp_version' and channel '$ocp_channel' ..."
 
-	scripts/j2 ./templates/imageset-config-save.yaml.j2 > save/imageset-config-save.yaml 
+	scripts/j2 ./templates/imageset-config-save-$oc_mirror_version.yaml.j2 > save/imageset-config-save.yaml 
 	scripts/add-operators-to-imageset.sh >> save/imageset-config-save.yaml 
 
 	touch save/.created
