@@ -65,6 +65,7 @@ test-cmd() {
 	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
 	local tot_cnt=1		# Try to run the command max tot_cnt times.
 	local host=localhost	# def. host to run on
+	local mark=L
 
 	#trap - ERR  # FIXME: needed?
 
@@ -81,11 +82,13 @@ test-cmd() {
 
 	local cmd="$@"
 
+	[ "$host" != "localhost" ] && mark=R
+
 	draw-line
 	if [ "$msg" ]; then
-		log-test -t "$msg ($cmd) ($host) ($PWD)"
+		log-test -t "$mark $msg ($cmd)" "[$host:$PWD]"
 	else
-		log-test -t "($cmd) ($host) ($PWD)"
+		log-test -t "$mark Running ($cmd)" "[$host:$PWD]"
 	fi
 	##draw-line
 

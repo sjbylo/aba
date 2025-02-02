@@ -475,6 +475,9 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "If cluster up, shutting clus
 # keep it # aba --dir ~/aba reset --force
 # keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete the registry" "aba --dir $subdir/aba/mirror uninstall"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
+
 mylog "===> Completed test $0"
 
 [ -f test/test.log ] && cp test/test.log test/test.log.bak

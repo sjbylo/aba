@@ -150,7 +150,7 @@ else
 	latest_dir=$(ls -dt mirror/{save,sync} 2>/dev/null | head -1)  # One of these should exist!
 
 	if [ "$latest_dir" ]; then
-		for f in $(ls -t $latest_dir/working-dir/cluster-resources/{idms,itms}*yaml 2>/dev/null | head -1) 
+		for f in $(ls -t $latest_dir/working-dir/cluster-resources/{idms,itms}*yaml 2>/dev/null) 
 		do
 			echo oc apply -f $f
 			oc apply -f $f
@@ -188,7 +188,6 @@ else
 	else
 		echo_red "Warning: missing directory mirror/save and/or mirror/sync" >&2
 	fi
-
 
 ############### v2 ##################
 fi
