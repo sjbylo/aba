@@ -29,8 +29,7 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 
 	echo_cyan "Generating initial image set configuration: 'sync/imageset-config-sync.yaml' for 'v$ocp_version' and channel '$ocp_channel' ..."
 
-	### FIXME: [ "$tls_verify" ] && export skipTLS=false || export skipTLS=true
-	scripts/j2 ./templates/imageset-config-sync.yaml.j2 > sync/imageset-config-sync.yaml 
+	scripts/j2 ./templates/imageset-config-sync-$oc_mirror_version.yaml.j2 > sync/imageset-config-sync.yaml 
 	scripts/add-operators-to-imageset.sh >> sync/imageset-config-sync.yaml
 
 	touch sync/.created

@@ -1,0 +1,72 @@
+apiVersion: v1alpha1        
+kind: AgentConfig                                                                       
+metadata:                 
+  name: {{ cluster_name }}
+rendezvousIP: {{ rendezvous_ip }}           
+{%- if arr_ntp_servers %}
+additionalNTPSources:
+{%- for ntp in arr_ntp_servers %}
+- {{ ntp }}
+{%- endfor %}
+{%- endif %}
+hosts:                    
+  {%- for role, prefix, count, mac_offset, ip_offset in [("master", master_prefix, num_masters|int, 0, 0), ("worker", worker_prefix, num_workers|int, 6, 3)] %}
+  {%- for hostcnt in range(count) %}
+  {%- if role == 'master' and num_workers == '0' and num_masters == '1' %}
+  - hostname: {{ cluster_name }}
+  {%- else %}                               
+  - hostname: {{ prefix }}{{ loop.index }}
+  {% endif %}             
+    role: {{ role }}
+    interfaces:                                                                         
+     - name: {{ port0 }}                                                                
+       macAddress: {{ arr_macs[hostcnt * 2 + mac_offset] }}
+     - name: {{ port1 }}                    
+       macAddress: {{ arr_macs[hostcnt * 2 + mac_offset + 1] }}
+    networkConfig:                                                                      
+      interfaces:                                                                       
+        - name: bond0.{{ vlan }}  
+          description: VLAN {{ vlan }} with bond using ports {{ port0 }} and {{ port1 }}
+          type: vlan                                                                    
+          state: up                                                                     
+          vlan:           
+            base-iface: bond0                                                           
+            id: {{ vlan }}
+          ipv4:
+            enabled: true
+            address:
+              - ip: {{ arr_ips[hostcnt] }}
+                prefix-length: 24
+            dhcp: false
+        - name: bond0 
+          type: bond 
+          state: up
+          mac-address: {{ arr_macs[hostcnt * 2 + mac_offset] }}
+          ipv4:
+            enabled: false
+          ipv6:
+            enabled: false
+          link-aggregation:
+            mode: active-backup   # mode=1 active-backup, mode=2 balance-xor or mode=4 802.3ad
+            options:
+              miimon: "150" 
+            port:
+             - {{ port0 }}
+             - {{ port1 }}
+
+      {%- if arr_dns_servers %}
+      dns-resolver:
+        config:
+          server:
+            {%- for dns in arr_dns_servers %}
+            - {{ dns }}
+            {%- endfor %}
+      {%- endif %}
+
+      routes:
+        config:
+          - destination: 0.0.0.0/0
+            next-hop-address: {{ next_hop_address }}
+            next-hop-interface: bond0.{{ vlan }}
+{% endfor %}
+{%- endfor %}

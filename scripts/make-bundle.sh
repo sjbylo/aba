@@ -32,12 +32,13 @@ echo >&2
 if [ -d mirror/save ]; then
 	if [ ! "$force" ]; then
 		# Detect if any image set archive files exist
-		ls mirror/save/mirror*seq*tar >/dev/null 2>&1 && image_set_files_exist=1
+		ls mirror/save/mirror_*\.tar >/dev/null 2>&1 && image_set_files_exist=1
 
 		if [ -s mirror/save/imageset-config-save.yaml -o -f mirror/mirror.conf -o "$image_set_files_exist" ]; then
 			echo_red "Warning: This repo is already in use!  Files exist under: mirror/save" >&2
 			echo -n "         "; ls mirror/save >&2
-			[ "$image_set_files_exist" ] && echo_red "         Image set archive files also exist." >&2
+			[ "$image_set_files_exist" ] && \
+			echo_red "         Image set archive files also exist." >&2
 			echo_red "         Back up any required files and try again with the '--force' flag to delete all existing files under mirror/save" >&2
 			echo_red "         Or, use a fresh Aba repo and try again!" >&2 
 			echo >&2

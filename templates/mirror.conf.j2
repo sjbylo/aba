@@ -19,21 +19,19 @@ reg_user=init				# Set your existing registry's username. Note that the Quay app
 reg_pw=p4ssw0rd				# Registry password. Leave blank if a random password should be created e.g. reg_pw=
 					# The password must be at least 8 characters and contain no white-space.
 
-reg_root=				# Optional: Set the absolute path to a directory where Quay mirror registry storage should be kept. 
+reg_root=				# Optional: Set the *absolute path* to a directory where Quay's storage should be kept. 
 					# Default is ~/quay-install.  Note that '~' can be used after the '='.
-					# Note: never delete this storage without uninstalling the Quay registry first!
 
 # Important: The below 2 values (reg_ssh_key & reg_ssh_user) are only needed if you want aba to install Quay on a remote host.
 
-#reg_ssh_key=~/.ssh/id_rsa		# Optional: Ssh key file to use for *remote* install of Quay. Default is undefined.
-					# Example: ~/.ssh/id_rsa 
-					# The key must allow password-less access to the remote host (defined by reg_host).
-					# If undefined (the default) then the registry will be installed on localhost. 
+#reg_ssh_key=~/.ssh/id_rsa		# Optional: Ssh key file to use for *remote* install of Quay.
+					# IMPORTANT: If undefined (the default) Quay will be installed on **localhost**.
+					# The key must allow password-less access to the remote host (defined by reg_host above).
 
 reg_ssh_user=				# Optional: Username to use for *remote* install of Quay. Default is current user.
 
 
-# The below parameters are for advanced use only and must not be changed!
+# Only change below values if you know what you're doing!
 
 tls_verify=true				# If TLS should be verified for all registries. Default is 'true'.
 					# Note that the installation of OpenShift *requires* an existing, trusted certificate

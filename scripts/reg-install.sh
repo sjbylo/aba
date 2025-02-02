@@ -70,7 +70,7 @@ if [ "$reg_root" ]; then
 		reg_root=$(echo "$reg_root" | sed "s#~#$fix_home#g")
 	fi
 
-	reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
+	reg_root_opts="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
 	echo_white "Using registry root dir: $reg_root and options: $reg_root_opts"
 else
 	# The default path
@@ -133,7 +133,7 @@ if [ "$reg_ssh_key" ]; then
 
 		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host rm -f $flag_file
 
-		echo "Ssh access to remote host ($reg_host) is working ..."
+		echo "Ssh access to remote host ($reg_ssh_user@$reg_host using key $reg_ssh_key) is working ..."
 	fi
 
 	ask "Install Quay mirror registry appliance on remote host, accessable via $reg_hostport" || exit 1

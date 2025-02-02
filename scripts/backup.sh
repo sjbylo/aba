@@ -2,17 +2,17 @@
 # Tar backup script for full OR incremental backups.  Used to only backup (and copy) the changes since the last backup.
 # Usage: backup.sh [--inc] [--repo] [file]
 #                   --inc	incremental backup based on the ~/.aba.previous.backup flag file's timestamp
-#                   --repo	exclude all */mirror_seq*tar files from the archive.  Copy them separately, if needed.
+#                   --repo	exclude all */mirror_*tar files from the archive.  Copy them separately, if needed.
 
 source scripts/include_all.sh
 
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
 inc= 				# Full backup by default
-repo_only=			# Also include the save/mirror_seq*.tar files (for some use-cases it's more efficient to keep them seperate) 
+repo_only=			# Also include the save/mirror_*.tar files (for some use-cases it's more efficient to keep them seperate) 
 
 while echo "$1" | grep -q ^--[a-z]
 do
-	[ "$1" = "--repo" ] && repo_only=1 && shift		# Set to NOT include any mirror_seq*.tar files, which can be copied separately. 
+	[ "$1" = "--repo" ] && repo_only=1 && shift		# Set to NOT include any mirror_*.tar files, which can be copied separately. 
 	[ "$1" = "--inc" ] && inc=1 && shift    		# Set optional backup type to "incremental".  Full is default. 
 done
 
@@ -79,6 +79,8 @@ file_list=$(find		\
 	! -path "aba/mirror/redis.tar"  			\
 	! -path "aba/mirror/regcreds/*"	  			\
 	! -path "aba/*/iso-agent-based*"  			\
+	! -path "aba/mirror/sync/working-dir*"  		\
+	! -path "aba/mirror/save/working-dir*"			\
 	! -path "aba/mirror/sync/oc-mirror-workspace*"  	\
 	! -path "aba/mirror/save/oc-mirror-workspace*"		\
 	! -path "aba/test/output.log" 				\
@@ -88,15 +90,16 @@ file_list=$(find		\
 	-newer ~/.aba.previous.backup 				\
 )
 
+# Notes on the above
 # See the "tar cf" command below and consider....
 # Note, don't copy over any of the ".init", ".installed", ".rpms" flag files etc, since these components are needed on the internal bastion
 # Don't include/compress the 'image set' tar files since they are compressed already!
-# Don't need to copy over the oc-mirror-workspace dirs.  The needed yaml files for 'make day2' are created at 'make load'. THIS IS WRONG?: #FIXME
-# FIXME: Need to consider how to copy over the meta date (oc-mirror-workspace), or we leave it to the user to do.
+# Don't need to copy over the oc-mirror-workspace (or working-dir 'v2') dirs.  The needed yaml files for 'make day2' are created at 'make load'.
 # Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop since it's activly written to. 
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
-[ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_seq.*.tar$") || true  # 'true' needed!
+###[ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_.*.tar$") || true  # 'true' needed!
+[ "$repo_only" ] && file_list=$(echo "$file_list" | grep -E -v "^aba/mirror/s.*/mirror_.*[0-9]{6}\.tar$") || true  # 'true' needed!
 
 # Clean up file_list
 file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " white space (is empty)
@@ -106,7 +109,7 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 
 # Output reminder message
 if [ "$repo_only" ]; then
-	echo_magenta "Warning: Not archiving any 'image set' files: mirror/*/mirror_seq*.tar." >&2
+	echo_magenta "Warning: Not archiving any 'image set' files: mirror/*/mirror_*.tar." >&2
 	echo_magenta "         You will need to copy them, along with the bundle archive, into mirror/save/ (in your private network)." >&2
 fi
 
@@ -121,13 +124,13 @@ if [ "$dest" != "-" ]; then
 		echo_white "After the bundle has been written, copy it to your *internal bastion*, e.g. with:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/thumbdrive>"
 		echo_white "Remember to copy over the 'image set' tar files also, e.g. with the command:"
-		echo_white " cp mirror/save/mirror_seq*.tar </path/to/your/portable/media/usb-stick/thumbdrive>"
+		echo_white " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/thumbdrive>"
 		echo
 		echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
 		echo_white "Extract the bundle tar file anywhere under your home directory"
 		echo_white "and move the 'image set' files into the save/ dir & continue by running 'aba', e.g. with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
-		echo_white "  mv mirror_seq*.tar aba/mirror/save"
+		echo_white "  mv mirror_*.tar aba/mirror/save"
 		echo_white "  cd aba"
 		echo_white "  ./install"
 		echo_white "  aba"
