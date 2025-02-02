@@ -6,6 +6,7 @@ endif
 
 TEMPLATES = templates
 SCRIPTS   = scripts
+name     ?= standard
 
 .PHONY: aba
 aba:  ## Run aba to set up 'aba.conf'

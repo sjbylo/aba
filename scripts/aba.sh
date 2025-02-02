@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250201211710
+ABA_VERSION=20250201211711
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -466,7 +466,7 @@ done
 
 ####[ "$err" ] && echo_red "An error has occurred, aborting!" >&2 && exit 1
 
-[ "$DEBUG_ABA" ] && echo DEBUG: $0: interactive_mode=$interactive_mode >&2
+[ "$DEBUG_ABA" ] && echo DEBUG: $0: interactive_mode=[$interactive_mode] >&2
 
 # Sanitize $BUILD_COMMAND
 BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
@@ -493,10 +493,16 @@ fi
 # Change to the top level repo directory
 cd $ABA_PATH
 
+
 # ###########################################
 # From now on it's all considered INTERACTIVE
 
+# If in interactive mode then ensure questions are asked!
+replace-value-conf aba.conf ask true 
+
 source <(normalize-aba-conf)
+
+export ask=1
 
 # Include aba bin path and common scripts
 ### export PATH=$PWD/bin:$PATH  # done in include.sh

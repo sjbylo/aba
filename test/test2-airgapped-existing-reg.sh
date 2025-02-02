@@ -156,7 +156,7 @@ test-cmd -r 15 3 -m "Saving images to local disk on `hostname`" aba save
 
 test-cmd -m "Checking existance of file mirror/save/mirror_*000000.tar" "ls -lh mirror/save/mirror_*1*\.tar"
 
-mylog "'aba tar' and copy (ssh) files over to internal bastion: $TEST_USER@$int_bastion_hostname"
+mylog "Use 'aba tar' and copy (ssh) files over to internal bastion @ $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname" "aba -d mirror tar --out - | ssh $TEST_USER@$int_bastion_hostname -- tar -C $subdir -xvf -"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh mirror/save/mirror_*1*\.tar"
@@ -248,7 +248,7 @@ test-cmd -r 15 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror sa
 
 test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh mirror/save/mirror_*1*\.tar"
 
-mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_*.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
+mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_*.tar' file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Create tmp dir" mkdir -p ~/tmp
 test-cmd -m "Delete the old tar file (if any)" rm -v -f ~/tmp/file.tar
 test-cmd -m "Create the tar file.  Should only contain (more-or-less) the 'image set' archive file" aba --dir mirror inc out=~/tmp/file.tar
@@ -326,7 +326,7 @@ test-cmd -m "Adding multicluster-engine          operator to mirror/save/imagese
 
 test-cmd -r 15 3 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
 
-mylog "'scp mirror/save/mirror_*1*.tar' file from `hostname` over to internal bastion: $TEST_USER@$int_bastion_hostname"
+mylog "Use 'scp' to copy mirror/save/mirror_*1*.tar file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/save/mirror_*1*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*1*\.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*1*\.tar"
