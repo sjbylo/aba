@@ -186,9 +186,9 @@ test-cmd() {
 log-test() {
 	if [ "$1" = "-t" ]; then
 		shift
-		echo $(date "+%b %e %H:%M:%S") "$@" | tee -a test/test.log
+		echo "$(date "+%b %e %H:%M:%S") $@" | tee -a test/test.log
 	else
-		echo $(date "+%b %e %H:%M:%S") "$@" >> test/test.log
+		echo "$(date "+%b %e %H:%M:%S") $@" >> test/test.log
 	fi
 }
 
