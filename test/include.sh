@@ -195,10 +195,8 @@ log-test() {
 mylog() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
-	##echo "---------------------------------------------------------------------------------------"
 	draw-line
-	echo $(date "+%b %e %H:%M:%S") $@ | tee -a test/test.log
-	##draw-line
+	echo "$(date "+%b %e %H:%M:%S")   $@" | tee -a test/test.log
 
 	[ "$reset_xtrace" ] && set -x
 

@@ -78,7 +78,7 @@ do
 	if [ -s templates/operator-set-$set ]; then
 		echo "# $set operators"
 		[ "$INFO_ABA" ] && echo_cyan -n "$set: " >&2
-		for op in $(cat templates/operator-set-$set)
+		for op in $(cat templates/operator-set-$set | sed -e 's/#.*//' -e '/^\s*$/d' -e 's/^\s*//g' -e 's/\s*$//g')
 		do
 			[ "$INFO_ABA" ] && echo_cyan -n "$op " >&2
 			add_op $op

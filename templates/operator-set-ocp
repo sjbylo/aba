@@ -2,6 +2,7 @@ kubernetes-nmstate-operator
 node-maintenance-operator
 node-healthcheck-operator
 redhat-oadp-operator
-web-terminal
 cincinnati-operator
 cluster-kube-descheduler-operator
+web-terminal
+devworkspace-operator
