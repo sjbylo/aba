@@ -53,7 +53,19 @@ do
 	echo_cyan "Running: $(cat save-mirror.sh)"
 	echo
 
-	./save-mirror.sh && failed= && break
+	# v1/v2 switch. For v2 need to do extra check!
+	if [ "$oc_mirror_version" = "v1" ]; then
+		./save-mirror.sh && failed= && break
+	else
+		if ./save-mirror.sh; then
+			# Check for errors
+			if [ ! -f $(ls -t mirror/save/working-dir/logs/mirroring_error_*_*.log 2>/dev/null | head -1) ]; then
+				failed=
+				break
+			fi
+			echo_red "Error detected in log file: $(ls -t mirror/save/working-dir/logs/mirroring_error_*_*.log | head -1)" >&2
+		fi
+	fi
 
 	let try=$try+1
 	[ $try -le $try_tot ] && echo_red -n "Image saving failed ... Trying again. " >&2
