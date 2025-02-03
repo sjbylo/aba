@@ -5,4 +5,4 @@ redhat-oadp-operator
 cincinnati-operator
 cluster-kube-descheduler-operator
 web-terminal
-devworkspace-operator
+devworkspace-operator		# Required by web-terminal

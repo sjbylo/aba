@@ -163,7 +163,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
 
-test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 # This user's action is expected to fail since there are no login credentials for the "existing reg."
 test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba load"
@@ -265,7 +265,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
@@ -337,7 +337,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load"
 

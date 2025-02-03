@@ -188,7 +188,7 @@ do
 
         rm -rf $cname
 
-	test-cmd -m "Creating cluster.conf for $cname cluster with 'aba $cname --step cluster.conf'" "aba $cname --step cluster.conf"
+	test-cmd -m "Creating cluster.conf for '$cname' cluster" "aba $cname --step cluster.conf"
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # Make sure all mac addr are the same, not random
         test-cmd -m "Creating install-config.yaml for $cname cluster" "aba --dir $cname install-config.yaml"
         test-cmd -m "Creating agent-config.yaml for $cname cluster" "aba --dir $cname agent-config.yaml"
@@ -212,21 +212,19 @@ do
 
 	mylog "Checking test/$cname/install-config.yaml"
 
-#FIXME: broken for oc-mirror v2
-#        if ! test-cmd -m "Comparing test/$cname/install-config.yaml with test/$cname/install-config.yaml.example" diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example | tee -a test/$cname/install-config.yaml.diff; then
-#		cp test/$cname/install-config.yaml test/$cname/install-config.yaml.failed
-#		cat test/$cname/install-config.yaml.diff
-#		mylog "Config mismatch! See file test/$cname/install-config.yaml.failed and test/$cname/install-config.yaml.diff"
-#        fi
+        if ! test-cmd -m "Comparing test/$cname/install-config.yaml with test/$cname/install-config.yaml.example" diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example | tee -a test/$cname/install-config.yaml.diff; then
+		cp test/$cname/install-config.yaml test/$cname/install-config.yaml.failed
+		cat test/$cname/install-config.yaml.diff
+		mylog "Config mismatch! See file test/$cname/install-config.yaml.failed and test/$cname/install-config.yaml.diff"
+        fi
 
-#	mylog "Checking test/$cname/agent-config.yaml"
-#
-#        if ! test-cmd -m "Comparing test/$cname/agent-config.yaml with test/$cname/agent-config.yaml.example" diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example | tee -a test/$cname/agent-config.yaml.diff; then
-#		cp test/$cname/agent-config.yaml test/$cname/agent-config.yaml.failed
-#		cat test/$cname/agent-config.yaml.diff
-#		mylog "Config mismatch! See file test/$cname/agent-config.yaml.failed and test/$cname/agent-config.yaml.diff"
-#        fi
-#FIXME: broken for oc-mirror v2
+	mylog "Checking test/$cname/agent-config.yaml"
+
+        if ! test-cmd -m "Comparing test/$cname/agent-config.yaml with test/$cname/agent-config.yaml.example" diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example | tee -a test/$cname/agent-config.yaml.diff; then
+		cp test/$cname/agent-config.yaml test/$cname/agent-config.yaml.failed
+		cat test/$cname/agent-config.yaml.diff
+		mylog "Config mismatch! See file test/$cname/agent-config.yaml.failed and test/$cname/agent-config.yaml.diff"
+        fi
 
         test-cmd -m "Generate iso file for cluster type '$cname'" "aba --dir $cname iso"
 done
