@@ -32,22 +32,13 @@ fi
 
 [ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
-echo OC-MIRROR V2 DEBUG:
-openshift-install version
-echo OLD: skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha
-
-release_image_path=$(openshift-install version| grep "^release image" | sed "s/.*quay.io\/\(.*\)/\1/g")
-echo release_image_path=[$release_image_path]
-echo OC-MIRROR V2 DEBUG:
-
-#if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha >/dev/null; then
-if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/$release_image_path >/dev/null; then
+if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha >/dev/null; then
 	echo
 	echo_red "Error: Release image missing in your registry at $reg_host:$reg_port/$reg_path. Expected version is $release_ver." >&2
 	echo_red "       Did you remember to 'sync' or 'save/load' the images into your registry?" >&2
 	echo_red "       Be sure that the images in your registry match the version of the 'openshift-install' CLI (currently version $release_ver)" >&2
 	echo_red "       Do you have the correct image versions in your registry?" >&2
-	echo_red "       Failed to access the release image: docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha" >&2  # FIXME: OLD:
+	echo_red "       Failed to access the release image: docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha" >&2
 
 	exit 1
 fi
@@ -63,24 +54,12 @@ spec:
 END
 echo "$image_content_sources" | sed 's/^/  /' >> .idms.yaml
 
-echo OC-MIRROR V2 DEBUG:
-openshift-install version
-echo OC-MIRROR V2 DEBUG:
-
-##echo Extracting openshift-install from $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha
-echo Extracting openshift-install from $reg_host:$reg_port/$reg_path/$release_image_path
+echo Extracting openshift-install from $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha
 #oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images:${release_ver}-x86_64
 # FIXME: this fails for oc versions up to v4.14 since the wrong version of 'oc' is used (i.e. 'idms' not supported).  So, I added || true to ignore errors
-
-###oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha --insecure=true || true
-oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/$release_image_path --insecure=true || true
+oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha --insecure=true || true
 [ -s openshift-install ] && mv openshift-install ~/bin
 rm -f .idms.yaml
 
-echo OC-MIRROR V2 DEBUG:
-openshift-install version
-echo OC-MIRROR V2 DEBUG:
-
-###echo_green "Release image for version $release_ver is available at $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha"
-echo_green "Release image for version $release_ver is available at $reg_host:$reg_port/$reg_path/$release_image_path"
+echo_green "Release image for version $release_ver is available at $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha"
 
