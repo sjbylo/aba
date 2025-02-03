@@ -59,11 +59,11 @@ do
 	else
 		if ./save-mirror.sh; then
 			# Check for errors
-			if [ ! "$(ls -t mirror/save/working-dir/logs/mirroring_error_*_*.log 2>/dev/null | head -1)" ]; then
+			if [ ! "$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)" ]; then
 				failed=
 				break
 			fi
-			echo_red "Error detected in log file: $(ls -t mirror/save/working-dir/logs/mirroring_error_*_*.log | head -1)" >&2
+			echo_red "Error detected in log file: $(ls -t save/working-dir/logs/mirroring_errors_*_*.txt | head -1)" >&2
 		fi
 	fi
 
