@@ -74,7 +74,7 @@ if [ "$oc_mirror_version" = "v1" ]; then
 	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 else
 	cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port/$reg_path"
-	echo "cd sync && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	# mirror-to-mirror: oc mirror -c <image_set_configuration> --workspace file://<file_path> docker://<mirror_registry_url> --v2 
 fi
 
