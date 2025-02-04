@@ -252,7 +252,7 @@ test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh
 
 mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_*.tar' file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Create tmp dir" mkdir -p ~/tmp
-test-cmd -m "Delete the old tar file (if any)" rm -v ~/tmp/file.tar
+test-cmd -m "Delete any old tar file (if any)" rm -fv ~/tmp/file.tar
 test-cmd -m "Create the tar file.  Should only contain (more-or-less) the 'image set' archive file" aba --dir mirror inc out=~/tmp/file.tar
 test-cmd -m "Check size of tar file" "ls -l ~/tmp/file.tar"
 test-cmd -m "Copy tar file over to $int_bastion_hostname" scp ~/tmp/file.tar $TEST_USER@$int_bastion_hostname:

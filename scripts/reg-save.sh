@@ -37,7 +37,7 @@ if [ "$oc_mirror_version" = "v1" ]; then
 	echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 else
 	cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://."
-	echo "cd save && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
+	echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 	# mirror-to-disk:  oc mirror -c <image_set_configuration> file://<file_path> --v2
 fi
 
