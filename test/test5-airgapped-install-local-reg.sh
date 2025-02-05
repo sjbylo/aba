@@ -193,7 +193,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file ex
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load" 
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded seq2 file" rm $subdir/aba/mirror/save/mirror_*1*.tar
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm $subdir/aba/mirror/save/mirror_*1*.tar
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
@@ -206,6 +206,7 @@ END
 
 mylog Add vote-app image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
+  additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
@@ -222,7 +223,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file ex
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading vote-app image into mirror" "aba -d $subdir/aba/mirror load" 
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded seq3 file" rm $subdir/aba/mirror/save/mirror_*1*.tar
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm $subdir/aba/mirror/save/mirror_*1*.tar
 
 cluster_type=sno  # Choose either sno, compact or standard
 
@@ -254,6 +255,7 @@ END
 
 # FIXME: Get values from the correct file!
 cat >> mirror/save/imageset-config-save.yaml <<END
+  additionalImages:
   - name: quay.io/kiali/demo_travels_cars:v1
   - name: quay.io/kiali/demo_travels_control:v1
   - name: quay.io/kiali/demo_travels_discounts:v1
@@ -390,6 +392,7 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
+	# This will run make in $subdir/aba/$cluster_name
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name" || \
 		test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Restarting nodes of failed cluster" "aba --dir $subdir/aba/$cluster_name stop; sleep 200; aba --dir $subdir/aba/$cluster_name start"
 
