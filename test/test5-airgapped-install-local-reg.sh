@@ -166,6 +166,15 @@ mylog Now adding more images to the mirror registry
 
 mylog Runtest: vote-app
 
+# For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+cat  > mirror/save/imageset-config-save.yaml <<END
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+END
+# For oc-miror v2
+
 mylog Add ubi9 image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
@@ -185,6 +194,15 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file ex
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded seq2 file" rm $subdir/aba/mirror/save/mirror_*1*.tar
+
+# For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+cat  > mirror/save/imageset-config-save.yaml <<END
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+END
+# For oc-miror v2
 
 mylog Add vote-app image to imageset conf file 
 cat >> mirror/save/imageset-config-save.yaml <<END
@@ -225,6 +243,15 @@ export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 mylog 
 mylog "Append svc mesh and kiali operators to imageset conf using v$ocp_ver_major ($ocp_version)"
 
+# For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+cat  > mirror/save/imageset-config-save.yaml <<END
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+END
+# For oc-miror v2
+
 # FIXME: Get values from the correct file!
 cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/kiali/demo_travels_cars:v1
@@ -260,8 +287,23 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading images to m
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/$cluster_type day2"
 
-mylog "Checking for jaeger-product in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
-cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep jaeger-product$
+##mylog "Checking for jaeger-product in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
+test-cmd -m "Checking jaeger-product operator exists in the catalog file" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep jaeger-product$"
+
+# For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+cat  > mirror/save/imageset-config-save.yaml <<END
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+END
+# For oc-miror v2
+
+cat >> mirror/save/imageset-config-save.yaml <<END
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
+    packages:
+END
 
 mylog Append jaeger operator to imageset conf
 grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
