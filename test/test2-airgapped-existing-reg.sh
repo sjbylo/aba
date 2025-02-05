@@ -241,6 +241,15 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster with 'aba -
 
 mylog Adding vote-app image to imageset conf file on `hostname`
 
+# For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+cat  > mirror/save/imageset-config-save.yaml <<END
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+END
+# For oc-miror v2
+
 cat >> mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
@@ -315,6 +324,15 @@ mylog "Checking for multicluster-engine         in mirror/imageset-config-operat
 cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep multicluster-engine$ 
 
 mylog Appending redhat-operator-index:v$ocp_ver_major header into mirror/save/imageset-config-save.yaml on `hostname`
+
+# For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+cat  > mirror/save/imageset-config-save.yaml <<END
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+END
+# For oc-miror v2
 
 cat >> mirror/save/imageset-config-save.yaml <<END
   operators:
