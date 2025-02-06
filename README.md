@@ -49,6 +49,7 @@ Aba automatically completes the following and more:
 1. Executes several workarounds for some typical issues with disconnected environments.
 1. Enables the integration with vSphere as a day 2 operation.
 1. Helps configure OpenShift with your NTP servers and many more. 
+1. Now works with oc-mirror v2 as default!
 
 ## Quick Start Guide for the Impatient:
 

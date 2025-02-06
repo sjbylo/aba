@@ -163,6 +163,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
 
+# FIXME: Is this needed since we use "full tar" copy above?
 test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 # This user's action is expected to fail since there are no login credentials for the "existing reg."
