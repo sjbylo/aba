@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250201211711
+ABA_VERSION=20250206222819
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -426,12 +426,8 @@ do
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND force=1"  # FIXME: Should only allow force=1 after the appropriate target
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
-		## NOT TRUE # If there is another arg, it must be an option, otherwise error
-		## NOT TRUE if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-			## NOT TRUE echo_red "Error: unexpected argument after [$1]" >&2 && exit 1
-		## NOT TRUE fi
 		shift
-		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target
+		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target (e.g. stop & shutdown)
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
 		cmd=
