@@ -487,7 +487,12 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting machine_network" "se
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting starting_ip" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.2.253 /g' $subdir/aba/$cluster_name/cluster.conf"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Making iso" "aba --dir $subdir/aba/$cluster_name iso"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name" || true
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)" || \
+(
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Cluster login failed? Restarting all nodes" "aba --dir $subdir/aba/$cluster_name stop --wait start && aba --dir $subdir/aba/$cluster_name"
+)
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30mins for all cluster operators to become available?" "aba --dir $subdir/aba/$cluster_name --cmd; i=0; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; echo -n .; sleep 10; done"
 
