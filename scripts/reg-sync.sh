@@ -67,7 +67,9 @@ if [ -s ./reg-uninstall.sh ]; then
 fi
 echo
 
+# If not already set, set the cache and tmp dirs to where there should be more disk space
 [ ! "$TMPDIR" ] && mkdir -p $reg_root/.tmp && export TMPDIR=$reg_root/.tmp
+[ ! "$OC_MIRROR_CACHE" ] && mkdir -p $reg_root/.cache && export OC_MIRROR_CACHE=$reg_root/.cashe
 
 if [ "$oc_mirror_version" = "v1" ]; then
 	# Set up script to help for manual re-sync
