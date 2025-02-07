@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250206222819
+ABA_VERSION=20250207181723
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -427,7 +427,10 @@ do
 		BUILD_COMMAND="$BUILD_COMMAND force=1"  # FIXME: Should only allow force=1 after the appropriate target
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
 		shift
-		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target (e.g. stop & shutdown)
+		BUILD_COMMAND="$BUILD_COMMAND wait=--wait"  #FIXME: Should only allow this after the appropriate target
+	elif [ "$1" = "--workers" ]; then
+		BUILD_COMMAND="$BUILD_COMMAND workers=--workers"  #FIXME: Should only allow this after the appropriate target
+		shift
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
 		cmd=
@@ -448,7 +451,7 @@ do
 		fi
 	else
 		if echo "$1" | grep -q "^-"; then
-			echo_red "Error: no such option [$1]" >&2
+			echo_red "$(basename $0): Error: no such option [$1]" >&2
 			exit 1
 		else
 			# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
@@ -458,6 +461,8 @@ do
 		fi
 		shift 
 	fi
+
+	[ "$DEBUG_ABA" ] && echo "$0: BUILD_COMMAND=$BUILD_COMMAND" >&2
 done
 
 ####[ "$err" ] && echo_red "An error has occurred, aborting!" >&2 && exit 1
