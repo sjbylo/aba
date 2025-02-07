@@ -45,7 +45,8 @@ mylog ============================================================
 mylog "Test to install sno directly from public registry."
 mylog
 
-set -ex
+# FIXME: Don't think we need this since test-cmd will loop on error unless -i is used
+#set -ex
 
 ntp=10.0.1.8 # If available
 

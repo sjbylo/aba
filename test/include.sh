@@ -120,6 +120,9 @@ test-cmd() {
 			[ $ret -eq 130 ] && break  # on Ctrl-C *during command execution*
 
 			[ $ret -eq 0 -a $i -gt 1 ] && notify.sh "Command ok: $cmd (`date`)" || true  # Only success after failure
+
+			[ "$ignore_result" -a $ret -ne 0 ] && echo "Returning failed result [$ret]" && return $ret  # We want to return the actual result (-i)
+
 			[ $ret -eq 0 ] && return 0 # Command successful 
 
 			echo Return value = $ret
@@ -150,7 +153,8 @@ test-cmd() {
 
 		[ "$reset_xtrace" ] && set -x
 
-		[ "$ignore_result" ] && echo "Ignoring result [$ret] and returning 0" && return 0  # We want to return 0 to ignore any errors (-i)
+		# FIXME: Added above now (as we want to return the actual error)
+		#[ "$ignore_result" ] && echo "Ignoring result [$ret] and returning 0" && return 0  # We want to return 0 to ignore any errors (-i)
 
 		sub_pid=
 		if [[ $ret -eq 130 ]]; then

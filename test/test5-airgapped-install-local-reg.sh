@@ -393,10 +393,10 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
 	# This will run make in $subdir/aba/$cluster_name
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name" || \
+	test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name" || \
 		test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Restarting nodes of failed cluster" "aba --dir $subdir/aba/$cluster_name stop; sleep 200; aba --dir $subdir/aba/$cluster_name start"
 
-	if ! test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 8 3 -m  "Checking '$cluster_name' cluster with 'mon'" "aba --dir $subdir/aba/$cluster_name mon"; then
+	if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -r 2 1 -m  "Checking '$cluster_name' cluster with 'mon'" "aba --dir $subdir/aba/$cluster_name mon"; then
 		mylog "CLUSTER INSTALL FAILED: REBOOTING ALL NODES ..."
 
 		set -x
@@ -409,6 +409,8 @@ build_and_test_cluster() {
 		aba --dir $subdir/aba/$cluster_name start
 		sleep 60
 		aba --dir $subdir/aba/$cluster_name mon
+
+		set +x
 	fi
 
 	#####
