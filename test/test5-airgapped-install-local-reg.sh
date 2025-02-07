@@ -395,7 +395,7 @@ build_and_test_cluster() {
 
 	# This will run make in $subdir/aba/$cluster_name
 	test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name" || \
-		test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Restarting nodes of failed cluster" "aba --dir $subdir/aba/$cluster_name stop; sleep 200; aba --dir $subdir/aba/$cluster_name start"
+		test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Restarting all worker nodes of failed cluster" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
 
 	if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -r 2 1 -m  "Checking '$cluster_name' cluster with 'mon'" "aba --dir $subdir/aba/$cluster_name mon"; then
 		mylog "CLUSTER INSTALL FAILED: REBOOTING ALL NODES ..."
@@ -494,7 +494,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name clus
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)" || \
 (
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Cluster login failed? Restarting all nodes" "aba --dir $subdir/aba/$cluster_name stop --wait start && aba --dir $subdir/aba/$cluster_name"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Cluster login failed? Restarting all worker nodes" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start && aba --dir $subdir/aba/$cluster_name"
 )
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30mins for all cluster operators to become available?" "aba --dir $subdir/aba/$cluster_name --cmd; i=0; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; echo -n .; sleep 10; done"
