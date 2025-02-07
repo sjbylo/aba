@@ -30,9 +30,9 @@ echo_cyan "Warning: Ensure there is enough disk space under $PWD/save.  "
 echo_cyan "This can take 5-20+ minutes to complete or even longer if Operator images are being saved!"
 echo 
 
-# If not already set, set the cache and tmp dirs to where there should be more disk space
-[ ! "$TMPDIR" ] && export TMPDIR=$reg_root/.tmp && mkdir -p $TMPDIR
-[ ! "$OC_MIRROR_CACHE" ] && export OC_MIRROR_CACHE=$reg_root/.cashe && mkdir -p $OC_MIRROR_CACHE
+## If not already set, set the cache and tmp dirs to where there should be more disk space
+#[ ! "$TMPDIR" ] && export TMPDIR=$reg_root/.tmp && mkdir -p $TMPDIR
+#[ ! "$OC_MIRROR_CACHE" ] && export OC_MIRROR_CACHE=$reg_root/.cashe && mkdir -p $OC_MIRROR_CACHE
 
 if [ "$oc_mirror_version" = "v1" ]; then
 	# Set up script to help for re-sync
