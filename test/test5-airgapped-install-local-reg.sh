@@ -47,7 +47,8 @@ which make || sudo dnf install make -y
 ./install 
 
 test-cmd -m "Cleaning up - aba reset --force" 
-mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
+####mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
+aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
 test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 #test-cmd -m "Cleaning up mirror - clean" "aba -s -C mirror clean" 
 
