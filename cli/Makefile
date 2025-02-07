@@ -124,7 +124,7 @@ openshift-install: ~/bin/openshift-install
 	@touch .$(ocp_version)-openshift-install-$(os)-installed 
 
 openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install tarball
-	@echo Downloading openshift-install-$(os)-$(ocp_version).tar.gz
+	@echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
 
 
@@ -135,12 +135,14 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
 
+# Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
+
 oc-mirror.tar.gz: ## Download oc-mirror tarball
-	echo Downloading oc-mirror.tar.gz
+	echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.7/oc-mirror.tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.7/oc-mirror.tar.gz	
 
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
-	echo Downloading oc-mirror.rhel9.tar.gz
+	echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.7/oc-mirror.rhel9.tar.gz
 	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.7/oc-mirror.rhel9.tar.gz
 
 
@@ -151,7 +153,7 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 	tar -C ~/bin -xmzf govc_Linux_x86_64.tar.gz govc
 
 govc_Linux_x86_64.tar.gz:   ## Download govc tarball
-	echo Downloading govc_Linux_x86_64.tar.gz
+	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz
 	curl --progress-bar -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz"
 
 butane: ~/bin/butane ## Install butane to ~/bin/butane
