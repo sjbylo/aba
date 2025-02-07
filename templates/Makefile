@@ -165,9 +165,10 @@ startup: vmware.conf ## Start all VMs and allow all pods to start (uncorden).  S
 rescue: ## If a cluster does not start due to login/CSR issues, rescue the cluster using ssh, if available. 
 	$(SCRIPTS)/cluster-rescue.sh 
 
+# $(wait) $(workers) are set in aba.sh 
 .PHONY: stop
 stop: .init vmware.conf                     agent-config.yaml ## Shut down all VMs gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again! Try using 'aba shutdown' for graceful cluster shutdown.
-	$(SCRIPTS)/vmw-stop.sh $(debug)
+	$(SCRIPTS)/vmw-stop.sh $(wait) $(workers) $(debug)
 
 .PHONY: start
 start: .init vmware.conf                     agent-config.yaml ## Power on all VMs.  Use 'aba startup' to ensure all nodes are uncordoned. 
