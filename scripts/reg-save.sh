@@ -30,6 +30,8 @@ echo_cyan "Warning: Ensure there is enough disk space under $PWD/save.  "
 echo_cyan "This can take 5-20+ minutes to complete or even longer if Operator images are being saved!"
 echo 
 
+[ ! "$TMPDIR" ] && mkdir -p $reg_root/.tmp && export TMPDIR=$reg_root/.tmp
+
 if [ "$oc_mirror_version" = "v1" ]; then
 	# Set up script to help for re-sync
 	# --continue-on-error : do not use this option. In testing the registry became unusable! 
