@@ -50,6 +50,8 @@ if [ -s ./reg-uninstall.sh ]; then
 fi
 echo
 
+[ ! "$TMPDIR" ] && mkdir -p $reg_root/.tmp && export TMPDIR=$reg_root/.tmp
+
 if [ "$oc_mirror_version" = "v1" ]; then
 	# Set up script to help for manual re-sync
 	# --continue-on-error : do not use this option. In testing the registry became unusable! 
