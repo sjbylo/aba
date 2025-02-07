@@ -90,8 +90,6 @@ fi
 if [ "$oc_mirror_version" = "v1" ]; then
 ############### v2 ##################
 
-echo Working on oc-mirror v1
-
 file_list=$(ls mirror/{sync,save}/oc-mirror-workspace 2>/dev/null || true)
 if [ ! "$file_list" ]; then
 	echo
@@ -137,9 +135,7 @@ else
 fi
 
 else
-############### v2 ##################
-
-	echo Working on oc-mirror v2
+############### v2 ################## START
 
 	# For oc-mirror v2
 	# note for oc-mirror v2
@@ -189,7 +185,7 @@ else
 		echo_red "Warning: missing directory mirror/save and/or mirror/sync" >&2
 	fi
 
-############### v2 ##################
+############### v2 ################## END
 fi
 
 
