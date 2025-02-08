@@ -53,7 +53,7 @@ Aba automatically completes the following and more:
 
 ## Quick Start Guide for the Impatient:
 
-Run the following command to clone the Aba repoitory (https://github.com/sjbylo/aba.git) and install the aba command:
+Run the following command to clone the Aba repository (https://github.com/sjbylo/aba.git) and install the aba command:
 
 ```
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
@@ -226,7 +226,7 @@ aba help
 
 ## Creating a bundle archive with everything you need to install OpenShift in an air-gapped network
 
-You need to download a set of images to install a particular version of OpenShift into a fully disconnected (air-gapped) netork?
+You need to download a set of images to install a particular version of OpenShift into a fully disconnected (air-gapped) network?
 
 Here is how you can use Aba to create a `bundle archive` to do that!
 
@@ -264,7 +264,7 @@ aba bundle --channel stable --version $v --op-sets ocp mesh3 --ops web-terminal 
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.3_* | tar tvf -`
 - Generate a checksum for the files, e.g. `cksum ocp_mycluster_4.17.3_*` and use the checksum to verify the files after transferring them to the internal network. 
 
-Copy the files to a RHEL 8/9 machine wthin the private internal network. 
+Copy the files to a RHEL 8/9 machine within the private internal network. 
 
 Verify the files are intact by comparing the checksum values with the original files:
 
@@ -584,7 +584,7 @@ aba mon
 
 ## Feature Backlog
 
-- Assist in adding OpenShift Update Service (OSUS) to the custer.
+- Assist in adding OpenShift Update Service (OSUS) to the cluster.
 
 - ~~Support bonding and vlan.~~
 
@@ -603,6 +603,7 @@ aba mon
 
 ## Miscellaneous
 
+- oc-mirror v2 now works with aba and is the preferred version (due to bugs and issues with v1).  If you need to move it's default cache location (~/.oc-mirror) simply define the OC_MIRROR_CACHE environment variable with the path to your preferred location with enough space, e.g. export OC_MIRROR_CACHE=/path/to/big-drive, and run aba again.
 
 - If you want to install workers with different CPU/MEM sizes (which can be used to install Operators, e.g. Ceph, ODF, ACM etc, on infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed (if using VMs).
 
@@ -611,7 +612,7 @@ aba mon
 
 Be sure to set the correct (govc) values to access vCenter in the `vmware.conf` file.  Note that ESXi is also supported.
 
-Aba uses `make` to define and process all dependencies.  Due to this, Aba will usually know what to do next, so just run `aba` agian. 
+Aba uses `make` to define and process all dependencies.  Due to this, Aba will usually know what to do next, so just run `aba` again. 
 Why `make` was chosen to build Aba?
 
 The UNIX/Linux command "make" is a utility for automating tasks based on rules specified in a Makefile. It enhances efficiency by managing dependencies, 
