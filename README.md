@@ -603,7 +603,9 @@ aba mon
 
 ## Miscellaneous
 
-- oc-mirror v2 now works with aba and is the preferred version (due to bugs and issues with v1).  If you need to move it's default cache location (~/.oc-mirror) simply define the OC_MIRROR_CACHE environment variable with the path to your preferred location with enough space, e.g. export OC_MIRROR_CACHE=/path/to/big-drive, and run aba again.
+- oc-mirror v2 is now supported by aba and is the preferred version due to bugs and issues in v1. To change its default cache location (~/.oc-mirror), export the OC_MIRROR_CACHE environment variable to a path with sufficient space, e.g., export OC_MIRROR_CACHE=/path/to/big-drive, and rerun aba.
+
+- By default, aba sets the cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by reg_root in mirror/mirror.conf. You can override these locations by exporting the environment variables, as shown above.
 
 - If you want to install workers with different CPU/MEM sizes (which can be used to install Operators, e.g. Ceph, ODF, ACM etc, on infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed (if using VMs).
 
