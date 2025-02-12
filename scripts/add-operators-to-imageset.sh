@@ -51,7 +51,7 @@ fi
 if [ "$ops" -o "$op_sets" ]; then
 	# Check for the index file
 	if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
-		echo_red "Warning: Missing operator index file: .redhat-operator-index-v$ocp_ver_major ... not adding your selected operators to the image set config!" >&2
+		echo_red "Warning: Missing operator index file: $PWD/.redhat-operator-index-v$ocp_ver_major ... not adding your selected operators to the image set config!" >&2
 
 		exit 0
 	fi
