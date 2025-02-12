@@ -64,7 +64,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 
 		handle_interupt() { echo_red "Stopped waiting for download to complete" >&2; exit 0; }
 		echo_magenta "Waiting for operator index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
-		try_cmd -q 2 0 150 test -s $index_file || true  # keep checking file does not have content, for max 300s (2 x 150s)
+		try_cmd -q 3 0 150 test -s $index_file || echo "Giving up waiting!"  # keep checking file does not have content, for max 450s (3 x 150s)
 	else
 		echo_white "Operator index v$ocp_ver_major already downloaded to file mirror/$index_file"
 	fi

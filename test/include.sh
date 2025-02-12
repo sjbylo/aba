@@ -326,6 +326,7 @@ END
 		# /root does not have enough space by default, so we link it to ~steve/root
 		test-cmd -h $test_user@$int_bastion_hostname -m "Create sub dir on remote host for $test_user" "rm -vrf $subdir && mkdir -vp ~steve/root/subdir && ln -vfs ~steve/root/subdir && ls -l subdir"
 		test-cmd -h $test_user@$int_bastion_hostname -m "Create dir on remote host for oc-mirror cache ($test_user)" "rm -vrf ~/.oc-mirror && mkdir -vp ~steve/root/.oc-mirror && ln -vfs ~steve/root/.oc-mirror && ls -l .oc-mirror"
+		test-cmd -h $test_user@$int_bastion_hostname -m "Create 2nd dir on remote host for oc-mirror cache ($test_user)" "mkdir -p quay-install && ln -vfs ~steve/.cashe quay-install && ls -l quay-install/.cashe"
 	else
 		test-cmd -h $test_user@$int_bastion_hostname -m "Create sub dir on remote host for $test_user" "rm -vrf $subdir && mkdir -v $subdir"
 	fi
