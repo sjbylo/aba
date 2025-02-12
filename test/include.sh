@@ -325,6 +325,7 @@ END
 	if [ "$test_user" = "root" ]; then
 		# /root does not have enough space by default, so we link it to ~steve/root
 		test-cmd -h $test_user@$int_bastion_hostname -m "Create sub dir on remote host for $test_user" "rm -rf $subdir && mkdir -p ~steve/root/subdir && ln -fs ~steve/root/subdir"
+		test-cmd -h $test_user@$int_bastion_hostname -m "Create dir on remote host for oc-mirror cache ($test_user)" "rm -rf ~/.oc-mirror && mkdir -p ~steve/root/.oc-mirror && ln -fs ~steve/root/.oc-mirror"
 	else
 		test-cmd -h $test_user@$int_bastion_hostname -m "Create sub dir on remote host for $test_user" "rm -rf $subdir && mkdir $subdir"
 	fi
