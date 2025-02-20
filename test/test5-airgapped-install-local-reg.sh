@@ -469,6 +469,7 @@ cluster_name=standard
 # Test bare-metal with BYO macs
 ##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster dir" "cd $subdir/aba; rm -rf $cluster_name; mkdir -p $cluster_name; ln -s ../templates/Makefile $cluster_name; aba --dir $cluster_name init" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating cluster.conf" "aba -d $subdir/aba cluster --name $cluster_name --type $cluster_name --step cluster.conf"
+mylog "Generating macs.conf file at $reg_ssh_user@$int_bastion_hostname:$subdir/aba/$cluster_name/macs.conf"
 echo -n "\
 00:50:56:20:xx:01
 00:50:56:20:xx:02
@@ -476,7 +477,7 @@ echo -n "\
 00:50:56:20:xx:04
 00:50:56:20:xx:05
 00:50:56:20:xx:06
-" | sed -E "s/xx/$(printf '%02x' $((RANDOM%256)))/" | ssh $reg_ssh_user@$int_bastion_hostname -- "cat > $subdir/aba/$cluster_name"
+" | sed -E "s/xx/$(printf '%02x' $((RANDOM%256)))/" | ssh $reg_ssh_user@$int_bastion_hostname -- "cat > $subdir/aba/$cluster_name/macs.conf"
 ##scp macs.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/$cluster_name
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding master CPU" "sed -i 's/^master_cpu_count=.*/master_cpu_count=12/g' $subdir/aba/$cluster_name/cluster.conf"
@@ -490,12 +491,15 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting machine_network" "se
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting starting_ip" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.2.253 /g' $subdir/aba/$cluster_name/cluster.conf"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Making iso" "aba --dir $subdir/aba/$cluster_name iso"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name" || true
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)" || \
+# -i means ignore any error and let this script handle the error. I.e. restart workers.
+test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name" || \
 (
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Cluster login failed? Restarting all worker nodes" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start && aba --dir $subdir/aba/$cluster_name"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Cluster creation failed? Restarting all worker nodes" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Wait for cluster install to complete ..." "aba --dir $subdir/aba/$cluster_name"
 )
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30mins for all cluster operators to become available?" "aba --dir $subdir/aba/$cluster_name --cmd; i=0; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; echo -n .; sleep 10; done"
 
