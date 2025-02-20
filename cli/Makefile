@@ -138,12 +138,12 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 # Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
 
 oc-mirror.tar.gz: ## Download oc-mirror tarball
-	echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.7/oc-mirror.tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.7/oc-mirror.tar.gz	
+	echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.9/oc-mirror.tar.gz
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.9/oc-mirror.tar.gz	
 
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
-	echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.7/oc-mirror.rhel9.tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.7/oc-mirror.rhel9.tar.gz
+	echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.9/oc-mirror.rhel9.tar.gz
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.0-rc.9/oc-mirror.rhel9.tar.gz
 
 
 ########################################
