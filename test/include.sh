@@ -321,7 +321,8 @@ END
 
 	test-cmd -m "Verify ssh to testy@$int_bastion_hostname" "ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname whoami | grep testy"
 
-	###test-cmd -h testy@$int_bastion_hostname -m "Delete and create sub dir on remote host for user $u" "rm -rf $subdir && mkdir $subdir"
+	test-cmd -h $u@$int_bastion_hostname -m "Delete and create 'sub dir' on remote host for user $u" "rm -vrf $subdir && mkdir -v $subdir"
+
 ##	if [ "$test_user" = "root" ]; then
 ##		# /root does not have enough space by default, so we link it to ~steve/root
 ##		test-cmd -h $test_user@$int_bastion_hostname -m "Create sub dir on remote host for $test_user" "rm -vrf $subdir && mkdir -vp ~steve/root/subdir && ln -vs ~steve/root/subdir && ls -l subdir"
