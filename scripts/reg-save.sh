@@ -31,10 +31,10 @@ echo_cyan "This can take 5-20+ minutes to complete or even longer if Operator im
 echo 
 
 ## If not already set, set the cache and tmp dirs to where there should be more disk space
-[ ! "$TMPDIR" -a "$reg_root" ] && export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
+[ ! "$TMPDIR" -a ! -z "$reg_root" ] && export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $reg_root, if it's defined
-[ ! "$OC_MIRROR_CACHE" -a "$reg_root" ] && export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
+[ ! "$OC_MIRROR_CACHE" -a ! -z "$reg_root" ] && export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
 
 if [ "$oc_mirror_version" = "v1" ]; then
 	# Set up script to help for re-sync
