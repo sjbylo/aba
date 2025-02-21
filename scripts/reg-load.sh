@@ -51,7 +51,8 @@ fi
 echo
 
 # If not already set, set the cache and tmp dirs to where there should be more disk space
-[ ! "$TMPDIR" -a ! -z "$reg_root" ] && export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
+# Had to use [[ && ]] here, as without it got "mkdir -p <missing operand>" error!
+[[ ! "$TMPDIR" && "$reg_root" ]] && export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $reg_root, if it's defined
 [ ! "$OC_MIRROR_CACHE" -a ! -z "$reg_root" ] && export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
 
