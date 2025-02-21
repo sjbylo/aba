@@ -281,6 +281,7 @@ timedatectl
 mkdir -p /root/.ssh
 echo $pub_key > /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
+mkdir -p ~/subdir
 END
 
 	# Copy over the ssh config to /root on bastion (in case test_user = root)

@@ -157,6 +157,7 @@ test-cmd -r 15 3 -m "Saving images to local disk on `hostname`" aba save
 test-cmd -m "Checking existance of file mirror/save/mirror_*000000.tar" "ls -lh mirror/save/mirror_*1*\.tar"
 
 mylog "Use 'aba tar' and copy (ssh) files over to internal bastion @ $TEST_USER@$int_bastion_hostname"
+test-cmd -m "Create 'subdir' on host $int_bastion_hostname" "ssh $TEST_USER@$int_bastion_hostname -- mkdir -p $subdir"
 test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname" "aba -d mirror tar --out - | ssh $TEST_USER@$int_bastion_hostname -- tar -C $subdir -xvf -"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*1*\.tar"
