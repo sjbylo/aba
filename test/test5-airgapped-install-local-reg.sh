@@ -394,8 +394,10 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
 	# This will run make in $subdir/aba/$cluster_name
-	test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name" || \
+	if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name"; then
+		test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes"
 		test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Restarting all worker nodes of failed cluster" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
+	fi
 
 	if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -r 2 1 -m  "Checking '$cluster_name' cluster with 'mon'" "aba --dir $subdir/aba/$cluster_name mon"; then
 		mylog "CLUSTER INSTALL FAILED: REBOOTING ALL NODES ..."
@@ -495,6 +497,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Making iso" "aba --dir $sub
 # -i means ignore any error and let this script handle the error. I.e. restart workers.
 test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name" || \
 (
+	test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Cluster creation failed? Restarting all worker nodes" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Wait for cluster install to complete ..." "aba --dir $subdir/aba/$cluster_name"
 )
