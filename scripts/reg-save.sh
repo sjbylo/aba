@@ -66,11 +66,21 @@ do
 	else
 		if ./save-mirror.sh; then
 			# Check for errors
-			if [ ! "$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)" ]; then
+			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
+			if [ ! "$error_file" ]; then
 				failed=
 				break
 			fi
-			echo_red "Error detected in log file: $(ls -t save/working-dir/logs/mirroring_errors_*_*.txt | head -1)" >&2
+			mkdir -p save/saved_errors
+			cp $error_file save/saved_errors
+			echo_red "Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
+			# FIXME:
+			### Check for errors
+			##if [ ! "$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)" ]; then
+			##	failed=
+			##	break
+			##fi
+			##echo_red "Error detected in log file: $(ls -t save/working-dir/logs/mirroring_errors_*_*.txt | head -1)" >&2
 		fi
 	fi
 
