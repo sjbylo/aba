@@ -103,4 +103,6 @@ else
 	[ "$INFO_ABA" ] && echo_cyan "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image set config file." >&2
 fi
 
+echo_cyan "Number of operators added: ${#added_operators[@]}" >&2
+
 exit 0

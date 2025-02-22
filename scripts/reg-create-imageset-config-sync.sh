@@ -33,6 +33,8 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 	scripts/add-operators-to-imageset.sh >> sync/imageset-config-sync.yaml
 
 	touch sync/.created
+
+	echo_green "Image set config file created: mirror/sync/imageset-config-sync.yaml"
 else
 	echo_cyan "Using existing image set config file (save/imageset-config-sync.yaml)"
 	echo_cyan "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'aba sync' again."
@@ -41,4 +43,3 @@ fi
 # This is needed since sometimes an existing registry may already be available
 scripts/create-containers-auth.sh
 
-echo_green "Image set config file created: mirror/sync/imageset-config-sync.yaml"
