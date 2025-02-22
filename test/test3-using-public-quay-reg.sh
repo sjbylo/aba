@@ -67,7 +67,7 @@ test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 rm -f aba.conf
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
-test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --channel stable --version $VER_OVERRIDE ### --vmw $vf
+test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --platform vmw --channel stable --version $VER_OVERRIDE ### --vmw $vf
 #test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ### --vmw $vf
 
 # Set up govc 

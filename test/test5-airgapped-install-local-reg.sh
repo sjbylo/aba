@@ -70,7 +70,7 @@ mylog "Test to install a local reg. on $int_bastion_hostname and save + copy + l
 rm -f aba.conf  # Set it up next
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
-test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --channel stable --version $VER_OVERRIDE
+test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel stable --version $VER_OVERRIDE
 mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
 mylog "ask set to $(grep -o '^ask=[^ ]*' aba.conf) in $PWD/aba.conf"
 
@@ -131,7 +131,7 @@ source <(cd mirror && normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-test-cmd -r 15 3 -m "Creating bundle for channel stable and version $ocp_version" "aba -f bundle --channel stable --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
+test-cmd -r 15 3 -m "Creating bundle for channel stable and version $ocp_version" "aba -f bundle --platform vmw --channel stable --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
 # Smoke tests!
 test-cmd -m  "Verifying existance of file 'mirror/save/mirror_*000000.tar'" "ls -lh mirror/save/mirror_*1*.tar" 
@@ -395,7 +395,7 @@ build_and_test_cluster() {
 
 	# This will run make in $subdir/aba/$cluster_name
 	if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name"; then
-		test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes"
+		test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes && aba ls"
 		test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Restarting all worker nodes of failed cluster" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
 	fi
 
@@ -497,7 +497,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Making iso" "aba --dir $sub
 # -i means ignore any error and let this script handle the error. I.e. restart workers.
 test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name" || \
 (
-	test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes"
+	test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes && aba ls"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Cluster creation failed? Restarting all worker nodes" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Wait for cluster install to complete ..." "aba --dir $subdir/aba/$cluster_name"
 )
