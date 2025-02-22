@@ -126,13 +126,15 @@ normalize-vmware-conf()
 	# Prepend "export "
 	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
 
+	# Removed this line since GOVC_PASSWORD='<my password here>' was getting cut and failing to parse
+	#awk '{print $1}' | \
+
 	[ ! -f vmware.conf ] &&                                                              return 0  # vmware.conf can be empty
 
         vars=$(cat vmware.conf | \
 		sed -E	-e "s/^\s*#.*//g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e "s/^VMW_FOLDER=/VC_FOLDER=/g" | \
-		awk '{print $1}' | \
                 sed	-e "s/^/export /g")
 	eval "$vars"
 	# Detect if ESXi is used and set the VC_FOLDER that ESXi prefers, and ignore GOVC_DATACENTER and GOVC_CLUSTER. 
