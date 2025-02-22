@@ -5,7 +5,7 @@
 #[ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
 [ "$TMUX" ] && tmux clear-history 
 
-export VER_OVERRIDE=4.16.30 # Uncomment to use the 'latest' stable version of OCP
+#export VER_OVERRIDE=4.16.30 # Uncomment to use the 'latest' stable version of OCP
 export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 export TEST_USER=$(whoami)   # This can be any user or $(whoami) 
 
