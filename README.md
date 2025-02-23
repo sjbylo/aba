@@ -5,7 +5,7 @@ Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/bl
 
 ## Who should use Aba?
 
-Use Aba if you want to get OpenShift up and running quickly in an air-gapped environment without having to study the documentation in detail.
+Use Aba to quickly set up OpenShift in an air-gapped environment while letting it handle the heavy lifting for you.
 
 1. [What does Aba do for me?](#what-does-aba-do-for-me)
 1. [Installing OpenShift in a Disconnected Network](#installing-openshift-in-a-disconnected-network)
@@ -37,7 +37,7 @@ Use Aba if you want to get OpenShift up and running quickly in an air-gapped env
 Aba automatically completes the following and more:
 
 1. Helps install any type of OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
-2. Makes use of any existing container registry or installs the Quay mirror registry appliance for you. 
+1. Installs the Quay mirror registry appliance for you or makes use of any existing container registry.
 1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
 1. Triggers the generation of the agent-based boot ISO. 
 1. Configures NTP during installation time to help avoid issues when using nodes with incorrect date & time.
@@ -48,8 +48,8 @@ Aba automatically completes the following and more:
 1. Can create an "archive bundle" containing all the files needed to complete a fully air-gapped installation. 
 1. Executes several workarounds for some typical issues with disconnected environments.
 1. Enables the integration with vSphere as a day 2 operation.
-1. Helps configure OpenShift with your NTP servers and many more. 
 1. Now works with oc-mirror v2 as default!
+1. Helps configure OpenShift with your NTP servers and many more. 
 
 ## Quick Start Guide for the Impatient:
 
