@@ -30,7 +30,8 @@ else
 	echo "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 
 fi
 
-[ "$reg_root" ] || reg_root=$HOME/quay-install  # $reg_root is needed for the below message
+#FIXME: Instead of using reg_root, why not have data_vol=/mnt/large-disk and put all data in there? reg_root can be = $data_vol/quay-install
+[ "$reg_root" ] || reg_root=$HOME/quay-install  # $reg_root is needed for the below 'disk space' message AND for TMPDIR / OC_MIRROR_CACHE below
 
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
