@@ -55,7 +55,7 @@ reg_code=$(curl --connect-timeout 10 --retry 3 -ILsk -o /dev/null -w "%{http_cod
 # This is needed since sometimes an existing registry may already be available
 scripts/create-containers-auth.sh
 
-[ ! "$reg_root" ] && reg_root=$HOME/quay-install
+[ ! "$reg_root" ] && reg_root=$HOME/quay-install  # Needed for below TMPDIR
 
 echo
 echo "Now mirroring the images."
