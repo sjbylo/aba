@@ -20,7 +20,7 @@ hosts:
             enabled: true
             address:
               - ip: 10.0.1.81
-                prefix-length: 24
+                prefix-length: 20
             dhcp: false
       dns-resolver:
         config:
@@ -48,7 +48,7 @@ hosts:
             enabled: true
             address:
               - ip: 10.0.1.82
-                prefix-length: 24
+                prefix-length: 20
             dhcp: false
       dns-resolver:
         config:
@@ -76,7 +76,7 @@ hosts:
             enabled: true
             address:
               - ip: 10.0.1.83
-                prefix-length: 24
+                prefix-length: 20
             dhcp: false
       dns-resolver:
         config:
@@ -104,7 +104,7 @@ hosts:
             enabled: true
             address:
               - ip: 10.0.1.84
-                prefix-length: 24
+                prefix-length: 20
             dhcp: false
       dns-resolver:
         config:
@@ -132,7 +132,7 @@ hosts:
             enabled: true
             address:
               - ip: 10.0.1.85
-                prefix-length: 24
+                prefix-length: 20
             dhcp: false
       dns-resolver:
         config:
@@ -160,7 +160,7 @@ hosts:
             enabled: true
             address:
               - ip: 10.0.1.86
-                prefix-length: 24
+                prefix-length: 20
             dhcp: false
       dns-resolver:
         config:
