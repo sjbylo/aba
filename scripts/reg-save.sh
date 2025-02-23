@@ -30,6 +30,9 @@ echo_cyan "Warning: Ensure there is enough disk space under $PWD/save.  "
 echo_cyan "This can take 5-20+ minutes to complete or even longer if Operator images are being saved!"
 echo 
 
+#FIXME: Instead of using reg_root, why not have data_vol=/mnt/large-disk and put all data in there? reg_root can be = $data_vol/quay-install
+[ "$reg_root" ] || reg_root=$HOME/quay-install  # $reg_root is needed for TMPDIR / OC_MIRROR_CACHE below
+
 ## If not already set, set the cache and tmp dirs to where there should be more disk space
 # Had to use [[ && ]] here, as without it got "mkdir -p <missing operand>" error!
 [[ ! "$TMPDIR" && "$reg_root" ]] && export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
