@@ -27,6 +27,8 @@ type=standard
 
 [ "$DEBUG_ABA" ] && echo_cyan "$0: Creating cluster directory for [$name] of type [$type]" >&2
 
+# Note: VMware mac address range for VMs is 00:50:56:00:00:00 to 00:50:56:3F:FF:FF 
+
 # Set reasonable defaults
 export mac_prefix=00:50:56:2x:xx:
 export num_masters=3

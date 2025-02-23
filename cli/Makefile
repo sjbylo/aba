@@ -89,7 +89,7 @@ download: $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download $(gen_oc_t
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
 oc: ~/bin/oc  ## Install oc into ~/bin
 ~/bin/oc: .init $(full_oc_tar_file)
-	@(file $(full_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(full_oc_tar_file) ... && tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl) || (file $(gen_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(gen_oc_tar_file) ... && tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl) || echo ERROR: Invalid files: $(full_oc_tar_file) or $(gen_oc_tar_file)
+	@(file $(full_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(full_oc_tar_file) to ~/bin/oc ... && tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl) || (file $(gen_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(gen_oc_tar_file) to ~/bin/oc ... && tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl) || echo ERROR: Invalid files: $(full_oc_tar_file) or $(gen_oc_tar_file)
 
 octars: $(gen_oc_tar_file) $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download
 $(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
