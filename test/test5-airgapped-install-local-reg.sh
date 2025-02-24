@@ -2,6 +2,8 @@
 # This test installs a mirror reg. on the internal bastion (just for testing) and then
 # treats that registry as an "existing registry" in the test internal workflow. 
 
+export INFO_ABA=1
+
 # Required: 2 bastions (internal and external), for internal (no direct Internet) only yum works via a proxy. For external, the proxy is fully configured. 
 # I.e. Internal bastion has no access to the Internet.  External has full access. 
 # Ensure passwordless ssh access from bastion1 (external) to int_bastion_hostname (internal). 
@@ -147,7 +149,7 @@ mylog Runtest: START - airgap
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Install aba script" "cd $subdir/aba; ./install" 
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading cluster images into mirror on internal bastion" "aba -d $subdir/aba load" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading cluster images into mirror on internal bastion (this will install quay)" "aba -d $subdir/aba load" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set archive file to make space: '$subdir/aba/mirror/save/mirror_*1*.tar'" "rm $subdir/aba/mirror/save/mirror_*1*.tar" 
 

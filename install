@@ -14,7 +14,7 @@ if [ "$(id -run)" != "root" ]; then
 			echo "Passwordless sudo access is recommended." >&2
 		fi
 		echo -n "You must enter your password to install and use aba: " >&2
-		[ "$(sudo -p "Enter %p's password" id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+		[ "$(sudo -p "Enter %p's password: " id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
 	fi
 fi
 

@@ -194,6 +194,7 @@ if [ "$reg_ssh_key" ]; then
 	uninstall_cmd="./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts --autoApprove -v"
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
+	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
   	#	-k $reg_ssh_key --initPassword $reg_pw $reg_root_opts"
@@ -293,6 +294,7 @@ else
 	uninstall_cmd="./mirror-registry uninstall --autoApprove $reg_root_opts -v"
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
+	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opts"
 	cmd="./mirror-registry install -v --quayHostname $reg_host $reg_root_opts"
