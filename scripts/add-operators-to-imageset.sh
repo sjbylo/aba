@@ -53,7 +53,7 @@ if [ "$ops" -o "$op_sets" ]; then
 	if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
 		echo_red "Warning: Missing operator index file: $PWD/.redhat-operator-index-v$ocp_ver_major ... not adding your selected operators to the image set config!" >&2
 
-		exit 0
+		exit 1  # We want to ensure the user gets what they expect, i.e. operators downloaded!
 	fi
 
 cat <<END

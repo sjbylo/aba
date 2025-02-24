@@ -7,6 +7,8 @@
 # Ensure passwordless ssh access from bastion1 (external) to int_bastion_hostname (internal). Script uses tar+ssh to copy over the aba repo. 
 # Be sure no mirror registries are installed on either bastion before running.  Internal int_bastion_hostname can be a fresh "minimal install" of RHEL8/9.
 
+export INFO_ABA=1
+
 ### TEST for clean start with or without the rpms.  
 if false; then
 	# Assuming user will NOT install all rpms in advance and aba will install them.

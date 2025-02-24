@@ -78,6 +78,7 @@ file_list=$(find		\
 	! -path "aba/mirror/postgres.tar"  			\
 	! -path "aba/mirror/redis.tar"  			\
 	! -path "aba/mirror/regcreds/*"	  			\
+	! -path "aba/mirror/reg-uninstall.sh"  			\
 	! -path "aba/*/iso-agent-based*"  			\
 	! -path "aba/mirror/sync/working-dir*"  		\
 	! -path "aba/mirror/save/working-dir*"			\
@@ -96,6 +97,7 @@ file_list=$(find		\
 # Don't include/compress the 'image set' tar files since they are compressed already!
 # Don't need to copy over the oc-mirror-workspace (or working-dir 'v2') dirs.  The needed yaml files for 'make day2' are created at 'make load'.
 # Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop since it's activly written to. 
+# Added [! -path "aba/mirror/reg-uninstall.sh"] to be sure no old scripts are bundled/saved. Intent is to install the registry *from* intrnal net.
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
 ###[ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_.*.tar$") || true  # 'true' needed!
