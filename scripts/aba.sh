@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250222224217
+ABA_VERSION=20250225183850
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -190,15 +190,6 @@ do
 
 		url="https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt"
 
-		# FIXME is this needed?
-		#if ! curl -f --connect-timeout 10 --retry 2 -sL "$url" > $tmp_dir/release.txt; then
-			#echo_red "Error downloading $url." >&2
-			#echo_red "Ensure you have Internet access to download the required images." >&2
-			#echo_red "To get started, run Aba on a connected workstation/laptop with Fedora or RHEL and try again." >&2
-#
-			#exit 1
-		#fi
-
 		[ "$ver" = "latest" ] && ver=$(fetch_latest_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
 		[ ! "$ver" ] && echo_red "Missing or wrong value after $1 option" >&2 && exit 1
@@ -208,15 +199,18 @@ do
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
-		make -s -C $ABA_PATH/mirror init >/dev/null 2>&1
-		(
-			(
-				make -s -C $ABA_PATH/cli ~/bin/oc-mirror >$ABA_PATH/mirror/.log  2>&1 && \
-				cd $ABA_PATH/mirror && \
-				date > .fetch-index.log && \
-				$ABA_PATH/scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
-			) &
-		) & 
+
+		( make -s -C $ABA_PATH/mirror catalog bg=true & ) & 
+
+		#make -s -C $ABA_PATH/mirror init >/dev/null 2>&1
+		#(
+		#	(
+		#		make -s -C $ABA_PATH/cli ~/bin/oc-mirror >$ABA_PATH/mirror/.log  2>&1 && \
+		#		cd $ABA_PATH/mirror && \
+		#		date > .fetch-index.log && \
+		#		$ABA_PATH/scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
+		#	) &
+		#) & 
 
 		shift 2
 
@@ -671,16 +665,18 @@ if [ ! -f .bundle ]; then
 		install_rpms make || exit 1
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-		make -s -C mirror init >/dev/null 2>&1
 
-		(
-			(
-				make -s -C cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
-				cd mirror && \
-				date > .fetch-index.log && \
-				scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
-			) &
-		) & 
+		( make -s -C mirror catalog bg=true & ) & 
+
+		#make -s -C mirror init >/dev/null 2>&1
+		#(
+		#	(
+		#		make -s -C cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
+		#		cd mirror && \
+		#		date > .fetch-index.log && \
+		#		scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
+		#	) &
+		#) & 
 
 		sleep 0.3
 	else

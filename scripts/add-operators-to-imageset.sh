@@ -15,7 +15,7 @@ declare -A added_operators  # Associative array to track added operators
 
 add_op() {
 	# Extract operator name and default channel from the file
-	read op_name op_default_channel < <(grep "^$1 " .redhat-operator-index-v$ocp_ver_major | awk '{print $1, $NF}')
+	read op_name op_default_channel < <(grep "^$1 " .index/redhat-operator-index-v$ocp_ver_major | awk '{print $1, $NF}')
 
 	# Check if the operator name exists
 	if [ "$op_name" ]; then
@@ -40,7 +40,7 @@ add_op() {
     - name: $op_name"
 		fi
 	else
-		echo_red "Warning: Operator '$1' not found in index file mirror/.redhat-operator-index-v$ocp_ver_major" >&2
+		echo_red "Warning: Operator '$1' not found in index file mirror/.index/redhat-operator-index-v$ocp_ver_major" >&2
 	fi
 }
 
@@ -50,14 +50,14 @@ fi
 
 if [ "$ops" -o "$op_sets" ]; then
 	# Check for the index file
-	if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
-		echo_red "Error: Missing operator catalog: $PWD/.redhat-operator-index-v$ocp_ver_major ... cannot add required operators to the image set config file!" >&2
+	if [ ! -s .index/redhat-operator-index-v$ocp_ver_major ]; then
+		echo_red "Error: Missing operator catalog: $PWD/.index/redhat-operator-index-v$ocp_ver_major ... cannot add required operators to the image set config file!" >&2
 		echo_red "       Your options are:" >&2
-		echo_red "       - Remove any existing catalog files by running: 'cd mirror; rm -f .redhat-operator-index-v${ocp_ver_major}*' and try again." >&2
+		echo_red "       - Remove any existing catalog files by running: 'cd mirror; rm -f .index/redhat-operator-index-v${ocp_ver_major}*' and try again." >&2
 		echo_red "       - run 'cd mirror; aba catalog' to try to download the catalog file again." >&2
 		echo_red "       - Check that the following command is working:" >&2
 		echo_red "           oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major" >&2
-		echo_red "       - Check access to registry is working: 'curl -kIL https://registry.redhat.io/'" >&2
+		echo_red "       - Check access to registry is working: 'curl -IL http://registry.redhat.io/v2'" >&2
 
 		exit 1  # We want to ensure the user gets what they expect, i.e. operators downloaded!
 	fi

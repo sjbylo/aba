@@ -48,6 +48,12 @@ uninstall: ## Uninstall any previously installed mirror registry
 sync: ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
 	@make -sC mirror sync
 
+.PHONY: catalog
+# -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
+catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
+	@#make -sC cli ~/bin/oc-mirror
+	@make -C mirror catalog $(bg)
+
 # These are the targets needed to create the 'bundle' archive
 .PHONY: bundle
 # Note: '@' used to ensure tar format is not corrupted when using out=-
