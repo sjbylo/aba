@@ -6,6 +6,7 @@ TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 debug   ?=
 force   ?= no
+bg   ?=
 
 all: mirror
 
@@ -151,9 +152,9 @@ index: init catalog
 
 .PHONY: catalog
 # -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
-catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
-	@make -sC ../cli ~/bin/oc-mirror
-	$(SCRIPTS)/download-operator-index.sh
+catalog: init ## Render all the latest Operators into a file which can be used in an imageset config file. 
+	@#make -sC ../cli ~/bin/oc-mirror
+	$(SCRIPTS)/download-operator-index.sh $(bg)
 
 #uninstall: .init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
 uninstall: .init             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
@@ -176,6 +177,7 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 	rm -f templates scripts
 	rm -f aba.conf  # remove link only
 	rm -f .init 
+	rm -rf .index
 	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh # Only clean up the created scripts, not the script needed to uninstall the reg.
 	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 

@@ -32,8 +32,8 @@ echo For disconnected environments, disabling online public catalog sources
 echo
 
 # This should really check the connectivity from the cluster, not from the bastion
-# E.g. ssh node "curl --connect-timeout 30 -s -kIL https://registry.redhat.io" or check for cluster proxy config?
-#ret=$(curl --retry 3 -ILsk --connect-timeout 10 -o /dev/null -w "%{http_code}\n" https://registry.redhat.io/ || true)
+# E.g. ssh node "curl --connect-timeout 30 -s -IL https://registry.redhat.io/v2" or check for cluster proxy config?
+#ret=$(curl --retry 3 -ILs --connect-timeout 10 -o /dev/null -w "%{http_code}\n" http://registry.redhat.io/v2 || true)
 #if [ "$ret" != "200" ]; then
 	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
