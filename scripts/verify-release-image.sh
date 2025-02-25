@@ -32,15 +32,19 @@ fi
 
 [ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
+# Check twice for the image (skopeo sometimes fails when it shouldn't!)
 if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha >/dev/null; then
-	echo
-	echo_red "Error: Release image missing in your registry at $reg_host:$reg_port/$reg_path. Expected version is $release_ver." >&2
-	echo_red "       Did you run 'sync' or 'save/load' to copy the images into your registry?" >&2
-	echo_red "       Be sure that the images in your registry match the version of the 'openshift-install' CLI (currently version $release_ver)" >&2
-	echo_red "       Do you have the correct image versions in your registry?" >&2
-	echo_red "       Failed to access the release image: docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha" >&2
+	sleep 10
+	if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha >/dev/null; then
+		echo
+		echo_red "Error: Release image missing in your registry at $reg_host:$reg_port/$reg_path. Expected version is $release_ver." >&2
+		echo_red "       Did you run 'sync' or 'save/load' to copy the images into your registry?" >&2
+		echo_red "       Be sure that the images in your registry match the version of the 'openshift-install' CLI (currently version $release_ver)" >&2
+		echo_red "       Do you have the correct image versions in your registry?" >&2
+		echo_red "       Failed to access the release image: docker://$reg_host:$reg_port/$reg_path/openshift/release-images$release_sha" >&2
 
-	exit 1
+		exit 1
+	fi
 fi
 
 # HACK
