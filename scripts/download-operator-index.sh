@@ -43,7 +43,7 @@ if [ "$bg" ]; then
 #	echo "Downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major ..."
 fi
 
-if ! curl --connect-timeout 15 --retry 3 -kIL https://registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >/dev/null 2>&1; then
+if ! curl --connect-timeout 15 --retry 3 -kIL https://registry.redhat.io/ >/dev/null 2>&1; then
 	echo_red "Error: while fetching the operator index from https://registry.redhat.io/.  Aborting." >&2
 
 	exit 1
@@ -104,7 +104,7 @@ done > imageset-config-operator-catalog-v${ocp_ver_major}.yaml
 
 echo_white "Generated imageset-config-operator-catalog-v${ocp_ver_major}.yaml file"
 
-##rm -f $lock_file $pid_file
+##rm -f $lock_file $pid_file  # Keep the lock file since we assume the catalog was downloaded ok.
 
 # Adding this to log file since it will run in the background
 echo_green "Downloaded operator index for v$ocp_ver_major successfully"
