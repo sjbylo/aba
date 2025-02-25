@@ -248,7 +248,7 @@ Connect a large USB media stick (or other device) to your VM and write the `bund
 
 Set the version you want to install:
 ```
-v=4.17.3
+v=4.17.16
 ```
 
 Note: It is recommended to run `aba bundle` on a fresh install of Aba or run: `cd aba/mirror; rm -rf save; cd ..` before continuing.
@@ -258,24 +258,24 @@ Create the bundle archive with this single command:
 aba bundle --channel stable --version $v --op-sets ocp mesh3 --ops web-terminal --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
 ```
 
-- This will generate several 10GB files: ocp_mycluster_4.17.3_aa|ab|ac... etc
+- This will generate several 10GB files: ocp_mycluster_4.17.16_aa|ab|ac... etc 
 - The --op-sets option refers to predefined operator sets in `templates/operator-set-*`.
 - If needed, add individual operators after "--ops"
-- Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.3_* | tar tvf -`
-- Generate a checksum for the files, e.g. `cksum ocp_mycluster_4.17.3_*` and use the checksum to verify the files after transferring them to the internal network.
+- Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`
+- Generate a checksum for the files, e.g. `cksum ocp_mycluster_4.17.16_*` and use the checksum to verify the files after transferring them to the internal network. 
 
 Copy the files to a RHEL 8/9 machine within the private internal network.
 
 Verify the files are intact by comparing the checksum values with the original files:
 
 ```
-cksum ocp_mycluster_4.17.3_*
+cksum ocp_mycluster_4.17.16_*
 ```
 
 Unpack the bundle archive:
 
 ```
-cat /path/to/ocp_mycluster_4.17.3_* | tar xvf -        # to extract the bundle archive
+cat /path/to/ocp_mycluster_4.17.16_* | tar xvf -        # to extract the bundle archive
 cd aba
 ./install
 aba           # Run aba if you want Aba to install & load the mirror registry

@@ -51,7 +51,13 @@ fi
 if [ "$ops" -o "$op_sets" ]; then
 	# Check for the index file
 	if [ ! -s .redhat-operator-index-v$ocp_ver_major ]; then
-		echo_red "Warning: Missing operator index file: $PWD/.redhat-operator-index-v$ocp_ver_major ... not adding your selected operators to the image set config!" >&2
+		echo_red "Error: Missing operator catalog: $PWD/.redhat-operator-index-v$ocp_ver_major ... cannot add required operators to the image set config file!" >&2
+		echo_red "       Your options are:" >&2
+		echo_red "       - Remove any existing catalog files by running: 'cd mirror; rm -f .redhat-operator-index-v${ocp_ver_major}*' and try again." >&2
+		echo_red "       - run 'cd mirror; aba catalog' to try to download the catalog file again." >&2
+		echo_red "       - Check that the following command is working:" >&2
+		echo_red "           oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major" >&2
+		echo_red "       - Check access to registry is working: 'curl -kIL https://registry.redhat.io/'" >&2
 
 		exit 1  # We want to ensure the user gets what they expect, i.e. operators downloaded!
 	fi
