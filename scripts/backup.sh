@@ -8,7 +8,7 @@ source scripts/include_all.sh
 
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
 inc= 				# Full backup by default
-repo_only=			# Also include the save/mirror_*.tar files (for some use-cases it's more efficient to keep them seperate) 
+repo_only=			# Also include the save/mirror_*.tar files (for some use-cases it's more efficient to keep them separate) 
 
 while echo "$1" | grep -q ^--[a-z]
 do
@@ -33,15 +33,15 @@ cd ..
 [ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup 
 
 # Note, for the bundle we prefer CLI install files and nothing under ~/bin
-# Remove bin in favour of cli/
+# Remove bin in favor of cli/
 ###bin			\
-# vmware only on "internal" bastion
+# vmware only on "private" bastion
 #aba/vmware.conf		\
 
 
 # Add the bundle flag file to the archive so when aba is run again it knows it's a bundle!
 touch aba/.bundle  # Flag this archive as a bundle
-rm -f aba/.aba.conf.seen   # Ensure user can be offered to edit this conf file again on the internal network
+rm -f aba/.aba.conf.seen   # Ensure user can be offered to edit this conf file again on the internal/private network
 
 # All 'find expr' below are by default "and"
 file_list=$(find		\
@@ -93,11 +93,11 @@ file_list=$(find		\
 
 # Notes on the above
 # See the "tar cf" command below and consider....
-# Note, don't copy over any of the ".init", ".installed", ".rpms" flag files etc, since these components are needed on the internal bastion
+# Note, don't copy over any of the ".init", ".installed", ".rpms" flag files etc, since these components are needed on the internal/private bastion
 # Don't include/compress the 'image set' tar files since they are compressed already!
 # Don't need to copy over the oc-mirror-workspace (or working-dir 'v2') dirs.  The needed yaml files for 'make day2' are created at 'make load'.
-# Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop since it's activly written to. 
-# Added [! -path "aba/mirror/reg-uninstall.sh"] to be sure no old scripts are bundled/saved. Intent is to install the registry *from* intrnal net.
+# Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop since it's actively written to. 
+# Added [! -path "aba/mirror/reg-uninstall.sh"] to be sure no old scripts are bundled/saved. Intent is to install the registry *from* internal net.
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
 ###[ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_.*.tar$") || true  # 'true' needed!
@@ -111,8 +111,10 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 
 # Output reminder message
 if [ "$repo_only" ]; then
-	echo_magenta "Warning: Not archiving any 'image set' files: mirror/*/mirror_*.tar." >&2
-	echo_magenta "         You will need to copy them, along with the bundle archive, into mirror/save/ (in your private network)." >&2
+	echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE BUNDLE." >&2
+	echo_magenta "           See image set file(s) at mirror/save/mirror_*.tar." >&2
+	echo_magenta "           You will need to copy them to your private bastion along with the bundle archive ($(basename $dest)). See below for more instructions." >&2
+	echo_magenta "           To avoid this write the full archive bundle to *external media* or to a *separate drive*." >&2
 fi
 
 # If destination is NOT stdout (i.e. if in interactive mode)
@@ -121,16 +123,16 @@ if [ "$dest" != "-" ]; then
 
 	if [ "$repo_only" ]; then
 		echo
-		echo_cyan "Writing partial bundle archive to $dest ..."
+		echo_cyan "Writing partial bundle archive to $dest ... (to create a full bundle, write the bundle directly to external media)."
 		echo
-		echo_white "After the bundle has been written, copy it to your *internal bastion*, e.g. with:"
-		echo_white " cp $dest </path/to/your/portable/media/usb-stick/thumbdrive>"
-		echo_white "Remember to copy over the 'image set' tar files also, e.g. with the command:"
-		echo_white " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/thumbdrive>"
+		echo_white "After the bundle has been written, copy it to your *private bastion*, e.g. with the command:"
+		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
+		echo_white "Copy over the image set tar file(s) also, e.g. with:"
+		echo_white " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "Transfer the bundle and the tar file(s) to your internal bastion."
+		echo_white "After the bundle has been written, transfer the bundle and the image set tar file(s) to your private bastion."
 		echo_white "Extract the bundle tar file anywhere under your home directory"
-		echo_white "and move the 'image set' files into the save/ dir & continue by running 'aba', e.g. with the commands:"
+		echo_white "and then move the image set tar file(s) into the aba/mirror/save/ dir & continue by running 'aba', e.g. with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
 		echo_white "  mv mirror_*.tar aba/mirror/save"
 		echo_white "  cd aba"
@@ -143,10 +145,11 @@ if [ "$dest" != "-" ]; then
 		echo
 		echo_cyan "Writing full bundle archive to $dest ..."
 		echo
-		echo_white "If not already ... after the bundle has been written, copy it to your *internal bastion*, e.g. with:"
-		echo_white " cp $dest </path/to/your/portable/media/usb-stick/thumbdrive>"
+		echo_white "After the bundle has been written, transfer it to your *private bastion*, e.g. with the command:"
+		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "Extract the bundle tar file anywhere under your home directory"
+		echo_white "Transfer the bundle to your private bastion."
+		echo_white "Extract the bundle tar file anywhere under your home directory, e.g. with:"
 		echo_white "  tar xvf $(basename $dest)"
 		echo_white "  cd aba"
 		echo_white "  ./install"
@@ -182,7 +185,7 @@ fi
 
 set -e
 
-rm -f aba/.bundle  # We don't want this repo to be labelled as 'bundle', only the tar archive should be
+rm -f aba/.bundle  # We don't want this repo to be labeled as 'bundle', only the tar archive should be
 
 # If "not repo backup only" (so, if 'inc' or 'tar'), then always update timestamp file so that future inc backups will not backup everything.
 # If using 'repo only, then you always want the whole repo to be backed up (so no need to use the timestamp file).

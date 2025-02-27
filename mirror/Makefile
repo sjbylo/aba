@@ -67,7 +67,8 @@ sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror              instal
 .PHONY: save
 # Note that for a connected laptop or bastion there is no need to install all the required packages (i.e. only 'rpmsext') 
 # mirror-registry-amd64.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
-save: .init .rpmsext ~/.pull-secret.json index cli-download mirror-registry-amd64.tar.gz save/imageset-config-save.yaml  ## Save images from the Internet to mirror/save/ & download 'mirror-registry-amd64.tar.gz' for later installation into your private network. Use retry=# to retry after failure.
+# For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
+save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror mirror-registry-amd64.tar.gz save/imageset-config-save.yaml  ## Save images from the Internet to mirror/save/ & download 'mirror-registry-amd64.tar.gz' for later installation into your private network. Use retry=# to retry after failure.
 	###
 	### Save images from the Internet to local disk (mirror-to-disk)
 	###
