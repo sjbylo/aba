@@ -10,6 +10,8 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
+verify-aba-conf || exit 1
+
 export reg_url=https://$reg_host:$reg_port
 
 # Can the registry mirror already be reached?
@@ -28,6 +30,8 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 	echo_cyan "Generating initial image set configuration: 'sync/imageset-config-sync.yaml' for 'v$ocp_version' and channel '$ocp_channel' ..."
+
+	[ ! "$ocp_channel" -o ! "$ocp_version" ] && echo_red "Error: ocp_channel or ocp_version incorrectly defined in aba.conf" >&2 && exit 1
 
 	scripts/j2 ./templates/imageset-config-sync-$oc_mirror_version.yaml.j2 > sync/imageset-config-sync.yaml 
 	scripts/add-operators-to-imageset.sh >> sync/imageset-config-sync.yaml

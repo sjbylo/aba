@@ -9,6 +9,8 @@ umask 077
 
 source <(normalize-aba-conf)
 
+verify-aba-conf || exit 1
+
 # Note that any existing save/* files will not be deleted
 mkdir -p save
 
@@ -33,6 +35,8 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 	echo_cyan "Generating initial image set configuration: 'save/imageset-config-save.yaml' to save images to local disk for OpenShift 'v$ocp_version' and channel '$ocp_channel' ..."
+
+	[ ! "$ocp_channel" -o ! "$ocp_version" ] && echo_red "Error: ocp_channel or ocp_version incorrectly defined in aba.conf" >&2 && exit 1
 
 	scripts/j2 ./templates/imageset-config-save-$oc_mirror_version.yaml.j2 > save/imageset-config-save.yaml 
 	scripts/add-operators-to-imageset.sh >> save/imageset-config-save.yaml 

@@ -18,7 +18,9 @@ fi
 
 source <(normalize-aba-conf)
 
-[ ! "$ocp_version" ] && echo_red "Error, ocp_version not defined in aba.conf!" >&2 && exit 1
+verify-aba-conf || exit 1
+
+[ ! "$ocp_version" ] && echo_red "Error, ocp_version incorrectly defined in aba.conf!" >&2 && exit 1
 
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
@@ -31,7 +33,7 @@ pid_file=.index/redhat-operator-index-v$ocp_ver_major.pid
 done_file=.index/redhat-operator-index-v$ocp_ver_major.done
 
 # Clean up on INT
-handle_interupt() { echo_red "Aborting download." >&2; [ ! -s $index_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0;}
+handle_interupt() { echo_red "Aborting catalog download." >&2; [ ! -s $index_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0;}
 trap 'handle_interupt' INT
 
 # Check if this script is running in the background, if it is then output to a log file

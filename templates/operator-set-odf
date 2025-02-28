@@ -1,3 +1,4 @@
 odf-operator
 local-storage-operator
 lvms-operator
+rook-ceph-operator

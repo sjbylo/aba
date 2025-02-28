@@ -69,6 +69,48 @@ normalize-aba-conf() {
 
 }
 
+verify-aba-conf() {
+	local ret=0
+
+	echo $ocp_version | grep -q -E "[0-9]+\.[0-9]+\.[0-9]+" || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf" >&2; ret=1; }
+	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf" >&2; ret=1; }
+	echo $platform    | grep -q -E "bm|vmw" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
+
+	if [ "$op_sets" ]; then
+		echo $op_sets | grep -q -E "^[a-z,]+" || { echo_red "Error: op_sets invalid in aba.conf: [$op_sets]" >&2; ret=1; }
+		for f in $(echo $op_sets | tr , " ")
+		do
+			test -s templates/operator-set-$f || { echo_red "Error: No such operator set [templates/operator-set-$f]!" >&2; ret=1; }
+		done
+	fi
+
+	if [ "$ops" ]; then
+		echo $ops | grep -q -E "^[a-z,]+" || { echo_red "Error: ops invalid in aba.conf: [$ops]" >&2; ret=1; }
+	fi
+
+	# Check for a domain name in less strict way
+	[ "$domain" ] && echo $domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
+
+	# Check for ip addr
+	[ "$machine_network" ] && echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
+	# Check for number between 0 and 32
+	[ "$prefix_length" ] && echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
+	# Check for comma separated list of either IPs or domains/hostnames
+	[ "$ntp_servers" ] && \
+		echo $ntp_servers | grep -q -E '^([A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b)(,([A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b))*$' || \
+			{ echo_red "Error: ntp_servers is invalid in aba.conf [$ntp_servers]" >&2; ret=1; }
+	REGEX='^(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3}))(,(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3})))*$'
+
+	#[ "$dns_servers" ] && echo $dns_servers | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}(,([0-9]{1,3}\.){3}[0-9]{1,3})*$' || { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
+	[ "$dns_servers" ] && echo $dns_servers | grep -q -E $REGEX || { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
+	[ "$next_hop_address" ] && echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: next_hop_address is invalid in aba.conf [$next_hop_address]" >&2; ret=1; }
+
+	echo $oc_mirror_version | grep -q -E '^v[12]$' || { echo_red "Error: oc_mirror_version is invalid in aba.conf [$oc_mirror_version]" >&2; ret=1; }
+
+	return $ret
+}
+
 normalize-mirror-conf()
 {
 	# Normalize or sanitize the config file
@@ -77,6 +119,7 @@ normalize-mirror-conf()
 	# Ensure only one arg after 'export'
 	# Verify oc_mirror_version exists and is somewhat correct and defaults to v1
 	# Prepend "export "
+	# reg_path must not stat with a /
 
 	[ ! -s mirror.conf ] &&                                                              return 0
 
@@ -89,9 +132,20 @@ normalize-mirror-conf()
 			-e 's/^reg_root=~/reg_root=\\~/g' \
 			-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
 			-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
+			-e 's#^reg_path=/#reg_path=#g' \
 			| \
 		awk '{print $1}' | \
 		sed	-e "s/^/export /g"
+}
+
+verify-mirror-conf() {
+	local ret=0
+
+	#echo $reg_host | grep -q -E '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]{2,})+$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
+	echo $reg_host | grep -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
+	[ ! "$reg_host" ] && echo_red "Error: reg_host is missing in mirror.conf" >&2 && ret=1
+
+	return $ret
 }
 
 normalize-cluster-conf()

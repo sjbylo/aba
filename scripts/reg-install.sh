@@ -10,6 +10,9 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
+verify-aba-conf || exit 1
+verify-mirror-conf || exit 1
+
 # If we're installing a mirror, then we do need all the "internal" rpms, esp. podman!
 scripts/install-rpms.sh internal
 
