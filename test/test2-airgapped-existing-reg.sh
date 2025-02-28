@@ -154,7 +154,7 @@ mylog
 source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
-test-cmd -r 15 3 -m "Saving images to local disk on `hostname`" aba save
+test-cmd -r 15 1 -m "Saving images to local disk on `hostname`" aba save
 
 test-cmd -m "Checking existance of file mirror/save/mirror_*000000.tar" "ls -lh mirror/save/mirror_*1*\.tar"
 
@@ -185,7 +185,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror 
 ######################
 
 # Now, this works
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load"
 
 test-cmd                                             -m "Delete loaded image set 1 file" "rm -v mirror/save/mirror_*1*.tar"
 test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/save/mirror_*1*.tar"
@@ -259,7 +259,7 @@ cat >> mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-test-cmd -r 15 3 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save"
+test-cmd -r 15 1 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save"
 
 test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh mirror/save/mirror_*1*\.tar"
 
@@ -280,7 +280,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror regi
 
 test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
 test-cmd                                     -m "Delete loaded image set 2 file" rm -v mirror/save/mirror_*1*.tar
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded image set 2 file on registry" rm -v $subdir/aba/mirror/save/mirror_*1*.tar
@@ -350,7 +350,7 @@ test-cmd -m "Adding advanced-cluster-management  operator to mirror/save/imagese
 test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
 
 
-test-cmd -r 15 3 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
+test-cmd -r 15 1 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
 
 mylog "Use 'scp' to copy mirror/save/mirror_*1*.tar file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/save/mirror_*1*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save"
@@ -361,7 +361,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry acces
 
 test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load"
 
 test-cmd                                     -m "Delete loaded image set 3 file" rm -v mirror/save/mirror_*1*.tar
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded image set 3 file on registry" rm -v $subdir/aba/mirror/save/mirror_*1*.tar
