@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250226065438
+ABA_VERSION=20250301011758
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -644,7 +644,7 @@ if [ ! -f .bundle ]; then
 		echo "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the bundle archive"
 		echo "                                                          # (size ~20-30GB for a base installation)."
 		echo "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
-		echo "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several more managable files."
+		echo "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more managable files."
 		echo "                                                          # Unpack the files on the internal bastion with: cat ocp_* | tar xvf - "
 		echo
 
