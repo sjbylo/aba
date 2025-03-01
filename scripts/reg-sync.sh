@@ -12,7 +12,7 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
-# Show warning if 'make save' has been used previously.
+# Show warning if 'aba save' has been used previously.
 #if [ -s save/mirror_seq1_000000.tar ]; then
 if [ -s save/mirror_*.tar ]; then
 	echo 
@@ -74,22 +74,27 @@ echo
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $reg_root, if it's defined
 ## [[ ! "$OC_MIRROR_CACHE" && "$reg_root" ]] && export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
 
-if [ "$oc_mirror_version" = "v1" ]; then
-	# Set up script to help for manual re-sync
-	# --continue-on-error : do not use this option. In testing the registry became unusable! 
-	cmd="oc-mirror --v1 --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
-	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
-else
-	cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port/$reg_path"
-	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
-	# mirror-to-mirror: oc mirror -c <image_set_configuration> --workspace file://<file_path> docker://<mirror_registry_url> --v2 
-fi
+# oc-mirror v2 tuning params
+parallel_images=8
+retry_delay=2
+retry_times=2
 
 # This loop is based on the "retry=?" value
 try=1
 failed=1
 while [ $try -le $try_tot ]
 do
+	# Set up the command in a script which can be run manually if needed.
+	if [ "$oc_mirror_version" = "v1" ]; then
+		# Set up script to help for manual re-sync
+		# --continue-on-error : do not use this option. In testing the registry became unusable! 
+		cmd="oc-mirror --v1 --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
+		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+	else
+		cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port/$reg_path --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+	fi
+
 	echo_cyan -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba sync --retry <count>'" || echo
 	echo "Running: $(cat sync-mirror.sh)"
@@ -112,14 +117,12 @@ do
 			mkdir -p sync/saved_errors
 			cp $error_file sync/saved_errors
 			echo_red "Error detected and log file saved in sync/saved_errors/$(basename $error_file)" >&2
-			# FIXME:
-			## Check for errors
-			#if [ ! "$(ls -t sync/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)" ]; then
-			#	failed=
-			#	break
-			#fi
-			#echo_red "Error detected in log file: $(ls -t sync/working-dir/logs/mirroring_errors_*_*.txt | head -1)" >&2
 		fi
+
+		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
+		parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# halve the value but it must always be at least 1
+		retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
+		retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
 	fi
 
 	let try=$try+1

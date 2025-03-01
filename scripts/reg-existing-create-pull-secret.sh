@@ -22,5 +22,5 @@ scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirro
 podman logout --all >/dev/null
 podman login --tls-verify=false --authfile=regcreds/pull-secret-mirror.json  $reg_host:$reg_port
 
-# Add flag so 'make mirror' is complete
+# Add flag so 'aba mirror' is complete
 touch .installed 
