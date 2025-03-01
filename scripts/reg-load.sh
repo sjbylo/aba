@@ -58,23 +58,28 @@ echo
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $reg_root, if it's defined
 [[ ! "$OC_MIRROR_CACHE" && "$reg_root" ]] && export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
 
-if [ "$oc_mirror_version" = "v1" ]; then
-	# Set up script to help for manual re-sync
-	# --continue-on-error : do not use this option. In testing the registry became unusable! 
-	# Note: If 'make save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
-	cmd="oc-mirror --v1 $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
-	echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh
-else
-	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port/$reg_path"
-	echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
-	# disk-to-mirror: oc mirror -c <image_set_configuration> --from file://<file_path> docker://<mirror_registry_url> --v2
-fi
+# oc-mirror v2 tuning params
+parallel_images=8
+retry_delay=2
+retry_times=2
 
 # This loop is based on the "retry=?" value
 try=1
 failed=1
 while [ $try -le $try_tot ]
 do
+	# Set up the command in a script which can be run manually if needed.
+	if [ "$oc_mirror_version" = "v1" ]; then
+		# Set up script to help for manual re-sync
+		# --continue-on-error : do not use this option. In testing the registry became unusable! 
+		# Note: If 'aba save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
+		cmd="oc-mirror --v1 $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
+		echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh
+	else
+		cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port/$reg_path --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+		echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
+	fi
+
 	echo_cyan -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba load --retry <count>'" || echo
 	echo "Running: $(cat load-mirror.sh)"
@@ -96,6 +101,11 @@ do
 			cp $error_file save/saved_errors
 			echo_red "Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
 		fi
+
+		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
+		parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# halve the value but it must always be at least 1
+		retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
+		retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
 	fi
 
 	let try=$try+1
@@ -106,6 +116,7 @@ if [ "$failed" ]; then
 	echo_red -n "Image loading aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes may fail. Resolve any issues if needed, otherwise, try again." >&2
+	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
 
 	exit 1
 fi

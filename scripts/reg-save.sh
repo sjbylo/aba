@@ -40,16 +40,10 @@ echo
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $reg_root, if it's defined
 [[ ! "$OC_MIRROR_CACHE" && "$reg_root" ]] && export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
 
-if [ "$oc_mirror_version" = "v1" ]; then
-	# Set up script to help for re-sync
-	# --continue-on-error : do not use this option. In testing the registry became unusable! 
-	cmd="oc-mirror --v1 --config=imageset-config-save.yaml file://."
-	echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
-else
-	cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://."
-	echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
-	# mirror-to-disk:  oc mirror -c <image_set_configuration> file://<file_path> --v2
-fi
+# oc-mirror v2 tuning params
+parallel_images=8
+retry_delay=2
+retry_times=2
 
 ##oc mirror -c <image_set_configuration> file://<file_path> --v2
 
@@ -58,15 +52,27 @@ try=1
 failed=1
 while [ $try -le $try_tot ]
 do
+	# Set up the command in a script which can be run manually if needed.
+	if [ "$oc_mirror_version" = "v1" ]; then
+		# Set up script to help for re-sync
+		# --continue-on-error : do not use this option. In testing the registry became unusable! 
+		cmd="oc-mirror --v1 --config=imageset-config-save.yaml file://."
+		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
+	else
+		cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
+	fi
+
 	echo_cyan -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba save --retry <count>'" || echo
 	echo_cyan "Running: $(cat save-mirror.sh)"
 	echo
 
-	# v1/v2 switch. For v2 need to do extra check!
+	# v1/v2 switch. For v2 need to do extra error checks!
 	if [ "$oc_mirror_version" = "v1" ]; then
 		./save-mirror.sh && failed= && break
 	else
+		# v2 will return zero even if some images failed to mirror
 		if ./save-mirror.sh; then
 			# Check for errors
 			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
@@ -77,14 +83,12 @@ do
 			mkdir -p save/saved_errors
 			cp $error_file save/saved_errors
 			echo_red "Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
-			# FIXME:
-			### Check for errors
-			##if [ ! "$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)" ]; then
-			##	failed=
-			##	break
-			##fi
-			##echo_red "Error detected in log file: $(ls -t save/working-dir/logs/mirroring_errors_*_*.txt | head -1)" >&2
 		fi
+
+		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
+		parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# halve the value but it must always be at least 1
+		retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
+		retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
 	fi
 
 	let try=$try+1

@@ -27,7 +27,7 @@ echo Bundle output file = $bundle_dest_path >&2
 echo >&2
 
 # Check if the repo is alreay in use, e.g. we don't want mirror.conf in the bundle
-# "-f, --force" means that "make bundle" can be run again & again and the image set config file will be re-created every time
+# "-f, --force" means that "aba bundle" can be run again & again and the image set config file will be re-created every time
 #force=1 # $force now comes from "--force" option
 if [ -d mirror/save ]; then
 	if [ ! "$force" ]; then
