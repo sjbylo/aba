@@ -63,6 +63,8 @@ normalize-aba-conf() {
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
+			-e "s/verify_conf=0\b/verify_conf=/g" -e "s/verify_conf=false/verify_conf=/g" \
+			-e "s/verify_conf=1\b/verify_conf=true/g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
 		awk '{print $1}' | \
 		sed	-e "s/^/export /g";
@@ -70,9 +72,13 @@ normalize-aba-conf() {
 }
 
 verify-aba-conf() {
-	local ret=0
+	[ ! "$verify_conf" ] && return 0
 
-	echo $ocp_version | grep -q -E "[0-9]+\.[0-9]+\.[0-9]+" || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf" >&2; ret=1; }
+	local ret=0
+	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
+	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
+
+	echo $ocp_version | grep -q -E "$REGEX_VERSION" || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf" >&2; ret=1; }
 	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf" >&2; ret=1; }
 	echo $platform    | grep -q -E "bm|vmw" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
@@ -90,21 +96,21 @@ verify-aba-conf() {
 	fi
 
 	# Check for a domain name in less strict way
-	[ "$domain" ] && echo $domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
+	#[ "$domain" ] && ! echo $domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
+	[ "$domain" ] && ! echo $domain | grep -q -E $REGEX_BASIC_DOMAIN && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
 
 	# Check for ip addr
-	[ "$machine_network" ] && echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
+	[ "$machine_network" ] && ! echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
 	# Check for number between 0 and 32
-	[ "$prefix_length" ] && echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
+	[ "$prefix_length" ] && ! echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' && { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
 	# Check for comma separated list of either IPs or domains/hostnames
-	[ "$ntp_servers" ] && \
-		echo $ntp_servers | grep -q -E '^([A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b)(,([A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b))*$' || \
+	[ "$ntp_servers" ] && ! echo $ntp_servers | grep -q -E '^([A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b)(,([A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b))*$' && \
 			{ echo_red "Error: ntp_servers is invalid in aba.conf [$ntp_servers]" >&2; ret=1; }
-	REGEX='^(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3}))(,(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3})))*$'
 
+	REGEX='^(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3}))(,(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3})))*$'
 	#[ "$dns_servers" ] && echo $dns_servers | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}(,([0-9]{1,3}\.){3}[0-9]{1,3})*$' || { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
-	[ "$dns_servers" ] && echo $dns_servers | grep -q -E $REGEX || { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
-	[ "$next_hop_address" ] && echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: next_hop_address is invalid in aba.conf [$next_hop_address]" >&2; ret=1; }
+	[ "$dns_servers" ] && ! echo $dns_servers | grep -q -E $REGEX && { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
+	[ "$next_hop_address" ] && ! echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && { echo_red "Error: next_hop_address is invalid in aba.conf [$next_hop_address]" >&2; ret=1; }
 
 	echo $oc_mirror_version | grep -q -E '^v[12]$' || { echo_red "Error: oc_mirror_version is invalid in aba.conf [$oc_mirror_version]" >&2; ret=1; }
 
@@ -139,6 +145,8 @@ normalize-mirror-conf()
 }
 
 verify-mirror-conf() {
+	[ ! "$verify_conf" ] && return 0
+
 	local ret=0
 
 	#echo $reg_host | grep -q -E '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]{2,})+$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
@@ -173,11 +181,15 @@ normalize-cluster-conf()
 }
 
 verify-cluster-conf() {
+	[ ! "$verify_conf" ] && return 0
+
 	local ret=0
+	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
 
 	echo $cluster_name | grep -q -E -i '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: cluster_name incorrectly set or missing in cluster.conf" >&2; ret=1; }
 
-	echo $base_domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
+	#echo $base_domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
+	echo $base_domain | grep -q -E $REGEX_BASIC_DOMAIN || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
 
 	# Note that machine_network is split into machine_network (ip) and prefix_length (4 bit number).
 	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
@@ -197,22 +209,22 @@ verify-cluster-conf() {
 
 	echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: next_hop_address is invalid in cluster.conf" >&2; ret=1; }
 
-	[ "$port0" ] && echo $port0 | grep -q -E '^[a-zA-Z0-9_.-]+$' || { echo_red "Error: port0 is invalid in cluster.conf: [$port0]" >&2; ret=1; }
-	[ "$port1" ] && echo $port1 | grep -q -E '^[a-zA-Z0-9_.-]+$' || { echo_red "Error: port1 is invalid in cluster.conf: [$port1]" >&2; ret=1; }
+	# The next few values are all optional
+	[ "$port0" ] && ! echo $port0 | grep -q -E '^[a-zA-Z0-9_.-]+$' && { echo_red "Error: port0 is invalid in cluster.conf: [$port0]" >&2; ret=1; }
+	[ "$port1" ] && ! echo $port1 | grep -q -E '^[a-zA-Z0-9_.-]+$' && { echo_red "Error: port1 is invalid in cluster.conf: [$port1]" >&2; ret=1; }
 
 	[[ -z "$vlan" || ( "$vlan" =~ ^[0-9]+$ && vlan -ge 1 && vlan -le 4094 ) ]] || { echo_red "Error: vlan is invalid in cluster.conf: [$vlan]" >&2; ret=1; }
 
 	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
-	[ "$mac_prefix" ] && { echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' || { echo_red "Error: mac_prefix is invalid in cluster.conf: [$mac_prefix]" >&2; ret=1; } }
-	#[ "$mac_prefix" ] && echo $mac_prefix | grep -q -E '^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'
+	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { echo_red "Error: mac_prefix is invalid in cluster.conf: [$mac_prefix]" >&2; ret=1; }
 
-	[ "$master_cpu_count" ] && echo $master_cpu_count | grep -q -E '^[0-9]+$' || { echo_red "Error: master_cpu_count is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
-	[ "$master_mem" ] && echo $master_mem | grep -q -E '^[0-9]+$' || { echo_red "Error: master_mem is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
+	[ "$master_cpu_count" ] && ! echo $master_cpu_count | grep -q -E '^[0-9]+$' && { echo_red "Error: master_cpu_count is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
+	[ "$master_mem" ] && ! echo $master_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: master_mem is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
 
-	[ "$worker_cpu_count" ] && echo $worker_cpu_count | grep -q -E '^[0-9]+$' || { echo_red "Error: worker_cpu_count is invalid in cluster.conf: [$worker_cpu_count]" >&2; ret=1; }
-	[ "$worker_mem" ] && echo $worker_mem | grep -q -E '^[0-9]+$' || { echo_red "Error: worker_mem is invalid in cluster.conf: [$worker_cpu_count]" >&2; ret=1; }
+	[ "$worker_cpu_count" ] && ! echo $worker_cpu_count | grep -q -E '^[0-9]+$' && { echo_red "Error: worker_cpu_count is invalid in cluster.conf: [$worker_cpu_count]" >&2; ret=1; }
+	[ "$worker_mem" ] && ! echo $worker_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: worker_mem is invalid in cluster.conf: [$worker_cpu_count]" >&2; ret=1; }
 
-	[ "$data_disk" ] && echo $data_disk | grep -q -E '^[0-9]+$' || { echo_red "Error: data_disk is invalid in cluster.conf: [$data_disk]" >&2; ret=1; }
+	[ "$data_disk" ] && ! echo $data_disk | grep -q -E '^[0-9]+$' && { echo_red "Error: data_disk is invalid in cluster.conf: [$data_disk]" >&2; ret=1; }
 
 	return $ret
 }
@@ -413,12 +425,34 @@ files_on_same_device() {
 fetch_latest_version() {
 	# $1 must be one of 'stable', 'fast' or 'candidate'
 	local c=stable
+	local REGEX_VERSION="[0-9]+\.[0-9]+\.[0-9]+"
+
 	[ "$1" ] && c=$1
 	[ "$c" = "eus" ] && c=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
 	rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$c/release.txt) || return 1
 	# Get the latest OCP version number, e.g. 4.14.6
-	ver=$(echo "$rel" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+	#ver=$(echo "$rel" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+	ver=$(echo "$rel" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
 	[ "$ver" ] && echo $ver || return 1
+}
+
+fetch_previous_version() {
+	# $1 must be one of 'stable', 'fast' or 'candidate'
+	local c=stable
+	local REGEX_VERSION="[0-9]+\.[0-9]+\.[0-9]+"
+
+	[ "$1" ] && c=$1
+	[ "$c" = "eus" ] && c=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
+	rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$c/release.txt) || return 1
+	# Get the previous OCP version number, e.g. 4.14.6
+	stable_ver=$(echo "$rel" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
+
+	# Extract the previous stable point version, e.g. 4.13.23
+	major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
+	stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
+	[ "$stable_ver_point" ] && stable_ver_prev=$(echo "$rel"| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+	[ "$stable_ver_prev" ] && echo $stable_ver_prev || return 1
+
 }
 
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values

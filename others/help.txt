@@ -66,7 +66,7 @@ Usage:
      -h, --help                          # Show this help information.
      -S, --pull-secret <path/to/file>    # Location of your pull secret (json) file here. 
      -c, --channel <channel>             # Set the OpenShift installation channel, e.g. fast, stable, eus or candidate.
-     -v, --version <version>             # Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest'.
+     -v, --version <version>             # Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest' or 'l' or 'previous' or 'p'.
      -p, --platform vmw|bm               # Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
      -b, --base-domain <domain>          # Set the OpenShift base domain, e.g. company.com.
      -M, --machine-network <cidr>        # Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24.
