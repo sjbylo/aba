@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250301234744
+ABA_VERSION=20250302073904
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -181,7 +181,8 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		ver=$2
 		###url="https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt"
-		[ "$ver" = "latest" ] && ver=$(fetch_latest_version $chan)
+		[ "$ver" = "latest" -o "$ver" = "l" ] && ver=$(fetch_latest_version $chan)
+		[ "$ver" = "previous" -o "$ver" = "p" ] && ver=$(fetch_previous_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
 		[ ! "$ver" ] && echo_red "Missing or wrong value after $1 option" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf ocp_version $ver
