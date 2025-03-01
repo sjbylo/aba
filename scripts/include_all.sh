@@ -142,7 +142,7 @@ verify-mirror-conf() {
 	local ret=0
 
 	#echo $reg_host | grep -q -E '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]{2,})+$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
-	echo $reg_host | grep -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
+	echo $reg_host | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
 	[ ! "$reg_host" ] && echo_red "Error: reg_host is missing in mirror.conf" >&2 && ret=1
 
 	return $ret
