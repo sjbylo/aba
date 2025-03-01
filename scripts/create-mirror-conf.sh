@@ -10,6 +10,8 @@ source scripts/include_all.sh
 
 source <(normalize-aba-conf)
 
+verify-aba-conf || exit 1
+
 # $domain is used as input in below j2 command
 if [ ! "$ocp_version" -o ! "$domain" ]; then
 	echo_red "Values 'domain' and/or 'ocp_version' missing in aba/aba.conf." >&2

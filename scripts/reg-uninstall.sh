@@ -7,6 +7,9 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
+verify-aba-conf || exit 1
+verify-mirror-conf || exit 1
+
 if [ -s reg-uninstall.sh ]; then
 	source reg-uninstall.sh  # Source the reg_host_to_del var and reg_delete fn()
 

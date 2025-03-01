@@ -4,6 +4,9 @@
 source scripts/include_all.sh
 
 source <(normalize-aba-conf)
+
+verify-aba-conf || exit 1
+
 [ -s ../shortcuts.conf ] && source ../shortcuts.conf  # Values can be set in this file for testing 
 
 if [ ! "$ocp_version" ]; then

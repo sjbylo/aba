@@ -11,6 +11,7 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 verify-aba-conf || exit 1
+verify-mirror-conf || exit 1
 
 export reg_url=https://$reg_host:$reg_port
 

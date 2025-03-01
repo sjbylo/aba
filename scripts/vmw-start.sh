@@ -19,6 +19,8 @@ fi
 
 source <(normalize-aba-conf)  # Fetch the 'ask' param
 
+verify-aba-conf || exit 1
+
 cluster_folder=$VC_FOLDER/$CLUSTER_NAME
 
 # If at least one VM exists, then show vms.

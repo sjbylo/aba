@@ -7,6 +7,9 @@ source scripts/include_all.sh
 umask 077
 
 source <(normalize-aba-conf)
+
+verify-aba-conf || exit 1
+
 ###source <(normalize-mirror-conf)
 
 if [ -s $pull_secret_file ]; then

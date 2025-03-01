@@ -10,6 +10,9 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
+verify-aba-conf || exit 1
+verify-mirror-conf || exit 1
+
 if [ ! "$reg_host" -o ! "$reg_port" ]; then
 	echo_red "Error: No registry is configured in 'mirror.conf'.  Run: 'aba mirror.conf' and edit the mirror.conf file." >&2
 

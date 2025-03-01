@@ -12,6 +12,8 @@ umask 077
 
 source <(normalize-aba-conf)
 
+verify-aba-conf || exit 1
+
 # Check internet connection...
 ##echo_cyan -n "Checking access to https://api.openshift.com/: "
 if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then

@@ -5,6 +5,8 @@ source scripts/include_all.sh
 
 source <(normalize-aba-conf)   # Fetch the domain name
 
+verify-aba-conf || exit 1
+
 name=standard
 cluster_type=standard
 [ "$1" ] && name=$1 && shift

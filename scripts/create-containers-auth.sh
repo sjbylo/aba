@@ -11,6 +11,8 @@ umask 077
 
 source <(normalize-aba-conf)
 
+verify-aba-conf || exit 1
+
 #if [ ! -s $pull_secret_file -a "$public_pull_secret_file_needed" ]; then
 if [ "$public_pull_secret_file_needed" -a ! -s "$pull_secret_file" ]; then
 	if [ ! "$pull_secret_file" ]; then

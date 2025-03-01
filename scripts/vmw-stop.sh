@@ -38,6 +38,8 @@ fi
 
 source <(normalize-aba-conf)  # Fetch the 'ask' param
 
+verify-aba-conf || exit 1
+
 cluster_folder=$VC_FOLDER/$CLUSTER_NAME
 
 hosts="$WORKER_NAMES $CP_NAMES"

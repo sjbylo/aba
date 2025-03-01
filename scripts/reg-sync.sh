@@ -12,6 +12,9 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
+verify-aba-conf || exit 1
+verify-mirror-conf || exit 1
+
 # Show warning if 'aba save' has been used previously.
 #if [ -s save/mirror_seq1_000000.tar ]; then
 if [ -s save/mirror_*.tar ]; then
