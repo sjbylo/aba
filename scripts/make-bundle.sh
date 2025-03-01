@@ -11,6 +11,8 @@ install_rpms make 2>/dev/null | cat -v >.bundle.log|| exit 1
 
 source <(normalize-aba-conf)
 
+verify-aba-conf || exit 1
+
 [ ! "$bundle_dest_path" ] && echo_red "Error: missing bundle archive filename! Example: /mnt/usb-media/my-bundle" >&2 && exit 1
 
 if [ "$bundle_dest_path" = "-" ]; then

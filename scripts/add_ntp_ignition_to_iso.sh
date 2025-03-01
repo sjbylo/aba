@@ -10,6 +10,8 @@ source scripts/include_all.sh
 
 source <(normalize-aba-conf)
 
+verify-aba-conf || exit 1
+
 [ ! "$ntp_servers" ] && echo_white "Not configuring NTP in early bootstrap node because 'ntp_servers' not defined in aba.conf." && exit 0
 
 [ "$INFO_ABA" ] && echo_cyan "Adding NTP server to early bootstrap ignition: $ntp_servers" 

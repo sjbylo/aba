@@ -172,6 +172,51 @@ normalize-cluster-conf()
 	grep -q ^port0= cluster.conf 		|| echo export port0=eth0
 }
 
+verify-cluster-conf() {
+	local ret=0
+
+	echo $cluster_name | grep -q -E -i '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: cluster_name incorrectly set or missing in cluster.conf" >&2; ret=1; }
+
+	echo $base_domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
+
+	# Note that machine_network is split into machine_network (ip) and prefix_length (4 bit number).
+	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
+	echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
+
+	echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: starting_ip is invalid in cluster.conf" >&2; ret=1; }
+
+	echo $hostPrefix | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: hostPrefix is invalid in cluster.conf" >&2; ret=1; }
+
+	echo $master_prefix | grep -q -E '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: master_prefix is invalid in cluster.conf" >&2; ret=1; }
+	echo $worker_prefix | grep -q -E '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: worker_prefix is invalid in cluster.conf" >&2; ret=1; }
+
+	echo $num_masters | grep -q -E '^[0-9]+$' || { echo_red "Error: num_masters is invalid in cluster.conf" >&2; ret=1; }
+	echo $num_workers | grep -q -E '^[0-9]+$' || { echo_red "Error: num_workers is invalid in cluster.conf" >&2; ret=1; }
+
+	echo $dns_servers | grep -q -E $REGEX || { echo_red "Error: dns_servers is invalid in cluster.conf [$dns_servers]" >&2; ret=1; }
+
+	echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: next_hop_address is invalid in cluster.conf" >&2; ret=1; }
+
+	[ "$port0" ] && echo $port0 | grep -q -E '^[a-zA-Z0-9_.-]+$' || { echo_red "Error: port0 is invalid in cluster.conf: [$port0]" >&2; ret=1; }
+	[ "$port1" ] && echo $port1 | grep -q -E '^[a-zA-Z0-9_.-]+$' || { echo_red "Error: port1 is invalid in cluster.conf: [$port1]" >&2; ret=1; }
+
+	[[ -z "$vlan" || ( "$vlan" =~ ^[0-9]+$ && vlan -ge 1 && vlan -le 4094 ) ]] || { echo_red "Error: vlan is invalid in cluster.conf: [$vlan]" >&2; ret=1; }
+
+	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
+	[ "$mac_prefix" ] && { echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' || { echo_red "Error: mac_prefix is invalid in cluster.conf: [$mac_prefix]" >&2; ret=1; } }
+	#[ "$mac_prefix" ] && echo $mac_prefix | grep -q -E '^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'
+
+	[ "$master_cpu_count" ] && echo $master_cpu_count | grep -q -E '^[0-9]+$' || { echo_red "Error: master_cpu_count is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
+	[ "$master_mem" ] && echo $master_mem | grep -q -E '^[0-9]+$' || { echo_red "Error: master_mem is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
+
+	[ "$worker_cpu_count" ] && echo $worker_cpu_count | grep -q -E '^[0-9]+$' || { echo_red "Error: worker_cpu_count is invalid in cluster.conf: [$worker_cpu_count]" >&2; ret=1; }
+	[ "$worker_mem" ] && echo $worker_mem | grep -q -E '^[0-9]+$' || { echo_red "Error: worker_mem is invalid in cluster.conf: [$worker_cpu_count]" >&2; ret=1; }
+
+	[ "$data_disk" ] && echo $data_disk | grep -q -E '^[0-9]+$' || { echo_red "Error: data_disk is invalid in cluster.conf: [$data_disk]" >&2; ret=1; }
+
+	return $ret
+}
+
 normalize-vmware-conf()
 {
         # Normalize or sanitize the config file

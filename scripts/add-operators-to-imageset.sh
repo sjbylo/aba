@@ -8,6 +8,9 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
+verify-aba-conf || exit 1
+verify-mirror-conf || exit 1
+
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 

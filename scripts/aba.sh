@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250301011758
+ABA_VERSION=20250301234744
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -434,6 +434,8 @@ cd $ABA_PATH
 replace-value-conf aba.conf ask true 
 
 source <(normalize-aba-conf)
+
+verify-aba-conf || exit 1
 
 export ask=1
 

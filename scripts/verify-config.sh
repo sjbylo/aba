@@ -7,6 +7,10 @@ source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
 
+verify-aba-conf || exit 1
+verify-cluster-conf || exit 1
+verify-mirror-conf || exit 1
+
 [ ! "$cluster_name" ] && echo_red "Error: missing cluster_name value in cluster.conf!" >&2 && exit 1
 [ ! "$base_domain" ] && echo_red "Error: missing base_domain value in cluster.conf!" >&2 && exit 1
 [ ! "$starting_ip" ] && echo_red "Error: missing starting_ip value in cluster.conf!" >&2 && exit 1

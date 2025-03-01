@@ -20,6 +20,8 @@ yaml2json()
 
 source <(normalize-aba-conf)
 
+verify-aba-conf || exit 1
+
 aba_ocp_ver=$ocp_version
 aba_ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 aba_ocp_channel=$ocp_channel-$aba_ocp_ver_major

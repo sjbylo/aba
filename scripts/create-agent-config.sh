@@ -9,7 +9,9 @@ source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
 
-###scripts/verify-config.sh || exit 1  # Added to Makefile
+verify-aba-conf || exit 1
+verify-cluster-conf || exit 1
+verify-mirror-conf || exit 1
 
 ##############
 # Functions for manipulating IP addresses and CIDRs

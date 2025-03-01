@@ -16,6 +16,9 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
+verify-aba-conf || exit 1
+verify-mirror-conf || exit 1
+
 export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
 	
 echo_white "What this 'day2' script does:"
