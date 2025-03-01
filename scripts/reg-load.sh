@@ -103,7 +103,8 @@ do
 		fi
 
 		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
-		parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# halve the value but it must always be at least 1
+		#parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# half the value but it must always be at least 1
+		parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 )) 	# Subtract 2 but never less than 2
 		retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
 		retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
 	fi
