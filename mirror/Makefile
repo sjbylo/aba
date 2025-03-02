@@ -193,7 +193,8 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@[ -f .installed ] && echo "Important: to uninstall the registry, you must run 'make uninstall' first!" || true
 	make clean
-	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && mv mirror.conf mirror.conf.bk && echo mirror config backed up to regcreds.bk and mirror.conf.bk || true
+	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && echo mirror/regcreds backed up to regcreds.bk || true
+	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo mirror/mirror.conf backed up to mirror.conf.bk || true
 	@#rm -rf regcreds
 	@#rm -f mirror.conf
 	rm -rf *.tar.gz oc-mirror-workspace 
