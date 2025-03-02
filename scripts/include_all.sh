@@ -59,7 +59,8 @@ normalize-aba-conf() {
 	[ ! -s aba.conf ] && echo "ask=true" && return 0  # if aba.conf is missing, output a safe default, "ask=true"
 
 	cat aba.conf | \
-		sed -E	-e "s/^\s*#.*//g" \
+		sed -E	\
+			-e "s/^\s*#.*//g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
@@ -73,12 +74,13 @@ normalize-aba-conf() {
 
 verify-aba-conf() {
 	[ ! "$verify_conf" ] && return 0
+	[ ! -s aba.conf ] && return 0
 
 	local ret=0
 	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
 	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
 
-	echo $ocp_version | grep -q -E "$REGEX_VERSION" || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf" >&2; ret=1; }
+	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf" >&2; ret=1; }
 	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf" >&2; ret=1; }
 	echo $platform    | grep -q -E "bm|vmw" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
@@ -97,7 +99,7 @@ verify-aba-conf() {
 
 	# Check for a domain name in less strict way
 	#[ "$domain" ] && ! echo $domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
-	[ "$domain" ] && ! echo $domain | grep -q -E $REGEX_BASIC_DOMAIN && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
+	[ "$domain" ] && ! echo $domain | grep -q -E "$REGEX_BASIC_DOMAIN" && { echo_red "Error: domain is invalid in aba.conf [$domain]" >&2; ret=1; }
 
 	# Check for ip addr
 	[ "$machine_network" ] && ! echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
@@ -146,6 +148,7 @@ normalize-mirror-conf()
 
 verify-mirror-conf() {
 	[ ! "$verify_conf" ] && return 0
+	[ ! -s mirror.conf ] && return 0
 
 	local ret=0
 
@@ -182,6 +185,7 @@ normalize-cluster-conf()
 
 verify-cluster-conf() {
 	[ ! "$verify_conf" ] && return 0
+	[ ! -s cluster.conf ] && return 0
 
 	local ret=0
 	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
@@ -189,7 +193,7 @@ verify-cluster-conf() {
 	echo $cluster_name | grep -q -E -i '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || { echo_red "Error: cluster_name incorrectly set or missing in cluster.conf" >&2; ret=1; }
 
 	#echo $base_domain | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
-	echo $base_domain | grep -q -E $REGEX_BASIC_DOMAIN || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
+	echo $base_domain | grep -q -E "$REGEX_BASIC_DOMAIN" || { echo_red "Error: base_domain is invalid in cluster.conf [$base_domain]" >&2; ret=1; }
 
 	# Note that machine_network is split into machine_network (ip) and prefix_length (4 bit number).
 	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
@@ -425,7 +429,7 @@ files_on_same_device() {
 fetch_latest_version() {
 	# $1 must be one of 'stable', 'fast' or 'candidate'
 	local c=stable
-	local REGEX_VERSION="[0-9]+\.[0-9]+\.[0-9]+"
+	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
 
 	[ "$1" ] && c=$1
 	[ "$c" = "eus" ] && c=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
@@ -439,7 +443,7 @@ fetch_latest_version() {
 fetch_previous_version() {
 	# $1 must be one of 'stable', 'fast' or 'candidate'
 	local c=stable
-	local REGEX_VERSION="[0-9]+\.[0-9]+\.[0-9]+"
+	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
 
 	[ "$1" ] && c=$1
 	[ "$c" = "eus" ] && c=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250302073904
+ABA_VERSION=20250302083615
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -436,7 +436,7 @@ replace-value-conf aba.conf ask true
 
 source <(normalize-aba-conf)
 
-verify-aba-conf || exit 1
+#verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_vrsion or channel defined
 
 export ask=1
 
@@ -471,7 +471,7 @@ if [ ! -f .bundle ]; then
 	if [ "$ocp_channel" ]; then
 		echo_cyan "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
 	else
-		echo_cyan -n "Which OpenShift update channel do you want to use? (f)ast, (s)table, or (c)andidate) [stable]: "
+		echo_cyan -n "Which OpenShift update channel do you want to use? (f)ast, (s)table, or (c)andidate) [s]: "
 		read ans
 		[ ! "$ans" ] && ocp_channel=stable
 		[ "$ans" = "f" ] && ocp_channel=fast
@@ -536,8 +536,8 @@ if [ ! -f .bundle ]; then
 				fi
 			fi
 
-			[ "$stable_ver" ] && or_s="or $stable_ver (latest) "
-			[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (previous) "
+			[ "$stable_ver" ] && or_s="or $stable_ver (l)atest "
+			[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (p)revious "
 
 			echo_cyan -n "Enter version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
 
@@ -561,6 +561,10 @@ if [ ! -f .bundle ]; then
 		install_rpms make || exit 1
 		make -s -C mirror checkversion 
 	) || exit 
+
+	##############################################################################################################################
+	source <(normalize-aba-conf)
+	verify-aba-conf || exit 1
 
 	##############################################################################################################################
 	# Determine editor
