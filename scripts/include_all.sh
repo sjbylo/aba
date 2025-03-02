@@ -209,6 +209,7 @@ verify-cluster-conf() {
 	echo $num_masters | grep -q -E '^[0-9]+$' || { echo_red "Error: num_masters is invalid in cluster.conf" >&2; ret=1; }
 	echo $num_workers | grep -q -E '^[0-9]+$' || { echo_red "Error: num_workers is invalid in cluster.conf" >&2; ret=1; }
 
+	REGEX='^(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3}))(,(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3})))*$'
 	echo $dns_servers | grep -q -E $REGEX || { echo_red "Error: dns_servers is invalid in cluster.conf [$dns_servers]" >&2; ret=1; }
 
 	echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: next_hop_address is invalid in cluster.conf" >&2; ret=1; }
@@ -244,7 +245,7 @@ normalize-vmware-conf()
 	# Removed this line since GOVC_PASSWORD='<my password here>' was getting cut and failing to parse
 	#awk '{print $1}' | \
 
-	[ ! -f vmware.conf ] &&                                                              return 0  # vmware.conf can be empty
+	[ ! -s vmware.conf ] &&                                                              return 0  # vmware.conf can be empty
 
         vars=$(cat vmware.conf | \
 		sed -E	-e "s/^\s*#.*//g" \

@@ -8,7 +8,8 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
-[ -s vmware.conf ] && source <(normalize-vmware-conf)  # Some values needed for install-config.yaml
+#[ -s vmware.conf ] && source <(normalize-vmware-conf)  # Some values needed for install-config.yaml
+source <(normalize-vmware-conf)  # Some values needed for install-config.yaml
 
 verify-aba-conf || exit 1
 verify-cluster-conf || exit 1

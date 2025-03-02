@@ -12,7 +12,7 @@ source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
 verify-aba-conf || exit 1
-verify-mirror-conf || exit 1
+verify-cluster-conf || exit 1
 
 server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)
 
