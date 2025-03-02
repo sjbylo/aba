@@ -87,7 +87,7 @@ mylog "Setting ntp_servers=$ntp"
 [ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
 
 mylog "Setting op_sets=abatest in aba.conf"
-sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
+sed -i "s/^op_sets=.*/op_sets=ocp,abatest /g" aba.conf
 echo kiali-ossm > templates/operator-set-abatest 
 
 # Needed for $ocp_version below
