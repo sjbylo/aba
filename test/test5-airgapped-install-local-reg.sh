@@ -37,7 +37,8 @@ trap - ERR # We don't want this trap during testing.  Needed for below normalize
 [ ! "$target_full" ] && default_target="--step iso"   # Default is to generate 'iso' only   # Default is to only create iso
 mylog default_target=$default_target
 
-ntp=10.0.1.8 # If available
+#ntp=10.0.1.8 # If available
+ntp=10.0.1.8,ntp.example.com # If available
 
 rm -f ~/.aba.previous.backup
 
