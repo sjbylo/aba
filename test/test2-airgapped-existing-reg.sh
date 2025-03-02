@@ -34,7 +34,7 @@ rm -f ~/.aba.previous.backup
 
 int_bastion_hostname=registry.example.com
 int_bastion_vm_name=bastion-internal-$internal_bastion_rhel_ver
-ntp=10.0.1.8 # If available
+ntp=10.0.1.8,ntp.example.com # If available
 
 source scripts/include_all.sh no-trap # Need for below normalize fn() calls
 source test/include.sh
