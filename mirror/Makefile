@@ -173,7 +173,7 @@ checkversion: init
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
 clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
-	@[ -f .installed ] && echo "Important: to uninstall the registry, run 'make uninstall'!" || true
+	@[ -f .installed ] && echo "Important: to uninstall the registry, run 'aba uninstall'!" || true
 	rm -rf *.tar mirror-registry 
 	rm -f templates scripts
 	rm -f aba.conf  # remove link only
@@ -184,19 +184,16 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 
 	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rf save || true  # Delete only if not edited
 	@[ -d sync ] && [ sync/.created -nt sync/imageset-config*yaml ] && rm -rf sync || true  # Delete only if not edited
-	@#rm -rf {save,sync}/oc-mirror-workspace {save,sync}/publish {save,sync}/*.tar  # keep this simple
+
 
 # Note that reg-uninstall.sh script will delete registry and regcreds/ dir.
 # Backup regcreds/ and anything that should not be lost
 .PHONY: reset
-#reset: .init  # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
-	@[ -f .installed ] && echo "Important: to uninstall the registry, you must run 'make uninstall' first!" || true
+	@[ -f .installed ] && echo "Important: to uninstall the registry, you must run 'aba uninstall' first!" || true
 	make clean
 	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && echo mirror/regcreds backed up to regcreds.bk || true
 	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo mirror/mirror.conf backed up to mirror.conf.bk || true
-	@#rm -rf regcreds
-	@#rm -f mirror.conf
 	rm -rf *.tar.gz oc-mirror-workspace 
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
