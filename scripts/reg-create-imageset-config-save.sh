@@ -44,6 +44,7 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 	touch save/.created
 
 	echo_green "Image set config file created: mirror/save/imageset-config-save.yaml"
+	echo_white "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'aba save' again to update the images."
 else
 	# Check disk space under save/. 
 	avail=$(df -m save | awk '{print $4}' | tail -1)
@@ -53,5 +54,4 @@ else
 	fi
 
 	echo_cyan "Using existing image set config file (save/imageset-config-save.yaml)"
-	echo_cyan "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'aba save' again to update the images."
 fi

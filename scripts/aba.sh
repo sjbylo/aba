@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250302083615
+ABA_VERSION=20250303101004
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -483,6 +483,8 @@ if [ ! -f .bundle ]; then
 		replace-value-conf aba.conf ocp_channel $ocp_channel
 		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
 		sleep 0.3
+
+		chan=$ocp_channel # Used below
 	fi
 
 	##############################################################################################################################
@@ -511,7 +513,8 @@ if [ ! -f .bundle ]; then
 		major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
 		stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
 		[ "$stable_ver_point" ] && \
-			stable_ver_prev=$(echo "$rel"| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+			stable_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${stable_ver_point} 2>/dev/null | tail -1)  # This is better way to fetch the newest previoous version!
+			#stable_ver_prev=$(echo "$rel"| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
 
 		# Determine any already installed tool versions
 		which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
