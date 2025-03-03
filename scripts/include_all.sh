@@ -133,7 +133,7 @@ normalize-mirror-conf()
 
 	cat mirror.conf | \
 		sed -E	-e "s/^\s*#.*//g" \
-			-e "s/^reg_ssh_user=[[:space:]]+/reg_ssh_user=$(whoami) /g" \
+			-e "s/^(reg_ssh_user=[[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e "s/^tls_verify=0\b/tls_verify= /g" -e "s/tls_verify=false/tls_verify= /g" \
 			-e "s/^tls_verify=1\b/tls_verify=true /g" \
@@ -155,6 +155,8 @@ verify-mirror-conf() {
 	#echo $reg_host | grep -q -E '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]{2,})+$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
 	echo $reg_host | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
 	[ ! "$reg_host" ] && echo_red "Error: reg_host is missing in mirror.conf" >&2 && ret=1
+
+	[ ! "$reg_ssh_user" ] && echo_red "Error: reg_ssh_user not defined!" >&2 && ret=1   # This should never happen as the user name (whoami) is added above if its empty.
 
 	return $ret
 }
