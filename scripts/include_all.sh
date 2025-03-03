@@ -429,12 +429,12 @@ files_on_same_device() {
 
 fetch_latest_version() {
 	# $1 must be one of 'stable', 'fast' or 'candidate'
-	local c=stable
+	local chan=stable
 	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
 
-	[ "$1" ] && c=$1
-	[ "$c" = "eus" ] && c=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
-	rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$c/release.txt) || return 1
+	[ "$1" ] && chan=$1
+	[ "$chan" = "eus" ] && chan=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
+	rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt) || return 1
 	# Get the latest OCP version number, e.g. 4.14.6
 	#ver=$(echo "$rel" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 	ver=$(echo "$rel" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
@@ -443,19 +443,22 @@ fetch_latest_version() {
 
 fetch_previous_version() {
 	# $1 must be one of 'stable', 'fast' or 'candidate'
-	local c=stable
+	local chan=stable
 	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
 
-	[ "$1" ] && c=$1
-	[ "$c" = "eus" ] && c=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
-	rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$c/release.txt) || return 1
+	[ "$1" ] && chan=$1
+	[ "$chan" = "eus" ] && chan=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
+	rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt) || return 1
 	# Get the previous OCP version number, e.g. 4.14.6
 	stable_ver=$(echo "$rel" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
 
 	# Extract the previous stable point version, e.g. 4.13.23
 	major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
 	stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
-	[ "$stable_ver_point" ] && stable_ver_prev=$(echo "$rel"| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+
+	#[ "$stable_ver_point" ] && stable_ver_prev=$(echo "$rel"| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+	stable_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${stable_ver_point} 2>/dev/null | tail -1)  # This is better way to fetch the newest previoous version!
+
 	[ "$stable_ver_prev" ] && echo $stable_ver_prev || return 1
 
 }
