@@ -40,7 +40,7 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 	touch sync/.created
 
 	echo_green "Image set config file created: mirror/sync/imageset-config-sync.yaml"
-	echo_white "Reminder: You can edit this file to add more content, e.g. Operators, and then run 'aba sync' again."
+	echo_white "Reminder: Edit this file to add more content, e.g. Operators, and then run 'aba sync' again."
 else
 	echo_cyan "Using existing image set config file (save/imageset-config-sync.yaml)"
 fi

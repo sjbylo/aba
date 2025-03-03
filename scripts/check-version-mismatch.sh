@@ -43,9 +43,9 @@ do
 			echo_red "         Settings in 'mirror/$f' are currently min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel" >&2
 			echo_red "         Before syncing or saving images (again), this mismatch must be corrected." >&2
 			echo_red "         Your options are:" >&2
-			echo_red "         * edit the image set config file (mirror/$f) to match the ocp version set in aba.conf ($aba_ocp_ver)" >&2
-			echo_red "         * delete mirror/$f and have aba re-create it for you" >&2
-			echo_red "         * edit aba.conf to match the version set in the image set config file." >&2
+			echo_red "         - edit the image set config file (mirror/$f) to match the ocp version set in aba.conf ($aba_ocp_ver)" >&2
+			echo_red "         - delete mirror/$f and have aba re-create it for you" >&2
+			echo_red "         - edit aba.conf to match the version set in the image set config file." >&2
 			echo_red "         Fix the mismatch and try again!" >&2 
 			echo
 
