@@ -122,28 +122,36 @@ verify-aba-conf() {
 normalize-mirror-conf()
 {
 	# Normalize or sanitize the config file
-	# Ensure any ~/ is masked, e.g. \~/
-	# Ensrue reg_ssh_user has a value
-	# Ensure only one arg after 'export'
+	# Ensure any ~/ is masked, e.g. \~/ ('cos ~ may need to be expanded on remote host)
+	# Ensure reg_ssh_user has a value
+	# Ensure only one arg after 'export'   # Note that all values are now single string, e.g. single value or comma-sep list (one string)
 	# Verify oc_mirror_version exists and is somewhat correct and defaults to v1
 	# Prepend "export "
-	# reg_path must not stat with a /
+	# reg_path must not start with a /, if so, remove it
+	# Force tls_verify=true 
 
 	[ ! -s mirror.conf ] &&                                                              return 0
 
-	cat mirror.conf | \
-		sed -E	-e "s/^\s*#.*//g" \
-			-e "s/^(reg_ssh_user=[[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
-			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e "s/^tls_verify=0\b/tls_verify= /g" -e "s/tls_verify=false/tls_verify= /g" \
-			-e "s/^tls_verify=1\b/tls_verify=true /g" \
-			-e 's/^reg_root=~/reg_root=\\~/g' \
-			-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
-			-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
-			-e 's#^reg_path=/#reg_path=#g' \
-			| \
-		awk '{print $1}' | \
-		sed	-e "s/^/export /g"
+	(
+		cat mirror.conf | \
+			sed -E	-e "s/^\s*#.*//g" \
+				-e "s/^(reg_ssh_user=[[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
+				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+				-e 's/^reg_root=~/reg_root=\\~/g' \
+				-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
+				-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
+				-e 's#^reg_path=/#reg_path=#g' \
+				| \
+			awk '{print $1}' | \
+			sed	-e "s/^/export /g"
+
+		# Append always
+		echo export tls_verify=true
+	)
+
+	# FIXME: delete
+	#		-e "s/^tls_verify=0\b/tls_verify= /g" -e "s/tls_verify=false/tls_verify= /g" \
+	#		-e "s/^tls_verify=1\b/tls_verify=true /g" \
 }
 
 verify-mirror-conf() {
