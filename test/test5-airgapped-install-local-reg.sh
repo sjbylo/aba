@@ -195,6 +195,7 @@ mylog Copy tar+ssh archives to internal bastion
 ## aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir - xvf -
 aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
 #### FIXME: test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
+test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
 test-cmd -m "Copy over image set archive 2 file" "scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -m "Copy over image set conf file" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
@@ -225,7 +226,7 @@ test-cmd -r 15 3 -m "Saving vote-app image to local disk" "aba --dir mirror save
 mylog Copy repo only to internal bastion
 aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
 
-# FIXME: test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq3_000000.tar"
+test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
 test-cmd -m "Copy extra image set tar file to internal bastion" scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save
 test-cmd -m "Copy over image set conf file" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 
