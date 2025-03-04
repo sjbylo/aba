@@ -197,7 +197,7 @@ aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- ta
 #### FIXME: test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
 test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
 test-cmd -m "Copy over image set archive 2 file" "scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
-test-cmd -m "Copy over image set conf file" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load" 
@@ -300,6 +300,8 @@ aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load" 
 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
+
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/$cluster_type day2"
 
 ##mylog "Checking for jaeger-product in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
@@ -346,6 +348,7 @@ test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion_h
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading jaeger operator images to mirror" "cd $subdir/aba/mirror; aba load" 
 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
 #test-cmd -m "Pausing for 90s to let OCP settle" sleep 90    # For some reason, the cluster was still not fully ready in tests!
 
