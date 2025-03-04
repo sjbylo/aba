@@ -245,16 +245,20 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster with 'aba -
 
 mylog Adding vote-app image to imageset conf file on `hostname`
 
+[ "$oc_mirror_version" = "v1" ] && gvk=v1alpha2 || gvk=v2alpha1
+
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
-cat  > mirror/save/imageset-config-save.yaml <<END
+if [ "$oc_mirror_version" = "v2" ]; then
+tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/v2alpha1
+apiVersion: mirror.openshift.io/$gvk
 mirror:
 END
+fi
 # For oc-miror v2
 
-cat >> mirror/save/imageset-config-save.yaml <<END
+tee -a mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
@@ -331,14 +335,16 @@ mylog Appending redhat-operator-index:v$ocp_ver_major header into mirror/save/im
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
-cat  > mirror/save/imageset-config-save.yaml <<END
+if [ "$oc_mirror_version" = "v2" ]; then
+tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/v2alpha1
+apiVersion: mirror.openshift.io/$gvk
 mirror:
 END
+fi
 # For oc-miror v2
 
-cat >> mirror/save/imageset-config-save.yaml <<END
+tee -a mirror/save/imageset-config-save.yaml <<END
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
     packages:
