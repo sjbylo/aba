@@ -1,7 +1,7 @@
 # Mirror registry configuration
-# Please go through all values carefully and adjust them to match your *internal/private* network environment!
+#
+# Examine all values carefully and adjust them to match your *internal/private* (air-gapped) environment!
 # Set the values to either a) your existing registry, or b) where you intend to install the Quay mirror registry. 
-
 
 reg_host=registry.{{ domain }}		# FQDN of registry.  Can be for this host or a remote host.
 					# Ensure a *DNS A record exists* that points to the IP address of that host.
@@ -19,7 +19,7 @@ reg_user=init				# Set your existing registry's username. Note that the Quay app
 reg_pw=p4ssw0rd				# Registry password. Leave blank if a random password should be created e.g. reg_pw=
 					# The password must be at least 8 characters and contain no white-space.
 
-reg_root=				# Optional: Set the *absolute path* to a directory where Quay's storage should be kept. 
+reg_root=				# Optional: Set an *absolute path* to a directory where Quay's storage should be kept. 
 					# Default is ~/quay-install.  Note that '~' can be used after the '='.
 
 # Important: The below 2 values (reg_ssh_key & reg_ssh_user) are only needed if you want aba to install Quay on a remote host.
@@ -30,11 +30,3 @@ reg_root=				# Optional: Set the *absolute path* to a directory where Quay's sto
 
 reg_ssh_user=				# Optional: Username to use for *remote* install of Quay. Default is current user.
 
-
-# Only change below values if you know what you're doing!
-
-tls_verify=true				# If TLS should be verified for all registries. Default is 'true'.
-					# Note that the installation of OpenShift *requires* an existing, trusted certificate
-					# authority, or a self-signed certificate to access a *secured* mirror registry. 
-					# Unencrypted HTTP as well as TLS connections with untrusted certificates will be allowed
-					# during mirror sync/load only but not during OCP installation.
