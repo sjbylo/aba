@@ -137,9 +137,9 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdi
 test-cmd -r 15 3 -m "Creating bundle for channel stable and version $ocp_version" "aba -f bundle --platform vmw --channel stable --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
 # Smoke tests!
-test-cmd -m  "Verifying existance of file 'mirror/save/mirror_*000000.tar'" "ls -lh mirror/save/mirror_*1*.tar" 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Verifying existance of file '$subdir/aba/mirror/save/mirror_*1*.tar' on remote host" "ls -lh $subdir/aba/mirror/save/mirror_*1*.tar" 
-test-cmd -m  "Delete this file that's already been copied to internal bastion: 'mirror/save/mirror_*1*.tar'" "rm mirror/save/mirror_*1*.tar" 
+test-cmd -m  "Verifying existance of file 'mirror/save/mirror_*000000.tar'" "ls -lh mirror/save/mirror_*.tar" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar' on remote host" "ls -lh $subdir/aba/mirror/save/mirror_*.tar" 
+test-cmd -m  "Delete this file that's already been copied to internal bastion: 'mirror/save/mirror_*.tar'" "rm -v mirror/save/mirror_*.tar" 
 
 ssh $reg_ssh_user@$int_bastion_hostname "rpm -q make || sudo yum install make -y"
 
@@ -152,7 +152,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Install aba script"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading cluster images into mirror on internal bastion (this will install quay)" "aba -d $subdir/aba load" 
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set archive file to make space: '$subdir/aba/mirror/save/mirror_*1*.tar'" "rm $subdir/aba/mirror/save/mirror_*1*.tar" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set archive file to make space: '$subdir/aba/mirror/save/mirror_*.tar'" "rm -v $subdir/aba/mirror/save/mirror_*.tar" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Tidying up internal bastion" "rm -rf $subdir/aba/sno" 
 
@@ -195,13 +195,13 @@ mylog Copy tar+ssh archives to internal bastion
 ## aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir - xvf -
 aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
 #### FIXME: test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
-test-cmd -m "Copy over image set archive 2 file" "scp mirror/save/mirror_*1*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -m "Copy over image set archive 2 file" "scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -m "Copy over image set conf file" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*1*.tar"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load" 
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm $subdir/aba/mirror/save/mirror_*1*.tar
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
@@ -226,14 +226,14 @@ mylog Copy repo only to internal bastion
 aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
 
 # FIXME: test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq3_000000.tar"
-test-cmd -m "Copy extra image set tar file to internal bastion" scp mirror/save/mirror_*1*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Copy extra image set tar file to internal bastion" scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save
 test-cmd -m "Copy over image set conf file" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_*1*.tar"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 3 -m  "Loading vote-app image into mirror" "aba -d $subdir/aba/mirror load" 
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm $subdir/aba/mirror/save/mirror_*1*.tar
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
 cluster_type=sno  # Choose either sno, compact or standard
 

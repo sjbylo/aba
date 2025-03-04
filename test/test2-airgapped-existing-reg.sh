@@ -156,13 +156,13 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 test-cmd -r 15 1 -m "Saving images to local disk on `hostname`" aba save
 
-test-cmd -m "Checking existance of file mirror/save/mirror_*000000.tar" "ls -lh mirror/save/mirror_*1*\.tar"
+test-cmd -m "Checking existance of file mirror/save/mirror_*000000.tar" "ls -lh mirror/save/mirror_*\.tar"
 
 mylog "Use 'aba tar' and copy (ssh) files over to internal bastion @ $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Create 'subdir' on host $int_bastion_hostname" "ssh $TEST_USER@$int_bastion_hostname -- mkdir -p $subdir"
 test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname" "aba -d mirror tar --out - | ssh $TEST_USER@$int_bastion_hostname -- tar -C $subdir -xvf -"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*1*\.tar"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
 
@@ -187,8 +187,8 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror 
 # Now, this works
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load"
 
-test-cmd                                             -m "Delete loaded image set 1 file" "rm -v mirror/save/mirror_*1*.tar"
-test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/save/mirror_*1*.tar"
+test-cmd                                             -m "Delete loaded image set 1 file" "rm -v mirror/save/mirror_*.tar"
+test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba compact $default_target" 
@@ -265,7 +265,7 @@ END
 
 test-cmd -r 15 1 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save"
 
-test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh mirror/save/mirror_*1*\.tar"
+test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh mirror/save/mirror_*\.tar"
 
 mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_*.tar' file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
 test-cmd -m "Create tmp dir" mkdir -p ~/tmp
@@ -278,7 +278,7 @@ mylog "The following untar command should unpack the file aba/mirror/save/mirror
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Removing tar file" "rm -v file.tar"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*1*\.tar"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
@@ -286,8 +286,8 @@ test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hos
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load"
 
-test-cmd                                     -m "Delete loaded image set 2 file" rm -v mirror/save/mirror_*1*.tar
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded image set 2 file on registry" rm -v $subdir/aba/mirror/save/mirror_*1*.tar
+test-cmd                                     -m "Delete loaded image set 2 file" rm -v mirror/save/mirror_*.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded image set 2 file on registry" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
 # Is the cluster can be reached ... use existing cluster
 #if test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno --cmd 'oc get clusterversion'"; then
@@ -358,10 +358,10 @@ test-cmd -m "Adding multicluster-engine          operator to mirror/save/imagese
 
 test-cmd -r 15 1 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save"
 
-mylog "Use 'scp' to copy mirror/save/mirror_*1*.tar file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
-test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/save/mirror_*1*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save"
+mylog "Use 'scp' to copy mirror/save/mirror_*.tar file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
+test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/save/mirror_*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*1*\.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*1*\.tar"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*\.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
@@ -369,8 +369,8 @@ test-cmd -m "Copy image set file over also (ocm v2 needs it) to $int_bastion_hos
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load"
 
-test-cmd                                     -m "Delete loaded image set 3 file" rm -v mirror/save/mirror_*1*.tar
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded image set 3 file on registry" rm -v $subdir/aba/mirror/save/mirror_*1*.tar
+test-cmd                                     -m "Delete loaded image set 3 file" rm -v mirror/save/mirror_*.tar
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded image set 3 file on registry" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
 
