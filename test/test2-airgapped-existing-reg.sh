@@ -34,7 +34,7 @@ rm -f ~/.aba.previous.backup
 
 int_bastion_hostname=registry.example.com
 int_bastion_vm_name=bastion-internal-$internal_bastion_rhel_ver
-ntp=10.0.1.8,ntp.example.com # If available
+ntp_ip=10.0.1.8 # If available
 
 source scripts/include_all.sh no-trap # Need for below normalize fn() calls
 source test/include.sh
@@ -88,8 +88,9 @@ if [ ! "$1" ]; then
 	mylog "Setting ask="
 	sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
 
-	mylog "Setting ntp_servers=$ntp" 
-	[ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
+	#mylog "Setting ntp_servers=$ntp" 
+	#[ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp,ntp.example.com #\2/g" aba.conf
+	[ "$ntp_ip" ] && test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in aba.conf" aba --ntp $ntp_ip ntp.example.com
 
 	mylog "Setting op_sets=abatest in aba.conf"
 	sed -i "s/^op_sets=.*/op_sets=ocp,abatest /g" aba.conf

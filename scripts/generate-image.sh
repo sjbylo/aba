@@ -50,8 +50,8 @@ echo_cyan "Making backup of '$ASSETS_DIR/auth' to '$ASSETS_DIR/auth.backup'"
 cp -rp $ASSETS_DIR/auth $ASSETS_DIR/auth.backup
 
 # Add NTP config to ignition, if needed
-# Now use the built in 'additionalNTPSources' feature
-#### scripts/add_ntp_ignition_to_iso.sh
+# Note that the built in 'additionalNTPSources' feature is not avalable for all latest ocp versions, so we use this still:
+scripts/add_ntp_ignition_to_iso.sh
 
 echo 
 echo_green "The agent based ISO has been created in the '$ASSETS_DIR' directory"

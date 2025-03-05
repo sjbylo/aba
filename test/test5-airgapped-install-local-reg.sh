@@ -37,8 +37,7 @@ trap - ERR # We don't want this trap during testing.  Needed for below normalize
 [ ! "$target_full" ] && default_target="--step iso"   # Default is to generate 'iso' only   # Default is to only create iso
 mylog default_target=$default_target
 
-#ntp=10.0.1.8 # If available
-ntp=10.0.1.8,ntp.example.com # If available
+ntp_ip=10.0.1.8 # If available
 
 rm -f ~/.aba.previous.backup
 
@@ -84,8 +83,9 @@ sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 # Do not ask to delete things
 test-cmd -m "Setting ask=false" aba --noask
 
-mylog "Setting ntp_servers=$ntp" 
-[ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
+#mylog "Setting ntp_servers=$ntp_ip" 
+#[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip,ntp.example.com    #\2/g" aba.conf
+test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in aba.conf" aba --ntp $ntp_ip ntp.example.com
 
 mylog "Setting op_sets=abatest in aba.conf"
 sed -i "s/^op_sets=.*/op_sets=ocp,abatest /g" aba.conf

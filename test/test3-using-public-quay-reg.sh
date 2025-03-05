@@ -50,7 +50,7 @@ mylog
 # FIXME: Don't think we need this since test-cmd will loop on error unless -i is used
 #set -ex
 
-ntp=10.0.1.8 # If available
+ntp_ip=10.0.1.8 # If available
 
 which make || sudo dnf install make -y
 
@@ -80,8 +80,9 @@ sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 #sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
 test-cmd -m "Set ask to false" aba --noask
 
-mylog "Setting ntp_servers=$ntp" 
-[ "$ntp" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp    #\2/g" aba.conf
+#mylog "Setting ntp_servers=$ntp_ip" 
+#[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=ntp.example.com  #\2/g" aba.conf
+test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in aba.conf" aba --ntp $ntp_ip ntp.example.com
 
 source <(normalize-aba-conf)
 echo Check aba.conf:

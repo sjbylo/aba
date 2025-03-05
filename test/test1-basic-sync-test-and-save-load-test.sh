@@ -49,7 +49,7 @@ mylog ============================================================
 mylog "Test to install remote reg. on $int_bastion_hostname and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
-ntp_ip=10.0.1.8,10.0.1.8 # If available
+ntp_ip=10.0.1.8 # If available
 
 which make || sudo dnf install make -y
 
@@ -92,7 +92,7 @@ sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 
 #mylog "Setting ntp_servers=$ntp_ip" 
 #[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip    #\2/g" aba.conf
-[ "$ntp_ip" ] && test-cmd -m "Setting ntp_servers=$ntp_ip in aba.conf" aba --ntp $ntp_ip
+[ "$ntp_ip" ] && test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in aba.conf" aba --ntp $ntp_ip ntp.example.com
 
 echo kiali-ossm > templates/operator-set-abatest 
 test-cmd -m "Setting op_sets=abatest in aba.conf" aba --op-sets abatest

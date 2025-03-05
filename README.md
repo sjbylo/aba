@@ -621,6 +621,28 @@ The UNIX/Linux command "make" is a utility for automating tasks based on rules s
 facilitating streamlined processes. Widely applied beyond software development, "make" proves versatile in system management, ensuring organized
 execution of diverse tasks through predefined rules!
 
+- How to clean up and remove aba
+
+Run on the internal bastion:
+```
+cd aba
+aba uninstall    # uninstall the registry (if needed)
+cd ..
+rm -rf aba
+sudo rm $(which aba)
+```
+
+Run on the external bastion or laptop:
+
+```
+rm -rf aba
+sudo rm $(which aba)
+# re-install aba
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
+cd aba
+./install
+aba
+```
 
 [Back to top](#who-should-use-aba)
 

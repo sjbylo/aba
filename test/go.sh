@@ -33,9 +33,9 @@ echo "Removing all traces of images from this host!"
 podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage
 
 all_tests="\
+test1 \
 test2 \
 test5 \
-test1 \
 test3 \
 "
 

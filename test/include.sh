@@ -290,23 +290,33 @@ END
 	test-cmd -m "Verify ssh to root@$int_bastion_hostname" ssh root@$int_bastion_hostname whoami
 
 	# Delete images
+	mylog "Cleaning up podman images ..."
 	ssh $test_user@$int_bastion_hostname -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+
+	mylog "Cleaning up .pull-secret.json on $int_bastion_hostname ..."
 	# This file is not needed in a fully air-gapped env. 
 	ssh $test_user@$int_bastion_hostname -- "rm -fv ~/.pull-secret.json"
+
+	mylog "Removing proxy-set.sh on $int_bastion_hostname ..."
 	# Want to test fully disconnected 
 	ssh $test_user@$int_bastion_hostname -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
+
+	mylog "Removing all home dir files on $int_bastion_hostname ..."
 	# Ensure home is empty!  Avoid errors where e.g. hidden files cause reg. install failing. 
 	ssh $test_user@$int_bastion_hostname -- "rm -rfv ~/*"
 
+	mylog "Copy $vf to $int_bastion_hostname ..."
 	# Just be sure a valid govc config file exists on internal bastion
 	scp $vf $test_user@$int_bastion_hostname: 
 
+	mylog "Generate testy ssh keys ..."
 	# Set up test to install mirror with other user, "testy"
 	rm -f ~/.ssh/testy_rsa*
 	ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N ''
 	pub_key=$(cat ~/.ssh/testy_rsa.pub)   # This must be different key
 	u=testy
 
+	mylog "Create testy user ..."
 cat << END  | ssh $def_user@$int_bastion_hostname -- sudo bash 
 set -ex
 userdel $u -r -f || true
