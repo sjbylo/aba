@@ -135,7 +135,7 @@ normalize-mirror-conf()
 	(
 		cat mirror.conf | \
 			sed -E	-e "s/^\s*#.*//g" \
-				-e "s/^(reg_ssh_user=[[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
+				-e "s/^reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
 				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 				-e 's/^reg_root=~/reg_root=\\~/g' \
 				-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \

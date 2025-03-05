@@ -52,7 +52,7 @@ echo
 
 # If not already set, set the cache and tmp dirs to where there should be more disk space
 # Had to use [[ && ]] here, as without it got "mkdir -p <missing operand>" error!
-[[ ! "$TMPDIR" && "$reg_root" ]] && export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
+[[ ! "$TMPDIR" && "$reg_root" ]] && export TMPDIR=$(eval echo $reg_root/.tmp) && eval mkdir -p $TMPDIR
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $reg_root, if it's defined
 [[ ! "$OC_MIRROR_CACHE" && "$reg_root" ]] && export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
