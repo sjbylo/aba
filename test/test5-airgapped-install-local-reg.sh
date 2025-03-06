@@ -49,9 +49,11 @@ which make || sudo dnf install make -y
 ./install 
 
 test-cmd -m "Cleaning up - aba reset --force" 
+aba reset -f
+
 ####mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
-aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
-test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
+### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
+### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 #test-cmd -m "Cleaning up mirror - clean" "aba -s -C mirror clean" 
 
 rm -rf sno compact standard 
@@ -78,7 +80,7 @@ mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.c
 mylog "ask set to $(grep -o '^ask=[^ ]*' aba.conf) in $PWD/aba.conf"
 
 mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
-sed "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
+sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
 
 # Set up govc 
 cp $vf vmware.conf 

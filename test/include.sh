@@ -217,8 +217,19 @@ init_bastion() {
 
 	mylog Revert internal bastion vm to snapshot and powering on ...
 
-	govc vm.power -off bastion-internal-rhel8
-	govc vm.power -off bastion-internal-rhel9
+	##### DO NOT DO THIS!! TOO MANY CHANGES TO RUN MULTIPLE TESTS 
+	#test_vm=bastion-aba-$(hostname)
+	#source_bastion_vm=rhel9-aba-source
+	#snapshot_name=aba-test
+	#mac=$(cat mac_address.txt)
+	# govc vm.destroy $test_vm || true
+	# govc snapshot.revert -vm $source_bastion_vm_name $snapshot_name
+	# govc vm.clone -vm $source_bastion_vm_name -on=false "$test_vm"
+	# govc vm.network.change -vm "$test_vm" -net.adapter "vmxnet3" -net.address "00:50:56:12:99:99" ethernet-0
+	##### DO NOT DO THIS!! TOO MANY CHANGES TO RUN MULTIPLE TESTS 
+
+	govc vm.power -off bastion-internal-rhel8 || true
+	govc vm.power -off bastion-internal-rhel9 || true
 	govc snapshot.revert -vm $int_bastion_vm_name aba-test
 	sleep 8
 	govc vm.power -on $int_bastion_vm_name

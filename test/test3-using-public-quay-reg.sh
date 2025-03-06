@@ -58,11 +58,11 @@ which make || sudo dnf install make -y
 
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
-echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
-### wrong # aba --dir ~/aba reset --force
+### echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
+aba --dir ~/aba reset --force
 #####mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
-aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
-test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
+### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
+### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 #aba clean
 
 # Set up aba.conf properly
@@ -74,7 +74,7 @@ test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba 
 #test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ### --vmw $vf
 
 mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
-sed "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
+sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
 
 # Set up govc 
 cp $vf vmware.conf 

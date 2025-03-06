@@ -49,6 +49,8 @@ mylog ============================================================
 mylog "Test to install remote reg. on $int_bastion_hostname and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
+aba --dir ~/aba reset --force
+
 ntp_ip=10.0.1.8 # If available
 
 which make || sudo dnf install make -y
@@ -71,24 +73,22 @@ test-cmd -m "Testing update of aba script, grep aba version" "grep ^ABA_VERSION=
 
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
-echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
-## this is wrong # aba --dir ~/aba reset --force
+#echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
 #####mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
-aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
-test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
+### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
+### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 #aba clean
 
 # Set up aba.conf properly
-rm -f aba.conf
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 [ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
-test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --platform vmw --channel stable --version $VER_OVERRIDE ### --vmw $vf
+test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba -A --platform vmw --channel stable --version $VER_OVERRIDE ### --vmw $vf
 
 mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
-sed "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
+sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
 
-test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba --noask
+##test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba --noask
 
 # Set up govc 
 cp $vf vmware.conf 
@@ -101,19 +101,21 @@ sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 echo kiali-ossm > templates/operator-set-abatest 
 test-cmd -m "Setting op_sets=abatest in aba.conf" aba --op-sets abatest
 
+mylog Showing aba.conf settings
+normalize-aba-conf
 source <(normalize-aba-conf)
 
-#reg_ssh_user=$(whoami)
 reg_ssh_user=$TEST_USER
 
 aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
-echo GOVC_URL=$GOVC_URL
-echo GOVC_DATASTORE=$GOVC_DATASTORE
-echo GOVC_NETWORK=$GOVC_NETWORK
-echo GOVC_DATACENTER=$GOVC_DATACENTER
-echo GOVC_CLUSTER=$GOVC_CLUSTER
-echo VC_FOLDER=$VC_FOLDER
+normalize-vmware-conf
+#echo GOVC_URL=$GOVC_URL
+#echo GOVC_DATASTORE=$GOVC_DATASTORE
+#echo GOVC_NETWORK=$GOVC_NETWORK
+#echo GOVC_DATACENTER=$GOVC_DATACENTER
+#echo GOVC_CLUSTER=$GOVC_CLUSTER
+#echo VC_FOLDER=$VC_FOLDER
 
 export subdir=\~/subdir  # init_bastion() needs this to create 'subdir' dir! though test1 does not use it! #FIXME
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
@@ -123,48 +125,10 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 #####################################################################################################################
 #####################################################################################################################
 
-# Create and edit mirror.conf 
-# TEST ADDING ONE-LINER # test-cmd -m "Confgure mirror to install registry on (remote) $int_bastion_hostname" aba --dir mirror mirror.conf
-
-#test-cmd -m "Setting 'reg_host' to '$int_bastion_hostname' in file 'mirror/mirror.conf'" aba -H $int_bastion_hostname
-# TEST ADDING ONE-LINER # mylog "Setting 'reg_host' to '$int_bastion_hostname' in file 'mirror/mirror.conf'"
-# TEST ADDING ONE-LINER # sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
-
-##test-cmd -m "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" aba -k "~/.ssh/id_rsa"
-# TEST ADDING ONE-LINER # mylog "Setting 'reg_ssh_key=~/.ssh/id_rsa' for remote installation in file 'mirror/mirror.conf'" 
-# TEST ADDING ONE-LINER # sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=\~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
-
-#mylog "Setting op_sets=abatest in mirror/mirror.conf"
-#sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
-#echo kiali-ossm > templates/operator-set-abatest 
-
-#mylog "Setting reg_root=~/my-quay-mirror"
-#sed -i "s#reg_root=#reg_root=\~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
-
-#sed -i "s#channel=.*#channel=fast          #g" ./mirror/mirror.conf	    	# test channel
-#sed -i "s#reg_root=#reg_root=\~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
-#sed -i "s#reg_pw=.*#reg_pw=             #g" ./mirror/mirror.conf	    	# test random password 
-### sed -i "s#tls_verify=true#tls_verify=            #g" ./mirror/mirror.conf  	# test tlsverify = false # sno install fails 
-### sed -i "s#reg_port=.*#reg_pw=443             #g" ./mirror/mirror.conf	    	# test port change
-#sed -i "s#reg_path=.*#reg_path=my/path             #g" ./mirror/mirror.conf	    	# test path
-
-#####################################################################################################################
-#####################################################################################################################
-#####################################################################################################################
-
-# TEST ADDING ONE-LINER # source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* values (see below)
-
-# TEST ADDING ONE-LINER # echo
-# TEST ADDING ONE-LINER # echo mirror-conf:
-# TEST ADDING ONE-LINER # (cd mirror; normalize-mirror-conf | awk '{print $2}')
-# TEST ADDING ONE-LINER # echo
-
-# TEST ADDING ONE-LINER # mylog "Using remote container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
-
 ######################
 # This will install mirror and sync images
 mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key ~/.ssh/id_rsa and then ..."
-test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba --dir mirror sync -H $int_bastion_hostname -k ~/.ssh/id_rsa --reg-root '~/my-quay-home'"
+test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba --dir mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --reg-root '~/my-quay-home'"
 
 source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* values (see below)
 echo
@@ -300,7 +264,7 @@ mylog "Using remote container mirror at $reg_host:$reg_port and using reg_ssh_us
 
 ######################
 # This will install the reg. and sync the images
-test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync 
+test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync --retry
 
 aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should start from scratch next time
