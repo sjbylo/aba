@@ -29,7 +29,7 @@ Usage: Set up and load mirror registry
    <<options>>:
      -H, --mirror-hostname <hostname>    # The hostname of the target mirror registry.
      -u, --reg-user <username>           # The username used to access the registry (default it 'init').
-     -k, --reg-ssh-key "~/.ssh/mykey"    # Path to ssh key to use to install Quay to a remote host.
+     -k, --reg-ssh-key ~/.ssh/mykey      # Path to ssh key to use to install Quay to a remote host.
      -U, --reg-ssh-user myuser           # Username to use to access the remote host via ssh.
          --reg-root /path/to/dir         # Install Quay files/images to this directory.
 
@@ -111,7 +111,7 @@ Examples of fully disconnected mode (air-gapped):
     aba mirror -H registry.example.com 
 
   Configure mirror registry on *remote host* with 'registry.example.com' using 'remote-ssh-user':
-    aba mirror -H registry.example.com -k "~/.ssh/id_rsa" -U remote-ssh-user
+    aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
 
   Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
     aba load -H registry.example.com  --retry
