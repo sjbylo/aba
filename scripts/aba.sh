@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250306162212
+ABA_VERSION=20250306175213
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -351,8 +351,8 @@ do
 			BUILD_COMMAND="$BUILD_COMMAND retry='$2'"
 			[ "$DEBUG_ABA" ] && echo $0: Adding retry=$2 to BUILD_COMMAND >&2
 			shift 2
-		# If there's no another arg then assume '3'
-		elif [ ! "$2" ]; then
+		# In all other cases, use '3' 
+		else
 			BUILD_COMMAND="$BUILD_COMMAND retry=3"  # FIXME: Also confusing, similar to --name
 			[ "$DEBUG_ABA" ] && echo $0: Setting $1 to 3 >&2
 			shift
