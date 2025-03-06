@@ -82,7 +82,11 @@ test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 rm -f aba.conf
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
+[ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
 test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --platform vmw --channel stable --version $VER_OVERRIDE ### --vmw $vf
+
+mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
+sed "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
 
 test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba --noask
 

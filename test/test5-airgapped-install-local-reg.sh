@@ -72,9 +72,13 @@ mylog "Test to install a local reg. on $int_bastion_hostname and save + copy + l
 rm -f aba.conf  # Set it up next
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
+[ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
 test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel stable --version $VER_OVERRIDE
 mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
 mylog "ask set to $(grep -o '^ask=[^ ]*' aba.conf) in $PWD/aba.conf"
+
+mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
+sed "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
 
 # Set up govc 
 cp $vf vmware.conf 
