@@ -224,14 +224,13 @@ apiVersion: mirror.openshift.io/$gvk
 mirror:
   additionalImages:
 END
-else
-	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
+#else
+#	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
 fi
 # For oc-miror v2
 
 mylog Add vote-app image to imageset conf file 
 tee -a mirror/save/imageset-config-save.yaml <<END
-#  additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
@@ -280,14 +279,13 @@ apiVersion: mirror.openshift.io/$gvk
 mirror:
   additionalImages:
 END
-else
-	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
+#else
+#	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
 fi
 # For oc-miror v2
 
 # FIXME: Get values from the correct file!
 tee -a mirror/save/imageset-config-save.yaml <<END
-#  additionalImages:
   - name: quay.io/kiali/demo_travels_cars:v1
   - name: quay.io/kiali/demo_travels_control:v1
   - name: quay.io/kiali/demo_travels_discounts:v1
