@@ -176,8 +176,8 @@ mylog Now adding more images to the mirror registry
 
 mylog Runtest: vote-app
 
+# Here, we need to cater for both v1 and v2 of oc-mirror which behave differently
 [ "$oc_mirror_version" = "v1" ] && gvk=v1alpha2 || gvk=v2alpha1
-
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
 if [ "$oc_mirror_version" = "v2" ]; then
@@ -185,13 +185,15 @@ tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/$gvk
 mirror:
+  additionalImages:
 END
+else
+	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
 fi
 # For oc-miror v2
 
 mylog Add ubi9 image to imageset conf file 
 tee -a mirror/save/imageset-config-save.yaml <<END
-  additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
 END
 
@@ -218,13 +220,16 @@ tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/$gvk
 mirror:
+  additionalImages:
 END
+else
+	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
 fi
 # For oc-miror v2
 
 mylog Add vote-app image to imageset conf file 
 tee -a mirror/save/imageset-config-save.yaml <<END
-  additionalImages:
+#  additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
@@ -271,13 +276,16 @@ tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/$gvk
 mirror:
+  additionalImages:
 END
+else
+	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
 fi
 # For oc-miror v2
 
 # FIXME: Get values from the correct file!
 tee -a mirror/save/imageset-config-save.yaml <<END
-  additionalImages:
+#  additionalImages:
   - name: quay.io/kiali/demo_travels_cars:v1
   - name: quay.io/kiali/demo_travels_control:v1
   - name: quay.io/kiali/demo_travels_discounts:v1
@@ -287,14 +295,17 @@ tee -a mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/kiali/demo_travels_mysqldb:v1
   - name: quay.io/kiali/demo_travels_portal:v1
   - name: quay.io/kiali/demo_travels_travels:v1
-  operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
-    packages:
 END
 
 test-cmd -m "Checking for file mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "test -s mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
 test-cmd -m "Checking for servicemeshoperator in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 servicemeshoperator$"
 test-cmd -m "Checking for kiali-ossm in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 kiali-ossm$"
+
+tee -a mirror/save/imageset-config-save.yaml <<END
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
+    packages:
+END
 
 # Append the correct values for each operator
 mylog Append sm and kiali operators to imageset conf
