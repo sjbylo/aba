@@ -263,6 +263,7 @@ END
 fi
 # For oc-miror v2
 
+# Note that if multiple 'additionalImages:' lines are added, it seems to cause oc-mirror v1 to delete images unexpectedly
 tee -a mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest

@@ -119,7 +119,7 @@ test-cmd() {
 
 			[ $ret -eq 130 ] && break  # on Ctrl-C *during command execution*
 
-			[ $ret -eq 0 -a $i -gt 1 ] && notify.sh "Command ok: $cmd (`date`)" || true  # Only success after failure
+			[ $ret -eq 0 -a $i -gt 1 ] && notify.sh "Command ok: $cmd (`date`)" && echo "Command ok: $cmd (`date`)" || true  # Only success after failure
 
 			[ "$ignore_result" -a $ret -ne 0 ] && echo "Returning failed result [$ret]" && return $ret  # We want to return the actual result (-i)
 
@@ -135,7 +135,7 @@ test-cmd() {
 			if [ $i -eq 1 ]; then
 				( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh -i "Command failed: $cmd" || true
 			else
-				( echo -e "test.log:\n"; tail -1 test/test.log; echo -e "\noutput.log:\n"; tail -3 test/output.log ) | notify.sh -i "Command failed: $cmd" || true
+				( echo -e "test.log:\n"; tail -1 test/test.log; echo -e "\noutput.log:\n"; tail -10 test/output.log ) | notify.sh -i "Command failed: $cmd" || true
 				#( notify.sh "Failed cmd: $cmd" || true )
 			fi
 
