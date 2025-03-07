@@ -177,6 +177,8 @@ mylog Now adding more images to the mirror registry
 mylog Runtest: vote-app
 
 # Here, we need to cater for both v1 and v2 of oc-mirror which behave differently
+# For v2, we create a new isc file every time we mirror
+# For v1, we always append to the isc file (not sure what is the best practice).
 [ "$oc_mirror_version" = "v1" ] && gvk=v1alpha2 || gvk=v2alpha1
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
