@@ -35,15 +35,15 @@ Usage: Set up and load mirror registry
 
    aba sync                              # Copy images from the Internet into the mirror registry.
    <<options>>:
-     -r, --retry <number>                # Retry <number> times on oc-mirror error.
+     -r, --retry <count>                 # Retry <count> times on oc-mirror error.
 
    aba save                              # Copy images from the Internet to disk.
    <<options>>:
-     -r, --retry <number>                # Retry <number> times on oc-mirror error.
+     -r, --retry <count>                 # Retry <count> times on oc-mirror error.
 
    aba load                              # Copy images from disk to the mirror registry.
    <<options>>:
-     -r, --retry <number>                # Retry <number> times on oc-mirror error.
+     -r, --retry <count>                 # Retry <count> times on oc-mirror error.
 
 Usage: Provision OpenShift cluster
    aba cluster --name <mycluster>        # Create a cluster 

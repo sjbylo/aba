@@ -251,20 +251,34 @@ Set the version you want to install:
 v=4.17.16
 ```
 
-Note: It is recommended to run `aba bundle` on a fresh install of Aba or run: `cd aba/mirror; rm -rf save; cd ..` before continuing.
+Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwite any pre-existing files under aba/mirror/save. 
 
 Create the bundle archive with this single command:
 ```
-aba bundle --channel stable --version $v --op-sets ocp mesh3 --ops web-terminal --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
+aba bundle \
+    --pull-secret ~/.my-pull-secret.json \
+    --channel stable \
+    --version $v \
+    --op-sets ocp odf \
+    --ops web-terminal devworkspace-operator \
+    --domain example.com \
+    --machine-network 10.0.1.8/20 \
+    --dns 10.0.1.8 \
+    --ntp 10.0.1.8 ntp.example.com \
+    --platform bm \
+    --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
 ```
 
-- This will generate several 10GB files: ocp_mycluster_4.17.16_aa|ab|ac... etc 
-- The --op-sets option refers to predefined operator sets in `templates/operator-set-*`.
-- If needed, add individual operators after "--ops"
-- Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`
-- Generate a checksum for the files, e.g. `cksum ocp_mycluster_4.17.16_*` and use the checksum to verify the files after transferring them to the internal network. 
+- This will output several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.
+- Depending on the channel chosen, the OpenShift version will be set to the most recent 'previous' point version.
+- If needed, --op-sets refers to predefined sets of operator defined in the files `templates/operator-set-*`.
+- If needed, add individual operators after "--ops".
+- If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise these values must be set on the internal bastion in aba.conf).
+- Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
+- Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
+- Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_*`.  It is important that the files are not damaged or incomplete in any way!
 
-Copy the files to a RHEL 8/9 machine within the private internal network.
+Copy the files to your RHEL 8/9 internal bastion within the private internal network.
 
 Verify the files are intact by comparing the checksum values with the original files:
 
@@ -278,7 +292,7 @@ Unpack the bundle archive:
 cat /path/to/ocp_mycluster_4.17.16_* | tar xvf -        # to extract the bundle archive
 cd aba
 ./install
-aba           # Run aba if you want Aba to install & load the mirror registry
+aba                     # Run aba if you want Aba to install & load the mirror registry
 ```
 
 Note: You will find the large image set tar file under `aba/mirror/save`.
@@ -339,7 +353,7 @@ aba save
 
 - pulls the images from the Internet and saves them into the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators)!
 
-Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repository (including templates, scripts, images, CLIs and other install files) to your bastion (in your private network) via a portable storage device, e.g. a thumb drive.
+Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repository (including templates, scripts, images, CLIs and other install files) to your internal bastion (in your private network) via a portable storage device, e.g. a thumb drive.
 
 Example:
 
@@ -386,7 +400,7 @@ aba load
 - Required RPMs:
   - Note that the bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure `dnf` to use a proxy).
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation.
-  - If rpms are not readily available in your private network, the command `aba rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your external bastion and internal bastions are running the exact same version of RHEL (at least, that was the experience when testing Aba!).
+  - If rpms are not readily available in your private network, the command `aba rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your external bastion and internal bastions are running the exact same version of RHEL (at least, that was the experience when testing!).
 
 Now continue with "Installing OpenShift" below.
 
