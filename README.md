@@ -256,12 +256,12 @@ Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the
 Create the bundle archive with this single command:
 ```
 aba bundle \
-    --pull-secret ~/.my-pull-secret.json \
+    --pull-secret "~/.my-pull-secret.json" \
     --channel stable \
     --version $v \
     --op-sets ocp odf \
     --ops web-terminal devworkspace-operator \
-    --domain example.com \
+    --base-domain example.com \
     --machine-network 10.0.1.8/20 \
     --dns 10.0.1.8 \
     --ntp 10.0.1.8 ntp.example.com \

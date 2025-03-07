@@ -7,7 +7,7 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf  || true # || exit 1  # ocp_version and ocp_channel can be missing
 verify-mirror-conf || exit 1
 
 if [ -s reg-uninstall.sh ]; then
