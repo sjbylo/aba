@@ -1,1 +1,1 @@
-make jq python3-jinja2 python3-pyyaml polkit
+make jq python3-jinja2 python3-pyyaml
