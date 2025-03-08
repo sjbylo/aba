@@ -94,7 +94,7 @@ test-cmd -m "Setting ask=false" aba --noask
 test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in aba.conf" aba --ntp $ntp_ip ntp.example.com
 
 mylog "Setting op_sets=abatest in aba.conf"
-sed -i "s/^op_sets=.*/op_sets=ocp,abatest /g" aba.conf
+sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
 echo kiali-ossm > templates/operator-set-abatest 
 
 # Needed for $ocp_version below
