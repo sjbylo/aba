@@ -36,6 +36,8 @@ mirror/.*
 mirror/regcreds.bk
 mirror/mirror.conf.bk
 mirror/.redhat-operator-index*
+mirror/mirror-registry-amd64.tar.gz
+mirror/sqlite3.tar
 sno*
 */cluster.conf
 *.ssh.conf
