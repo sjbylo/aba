@@ -97,7 +97,7 @@ if [ ! "$1" ]; then
 	[ "$ntp_ip" ] && test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in aba.conf" aba --ntp $ntp_ip ntp.example.com
 
 	mylog "Setting op_sets=abatest in aba.conf"
-	sed -i "s/^op_sets=.*/op_sets=ocp,abatest /g" aba.conf
+	sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
 	echo kiali-ossm > templates/operator-set-abatest 
 
 	source <(normalize-aba-conf)
@@ -113,13 +113,6 @@ if [ ! "$1" ]; then
 	## test the internal bastion ($int_bastion_hostname) as mirror
 	mylog "Setting reg_host=$int_bastion_hostname"
 	sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
-	#sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=\~/.ssh/id_rsa #g" ./mirror/mirror.conf
-
-	# Repeated here? ########## See above!
-	####mylog "Setting op_sets=abatest"
-	####sed -i "s/^.*op_sets=.*/op_sets=abatest /g" ./mirror/mirror.conf
-	####echo kiali-ossm > templates/operator-set-abatest 
-	# Repeated here? ##########
 
 	aba --dir cli ~/bin/govc
 
