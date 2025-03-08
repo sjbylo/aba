@@ -262,7 +262,7 @@ aba bundle \
     --op-sets ocp odf \
     --ops web-terminal devworkspace-operator \
     --base-domain example.com \
-    --machine-network 10.0.1.8/20 \
+    --machine-network 10.0.0.0/20 \
     --dns 10.0.1.8 \
     --ntp 10.0.1.8 ntp.example.com \
     --platform bm \

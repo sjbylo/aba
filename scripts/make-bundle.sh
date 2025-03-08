@@ -19,6 +19,7 @@ verify-aba-conf || exit 1
 if [ "$bundle_dest_path" = "-" ]; then
 	echo_cyan "A bundle archive will be generated and written to standard output using the following parameters:" >&2
 else
+	[ -d $bundle_dest_path ] && bundle_dest_path=$bundle_dest_path/ocp-bundle	# This output needs to be a file
 	echo_cyan "A bundle archive file will be generated and saved to disk using the following parameters:" >&2
 	bundle_dest_path="$bundle_dest_path-$ocp_version"
 fi

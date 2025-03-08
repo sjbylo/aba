@@ -20,6 +20,7 @@ done
 
 # Append .tar if it's missing from filename (ignore stdout) 
 if [ "$dest" != "-" ]; then
+	[ -d $dest ] && dest=$dest/aba-backup-$(whoami).tar		# The dest needs to be a file
 	echo "$dest" | grep -q \.tar$ || dest="$dest.tar"
 
 	# If the destination file already exists...
