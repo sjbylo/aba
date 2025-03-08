@@ -39,7 +39,8 @@ if [ -d mirror/save ]; then
 
 		if [ -s mirror/save/imageset-config-save.yaml -o -f mirror/mirror.conf -o "$image_set_files_exist" ]; then
 			echo_red "Warning: This repo is already in use!  Files exist under: mirror/save" >&2
-			echo -n "         "; ls mirror/save >&2
+			echo -n "         " >&2
+			ls mirror/save >&2
 			[ "$image_set_files_exist" ] && \
 			echo_red "         Image set archive files also exist." >&2
 			echo_red "         Back up any required files and try again with the '--force' flag to delete all existing files under mirror/save" >&2
@@ -47,7 +48,6 @@ if [ -d mirror/save ]; then
 			echo >&2
 
 			ask "         Continue anyway" >&2 || exit 1
-			#exit 1
 		fi
 	else
 		if [ "$(ls mirror/save)" ]; then
