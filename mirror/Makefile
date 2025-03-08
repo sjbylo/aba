@@ -184,6 +184,7 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 
 	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rf save || true  # Delete only if not edited
 	@[ -d sync ] && [ sync/.created -nt sync/imageset-config*yaml ] && rm -rf sync || true  # Delete only if not edited
+	rm -f .cmd.out
 
 
 # Note that reg-uninstall.sh script will delete registry and regcreds/ dir.
@@ -194,7 +195,8 @@ reset:                # Clean up all files. Only use if you know what you're doi
 	make clean
 	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && echo mirror/regcreds backed up to regcreds.bk || true
 	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo mirror/mirror.conf backed up to mirror.conf.bk || true
-	rm -rf *.tar.gz oc-mirror-workspace 
+	@#rm -rf *.tar.gz oc-mirror-workspace   # Leave this so the mirror can be uninstalled with reg-uninstall.sh 
+	rm -rf          oc-mirror-workspace 
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
