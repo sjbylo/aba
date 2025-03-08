@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250306175213
+ABA_VERSION=20250308080114
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -103,8 +103,7 @@ if [ ! -f $ABA_PATH/aba.conf ]; then
 	# Initial prep for interactive mode
 	replace-value-conf $ABA_PATH/aba.conf ocp_version 
 	replace-value-conf $ABA_PATH/aba.conf ocp_channel
-	sed -i "s/^editor=[^ \t]*/editor= /g" $ABA_PATH/aba.conf
-	replace-value-conf $ABA_PATH/aba.conf editor
+	#replace-value-conf $ABA_PATH/aba.conf editor 		# FIXME: Not sure why we need to remove this
 fi
 
 # Set defaults 
