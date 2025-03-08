@@ -1,8 +1,8 @@
 #!/bin/bash -e
-# Tar backup script for full OR incremental backups.  Used to only backup (and copy) the changes since the last backup.
+# Tar backup script for full OR incremental backup of the repo.  Used to only backup (and copy) the changes since the last backup.
 # Usage: backup.sh [--inc] [--repo] [file]
 #                   --inc	incremental backup based on the ~/.aba.previous.backup flag file's timestamp
-#                   --repo	exclude all */mirror_*tar files from the archive.  Copy them separately, if needed.
+#                   --repo	exclude all */mirror_*tar files from the archive due to disk space restictions.  Copy them separately, if needed.
 
 source scripts/include_all.sh
 
@@ -12,8 +12,8 @@ repo_only=			# Also include the save/mirror_*.tar files (for some use-cases it's
 
 while echo "$1" | grep -q ^--[a-z]
 do
-	[ "$1" = "--repo" ] && repo_only=1 && shift		# Set to NOT include any mirror_*.tar files, which can be copied separately. 
-	[ "$1" = "--inc" ] && inc=1 && shift    		# Set optional backup type to "incremental".  Full is default. 
+	[ "$1" = "--repo" ] && repo_only=1 && shift	# Set to NOT include any mirror_*.tar files, which should be copied separately. 
+	[ "$1" = "--inc" ] && inc=1 && shift    	# Set optional backup type to "incremental".  Full is default. 
 done
 
 [ "$1" ] && dest="$1"
@@ -23,7 +23,7 @@ if [ "$dest" != "-" ]; then
 	echo "$dest" | grep -q \.tar$ || dest="$dest.tar"
 
 	# If the destination file already exists...
-	[ -s $dest ] && echo_red "Warning: File $dest already exists. Aborting!" >&2 >&2 && exit 1 # Must use stderr otherwise the tar archive becomes corrupt
+	[ -s $dest ] && echo_red "Warning: File $dest already exists. Aborting!" >&2 && exit 1 # Must use stderr otherwise the tar archive becomes corrupt
 fi
 
 # Assume this script is run via 'make ...' from aba's top level dir
@@ -32,12 +32,12 @@ cd ..
 # If this is the first run OR is doing a full backup ... set up for full backup (i.e. set time in past) 
 [ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup 
 
-# Note, for the bundle we prefer CLI install files and nothing under ~/bin
+# Notes:
+# For the bundle we prefer only install files in cli/ and nothing under ~/bin
 # Remove bin in favor of cli/
 ###bin			\
-# vmware only on "private" bastion
+# vmware only needed on "private" bastion
 #aba/vmware.conf		\
-
 
 # Add the bundle flag file to the archive so when aba is run again it knows it's a bundle!
 touch aba/.bundle  # Flag this archive as a bundle
@@ -66,7 +66,7 @@ file_list=$(find		\
 	! -path "aba/.git*"  					\
 	! -path "aba/cli/.init"  				\
 	! -path "aba/cli/.??*"	  				\
-	! -path "aba/mirror/.init"  			\
+	! -path "aba/mirror/.init" 	 			\
 	! -path "aba/mirror/.rpms"  				\
 	! -path "aba/mirror/.installed"  			\
 	! -path "aba/mirror/.loaded" 				\
@@ -97,10 +97,9 @@ file_list=$(find		\
 # Don't include/compress the 'image set' tar files since they are compressed already!
 # Don't need to copy over the oc-mirror-workspace (or working-dir 'v2') dirs.  The needed yaml files for 'aba day2' are created at 'aba load'.
 # Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop since it's actively written to. 
-# Added [! -path "aba/mirror/reg-uninstall.sh"] to be sure no old scripts are bundled/saved. Intent is to install the registry *from* internal net.
+# Added [! -path "aba/mirror/reg-uninstall.sh"] to be sure no old scripts are added. Intent is to install the registry *from* internal bastion/net.
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
-###[ "$repo_only" ] && file_list=$(echo "$file_list" | grep -v "^aba/mirror/s.*/mirror_.*.tar$") || true  # 'true' needed!
 [ "$repo_only" ] && file_list=$(echo "$file_list" | grep -E -v "^aba/mirror/s.*/mirror_.*[0-9]{6}\.tar$") || true  # 'true' needed!
 
 # Clean up file_list
@@ -112,26 +111,24 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 # Output reminder message
 if [ "$repo_only" ]; then
 	echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE BUNDLE." >&2
-	echo_magenta "           See image set file(s) at mirror/save/mirror_*.tar." >&2
+	echo_magenta "           See image set file(s) at aba/mirror/save/mirror_*.tar." >&2
 	echo_magenta "           You will need to copy them to your private bastion along with the bundle archive ($(basename $dest)). See below for more instructions." >&2
 	echo_magenta "           To avoid this write the full archive bundle to *external media* or to a *separate drive*." >&2
 fi
 
 # If destination is NOT stdout (i.e. if in interactive mode)
 if [ "$dest" != "-" ]; then
-	### now=$(date "+%Y-%m-%d-%H-%M-%S")  # Not needed anymore
-
 	if [ "$repo_only" ]; then
 		echo
-		echo_cyan "Writing partial bundle archive to $dest ... (to create a full bundle, write the bundle directly to external media)."
+		echo_cyan "Writing 'split'  bundle archive to $dest ... (to create a full bundle, write the bundle directly to external media)."
 		echo
 		echo_white "After the bundle has been written, copy it to your *private bastion*, e.g. with the command:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo_white "Copy over the image set tar file(s) also, e.g. with:"
 		echo_white " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "After the bundle has been written, transfer the bundle and the image set tar file(s) to your private bastion."
-		echo_white "Extract the bundle tar file anywhere under your home directory"
+		echo_white "Transfer the bundle and the image set tar file(s) to your private bastion."
+		echo_white "Extract the bundle tar file into your home directory"
 		echo_white "and then move the image set tar file(s) into the aba/mirror/save/ dir & continue by running 'aba', e.g. with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
 		echo_white "  mv mirror_*.tar aba/mirror/save"
@@ -143,13 +140,13 @@ if [ "$dest" != "-" ]; then
 		echo
 	else
 		echo
-		echo_cyan "Writing full bundle archive to $dest ..."
+		echo_cyan "Writing 'all-in-one' bundle archive to $dest ..."
 		echo
-		echo_white "After the bundle has been written, transfer it to your *private bastion*, e.g. with the command:"
+		echo_white "Transfer it to your *private bastion*, e.g. with the command:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
 		echo_white "Transfer the bundle to your private bastion."
-		echo_white "Extract the bundle tar file anywhere under your home directory, e.g. with:"
+		echo_white "Extract the bundle tar file into your home directory, e.g. with:"
 		echo_white "  tar xvf $(basename $dest)"
 		echo_white "  cd aba"
 		echo_white "  ./install"
@@ -190,11 +187,8 @@ rm -f aba/.bundle  # We don't want this repo to be labeled as 'bundle', only the
 # If "not repo backup only" (so, if 'inc' or 'tar'), then always update timestamp file so that future inc backups will not backup everything.
 # If using 'repo only, then you always want the whole repo to be backed up (so no need to use the timestamp file).
 # NOTE: ONLY INC BACKUPS USE THIS FILE!!! See above. 
-#if [ ! "$repo_only" ]; then
-	# Upon success, make a note of the time
-	[ "$INFO_ABA" ] && echo_white "Touching file ~/.aba.previous.backup" >&2
-	#[ "$inc" ] && touch ~/.aba.previous.backup
-	touch ~/.aba.previous.backup
-#fi
+# Upon success, make a note of the time
+[ "$INFO_ABA" ] && echo_white "Touching file ~/.aba.previous.backup" >&2
+touch ~/.aba.previous.backup
 
 [ "$dest" != "-" ] && echo_green "Bundle archive written successfully to $dest!" >&2 || echo_green "Bundle archive streamed successfully to stdout!" >&2
