@@ -266,6 +266,7 @@ aba bundle \
     --dns 10.0.1.8 \
     --ntp 10.0.1.8 ntp.example.com \
     --platform bm \
+    --force \
     --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
 ```
 
@@ -277,6 +278,7 @@ aba bundle \
 - Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
 - Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_*`.  It is important that the files are not damaged or incomplete in any way!
+- Warning: --force will overwrite any image set files already under aba/mirror/save!
 
 Copy the files to your RHEL 8/9 internal bastion within the private internal network.
 

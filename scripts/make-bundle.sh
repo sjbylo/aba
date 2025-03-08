@@ -7,7 +7,8 @@ source scripts/include_all.sh
 [ "$1" ] && force=true && shift
 [ "$1" ] && set -x
 
-install_rpms make 2>/dev/null | cat -v >.bundle.log|| exit 1
+#install_rpms make 2>/dev/null | cat -v >.bundle.log|| exit 1
+install_rpms $(cat templates/rpms-external.txt) || exit 1
 
 source <(normalize-aba-conf)
 
@@ -18,7 +19,7 @@ verify-aba-conf || exit 1
 if [ "$bundle_dest_path" = "-" ]; then
 	echo_cyan "The bundle archive will be generated and written to standard output using the following parameters:" >&2
 else
-	echo_cyan "The bundle archive file will be created on disk using the following parameters:" >&2
+	echo_cyan "The bundle archive file will be saved to disk using the following parameters:" >&2
 	bundle_dest_path="$bundle_dest_path-$ocp_version"
 fi
 
@@ -45,44 +46,39 @@ if [ -d mirror/save ]; then
 			echo_red "         Or, use a fresh Aba repo and try again!" >&2 
 			echo >&2
 
-			ask "         Continue anyway" || exit 1
+			ask "         Continue anyway" >&2 || exit 1
 			#exit 1
 		fi
 	else
 		if [ "$(ls mirror/save)" ]; then
-			echo_red "Deleteing all files under mirror/save! (force=true)" >&2
-			##ls mirror/save >&2
+			echo_red "Deleteing all files under aba/mirror/save! (--force set)" >&2
 			echo >&2
 			rm -rf mirror/save/*
 		fi
 	fi
 fi
 
-#if [ -s mirror/save/imageset-config-save.yaml ]; then
-#	if ask "Create bundle file (mirror/save/imageset file will be backed up)"; then
-#		mv -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.backup.$(date +%Y%m%d-%H%M) >&2
-#	else
-#		exit 1
-#	fi
-#fi
-
-# This is a special case where we want to only output the tar repo contents to stdout 
-# so we can do something like: aba bundle ... --bundle-file - | ssh host tar xvf - 
+# This is a special case where we want to only send the tar repo contents to stdout 
+# so we can do something like: aba bundle ... --out - | ssh host tar xvf - 
 if [ "$bundle_dest_path" = "-" ]; then
-	echo "Downloading binary data.  See logfile '.bundle.log' for details." >&2
+	#echo "Downloading binary data.  See logfile '.bundle.log' for details." >&2
+	echo "Downloading binary data." >&2
 
-	make -s download save retry=7 2>&1 | cat -v >>.bundle.log
+	#make -s download save retry=7 2>&1 | cat -v >>.bundle.log
+	make -s download save retry=7 >&2
+
+	echo_cyan "Writing 'all-in-one' bundle archive (tar format) to stdout ..." >&2
 	make -s tar out=-   # Be sure the output of this command is ONLY tar output!
 
 	exit
 fi
 
 if files_on_same_device mirror $bundle_dest_path; then
-	echo_cyan "Creating 'minor' bundle archive (because the image set archive files are on the same file-system) ..."
+	echo_cyan "Creating 'split' bundle archive (because the bundle is on the same file-system as the image set archive file) ..."
 	make download save tarrepo out="$bundle_dest_path" retry=7	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
 else
-	echo_cyan "Creating 'full' bundle archive (assuming destination file is on portable media or a different file-system) ..."
-	make download save tar out="$bundle_dest_path" retry=7    	# Try save 8 times, then create full archive, including all files. 
+	echo_cyan "Creating 'all-in-one' bundle archive (assuming destination file is on portable media or a different file-system) ..."
+	make download save tar out="$bundle_dest_path" retry=7    	# Try save 8 times, then create all-in-one archive, including all files. 
 fi
 
 exit 0
