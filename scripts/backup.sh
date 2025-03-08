@@ -112,7 +112,7 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 if [ "$repo_only" ]; then
 	echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE BUNDLE." >&2
 	echo_magenta "           See image set file(s) at aba/mirror/save/mirror_*.tar." >&2
-	echo_magenta "           You will need to copy them to your private bastion along with the bundle archive ($(basename $dest)). See below for more instructions." >&2
+	echo_magenta "           You will need to copy them to your internal bastion along with the bundle archive ($(basename $dest)). See below for more instructions." >&2
 	echo_magenta "           To avoid this write the full archive bundle to *external media* or to a *separate drive*." >&2
 fi
 
@@ -122,12 +122,12 @@ if [ "$dest" != "-" ]; then
 		echo
 		echo_cyan "Writing 'split'  bundle archive to $dest ... (to create a full bundle, write the bundle directly to external media)."
 		echo
-		echo_white "After the bundle has been written, copy it to your *private bastion*, e.g. with the command:"
+		echo_white "After the bundle has been written, copy it to your *internal bastion*, e.g. with the command:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo_white "Copy over the image set tar file(s) also, e.g. with:"
 		echo_white " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "Transfer the bundle and the image set tar file(s) to your private bastion."
+		echo_white "Transfer the bundle and the image set tar file(s) to your internal bastion."
 		echo_white "Extract the bundle tar file into your home directory"
 		echo_white "and then move the image set tar file(s) into the aba/mirror/save/ dir & continue by running 'aba', e.g. with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
@@ -142,10 +142,10 @@ if [ "$dest" != "-" ]; then
 		echo
 		echo_cyan "Writing 'all-in-one' bundle archive to $dest ..."
 		echo
-		echo_white "Transfer it to your *private bastion*, e.g. with the command:"
+		echo_white "Transfer it to your *internal bastion*, e.g. with the command:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "Transfer the bundle to your private bastion."
+		echo_white "Transfer the bundle to your internal bastion."
 		echo_white "Extract the bundle tar file into your home directory, e.g. with:"
 		echo_white "  tar xvf $(basename $dest)"
 		echo_white "  cd aba"

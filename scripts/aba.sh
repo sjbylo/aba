@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250308080114
+ABA_VERSION=20250308175330
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -31,7 +31,7 @@ if echo "$0" | grep -qe /; then
 	[ -s $d/Makefile ] && grep -q "Top level Makefile" $d/Makefile && cd $d #|| cd - >/dev/null
 fi
 
-# Check the rpo location
+# Check the repo location
 # Need to be sure location of the top of the repo in order to find the important files
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
 	ABA_PATH=.
@@ -435,7 +435,7 @@ replace-value-conf aba.conf ask true
 
 source <(normalize-aba-conf)
 
-#verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_vrsion or channel defined
+#verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_version or channel defined
 
 export ask=1
 
@@ -512,7 +512,7 @@ if [ ! -f .bundle ]; then
 		major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
 		stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
 		[ "$stable_ver_point" ] && \
-			stable_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${stable_ver_point} 2>/dev/null | tail -1)  # This is better way to fetch the newest previoous version!
+			stable_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${stable_ver_point} 2>/dev/null | tail -1)  # This is better way to fetch the newest previous version!
 			#stable_ver_prev=$(echo "$rel"| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
 
 		# Determine any already installed tool versions
@@ -653,7 +653,7 @@ if [ ! -f .bundle ]; then
 		echo "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the bundle archive"
 		echo "                                                          # (size ~20-30GB for a base installation)."
 		echo "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
-		echo "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more managable files."
+		echo "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more manageable files."
 		echo "                                                          # Unpack the files on the internal bastion with: cat ocp_* | tar xvf - "
 		echo
 
@@ -683,18 +683,17 @@ if [ ! -f .bundle ]; then
 	echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 	echo
 	echo "Run:"
-	echo "  aba mirror                  # to configure and/or install Quay."
-	echo "  aba sync --retry N          # to sychnonize all container images - from the Internet - into your registry."
+	echo "  aba mirror                        # to configure and/or install Quay."
+	echo "  aba sync --retry <count>          # to synchronize all container images - from the Internet - into your registry."
 	echo
 	echo "Or run:"
-	echo "  aba mirror sync --retry 8   # to complete both actions and ensure any image synchronization issues are retried."
+	echo "  aba mirror sync --retry <count>   # to complete both actions and ensure any image synchronization issues are retried."
 	echo
 
 else
-	# aba is running on the internal bastion, in 'bundle' mode.
+	# aba is running on the internal bastion, in 'bundle mode'.
 
-	# make & jq are needed below and in the next steps 
-	#install_rpms make jq python3-pyyaml
+	# make & jq are needed below and in the next steps. Best to install all at once.
 	scripts/install-rpms.sh internal
 
 	echo_cyan "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version', assuming this is running on an internal RHEL bastion!"
@@ -702,23 +701,25 @@ else
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
 		echo
-		echo_red "Warning: Please ensure the image set tar files (created in the previous step with 'aba save' or 'aba bundle') are" >&2
-		echo_red "         copied to the 'aba/mirror/save' directory before following the instructions below!" >&2
-		echo_red "         For example, run the command: cp /path/to/portable/media/mirror_*tar mirror/save" >&2
+		echo_red "Important: Please ensure the image set tar files (created in the previous step with 'aba bundle' or 'aba save') are" >&2
+		echo_red "           copied to the 'aba/mirror/save' directory before following the instructions below!" >&2
+		echo_red "           For example, run the command: cp /path/to/portable/media/mirror_*tar aba/mirror/save" >&2
 	fi
 
 	echo 
 	echo_yellow Instructions
 	echo 
-	echo "Action Required: Set up the mirror registry and load it from disk with the necessary container images."
+	echo_red "Important: Check the values in aba.conf and ensure they are all complete and match your disconnected environment."
+	echo
+	echo "Set up the mirror registry and load it with the necessary container images from disk."
 	echo
 	echo "To store container images, Aba can install the Quay mirror appliance or you can utilize an existing container registry."
 	echo
 	echo "Run:"
-	echo "  aba mirror                   # to configure and/or install Quay."
-	echo "  aba load --retry N           # to set up the mirror registry (configure or install quay) and load it."
+	echo "  aba mirror                         # to configure and/or install Quay."
+	echo "  aba load --retry <count>           # to set up the mirror registry (configure or install quay) and load it."
 	echo "Or run:"
-	echo "  aba mirror load --retry 8    # to complete both actions and ensure any image load issues are retried."
+	echo "  aba mirror load --retry <count>    # to complete both actions and ensure the process is retried if there are any issues."
 	echo
 fi
 
