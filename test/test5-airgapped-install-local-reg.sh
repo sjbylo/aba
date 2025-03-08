@@ -140,7 +140,7 @@ source <(cd mirror && normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-test-cmd -r 15 3 -m "Creating bundle for channel stable and version $ocp_version" "aba -f bundle --platform vmw --channel stable --version $ocp_version --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
+test-cmd -r 15 3 -m "Creating bundle for channel stable and version $ocp_version" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel stable --version $ocp_version --op-sets abatest --ops web-terminal --base-domain example.com --machine-network 10.0.1.8/20 --dns 10.0.1.8 10.0.2.8 --ntp 10.0.1.8 ntp.example.com --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
 # Smoke tests!
 test-cmd -m  "Verifying existance of file 'mirror/save/mirror_*000000.tar'" "ls -lh mirror/save/mirror_*.tar" 
