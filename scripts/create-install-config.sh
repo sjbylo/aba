@@ -99,6 +99,8 @@ if [ "$proxy" ]; then
 		echo_red "Warning: The proxy value in cluster.conf is set but not all proxy vars are set. Ignoring." >&2
 		echo_red "If you want to configure the cluster wide proxy, set 'proxy=1' or override by" >&2
 		echo_red "setting the '*_proxy' values in 'cluster.conf'" >&2
+
+		sleep 2
 	fi
 else
 	[ "$INFO_ABA" ] && echo_white "Not configuring the cluster wide proxy since proxy values not set in cluster.conf."
@@ -112,13 +114,15 @@ else
 	# Only show this warning IF there is no internet connection?
 	# Or, only show if proxy is NOT being used?
 	if [ "$insert_proxy" ]; then
-		echo_red "No private mirror registry configured! Using proxy settings to access public registry." >&2
+		echo_red "No private mirror registry configured! Using proxy settings to access Red Hat's public registry." >&2
 	else
 		# Should check accessibility to registry.redhat.io?
 		echo
 		echo_red "Warning: No private mirror registry is configured, and no proxy settings have been provided!" >&2
 		echo_red "         If this is *unexpected*, setting up a mirror registry may be necessary. Refer to the README.md for detailed instructions." >&2
 		echo_red "         Root CA file 'regcreds/rootCA.pem' is missing. As a result, the 'additionalTrustBundle' will not be added to 'install-config.yaml'." >&2
+
+		sleep 2
 	fi
 fi
 

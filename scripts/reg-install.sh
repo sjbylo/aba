@@ -128,10 +128,10 @@ if [ "$reg_ssh_key" ]; then
 		# If the flag file exists, then the FQDN points to this host (config wrong!) 
 		if [ -f $flag_file ]; then
 			echo
-			echo_red "Error: FQDN '$reg_host' resolves to this host '`hostname`'!" >&2
-			echo_red "       By setting 'reg_ssh_key' in 'mirror/mirror.conf' you have defined the mirror to be on the remote host '$reg_host' (IP: '$fqdn_ip')." >&2
-			echo_red "       If that should be the localhost (`hostname`), undefine the 'reg_ssh_key' value in 'mirror/mirror.conf'." >&2
-			echo_red "       Otherwise, ensure the DNS record ($reg_host) points to the correct *remote* host." >&2
+			echo_red "Error: The mirror registry is configured to be on a *remote* host but '$reg_host'" >&2
+			echo_red "       resolves to $fqdn_ip, which reaches this localhost ($(hostname)) instead!" >&2
+			echo_red "       If '$reg_host' should point to this localhost ($(hostname)), undefine 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
+			echo_red "       If '$reg_host' is meant be point to a remote host, update the DNS record ($reg_host) to resolve to an IP that can reach the *remote* host via ssh." >&2
 			echo_red "       Correct the problem and try again." >&2
 			echo
 
@@ -164,19 +164,6 @@ if [ "$reg_ssh_key" ]; then
 
 	[ "$err" ] && echo_red "Install 'podman' and 'jq' on the remote host '$reg_host' and try again." && exit 1
 
-#	# Check if the workaround needs to be run:
-#	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host podman images | grep -q ^registry.access.redhat.com/ubi8/pause >> .remote_host_check.out 2>&1 || \
-#	(
-#		echo "Implementing workaround to install Quay on remote host ... see https://access.redhat.com/solutions/7040517 for more."
-#		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host mkdir -p .abatmp
-#		scp -i $reg_ssh_key -F .ssh.conf mirror-registry-amd64.tar.gz $reg_ssh_user@$reg_host:.abatmp/
-#		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && tar xmzf mirror-registry-amd64.tar.gz"
-#		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry install"
-#		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host "cd .abatmp && ./mirror-registry uninstall --autoApprove"
-#		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host rm -rf .abatmp/*
-#	)
-#	# Workaround END ########
-			
 	# FIXME: this is not used
 	# If the key is missing, then generate one
 	####[ ! -s $reg_ssh_key ] && ssh-keygen -t rsa -f $reg_ssh_key -N ''
@@ -249,15 +236,15 @@ else
 	# Get local IP addresses
 	local_ips=$(hostname -I)
 
-	# Check if FQDN IP DOES NOT matche any local IPs
+	# For local install, we check if FQDN IP DOES NOT match any local IPs
 	# We will leave this only as a warning, not an error since sometimes there is a NAT in use which is difficult to check
 	if ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
 		echo
-		echo_red "Warning: FQDN '$reg_host' does not resolve to an IP addr on this localhost '`hostname`'!" >&2
-		echo_red "         By not setting 'reg_ssh_key' in 'mirror/mirror.conf' you have defined a *remote* mirror '$reg_host' (IP: '$fqdn_ip')." >&2
-		echo_red "         If that should be a remote host, define the 'reg_ssh_key' value in 'mirror/mirror.conf'." >&2
-		echo_red "         Otherwise, ensure the DNS record points to an IP address that can reach this local host '`hostname`'." >&2
-		##echo_red "         Please correct the problem and try again." >&2
+		echo_red "Warning: The mirror registry is configured on this localhost ($(hostname)) but '$reg_host'" >&2
+		echo_red "         resolves to $fqdn_ip, which DOES NOT reach this localhost via ssh!" >&2
+		echo_red "         If '$reg_host' is meant to point to a remote host, set 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
+		echo_red "         If '$reg_host' should point to this *localhost*, update the DNS record to resolve to an IP address that correctly reaches $(hostname)." >&2
+
 		echo
 		sleep 2
 
@@ -279,7 +266,7 @@ else
 #		fi
 #	fi
 
-	ask "Install Quay mirror registry appliance locally on localhost '`hostname`', accessable via $reg_hostport" || exit 1
+ask "Install Quay mirror registry appliance locally on localhost ($(hostname)), accessable via $reg_hostport" || exit 1
 	echo "Installing Quay registry on localhost ..."
 
 	# mirror-registry installer does not open the port for us
