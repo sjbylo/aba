@@ -50,7 +50,7 @@ echo "==========================================================================
 echo "START TESTS @ $(date)" 								>> test/test.log
 echo "==========================================================================" 	>> test/test.log
 
-echo $all_tests | notify.sh -i Starting tests:
+echo "$all_tests $internal_bastion_rhel_ver $TEST_USER $oc_mirror_ver_override" | notify.sh -i Starting tests:
 
 time for t in $all_tests
 do
