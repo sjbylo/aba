@@ -53,7 +53,8 @@ if ! curl --connect-timeout 15 --retry 3 -IL http://registry.redhat.io/v2 >/dev/
 fi
 
 # FIXME: this is a hack. Better implement as dep in makefile?
-scripts/create-containers-auth.sh >/dev/null 2>&1
+#scripts/create-containers-auth.sh >/dev/null 2>&1
+scripts/create-containers-auth.sh >/dev/null  # Ensure any errors are output
 
 [[ -s $index_file && -f $done_file ]] && echo_white "Operator index v$ocp_ver_major already downloaded to file mirror/$index_file" && exit 0
 
