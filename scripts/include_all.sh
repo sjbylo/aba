@@ -483,3 +483,12 @@ replace-value-conf() {
 	[ "$DEBUG_ABA" ] && echo "Replacing config value [$2] with [$3] in file: $1" >&2
 	sed -i "s|^[# \t]*${2}=[^ \t#]*\(.*\)|${2}=${3}\1|g" $1
 }
+
+output_table() {
+	len=$(echo "$1" | longest_line)
+	printf '=%.0s' $(seq 1 "$len")
+	echo
+	echo "$1"
+	printf '=%.0s' $(seq 1 "$len")
+	echo
+}

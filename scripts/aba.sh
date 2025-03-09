@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250309135150
+ABA_VERSION=20250309143810
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -696,7 +696,7 @@ else
 	# make & jq are needed below and in the next steps. Best to install all at once.
 	scripts/install-rpms.sh internal
 
-	echo_cyan "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version', assuming this is running on an internal RHEL bastion!"
+	echo_cyan "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version' in your disconnected environment!"
 	
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
@@ -710,8 +710,11 @@ else
 	echo_yellow Instructions
 	echo 
 	echo_magenta "IMPORTANT: Check the values in aba.conf and ensure they are all complete and match your disconnected environment."
-	echo_white Your values in aba.conf are currently:
-	normalize-aba-conf | sed "s/^export //g" | paste -d ' ' - - - | column -t | sed "s/^/  /g"
+
+	echo_white "Current values in aba.conf:"
+	to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d" | paste -d '  ' - - - | column -t --output-separator " | ")
+	output_table "$to_output"
+
 	echo
 	echo "Set up the mirror registry and load it with the necessary container images from disk."
 	echo
@@ -719,9 +722,9 @@ else
 	echo
 	echo "Run:"
 	echo "  aba mirror                         # to configure and/or install Quay."
-	echo "  aba load --retry <count>           # to set up the mirror registry (configure or install quay) and load it."
+	echo "  aba load --retry <count>           # to load the image set archive file(s) into the mirror registry."
 	echo "Or run:"
-	echo "  aba mirror load --retry <count>    # to complete both actions and ensure the 'load' process is retried should there be any issues."
+	echo "  aba mirror load --retry <count>    # to complete both actions and ensure the 'load' process is repeated should there be any issues."
 	echo
 fi
 

@@ -27,10 +27,8 @@ export MANIFEST_SRC_DIR=.
 export ASSETS_DIR=iso-agent-based
 
 echo export ASSETS_DIR=$ASSETS_DIR
-##echo export MANIFEST_SRC_DIR=$MANIFEST_SRC_DIR
 
 ICONF=$MANIFEST_SRC_DIR/install-config.yaml  
-
 ACONF=$MANIFEST_SRC_DIR/agent-config.yaml  
 
 # If the files don't exist, nothing to do but exit!
@@ -40,8 +38,6 @@ if [ ! -s $ICONF -o ! -s $ACONF ]; then
 	exit 1
 fi
 
-#cat $ICONF | yaml2json > $ICONF_TMP
-#cat $ACONF | yaml2json > $ACONF_TMP
 ICONF_TMP=$(cat $ICONF | yaml2json)
 ACONF_TMP=$(cat $ACONF | yaml2json)
 
@@ -107,8 +103,6 @@ if [ $WORKER_REPLICAS -ne 0 ]; then
 	[ ! "$WKR_IP_ADDR" ] && echo ".hosts[].role.worker.networkConfig.interfaces[0].ipv4.address[0].ip missing in $ACONF" >&2 && err=1
 fi
 
-##rm -f $ICONF_TMP $ACONF_TMP
-
 # basic checks
 [ ! "$CLUSTER_NAME" ] && echo "Cluster name .metadata.name missing in $ICONF" >&2 && err=1
 [ ! "$BASE_DOMAIN" ] && echo "Base domain .baseDomain missing in $ICONF" >&2 && err=1
@@ -122,7 +116,7 @@ fi
 
 if [ "$err" ]; then
 	echo
-	echo_red "Warning: The files 'install-config.yaml' and/or 'agent-config.yaml' chould not be parsed properly." >&2 
+	echo_red "Error: Validation of values in files 'install-config.yaml' and/or 'agent-config.yaml' failed." >&2 
 	echo
 
 	exit 1
