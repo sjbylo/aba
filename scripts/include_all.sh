@@ -485,10 +485,33 @@ replace-value-conf() {
 }
 
 output_table() {
-	len=$(echo "$1" | longest_line)
-	printf '=%.0s' $(seq 1 "$len")
+	num_cols=$1
+	string="$2"
+
+	# Convert string into an array
+	mapfile -t lines <<< "$string"
+
+	# Get total lines and calculate rows
+	num_lines=${#lines[@]}
+	num_rows=$(( (num_lines + num_cols - 1) / num_cols ))
+
+	# Use awk to format into 3 aligned columns
+	local o=$(awk -v rows="$num_rows" -v cols="$num_cols" -v lines="${lines[*]}" '
+	BEGIN {
+		split(lines, arr, " ");
+		for (i = 1; i <= rows; i++) {
+			for (j = i; j <= length(arr); j += rows) {
+				printf "%s ", arr[j];
+			}
+			print "";
+		}
+	}' <<< "$string" | column -t --output-separator " | ")
+
+	width=$(echo "$o" | longest_line)
+	printf '=%.0s' $(seq 1 "$width")
 	echo
-	echo "$1"
-	printf '=%.0s' $(seq 1 "$len")
+	echo "$o"
+	printf '=%.0s' $(seq 1 "$width")
 	echo
 }
+

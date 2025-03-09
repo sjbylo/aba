@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250309143810
+ABA_VERSION=20250309163742
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -712,8 +712,9 @@ else
 	echo_magenta "IMPORTANT: Check the values in aba.conf and ensure they are all complete and match your disconnected environment."
 
 	echo_white "Current values in aba.conf:"
-	to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d" | paste -d '  ' - - - | column -t --output-separator " | ")
-	output_table "$to_output"
+	#to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d" | paste -d '  ' - - - | column -t --output-separator " | ")
+	to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d")
+	output_table 3 "$to_output"
 
 	echo
 	echo "Set up the mirror registry and load it with the necessary container images from disk."
