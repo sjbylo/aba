@@ -15,8 +15,8 @@ Usage: Create a install 'bundle archive'
      -v, --version <version>
      -o, --out </path/to/mybundle|->
      -S, --pull-secret ~/.pull-secret.json
-     -P, --op-sets <list of operator sets>
-     -O, --ops <list of operator names>
+     -P, --op-sets [<list of operator sets>]
+     -O, --ops [<list of operator names>]
      -f, --force
         <<other options>> 
 
@@ -73,8 +73,8 @@ Usage:
      -N, --dns <ip address(es)>          # Set one DNS IP address.
      -R, --default-route <next hop ip>   # Set the default route of the internal network, if any (optional).
      -T, --ntp <hostname(s) or IPs>      # Set the NTP hostname(s) or IP address(es) (optional but recommended!). 
-     -O, --ops <list of operators>       # Add individual operators to your image set config file (for oc-mirror).
-     -P, --op-sets <operator set list>   # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted.
+     -O, --ops [<list of operators>]     # Add individual operators to your image set config file (for oc-mirror).
+     -P, --op-sets [<operator set list>] # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted.
      -e, --editor <editor command>       # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
      -a, --ask                           # Prompt user when needed.
      -A, --noask                         # Do not prompt, assume default answers.

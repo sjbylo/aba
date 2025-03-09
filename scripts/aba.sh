@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250309163742
+ABA_VERSION=20250309174402
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -275,28 +275,39 @@ do
 		replace-value-conf $ABA_PATH/aba.conf platform "$2"
 		shift 2
 	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
-		shift
-		# Step through non-opt params, check the set exists and add to the list ...
-		while [ "$1" ] && ! echo "$1" | grep -q -e "^-"
-		do
-			if [ -s "$ABA_PATH/templates/operator-set-$1" -o "$1" = "all" ]; then
-				[ "$op_set_list" ] && op_set_list="$op_set_list,$1" || op_set_list=$1
-			else
-				echo "No such operator set: $1" >&2
-				echo -n "Available operator sets are: " >&2
-				ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
-				echo >&2
-			fi
+		# If no arg after --op-sets
+		if [[ "$2" =~ ^- || -z "$2" ]]; then
+			# Remove value
+			replace-value-conf $ABA_PATH/aba.conf op_sets " "
 			shift
-		done
-		replace-value-conf $ABA_PATH/aba.conf op_sets $op_set_list
+		else
+			shift
+			# Step through non-opt params, check the set exists and add to the list ...
+			#while [ "$1" ] && ! echo "$1" | grep -q -e "^-"
+			while [[ -n "$1" && "$1" != -* ]]; do
+				if [ -s "$ABA_PATH/templates/operator-set-$1" -o "$1" = "all" ]; then
+					[ "$op_set_list" ] && op_set_list="$op_set_list,$1" || op_set_list=$1
+				else
+					echo_red "No such operator set: $1" >&2
+					echo_white -n "Available operator sets are: " >&2
+					ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
+					echo_white "(as defined in files: aba/templates/operator-sets-*)" >&2
+				fi
+				shift
+			done
+			replace-value-conf $ABA_PATH/aba.conf op_sets $op_set_list
+		fi
 	elif [ "$1" = "--ops" -o "$1" = "-O" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
-		shift
-		while [[ "$1" && "$1" != -* ]]; do ops_list="$ops_list $1"; shift; done
-		ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
-		replace-value-conf $ABA_PATH/aba.conf ops $ops_list
+		if [[ "$2" =~ ^- || -z "$2" ]]; then
+			# Remove value
+			replace-value-conf $ABA_PATH/aba.conf ops " "
+			shift
+		else
+			shift
+			while [[ -n "$1" && "$1" != -* ]]; do ops_list="$ops_list $1"; shift; done
+			ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
+			replace-value-conf $ABA_PATH/aba.conf ops $ops_list
+		fi
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		editor="$2"
