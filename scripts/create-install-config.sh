@@ -15,18 +15,18 @@ verify-aba-conf || exit 1
 verify-cluster-conf || exit 1
 verify-mirror-conf || exit 1
 
-##scripts/verify-config.sh || exit 1  # Added to Makefile
+to_output=$(normalize-cluster-conf | sed -e "s/^export //g" | paste -d '  ' - - - | column -t --output-separator " | ")
+echo_white "Current values in cluster.conf:"
+output_table "$to_output"
+echo
 
 # Set the rendezvous_ip to the the first master's ip
-##export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
-#export rendezvous_ip=$machine_ip_prefix$starting_ip
 export rendezvous_ip=$starting_ip
 
 export pull_secret=
 export ssh_key_pub=
 export additional_trust_bundle=
 export image_content_sources=
-###export insert_proxy=
 
 # Change the default of bare-metal host prefix
 if [ "$platform" = "bm" -a $hostPrefix -eq 23 ]; then
@@ -88,8 +88,6 @@ if [ "$proxy" ]; then
 		[ "$INFO_ABA" ] && echo_white "  https_proxy=$https_proxy"
 		[ "$INFO_ABA" ] && echo_white "  no_proxy=$no_proxy"
 
-		###export insert_proxy=$(scripts/j2 templates/install-config-proxy.j2)
-
 		# Using proxy! No need for this
 		image_content_sources=
 		additional_trust_bundle=
@@ -118,9 +116,10 @@ else
 	else
 		# Should check accessibility to registry.redhat.io?
 		echo
-		echo_red "Warning: No private mirror registry is configured, and no proxy settings have been provided!" >&2
-		echo_red "         If this is *unexpected*, setting up a mirror registry may be necessary. Refer to the README.md for detailed instructions." >&2
-		echo_red "         Root CA file 'regcreds/rootCA.pem' is missing. As a result, the 'additionalTrustBundle' will not be added to 'install-config.yaml'." >&2
+		echo_red "Warning: No private mirror registry is configured (missing aba/mirror/regcreds/rootCA.pem cert file) and" >&2
+		echo_red "         no proxy settings have been provided in cluster.conf!" >&2
+		echo_red "         If this is *unexpected*, setting up a mirror registry is required. Refer to the README.md for detailed instructions." >&2
+		echo_red "         Root CA file 'aba/mirror/regcreds/rootCA.pem' is missing. As a result, no 'additionalTrustBundle' can be added to 'install-config.yaml'." >&2
 
 		sleep 2
 	fi
