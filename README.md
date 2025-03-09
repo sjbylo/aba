@@ -664,7 +664,44 @@ aba
 
 ## Advanced
 
-Cluster presets are used mainly to automate the testing of Aba.
+### To have more control as to which folder the images are stored in the mrror registry, follow these instructions.
+
+Create an image set archive file for the OpenShift release images:
+
+```
+aba save --op-sets --ops 
+```
+- This will save all release images (and no operators) into a single image set archive file under `aba/mirror/save`.
+
+Next create an image set archive file for operators:
+```
+aba save --op-sets ocp odf ocpv acm --ops web-terminal
+```
+- This will download operator images for pre-defined sets of operators (e.g. ocp odf ocpv acm) and individual operators (e.g. web-terminal).
+
+Copy only the first image set archive file containing the OpenShift release images to your internal bastion (into aba/mirror/save).
+
+Ensure your mirror registry has been configured.  If not already, run `aba mirror` to set up your mirror registry.
+
+Verify access to your mirror registry:
+```
+cd mirror
+aba verify
+```
+
+Load (diskToMirror) the images to your mirror registry:
+```
+aba load --reg_path ocp4/operators
+```
+
+Copy the 2nd image set archive file containing the operator images to your internal bastion (into aba/mirror/save).
+
+Load (diskToMirror) the operator images to your mirror registry:
+```
+aba load --reg_path ocp4/openshift4
+```
+
+### Cluster presets are used mainly to automate the testing of Aba.
 
 ```
 aba sno
@@ -680,7 +717,7 @@ aba standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must b
 ```
 - Run this to create a compact cluster (works in a similar way to the above).
 
-To install aba from the dev branch run the following:
+### To install aba from the dev branch run the following:
 
 ```
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
