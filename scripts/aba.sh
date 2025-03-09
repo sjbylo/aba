@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250309174402
+ABA_VERSION=20250309183240
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -228,6 +228,12 @@ do
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
 		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_root "$2"
 		shift 2
+	elif [ "$1" = "--reg-path" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		# force will skip over asking to edit the conf file
+		make -sC $ABA_PATH/mirror mirror.conf force=yes
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_path "$2"
+		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
@@ -292,6 +298,8 @@ do
 					echo_white -n "Available operator sets are: " >&2
 					ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
 					echo_white "(as defined in files: aba/templates/operator-sets-*)" >&2
+
+					exit 1
 				fi
 				shift
 			done
