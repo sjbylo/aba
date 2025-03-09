@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250308175330
+ABA_VERSION=20250309135150
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -701,15 +701,17 @@ else
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
 		echo
-		echo_red "Important: Please ensure the image set tar files (created in the previous step with 'aba bundle' or 'aba save') are" >&2
-		echo_red "           copied to the 'aba/mirror/save' directory before following the instructions below!" >&2
-		echo_red "           For example, run the command: cp /path/to/portable/media/mirror_*tar aba/mirror/save" >&2
+		echo_magenta "IMPORTANT: The image set tar files (created in the previous step with 'aba bundle' or 'aba save') MUST BE" >&2
+		echo_magenta "           copied or moved to the 'aba/mirror/save' directory before following the instructions below!" >&2
+		echo_magenta "           For example, run the command: cp /path/to/portable/media/mirror_*tar aba/mirror/save" >&2
 	fi
 
 	echo 
 	echo_yellow Instructions
 	echo 
-	echo_red "Important: Check the values in aba.conf and ensure they are all complete and match your disconnected environment."
+	echo_magenta "IMPORTANT: Check the values in aba.conf and ensure they are all complete and match your disconnected environment."
+	echo_white Your values in aba.conf are currently:
+	normalize-aba-conf | sed "s/^export //g" | paste -d ' ' - - - | column -t | sed "s/^/  /g"
 	echo
 	echo "Set up the mirror registry and load it with the necessary container images from disk."
 	echo
@@ -719,7 +721,7 @@ else
 	echo "  aba mirror                         # to configure and/or install Quay."
 	echo "  aba load --retry <count>           # to set up the mirror registry (configure or install quay) and load it."
 	echo "Or run:"
-	echo "  aba mirror load --retry <count>    # to complete both actions and ensure the process is retried if there are any issues."
+	echo "  aba mirror load --retry <count>    # to complete both actions and ensure the 'load' process is retried should there be any issues."
 	echo
 fi
 
