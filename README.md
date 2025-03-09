@@ -673,7 +673,8 @@ Create an image set archive file for the OpenShift release images:
 ```
 aba save --op-sets --ops 
 ```
-- This will save all release images (and no operators) into a single image set archive file under `aba/mirror/save`.
+- Removes any operators defined in aba.conf.
+- Saves only release images into a single image set archive file under `aba/mirror/save`.
 
 Copy the image set archive file containing the OpenShift release images to your internal bastion (into aba/mirror/save).
 
@@ -686,7 +687,7 @@ Next create an image set archive file for the required operators:
 ```
 aba save --op-sets ocp odf ocpv acm --ops web-terminal
 ```
-- This will download operator images for pre-defined sets of operators (e.g. ocp odf ocpv acm) and individual operators (e.g. web-terminal).
+- Saves operator images from pre-defined sets of operators (e.g. ocp odf ocpv acm) and individual operators (e.g. web-terminal) to a 2nd image set archive file under `aba/mirror/save`.
 
 Copy the image set archive file containing the operator images to your internal bastion (into aba/mirror/save).
 
