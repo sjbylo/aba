@@ -673,17 +673,25 @@ aba save --op-sets --ops
 ```
 - This will save all release images (and no operators) into a single image set archive file under `aba/mirror/save`.
 
-Next create an image set archive file for operators:
+Copy the image set archive file containing the OpenShift release images to your internal bastion (into aba/mirror/save).
+
+Load (diskToMirror) the operator images to your mirror registry:
+```
+aba load --reg-path ocp4/openshift4
+```
+
+Next create an image set archive file for the required operators:
 ```
 aba save --op-sets ocp odf ocpv acm --ops web-terminal
 ```
 - This will download operator images for pre-defined sets of operators (e.g. ocp odf ocpv acm) and individual operators (e.g. web-terminal).
 
-Copy only the first image set archive file containing the OpenShift release images to your internal bastion (into aba/mirror/save).
+Copy the image set archive file containing the operator images to your internal bastion (into aba/mirror/save).
 
-Ensure your mirror registry has been configured.  If not already, run `aba mirror` to set up your mirror registry.
+Ensure your mirror registry has been configured.  If not already, run `aba mirror` on your internal bastion to set up your mirror registry.
 
 Verify access to your mirror registry:
+
 ```
 cd mirror
 aba verify
@@ -691,15 +699,9 @@ aba verify
 
 Load (diskToMirror) the images to your mirror registry:
 ```
-aba load --reg_path ocp4/operators
+aba load --reg-path ocp4/operators
 ```
 
-Copy the 2nd image set archive file containing the operator images to your internal bastion (into aba/mirror/save).
-
-Load (diskToMirror) the operator images to your mirror registry:
-```
-aba load --reg_path ocp4/openshift4
-```
 
 ### Cluster presets are used mainly to automate the testing of Aba.
 
