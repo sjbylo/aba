@@ -251,7 +251,7 @@ Set the version you want to install:
 v=4.17.16
 ```
 
-Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwite any pre-existing files under aba/mirror/save. 
+Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any pre-existing files under aba/mirror/save. 
 
 Create the bundle archive with this single command:
 ```
@@ -664,7 +664,9 @@ aba
 
 ## Advanced
 
-### To have more control as to which folder the images are stored in the mrror registry, follow these instructions.
+### You need more control with your mirror registry folders?
+
+To have more control as to which folders the images are stored to in your mirror registry, follow these instructions.
 
 Create an image set archive file for the OpenShift release images:
 
