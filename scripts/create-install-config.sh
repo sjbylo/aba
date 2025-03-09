@@ -15,9 +15,10 @@ verify-aba-conf || exit 1
 verify-cluster-conf || exit 1
 verify-mirror-conf || exit 1
 
-to_output=$(normalize-cluster-conf | sed -e "s/^export //g" | paste -d '  ' - - - | column -t --output-separator " | ")
+#to_output=$(normalize-cluster-conf | sed -e "s/^export //g" | paste -d '  ' - - - | column -t --output-separator " | ")
+to_output=$(normalize-cluster-conf | sed -e "s/^export //g")
 echo_white "Current values in cluster.conf:"
-output_table "$to_output"
+output_table 3 "$to_output"
 echo
 
 # Set the rendezvous_ip to the the first master's ip
