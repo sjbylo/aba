@@ -66,7 +66,7 @@ if [ "$bundle_dest_path" = "-" ]; then
 	echo "Downloading binary data." >&2
 
 	#make -s download save retry=7 2>&1 | cat -v >>.bundle.log
-	make -s download save retry=7 >&2
+	make -s download save retry=7 >&2 || exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
 
 	echo_cyan "Writing 'all-in-one' bundle archive (tar format) to stdout ..." >&2
 	make -s tar out=-   # Be sure the output of this command is ONLY tar output!
@@ -76,10 +76,10 @@ fi
 
 if files_on_same_device mirror $bundle_dest_path; then
 	echo_cyan "Creating 'split' bundle archive (because the bundle is on the same file-system as the image set archive file) ..."
-	make download save tarrepo out="$bundle_dest_path" retry=7	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
+	make download save tarrepo out="$bundle_dest_path" retry=7 || exit 1	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
 else
 	echo_cyan "Creating 'all-in-one' bundle archive (assuming destination file is on portable media or a different file-system) ..."
-	make download save tar out="$bundle_dest_path" retry=7    	# Try save 8 times, then create all-in-one archive, including all files. 
+	make download save tar out="$bundle_dest_path" retry=7 || exit 1    	# Try save 8 times, then create all-in-one archive, including all files. 
 fi
 
 exit 0

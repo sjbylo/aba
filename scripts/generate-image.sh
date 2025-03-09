@@ -14,7 +14,11 @@ echo_cyan Cluster configuration
 printf '=%.0s' $(seq 1 "$len")
 echo
 openshift-install version 2>&1 | cat_cyan
-output_table "$conf_display"
+printf '=%.0s' $(seq 1 "$len")
+echo
+echo_cyan "$conf_display"
+printf '=%.0s' $(seq 1 "$len")
+echo
 
 # FIXME: Use $config above? ###
 #eval `scripts/cluster-config.sh || exit 1`
