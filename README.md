@@ -666,26 +666,38 @@ aba
 
 ### You need more control with your mirror registry folders?
 
-To have more control as to which folders the images are stored to in your mirror registry, follow these instructions.
+You can gain more control over the mirror registry folders and the storage locations for different types of images by following these instructions.
 
 Create an image set archive file for the OpenShift release images:
 
 ```
-aba save --op-sets --ops 
+aba save \
+    --channel stable \
+    --version latest \
+    --op-sets \
+    --ops \
+    --base-domain example.com \
+    --machine-network 10.0.0.0/20 \
+    --dns 10.0.1.8 \
+    --ntp 10.0.1.8 ntp.example.com \
+    --platform bm
 ```
-- Removes any operators defined in aba.conf.
+- Removes any operators defined in aba.conf (--op-sets and --ops).
 - Saves only release images into a single image set archive file under `aba/mirror/save`.
+- Note: options --base-domain, --machine-network, --dns, --ntp, --platform are optional and *should be used* if the values are already known for the internal env.
 
 Copy the image set archive file containing the OpenShift release images to your internal bastion (into aba/mirror/save).
 
-Load (diskToMirror) the operator images to your mirror registry:
+Load (diskToMirror) the operator images to your mirror registry using your desired path:
 ```
 aba load --reg-path ocp4/openshift4
 ```
 
 Next create an image set archive file for the required operators:
 ```
-aba save --op-sets ocp odf ocpv acm --ops web-terminal
+aba save \
+    --op-sets ocp odf ocpv acm \
+    --ops web-terminal
 ```
 - Saves operator images from pre-defined sets of operators (e.g. ocp odf ocpv acm) and individual operators (e.g. web-terminal) to a 2nd image set archive file under `aba/mirror/save`.
 
@@ -700,7 +712,7 @@ cd mirror
 aba verify
 ```
 
-Load (diskToMirror) the images to your mirror registry:
+Load (diskToMirror) the images to your mirror registry using your desired path:
 ```
 aba load --reg-path ocp4/operators
 ```
