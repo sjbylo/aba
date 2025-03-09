@@ -4,11 +4,12 @@
 
 source scripts/include_all.sh
 
-# Only background for the opertor index to be downloaded, e.g. if it likely will be needed!
+# Only d/l the opertor index in the background to save time!
 if [ "$1" = "true" ]; then
 	shift
-	# Daemon the script!
+	# Daemonify the script!
 	( $0 --bg $* & ) & 
+	sleep 1
 
 	exit 0
 fi
@@ -33,7 +34,7 @@ pid_file=.index/redhat-operator-index-v$ocp_ver_major.pid
 done_file=.index/redhat-operator-index-v$ocp_ver_major.done
 
 # Clean up on INT
-handle_interupt() { echo_red "Aborting catalog download." >&2; [ ! -s $index_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0;}
+handle_interupt() { echo_red "Aborting catalog download." >&2; [ ! -f $done_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0;}
 trap 'handle_interupt' INT
 
 # Check if this script is running in the background, if it is then output to a log file
@@ -64,15 +65,15 @@ scripts/create-containers-auth.sh >/dev/null  # Ensure any errors are output
 # See if the index is currently downloading (using 'ln' to get a lock)
 if ! ln $index_file $lock_file >/dev/null 2>&1; then
 	[ "$DEBUG_ABA" ] && echo "Lock file $lock_file already exists ..." >&2
-	# Passed here only if the lock file exists (i.e. index already downloading) 
+	# Passed here only if the lock file already exists (i.e. index already downloading) 
 
-	# If still downloading...
+	# Check if still downloading...
 	if [[ -s $index_file && -f $done_file ]]; then
 		echo_white "Operator index v$ocp_ver_major already downloaded to file mirror/$index_file"
 	else
 		# No need to wait if operator vars are not defined in aba.conf!
 		if [ ! "$op_sets" -a ! "$ops" ]; then
-			[ "$DEBUG_ABA" ] && echo "No operators defined ..."
+			[ "$DEBUG_ABA" ] && echo "No operators defined ... exiting"
 			exit 0
 		fi
 
