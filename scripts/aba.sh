@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250309183240
+ABA_VERSION=20250310100727
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -634,16 +634,6 @@ if [ ! -f .bundle ]; then
 
 		( make -s -C mirror catalog bg=true & ) & 
 
-		#make -s -C mirror init >/dev/null 2>&1
-		#(
-		#	(
-		#		make -s -C cli ~/bin/oc-mirror >mirror/.log  2>&1 && \
-		#		cd mirror && \
-		#		date > .fetch-index.log && \
-		#		scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
-		#	) &
-		#) & 
-
 		sleep 0.3
 	else
 		echo
@@ -663,6 +653,7 @@ if [ ! -f .bundle ]; then
 	# Determine air-gapped
 
 	echo
+	echo_white "Fully Disconnected (air-gapped)"
 	echo_white "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, Aba can download all required software"
 	echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'bundle archive' for you to transfer into your disconnected environment."
 	if ask "Install OpenShift into a fully disconnected network environment"; then
@@ -683,31 +674,37 @@ if [ ! -f .bundle ]; then
 	# Determine online installation (e.g. via a proxy)
 
 	echo
-	echo_white "OpenShift can be installed directly from the Internet *without* using a mirror registry, e.g. via a proxy."
-	if ask "Install OpenShift directly from the Internet"; then
-		echo 
-		echo_yellow Instructions
-		echo 
-		echo "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>]"
-		echo 
+	echo_white "Partially Disconnected"
+	echo_white "A mirror registry can be synchronized directly from the Internet, allowing OpenShift to be installed from the mirrored content."
+	if ask "Install OpenShift from a mirror registry that is synchonized directly from the Internet"; then
 
-		exit 1
+		echo 
+		echo_yellow Instructions to sync images directly to a mirror registry
+		echo 
+		echo "Action required: Set up the mirror registry and sync it with the necessary container images."
+		echo
+		echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
+		echo
+		echo "Run:"
+		echo "  aba mirror                        # to configure and/or install Quay."
+		echo "  aba sync --retry <count>          # to synchronize all container images - from the Internet - into your registry."
+		echo
+		echo "Or run:"
+		echo "  aba mirror sync --retry <count>   # to complete both actions and ensure any image synchronization issues are retried."
+		echo
+
+		exit 0
 	fi
 
 	echo 
-	echo_yellow Instructions to sync images directly to a mirror registry
+	echo_yellow Instructions
 	echo 
-	echo "Action required: Set up the mirror registry and sync it with the necessary container images."
+	echo "Install OpenShift directly from the Internet"
 	echo
-	echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
+	echo "Configure the installation to use a proxy (optional)."
 	echo
-	echo "Run:"
-	echo "  aba mirror                        # to configure and/or install Quay."
-	echo "  aba sync --retry <count>          # to synchronize all container images - from the Internet - into your registry."
-	echo
-	echo "Or run:"
-	echo "  aba mirror sync --retry <count>   # to complete both actions and ensure any image synchronization issues are retried."
-	echo
+	echo "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>]"
+	echo 
 
 else
 	# aba is running on the internal bastion, in 'bundle mode'.
