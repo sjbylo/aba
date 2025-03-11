@@ -42,8 +42,9 @@ ocp_version := $(strip $(shell echo $(ocp_version)))
 
 all: oc openshift-install oc-mirror govc butane
 
-# If 'reset' found in $MAKECMDGOALS, i.e. no reset provided
-ifneq ($(filter reset,$(MAKECMDGOALS)),)
+# For "reset" and "oc-mirror" and "govc" targets we DO NOT need to check for the target ocp version
+# If 'reset' found in $MAKECMDGOALS, i.e. no reset target provided
+ifneq ($(filter reset oc-mirror govc,$(MAKECMDGOALS)),)
   # reset not given
 else
   ifeq ($(ocp_version),)
@@ -130,7 +131,7 @@ openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install ta
 
 ########################################
 oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
-~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz ~/bin/oc
+~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz # ~/bin/oc # is this really needed for oc-mirror - no!
 	@echo $(os_ver) | grep -q "^9\." && echo Extracting oc-mirror.rhel9.tar.gz to ~/bin/oc-mirror || echo Extracting oc-mirror.tar.gz to ~/bin/oc-mirror
 	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror

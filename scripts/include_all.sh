@@ -466,6 +466,9 @@ fetch_previous_version() {
 	major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
 	stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
 
+	# We need oc-mirror!
+	which oc-mirror 2>/dev/null >&2 || { echo Installing oc-mirror ... >&2; make -s -C $ABA_PATH/cli oc-mirror >&2; }
+
 	#[ "$stable_ver_point" ] && stable_ver_prev=$(echo "$rel"| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
 	stable_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${stable_ver_point} 2>/dev/null | tail -1)  # This is better way to fetch the newest previoous version!
 
