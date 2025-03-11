@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250311211353
+ABA_VERSION=20250311213913
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -639,7 +639,6 @@ if [ ! -f .bundle ]; then
 	fi
 
 	# make & jq are needed below and in the next steps 
-	#install_rpms make jq python3-pyyaml
 	scripts/install-rpms.sh external 
 
 	##############################################################################################################################
