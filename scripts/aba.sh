@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250310100727
+ABA_VERSION=20250311211353
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -114,6 +114,9 @@ chan=stable
 interactive_mode=
 [ "$*" ] && interactive_mode_none=1
 
+# Let's ensure we get the most important rpms installed
+install_rpms $(cat templates/rpms-external.txt) || exit 1
+
 while [ "$*" ] 
 do
 	[ "$DEBUG_ABA" ] && echo "$0: \$* = " $* >&2
@@ -191,16 +194,6 @@ do
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
 
 		( make -s -C $ABA_PATH/mirror catalog bg=true & ) & 
-
-		#make -s -C $ABA_PATH/mirror init >/dev/null 2>&1
-		#(
-		#	(
-		#		make -s -C $ABA_PATH/cli ~/bin/oc-mirror >$ABA_PATH/mirror/.log  2>&1 && \
-		#		cd $ABA_PATH/mirror && \
-		#		date > .fetch-index.log && \
-		#		$ABA_PATH/scripts/download-operator-index.sh --background >> .fetch-index.log 2>&1
-		#	) &
-		#) & 
 
 		shift 2
 

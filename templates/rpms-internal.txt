@@ -1,1 +1,1 @@
-podman make python3-jinja2 python3-pyyaml jq bind-utils nmstate net-tools skopeo openssl coreos-installer httpd
+make jq python3-jinja2 python3-pyyaml podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd
