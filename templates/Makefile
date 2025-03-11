@@ -9,7 +9,7 @@ debug    ?= 		# Set debug=1 for some commands will: set -x
 -include ../aba.conf
 platform := $(strip $(shell echo $(platform)))
 
-# The next section is (unfortunatelly) needed because making a bare-metal cluster has a different flow, with interruptions!
+# The next section is (unfortunately) needed because making a bare-metal cluster has a different flow, with interruptions!
 # 1. Before iso creation, the Agent-based installer config files need to be changed: mac addresses added, disk hints ... etc.
 # 2. And, after iso creation, the iso hosts need to be booted before 'aba mon' target is run.
 ifneq ($(platform),vmw)   # if platform is not 'vmw', i.e. bare-metal is assumed 
@@ -97,16 +97,17 @@ agent-config.yaml: .init             cluster.conf mirror.conf  ## Create the age
 .bm-message:
 	@echo
 	@echo "Next steps:"
-	@echo "1 cd <cluster name>"
+	@echo "1 cd <cluster name>    # if not already"
 	@echo "2 Check & edit the agent configuration files: "
-	@echo "   - install-config.yaml:"
-	@#echo "       Add proxy values, in case you want to use them."
-	@echo "   - agent-config.yaml:"
+	@echo "   - $(PWD)/install-config.yaml:"
+	@echo "   - $(PWD)/agent-config.yaml:"
 	@echo "       You must modify the mac addresses to match your host's network interfaces."
-	@echo "       Optionally, add drive & NIC hints, vlan tag and any other network configurations, if needed."
+	@echo "       Optionally, add drive & NIC hints and any other network configurations, if needed."
 	@echo "3 Run 'aba iso' to create the ISO file."
 	@echo "4 Power on all your hosts and boot them with the ISO file."
-	@echo "5 Run 'aba mon' to monitor the installation progress."
+	@echo "5 Verify that the hosts start up and can connect to the registry successfully."
+	@echo "   - aba ssh    # connect to node0 for any needed troubleshooting."
+	@echo "6 Then, run 'aba mon' to monitor the installation progress."
 	@echo 
 	@touch .bm-message
 
@@ -117,7 +118,9 @@ iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note
 
 .bm-nextstep:
 	@echo "Next steps:"
-	@echo "  Boot your hosts with the ISO file and then run 'aba mon' to monitor the installation progress."
+	@echo "1 Boot your hosts with the ISO file."
+	@echo "2 if needed, run 'aba ssh' to log into node0 to troubleshoot."
+	@echo "3 then run 'aba mon' to monitor the installation progress."
 	@touch .bm-nextstep
 	@exit 0
 
@@ -226,7 +229,7 @@ day2-ntp:  ## Configure OpenShift with your NTP server
 	$(SCRIPTS)/day2-config-ntp.sh $(debug)
 
 .PHONY: remove-cdrom
-remove-cdrom: vmware.conf  ## Remove the cdrom devide from all VMs
+remove-cdrom: vmware.conf  ## Remove the cdrom devise from all VMs
 	$(SCRIPTS)/vmw-remove-cdrom-device.sh
 
 .PHONY: vmw

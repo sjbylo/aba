@@ -26,11 +26,12 @@ if [ $ret -ne 0 ]; then
 	exit $ret
 else
 	echo 
-	echo_green "The cluster has been successfully installed."
+	echo_green "The cluster has been successfully installed!"
 	echo_green "Run '. <(aba shell)' to access the cluster using the kubeconfig file (x509 cert), or"
-	echo_green "Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password. "
-	[ -d regcreds ] && echo_green "Run 'aba day2' to connect this cluster with your mirror registry."
-	echo_green "Run 'aba day2-ntp' to connect this cluster with your NTP server(s)."
+	echo_green "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
+	[ -f regcreds/pull-secret-mirror.json ] && \
+	echo_green "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry."
+	echo_green "Run 'aba day2-ntp' to configure NTP on this cluster."
 	echo_green "Run 'aba help' for more options."
 fi
 
