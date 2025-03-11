@@ -226,7 +226,7 @@ aba help
 
 ## Creating a bundle archive with everything you need to install OpenShift in an air-gapped network
 
-You need to download a set of images to install a particular version of OpenShift into a fully disconnected (air-gapped) network?
+Do you need to download a set of images to install a particular version of OpenShift into a fully disconnected (air-gapped) network?
 
 Here is how you can use Aba to create a `bundle archive` to do that!
 
@@ -246,7 +246,7 @@ cd aba
 
 Connect a large USB media stick (or other device) to your VM and write the `bundle archive` to it:
 
-Set the version you want to install:
+Set the version oc OpenShift you want to install:
 ```
 v=4.17.16
 ```
@@ -272,9 +272,9 @@ aba bundle \
 
 - This will output several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.
 - Depending on the channel chosen, the OpenShift version will be set to the most recent 'previous' point version.
-- If needed, --op-sets refers to predefined sets of operator defined in the files `templates/operator-set-*`.
+- If needed, --op-sets refers to predefined sets of operators, as defined in the files `templates/operator-set-*`.
 - If needed, add individual operators after "--ops".
-- If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise these values must be set on the internal bastion in aba.conf).
+- If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise these values must be set in aba.conf on the internal bastion).
 - Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
 - Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_*`.  It is important that the files are not damaged or incomplete in any way!
@@ -288,17 +288,28 @@ Verify the files are intact by comparing the checksum values with the original f
 cksum ocp_mycluster_4.17.16_*
 ```
 
-Unpack the bundle archive:
+Extract the bundle archive:
 
 ```
-cat /path/to/ocp_mycluster_4.17.16_* | tar xvf -        # to extract the bundle archive
+cat /path/to/ocp_mycluster_4.17.16_* | tar xvf -
 cd aba
 ./install
-aba                     # Run aba if you want Aba to install & load the mirror registry
+aba         # Run aba and follow the instructions
 ```
 
 Note: You will find the large image set tar file under `aba/mirror/save`.
 
+You can now install the Quay mirror registry to localhost and then load it with images using the following command (see below for more details):
+
+```
+aba mirror -H registry.example.com load --retry 3
+```
+
+To install OpenShift run the following command and follow the instructions (see below for more details):
+
+```
+aba cluster --name mycluster --type compact
+```
 
 [Back to top](#who-should-use-aba)
 
