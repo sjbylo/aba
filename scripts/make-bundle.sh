@@ -7,7 +7,7 @@ source scripts/include_all.sh
 [ "$1" ] && force=true && shift
 [ "$1" ] && set -x
 
-#install_rpms make 2>/dev/null | cat -v >.bundle.log|| exit 1
+# This will have been completed behand, but just in case!
 install_rpms $(cat templates/rpms-external.txt) || exit 1
 
 source <(normalize-aba-conf)
