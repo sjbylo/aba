@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250311213913
+ABA_VERSION=20250312225806
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -115,7 +115,7 @@ interactive_mode=
 [ "$*" ] && interactive_mode_none=1
 
 # Let's ensure we get the most important rpms installed
-install_rpms $(cat templates/rpms-external.txt) || exit 1
+install_rpms $(cat $ABA_PATH/templates/rpms-external.txt) || exit 1
 
 while [ "$*" ] 
 do
