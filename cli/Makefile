@@ -70,8 +70,8 @@ help: ## Help
 
 # The preference to download the oc tar files is for rhel9, then rhel8 and then the generic tar file.
 
-full_oc_tar_file       := openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
-full_oc_url            := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
+full_oc_tar_file  := openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
+full_oc_url       := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
 
 gen_oc_tar_file   := openshift-client-$(os)-$(ocp_version).tar.gz
 gen_url           := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
@@ -114,8 +114,8 @@ $(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
 ########################################
 # Be sure that the correct version is installed by creating .*installed flag file
 
-openshift-install: ~/bin/openshift-install
-~/bin/openshift-install: .init .$(ocp_version)-openshift-install-$(os)-installed ## Install openshift-install into ~/bin
+openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/bin
+~/bin/openshift-install: .init .$(ocp_version)-openshift-install-$(os)-installed
 	@file openshift-install-$(os)-$(ocp_version).tar.gz | grep -q "gzip compressed data" || { echo ERROR: Invalid file: openshift-install-$(os)-$(ocp_version).tar.gz; exit 1;}
 	@echo Extracting  openshift-install-$(os)-$(ocp_version).tar.gz to ~/bin/openshift-install
 	tar -C ~/bin -xmzf openshift-install-$(os)-$(ocp_version).tar.gz openshift-install
