@@ -11,7 +11,7 @@ source <(normalize-aba-conf)
 
 verify-aba-conf || exit 1
 
-[ "$platform" != "vmw" ] && echo_white "Platform value  not set to 'vmw' in 'aba.conf'. Not configuring: vmware.conf" && > vmware.conf && exit 0
+[ "$platform" != "vmw" ] && echo_white "Platform value not set to 'vmw' in 'aba.conf'. Not configuring: vmware.conf" && > vmware.conf && exit 0
 
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)
