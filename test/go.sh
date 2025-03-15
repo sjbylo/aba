@@ -5,6 +5,7 @@
 #[ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
 [ "$TMUX" ] && tmux clear-history 
 
+export VER_OVERRIDE=l # Uncomment to use the 'latest' stable version of OCP
 #export VER_OVERRIDE=4.16.30 # Uncomment to use the 'latest' stable version of OCP
 export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 export TEST_USER=$(whoami)   # This can be any user or $(whoami) 
@@ -50,7 +51,7 @@ echo "==========================================================================
 echo "START TESTS @ $(date)" 								>> test/test.log
 echo "==========================================================================" 	>> test/test.log
 
-echo "$all_tests $internal_bastion_rhel_ver $TEST_USER $oc_mirror_ver_override" | notify.sh -i Starting tests:
+echo "$all_tests [$VER_OVERRIDE] $internal_bastion_rhel_ver $TEST_USER $oc_mirror_ver_override" | notify.sh -i Starting tests:
 
 time for t in $all_tests
 do
