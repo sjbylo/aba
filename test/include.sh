@@ -230,13 +230,15 @@ init_bastion() {
 
 	govc vm.power -off bastion-internal-rhel8 || true
 	govc vm.power -off bastion-internal-rhel9 || true
-	govc snapshot.revert -vm $int_bastion_vm_name aba-test
+	echo "Reverting vm $int_bastion_vm_name to snapshot $aba-test ..."
+	govc snapshot.revert -vm $int_bastion_vm_name aba-test || exit 1
 	sleep 8
 	govc vm.power -on $int_bastion_vm_name
 	sleep 5
 
 	# Copy over the - already working - default user's ssh config to /root
 	if [ "$test_user" = "root" ]; then
+		mkdir -p /root/.ssh
 		eval cp ~$def_user/.ssh/config /root/.ssh
 		eval cp ~$def_user/.ssh/id_rsa* /root/.ssh
 	fi
@@ -249,7 +251,7 @@ init_bastion() {
 
 	pub_key=$(cat ~/.ssh/id_rsa.pub)
 
-	net_if=ens192
+	net_if=ens160 # Not used!
 
 	# General bastion config, e.g. date/time/timezone and also root ssh
 cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash

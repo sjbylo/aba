@@ -443,17 +443,18 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 cd aba
 aba cluster --name mycluster [--type sno|compact|standard] [--step xyz]
 ```
-- will create a directory `mycluster`, copy the Makefile into it and then prompt you to run `aba` inside the directory.
-- Note, *all* advanced preset parameters at the bottom of the `aba.conf` configuration file must be completed for the optional "type" parameter to have any affect.
+- creates a directory `mycluster` (it is useful to name the directory with the same name of your cluster),
+- initializes the directory and then prompts you to run `aba` inside the directory. The most useful 'steps' are 'agentconf', 'iso' and 'mon'.
+- Note, *all* advanced preset parameters in the 'shortcuts.conf' configuration file must be completed for the "--type" option to take affect.
 
- You should run the following command to monitor the progress of the Agent-based installer. For example:
+Once the nodes have booted from the iso the following command should be run to monitor the progress of the installation. For example:
 
 ```
-cd <cluster dir>   # e.g. cd compact
+cd <cluster dir>     # e.g. cd mycluster
 aba mon
 ```
 
-Get help with `aba help`.
+Get help with `aba -h`.
 
 After OpenShift has been installed you will see the following output:
 

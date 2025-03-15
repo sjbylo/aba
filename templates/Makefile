@@ -200,6 +200,10 @@ mon:  ## Monitor the agent-based installation of OpenShift.
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 
+.PHONY: info
+info:
+	$(SCRIPTS)/cluster-info.sh $(debug)
+
 .PHONY: login
 login: 
 	$(SCRIPTS)/show-cluster-login.sh

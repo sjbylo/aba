@@ -82,19 +82,19 @@ load: ## Load the saved images into a registry on the internal bastion (as defin
 	@make -sC mirror load
 
 .PHONY: sno
-sno: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'aba sno target=iso' to make that target.
+sno: aba.conf  ## Install a Single Node OpenShift cluster.  Use 'aba sno --step iso' to create the iso.
 	$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: compact
-compact: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'aba compact target=iso' to make that target.
+compact: aba.conf  ## Install a standard 3-node OpenShift cluster.  Use 'aba compact --step iso' to create the iso.
 	$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: standard
-standard: aba.conf  ## Install a standard 3+2-node OpenShift cluster.  Use 'aba standard target=iso' to make that target.
+standard: aba.conf  ## Install a standard 3+3-node OpenShift cluster.  Use 'aba standard --step iso' to create the iso.
 	$(SCRIPTS)/setup-cluster.sh $@ $@ $(target)
 
 .PHONY: cluster
-cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. aba cluster name=mycluster [type=sno|compact|standard] [target=<target>]
+cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step=<step>]
 	$(SCRIPTS)/setup-cluster.sh $(name) $(type) $(target)
 
 #.PHONY: rsync
