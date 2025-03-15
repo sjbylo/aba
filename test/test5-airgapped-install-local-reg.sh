@@ -183,6 +183,7 @@ mylog Runtest: vote-app
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
 if [ "$oc_mirror_version" = "v2" ]; then
+# Create fresh file for v2
 tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/$gvk
@@ -218,6 +219,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading UBI images i
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
 if [ "$oc_mirror_version" = "v2" ]; then
+# Create fresh file for v2
 tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/$gvk
@@ -301,6 +303,7 @@ test-cmd -m "Checking for file mirror/imageset-config-operator-catalog-v${ocp_ve
 test-cmd -m "Checking for servicemeshoperator in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 servicemeshoperator$"
 test-cmd -m "Checking for kiali-ossm in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 kiali-ossm$"
 
+# This header is needed for both v1 and v2
 tee -a mirror/save/imageset-config-save.yaml <<END
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
@@ -332,20 +335,26 @@ test-cmd -m "Checking jaeger-product operator exists in the catalog file" "cat m
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
 if [ "$oc_mirror_version" = "v2" ]; then
+# Create fresh file for v2
 tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/$gvk
 mirror:
-END
-fi
-# For oc-miror v2
-
-mylog Appending operator header to mirror/save/imageset-config-save.yaml
-tee -a mirror/save/imageset-config-save.yaml <<END
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
     packages:
 END
+fi
+# For oc-miror v2
+
+
+# This header already exists for oc-mirror v1 (see above) 
+#mylog Appending operator header to mirror/save/imageset-config-save.yaml
+#tee -a mirror/save/imageset-config-save.yaml <<END
+#  operators:
+#  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
+#    packages:
+#END
 
 mylog Appending jaeger operator to imageset conf
 grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
