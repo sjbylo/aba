@@ -231,8 +231,8 @@ init_bastion() {
 	govc vm.power -off bastion-internal-rhel8 || true
 	govc vm.power -off bastion-internal-rhel9 || true
 	echo "Reverting vms to snapshot $aba-test ..."   # Do both to ensure all disk space is recovered
-	govc snapshot.revert -vm $bastion-internal-rhel8  aba-test || exit 1
-	govc snapshot.revert -vm $bastion-internal-rhel9  aba-test || exit 1
+	govc snapshot.revert -vm bastion-internal-rhel8  aba-test || exit 1
+	govc snapshot.revert -vm bastion-internal-rhel9  aba-test || exit 1
 	sleep 8
 	govc vm.power -on $int_bastion_vm_name
 	sleep 5
