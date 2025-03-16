@@ -7,7 +7,7 @@
 source scripts/include_all.sh
 
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
-inc= 				# Full backup by default
+inc= 				# Full backup by default (not incremental) 
 repo_only=			# Also include the save/mirror_*.tar files (for some use-cases it's more efficient to keep them separate) 
 
 while echo "$1" | grep -q ^--[a-z]
@@ -18,13 +18,13 @@ done
 
 [ "$1" ] && dest="$1"
 
-# Append .tar if it's missing from filename (ignore stdout) 
+# Append .tar if it's missing from filename (ignore for stdout) 
 if [ "$dest" != "-" ]; then
-	[ -d $dest ] && dest=$dest/aba-backup-$(whoami).tar		# The dest needs to be a file
-	echo "$dest" | grep -q \.tar$ || dest="$dest.tar"
+	[ -d $dest ] && dest=$dest/aba-backup-$(whoami).tar	# The dest needs to be a file
+	echo "$dest" | grep -q \.tar$ || dest="$dest.tar"	# append .tar if needed
 
 	# If the destination file already exists...
-	[ -s $dest ] && echo_red "Warning: File $dest already exists. Aborting!" >&2 && exit 1 # Must use stderr otherwise the tar archive becomes corrupt
+	[ -s $dest ] && echo_red "Warning: File $dest already exists. Aborting!" >&2 && exit 1 
 fi
 
 # Assume this script is run via 'make ...' from aba's top level dir
@@ -111,9 +111,10 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 
 # Output reminder message
 if [ "$repo_only" ]; then
-	echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE BUNDLE." >&2
-	echo_magenta "           See image set file(s) at aba/mirror/save/mirror_*.tar." >&2
-	echo_magenta "           You will need to copy them to your internal bastion along with the bundle archive ($(basename $dest)). See below for more instructions." >&2
+	echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE BUNDLE ARCHIVE ('SPLIT BUNDLE')." >&2
+	echo_magenta "           The image set archive file(s) are located at aba/mirror/save/mirror_*.tar." >&2
+	echo_magenta "           You will need to copy them to your internal bastion, along with the bundle file ($dest), and combine them." >&2
+	echo_magenta "           READ THE BELOW INSTRUCTIONS CAREFULLY!" >&2
 	echo_magenta "           To avoid this write the full archive bundle to *external media* or to a *separate drive*." >&2
 fi
 
@@ -121,16 +122,16 @@ fi
 if [ "$dest" != "-" ]; then
 	if [ "$repo_only" ]; then
 		echo
-		echo_cyan "Writing 'split'  bundle archive to $dest ... (to create a full bundle, write the bundle directly to external media)."
+		echo_cyan "Writing 'split' bundle file to $dest ... (to create a full bundle, write the bundle directly to external media)."
 		echo
-		echo_white "After the bundle has been written, copy it to your *internal bastion*, e.g. with the command:"
+		echo_white "After the bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
-		echo_white "Copy over the image set tar file(s) also, e.g. with:"
+		echo_white "Also transfer the image set archive file(s), for example, with:"
 		echo_white " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "Transfer the bundle and the image set tar file(s) to your internal bastion."
-		echo_white "Extract the bundle tar file into your home directory"
-		echo_white "and then move the image set tar file(s) into the aba/mirror/save/ dir & continue by running 'aba', e.g. with the commands:"
+		echo_white "After transfering the bundle file and the image set archive file(s) to your internal bastion"
+		echo_white "extract them into your home directory and"
+		echo_white "then move the image set archive file(s) into the aba/mirror/save/ directory & continue by installing & running 'aba', for example, with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
 		echo_white "  mv mirror_*.tar aba/mirror/save"
 		echo_white "  cd aba"
@@ -141,13 +142,14 @@ if [ "$dest" != "-" ]; then
 		echo
 	else
 		echo
-		echo_cyan "Writing 'all-in-one' bundle archive to $dest ..."
+		echo_cyan "Writing 'all-in-one' bundle file to $dest ..."
 		echo
-		echo_white "Transfer it to your *internal bastion*, e.g. with the command:"
+		echo_white "After the bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "Transfer the bundle to your internal bastion."
-		echo_white "Extract the bundle tar file into your home directory, e.g. with:"
+		echo_white "After transfering the bundle file to your internal bastion"
+		echo_white "extract it into your home directory and"
+		echo_white "then continue by installing & running 'aba', for example, with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
 		echo_white "  cd aba"
 		echo_white "  ./install"
