@@ -391,7 +391,7 @@ test-cmd -m "Leave time for ACM to deploy ..." sleep 30
 
 # Need 'cd' here due to '=$subdir' not 'resolving' ok
 # cd $subdir only works in "" .. and will work for root or user
-### SKIP FOR NOW, NOT WORKING ### test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Waiting up to 6 mins for acm hub status is 'Running'" "cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=\$i+1; [ \$i -gt 36 ] && exit 1; sleep 10; done"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Waiting up to 6 mins for acm hub status is 'Running'" "cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=\$i+1; [ \$i -gt 36 ] && exit 1; sleep 10; done"
 #### TESTING ACM + MCH 
 
 # Apply NTP config, but don't wait for it to complete!
