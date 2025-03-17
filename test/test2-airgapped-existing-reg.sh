@@ -323,12 +323,9 @@ mylog "Adding advanced-cluster-management operator images to mirror/save/imagese
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-mylog "Checking for file mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
-test -s mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml
-mylog "Checking for advanced-cluster-management in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
-cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep advanced-cluster-management$ 
-mylog "Checking for multicluster-engine         in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
-cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep multicluster-engine$ 
+test-cmd -m "Checking for file mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "test -s mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
+test-cmd -m "Checking for advanced-cluster-management in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep advanced-cluster-management$"
+test-cmd -m "Checking for multicluster-engine in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep multicluster-engine$"
 
 mylog Appending redhat-operator-index:v$ocp_ver_major header into mirror/save/imageset-config-save.yaml on `hostname`
 
@@ -352,7 +349,7 @@ END
 # Append the correct values for each operator
 test-cmd -m "Adding advanced-cluster-management  operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: advanced-cluster-management$' mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
 
-test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
+### TEST LEAVE THIS OFF - CAN oc-mirror v1 add it? ### test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
 ### WORKING BUT 60+ GB OF DATA !!! ### test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep     -e 'name: multicluster-engine$'         mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"   # Fetch all ??
 
 
