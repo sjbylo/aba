@@ -237,7 +237,7 @@ init_bastion() {
 	govc vm.power -on $int_bastion_vm_name
 	sleep 5
 
-	# Copy over the - already working - default user's ssh config to /root
+	# Copy over the - already working - default user's ssh config to /root (so ssh works also for root)
 	if [ "$test_user" = "root" ]; then
 		mkdir -p /root/.ssh
 		eval cp ~$def_user/.ssh/config /root/.ssh
@@ -252,7 +252,7 @@ init_bastion() {
 
 	pub_key=$(cat ~/.ssh/id_rsa.pub)
 
-	net_if=ens160 # Not used!
+	net_if=ens160 # Not used below!
 
 	# General bastion config, e.g. date/time/timezone and also root ssh
 cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
