@@ -1,6 +1,8 @@
 openshift-gitops-operator
 openshift-pipelines-operator-rh
 devspaces
-devworkspace-operator
 serverless-operator
 rhsso-operator
+
+# Dependencies
+devworkspace-operator
