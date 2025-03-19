@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250312225806
+ABA_VERSION=20250319150745
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -176,7 +176,11 @@ do
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		shift 
-		chan=$(echo $1 | grep -E -o '^(stable|fast|eus|candidate)$')
+		chan=$(echo $1 | grep -E -o '^(stable|s|fast|f|eus|e|candidate|c)$')
+		[ "$chan" = "s" ] && chan=stable
+		[ "$chan" = "f" ] && chan=fast
+		[ "$chan" = "c" ] && chan=candidate
+		[ "$chan" = "e" ] && chan=eus
 		replace-value-conf $ABA_PATH/aba.conf ocp_channel $chan
 		shift 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then

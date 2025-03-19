@@ -2,3 +2,11 @@ odf-operator
 local-storage-operator
 lvms-operator
 rook-ceph-operator
+
+# Dependent operators
+mcg-operator
+ocs-client-operator
+ocs-operator
+odf-csi-addons-operator
+odf-prometheus-operator
+recipe
