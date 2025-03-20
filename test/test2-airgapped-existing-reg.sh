@@ -20,7 +20,7 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
-[ ! "$TEST_USER" ] && TEST_USER=$(whoami)
+[ ! "$TEST_USER" ] && export TEST_USER=$(whoami)
 
 cd `dirname $0`
 cd ..  # Change into "aba" dir
