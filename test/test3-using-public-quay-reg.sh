@@ -16,7 +16,7 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
-[ ! "$TEST_USER" ] && TEST_USER=$(whoami)
+[ ! "$TEST_USER" ] && export TEST_USER=$(whoami)
 
 # Try to fix "out of space" error when generating the op. index
 cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*

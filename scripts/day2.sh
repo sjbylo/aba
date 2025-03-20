@@ -168,8 +168,8 @@ else
 	
 			echo "Patching registry poll interval for CatalogSource redhat-operators"
 			oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
-			echo Pausing ...
-			sleep 60
+			echo Pausing 30s ...
+			sleep 30
 		fi
 
 		echo "Waiting for CatalogSource 'redhat-operators' to become 'ready' ..."
