@@ -96,6 +96,7 @@ test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in aba.conf" aba --ntp 
 mylog "Setting op_sets=abatest in aba.conf"
 sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
 echo kiali-ossm > templates/operator-set-abatest 
+# kiali is installed in later tests below
 
 # Needed for $ocp_version below
 source <(normalize-aba-conf)
@@ -120,6 +121,7 @@ sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
 # This is also a test that overriding vakues works ok, e.g. this is an override in the mirror.connf gile, overriding from aba.conf file
 test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_sets=.*/op_sets=abatest /g' ./mirror/mirror.conf"
 echo kiali-ossm > templates/operator-set-abatest 
+# kiali is installed in later tests below
 
 # Uncomment this line
 # NOT NEEDED.  This is a local reg on host $int_bastion_hostname!
@@ -270,7 +272,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 mylog 
-mylog "Append svc mesh and kiali operators to imageset conf using v$ocp_ver_major ($ocp_version)"
+mylog "Append svc mesh (kiali op. installed already) operators to imageset conf using v$ocp_ver_major ($ocp_version)"
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
@@ -301,7 +303,7 @@ END
 
 test-cmd -m "Checking for file mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "test -s mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
 test-cmd -m "Checking for servicemeshoperator in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 servicemeshoperator$"
-test-cmd -m "Checking for kiali-ossm in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 kiali-ossm$"
+### Added from op-set 'abatest' test-cmd -m "Checking for kiali-ossm in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 kiali-ossm$"
 
 # This header is needed for both v1 and v2
 tee -a mirror/save/imageset-config-save.yaml <<END
@@ -313,7 +315,7 @@ END
 # Append the correct values for each operator
 mylog Append sm and kiali operators to imageset conf
 grep -A2 -e "name: servicemeshoperator$"  mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
-grep -A2 -e "name: kiali-ossm$"	          mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+### Added from op-set 'abatest' grep -A2 -e "name: kiali-ossm$"	          mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
 ########
 test-cmd -r 3 3 -m "Saving mesh operators to local disk" "aba --dir mirror save --retry"
