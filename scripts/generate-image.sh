@@ -3,6 +3,12 @@
 
 source scripts/include_all.sh
 
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
+
+verify-aba-conf || exit 1
+verify-mirror-conf || exit 1
+
 # Output the cluster configuration, to be installed.
 
 config=$(scripts/cluster-config.sh) 
@@ -38,13 +44,15 @@ mkdir -p $ASSETS_DIR
 
 cp install-config.yaml agent-config.yaml $ASSETS_DIR 
 
+# Pnly use this binary to install OCP
+openshift_install_mirror=./openshift-install-$ocp_version-$reg_host
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
-echo_yellow "Running: openshift-install agent create image --dir $ASSETS_DIR "
-openshift-install agent create image --dir $ASSETS_DIR $opts
+echo_yellow "Running: $openshift_install_mirror agent create image --dir $ASSETS_DIR "
+$openshift_install_mirror agent create image --dir $ASSETS_DIR $opts
 
 # FIXME: to implement PXE 
-#openshift-install agent create pxe-files --dir $ASSETS_DIR
+#$openshift_install_mirror agent create pxe-files --dir $ASSETS_DIR
 
 echo_cyan "Making backup of '$ASSETS_DIR/auth' to '$ASSETS_DIR/auth.backup'"
 cp -rp $ASSETS_DIR/auth $ASSETS_DIR/auth.backup
