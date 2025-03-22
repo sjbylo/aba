@@ -50,23 +50,30 @@ if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/open
 	fi
 fi
 
-# HACK
-cat > .idms.yaml <<END
-apiVersion: config.openshift.io/v1
-kind: ImageDigestMirrorSet
-metadata:
-  name: image-digest-mirror
-spec:
-  imageDigestMirrors:
-END
-echo "$image_content_sources" | sed 's/^/  /' >> .idms.yaml
+# Extract openshift-install binary from the mirror, if not already.  Use this binary to install OCP. 
+openshift_install_mirror="./openshift-install-$ocp_version-$reg_host"
+if [ ! -x $openshift_install_mirror ]; then
+	# HACK
+	cat > .idms.yaml <<-END
+	apiVersion: config.openshift.io/v1
+	kind: ImageDigestMirrorSet
+	metadata:
+	  name: image-digest-mirror
+	spec:
+	  imageDigestMirrors:
+	END
+	echo "$image_content_sources" | sed 's/^/  /' >> .idms.yaml
 
-echo Extracting openshift-install from $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha
-#oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images:${release_ver}-x86_64
-# FIXME: this fails for oc versions up to v4.14 since the wrong version of 'oc' is used (i.e. 'idms' not supported).  So, I added || true to ignore errors
-oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha --insecure=true || true
-[ -s openshift-install ] && mv openshift-install ~/bin
-rm -f .idms.yaml
+	echo Extracting openshift-install from $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha
+	# This fails for oc versions up to v4.14 since the wrong/old version of 'oc' is used (i.e. 'idms' not supported).
+	# So, I added || true to ignore errors (which is a hack!) 
+	oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha --insecure=true || true
+	[ -x openshift-install ] && mv openshift-install $openshift_install_mirror
+	# Now use the one in CWD # [ -s openshift-install ] && mv openshift-install ~/bin
+	rm -f .idms.yaml
+else
+	[ "$ABA_INFO" ] && echo_white "openshift-install already extracted from mirror registry"
+fi
 
 echo_green "Release image for version $release_ver is available at $reg_host:$reg_port/$reg_path/openshift/release-images$release_sha"
 
