@@ -9,6 +9,9 @@ source <(normalize-mirror-conf)
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
+# Only use this binary to install OCP
+openshift_install_mirror=./openshift-install-$ocp_version-$reg_host
+
 # Output the cluster configuration, to be installed.
 
 config=$(scripts/cluster-config.sh) 
@@ -19,7 +22,7 @@ echo
 echo_cyan Cluster configuration
 printf '=%.0s' $(seq 1 "$len")
 echo
-openshift-install version 2>&1 | cat_cyan
+$openshift_install_mirror version 2>&1 | cat_cyan
 printf '=%.0s' $(seq 1 "$len")
 echo
 echo_cyan "$conf_display"
@@ -44,8 +47,6 @@ mkdir -p $ASSETS_DIR
 
 cp install-config.yaml agent-config.yaml $ASSETS_DIR 
 
-# Pnly use this binary to install OCP
-openshift_install_mirror=./openshift-install-$ocp_version-$reg_host
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
 echo_yellow "Running: $openshift_install_mirror agent create image --dir $ASSETS_DIR "
