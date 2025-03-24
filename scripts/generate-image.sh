@@ -10,7 +10,9 @@ verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
 # Only use the binary from the mirror to install OCP.  For fully online installs (e.g. via proxy) reg_host is NOT defined. 
-[ "$reg_host" ] && openshift_install_mirror=./openshift-install-$ocp_version-$reg_host || openshift_install_mirror=openshift-install
+#[ "$reg_host" ] && openshift_install_mirror=./openshift-install-$ocp_version-$reg_host || openshift_install_mirror=openshift-install
+openshift_install_mirror=./openshift-install-$ocp_version-$reg_host
+[ ! -x "$openshift_install_mirror" ] && openshift_install_mirror=openshift-install # fallback to the regular binary
 
 # Output the cluster configuration, to be installed.
 
