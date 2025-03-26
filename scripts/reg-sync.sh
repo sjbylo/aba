@@ -61,9 +61,8 @@ scripts/create-containers-auth.sh
 [ ! "$reg_root" ] && reg_root=$HOME/quay-install  # Needed for below TMPDIR
 
 echo
-echo "Now mirroring the images."
-echo
-echo "Now loading the images to the registry $reg_host:$reg_port/$reg_path. "
+echo "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port/$reg_path. "
+
 # Check if aba installed Quay or it's an existing reg.
 if [ -s ./reg-uninstall.sh ]; then
 	echo "Warning: Ensure there is enough disk space under $reg_root.  This can take 5-20+ minutes to complete or even longer if Operator images are being copied!"

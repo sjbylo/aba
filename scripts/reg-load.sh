@@ -41,7 +41,7 @@ if [ ! -d save ]; then
 fi
 
 echo 
-echo Now loading the images to the registry $reg_host:$reg_port/$reg_path. 
+echo "Now loading (disk2mirror) the images from mirror/save/ directory to registry $reg_host:$reg_port/$reg_path."
 echo
 
 # Check if aba installed Quay or it's an existing reg.
