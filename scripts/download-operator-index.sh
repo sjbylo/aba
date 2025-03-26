@@ -138,7 +138,7 @@ touch $done_file   # This marks successful completion of download!
 
 # If the catalog is downloaded ok, we leave the lock file so there's no risk of it being overwritten. 
 
-echo_white "Downloaded $index_file successfully"
+echo_white "Downloaded $index_file operator list successfully"
 
 # Generate a handy yaml file with operators which can be manually copied into image set config if needed.
 tail -n +3 $index_file | awk '{print $1,$NF}' | while read op_name op_default_channel
@@ -149,7 +149,7 @@ do
       - name: $op_default_channel"
 done > imageset-config-operator-catalog-v${ocp_ver_major}.yaml
 
-echo_white "Generated imageset-config-operator-catalog-v${ocp_ver_major}.yaml file"
+echo_white "Generated imageset-config-operator-catalog-v${ocp_ver_major}.yaml file for easy reference when editing your image set config file."
 
 # Keep the lock file since we assume the catalog was downloaded ok
 ##rm -f $lock_file $pid_file
