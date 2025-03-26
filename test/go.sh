@@ -2,9 +2,9 @@
 # Simple top level script to run all tests
 
 all_tests="\
+test1 \
 test2 \
 test5 \
-test1 \
 test3 \
 "
 
