@@ -1,15 +1,21 @@
 #!/bin/bash -ex
 # Simple top level script to run all tests
 
-# Clear the tmux screen buffer
-#[ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
-[ "$TMUX" ] && tmux clear-history 
+all_tests="\
+test2 \
+test5 \
+test1 \
+test3 \
+"
 
 export VER_OVERRIDE=l # Uncomment to use the 'latest' stable version of OCP
+#export VER_OVERRIDE=p # Uncomment to use the 'latest' stable version of OCP
 #export VER_OVERRIDE=4.16.30 # Uncomment to use the 'latest' stable version of OCP
 export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
+#export internal_bastion_rhel_ver=rhel8  # rhel8 or rhel9
 export TEST_USER=$(whoami)   # This can be any user or $(whoami) 
-export oc_mirror_ver_override=v2
+#export oc_mirror_ver_override=v2
+export oc_mirror_ver_override=v1
 
 # This is for testing a specific branch ($1) directly from "git clone", otherwise it will test
 # the local dir. ($PWD)
@@ -25,6 +31,10 @@ if [ "$1" ]; then
 	#####git checkout 2fc137962da8c643724b09dca02a8e493c362f3c
 fi
 
+# Clear the tmux screen buffer
+#[ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
+[ "$TMUX" ] && tmux clear-history 
+
 # Check no syntax errors in any scripts!
 for f in */*.sh; do bash -n $f; done
 
@@ -33,13 +43,6 @@ export target_full=    # Build only iso
 
 echo "Removing all traces of images from this host!"
 podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage
-
-all_tests="\
-test2 \
-test5 \
-test1 \
-test3 \
-"
 
 all_tests=$(echo $all_tests| sed "s/ $//g")
 echo all_tests=$all_tests
