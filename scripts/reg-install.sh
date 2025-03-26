@@ -63,15 +63,15 @@ if [ "$reg_code" = "200" ]; then
 fi
 
 # Hack to get the home path right
-fix_home=/home/$reg_ssh_user
-[ "$reg_ssh_user" = "root" ] && fix_home=/root
+## FIX # fix_home=/home/$reg_ssh_user
+## FIX # [ "$reg_ssh_user" = "root" ] && fix_home=/root
 
 # Is registry root dir value defined?
 if [ "$reg_root" ]; then
-	if echo "$reg_root" | grep -q ^~; then
-		# Must replace ~ with the remote user's home dir
-		reg_root=$(echo "$reg_root" | sed "s#~#$fix_home#g")
-	fi
+	## FIX # if echo "$reg_root" | grep -q ^~; then
+		## FIX # # Must replace ~ with the remote user's home dir
+		## FIX # reg_root=$(echo "$reg_root" | sed "s#~#$fix_home#g")
+	## FIX # fi
 
 	# Check for absolute path
 	if ! echo "$reg_root" | grep -q ^/; then
@@ -84,7 +84,8 @@ if [ "$reg_root" ]; then
 else
 	# The default path
 	# This must be the path *where Quay will be installed*
-	reg_root=$fix_home/quay-install
+	## FIX # reg_root=$fix_home/quay-install
+	reg_root="~/quay-install"
 	echo_white "Using default registry root dir: $reg_root"
 fi
 
@@ -181,20 +182,19 @@ if [ "$reg_ssh_key" ]; then
 	fi
 
 	# Generate the script to be used to delete this registry
-	uninstall_cmd="./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts --autoApprove -v"
+	uninstall_cmd="eval ./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts --autoApprove -v"
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
   	#	-k $reg_ssh_key --initPassword $reg_pw $reg_root_opts"
-	cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
-  		-k $reg_ssh_key $reg_root_opts"
+	cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts"
 
 	echo_cyan "Installing mirror registry with command:"
 	echo_cyan "$cmd --initPassword <hidden>"
 
-	$cmd --initPassword $reg_pw
+	eval $cmd --initPassword $reg_pw   # eval needed for "~"
 
 	if [ -d regcreds ]; then
 		rm -rf regcreds.bk
@@ -282,7 +282,7 @@ ask "Install Quay mirror registry appliance locally on localhost ($(hostname)), 
 	fi
 
 	# Generate the script to be used to delete this registry
-	uninstall_cmd="./mirror-registry uninstall --autoApprove $reg_root_opts -v"
+	uninstall_cmd="eval ./mirror-registry uninstall --autoApprove $reg_root_opts -v"
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
@@ -293,7 +293,7 @@ ask "Install Quay mirror registry appliance locally on localhost ($(hostname)), 
 	echo_cyan "Installing mirror registry with command:"
 	echo_cyan "$cmd --initPassword <hidden>"
 
-	$cmd --initPassword $reg_pw
+	eval $cmd --initPassword $reg_pw   # eval needed for "~"
 
 	if [ -d regcreds ]; then
 		rm -rf regcreds.bk
@@ -302,7 +302,7 @@ ask "Install Quay mirror registry appliance locally on localhost ($(hostname)), 
 	mkdir regcreds
 
 	# Fetch root CA from localhost 
-	cp $reg_root/quay-rootCA/rootCA.pem regcreds/
+	eval cp $reg_root/quay-rootCA/rootCA.pem regcreds/   # eval since $reg_root may container "~"
 
 	#################
 
