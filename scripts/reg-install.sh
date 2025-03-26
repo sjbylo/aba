@@ -81,7 +81,7 @@ if [ "$reg_root" ]; then
 	fi
 
 	# Fetch the actual absolute dir path for $reg_root
-	####reg_root=$(ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@reg_host echo $reg_root)
+	####reg_root=$(ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host echo $reg_root)
 
 	##reg_root_opts="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
 	##reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
@@ -182,7 +182,7 @@ if [ "$reg_ssh_key" ]; then
 
 	if [ "$reg_root" ]; then
 		# Fetch the actual absolute dir path for $reg_root.  "~" on remote host may be diff. to this localhost. Ansible installer does not eval "~"
-		reg_root=$(ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@reg_host echo $reg_root)
+		reg_root=$(ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host echo $reg_root)
 
 		reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
 		##echo_white "Using registry root dir: $reg_root and options: $reg_root_opts"
