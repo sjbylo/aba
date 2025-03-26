@@ -74,7 +74,8 @@ if [ "$reg_root" ]; then
 	## FIX # fi
 
 	# Check for absolute path
-	if ! echo "$reg_root" | grep -q ^/; then
+	#if ! echo "$reg_root" | grep -q ^/; then
+	if [[ "$reg_root" != /* && "$reg_root" != ~* ]]; then
 		echo_red "Error: reg_root value must be an 'absolute path', i.e. starting with a '/' or a '~' char! Fix this in mirror/mirror.conf and try again!" >&2
 		exit 1
 	fi
