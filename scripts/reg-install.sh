@@ -191,7 +191,8 @@ if [ "$reg_ssh_key" ]; then
 	cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
   		-k $reg_ssh_key $reg_root_opts"
 
-	echo_cyan "Running command: \"$cmd --initPassword <hidden>\""
+	echo_cyan "Installing mirror registry with command:"
+	echo_cyan "$cmd --initPassword <hidden>"
 
 	$cmd --initPassword $reg_pw
 
@@ -289,7 +290,8 @@ ask "Install Quay mirror registry appliance locally on localhost ($(hostname)), 
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opts"
 	cmd="./mirror-registry install -v --quayHostname $reg_host $reg_root_opts"
 
-	echo_cyan "Running command: \"$cmd --initPassword <hidden>\""
+	echo_cyan "Installing mirror registry with command:"
+	echo_cyan "$cmd --initPassword <hidden>"
 
 	$cmd --initPassword $reg_pw
 
