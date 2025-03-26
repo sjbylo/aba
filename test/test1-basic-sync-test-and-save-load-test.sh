@@ -128,7 +128,7 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 ######################
 # This will install mirror and sync images
 mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key ~/.ssh/id_rsa and then ..."
-test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba --dir mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --reg-root '~/my-quay-home'"
+test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba --dir mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --reg-root '~/my-quay-mirror-remote-save-load-test'"
 
 source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* values (see below)
 echo
@@ -226,7 +226,6 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "po
 #####################################################################################################################
 #####################################################################################################################
 
-## FIXME INSTALL FAILURE mylog "Configure mirror to install on internal (remote) bastion in '~/my-quay-mirror', with random password to '/my/path'"
 mylog "Configure mirror to install on internal bastion (remote host) in custom dir, with random password to '/my/path'"
 
 reg_ssh_user=testy
@@ -235,8 +234,8 @@ reg_ssh_key=${reg_ssh_user}_rsa
 #sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=\~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
-mylog "Setting reg_root=~/my-quay-mirror"
-sed -i "s#^reg_root=[^ \t]*#reg_root=\~/my-quay-mirror #g" ./mirror/mirror.conf	     	# test other storage location
+mylog "Setting reg_root=~/my-quay-mirror-remote-sync-test"
+sed -i "s#^reg_root=[^ \t]*#reg_root=\~/my-quay-mirror-remote-sync-test #g" ./mirror/mirror.conf	     	# test other storage location
 
 mylog "Setting reg_pw=  (empty)"
 sed -i "s#^reg_pw=[^ \t]*#reg_pw= #g" ./mirror/mirror.conf	    	# test random password 
