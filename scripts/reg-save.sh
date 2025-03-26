@@ -33,14 +33,14 @@ echo_cyan "This can take 5-20+ minutes to complete or even longer if Operator im
 echo 
 
 #FIXME: Instead of using reg_root, why not have data_vol=/mnt/large-disk and put all data in there? reg_root can be = $data_vol/quay-install
-[ "$reg_root" ] || reg_root=$HOME/quay-install  # $reg_root is needed for TMPDIR / OC_MIRROR_CACHE below
+[ ! "$reg_root" ] && reg_root=$HOME/quay-install  # $reg_root is needed for TMPDIR / OC_MIRROR_CACHE below
 
 ## If not already set, set the cache and tmp dirs to where there should be more disk space
 # Had to use [[ && ]] here, as without it got "mkdir -p <missing operand>" error!
-[[ ! "$TMPDIR" && "$reg_root" ]] && export TMPDIR=$(eval echo $reg_root/.tmp) && eval mkdir -p $TMPDIR
+[[ ! "$TMPDIR" && "$reg_root" ]] && eval export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $reg_root, if it's defined
-[[ ! "$OC_MIRROR_CACHE" && "$reg_root" ]] && export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
+[[ ! "$OC_MIRROR_CACHE" && "$reg_root" ]] && eval export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
 
 # oc-mirror v2 tuning params
 parallel_images=8
