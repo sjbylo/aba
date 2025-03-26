@@ -41,13 +41,14 @@ if [ "$reg_root" ]; then
 	reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
 else
 	# The default path
-	reg_root=/home/$reg_ssh_user/quay-install   # Not used in thie script!
-	[ "$reg_ssh_user" = "root" ] && reg_root=/root/quay-install
+	## FIX # reg_root=/home/$reg_ssh_user/quay-install   # Not used in thie script!
+	reg_root="~/quay-install"   # Used in $reg_root_opt above
+	## FIX # [ "$reg_ssh_user" = "root" ] && reg_root=/root/quay-install
 fi
 
 if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registry; then
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
-		cmd="./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
+		cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
 		echo "Running command: $cmd"
 		$cmd || exit 1
 	else
@@ -55,7 +56,7 @@ if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registr
 	fi
 elif podman ps | grep -q registry; then
 	if ask "Registry detected on localhost.  Uninstall this mirror registry"; then
-		cmd="./mirror-registry uninstall -v --autoApprove $reg_root_opt"
+		cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 		echo "Running command: $cmd"
 		$cmd || exit 1
 	else
