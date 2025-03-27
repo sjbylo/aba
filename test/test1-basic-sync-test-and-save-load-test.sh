@@ -250,7 +250,7 @@ sed -i "s#^reg_ssh_user=[^ \t]*#reg_ssh_user=$reg_ssh_user #g" ./mirror/mirror.c
 mylog "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" 
 sed -E -i "s|^^#{,1}reg_ssh_key=[^ \t]*|reg_ssh_key=\~/.ssh/$reg_ssh_key |g" ./mirror/mirror.conf	     	# Remote or localhost
 
-test-cmd -m "Checking values in $PWD/mirror/mirror.conf" cat mirror/mirror.conf
+test-cmd -m "Checking values in $PWD/mirror/mirror.conf" cat mirror/mirror.conf | cut -d\# -f1| sed '/^[ \t]*$/d'
 
 # FIXME: no need? or use 'aba clean' or?
 rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"

@@ -11,7 +11,7 @@ fi
 
 [ ! -x ./mirror-registry ] && tar xvmzf mirror-registry-amd64.tar.gz
 
-reg_root="~/quay-install"
+reg_root=~/quay-install  # ~ must be evaluated here
 reg_pw=p4ssw0rd
 [ "$1" ] && reg_host=$1 || reg_host=registry.example.com   #FIXME: needs to be param
 reg_port=8443
