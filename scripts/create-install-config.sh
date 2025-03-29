@@ -39,20 +39,19 @@ fi
 
 # Read in the needed files ...
 
-if [ -s regcreds/pull-secret-full.json ]; then
-	export pull_secret=$(cat regcreds/pull-secret-full.json) 
-	echo Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at $reg_host
-
-	# If we pull from the local reg. then we define the image content sources
-	export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
-
-elif [ -s regcreds/pull-secret-mirror.json ]; then
+# Which pull secret file to use?  Use the mirror by default.
+if [ -s regcreds/pull-secret-mirror.json ]; then
 	export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
 	echo Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at $reg_host
 
 	# If we pull from the local reg. then we define the image content sources
 	export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
+elif [ -s regcreds/pull-secret-full.json ]; then
+	export pull_secret=$(cat regcreds/pull-secret-full.json) 
+	echo Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at $reg_host
 
+	# If we pull from the local reg. then we define the image content sources
+	export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
 else
 	# This means we will do an ONLINE install, using the public RH registry. 
 	if [ -s $pull_secret_file ]; then
@@ -77,11 +76,6 @@ export ssh_key_pub=$(cat $ssh_key_file.pub)
 
 
 # See if the cluster wide proxy should be added
-#if [ "$set_http_proxy" -a "$set_https_proxy" ]; then
-#	export http_proxy=$set_http_proxy
-#	export https_proxy=$set_https_proxy
-#	export no_proxy=$set_no_proxy
-#if [ "$http_proxy" -a "$https_proxy" ]; then
 if [ "$proxy" ]; then
 	if [ "$http_proxy" -a "$https_proxy" ]; then
 		[ "$INFO_ABA" ] && echo_green "Configuring 'cluster wide proxy' using the following proxy settings:"
