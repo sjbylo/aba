@@ -6,6 +6,7 @@
 ## This script also solves the problem that multiple sync/save runs do not containing all ICSPs. See: https://github.com/openshift/oc-mirror/issues/597 
 # For disconnected environments, disable online public catalog sources
 # Install any CatalogSources
+# Note: https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html-single/registry/index#images-configuration-cas_configuring-registry-operator 
 
 source scripts/include_all.sh
 
@@ -184,6 +185,10 @@ else
 
 		oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$ && \
 			echo "The CatalogSource is 'ready'"
+
+		sig_file=$latest_dir/working-dir/cluster-resources/signature-configmap.json
+		echo "Applying signatures from: $sig_file ..."
+		[ -s $sig_file ] && oc apply -f $sig_file
 	else
 		echo_red "Warning: missing directory mirror/save and/or mirror/sync" >&2
 	fi
@@ -233,6 +238,19 @@ if [ "$file_list" ]; then
 	#### Force all default sources to be disabled, since we use the internal mirror.
 	###echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" 
 	###oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' 
+
+	# Now add any signatures
+	echo "Applying any signature files under: mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures:"
+	file_list=$(find mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures -type f -name signature*json 2>/dev/null || true)
+	if [ "$file_list" ]; then
+		for f in $file_list
+		do
+			echo Applying: $f
+			oc apply -f $f 2>/dev/null
+		done
+	else
+		echo_cyan "No release signatures found in mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures (no new OCP versions mirrored?)."
+	fi
 else
 	echo
 	echo_cyan "No Operator CatalogSources found under mirror/{save,sync}/oc-mirror-workspace (no operators mirrored?)."
@@ -241,19 +259,6 @@ else
 fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
-
-# Now add any signatures
-echo "Applying any signature files under: mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures:"
-file_list=$(find mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures -type f -name signature*json 2>/dev/null || true)
-if [ "$file_list" ]; then
-	for f in $file_list
-	do
-		echo Applying: $f
-		oc apply -f $f 2>/dev/null
-	done
-else
-	echo_cyan "No release signatures found in mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures (no new OCP versions mirrored?)."
-fi
 
 exit 0
 

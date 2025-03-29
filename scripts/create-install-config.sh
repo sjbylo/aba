@@ -53,10 +53,10 @@ elif [ -s regcreds/pull-secret-full.json ]; then
 	# If we pull from the local reg. then we define the image content sources
 	export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
 else
-	# This means we will do an ONLINE install, using the public RH registry. 
+	# This means we will do an ONLINE install, using the public Red Hat registry. 
 	if [ -s $pull_secret_file ]; then
 		export pull_secret=$(cat $pull_secret_file)
-		[ "$INFO_ABA" ] && echo Found pull secret file at $pull_secret_file.  Assuming online installation using public RH registry.
+		[ "$INFO_ABA" ] && echo Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry.
 	else
 		echo_red "Error: No pull secret found in mirror/regcreds dir. Aborting!  See the README.md file for help!" >&2 
 
