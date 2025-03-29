@@ -38,7 +38,7 @@ if [ -s regcreds/pull-secret-mirror.json -a -s $pull_secret_file ]; then
 	# Copy into place 
 	cp ./regcreds/pull-secret-full.json ~/.docker/config.json
 	cp ./regcreds/pull-secret-full.json ~/.containers/auth.json
-	[ "$XDG_RUNTIME_DIR" ] && cp ./regcreds/pull-secret-full.json $XDG_RUNTIME_DIR/containers/auth.json || true
+	[ "$XDG_RUNTIME_DIR" ] && cp ./regcreds/pull-secret-full.json $XDG_RUNTIME_DIR/containers/auth.json 2>/dev/null || true
 
 # If the mirror creds are available add them also
 elif [ -s regcreds/pull-secret-mirror.json ]; then
@@ -46,7 +46,7 @@ elif [ -s regcreds/pull-secret-mirror.json ]; then
 
 	cp ./regcreds/pull-secret-mirror.json ~/.docker/config.json
 	cp ./regcreds/pull-secret-mirror.json ~/.containers/auth.json
-	[ "$XDG_RUNTIME_DIR" ] && cp ./regcreds/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json || true
+	[ "$XDG_RUNTIME_DIR" ] && cp ./regcreds/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json 2>/dev/null || true
 
 # Only use the Red Hat pull secret file
 elif [ -s $pull_secret_file ]; then
@@ -54,7 +54,7 @@ elif [ -s $pull_secret_file ]; then
 
 	cp $pull_secret_file ~/.docker/config.json
 	cp $pull_secret_file ~/.containers/auth.json  
-	[ "$XDG_RUNTIME_DIR" ] && cp $pull_secret_file $XDG_RUNTIME_DIR/containers/auth.json || true
+	[ "$XDG_RUNTIME_DIR" ] && cp $pull_secret_file $XDG_RUNTIME_DIR/containers/auth.json 2>/dev/null || true
 
 else
 	echo 

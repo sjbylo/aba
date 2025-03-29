@@ -27,7 +27,7 @@ if [ $ret -ne 0 ]; then
 else
 	echo 
 	echo_green "The cluster has been successfully installed!"
-	echo_green "Run '. <(aba shell)' to access the cluster using the kubeconfig file (x509 cert), or"
+	echo_green "Run '. <(aba shell)' to access the cluster using the kubeconfig file (client cert), or"
 	echo_green "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
 	[ -f regcreds/pull-secret-mirror.json ] && \
 	echo_green "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry."
