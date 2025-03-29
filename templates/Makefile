@@ -232,6 +232,10 @@ day2:  ## Set up OperatorHub, CatalogSources, imageContentSourcePolicy resources
 day2-ntp:  ## Configure OpenShift with your NTP server
 	$(SCRIPTS)/day2-config-ntp.sh $(debug)
 
+.PHONY:
+day2-osus:  ## Configure OpenShift with your NTP server
+	$(SCRIPTS)/day2-config-osus.sh $(debug)
+
 .PHONY: remove-cdrom
 remove-cdrom: vmware.conf  ## Remove the cdrom devise from all VMs
 	$(SCRIPTS)/vmw-remove-cdrom-device.sh
