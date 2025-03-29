@@ -39,24 +39,57 @@ fi
 
 # Read in the needed files ...
 
-# Which pull secret file to use?  Use the mirror by default.
-if [ -s regcreds/pull-secret-mirror.json ]; then
-	export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
-	echo Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at $reg_host
+# Which pull secret file to use?  If proxy, then use the public pull secret, otherwise use the "mirror" pull secret by default.
 
-	# If we pull from the local reg. then we define the image content sources
-	export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
-elif [ -s regcreds/pull-secret-full.json ]; then
-	export pull_secret=$(cat regcreds/pull-secret-full.json) 
-	echo Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at $reg_host
+# See if the cluster wide proxy should be added
+if [ "$proxy" ]; then
+	if [ "$http_proxy" -a "$https_proxy" ]; then
+		# This means we will do an ONLINE install, using the public Red Hat registry. 
+		if [ -s $pull_secret_file ]; then
+			export pull_secret=$(cat $pull_secret_file)
+			[ "$INFO_ABA" ] && echo Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry.
+		else
+			echo_red "Error: No pull secret found at $pull_secret_file.  Aborting!  See the README.md file for help!" >&2 
 
-	# If we pull from the local reg. then we define the image content sources
-	export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
+			exit 1
+		fi
+
+		[ "$INFO_ABA" ] && echo_green "Configuring 'cluster wide proxy' using the following proxy settings:"
+		[ "$INFO_ABA" ] && echo_white "  http_proxy=$http_proxy"
+		[ "$INFO_ABA" ] && echo_white "  https_proxy=$https_proxy"
+		[ "$INFO_ABA" ] && echo_white "  no_proxy=$no_proxy"
+
+		# Using proxy! No need for these
+		image_content_sources=
+		additional_trust_bundle=
+
+		use_proxy=1
+	else
+		echo_red "Warning: The proxy value in cluster.conf is set but not all proxy vars are set. Ignoring." >&2
+		echo_red "If you want to configure the cluster wide proxy, set 'proxy=true' or override by" >&2
+		echo_red "setting the '*_proxy' values in 'cluster.conf'" >&2
+
+		sleep 2
+	fi
 else
-	# This means we will do an ONLINE install, using the public Red Hat registry. 
-	if [ -s $pull_secret_file ]; then
-		export pull_secret=$(cat $pull_secret_file)
-		[ "$INFO_ABA" ] && echo Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry.
+	[ "$INFO_ABA" ] && echo_white "Not configuring the cluster wide proxy since proxy values not set in cluster.conf."
+fi
+
+
+# If the proxy is not in use (usually the case), find the pull secret to use ... prioritize the mirror ...
+if [ ! "$use_proxy" ]; then
+	if [ -s regcreds/pull-secret-mirror.json ]; then
+		export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
+		echo Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at registry: $reg_host
+
+		# If we pull from the local reg. then we define the image content sources
+		export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
+	elif [ -s regcreds/pull-secret-full.json ]; then
+		export pull_secret=$(cat regcreds/pull-secret-full.json) 
+		echo Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at registry: $reg_host
+
+		# If we pull from the local reg. then we define the image content sources
+		export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
 	else
 		echo_red "Error: No pull secret found in mirror/regcreds dir. Aborting!  See the README.md file for help!" >&2 
 
@@ -75,30 +108,6 @@ fi
 export ssh_key_pub=$(cat $ssh_key_file.pub) 
 
 
-# See if the cluster wide proxy should be added
-if [ "$proxy" ]; then
-	if [ "$http_proxy" -a "$https_proxy" ]; then
-		[ "$INFO_ABA" ] && echo_green "Configuring 'cluster wide proxy' using the following proxy settings:"
-		[ "$INFO_ABA" ] && echo_white "  http_proxy=$http_proxy"
-		[ "$INFO_ABA" ] && echo_white "  https_proxy=$https_proxy"
-		[ "$INFO_ABA" ] && echo_white "  no_proxy=$no_proxy"
-
-		# Using proxy! No need for this
-		image_content_sources=
-		additional_trust_bundle=
-
-		insert_proxy=1
-	else
-		echo_red "Warning: The proxy value in cluster.conf is set but not all proxy vars are set. Ignoring." >&2
-		echo_red "If you want to configure the cluster wide proxy, set 'proxy=1' or override by" >&2
-		echo_red "setting the '*_proxy' values in 'cluster.conf'" >&2
-
-		sleep 2
-	fi
-else
-	[ "$INFO_ABA" ] && echo_white "Not configuring the cluster wide proxy since proxy values not set in cluster.conf."
-fi
-
 # ... we also, need a root CA... if using our own registry.
 if [ -s regcreds/rootCA.pem ]; then
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
@@ -106,7 +115,7 @@ if [ -s regcreds/rootCA.pem ]; then
 else
 	# Only show this warning IF there is no internet connection?
 	# Or, only show if proxy is NOT being used?
-	if [ "$insert_proxy" ]; then
+	if [ "$use_proxy" ]; then
 		echo_red "No private mirror registry configured! Using proxy settings to access Red Hat's public registry." >&2
 	else
 		# Should check accessibility to registry.redhat.io?
@@ -114,11 +123,12 @@ else
 		echo_red "Warning: No private mirror registry is configured (missing aba/mirror/regcreds/rootCA.pem cert file) and" >&2
 		echo_red "         no proxy settings have been provided in cluster.conf!" >&2
 		echo_red "         If this is *unexpected*, setting up a mirror registry is required. Refer to the README.md for detailed instructions." >&2
-		echo_red "         Root CA file 'aba/mirror/regcreds/rootCA.pem' is missing. As a result, no 'additionalTrustBundle' can be added to 'install-config.yaml'." >&2
+		echo_red "         Root CA file 'aba/mirror/regcreds/rootCA.pem' missing.  As a result, no 'additionalTrustBundle' can be added to 'install-config.yaml'." >&2
 
 		sleep 2
 	fi
 fi
+
 
 # Check the private registry is defined, if it's in use
 if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
@@ -136,9 +146,10 @@ if [ "$INFO_ABA" ]; then
 	echo Generating Agent-based configuration file: $PWD/install-config.yaml 
 	echo
 fi
-# Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret, insert_proxy ...
+# Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret, use_proxy ...
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
 echo_green "$PWD/install-config.yaml generated successfully!"
 echo
+
