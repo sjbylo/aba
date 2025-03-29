@@ -95,6 +95,27 @@ if [ ! "$use_proxy" ]; then
 
 		exit 1
 	fi
+
+	# ... we also, need a root CA... if using our own registry.
+	if [ -s regcreds/rootCA.pem ]; then
+		export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
+		echo "Using root CA file at regcreds/rootCA.pem"
+	else
+		# Only show this warning IF there is no internet connection?
+		# Or, only show if proxy is NOT being used?
+		if [ "$use_proxy" ]; then
+			echo_red "No private mirror registry configured! Using proxy settings to access Red Hat's public registry." >&2
+		else
+			# Should check accessibility to registry.redhat.io?
+			echo
+			echo_red "Warning: No private mirror registry is configured (missing aba/mirror/regcreds/rootCA.pem cert file) and" >&2
+			echo_red "         no proxy settings have been provided in cluster.conf!" >&2
+			echo_red "         If this is *unexpected*, setting up a mirror registry is required. Refer to the README.md for detailed instructions." >&2
+			echo_red "         Root CA file 'aba/mirror/regcreds/rootCA.pem' missing.  As a result, no 'additionalTrustBundle' can be added to 'install-config.yaml'." >&2
+	
+			sleep 2
+		fi
+	fi
 fi
 
 
@@ -106,28 +127,6 @@ else
 	ssh-keygen -t rsa -f $ssh_key_file -N ''
 fi
 export ssh_key_pub=$(cat $ssh_key_file.pub) 
-
-
-# ... we also, need a root CA... if using our own registry.
-if [ -s regcreds/rootCA.pem ]; then
-	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
-	echo "Using root CA file at regcreds/rootCA.pem"
-else
-	# Only show this warning IF there is no internet connection?
-	# Or, only show if proxy is NOT being used?
-	if [ "$use_proxy" ]; then
-		echo_red "No private mirror registry configured! Using proxy settings to access Red Hat's public registry." >&2
-	else
-		# Should check accessibility to registry.redhat.io?
-		echo
-		echo_red "Warning: No private mirror registry is configured (missing aba/mirror/regcreds/rootCA.pem cert file) and" >&2
-		echo_red "         no proxy settings have been provided in cluster.conf!" >&2
-		echo_red "         If this is *unexpected*, setting up a mirror registry is required. Refer to the README.md for detailed instructions." >&2
-		echo_red "         Root CA file 'aba/mirror/regcreds/rootCA.pem' missing.  As a result, no 'additionalTrustBundle' can be added to 'install-config.yaml'." >&2
-
-		sleep 2
-	fi
-fi
 
 
 # Check the private registry is defined, if it's in use
@@ -146,6 +145,7 @@ if [ "$INFO_ABA" ]; then
 	echo Generating Agent-based configuration file: $PWD/install-config.yaml 
 	echo
 fi
+
 # Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret, use_proxy ...
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
