@@ -361,7 +361,20 @@ fi
 mylog Appending jaeger operator to imageset conf
 grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
-test-cmd -r 3 3 -m "Saving jaeger operator to local disk" "aba --dir mirror save --retry"
+mylog Appending cincinnati operator to imageset conf
+grep -A2 -e "name: cincinnati-operator$"	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+
+####### Upgrade cluster?  Change channel from stable (as set above) to "fast"
+ocp_version_major=$(echo $ocp_version | cut -d\. -f1-2)
+ocp_version_point=$(echo $ocp_version | cut -d\. -f3)
+let ocp_version_point=$ocp_version_point+1   # Assuming there is 1 higher version in the fast channel
+ocp_version_desired=$ocp_version_major.$ocp_version_point
+sed -i "s/^    - name: stable-$ocp_version_major/    - name: fast-$ocp_version_major/g" mirror/save/imageset-config-save.yaml   # Switch to fast channel
+sed -i "s/^      maxVersion: $ocp_version/      maxVersion: $ocp_version_major.$ocp_version_point/g" mirror/save/imageset-config-save.yaml  # Increase the max version by one
+test-cmd -m "Output heade of image set conf file" head -20 mirror/save/imageset-config-save.yaml 
+####### Upgrade cluster?
+
+test-cmd -r 3 3 -m "Saving jaeger and cincinnati operator images to local disk" "aba --dir mirror save --retry"
 
 mylog Downloading the mesh demo into test/mesh, for use by deploy script
 
@@ -382,7 +395,7 @@ test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion_h
 
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading jaeger operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading jaeger and cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
@@ -395,7 +408,21 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "s
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'aba day2' ...
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m "Run 'day2'" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m "Run 'day2' to integrate operator hub and apply configs" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
+
+#### Do upgrade
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Run 'day2-osus' to install the update service" "aba --dir $subdir/aba/sno day2-osus"  # Install Update Service
+test-cmd -m "Sleeping 30s" sleep 30
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Set update channel" "oc adm upgrade channel fast-$ocp_version_major" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show cluster version" "oc get clusterversion"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check cluster version is $ocp_version" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version$"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale version[0]" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[0].version}')"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale versions" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[*].version}'; echo"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade" "cd $subdir/aba/sno; oc adm upgrade --to-latest=true" 
+test-cmd -m "Sleeping 60s" sleep 60
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show desired cluster version" "oc get clusterversion version -o jsonpath='{.status.desired.version}'"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version_desired$"
+#### Do upgrade
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
 #test-cmd -m "Pausing for 60s to let OCP settle" sleep 60  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
