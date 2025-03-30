@@ -24,21 +24,27 @@ echo "Logging into cluster ..."
 #####################
 echo -n "Adding cluster ingress CA cert to the CA trust bundle ... "
 
-cert="$(oc get secret -n openshift-ingress-operator router-ca -o jsonpath="{.data['tls\.crt']}"| base64 -d)"
-ingress_cert="$(echo "$cert" | sed ':a;N;$!ba;s/\n/\\n/g')"
+ingress_cert="$(oc get secret -n openshift-ingress-operator router-ca -o jsonpath="{.data['tls\.crt']}"| base64 -d)"
+echo "$ingress_cert" > .openshift-ingress.cacert.pem
+ingress_cert_json="$(echo "$ingress_cert" | sed ':a;N;$!ba;s/\n/\\n/g')"   # Replace all new-lines with '\n'
+#echo "$ingress_cert_json" > .openshift-ingress.cacert.json
 ca_bundle_crt=$(oc get cm user-ca-bundle -n openshift-config -o jsonpath='{.data.ca-bundle\.crt}' | sed ':a;N;$!ba;s/\n/\\n/g')
+#echo "$ca_bundle_crt" > .ca_bundle_crt
 
-# Check if already added
-tmp_line2=$(echo "$cert" | head -2 | tail -1)
+# Check if cert already added. 
+# If these two lines already exist then it's safe to assume the cert is already in the bundle!
+tmp_line8=$(echo "$ingress_cert" | head -8 | tail -1)
+tmp_line12=$(echo "$ingress_cert" | head -12 | tail -1)
 
-if echo "$ingress_cert" | grep -q "$tmp_line2"; then
-	echo_cyan "already added"
+if echo "$ca_bundle_crt" | grep -q "$tmp_line8" && echo "$ca_bundle_crt" | grep -q "$tmp_line12"; then
+	echo_cyan "CA cert already added"
 else
-	ca_bundle_crt="$ca_bundle_crt\n$ingress_cert"
+	ca_bundle_crt="$ca_bundle_crt\n$ingress_cert_json"
 	oc patch cm user-ca-bundle -n openshift-config --type='merge' -p '{"data":{"ca-bundle.crt":"'"$ca_bundle_crt"'"}}'
-	echo_green added
+	echo_green CA cert added
 fi
 
+echo Adding trustedCA to cluster proxy ...
 oc patch proxy cluster --type=merge -p '{"spec":{"trustedCA":{"name":"user-ca-bundle"}}}'
 
 #####################
@@ -91,7 +97,7 @@ spec:
 END
 
 #####################
-echo "Waiting for operator to be installed ..."
+echo "Waiting for operator to be installed (up to 3 mins)..."
 
 csv_cmd="oc get subscription -n $NAMESPACE update-service-subscription -o jsonpath='{.status.installedCSV}'"
 CSV=$(eval $csv_cmd)
@@ -142,9 +148,9 @@ echo_green $POLICY_ENGINE_GRAPH_URI
 CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
 #echo CH=$CH
 
-echo -n "Checking access to $POLICY_ENGINE_GRAPH_URI/?channel=$CH ... "
+echo "Checking access to $POLICY_ENGINE_GRAPH_URI/?channel=$CH (up to 2 mins) ..."
 
-while true; do HTTP_CODE="$(curl -k --header Accept:application/json -s --output /dev/null --write-out "%{http_code}" "${POLICY_ENGINE_GRAPH_URI}?channel=$CH")"; if test "${HTTP_CODE}" -eq 200; then break; fi; echo -n .; sleep 10; done; echo_green available
+while true; do HTTP_CODE="$(curl --cacert .openshift-ingress.cacert.pem --header Accept:application/json -s --output /dev/null --write-out "%{http_code}" "${POLICY_ENGINE_GRAPH_URI}?channel=$CH")"; if test "${HTTP_CODE}" -eq 200; then break; fi; echo -n .; sleep 10; done; echo_green Available
 
 #####################
 echo "Updating cluster version with $POLICY_ENGINE_GRAPH_URI ..."
@@ -153,5 +159,5 @@ PATCH="{\"spec\":{\"upstream\":\"${POLICY_ENGINE_GRAPH_URI}\"}}"
 oc patch clusterversion version -p $PATCH --type merge
 
 echo_green "Update Service configuration completed successfully!"
-echo_cyan "Please wait *15-20 MINUTES* for the Administration Console to show the 'Update status' ..."
+echo_cyan "Please wait about *10 MINUTES* for the OpenShift Console to show the 'Update Graph' under 'Administration -> Cluster Settings' ..."
 
