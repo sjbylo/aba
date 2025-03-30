@@ -97,7 +97,7 @@ spec:
 END
 
 #####################
-echo "Waiting for operator to be installed (up to 3 mins)..."
+echo "Waiting for operator to be installed (this can take 3 minutes)..."
 
 csv_cmd="oc get subscription -n $NAMESPACE update-service-subscription -o jsonpath='{.status.installedCSV}'"
 CSV=$(eval $csv_cmd)
@@ -148,7 +148,7 @@ echo_green $POLICY_ENGINE_GRAPH_URI
 CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
 #echo CH=$CH
 
-echo "Checking access to $POLICY_ENGINE_GRAPH_URI/?channel=$CH (up to 2 mins) ..."
+echo "Checking access to $POLICY_ENGINE_GRAPH_URI/?channel=$CH (this can take 1-2 minutes) ..."
 
 while true; do HTTP_CODE="$(curl --cacert .openshift-ingress.cacert.pem --header Accept:application/json -s --output /dev/null --write-out "%{http_code}" "${POLICY_ENGINE_GRAPH_URI}?channel=$CH")"; if test "${HTTP_CODE}" -eq 200; then break; fi; echo -n .; sleep 10; done; echo_green Available
 
