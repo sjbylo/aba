@@ -17,9 +17,44 @@ verify-mirror-conf || exit 1
 NAME=osus
 NAMESPACE=openshift-update-service
 
+#####################
 echo "Logging into cluster ..."
 . <(aba shell)
 
+#####################
+echo -n "Adding cluster ingress CA cert to the CA trust bundle ... "
+
+cert="$(oc get secret -n openshift-ingress-operator router-ca -o jsonpath="{.data['tls\.crt']}"| base64 -d)"
+ingress_cert="$(echo "$cert" | sed ':a;N;$!ba;s/\n/\\n/g')"
+ca_bundle_crt=$(oc get cm user-ca-bundle -n openshift-config -o jsonpath='{.data.ca-bundle\.crt}' | sed ':a;N;$!ba;s/\n/\\n/g')
+
+# Check if already added
+tmp_line2=$(echo "$cert" | head -2 | tail -1)
+
+if echo "$ingress_cert" | grep -q "$tmp_line2"; then
+	echo_cyan "already added"
+else
+	ca_bundle_crt="$ca_bundle_crt\n$ingress_cert"
+	oc patch cm user-ca-bundle -n openshift-config --type='merge' -p '{"data":{"ca-bundle.crt":"'"$ca_bundle_crt"'"}}'
+	echo_green added
+fi
+
+oc patch proxy cluster --type=merge -p '{"spec":{"trustedCA":{"name":"user-ca-bundle"}}}'
+
+#####################
+echo "Adding mirror registry CA cert to config ..."
+
+if [ -s regcreds/rootCA.pem ]; then
+        ca_cert="$(cat regcreds/rootCA.pem | sed ':a;N;$!ba;s/\n/\\n/g')"
+        echo "Using root CA file at $PWD/mirror/regcreds/rootCA.pem"
+	kubectl patch configmap registry-config -n openshift-config --type='merge' -p '{"data":{"updateservice-registry":"'"$ca_cert"'"}}'
+else
+	echo_red "No root CA file found at $PWD/regcreds/rootCA.pem.  Is the mirror registry available?" >&2
+
+	exit 1
+fi
+
+#####################
 echo "Provisioning OpenShift Update Service Operator ..."
 
 oc apply -f - <<END
@@ -55,6 +90,7 @@ spec:
   name: "cincinnati-operator"
 END
 
+#####################
 echo "Waiting for operator to be installed ..."
 
 csv_cmd="oc get subscription -n $NAMESPACE update-service-subscription -o jsonpath='{.status.installedCSV}'"
@@ -75,6 +111,7 @@ do
 	sleep 10
 done
 
+#####################
 echo "Deploying OpenShift Update Service ..."
 
 graph_image=$reg_host:$reg_port/$reg_path/openshift/graph-image:latest
@@ -95,42 +132,26 @@ spec:
   replicas: 1
 END
 
-echo "Adding mirror registry CA cert to config ..."
-
-if [ -s regcreds/rootCA.pem ]; then
-        ca_cert="$(cat regcreds/rootCA.pem | sed ':a;N;$!ba;s/\n/\\n/g')"
-        echo "Using root CA file at regcreds/rootCA.pem"
-	kubectl patch configmap registry-config -n openshift-config --type='merge' -p '{"data":{"updateservice-registry":"'"$ca_cert"'"}}'
-fi
-
-echo "Obtaining the policy engine route ..."
+#####################
+echo -n "Obtaining the policy engine route ... "
 
 while sleep 1; do POLICY_ENGINE_GRAPH_URI="$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph{"\n"}' updateservice "${NAME}")"; SCHEME="${POLICY_ENGINE_GRAPH_URI%%:*}"; if test "${SCHEME}" = http -o "${SCHEME}" = https; then break; fi; done
 
-#echo POLICY_ENGINE_GRAPH_URI=$POLICY_ENGINE_GRAPH_URI
+echo_green $POLICY_ENGINE_GRAPH_URI
 
 CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
-echo CH=$CH
+#echo CH=$CH
 
-echo "Checking access to $POLICY_ENGINE_GRAPH_URI/?channel=$CH ..."
+echo -n "Checking access to $POLICY_ENGINE_GRAPH_URI/?channel=$CH ... "
 
-#while true; do HTTP_CODE="$(curl -k --header Accept:application/json --output /dev/stderr --write-out "%{http_code}" "${POLICY_ENGINE_GRAPH_URI}?channel=$CH")"; if test "${HTTP_CODE}" -eq 200; then break; fi; echo "${HTTP_CODE}"; sleep 10; done
-while true; do HTTP_CODE="$(curl -k --header Accept:application/json --output /dev/stderr --write-out "%{http_code}" "${POLICY_ENGINE_GRAPH_URI}?channel=$CH")"; if test "${HTTP_CODE}" -eq 200; then break; fi; echo -n .; sleep 10; done
+while true; do HTTP_CODE="$(curl -k --header Accept:application/json -s --output /dev/null --write-out "%{http_code}" "${POLICY_ENGINE_GRAPH_URI}?channel=$CH")"; if test "${HTTP_CODE}" -eq 200; then break; fi; echo -n .; sleep 10; done; echo_green available
 
-####
+#####################
+echo "Updating cluster version with $POLICY_ENGINE_GRAPH_URI ..."
 
-echo "Adding cluster ingress CA cert to the CA trust bundle ..."
+PATCH="{\"spec\":{\"upstream\":\"${POLICY_ENGINE_GRAPH_URI}\"}}"
+oc patch clusterversion version -p $PATCH --type merge
 
-ingress_cert="$(oc get secret -n openshift-ingress-operator router-ca -o jsonpath="{.data['tls\.crt']}"| base64 -d | sed ':a;N;$!ba;s/\n/\\n/g')"
-ca_bundle_crt=$(oc get cm user-ca-bundle -n openshift-config -o jsonpath='{.data.ca-bundle\.crt}' | sed ':a;N;$!ba;s/\n/\\n/g')
-ca_bundle_crt="$ca_bundle_crt\n$ingress_cert"
-
-#echo ============
-#echo "$ca_bundle_crt"
-#echo ============
-
-oc patch cm user-ca-bundle -n openshift-config --type='merge' -p '{"data":{"ca-bundle.crt":"'"$ca_bundle_crt"'"}}'
-oc patch proxy cluster --type=merge -p '{"spec":{"trustedCA":{"name":"user-ca-bundle"}}}'
-
-echo "Configuration completed successfully.  Please wait 5-10 minuets for the Administration Console to show the available updates ..."
+echo_green "Update Service configuration completed successfully!"
+echo_cyan "Please wait *15-20 MINUTES* for the Administration Console to show the 'Update status' ..."
 
