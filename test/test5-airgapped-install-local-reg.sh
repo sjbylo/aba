@@ -80,11 +80,16 @@ test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --p
 mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
 
 # for upgrade tests - reduce the version so it can be upgraded later (see below)
+mylog Fetching ocp_version
 ocp_version_desired=$(grep -o '^ocp_version=[^ ]*' aba.conf)  # Get the version from aba.conf since that will be the "latest & previous" version.
+mylog ocp_version_desired is $ocp_version_desired
 ocp_version_major=$(echo $ocp_version_desired | cut -d\. -f1-2)
 ocp_version_point=$(echo $ocp_version_desired | cut -d\. -f3)
+mylog ocp_version_point is $ocp_version_point
 ocp_version_older=$ocp_version_major.$(expr $ocp_version_point / 2 + 1) ## Reduce the version to create 'bundle' (below) with by about half
+mylog ocp_version_older is $ocp_version_older
 sed -i "s/^ocp_version=[^ \t]*/ocp_version=$ocp_version_older /g" aba.conf  # add the older version
+mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
 # for upgrade
 
 
