@@ -412,16 +412,17 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m "Run 'day2' to integra
 
 #### Do upgrade
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Run 'day2-osus' to install the update service" "aba --dir $subdir/aba/sno day2-osus"  # Install Update Service
-test-cmd -m "Sleeping 30s" sleep 30
+test-cmd -m "Sleeping 60s" sleep 60
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Set update channel" "oc adm upgrade channel fast-$ocp_version_major" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show cluster version" "oc get clusterversion"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check cluster version is $ocp_version" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version$"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale version[0]" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[0].version}')"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale version[0]" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[0].version}'"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale versions" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[*].version}'; echo"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade" "cd $subdir/aba/sno; oc adm upgrade --to-latest=true" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." "cd $subdir/aba/sno; oc adm upgrade --to-latest=true" 
 test-cmd -m "Sleeping 60s" sleep 60
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show desired cluster version" "oc get clusterversion version -o jsonpath='{.status.desired.version}'"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version_desired$"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check update  $ocp_version_desired" "oc adm upgrade | grep \"^info: An upgrade is in progress. Working towards $ocp_version_desired:\""
 #### Do upgrade
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
