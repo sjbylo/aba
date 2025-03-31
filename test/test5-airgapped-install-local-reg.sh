@@ -59,7 +59,7 @@ aba reset -f
 rm -rf sno compact standard 
 
 # Need this so this test script can be run standalone
-[ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
+##[ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
 [ ! "$internal_bastion_rhel_ver" ] && export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 
 int_bastion_hostname=registry.example.com
@@ -73,10 +73,20 @@ mylog "Test to install a local reg. on $int_bastion_hostname and save + copy + l
 
 rm -f aba.conf  # Set it up next
 vf=~steve/.vmware.conf
-[ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
+[ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=p
 [ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
 test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel stable --version $VER_OVERRIDE
 mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
+
+# for upgrade tests - reduce the version so it can be upgraded later (see below)
+ocp_version_desired=$(grep -o '^ocp_version=[^ ]*' aba.conf)  # Get the version from aba.conf since that will be the "latest & previous" version.
+ocp_version_major=$(echo $ocp_version | cut -d\. -f1-2)
+ocp_version_point=$(echo $ocp_version | cut -d\. -f3)
+ocp_version_older=$ocp_version_major.$(expr $ocp_version_point / 2 + 1) ## Reduce the version to create 'bundle' (below) with by about half
+sed -i "s/^ocp_version=[^ \t]*/ocp_version=$ocp_version_older /g" aba.conf
+# for upgrade
+
+
 mylog "ask set to $(grep -o '^ask=[^ ]*' aba.conf) in $PWD/aba.conf"
 
 mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
@@ -101,6 +111,8 @@ echo kiali-ossm > templates/operator-set-abatest
 # Needed for $ocp_version below
 source <(normalize-aba-conf)
 mylog "Checking value of: ocp_version=$ocp_version"
+
+#XXX
 
 # Be sure this file exists
 test-cmd -m "Init test: download mirror-registry-amd64.tar.gz" "aba --dir test mirror-registry-amd64.tar.gz"
@@ -361,18 +373,21 @@ fi
 mylog Appending jaeger operator to imageset conf
 grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
+## upgrade tests
 mylog Appending cincinnati operator to imageset conf
 grep -A2 -e "name: cincinnati-operator$"	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
-####### Upgrade cluster?  Change channel from stable (as set above) to "fast"
-ocp_version_major=$(echo $ocp_version | cut -d\. -f1-2)
-ocp_version_point=$(echo $ocp_version | cut -d\. -f3)
-let ocp_version_point=$ocp_version_point+1   # Assuming there is 1 higher version in the fast channel
-ocp_version_desired=$ocp_version_major.$ocp_version_point
+####### upgrade cluster?  Change channel from stable (as set above) to "fast"
+# DONE ABOVE NOW ocp_version_desired=$ocp_version
+# DONE ABOVE NOW ocp_version_major=$(echo $ocp_version | cut -d\. -f1-2)
+# DONE ABOVE NOW ocp_version_point=$(echo $ocp_version | cut -d\. -f3)
+# DONE ABOVE NOW let ocp_version_point=$ocp_version_point+1   # Assuming there is 1 higher version in the fast channel
+# DONE ABOVE NOW ocp_version_desired=$ocp_version_major.$ocp_version_point
 sed -i "s/^    - name: stable-$ocp_version_major/    - name: fast-$ocp_version_major/g" mirror/save/imageset-config-save.yaml   # Switch to fast channel
-sed -i "s/^      maxVersion: $ocp_version/      maxVersion: $ocp_version_major.$ocp_version_point/g" mirror/save/imageset-config-save.yaml  # Increase the max version by one
-test-cmd -m "Output heade of image set conf file" head -20 mirror/save/imageset-config-save.yaml 
-####### Upgrade cluster?
+sed -i "s/^      maxVersion: $ocp_version/      maxVersion: $ocp_version_desired/g" mirror/save/imageset-config-save.yaml  # Increase the max ver
+sed -i "s/^#      shortestPath: true.*/      shortestPath: true/g" mirror/save/imageset-config-save.yaml  # Set this to reduce data download
+test-cmd -m "Output head of imageset conf file" head -20 mirror/save/imageset-config-save.yaml 
+####### upgrade cluster?
 
 test-cmd -r 3 3 -m "Saving jaeger and cincinnati operator images to local disk" "aba --dir mirror save --retry"
 
@@ -419,10 +434,10 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check cluster version is $oc
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale version[0]" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[0].version}'"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale versions" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[*].version}'; echo"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." "cd $subdir/aba/sno; oc adm upgrade --to-latest=true" 
-###test-cmd -m "Sleeping 60s" sleep 60
+test-cmd -m "Sleeping 60s" sleep 60
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show desired cluster version" "oc get clusterversion version -o jsonpath='{.status.desired.version}'"
-###test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version_desired$"
-###test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check update  $ocp_version_desired" "oc adm upgrade | grep \"^info: An upgrade is in progress. Working towards $ocp_version_desired:\""
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version_desired$"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check update  $ocp_version_desired" "oc adm upgrade | grep \"^info: An upgrade is in progress. Working towards $ocp_version_desired:\""
 #### Do upgrade
 
 # Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
