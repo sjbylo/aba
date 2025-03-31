@@ -74,6 +74,7 @@ mylog "Test to install a local reg. on $int_bastion_hostname and save + copy + l
 rm -f aba.conf  # Set it up next
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=p
+export VER_OVERRIDE=p  # Must set to p since we do upgrade test below
 [ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
 test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel stable --version $VER_OVERRIDE
 mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
