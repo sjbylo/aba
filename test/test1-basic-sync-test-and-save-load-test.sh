@@ -327,6 +327,6 @@ mylog
 mylog "===> Completed test $0"
 mylog
 
-[ -f test/test.log ] && cp test/test.log test/test.log.bak
+[ -f test/test.log ] && cp test/test.log test/test.log.bak || true
 
 echo SUCCESS $0

@@ -30,8 +30,10 @@ else
 	echo_green "Run '. <(aba shell)' to access the cluster using the kubeconfig file (client cert), or"
 	echo_green "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
 	[ -f regcreds/pull-secret-mirror.json ] && \
-	echo_green "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry."
+		echo_green "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
+		echo_green "Run 'aba day2-osus' to configure the OpenShift Update Service."
 	echo_green "Run 'aba day2-ntp' to configure NTP on this cluster."
+	echo_green "Run 'aba info' to see this information again."
 	echo_green "Run 'aba help' for more options."
 fi
 

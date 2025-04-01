@@ -27,6 +27,7 @@ echo -n "Adding cluster ingress CA cert to the CA trust bundle ... "
 ingress_cert="$(oc get secret -n openshift-ingress-operator router-ca -o jsonpath="{.data['tls\.crt']}"| base64 -d)"
 echo "$ingress_cert" > .openshift-ingress.cacert.pem
 ingress_cert_json="$(echo "$ingress_cert" | sed ':a;N;$!ba;s/\n/\\n/g')"   # Replace all new-lines with '\n'
+#echo "$ingress_cert_json2" > ~/.ingress_cert_json_with_tr.txt
 #echo "$ingress_cert_json" > .openshift-ingress.cacert.json
 ca_bundle_crt=$(oc get cm user-ca-bundle -n openshift-config -o jsonpath='{.data.ca-bundle\.crt}' | sed ':a;N;$!ba;s/\n/\\n/g')
 #echo "$ca_bundle_crt" > .ca_bundle_crt
@@ -97,7 +98,7 @@ spec:
 END
 
 #####################
-echo "Waiting for operator to be installed (this can take 3 minutes)..."
+echo "Waiting for operator to be installed (this can take up to 3 minutes)..."
 
 csv_cmd="oc get subscription -n $NAMESPACE update-service-subscription -o jsonpath='{.status.installedCSV}'"
 CSV=$(eval $csv_cmd)
