@@ -60,7 +60,6 @@ file_list=$(find		\
 	aba/templates		\
 	aba/Makefile		\
 	aba/README.md		\
-	aba/README-OTHER.md	\
 	aba/Troubleshooting.md	\
 	aba/test		\
 								\
