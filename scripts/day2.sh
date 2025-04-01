@@ -35,17 +35,14 @@ echo
 echo For disconnected environments, disabling online public catalog sources
 echo
 
-# This should really check the connectivity from the cluster, not from the bastion
-# E.g. ssh node "curl --connect-timeout 30 -s -IL https://registry.redhat.io/v2" or check for cluster proxy config?
-#ret=$(curl --retry 3 -ILs --connect-timeout 10 -o /dev/null -w "%{http_code}\n" http://registry.redhat.io/v2 || true)
-#if [ "$ret" != "200" ]; then
-	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" && \
+# Check if the default catalog sources need to be disabled (e.g. air-gapped)
+if [ ! "$proxy" ]; then
+	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'"
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
-       	echo "Patched OperatorHub, disabled Red Hat public catalog sources"
-#
-#else
-	#echo "Access to the Internet from this host is working, not disabling public catalog sources"
-#fi
+       		echo "Patched OperatorHub, disabled Red Hat default catalog sources"
+else
+	echo "Assuming proxy in use, not disabling default catalog sources"
+fi
 
 
 echo_white "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
@@ -87,65 +84,65 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 	fi
 	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
 else	
-	echo_cyan "Registry trust bundle already added (cm registry-config -n openshift-config). Assuming workaround has already been applied."
+	echo_cyan "Registry trust bundle already added (cm registry-config -n openshift-config). Assuming workaround has already been applied or not necessary."
 fi
 
-############### v2 ##################
+############### v1 ##################
 if [ "$oc_mirror_version" = "v1" ]; then
-############### v2 ##################
+############### v1 ##################
 
-file_list=$(ls mirror/{sync,save}/oc-mirror-workspace 2>/dev/null || true)
-if [ ! "$file_list" ]; then
+	file_list=$(ls mirror/{sync,save}/oc-mirror-workspace 2>/dev/null || true)
+	if [ ! "$file_list" ]; then
+		echo
+		echo_red "Missing oc-mirror meta-data (mirror/{save,sync}/oc-mirror-workspace* not be available). Please copy this directory from where it was created to this location and try again!" >&2
+		echo
+	fi
+
 	echo
-	echo_red "Missing oc-mirror meta-data (mirror/{save,sync}/oc-mirror-workspace* not be available). Please copy this directory from where it was created to this location and try again!" >&2
+	echo "Applying any imageContentSourcePolicy resource files that were created by oc-mirror under mirror/{save,sync}/oc-mirror-workspace* (aba sync/load)"
 	echo
-fi
 
-echo
-echo "Applying any imageContentSourcePolicy resource files that were created by oc-mirror under mirror/{save,sync}/oc-mirror-workspace* (aba sync/load)"
-echo
-
-# If one should clash with an existing ICSP resource, change its name by incrementing the value (-x) and try to apply it again.
-# See this issue: https://github.com/openshift/oc-mirror/issues/597
-# "|| true" needed in case no "oc-mirror-workspace" dir exist (e.g. no mirror meta data evailable) 
-file_list=$(find mirror/{save,sync}/oc-mirror-workspace* -type f 2> /dev/null | grep /imageContentSourcePolicy.yaml$ || true)
-if [ "$file_list" ]; then
-	for f in $file_list
-	do
-		echo "Running: oc create -f $f"
-		oc create -f $f 2>/dev/null && continue   # If it can be created, move to the next file
-
-		# If it can't be created....
-		# If it's different, then apply the resource with a different name
-		v=$(cat $f | grep "^  name: .*" | head -1 | cut -d- -f2)
-		while ! oc diff -f $f > /dev/null
+	# If one should clash with an existing ICSP resource, change its name by incrementing the value (-x) and try to apply it again.
+	# See this issue: https://github.com/openshift/oc-mirror/issues/597
+	# "|| true" needed in case no "oc-mirror-workspace" dir exist (e.g. no mirror meta data available) 
+	file_list=$(find mirror/{save,sync}/oc-mirror-workspace* -type f 2> /dev/null | grep /imageContentSourcePolicy.yaml$ || true)
+	if [ "$file_list" ]; then
+		for f in $file_list
 		do
-			# oc-mirror creates resources with names xxx-0 fetch the digit after the '-' and increment.
-			# head needed since soemtimes the files have more than one resource!
-			let v=$v+1
-			###echo $v | grep -E "^[0-9]+$" || continue  # Check $v is an integer
-
-			echo "Applying resource(s):" 
-			grep -E -o 'name: [^-]+' $f
-
-			# Adjust the name: in the file
-			sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
 			echo "Running: oc create -f $f"
-			oc create -f $f 2>/dev/null || true
-		done
-	done
-else
-	echo_cyan "No imageContentSourcePolicy.yaml files found under 'mirror/{save,sync}/oc-mirror-workspace*' (no operators mirrored?)."
-fi
+			oc create -f $f 2>/dev/null && continue   # If it can be created, move to the next file
 
+			# If it can't be created....
+			# If it's different, then apply the resource with a different name
+			v=$(cat $f | grep "^  name: .*" | head -1 | cut -d- -f2)
+			while ! oc diff -f $f > /dev/null
+			do
+				# oc-mirror creates resources with names xxx-0 fetch the digit after the '-' and increment.
+				# head needed since sometimes the files have more than one resource!
+				let v=$v+1
+				###echo $v | grep -E "^[0-9]+$" || continue  # Check $v is an integer
+
+				echo "Applying resource(s):" 
+				grep -E -o 'name: [^-]+' $f
+
+				# Adjust the name: in the file
+				sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
+				echo "Running: oc create -f $f"
+				oc create -f $f 2>/dev/null || true
+			done
+		done
+	else
+		echo_cyan "No imageContentSourcePolicy.yaml files found under 'mirror/{save,sync}/oc-mirror-workspace*' (no operators mirrored?)."
+	fi
 else
+
 ############### v2 ################## START
 
 	# For oc-mirror v2
 	# note for oc-mirror v2
 	# resources/idms-oc-mirror.yaml
-	#mirror/sync/working-dir/cluster-resources/itms-oc-mirror.yaml
-	#ls mirror/{save,sync}/working-dir/cluster-resources/{idms,itms}*yaml
+	# mirror/sync/working-dir/cluster-resources/itms-oc-mirror.yaml
+	# ls mirror/{save,sync}/working-dir/cluster-resources/{idms,itms}*yaml
 
 	latest_dir=$(ls -dt mirror/{save,sync} 2>/dev/null | head -1)  # One of these should exist!
 
@@ -190,9 +187,10 @@ else
 		echo "Applying signatures from: $sig_file ..."
 		[ -s $sig_file ] && oc apply -f $sig_file
 	else
-		echo_red "Warning: missing directory mirror/save and/or mirror/sync" >&2
+		echo_red "Warning: missing directory $PWD/mirror/save and/or $PWD/mirror/sync" >&2
 	fi
 
+	exit 0
 ############### v2 ################## END
 fi
 
