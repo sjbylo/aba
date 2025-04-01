@@ -357,27 +357,20 @@ test-cmd -m "Checking jaeger-product operator exists in the catalog file" "cat m
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+
 if [ "$oc_mirror_version" = "v2" ]; then
-# Create fresh file for v2
-tee mirror/save/imageset-config-save.yaml <<END
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/$gvk
-mirror:
-  operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
-    packages:
-END
-fi
-# For oc-miror v2
-
-
-# This header already exists for oc-mirror v1 (see above) 
-#mylog Appending operator header to mirror/save/imageset-config-save.yaml
+	# Create fresh file for v2
+	test-cmd -m "Restore the image set config file for the cluster release images" head -11 mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml
 #tee -a mirror/save/imageset-config-save.yaml <<END
+#kind: ImageSetConfiguration
+#apiVersion: mirror.openshift.io/$gvk
+#mirror:
 #  operators:
 #  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
 #    packages:
-#END
+END
+fi
+# For oc-miror v2
 
 mylog Appending jaeger operator to imageset conf
 grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
@@ -392,8 +385,7 @@ grep -A2 -e "name: cincinnati-operator$"	mirror/imageset-config-operator-catalog
 # DONE ABOVE NOW ocp_version_point=$(echo $ocp_version | cut -d\. -f3)
 # DONE ABOVE NOW let ocp_version_point=$ocp_version_point+1   # Assuming there is 1 higher version in the fast channel
 # DONE ABOVE NOW ocp_version_desired=$ocp_version_major.$ocp_version_point
-
-[ "$oc_mirror_version" = "v2" ] && test-cmd -m "Restore the image set config file for the cluster release images" cp mirror/save/imageset-config-save.yaml.release.images mirror/save/imageset-config-save.yaml
+test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml 
 mylog "Update channel, shortestPath and maxVersion in the mirror/save/imageset-config-save.yaml"
 sed -i "s/^    - name: stable-$ocp_version_major/    - name: fast-$ocp_version_major/g" mirror/save/imageset-config-save.yaml   # Switch to fast channel
 sed -i "s/^      maxVersion: $ocp_version/      maxVersion: $ocp_version_desired/g" mirror/save/imageset-config-save.yaml  # Increase the max ver
@@ -449,7 +441,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale versions" "oc
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." "cd $subdir/aba/sno; oc adm upgrade --to-latest=true" 
 test-cmd -m "Sleeping 60s" sleep 60
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc adm upgrade" 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show desired cluster version" "oc get clusterversion version -o jsonpath='{.status.desired.version}'"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show desired cluster version" "oc get clusterversion version -o jsonpath='{.status.desired.version}'; echo"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version_desired$"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check update  $ocp_version_desired" "oc adm upgrade | grep \"^info: An upgrade is in progress. Working towards $ocp_version_desired:\""
 #### Do upgrade
@@ -652,6 +644,6 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "pod
 
 mylog "===> Completed test $0"
 
-[ -f test/test.log ] && cp test/test.log test/test.log.bak
+[ -f test/test.log ] && cp test/test.log test/test.log.bak || true
 
 echo SUCCESS $0

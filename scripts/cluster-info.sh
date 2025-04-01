@@ -26,9 +26,11 @@ Run '. <(aba shell)' to access the cluster using the kubeconfig file (client cer
 Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.
 END
 [ -f regcreds/pull-secret-mirror.json ] && \
-echo "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry."
+	echo "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
+	echo "Run 'aba day2-osus' to configure the OpenShift Update Service."
 cat <<END
 Run 'aba day2-ntp' to configure NTP on this cluster.
+Run 'aba info' to see this information again.
 Run 'aba -h' or 'aba help' for more.
 END
 
