@@ -49,7 +49,7 @@ echo Adding trustedCA to cluster proxy ...
 oc patch proxy cluster --type=merge -p '{"spec":{"trustedCA":{"name":"user-ca-bundle"}}}'
 
 #####################
-echo "Adding mirror registry CA cert to config ..."
+echo "Adding mirror registry CA cert to registry config ..."
 
 if [ -s regcreds/rootCA.pem ]; then
         ca_cert="$(cat regcreds/rootCA.pem | sed ':a;N;$!ba;s/\n/\\n/g')"
