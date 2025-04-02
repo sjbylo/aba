@@ -360,7 +360,7 @@ test-cmd -m "Checking jaeger-product operator exists in the catalog file" "cat m
 
 if [ "$oc_mirror_version" = "v2" ]; then
 	# Create fresh file for v2
-	test-cmd -m "Restore the image set config file for the cluster release images" head -11 mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml
+	test-cmd -m "Restore the image set config file for the cluster release images" "head -11 mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml"
 #tee -a mirror/save/imageset-config-save.yaml <<END
 #kind: ImageSetConfiguration
 #apiVersion: mirror.openshift.io/$gvk
