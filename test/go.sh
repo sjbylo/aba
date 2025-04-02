@@ -11,11 +11,12 @@ test3 \
 export VER_OVERRIDE=l # Uncomment to use the 'latest' stable version of OCP
 #export VER_OVERRIDE=p # Uncomment to use the 'latest' stable version of OCP
 #export VER_OVERRIDE=4.16.30 # Uncomment to use the 'latest' stable version of OCP
+#export VER_OVERRIDE=4.14.30 # Uncomment to use the 'latest' stable version of OCP
 export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 #export internal_bastion_rhel_ver=rhel8  # rhel8 or rhel9
 export TEST_USER=$(whoami)   # This can be any user or $(whoami) 
-#export oc_mirror_ver_override=v2
 export oc_mirror_ver_override=v1
+#export oc_mirror_ver_override=v2
 
 # This is for testing a specific branch ($1) directly from "git clone", otherwise it will test
 # the local dir. ($PWD)
