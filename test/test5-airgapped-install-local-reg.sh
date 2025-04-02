@@ -364,10 +364,11 @@ if [ "$oc_mirror_version" = "v2" ]; then
 #tee -a mirror/save/imageset-config-save.yaml <<END
 #kind: ImageSetConfiguration
 #apiVersion: mirror.openshift.io/$gvk
-#mirror:
-#  operators:
-#  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
-#    packages:
+tee -a mirror/save/imageset-config-save.yaml <<END
+mirror:
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
+    packages:
 END
 fi
 # For oc-miror v2
