@@ -6,3 +6,4 @@ cincinnati-operator
 cluster-kube-descheduler-operator
 web-terminal
 devworkspace-operator		# Required by web-terminal
+cli-manager

@@ -153,7 +153,7 @@ create: vmw agentconf      ## Create the VMs based on the 'agent-based' config f
 
 ###ls: vmware.conf  ## List VMs and their power state.
 .PHONY: ls
-ls: vmw agentconf                 agent-config.yaml ## List all VMs and their power state.
+ls: vmw                           agent-config.yaml ## List all VMs and their power state.
 	$(SCRIPTS)/vmw-ls.sh || echo "No vm(s)."
 
 .PHONY: shutdown 
@@ -161,7 +161,8 @@ shutdown: ## Trigger the cluster to gracefully shut itself down by draining all 
 	$(SCRIPTS)/cluster-graceful-shutdown.sh 
 
 .PHONY: startup
-startup: vmware.conf ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
+#startup: vmware.conf ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
+startup:             ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
 	$(SCRIPTS)/cluster-startup.sh 
 
 .PHONY: rescue
@@ -233,7 +234,7 @@ day2-ntp:  ## Configure OpenShift with your NTP server
 	$(SCRIPTS)/day2-config-ntp.sh $(debug)
 
 .PHONY:
-day2-osus:  ## Configure OpenShift with your NTP server
+day2-osus:  ## Install OpenShift Update Service and integrate with the Admin Console
 	$(SCRIPTS)/day2-config-osus.sh $(debug)
 
 .PHONY: remove-cdrom
