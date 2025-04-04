@@ -246,7 +246,7 @@ mylog Adding vote-app image to imageset conf file on `hostname`
 [ "$oc_mirror_version" = "v1" ] && gvk=v1alpha2 || gvk=v2alpha1
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
-[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y%m%d_%H%M%S")
 if [ "$oc_mirror_version" = "v2" ]; then
 tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
@@ -330,7 +330,7 @@ test-cmd -m "Checking for multicluster-engine in mirror/imageset-config-operator
 mylog Appending redhat-operator-index:v$ocp_ver_major header into mirror/save/imageset-config-save.yaml on `hostname`
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
-[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y%m%d_%H%M%S")
 if [ "$oc_mirror_version" = "v2" ]; then
 tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration

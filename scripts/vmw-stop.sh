@@ -57,8 +57,8 @@ fi
 
 for name in $hosts; do
 	# Shut down guest if vmware tools exist
-	#govc vm.power -s ${CLUSTER_NAME}-$name || true
-	govc vm.power -s ${CLUSTER_NAME}-$name 
+	govc vm.power -s ${CLUSTER_NAME}-$name || true
+	#govc vm.power -s ${CLUSTER_NAME}-$name 
 done
 
 if [ "$wait" ]; then

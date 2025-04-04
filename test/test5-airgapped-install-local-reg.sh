@@ -437,7 +437,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc a
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Set update channel" "oc adm upgrade channel fast-$ocp_version_major" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show cluster version" "oc get clusterversion"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check cluster version is $ocp_version" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version$; echo"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale version[0]" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[0].version}'"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale version[0]" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[0].version}'; echo"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale versions" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[*].version}'; echo"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
