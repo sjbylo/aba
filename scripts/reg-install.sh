@@ -212,7 +212,6 @@ if [ "$reg_ssh_key" ]; then
 	echo_cyan "Installing mirror registry with command:"
 	echo_cyan "$cmd --initPassword <hidden>"
 
-	exit
 	eval $cmd --initPassword $reg_pw   # eval needed for "~"
 
 	if [ -d regcreds ]; then
