@@ -16,8 +16,8 @@ if [ -s reg-uninstall.sh ]; then
 	if ask "Uninstall the mirror registry on host $reg_host_to_del"; then
 		#echo Uninstalling mirror registry from host $reg_host ...
 		reg_delete
-		[ "$reg_root" ] && eval ls -la $reg_root || ls -la ~/quay-install
-		[ "$reg_root" ] && eval rm -vrf $reg_root || rm -vrf ~/quay-install
+		#[ "$reg_root" ] && eval ls -la $reg_root || ls -la ~/quay-install
+		#[ "$reg_root" ] && eval rm -rf $reg_root || rm -rf ~/quay-install
 		rm -rf regcreds/*
 		rm -f ./reg-uninstall.sh
 		rm -f .installed 
@@ -54,7 +54,7 @@ if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registr
 		echo "Running command: $cmd"
 		$cmd || exit 1
 
-		[ "$reg_root" ] && ssh $reg_ssh_user@$reg_host rm -vrf $reg_root || ssh $reg_ssh_user@$reg_host rm -vrf ~/quay-install
+		#[ "$reg_root" ] && ssh $reg_ssh_user@$reg_host rm -rf $reg_root || ssh $reg_ssh_user@$reg_host rm -rf ~/quay-install
 	else
 		exit 1
 	fi
@@ -63,7 +63,7 @@ elif podman ps | grep -q registry; then
 		cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 		echo "Running command: $cmd"
 		$cmd || exit 1
-		[ "$reg_root" ] && eval rm -vrf $reg_root || rm -vrf ~/quay-install
+		#[ "$reg_root" ] && eval rm -rf $reg_root || rm -rf ~/quay-install
 	else
 		exit 1
 	fi

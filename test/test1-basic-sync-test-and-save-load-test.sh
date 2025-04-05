@@ -312,7 +312,7 @@ rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation i
 test-cmd -m "Bare-metal simulation: Creating agent config files" aba standard   	# Since we're simulating bare-metal, *make will stop* after creating agent configs 
 test-cmd -m "Bare-metal simulation: Creating iso file" aba --dir standard iso        	# Since we're simulating bare-metal, only create iso
 
-#test-cmd -m "Uninstalling mirror registry" aba --dir mirror uninstall 
+#test-cmd -m "Delete the registry" aba --dir mirror uninstall 
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
