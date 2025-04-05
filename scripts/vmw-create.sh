@@ -82,7 +82,7 @@ for name in $CP_NAMES ; do
 	echo_cyan -n "Create VM: "
 	echo "$vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [$mac] [$GOVC_NETWORK] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 	govc vm.create \
-		-annotation="Created on '$(date)' as control node for OCP cluster $cluster_name.$base_domain version v$ocp_version" \
+		-annotation="Created on '$(date)' as control node for OCP cluster $cluster_name.$base_domain version v$ocp_version from $(hostname):$PWD" \
 		-version vmx-15 \
 		-g rhel8_64Guest \
 		-firmware=efi \
@@ -140,7 +140,7 @@ for name in $WORKER_NAMES ; do
 	echo_cyan -n "Create VM: "
 	echo "$vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 	govc vm.create \
-		-annotation="Created on '$(date)' as control node for OCP cluster $cluster_name.$base_domain version v$ocp_version" \
+		-annotation="Created on '$(date)' as worker node for OCP cluster $cluster_name.$base_domain version v$ocp_version from $(hostname):$PWD" \
 		-version vmx-15 \
 		-g rhel8_64Guest \
 		-firmware=efi \
