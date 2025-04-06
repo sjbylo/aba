@@ -136,7 +136,7 @@ done
 if [ "$failed" ]; then
 	echo_red -n "Image synchronization aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
-	echo_red "Warning: Long-running & large data copy processes can fail! Resolve any issues (if needed) and try again." >&2
+	echo_red "Warning: Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." >&2
 	echo_red "         View https://status.redhat.com/ for any current issues or planned maintenance." >&2
 	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
 
