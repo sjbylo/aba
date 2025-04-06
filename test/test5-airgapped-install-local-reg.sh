@@ -425,7 +425,11 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator st
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/$cluster_type login)"
 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
+
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'aba day2' ...
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m "Run 'day2' to integrate operator hub and apply configs" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
@@ -440,7 +444,9 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check cluster version is $oc
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale version[0]" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[0].version}'; echo"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show availbale versions" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[*].version}'; echo"
 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 8 5 "cd $subdir/aba/sno; oc adm upgrade --to-latest=true" 
 # Consider using "--allow-upgrade-with-warnings" in the above trigger 
@@ -528,9 +534,14 @@ build_and_test_cluster() {
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
 
+	#test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "aba --dir $subdir/aba/$cluster_name --cmd"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
+
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all cluster operators available?" "aba --dir $subdir/aba/$cluster_name --cmd; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to become *fully* available (available/complete/non-degraded)?" "i=0; until aba --dir $subdir/aba/$cluster_name --cmd | tail -n +2 |grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$'|wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Show all cluster operators" "aba --dir $subdir/aba/$cluster_name --cmd"
 

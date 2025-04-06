@@ -201,7 +201,7 @@ if [ "$reg_ssh_key" ]; then
 	# Generate the script to be used to delete this registry
 	uninstall_cmd="eval ./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts --autoApprove -v"
 	###echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd; ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host \"rm -rf $reg_root\"; }" > ./reg-uninstall.sh
-	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd; }" > ./reg-uninstall.sh
+	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
@@ -308,7 +308,7 @@ ask "Install Quay mirror registry appliance locally on localhost ($(hostname)), 
 
 	# Generate the script to be used to delete this registry
 	uninstall_cmd="eval ./mirror-registry uninstall --autoApprove $reg_root_opts -v"
-	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd; }" > ./reg-uninstall.sh
+	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
