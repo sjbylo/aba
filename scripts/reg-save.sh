@@ -40,7 +40,7 @@ echo
 [[ ! "$TMPDIR" && "$reg_root" ]] && eval export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $reg_root, if it's defined
-[[ ! "$OC_MIRROR_CACHE" && "$reg_root" ]] && eval export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
+[[ ! "$OC_MIRROR_CACHE" && "$reg_root" ]] && eval export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE  # This is wrong!
 
 # oc-mirror v2 tuning params
 parallel_images=8

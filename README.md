@@ -51,6 +51,7 @@ Aba automatically completes the following and more:
 1. Now works with oc-mirror v2 as default!
 1. Installs and integrates OpenShift Update Service (OSUS).
 1. Helps configure OpenShift with your NTP servers and many more.
+1. Enables graceful cluster shutdown and startup.
 
 ## Quick Start Guide for the Impatient:
 
@@ -272,7 +273,7 @@ aba bundle \
 ```
 
 - This will output several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.
-- Depending on the channel chosen, the OpenShift version will be set to the most recent 'previous' point version.
+- Depending on the channel chosen, the OpenShift version can be set to the most recent 'previous' point version (using '--version p').
 - If needed, --op-sets refers to predefined sets of operators, as defined in the files `templates/operator-set-*`.
 - If needed, add individual operators after "--ops".
 - If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise these values must be set in aba.conf on the internal bastion).
@@ -280,6 +281,7 @@ aba bundle \
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
 - Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_*`.  It is important that the files are not damaged or incomplete in any way!
 - Warning: --force will overwrite any image set files already under aba/mirror/save!
+
 
 Copy the files to your RHEL 8/9 internal bastion within the private internal network.
 
@@ -314,6 +316,12 @@ aba cluster --name mycluster --type compact
 
 [Back to top](#who-should-use-aba)
 
+
+## Aba Flow Chart
+
+This diagram explains the flow of Aba and how Aba works.
+
+<img src="images/aba-flow-diagram.png" alt="Aba Flow Chart" title="Aba Flow Chart" width="80%">
 
 ## Getting Started with Aba
 
@@ -525,10 +533,10 @@ cd mycluster     # change to the directory with the agent-based install files, u
 | `aba shutdown`    | Gracefully shut down (or hibernate) a cluster. `aba shutdown --wait` wait for power-off |
 | `aba start`       | Power on all VMs |
 | `aba stop`        | Gracefully shut down all VMs (guest shutdown only!) |
-| `aba powerdown`   | Power down all VMs immediately |
-| `aba kill`        | Same as `powerdown` |
+| `aba poweroff `   | Power off all VMs immediately |
+| `aba kill`        | Same as `poweroff` |
 | `aba create`      | Create all VMs  |
-| `aba refresh`     | Delete & re-create the VMs causing the cluster to be re-installed. |
+| `aba refresh`     | Delete, re-create and boot the VMs causing the cluster to be re-installed. |
 | `aba delete`      | Delete all the VMs  |
 | `aba login`       | Display the `oc login` command for the cluster.  Use: . <(aba login)  |
 | `aba shell`       | Display the command to access the cluster using the kubeconfig file.  Use: . <(aba shell) |
@@ -611,7 +619,9 @@ aba mon
 
 [Back to top](#who-should-use-aba)
 
-## Feature Backlog
+## Feature Backlog/Ideas
+
+- Configure ACM (if installed) to be ready to install clusters from the mirror registry.
 
 - ~~Assist in adding OpenShift Update Service (OSUS) to the cluster.~~
 
