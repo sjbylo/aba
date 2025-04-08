@@ -319,9 +319,12 @@ aba cluster --name mycluster --type compact
 
 ## Aba Flow Chart
 
-This diagram explains the flow of Aba and how Aba works.
+This chart explains the flow of Aba and how Aba works, showing the main choices: air-gapped, partially disconnected, connected and installation on VMW or bare-metal. 
 
 <img src="images/aba-flow-diagram.png" alt="Aba Flow Chart" title="Aba Flow Chart" width="80%">
+
+[Back to top](#who-should-use-aba)
+
 
 ## Getting Started with Aba
 
