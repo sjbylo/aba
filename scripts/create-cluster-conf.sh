@@ -33,16 +33,19 @@ type=standard
 # Note: VMware mac address range for VMs is 00:50:56:00:00:00 to 00:50:56:3F:FF:FF 
 
 # Set reasonable defaults
+export starting_ip="ADD-IP-ADDR-HERE"
 export mac_prefix=00:50:56:2x:xx:
 export num_masters=3
 export num_workers=3
-export starting_ip="ADD-IP-ADDR-HERE"
 export port0=ens160
 export port1=ens192
+export vlan=
 export master_cpu_count=8
 export master_mem=16
 export worker_cpu_count=4
 export worker_mem=8
+export proxy=
+export data_disk=500
 
 # Now, need to create cluster.conf
 export cluster_name=$name
@@ -60,6 +63,10 @@ export cluster_name=$name
 [ "${shortcuts["$name:worker_mem"]}" ]		&& export worker_mem=${shortcuts["$name:worker_mem"]}
 [ "${shortcuts["$name:port0"]}" ]		&& export port0=${shortcuts["$name:port0"]}
 [ "${shortcuts["$name:port1"]}" ]		&& export port1=${shortcuts["$name:port1"]}
+[ "${shortcuts["$name:vlan"]}" ]		&& export vlan=${shortcuts["$name:vlan"]}
+[ "${shortcuts["$name:data_disk"]}" ]		&& export data_disk=${shortcuts["$name:data_disk"]}
+[ "${shortcuts["$name:proxy"]}" ]		&& export proxy=${shortcuts["$name:proxy"]}
+
 
 # Set reasonable defaults for sno and compact
 if [ "$type" = "sno" ]; then
