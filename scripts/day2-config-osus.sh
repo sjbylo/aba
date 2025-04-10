@@ -19,7 +19,8 @@ NAMESPACE=openshift-update-service
 
 #####################
 echo "Logging into cluster ..."
-. <(aba shell)
+###. <(aba shell)
+[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
 
 #####################
 echo -n "Adding cluster ingress CA cert to the CA trust bundle ... "

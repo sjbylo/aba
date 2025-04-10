@@ -20,7 +20,7 @@ source <(normalize-mirror-conf)
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
-[ ! "$KUBECONFIG" ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig  # Can also apply this script to non-aba clusters!
+[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
 	
 echo_white "What this 'day2' script does:"
 echo_white "- Add the internal mirror registry's Root CA to the cluster trust store."
