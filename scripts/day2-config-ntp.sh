@@ -125,7 +125,8 @@ fi
 butane .99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
 butane .99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
-export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
+###export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
+[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
 
 oc apply -f 99-master-chrony-conf-override.yaml
 oc apply -f 99-worker-chrony-conf-override.yaml

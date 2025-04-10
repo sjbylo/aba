@@ -50,8 +50,10 @@ fi
 
 # Read in the cpu and mem values 
 source <(normalize-cluster-conf) 
+source <(normalize-aba-conf) 
 
 verify-cluster-conf || exit 1
+verify-aba-conf || exit 1
 
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
 

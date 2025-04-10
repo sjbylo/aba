@@ -79,7 +79,7 @@ vmware.conf: .init ## Use VMW vCenter or ESXi to create cluster.
 	@#test -f ../vmware.conf &&                          ln -fs ../vmware.conf || true
 	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo vmware.conf initialized || true
 
-cluster.conf: .init  ## Set up the OpenShift cluster.conf file.
+cluster.conf: .init mirror.conf  ## Set up the OpenShift cluster.conf file.
 	$(SCRIPTS)/create-cluster-conf.sh $(name) $(type)
 
 agentconf: install-config.yaml agent-config.yaml  ## Convenient target to only generate the agent config files, so they can be edited. 
