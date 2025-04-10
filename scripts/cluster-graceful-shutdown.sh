@@ -21,7 +21,7 @@ echo Checking cluster ...
 if ! curl --connect-timeout 10 --retry 2 -skI $server_url >/dev/null; then
 	echo_red "Cluster not reachable at $server_url" >&2
 
-	exit
+	exit 1
 fi
 
 echo_cyan "Attempting to access the cluster ... "
