@@ -602,16 +602,12 @@ Check `cluster-config.sh` is able to parse all the data it needs to create the a
 scripts/cluster-config.sh        # example execution to show the cluster configuration extracted from the agend-based files.
 ```
 
-Run aba again to rebuild the agent-based ISO and refresh the VMs, e.g.:
+Run aba again to rebuild the agent-based ISO. You should boot the bare-metal servers with the iso file, e.g.:
 
 ```
 aba
 ...
 aba iso
-...
-aba upload
-...
-aba refresh
 ...
 aba mon
 ```

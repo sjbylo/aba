@@ -49,6 +49,7 @@ If the image cannot be pulled from the registry:
 unauthorized: access to the requested resource is not authorized
 ```
 - Check the pull-secret, the root CA cert, the registry hostname and port in the mirror.conf and cluster.conf files. 
+- Run the following to verify mirror access: aba verify
 
 Be sure the InfraEnv is properly set:
 
@@ -144,7 +145,7 @@ ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadl
 
 ## Other Problems
 
-Sometimes or-mirror runs out of space under /tmp for temporary files.  You can fix this by increasing the space under /tmp:
+Sometimes or-mirror runs out of space under /tmp for temporary files.  You can fix this by increasing the space under /tmp or setting reg_root in mirror.conf to a directory with more disk space:
 
 ```
 sudo mount -o remount,size=6G /tmp
