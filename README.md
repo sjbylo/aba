@@ -13,12 +13,12 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
    1. [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
    1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
-1. [Start here](#a-very-quick-guide)
+1. [Start here](#start-here)
 1. [Getting Started with Aba](#getting-started-with-aba)
    1. [Disconnected Scenario](#disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
-1. [Creating a bundle archive with everything you need to install OpenShift in an fully disconnected (air-gapped) network](#Creating-a-bundle-archive-with-everything-you-need-to-install-OpenShift-in-an-air-gapped-network)
+1. [Creating a bundle archive with everything you need to install OpenShift in an fully disconnected (air-gapped) network](#Creating-a-bundle-archive-with-everything-you-need-to-install-OpenShift-in-a-fully-disconnected-air-gapped-network)
 1. [About configuration files](#configuration-files)
 1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-andor-openshift-install.yaml-files)
 1. [Feature Backlog](#feature-backlog)
@@ -157,6 +157,7 @@ Note: that Aba also works in connected environments without a private mirror reg
 
 
 [Back to top](#who-should-use-aba)
+
 
 ## Start here
 
