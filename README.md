@@ -19,6 +19,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
 1. [Creating a bundle archive with everything you need to install OpenShift in an fully disconnected (air-gapped) network](#Creating-a-bundle-archive-with-everything-you-need-to-install-OpenShift-in-a-fully-disconnected-air-gapped-network)
+1. [Aba Flow Chart](#aba-flow-chart)
 1. [About configuration files](#configuration-files)
 1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-andor-openshift-install.yaml-files)
 1. [Feature Backlog](#feature-backlog)
@@ -34,7 +35,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
 
 ## Aba Overview
 
-Aba automatically completes the following and more:
+Aba helps you with the following and more:
 
 1. Helps install your first OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
 1. Installs the Quay mirror registry appliance for you or makes use of your existing container registry.
@@ -71,7 +72,7 @@ aba            # Let Aba guide you through the installation process
 -->
 
 
-## Abouit installing OpenShift in a Disconnected Network
+## About installing OpenShift in a Disconnected Network
 
 <img src="images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="80%">
 
@@ -232,14 +233,6 @@ aba help
 [Back to top](#who-should-use-aba)
 
 
-
-## Aba Flow Chart
-
-This chart explains the flow of Aba and how Aba works, showing the main choices: air-gapped, partially disconnected, connected and installation on VMW or bare-metal. 
-
-<img src="images/aba-flow-diagram.png" alt="Aba Flow Chart" title="Aba Flow Chart" width="80%">
-
-[Back to top](#who-should-use-aba)
 
 
 ## Getting Started with Aba
@@ -553,6 +546,14 @@ To install OpenShift run the following command and follow the instructions (see 
 ```
 aba cluster --name mycluster --type compact
 ```
+
+[Back to top](#who-should-use-aba)
+
+## Aba Flow Chart
+
+This chart explains the flow of Aba and how Aba works, showing the main choices: air-gapped, partially disconnected, connected and installation on VMW or bare-metal. 
+
+<img src="images/aba-flow-diagram.png" alt="Aba Flow Chart" title="Aba Flow Chart" width="80%">
 
 [Back to top](#who-should-use-aba)
 
