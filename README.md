@@ -21,7 +21,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
 1. [Aba Flow Chart](#aba-flow-chart)
 1. [About configuration files](#configuration-files)
 1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-andor-openshift-install.yaml-files)
-1. [Feature Backlog](#feature-backlog)
+1. [Feature Backlog/Ideas](#feature-backlog-ideas)
 1. [Miscellaneous](#miscellaneous)
 1. [Advanced](#advanced)
 
@@ -657,6 +657,7 @@ export OC_MIRROR_CACHE=/path/to/big-drive
 Be sure to set the correct (govc) values to access vCenter in the `vmware.conf` file.  Note that ESXi is also supported.
 
 Aba uses `make` to define and process all dependencies.  Due to this, Aba will usually know what to do next, so just run `aba` again.
+
 Why `make` was chosen to build Aba?
 
 The UNIX/Linux command "make" is a utility for automating tasks based on rules specified in a Makefile. It enhances efficiency by managing dependencies,
