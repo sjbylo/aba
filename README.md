@@ -14,7 +14,6 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
    1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
 1. [Start here](#start-here)
-1. [Getting Started with Aba](#getting-started-with-aba)
    1. [Disconnected Scenario](#disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
@@ -177,7 +176,6 @@ bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubuser
 ```
 cd aba
 aba          # Let Aba guide you through the installation process
-aba -h       # Get more help
 ```
 
 ### Method 2: Install Aba using 'git clone'
@@ -187,11 +185,14 @@ git clone https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba          # Let Aba guide you through the installation process
-aba -h       # For help
 ```
 - clones the repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
 - If needed, add any required operators to the `aba.conf` file by setting 'op-sets' and/or 'ops' values.
 - helps you decide the method of deployment and how you should proceed.
+
+Note that 'aba' will create the `aba.conf` file which contains some values that you *must change*, e.g. your preferred platform, your domain name, your network address (if known) and any operators you will require etc.
+
+Now, continue with either 'Disconnected scenario' or 'Fully disconnected (air-gapped) scenario' below.
 
 <!--
 ```
@@ -233,24 +234,6 @@ aba help
 
 
 [Back to top](#who-should-use-aba)
-
-
-
-
-## Getting Started with Aba
-
-To get started, run:
-
-```
-aba
-```
-
-Note that this command will create the `aba.conf` file which contains some values that you *must change*, e.g. your preferred platform, your domain name, your network address (if known) and any operators you will require etc.
-
-Now, continue with either 'Disconnected scenario' or 'Fully disconnected (air-gapped) scenario' below.
-
-[Back to top](#who-should-use-aba)
-
 
 
 ### Disconnected Scenario
@@ -367,9 +350,12 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 cd aba
 aba cluster --name mycluster [--type sno|compact|standard] [--step xyz]
 ```
-- creates a directory `mycluster` (it is useful to name the directory with the same name of your cluster),
-- initializes the directory and then prompts you to run `aba` inside the directory. The most useful 'steps' are 'agentconf', 'iso' and 'mon'.
+- creates and initializes a directory `mycluster` (you should name the directory with the same name of your cluster),
+- prompts you to run `aba` inside the directory. The most useful 'steps' are 'agentconf', 'iso' and 'mon'.
+
+<!--
 - Note, *all* advanced preset parameters in the 'shortcuts.conf' configuration file must be completed for the "--type" option to take affect.
+-->
 
 Once the nodes have booted from the iso the following command should be run to monitor the progress of the installation. For example:
 
@@ -378,7 +364,7 @@ cd <cluster dir>     # e.g. cd mycluster
 aba mon
 ```
 
-Get help with `aba -h`.
+<!--Get help with `aba -h`.-->
 
 After OpenShift has been installed you will see the following output:
 
