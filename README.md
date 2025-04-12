@@ -7,8 +7,8 @@ Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/bl
 
 Use Aba to quickly set up OpenShift in an air-gapped environment while letting it handle the heavy lifting for you.
 
-1. [What does Aba do for me?](#what-does-aba-do-for-me)
-1. [Installing OpenShift in a Disconnected Network](#installing-openshift-in-a-disconnected-network)
+1. [Aba Overview](#aba-overview)
+1. [About installing OpenShift in a Disconnected Network](#about-installing-openshift-in-a-disconnected-network)
 1. [Prerequisites](#prerequisites)
    1. [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
@@ -32,27 +32,28 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
 [Download Demo Video](https://github.com/sjbylo/aba/raw/refs/heads/main/images/aba-bundle-demo-v5-low.mp4)
 
 
-## What does Aba do for me?
+## Aba Overview
 
 Aba automatically completes the following and more:
 
-1. Helps install any type of OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
-1. Installs the Quay mirror registry appliance for you or makes use of any existing container registry.
+1. Helps install your first OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
+1. Installs the Quay mirror registry appliance for you or makes use of your existing container registry.
 1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
 1. Triggers the generation of the agent-based boot ISO.
-1. Configures NTP during installation time to help avoid issues when using nodes with incorrect date & time.
-1. Optionally creates the required VMs in ESXi or vSphere.
+1. Configures NTP during installation to prevent time synchronization issues caused by nodes with incorrect date and time settings
+1. Optionally, creates the required VMs in ESXi or vSphere.
 1. Monitors the installation progress.
 1. Allows for adding more images (e.g. Operators) when synchronizing the mirror registry (day 1 or 2 operation).
 1. Configures the OperatorHub integration with the mirror registry.
 1. Can create an "archive bundle" containing all the files needed to complete a fully air-gapped installation.
-1. Executes several workarounds for some typical issues with disconnected environments.
-1. Enables the integration with vSphere as a day 2 operation.
-1. Now works with oc-mirror v2 as default!
-1. Installs and integrates OpenShift Update Service (OSUS).
-1. Helps configure OpenShift with your NTP servers and many more.
+1. Executes several workarounds, if needed, for some typical issues with disconnected environments.
+1. Now works with oc-mirror v1 or v2!
+1. Installs and integrates OpenShift Update Service (OSUS) to make upgrades a single-click.
+1. Helps configure OpenShift with your NTP servers.
 1. Enables graceful cluster shutdown and startup.
+1. Allows for the modification of generated configuration files (image set & agent based), if more control is required. 
 
+<!--
 ## Quick Start Guide for the Impatient:
 
 Run the following command to clone the Aba repository (https://github.com/sjbylo/aba.git) and install the aba command:
@@ -67,9 +68,10 @@ Run Aba:
 cd aba         # Change into Aba's top-level directory to run all commands
 aba            # Let Aba guide you through the installation process
 ```
+-->
 
 
-## Installing OpenShift in a Disconnected Network
+## Abouit installing OpenShift in a Disconnected Network
 
 <img src="images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="80%">
 
@@ -132,7 +134,7 @@ In a partially disconnected environment, the internal network has limited or pro
 ### Common Requirements for Both Environments
 
 - **Registry Storage**
-   - Minimum of 30 GB is required for OpenShift base images, with additional Operators requiring more (500 GB or more).
+   - Minimum of 30 GB is required for OpenShift base images only, with additional Operators requiring more (500 GB or more is recommended).
 
 - **Network Configuration**
    - **DNS**: Configure the following DNS A records which match the intended cluster name and base domain ('ocp1' and 'example.com' are just examples!):
