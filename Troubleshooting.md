@@ -9,7 +9,7 @@ Ssh to the rendezvous server:
 
 ```
 cd sno
-make ssh
+aba ssh
 # This will run `ssh core@<ip of rendezvous server>`
 
 [core@master1 ~]$ journalctl -u assisted-service.service -f 
@@ -122,8 +122,8 @@ Nov 19 02:39:26 master1 bootkube.sh[10004]: Sending bootstrap-success event. Wai
 Once bootkube has finished and the host has restarted run the following command to observe the installation of OpenShift:
 
 ```
-make cmd get co
-make cmd get nodes
+aba cmd --cmd "get co"
+aba cmd --cmd "get nodes"
 ```
 
 ## Other problems that might happen during mirroring: 
@@ -159,10 +159,10 @@ ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadl
 
 Use the following command to access the node to see if there are any problems:
 ```
-make ssh
+aba ssh
 ```
 
 In tests, it was found that repeated installation of OCP using the exact same mac addresses tends to cause the install to either fail or to take a long time to complete.
-When installing a fresh cluster, it is better not to run 'make refresh' but to run 'make clean' first and then run 'make'. This will cause the configuration to be refreshed with random mac addresses (as long as "xx" is in use within the 'mac_prefix' parameter in the 'cluster.conf' file).
+When installing a fresh cluster, it is better not to run 'aba refresh' but to run 'aba clean' first and then run 'aba'. This will cause the configuration to be refreshed with random mac addresses (as long as "xx" is in use within the 'mac_prefix' parameter in the 'cluster.conf' file).
 
 
