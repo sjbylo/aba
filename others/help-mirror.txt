@@ -1,0 +1,41 @@
+Install Quay (or connect to existing) mirror registry
+
+Usage:
+  aba mirror [options]
+
+Options:
+  -H, --mirror-hostname string         # The hostname of the target mirror registry.
+  -u, --reg-user string                # The username used to access the registry (default it 'init').
+  -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key to use to install Quay to a remote host.
+  -U, --reg-ssh-user string            # Username to use to access the remote host via ssh.
+      --reg-root /path/to/dir          # Install Quay files/images to this dir instead of ~/quay-install.
+      --reg-path string                # The path to use to store images in the mirror reg.
+
+Related commands:
+  aba sync                             # Copy images from the Internet into the mirror registry.
+    -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
+
+  aba save                             # Copy images from the Internet to disk.
+    -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
+
+  aba load                             # Copy images from disk to the mirror registry.
+    -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
+
+Examples of fully disconnected mode (air-gapped):
+
+  Configure mirror registry on localhost (ensure 'registry.example.com' points to the mirror registry):
+    aba mirror -H registry.example.com 
+
+  Configure mirror registry on *remote host* with 'registry.example.com' using 'remote-ssh-user':
+    aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
+
+  Configure mirror registry and use path ocp4/openshift4 and store data under /mnt/...
+    aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user --reg-path ocp4/openshift4 \
+      --reg-root /mnt/large/drive/my-quay-data
+
+  Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
+    aba load -H registry.example.com  --retry
+
+  Install OpenShift:
+    aba cluster --name mycluster --type standard 
+

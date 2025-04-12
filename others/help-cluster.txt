@@ -1,0 +1,18 @@
+Install OpenShift
+
+Usage:
+  aba cluster --name <name> [options]
+
+Examples:
+  aba cluster --name mycluster --type standard                   # Create the cluster dir and install OpenShift.
+  aba cluster --name mycompact --type compact --step agentconf   # Create agent-based config files and stop.
+  aba cluster --name sno --type sno --step iso                   # Create the agent-based iso and stop.
+
+Options:
+
+  aba cluster --name string             # Create a cluster.
+    -n, --name string                   # The name of the cluster to create. 
+    -t, --type <sno|compact|standard>   # Set type of cluster.
+        --step <step>                   # Process up to this step or command <cluster.conf|agentconf|iso|mon>.
+                                        # See commands with "aba -d mycluster help".
+  aba --cmd "oc command"                # Run this oc command on the current cluster.

@@ -25,7 +25,7 @@ scripts/j2 templates/mirror.conf.j2 > mirror.conf
 
 # If no 'force' (or if in doubt) ask!
 if [ "$force" != "yes" ]; then
-	edit_file mirror.conf "Configure your private mirror registry (mirror.conf)" || exit 1  # if editor=none exit 0
+	edit_file mirror.conf "Configure your private mirror registry (mirror/mirror.conf)" || exit 1  # if editor=none exit 0
 fi
 
 exit 0

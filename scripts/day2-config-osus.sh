@@ -63,6 +63,13 @@ else
 fi
 
 #####################
+if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
+	echo_red "Error: cincinnati-operator not available in OperatorHub on this cluster"
+
+	exit 1
+fi
+
+#####################
 echo "Provisioning OpenShift Update Service Operator ..."
 
 oc apply -f - <<END

@@ -1,8 +1,8 @@
+cincinnati-operator
 kubernetes-nmstate-operator
 node-maintenance-operator
 node-healthcheck-operator
 redhat-oadp-operator
-cincinnati-operator
 cluster-kube-descheduler-operator
 web-terminal
 devworkspace-operator		# Required by web-terminal

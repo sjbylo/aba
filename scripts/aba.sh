@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250410235042
+ABA_VERSION=20250412225350
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -117,12 +117,27 @@ interactive_mode=
 # Let's ensure we get the most important rpms installed
 install_rpms $(cat $ABA_PATH/templates/rpms-external.txt) || exit 1
 
+cur_target=
+
 while [ "$*" ] 
 do
 	[ "$DEBUG_ABA" ] && echo "$0: \$* = " $* >&2
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
-		echo "$usage"
+		if [ ! "$cur_target" ]; then
+			#echo "$usage"
+			cat $ABA_PATH/others/help-aba.txt
+		elif [ "$cur_target" = "mirror" ]; then
+			cat $ABA_PATH/others/help-mirror.txt
+		elif [ "$cur_target" = "cluster" ]; then
+			cat $ABA_PATH/others/help-cluster.txt
+		elif [ "$cur_target" = "bundle" ]; then
+			cat $ABA_PATH/others/help-bundle.txt
+		else
+			# If some other target, then show the main help
+			# # If some other target, then show the main help
+			cat $ABA_PATH/others/help-aba.txt
+		fi
 
 		exit 0
 	elif [ "$1" = "-i" ]; then
@@ -406,6 +421,7 @@ do
 		else
 			# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
 			# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
+			cur_target=$1
 			BUILD_COMMAND="$BUILD_COMMAND $1"
 			[ "$DEBUG_ABA" ] && echo $0: Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
 		fi
