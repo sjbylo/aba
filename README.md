@@ -21,7 +21,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
 1. [Aba Flow Chart](#aba-flow-chart)
 1. [About configuration files](#configuration-files)
 1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-andor-openshift-install.yaml-files)
-1. [Feature Backlog/Ideas](#feature-backlog-ideas)
+1. [Feature Backlog and Ideas](#feature-backlog-and-ideas)
 1. [Miscellaneous](#miscellaneous)
 1. [Advanced](#advanced)
 
@@ -618,7 +618,7 @@ aba mon
 
 [Back to top](#who-should-use-aba)
 
-## Feature Backlog/Ideas
+## Feature Backlog and Ideas
 
 - Configure ACM (if installed) to be ready to install clusters from the mirror registry.
 
