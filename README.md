@@ -13,13 +13,13 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
    1. [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
    1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
-1. [A Very Quick Guide](#a-very-quick-guide)
-1. [Creating a bundle archive with everything you need to install OpenShift in an air-gapped network](#Creating-a-bundle-archive-with-everything-you-need-to-install-OpenShift-in-an-air-gapped-network)
+1. [Start here](#a-very-quick-guide)
 1. [Getting Started with Aba](#getting-started-with-aba)
    1. [Disconnected Scenario](#disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
-1. [Configuration files](#configuration-files)
+1. [Creating a bundle archive with everything you need to install OpenShift in an fully disconnected (air-gapped) network](#Creating-a-bundle-archive-with-everything-you-need-to-install-OpenShift-in-an-air-gapped-network)
+1. [About configuration files](#configuration-files)
 1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-andor-openshift-install.yaml-files)
 1. [Feature Backlog](#feature-backlog)
 1. [Miscellaneous](#miscellaneous)
@@ -158,7 +158,7 @@ Note: that Aba also works in connected environments without a private mirror reg
 
 [Back to top](#who-should-use-aba)
 
-## A Very Quick Guide
+## Start here
 
 Installing Aba:
 
@@ -187,6 +187,7 @@ aba -h       # For help
 - If needed, add any required operators to the `aba.conf` file by setting 'op-sets' and/or 'ops' values.
 - helps you decide the method of deployment and how you should proceed.
 
+<!--
 ```
 aba mirror
 ```
@@ -222,99 +223,11 @@ aba help
 ```
 - shows what other commands are available.
 
+-->
+
 
 [Back to top](#who-should-use-aba)
 
-
-## Creating a bundle archive with everything you need to install OpenShift in an air-gapped network
-
-Do you need to download a set of images to install a particular version of OpenShift into a fully disconnected (air-gapped) network?
-
-Here is how you can use Aba to create a `bundle archive` to do that!
-
-Store your pull secret in this file:
-
-```
-~/.pull-secret.json
-```
-
-Run these commands on a RHEL 8/9 or Fedora VM:
-
-```
-git clone https://github.com/sjbylo/aba.git
-cd aba
-./install
-```
-
-Connect a large USB media stick (or other device) to your VM and write the `bundle archive` to it:
-
-Set the version oc OpenShift you want to install:
-```
-v=4.17.16
-```
-
-Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any pre-existing files under aba/mirror/save. 
-
-Create the bundle archive with this single command:
-```
-aba bundle \
-    --pull-secret "~/.pull-secret.json" \
-    --channel stable \
-    --version $v \
-    --op-sets ocp odf \
-    --ops web-terminal devworkspace-operator \
-    --base-domain example.com \
-    --machine-network 10.0.0.0/20 \
-    --dns 10.0.1.8 \
-    --ntp 10.0.1.8 ntp.example.com \
-    --platform bm \
-    --force \
-    --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
-```
-
-- This will output several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.
-- Depending on the channel chosen, the OpenShift version can be set to the most recent 'previous' point version (using '--version p').
-- If needed, --op-sets refers to predefined sets of operators, as defined in the files `templates/operator-set-*`.
-- If needed, add individual operators after "--ops".
-- If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise these values must be set in aba.conf on the internal bastion).
-- Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
-- Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
-- Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_*`.  It is important that the files are not damaged or incomplete in any way!
-- Warning: --force will overwrite any image set files already under aba/mirror/save!
-
-
-Copy the files to your RHEL 8/9 internal bastion within the private internal network.
-
-Verify the files are intact by comparing the checksum values with the original files:
-
-```
-cksum ocp_mycluster_4.17.16_*
-```
-
-Extract the bundle archive:
-
-```
-cat /path/to/ocp_mycluster_4.17.16_* | tar xvf -
-cd aba
-./install
-aba         # Run aba and follow the instructions
-```
-
-Note: You will find the large image set tar file under `aba/mirror/save`.
-
-You can now install the Quay mirror registry to localhost and then load it with images using the following command (see below for more details):
-
-```
-aba mirror -H registry.example.com load --retry 3
-```
-
-To install OpenShift run the following command and follow the instructions (see below for more details):
-
-```
-aba cluster --name mycluster --type compact
-```
-
-[Back to top](#who-should-use-aba)
 
 
 ## Aba Flow Chart
@@ -446,6 +359,7 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 
 [Back to top](#who-should-use-aba)
 
+
 ## Installing OpenShift
 
 <img src="images/make-cluster.jpg" alt="Installing OpenShift" title="Installing OpenShift" width="50%">
@@ -549,7 +463,97 @@ cd mycluster     # change to the directory with the agent-based install files, u
 
 [Back to top](#who-should-use-aba)
 
-## Configuration files
+## Creating a bundle archive with everything you need to install OpenShift in a fully disconnected (air-gapped) network
+
+Do you need to download a set of images and CLI tools to install OpenShift into a fully disconnected (air-gapped) network?
+
+Here is how you can use Aba to create a `bundle archive` to do that!
+
+Store your pull secret in this file:
+
+```
+~/.pull-secret.json
+```
+
+Run these commands on a RHEL 8/9 or Fedora VM:
+
+```
+git clone https://github.com/sjbylo/aba.git
+cd aba
+./install
+```
+
+Connect a large USB media stick (or other device) to your VM and write the `bundle archive` to it:
+
+Set the version oc OpenShift you want to install:
+```
+v=4.17.16
+```
+
+Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any pre-existing files under aba/mirror/save. 
+
+Create the bundle archive with this single command:
+```
+aba bundle \
+    --pull-secret "~/.pull-secret.json" \
+    --channel stable \
+    --version $v \
+    --op-sets ocp odf \
+    --ops web-terminal devworkspace-operator \
+    --base-domain example.com \
+    --machine-network 10.0.0.0/20 \
+    --dns 10.0.1.8 \
+    --ntp 10.0.1.8 ntp.example.com \
+    --platform bm \
+    --force \
+    --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
+```
+
+- This will output several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.
+- Depending on the channel chosen, the OpenShift version can be set to the most recent 'previous' point version (using '--version p').
+- If needed, --op-sets refers to predefined sets of operators, as defined in the files `templates/operator-set-*`.
+- If needed, add individual operators after "--ops".
+- If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise these values must be set in aba.conf on the internal bastion).
+- Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
+- Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
+- Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_*`.  It is important that the files are not damaged or incomplete in any way!
+- Warning: --force will overwrite any image set files already under aba/mirror/save!
+
+
+Copy the files to your RHEL 8/9 internal bastion within the private internal network.
+
+Verify the files are intact by comparing the checksum values with the original files:
+
+```
+cksum ocp_mycluster_4.17.16_*
+```
+
+Extract the bundle archive:
+
+```
+cat /path/to/ocp_mycluster_4.17.16_* | tar xvf -
+cd aba
+./install
+aba         # Run aba and follow the instructions
+```
+
+Note: You will find the large image set tar file under `aba/mirror/save`.
+
+You can now install the Quay mirror registry to localhost and then load it with images using the following command (see below for more details):
+
+```
+aba mirror -H registry.example.com load --retry 3
+```
+
+To install OpenShift run the following command and follow the instructions (see below for more details):
+
+```
+aba cluster --name mycluster --type compact
+```
+
+[Back to top](#who-should-use-aba)
+
+## About configuration files
 
 | Config file | Description |
 | :---------- | :---------- |
