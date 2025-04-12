@@ -20,7 +20,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
 1. [Creating a bundle archive with everything you need to install OpenShift in an fully disconnected (air-gapped) network](#Creating-a-bundle-archive-with-everything-you-need-to-install-OpenShift-in-a-fully-disconnected-air-gapped-network)
 1. [Aba Flow Chart](#aba-flow-chart)
 1. [About configuration files](#configuration-files)
-1. [Customizing agent-config.yaml and/or openshift-install.yaml files](#customizing-agent-config.yaml-andor-openshift-install.yaml-files)
+1. [Customizing the Agent-based config files](#customizing-the-agent-based-config-files)
 1. [Feature Backlog and Ideas](#feature-backlog-and-ideas)
 1. [Miscellaneous](#miscellaneous)
 1. [Advanced](#advanced)
@@ -557,15 +557,15 @@ This chart explains the flow of Aba and how Aba works, showing the main choices:
 
 [Back to top](#who-should-use-aba)
 
-## Customizing agent-config.yaml and/or openshift-install.yaml files
+## Customizing the Agent-based config files
 
-- Once a cluster config directory has been created (e.g. `compact`) and Agent-based configuration has been created, some changes can be made to the `install-config.yaml` and `agent-config.yaml` files if needed. `aba` can be run again to re-create the ISO and the VMs etc (if required).  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.
+- Once a cluster config directory has been created (e.g. `compact`) and Agent-based configuration has been created, changes can be made to the `install-config.yaml` and `agent-config.yaml` files if needed. `aba` can be run again to re-create the ISO and the VMs etc (if required).  Aba should see the changes and try to preserve and use them.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.
 
 The workflow could look like this:
 ```
 aba cluster --name mycluser --step agentconf       # Create the cluster dir and Makefile & generate the initial agent config files.
 cd mycluster
-# Now manually edit the generated install-config.yaml and agent-config.yaml files (where needed, e.g. bare-metal mac addresses) and
+# Now manually edit the generated `install-config.yaml` and `agent-config.yaml` files (where needed, e.g. bare-metal mac addresses) and
 # start cluster installation:
 aba
 ```
@@ -622,17 +622,17 @@ aba mon
 
 - Configure ACM (if installed) to be ready to install clusters from the mirror registry.
 
+- Configure htpasswd login, add users, disable kubeadmin.
+
+- Use PXE boot as alternative to ISO upload.
+
 - ~~Assist in adding OpenShift Update Service (OSUS) to the cluster.~~
 
 - ~~Support bonding and vlan.~~
 
 - ~~Make it easier to integrate with vSphere, including storage.~~
 
-- Configure htpasswd login, add users, disable kubeadmin.
-
 - ~~Disable public OperatorHub and configure the internal registry to serve images.~~
-
-- Use PXE boot as alternative to ISO upload.
 
 - ~~Make it easier to populate the imageset config file with current values, i.e. download the values from the latest catalog and insert them into the image set archive file.~~
 
