@@ -641,7 +641,11 @@ aba mon
 
 ## Miscellaneous
 
-- oc-mirror v2 is now supported by aba and is the preferred version due to bugs and issues in v1. To change its default cache location (~/.oc-mirror), export the OC_MIRROR_CACHE environment variable to a path with sufficient space, e.g., export OC_MIRROR_CACHE=/path/to/big-drive, and rerun aba.
+- oc-mirror v2 is now also supported by aba . To change oc-mirror's default cache location (~/.oc-mirror), export the OC_MIRROR_CACHE environment variable to a path with sufficient disk space, e.g.:
+
+```
+export OC_MIRROR_CACHE=/path/to/big-drive
+```
 
 - By default, aba sets the cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by reg_root in mirror/mirror.conf. You can override these locations by exporting the environment variables, as shown above.
 
