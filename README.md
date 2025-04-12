@@ -54,6 +54,8 @@ Aba helps you with the following and more:
 1. Enables graceful cluster shutdown and startup.
 1. Allows for the modification of generated configuration files (image set & agent based), if more control is required. 
 
+All commands and actions in Aba are *idempotent*.  If you hit a snag, fix it and try again should always be the right way forward!
+
 <!--
 ## Quick Start Guide for the Impatient:
 
@@ -698,6 +700,7 @@ aba
 
 ## Advanced
 
+<!--
 ### You need more control with your mirror registry folders?
 
 You can gain more control over the mirror registry folders and the storage locations for different types of images by following these instructions.
@@ -750,6 +753,7 @@ Load (diskToMirror) the images to your mirror registry using your desired path:
 ```
 aba load --reg-path ocp4/operators
 ```
+-->
 
 
 ### Cluster presets are used mainly to automate the testing of Aba.
@@ -757,7 +761,7 @@ aba load --reg-path ocp4/operators
 ```
 aba sno
 ```
-- This will create a directory `sno` and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `aba.conf` must be completed for this to work).  If you are using VMware it will create the VMs for you.
+- This will create a directory `sno` and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `shortcut.conf` must be completed for this to work).  If you are using VMware the VMs will be created for you.
 - Be sure to go through *all* the values in `aba/vmware.conf` and `sno/cluster.conf`.
 - Be sure your DNS entries have been set up in advance. See above on Prerequisites.
 - Aba will show you the installation progress.  To troubleshoot cluster installation, run `aba ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands and actions in Aba are idempotent.  If you hit a problem, fix it and try again should always be the right way forward!
