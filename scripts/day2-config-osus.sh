@@ -64,9 +64,12 @@ fi
 
 #####################
 if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
-	echo_red "Error: cincinnati-operator not available in OperatorHub on this cluster"
+	sleep 30
+	if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
+		echo_red "Error: cincinnati-operator not available in OperatorHub on this cluster"
 
-	exit 1
+		exit 1
+	fi
 fi
 
 #####################

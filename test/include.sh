@@ -63,7 +63,8 @@ test-cmd() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
 	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
-	local tot_cnt=1		# Try to run the command max tot_cnt times.
+	local tot_cnt=2		# Try to run the command max tot_cnt times. If it fails, try one more time by def.
+	local backoff=8		# Default to wait after failed command is a few sec.
 	local host=localhost	# def. host to run on
 	local mark=L
 
