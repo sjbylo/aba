@@ -78,7 +78,7 @@ do
 done
 
 # Wait for this command to work!
-until $OC get nodes >/dev/null 2>&1
+until $OC get nodes &>/dev/null # >/dev/null 2>&1
 do
 	sleep 10
 done
@@ -86,23 +86,23 @@ done
 all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v "^True$" | wc -l | grep -q "^0$"; }
 
 check_and_approve_csrs() {
-	# Check any pending CSRs
-	CSRs=$($OC get csr -A --no-headers 2>/dev/null | grep -i pending | awk '{print $1}')
-	[ ! "$CSRs" ] && return 0
-
-	# Ensure CSRs are checked for at least about 3 mins (180s) 
-	t=0
-	while [ $t -lt 180 ]
+	# Keep on watching for and approving those CSRs ...
+	while true
 	do
-		if [ "$CSRs" ]; then
-			$OC adm certificate approve $CSRs
-			t=0
-		fi
-			let t=$t+10
-		sleep 10
-		CSRs=$($OC get csr -A --no-headers 2>/dev/null | grep -i pending | awk '{print $1}')
+		# Check any pending CSRs
+		$OC get csr -A --no-headers -w 2>/dev/null | grep -i pending | awk '{print $1}' | while read csr
+		do
+			#$OC adm certificate approve $CSRs
+			echo "$OC adm certificate approve $csr"
+			$OC adm certificate approve $csr
+		done
+		sleep 1
 	done
 }
+
+(check_and_approve_csrs) &>/dev/null & 
+pid=$!
+myexit() { [ ! "$pid" ] && return; kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; exit $1; }
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
@@ -110,11 +110,11 @@ if ! all_nodes_ready; then
 
 	sleep 8
 
-	check_and_approve_csrs
+	#check_and_approve_csrs
 
 	until all_nodes_ready
 	do
-		check_and_approve_csrs
+		#check_and_approve_csrs
 		sleep 8
 	done
 fi
@@ -137,7 +137,7 @@ if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
 	echo
 	echo "Waiting for the console to become available at $console"
 
-	check_and_approve_csrs
+	#check_and_approve_csrs
 
 	if ! try_cmd -q 5 0 60 "curl --retry 2 -skL $console | grep 'Red Hat OpenShift'"; then
 		echo "Giving up waiting for the console!"
@@ -152,14 +152,16 @@ fi
 if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
 	echo "Waiting for all cluster operators ..."
 
-	check_and_approve_csrs
+	#check_and_approve_csrs
 
 	echo
 	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False$' | wc -l| grep '^0$'"; then
 		echo "Giving up waiting for the operators!"
-		exit 0
+		myexit 0
 	fi
 fi
 
 echo_green "All cluster operators are fully available!"
+
+myexit 0
 
