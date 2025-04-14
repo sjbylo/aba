@@ -67,6 +67,7 @@ do
 done
 
 if [ $ret -eq 0 ]; then
+	git rev-parse HEAD  # Show the commit hash for this tested version
 	echo SUCCESS
 	notify.sh "SUCCESS (`date`)" || true
 else

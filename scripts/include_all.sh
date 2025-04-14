@@ -20,17 +20,17 @@ fi
 
 umask 077
 
-if [ ! "$tmp_dir" ]; then
-	export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
-	mkdir -p $tmp_dir 
-	cleanup() {
-		[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..." >&2
-		rm -rf "$tmp_dir"
-	}
-	
-	# Set up the trap to call cleanup on script exit or termination
-	trap cleanup EXIT
-fi
+#if [ ! "$tmp_dir" ]; then
+#	export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
+#	mkdir -p $tmp_dir 
+#	cleanup() {
+#		[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..." >&2
+#		rm -rf "$tmp_dir"
+#	}
+#	
+#	# Set up the trap to call cleanup on script exit or termination
+#	trap cleanup EXIT
+#fi
 
 # Function to display an error message and the last executed command
 show_error() {

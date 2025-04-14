@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250412225350
+ABA_VERSION=20250414210628
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -78,14 +78,14 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 fi
 
 # Set up a temp directory
-export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
-mkdir -p $tmp_dir 
-cleanup() {
-	[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..." >&2
-	rm -rf "$tmp_dir"
-}
+#export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
+#mkdir -p $tmp_dir 
+#cleanup() {
+#	[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..." >&2
+#	rm -rf "$tmp_dir"
+#}
 # Set up the trap to call cleanup on script exit or termination
-trap cleanup EXIT
+#trap cleanup EXIT
 
 usage=$(cat $ABA_PATH/others/help.txt)
 
