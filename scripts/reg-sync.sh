@@ -35,7 +35,8 @@ elif [ -s $pull_secret_file ]; then
 	:
 else
 	echo
-	echo_red "Error: The pull secret file '$pull_secret_file' does not exist! Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret" >&2
+	echo_red "Error: The pull secret file '$pull_secret_file' does not exist!" >&2
+	echo_white "       Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
 	echo
 
 	exit 1
