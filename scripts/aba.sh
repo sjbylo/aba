@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250415222459
+ABA_VERSION=20250416071031
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -661,8 +661,9 @@ if [ ! -f .bundle ]; then
 	else
 		echo
 		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
-		echo_white "To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!"
-		echo_white "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'."
+		echo_white "To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!" >&2
+		echo_white "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret" >&2
+		echo_white "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'." >&2
 		echo
 
 		exit 1
