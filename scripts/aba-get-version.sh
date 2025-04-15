@@ -18,10 +18,12 @@ verify-aba-conf || exit 1
 # Include aba bin path and common scripts
 export PATH=$PWD/bin:$PATH
 
-cat others/message.txt
+##cat others/message.txt
 
 ############
 # Determine OCP version 
+
+export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
 
 echo -n "Looking up OpenShift release versions ..."
 
@@ -53,11 +55,11 @@ which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version |
 [ "$TERM" ] && tput cr
 sleep 0.5
 
-echo    "Which version of OpenShift do you want to install?"
+#echo    "Which version of OpenShift do you want to install?"
 
 target_ver=
-while true
-do
+#while true
+#do
 	# Exit loop if release version exists
 	if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
 		if curl --connect-timeout 10 --retry 2 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
@@ -67,18 +69,24 @@ do
 		fi
 	fi
 
-	[ "$stable_ver" ] && or_s="or $stable_ver (latest) "
-	[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (previous) "
+	#[ "$stable_ver" ] && or_s="$stable_ver"
+	#[ "$stable_ver_prev" ] && or_p="$stable_ver_prev"
 
-	echo -n "Enter version $or_s$or_p$or_ret(l/p/<version>/Enter) [$default_ver]: "
+	[ "$stable_ver" ] && echo "Latest current version: $stable_ver"
+	[ "$stable_ver_prev" ] && echo "Latest previous version: $stable_ver_prev"
+	[ "$default_ver" ] && echo "Version installed: $default_ver"
+#	echo "Current available versions: $or_s$or_p$or_ret "
+#	echo ": $or_s$or_p$or_ret "
 
-	read target_ver
-	[ ! "$target_ver" ] && target_ver=$default_ver          # use default
-	[ "$target_ver" = "l" ] && target_ver=$stable_ver       # latest
-	[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev  # previous latest
-done
+	#read target_ver
+	#[ ! "$target_ver" ] && target_ver=$default_ver          # use default
+	#[ "$target_ver" = "l" ] && target_ver=$stable_ver       # latest
+	#[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev  # previous latest
+#done
+
+#echo 
 
 # Update the conf file
 #sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver/g" aba.conf
-replace-value-conf aba.conf ocp_version $target_ver
+#replace-value-conf aba.conf ocp_version $target_ver
 
