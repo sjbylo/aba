@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250414210628
+ABA_VERSION=20250415222459
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -634,20 +634,30 @@ if [ ! -f .bundle ]; then
 		edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, pull secret, default base domain & net address, dns & ntp etc (if known)" || exit 1
 	fi
 
+	# make & jq are needed below and in the next steps 
+	scripts/install-rpms.sh external 
+
 
 	##############################################################################################################################
 	# Determine pull secret
 
 	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
-		[ "$INFO_ABA" ] && echo_cyan "Pull secret found at '$pull_secret_file'."
+		if jq empty $pull_secret_file; then
+			[ "$INFO_ABA" ] && echo_cyan "Pull secret found at '$pull_secret_file'."
 
-		install_rpms make || exit 1
+			#install_rpms make || exit 1  # rpms installed above
 
-		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
+			# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
+			( make -s -C mirror catalog bg=true & ) & 
 
-		( make -s -C mirror catalog bg=true & ) & 
+			sleep 0.3
+		else
+			echo
+			echo_red "Error: Pull secret file sytax error: $pull_secret_file!" >&2
+			echo
 
-		sleep 0.3
+			exit 1
+		fi
 	else
 		echo
 		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
@@ -657,9 +667,6 @@ if [ ! -f .bundle ]; then
 
 		exit 1
 	fi
-
-	# make & jq are needed below and in the next steps 
-	scripts/install-rpms.sh external 
 
 	##############################################################################################################################
 	# Determine air-gapped
