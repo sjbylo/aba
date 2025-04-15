@@ -23,6 +23,15 @@ echo "Logging into cluster ..."
 [ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
 
 #####################
+if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
+	if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
+		echo_red "Error: cincinnati-operator not available in OperatorHub on this cluster"
+
+		exit 1
+	fi
+fi
+
+#####################
 echo -n "Adding cluster ingress CA cert to the CA trust bundle ... "
 
 ingress_cert="$(oc get secret -n openshift-ingress-operator router-ca -o jsonpath="{.data['tls\.crt']}"| base64 -d)"
@@ -60,16 +69,6 @@ else
 	echo_red "No root CA file found at $PWD/regcreds/rootCA.pem.  Is the mirror registry available?" >&2
 
 	exit 1
-fi
-
-#####################
-if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
-	sleep 30
-	if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
-		echo_red "Error: cincinnati-operator not available in OperatorHub on this cluster"
-
-		exit 1
-	fi
 fi
 
 #####################
