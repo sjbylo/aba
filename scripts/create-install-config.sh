@@ -50,7 +50,7 @@ if [ "$proxy" ]; then
 			[ "$INFO_ABA" ] && echo Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry.
 		else
 			echo_red "Error: No pull secret found at $pull_secret_file.  Aborting!  See the README.md file for help!" >&2 
-			echo_white "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret" >&2
+			echo_white "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
 
 			exit 1
 		fi
