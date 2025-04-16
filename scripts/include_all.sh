@@ -49,9 +49,9 @@ show_error() {
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
-	# Remove all chars from lines with <whitespace>#<anything>
-	# Remove all whitespace lines
-	# Remove all leading and trailing whitespace
+	# Remove all chars from lines with <white-space>#<anything>
+	# Remove all white-space lines
+	# Remove all leading and trailing white-space
 	# Correct ask=? which must be either =1 or = (empty)
 	# Extract machine_network and prefix_length from the CIDR notation
 	# Ensure only one arg after 'export'
@@ -172,9 +172,9 @@ verify-mirror-conf() {
 normalize-cluster-conf()
 {
 	# Normalize or sanitize the config file
-	# Remove all chars from lines with <whitespace>#<anything>
-	# Remove all whitespace lines
-	# Remove all leading and trailing whitespace
+	# Remove all chars from lines with <white-space>#<anything>
+	# Remove all white-space lines
+	# Remove all leading and trailing white-space
 	# Extract machine_network and prefix_length from the CIDR notation
 	# Ensure only one arg after 'export'
 	# Prepend "export "
@@ -186,6 +186,7 @@ normalize-cluster-conf()
 		sed -E	-e "s/^\s*#.*//g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
+			-e 's#^int_connection=none#int_connection= #g' | \
 		awk '{print $1}' | \
 		sed -e "s/^/export /g";
 
@@ -231,6 +232,8 @@ verify-cluster-conf() {
 	[ "$port1" ] && ! echo $port1 | grep -q -E '^[a-zA-Z0-9_.-]+$' && { echo_red "Error: port1 is invalid in cluster.conf: [$port1]" >&2; ret=1; }
 
 	[[ -z "$vlan" || ( "$vlan" =~ ^[0-9]+$ && vlan -ge 1 && vlan -le 4094 ) ]] || { echo_red "Error: vlan is invalid in cluster.conf: [$vlan]" >&2; ret=1; }
+
+	[ "$int_connection" ] && echo $int_connection | grep -q -E "none|proxy|direct" || { echo_red "Error: int_connection incorrectly set [$int_connection] in cluster.conf" >&2; ret=1; }
 
 	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
 	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { echo_red "Error: mac_prefix is invalid in cluster.conf: [$mac_prefix]" >&2; ret=1; }
@@ -291,7 +294,7 @@ install_rpms() {
 	if [ "$rpms_to_install" ]; then
 		echo "Installing required rpms:$rpms_to_install (logging to .dnf-install.log). Please wait!" >&2  # send to stderr so this can be seen during "aba bundle -o -"
 		if ! sudo dnf install $rpms_to_install -y >> .dnf-install.log 2>&1; then
-			echo_red "Warning: an error occured during rpm installation. See the logs at .dnf-install.log." >&2
+			echo_red "Warning: an error occurred during rpm installation. See the logs at .dnf-install.log." >&2
 			echo_red "If dnf cannot be used to install rpm packages, please install the following packages manually and try again!" >&2
 			echo_magenta $rpms_to_install
 
@@ -306,34 +309,34 @@ ask() {
 
 	# Default reply is 'yes' (or 'no') and return 0
 	yn_opts="(Y/n)"
-	def_responce=y
-	[ "$1" == "-n" ] && def_responce=n && yn_opts="(y/N)" && shift
-	[ "$1" == "-y" ] && def_responce=y && yn_opts="(Y/n)" && shift
+	def_response=y
+	[ "$1" == "-n" ] && def_response=n && yn_opts="(y/N)" && shift
+	[ "$1" == "-y" ] && def_response=y && yn_opts="(Y/n)" && shift
 	timer=
 	[ "$1" == "-t" ] && timer="-t $1" && shift && shift 
 
 	echo_yellow -n "$@? $yn_opts: "
 	read $timer yn
 
-	# Return default responce, 0
+	# Return default response, 0
 	[ ! "$yn" ] && return 0
 
-	[ "$def_responce" == "y" ] && [ "$yn" == "y" -o "$yn" == "Y" ] && return 0
-	[ "$def_responce" == "n" ] && [ "$yn" == "n" -o "$yn" == "N" ] && return 0
+	[ "$def_response" == "y" ] && [ "$yn" == "y" -o "$yn" == "Y" ] && return 0
+	[ "$def_response" == "n" ] && [ "$yn" == "n" -o "$yn" == "N" ] && return 0
 
-	# return "non-default" responce 
+	# return "non-default" response 
 	return 1
 
-#	if [ "$def_responce" == "y" ]; then
+#	if [ "$def_response" == "y" ]; then
 #		[ ! "$yn" -o "$yn" == "y" -o "$yn" == "Y" ] && return 0
 #	else
-#		# Return default responce
+#		# Return default response
 #		[ ! "$yn" ] && return 0
 #		[ "$yn" == "n" -o "$yn" == "N" ] && return 0 
 #		[ "$yn" != "y" -a "$yn" != "Y" ] && return 0
 #	fi
 #
-#	# return "non-default" responce 
+#	# return "non-default" response 
 #	return 1
 }
 
@@ -475,7 +478,7 @@ fetch_previous_version() {
 	which oc-mirror 2>/dev/null >&2 || { echo Installing oc-mirror ... >&2; make -s -C $ABA_PATH/cli oc-mirror >&2; }
 
 	#[ "$stable_ver_point" ] && stable_ver_prev=$(echo "$rel"| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
-	stable_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${stable_ver_point} 2>/dev/null | tail -1)  # This is better way to fetch the newest previoous version!
+	stable_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${stable_ver_point} 2>/dev/null | tail -1)  # This is better way to fetch the newest previous version!
 
 	[ "$stable_ver_prev" ] && echo $stable_ver_prev || return 1
 
