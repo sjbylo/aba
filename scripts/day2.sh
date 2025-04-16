@@ -36,12 +36,12 @@ echo For disconnected environments, disabling online public catalog sources
 echo
 
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
-if [ ! "$proxy" ]; then
+if [ ! "$int_connection" ]; then
 	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'"
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
        		echo "Patched OperatorHub, disabled Red Hat default catalog sources"
 else
-	echo "Assuming proxy in use, not disabling default catalog sources"
+	echo "Assuming internet connection (proxy) in use, not disabling default catalog sources"
 fi
 
 

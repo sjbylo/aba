@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250416071815
+ABA_VERSION=20250416162720
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
 
@@ -631,7 +631,7 @@ if [ ! -f .bundle ]; then
 	if [ ! -f .aba.conf.seen ]; then
 		touch .aba.conf.seen
 
-		edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, pull secret, default base domain & net address, dns & ntp etc (if known)" || exit 1
+		edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, pull secret, default base domain & net address, dns & ntp etc (if known)" || true #|| exit 1
 	fi
 
 	# make & jq are needed below and in the next steps 
@@ -691,7 +691,7 @@ if [ ! -f .bundle ]; then
 	fi
 	
 	##############################################################################################################################
-	# Determine online installation (e.g. via a proxy)
+	# Determine online installation (e.g. via a proxy/NAT)
 
 	echo
 	echo_white "Partially Disconnected"
@@ -721,7 +721,7 @@ if [ ! -f .bundle ]; then
 	echo 
 	echo "Install OpenShift directly from the Internet"
 	echo
-	echo "Configure the installation to use a proxy (optional)."
+	echo "Configure the installation to use a proxy or NAT (optional)."
 	echo
 	echo "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>]"
 	echo 

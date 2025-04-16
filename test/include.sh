@@ -315,7 +315,7 @@ END
 	# This file is not needed in a fully air-gapped env. 
 	ssh $test_user@$int_bastion_hostname -- "rm -fv ~/.pull-secret.json"
 
-	mylog "Removing proxy-set.sh on $int_bastion_hostname ..."
+	mylog "Removing ~/.proxy-set.sh on $int_bastion_hostname ..."
 	# Want to test fully disconnected 
 	ssh $test_user@$int_bastion_hostname -- "sed -i 's|^source ~/.proxy-set.sh|# aba test # source ~/.proxy-set.sh|g' ~/.bashrc"
 
