@@ -12,14 +12,14 @@ source <(normalize-aba-conf)
 
 verify-aba-conf || exit 1
 
-[ ! "$ntp_servers" ] && echo_white "Not configuring NTP in early bootstrap node because 'ntp_servers' not defined in aba.conf." && exit 0
+[ ! "$ntp_servers" ] && echo_white "Not configuring NTP in early bootstrap node because 'ntp_servers' not defined in aba.conf or cluster.conf." && exit 0
 
 [ "$INFO_ABA" ] && echo_cyan "Adding NTP server to early bootstrap ignition: $ntp_servers" 
 
 iso_dir=iso-agent-based
 coreos-installer iso ignition show $iso_dir/agent.x86_64.iso > $iso_dir/tmp.ign
 
-# Do not use tr -d "[:space:]", since that also deleted newlines which are needed for resd to work for the last line!
+# Do not use tr -d "[:space:]", since that also deleted newlines which are needed for read to work for the last line!
 # Want to keep a record of chrony.conf for debugging
 cat > $iso_dir/chrony.conf << EOF
 $(echo "$ntp_servers" | tr -d "[ \t]" | tr ',' '\n' | while read item; do echo "server ${item} iburst"; done)
@@ -28,9 +28,9 @@ makestep 1.0 3
 rtcsync
 logdir /var/log/chrony
 EOF
-###echo $CHRONY_CONF_BASE64_2 | base64 -d > $iso_dir/chrony.conf
 
-export CHRONY_CONF_BASE64_2=$(echo "$config" | base64 -w 0)
+#export CHRONY_CONF_BASE64=$(echo "$config" | base64 -w 0)
+export CHRONY_CONF_BASE64=$(cat $iso_dir/chrony.conf | base64 -w 0)
 
 jq '.storage.files += [{
   "group": {},
@@ -40,7 +40,7 @@ jq '.storage.files += [{
     "name": "root"
   },
   "contents": {
-    "source": "data:text/plain;charset=utf-8;base64,'$CHRONY_CONF_BASE64_2'"
+    "source": "data:text/plain;charset=utf-8;base64,'$CHRONY_CONF_BASE64'"
   },
   "mode": 420
 }]' $iso_dir/tmp.ign > $iso_dir/custom_ign.ign
