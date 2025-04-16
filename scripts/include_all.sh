@@ -193,7 +193,8 @@ normalize-cluster-conf()
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
 	grep -q ^port0= cluster.conf 		|| echo export port0=eth0
-	grep -q "^int_connection=\S" cluster.conf && grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy
+	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
+	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
 }
 
 verify-cluster-conf() {
