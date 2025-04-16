@@ -616,7 +616,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Making iso" "aba --dir $sub
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating and starting VMs" "aba --dir $subdir/aba/$cluster_name refresh"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30mins for node0 to be reachabe" "i=0; until aba --dir $subdir/aba/$cluster_name ssh --cmd hostname; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; echo -n .; sleep 10; done"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~10mins for node0 to config NTP" "i=0; until aba --dir $subdir/aba/$cluster_name ssh --cmd chronyc sources | grep $ntp_ip ; do let i=\$i+1; [ \$i -gt 120 ] && exit 1; echo -n .; sleep 10; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~10mins for node0 to config NTP" "i=0; until aba --dir $subdir/aba/$cluster_name ssh --cmd 'chronyc sources' | grep $ntp_ip ; do let i=\$i+1; [ \$i -gt 120 ] && exit 1; echo -n .; sleep 10; done"
 
 # -i means ignore any error and let this script handle the error. I.e. restart workers.
 test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name" || \
