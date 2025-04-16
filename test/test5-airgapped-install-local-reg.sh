@@ -160,7 +160,7 @@ source <(cd mirror && normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
-test-cmd -r 3 3 -m "Creating bundle for channel stable and version $ocp_version" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel stable --version $ocp_version --op-sets abatest --ops web-terminal --base-domain example.com --machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp 10.0.1.8 ntp.example.com --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
+test-cmd -r 3 3 -m "Creating bundle for channel stable and version $ocp_version" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel stable --version $ocp_version --op-sets abatest --ops web-terminal --base-domain example.com --machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp $ntp_ip  ntp.example.com --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
 # Back up the image set conf file so we can upgrade the cluster later
 [ "$oc_mirror_version" = "v2" ] && test-cmd -m "Back up the image set conf file so we can use it to upgrade the cluster later" cp mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.release.images
@@ -612,6 +612,10 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting machine_network" "se
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Setting starting_ip" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.2.253 /g' $subdir/aba/$cluster_name/cluster.conf"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Making iso" "aba --dir $subdir/aba/$cluster_name iso"
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating and starting VMs" "aba --dir $subdir/aba/$cluster_name refresh"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30mins for node0 to be reachabe" "i=0; until aba --dir $subdir/aba/$cluster_name ssh --cmd hostname; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; echo -n .; sleep 10; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~10mins for node0 to config NTP" "i=0; until aba --dir $subdir/aba/$cluster_name ssh --cmd chronyc sources | grep $ntp_ip ; do let i=\$i+1; [ \$i -gt 120 ] && exit 1; echo -n .; sleep 10; done"
 
 # -i means ignore any error and let this script handle the error. I.e. restart workers.
 test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name" || \
