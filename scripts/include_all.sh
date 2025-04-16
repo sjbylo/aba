@@ -178,6 +178,7 @@ normalize-cluster-conf()
 	# Extract machine_network and prefix_length from the CIDR notation
 	# Ensure only one arg after 'export'
 	# Prepend "export "
+	# Adjust new int_connection value for compatibility
 
 	[ ! -s cluster.conf ] &&                                                               return 0
 
@@ -191,6 +192,7 @@ normalize-cluster-conf()
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
 	grep -q ^port0= cluster.conf 		|| echo export port0=eth0
+	grep -q "^proxy=[^ \t]" cluster.conf	&& echo export int_connection=proxy
 }
 
 verify-cluster-conf() {

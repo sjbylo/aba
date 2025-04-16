@@ -45,7 +45,7 @@ export master_cpu_count=8
 export master_mem=16
 export worker_cpu_count=4
 export worker_mem=8
-export proxy=
+export int_connection=
 export data_disk=500
 
 # Now, need to create cluster.conf
@@ -66,7 +66,7 @@ export cluster_name=$name
 [ "${shortcuts["$name:port1"]}" ]		&& export port1=${shortcuts["$name:port1"]}
 [ "${shortcuts["$name:vlan"]}" ]		&& export vlan=${shortcuts["$name:vlan"]}
 [ "${shortcuts["$name:data_disk"]}" ]		&& export data_disk=${shortcuts["$name:data_disk"]}
-[ "${shortcuts["$name:proxy"]}" ]		&& export proxy=${shortcuts["$name:proxy"]}
+[ "${shortcuts["$name:int_connection"]}" ]	&& export int_connection=${shortcuts["$name:int_connection"]}
 
 
 # Set reasonable defaults for sno and compact

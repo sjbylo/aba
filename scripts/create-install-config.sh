@@ -39,14 +39,16 @@ fi
 
 # Read in the needed files ...
 
-# Which pull secret file to use?  If proxy, then use the public pull secret, otherwise use the "mirror" pull secret by default.
+# Which pull secret file to use?  If int_connection=proxy, then use the public pull secret, otherwise use the "mirror" pull secret by default.
+
+use_mirror=1
 
 # See if the cluster wide proxy should be added or not
-if [ "$proxy" = "direct" ]; then
+if [ "$int_connection" = "direct" ]; then
 	echo_white "Using direct internet access"
 
-	use_internet=1
-elif [ "$proxy" = "proxy" ]; then
+	use_mirror=
+elif [ "$int_connection" = "proxy" ]; then
 	# Else, if proxy is otherwise set, e.g. to 1 or true
 	if [ "$http_proxy" -o "$https_proxy" ]; then
 		# This means we will do an ONLINE install, using the public Red Hat registry. 
@@ -69,7 +71,8 @@ elif [ "$proxy" = "proxy" ]; then
 		image_content_sources=
 		additional_trust_bundle=
 
-		use_proxy=1
+		export use_proxy=1
+		use_mirror=
 	else
 		echo_red "Warning: The proxy value in cluster.conf is set but not all proxy vars are set. Ignoring." >&2
 		echo_red "If you want to configure the cluster wide proxy, set 'proxy=true' or override by" >&2
@@ -77,13 +80,15 @@ elif [ "$proxy" = "proxy" ]; then
 
 		sleep 2
 	fi
+elif [ "$int_connection" ]; then
+	echo_red "Warning: Internet connectivity incorrectly defined in cluster.conf" >&2
 else
-	[ "$INFO_ABA" ] && echo_white "Not configuring the cluster wide proxy since proxy values not set in cluster.conf."
+	[ "$INFO_ABA" ] && echo_white "Not configuring the Internet connectivity (proxy or direct) since values not set in cluster.conf."
 fi
 
-
 # If the proxy is not in use (usually the case), find the pull secret to use ... prioritize the mirror ...
-if [ ! "$use_proxy" -a ! "$use_internet" ]; then
+#if [ ! "$use_proxy" -a ! "$use_direct" ]; then
+if [ "$use_mirror" ]; then
 	if [ -s regcreds/pull-secret-mirror.json ]; then
 		export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
 		echo_white Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at: $reg_host
@@ -96,10 +101,9 @@ if [ ! "$use_proxy" -a ! "$use_internet" ]; then
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
-#	else
-#		echo_red "Error: No pull secret found in mirror/regcreds dir. Aborting!  See the README.md file for help!" >&2 
-#
-#		exit 1
+	else
+		echo_red "Warning: No pull secret files found in directory: aba/mirror/regcreds." >&2 
+		show_mirror_missing_err=1
 	fi
 
 	# ... we also, need a root CA... if using our own registry.
@@ -112,15 +116,20 @@ if [ ! "$use_proxy" -a ! "$use_internet" ]; then
 		#if [ "$use_proxy" ]; then
 		#	echo_red "No private mirror registry configured! Using proxy settings to access Red Hat's public registry." >&2
 		#else
-			# Should check accessibility to registry.redhat.io?
-			echo
-			echo_red "Warning: No private mirror registry is configured (missing aba/mirror/regcreds/rootCA.pem cert file) and" >&2
-			echo_red "         no proxy settings have been provided in cluster.conf!" >&2
-			echo_red "         If this is *unexpected*, setting up a mirror registry is required. Refer to the README.md for detailed instructions." >&2
-			echo_red "         Root CA file 'aba/mirror/regcreds/rootCA.pem' missing.  As a result, no 'additionalTrustBundle' can be added to 'install-config.yaml'." >&2
-	
-			sleep 2
+		# Should check accessibility to registry.redhat.io?
+			echo_red "Warning: Root CA file missing: aba/mirror/regcreds/rootCA.pem." >&2
+			echo_red "         No private mirror registry available!" >&2
+			echo_red "         As a result, no 'additionalTrustBundle' will be added to 'install-config.yaml'." >&2
+
+			show_mirror_missing_err=1
 		#fi
+	fi
+
+	if [ "$show_mirror_missing_err" ]; then
+		echo_red "         No internet connectivity (proxy or direct) has been defined in cluster.conf." >&2
+		echo_red "         If this is *unexpected*, either set up a mirror registry or define internet connectivity. Refer to the README.md for detailed instructions." >&2
+
+		sleep 2
 	fi
 fi
 

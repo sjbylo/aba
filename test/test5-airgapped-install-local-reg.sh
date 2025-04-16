@@ -4,7 +4,7 @@
 
 export INFO_ABA=1
 
-# Required: 2 bastions (internal and external), for internal (no direct Internet) only yum works via a proxy. For external, the proxy is fully configured. 
+# Required: 2 bastions (internal and external), for internal (no direct Internet) only yum works via a proxy/NAT. For external, the proxy is fully configured. 
 # I.e. Internal bastion has no access to the Internet.  External has full access. 
 # Ensure passwordless ssh access from bastion1 (external) to int_bastion_hostname (internal). 
 # Be sure no mirror registries are installed on either bastion before running.  Internal int_bastion_hostname can be a fresh "minimal install" of RHEL8/9.

@@ -100,7 +100,7 @@ source <(normalize-vmware-conf)
 
 test-cmd -m "Removing sno dir" rm -rf sno
 test-cmd -m "Creating sno/cluster.conf." aba sno --step cluster.conf
-test-cmd -m "Adding proxy=true to sno/cluster.conf" "sed -i 's/^#proxy=.*/proxy=true/g' sno/cluster.conf"
+test-cmd -m "Adding int_connection=proxy to sno/cluster.conf" "sed -i 's/^#int_connection=.*/int_connection=proxy/g' sno/cluster.conf"
 
 test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." aba sno 
 test-cmd -m "Checking cluster operators" aba --dir sno cmd
