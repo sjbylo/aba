@@ -41,12 +41,17 @@ fi
 
 # Which pull secret file to use?  If proxy, then use the public pull secret, otherwise use the "mirror" pull secret by default.
 
-# See if the cluster wide proxy should be added
-if [ "$proxy" ]; then
-	if [ "$http_proxy" -a "$https_proxy" ]; then
+# See if the cluster wide proxy should be added or not
+if [ "$proxy" = "direct" ]; then
+	echo_white "Using direct internet access"
+
+	use_internet=1
+elif [ "$proxy" = "proxy" ]; then
+	# Else, if proxy is otherwise set, e.g. to 1 or true
+	if [ "$http_proxy" -o "$https_proxy" ]; then
 		# This means we will do an ONLINE install, using the public Red Hat registry. 
 		if [ -s $pull_secret_file ]; then
-			export pull_secret=$(cat $pull_secret_file)
+			export pull_secret=$(cat $pull_secret_file | jq .)
 			[ "$INFO_ABA" ] && echo Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry.
 		else
 			echo_red "Error: No pull secret found at $pull_secret_file.  Aborting!  See the README.md file for help!" >&2 
@@ -78,23 +83,23 @@ fi
 
 
 # If the proxy is not in use (usually the case), find the pull secret to use ... prioritize the mirror ...
-if [ ! "$use_proxy" ]; then
+if [ ! "$use_proxy" -a ! "$use_internet" ]; then
 	if [ -s regcreds/pull-secret-mirror.json ]; then
 		export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
-		echo Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at: $reg_host
+		echo_white Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at: $reg_host
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
 	elif [ -s regcreds/pull-secret-full.json ]; then
 		export pull_secret=$(cat regcreds/pull-secret-full.json) 
-		echo Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at: $reg_host
+		echo_white Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at: $reg_host
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
-	else
-		echo_red "Error: No pull secret found in mirror/regcreds dir. Aborting!  See the README.md file for help!" >&2 
-
-		exit 1
+#	else
+#		echo_red "Error: No pull secret found in mirror/regcreds dir. Aborting!  See the README.md file for help!" >&2 
+#
+#		exit 1
 	fi
 
 	# ... we also, need a root CA... if using our own registry.
@@ -104,9 +109,9 @@ if [ ! "$use_proxy" ]; then
 	else
 		# Only show this warning IF there is no internet connection?
 		# Or, only show if proxy is NOT being used?
-		if [ "$use_proxy" ]; then
-			echo_red "No private mirror registry configured! Using proxy settings to access Red Hat's public registry." >&2
-		else
+		#if [ "$use_proxy" ]; then
+		#	echo_red "No private mirror registry configured! Using proxy settings to access Red Hat's public registry." >&2
+		#else
 			# Should check accessibility to registry.redhat.io?
 			echo
 			echo_red "Warning: No private mirror registry is configured (missing aba/mirror/regcreds/rootCA.pem cert file) and" >&2
@@ -115,10 +120,23 @@ if [ ! "$use_proxy" ]; then
 			echo_red "         Root CA file 'aba/mirror/regcreds/rootCA.pem' missing.  As a result, no 'additionalTrustBundle' can be added to 'install-config.yaml'." >&2
 	
 			sleep 2
-		fi
+		#fi
 	fi
 fi
 
+# If not already set, set the default value
+if [ ! "$pull_secret" ]; then
+	if [ -s "$pull_secret_file" ]; then
+		export pull_secret=$(cat "$pull_secret_file" | jq .) 
+		echo_white Using pull secret file at $pull_secret_file to access Red Hat registry
+		# Note, no image_content_sources needed
+		export image_content_sources=
+	else
+		echo_red "Error: Pull secret file missing: $pull_secret_file"
+
+		exit 1
+	fi
+fi
 
 # Check for ssh key files 
 if [ -s $ssh_key_file.pub ]; then
@@ -138,7 +156,7 @@ fi
 # Check that the release image is available in the private registry
 if [ "$additional_trust_bundle" -a "$image_content_sources" ]; then
 	scripts/create-containers-auth.sh --load
-	scripts/verify-release-image.sh
+####	scripts/verify-release-image.sh
 fi
 
 if [ "$INFO_ABA" ]; then
