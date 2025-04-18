@@ -27,7 +27,7 @@ echo_cyan "Creating '$name/cluster.conf' file for cluster type '$cluster_type'."
 scripts/create-cluster-conf.sh $name $cluster_type
 
 msg="Install the cluster with 'cd $name; aba'"
-[ "$target" ] && msg="Make the target '$target' with 'cd $name; aba $target'"
+[ "$target" ] && msg="Process until step '$target' with 'cd $name; aba $target'"
 
 # adding "exit 0" here to give best practise instuctions to cd into the cluster dir!
 if [ "$ask" ]; then

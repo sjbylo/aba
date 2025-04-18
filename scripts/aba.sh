@@ -1,13 +1,13 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250416162720
+ABA_VERSION=20250417191106
 # Sanity check
-echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" && exit 1; }
+echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
 uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
-# Check sudo or root access 
+# Check we have sudo or root access 
 [ "$(sudo id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
 
 # Having $1 = --dir is an exception only, $1 can point to the top-level repo dir only
@@ -21,14 +21,12 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	shift 2
 fi
 
-# If aba is called with relative path, e.g. aba/aba then why not try cd to the top-level dir?
-#if echo $0 | grep -q / && cd $(dirname $0); then
-#if [[ "$0" != /* ]]; then
+# If aba is called with relative path, e.g. aba/aba or ../aba then why not try cd to the top-level dir?
+# A relative path will contain a '/'
 if echo "$0" | grep -qe /; then
 	d=$(dirname $0)
-	#cd $(dirname $0)
 	# If we are not at the top level repo dir then change back again
-	[ -s $d/Makefile ] && grep -q "Top level Makefile" $d/Makefile && cd $d #|| cd - >/dev/null
+	[ -s $d/Makefile ] && grep -q "Top level Makefile" $d/Makefile && cd $d
 fi
 
 # Check the repo location
@@ -42,7 +40,7 @@ elif [ -s ../../Makefile ] && grep -q "Top level Makefile" ../../Makefile; then
 elif [ -s ../../../Makefile ] && grep -q "Top level Makefile" ../../../Makefile; then
 	ABA_PATH=../../..
 else
-	# Give an error to change to the top level dir
+	# Give an error to change to the top level dir. Text must be coded here.
 	(
 		echo "  __   ____   __  "
 		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
@@ -66,8 +64,6 @@ else
 fi
 
 ## install will check if aba needs to be updated, if so it will return 0 ... so we re-execute it!
-#if $ABA_PATH/install -v $ABA_VERSION -q; then
-#if $ABA_PATH/install -q; then
 if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	$ABA_PATH/install -q
 	if [ $? -eq 2 ]; then
@@ -87,10 +83,8 @@ fi
 # Set up the trap to call cleanup on script exit or termination
 #trap cleanup EXIT
 
-usage=$(cat $ABA_PATH/others/help.txt)
+#usage=$(cat $ABA_PATH/others/help.txt)
 
-# FIXME: only found from the top level dir!
-# "Repo checking" above should ensure this always works
 source $ABA_PATH/scripts/include_all.sh
 
 # This will be the actual 'make' command that will eventually be run
@@ -100,13 +94,12 @@ BUILD_COMMAND=
 if [ ! -f $ABA_PATH/aba.conf ]; then
 	cp $ABA_PATH/templates/aba.conf $ABA_PATH
 
-	# Initial prep for interactive mode
+	# Initial prep for interactive mode, unset ocp_version and ocp_channel
 	replace-value-conf $ABA_PATH/aba.conf ocp_version 
 	replace-value-conf $ABA_PATH/aba.conf ocp_channel
-	#replace-value-conf $ABA_PATH/aba.conf editor 		# FIXME: Not sure why we need to remove this
 fi
 
-# Set defaults 
+# Set some defaults 
 ops_list=
 op_set_list=
 chan=stable
@@ -125,7 +118,6 @@ do
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		if [ ! "$cur_target" ]; then
-			#echo "$usage"
 			cat $ABA_PATH/others/help-aba.txt
 		elif [ "$cur_target" = "mirror" ]; then
 			cat $ABA_PATH/others/help-mirror.txt
@@ -135,34 +127,35 @@ do
 			cat $ABA_PATH/others/help-bundle.txt
 		else
 			# If some other target, then show the main help
-			# # If some other target, then show the main help
 			cat $ABA_PATH/others/help-aba.txt
 		fi
 
 		exit 0
-	elif [ "$1" = "-i" ]; then
+	elif [ "$1" = "--interactive" ]; then
 		interactive_mode=1
 		interactive_mode_none=
 		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
 		replace-value-conf $ABA_PATH/aba.conf ask true
 		shift
-	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
-		# Check id --fir already specified
+	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then  #FIXME: checking --dir is also above!
+		# Check id --dir already specified
 		if [ ! "$WORK_DIR" ]; then
 			[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
 			[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
 			[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
-			# Note that make will take one -C option only #FIXME
+			# Note that make will take *one* -C option only, so we only use one also
 			BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
 			WORK_DIR="$2"
 			[ "$DEBUG_ABA" ] && echo "$0: -C \"$WORK_DIR\"" >&2
-			#cd "$WORK_DIR"
+			#cd "$WORK_DIR"  # Do not cd
 			#ABA_PATH=.
 			shift 2
-		else
+		else  # FIXME: this uses make -C ... do we want to do that still?
 			# We only act on the first --dir <dir> option and ignore all others
-			if [ "$2" ] && echo "$2" | grep -q "^-"; then
+			#if [ "$2" ] && echo "$2" | grep -q "^-"; then
+			if [[ "$2" =~ ^- || -z "$2" ]]; then
+				# If there's an option next or $1 is the last arg, pass over
 				shift   # shift over the '--dir' only
 			else
 				# Check if it's a dir
@@ -336,7 +329,12 @@ do
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
-			replace-value-conf $ABA_PATH/aba.conf machine_network "$2"
+			#if [ "$cur_target" = "cluster" ]; then
+			if [ -s cluster.conf ]; then
+				replace-value-conf cluster.conf machine_network "$2"
+			else
+				replace-value-conf $ABA_PATH/aba.conf machine_network "$2"
+			fi
 		else
 			echo_red "Error: Invalid CIDR [$2]" >&2
 			exit 1
@@ -356,9 +354,21 @@ do
 	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then
 		replace-value-conf $ABA_PATH/aba.conf ask false 
 		shift 
+	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+			replace-value-conf cluster.conf starting_ip $2 
+		else
+			echo_red "Argument invalid [$2] after $1" >&2
+		fi
+		shift 2
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
-		BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
+		if [ "$cur_target" = "cluster" ]; then
+			make cluster name=$2
+		else
+			BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
+		fi
 		shift 2
 	elif [ "$1" = "--type" -o "$1" = "-t" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
@@ -419,11 +429,16 @@ do
 			echo_red "$(basename $0): Error: no such option [$1]" >&2
 			exit 1
 		else
-			# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
-			# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
-			cur_target=$1
-			BUILD_COMMAND="$BUILD_COMMAND $1"
-			[ "$DEBUG_ABA" ] && echo $0: Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
+			if [ "$1" = "cluster" ]; then
+				cur_target=$1
+				# Do not append "cluster" to $BUILD_COMMAND
+			else
+				# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
+				# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
+				cur_target=$1
+				BUILD_COMMAND="$BUILD_COMMAND $1"
+				[ "$DEBUG_ABA" ] && echo $0: Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
+			fi
 		fi
 		shift 
 	fi
