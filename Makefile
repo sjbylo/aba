@@ -10,7 +10,7 @@ name     ?= standard
 
 .PHONY: aba
 aba:  ## Run aba to set up 'aba.conf'
-	aba -i
+	aba --interactive
 
 aba.conf:
 	aba
