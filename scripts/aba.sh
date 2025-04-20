@@ -281,6 +281,36 @@ do
 		fi
 		replace-value-conf $ABA_PATH/aba.conf next_hop_address "$def_route_ip"
 		shift 
+	elif [ "$1" = "--api-ingress" -o "$1" = "-XX" ]; then # FIXME: opt?
+		# If arg missing remove from aba.conf
+		shift 
+		api_ingress_ip=
+		if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
+			api_ingress_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+		fi
+		BUILD_COMMAND="$BUILD_COMMAND api_ingress_ip='$api_ingress_ip'"
+		shift 
+	elif [ "$1" = "--apps-ingress" -o "$1" = "-XX" ]; then # FIXME: opt?
+		# If arg missing remove from aba.conf
+		shift 
+		apps_ingress_ip=
+		if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
+			apps_ingress_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+		fi
+		BUILD_COMMAND="$BUILD_COMMAND apps_ingress_ip='$apps_ingress_ip'"
+		shift 
+	elif [ "$1" = "--ports" -o "$1" = "-PP" ]; then #FIXME: opt name?
+		# If arg missing remove from aba.conf
+		# Check arg after --ports, if "empty" then remove value from aba.conf, otherwise add valid ip addr
+		ports_vals=""
+		# While there is a valid arg...
+		while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
+		do
+			[ "$ports_vals" ] && ports_vals="$ports_vals,$2" || ports_vals="$2"
+			shift	
+		done
+		BUILD_COMMAND="$BUILD_COMMAND ports='$ports_vals'"
+		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf platform "$2"
@@ -329,12 +359,7 @@ do
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
-			#if [ "$cur_target" = "cluster" ]; then
-			if [ -s cluster.conf ]; then
-				replace-value-conf cluster.conf machine_network "$2"
-			else
-				replace-value-conf $ABA_PATH/aba.conf machine_network "$2"
-			fi
+			replace-value-conf $ABA_PATH/aba.conf machine_network "$2"
 		else
 			echo_red "Error: Invalid CIDR [$2]" >&2
 			exit 1
@@ -357,18 +382,15 @@ do
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-			replace-value-conf cluster.conf starting_ip $2 
+			#replace-value-conf cluster.conf starting_ip $2 
+			BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'"  # FIXME: This is confusing and prone to error
 		else
 			echo_red "Argument invalid [$2] after $1" >&2
 		fi
 		shift 2
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
-		if [ "$cur_target" = "cluster" ]; then
-			make cluster name=$2
-		else
-			BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
-		fi
+		BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
 		shift 2
 	elif [ "$1" = "--type" -o "$1" = "-t" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
@@ -429,16 +451,16 @@ do
 			echo_red "$(basename $0): Error: no such option [$1]" >&2
 			exit 1
 		else
-			if [ "$1" = "cluster" ]; then
-				cur_target=$1
-				# Do not append "cluster" to $BUILD_COMMAND
-			else
+			#if [ "$1" = "cluster" ]; then
+			#	cur_target=$1
+			#	# Do not append "cluster" to $BUILD_COMMAND
+			#else
 				# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
 				# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
 				cur_target=$1
 				BUILD_COMMAND="$BUILD_COMMAND $1"
 				[ "$DEBUG_ABA" ] && echo $0: Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
-			fi
+			#fi
 		fi
 		shift 
 	fi

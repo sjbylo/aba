@@ -9,9 +9,11 @@ verify-aba-conf || exit 1
 
 name=standard
 cluster_type=standard
-[ "$1" ] && name=$1 && shift
-[ "$1" ] && cluster_type=$1 && shift
-[ "$1" ] && target=$1
+
+echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: incorrect params [$*]"; exit 1; }
+
+# eval all key value args
+. <(echo $* | tr " " "\n")
 
 if [ ! -d $name ]; then
 	mkdir $name
@@ -24,7 +26,7 @@ else
 fi
 
 echo_cyan "Creating '$name/cluster.conf' file for cluster type '$cluster_type'."
-scripts/create-cluster-conf.sh $name $cluster_type
+scripts/create-cluster-conf.sh name=$name cluster_type=$cluster_type domain=$domain starting_ip=$starting_ip ports=$ports apps_ingress_ip=$apps_ingress_ip
 
 msg="Install the cluster with 'cd $name; aba'"
 [ "$target" ] && msg="Process until step '$target' with 'cd $name; aba $target'"
