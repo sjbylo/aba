@@ -4,8 +4,8 @@ cluster_name={{ cluster_name }}			# Set the cluster name.
 base_domain={{ domain }}			# Set the cluster base domain.
 					# These will form the cluster domain, e.g. sno.example.com
 
-api_vip={{ api_vip }}			# Set the OCP 'ingress' and 'api' IP addresses. Note that the values 'api_vip' and 
-ingress_vip={{ ingress_vip }}			# 'ingress_vip' are *ignored* for single node OpenShift (SNO).
+api_ingress_ip={{ api_ingress_ip }}		# Set the OCP 'ingress' and 'api' IP addresses. Note that the values 'api_vip' and 
+apps_ingress_ip={{ apps_ingress_ip }}		# 'ingress_vip' are *ignored* for single node OpenShift (SNO).
 					# OCP installation prerequisite:
 					# Be sure to set the two required A records *in your DNS server*.
 					# For SNO, be sure both DNS A records point to the IP of the SNO node.
@@ -41,6 +41,7 @@ ntp_servers={{ ntp_servers }}		# Optional: Comma-separated list of NTP servers. 
 
 port0={{ port0 }}			# Name of the port to use for the default network. 	    Example: ens1f0, ens3, eth0 etc.
 port1={{ port1 }}			# Optional: Name of 2nd port to use if bonding is required. Example: ens1f1, ens4, eth1 etc.
+ports={{ ports }}
 vlan={{ vlan }}				# Optional: Vlan tag to use with or without bonding.
 
 #int_connection={{ int_connection }}		# Optional: Set int_connection=proxy if you want to configure the 'cluster wide proxy' by reusing any existing shell proxy vars.
