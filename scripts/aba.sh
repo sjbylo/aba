@@ -760,7 +760,7 @@ if [ ! -f .bundle ]; then
 	echo
 	echo "Configure the installation to use a proxy or NAT (optional)."
 	echo
-	echo "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>]"
+	echo "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
 	echo 
 
 else

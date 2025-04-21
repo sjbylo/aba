@@ -53,6 +53,9 @@ Usage: Provision OpenShift cluster
      -t, --type <sno|compact|standard>   # Set type of cluster.
          --step <step>                   # Process up to this step or command.  
                                          # See commands with "aba -d mycluster help".
+         --starting-ip <ip>              # IP addr for the first cluster node
+         --api-vip <ip>                  # IP addr for cluster API
+         --ingress-vip <ip>              # IP addr for application ingress 
 
    aba --cmd "oc command"                # Run this oc command on the current cluster.
 

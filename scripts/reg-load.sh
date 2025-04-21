@@ -128,6 +128,6 @@ echo_green -n "Images loaded successfully!"
 echo 
 echo "OpenShift can now be installed with the command:"
 echo "  cd aba"
-echo "  aba cluster --name mycluster [--type <sno|compact|standard>]   # and follow the instructions."
+echo "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]   # and follow the instructions."
 
 exit 0

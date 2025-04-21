@@ -4,9 +4,10 @@ Usage:
   aba cluster --name <name> [options]
 
 Examples:
-  aba cluster --name mycluster --type standard                   # Create the cluster dir and install OpenShift.
-  aba cluster --name mycompact --type compact --step agentconf   # Create agent-based config files and stop.
-  aba cluster --name sno --type sno --step iso                   # Create the agent-based iso and stop.
+  aba cluster --name mycluster --type standard                       # Create the cluster dir and install OpenShift.
+  aba cluster --name mycompact --type compact --step agentconf       # Create agent-based config files and stop.
+  aba cluster --name sno --type sno --step iso                       # Create the agent-based iso and stop.
+  aba cluster --name sno --type sno --starting-ip 10.0.0.1           # Install SNO cluster, setting the first node's IP
 
 Options:
 
@@ -15,4 +16,7 @@ Options:
     -t, --type <sno|compact|standard>   # Set type of cluster.
         --step <step>                   # Process up to this step or command <cluster.conf|agentconf|iso|mon>.
                                         # See commands with "aba -d mycluster help".
+        --starting-ip <ip>              # IP addr for the first cluster node
+        --api-vip <ip>                  # IP addr for cluster API
+        --ingress-vip <ip>              # IP addr for application ingress 
   aba --cmd "oc command"                # Run this oc command on the current cluster.
