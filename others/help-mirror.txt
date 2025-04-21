@@ -37,5 +37,5 @@ Examples of fully disconnected mode (air-gapped):
     aba load -H registry.example.com  --retry
 
   Install OpenShift:
-    aba cluster --name mycluster --type standard 
+    aba cluster --name mycluster --type standard [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]
 

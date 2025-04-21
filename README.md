@@ -207,7 +207,7 @@ aba sync
 - Fully disconnected (air-gapped) environments are also supported with `aba save` and `aba load` (see below).
 
 ```
-aba cluster --name mycluster --type sno
+aba cluster --name mycluster --type sno [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]
 ```
 - creates a directory `mycluster` and the file `mycluser/cluster.conf`.
 - Edit/verify the `mycluster/cluster.conf` file.
@@ -348,7 +348,7 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 
 ```
 cd aba
-aba cluster --name mycluster [--type sno|compact|standard] [--step xyz]
+aba cluster --name mycluster [--type sno|compact|standard] [--step xyz] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]
 ```
 - creates and initializes a directory `mycluster` (you should name the directory with the same name of your cluster),
 - prompts you to run `aba` inside the directory. The most useful 'steps' are 'agentconf', 'iso' and 'mon'.
@@ -532,7 +532,7 @@ aba mirror -H registry.example.com load --retry 3
 To install OpenShift run the following command and follow the instructions (see below for more details):
 
 ```
-aba cluster --name mycluster --type compact
+aba cluster --name mycluster --type compact [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]
 ```
 
 [Back to top](#who-should-use-aba)
