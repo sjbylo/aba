@@ -43,43 +43,43 @@ fi
 actual_ip_of_api=$(dig +time=8 +short $cl_api_domain)
 actual_ip_of_ingress=$(dig +time=8 +short x.apps.$cl_domain)
 
-# If not SNO, then ensure api_ingress_ip and apps_ingress_ip are defined 
+# If not SNO, then ensure api_vip and ingress_vip are defined 
 if [ ! "$SNO" ]; then
-	# If api_ingress_ip defined and an IP address
-	if [ "$api_ingress_ip" ] && echo "$api_ingress_ip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-		[ "$INFO_ABA" ] && echo_white "Value 'api_ingress_ip' ($api_ingress_ip) is defined."
+	# If api_vip defined and an IP address
+	if [ "$api_vip" ] && echo "$api_vip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+		[ "$INFO_ABA" ] && echo_white "Value 'api_vip' ($api_vip) is defined."
 	else
 		if echo "$actual_ip_of_api" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			# Add into cluster.conf
-			###sed -E -i "s/^^#{,1}api_ingress_ip=[^ \t]*/api_ingress_ip=$actual_ip_of_api /g" cluster.conf
-			replace-value-conf cluster.conf api_ingress_ip $actual_ip_of_api
+			###sed -E -i "s/^^#{,1}api_vip=[^ \t]*/api_vip=$actual_ip_of_api /g" cluster.conf
+			replace-value-conf cluster.conf api_vip $actual_ip_of_api
 			echo_red "Warning: adding in actual IP address ($actual_ip_of_api) into cluster.conf" >&2
 			echo_red "         Please verify this is correct! If not, edit cluster.conf file and try again!" >&2
-			api_ingress_ip=$actual_ip_of_api
+			api_vip=$actual_ip_of_api
 		else
-			[ "$INFO_ABA" ] && echo_red "Error: Value 'api_ingress_ip' must be defined for this cluster configuration!" >&2 && exit 1
+			[ "$INFO_ABA" ] && echo_red "Error: Value 'api_vip' must be defined for this cluster configuration!" >&2 && exit 1
 		fi
 	fi
 
-	# If apps_ingress_ip is defined and an IP address
-	if [ "$apps_ingress_ip" ] && echo "$apps_ingress_ip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-		[ "$INFO_ABA" ] && echo_white "Value 'apps_ingress_ip' ($apps_ingress_ip) is defined."
+	# If ingress_vip is defined and an IP address
+	if [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+		[ "$INFO_ABA" ] && echo_white "Value 'ingress_vip' ($ingress_vip) is defined."
 	else
-		# If apps_ingress_ip not defined or an IP address
+		# If ingress_vip not defined or an IP address
 		if echo "$actual_ip_of_ingress" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			# Add into cluster.conf
-			###sed -E -i "s/^^#{,1}apps_ingress_ip=[^ \t]*/apps_ingress_ip=$actual_ip_of_ingress /g" cluster.conf
-			replace-value-conf cluster.conf apps_ingress_ip $actual_ip_of_ingress
+			###sed -E -i "s/^^#{,1}ingress_vip=[^ \t]*/ingress_vip=$actual_ip_of_ingress /g" cluster.conf
+			replace-value-conf cluster.conf ingress_vip $actual_ip_of_ingress
 			echo_red "Warning: adding in actual IP address ($actual_ip_of_ingress) into cluster.conf" >&2
 			echo_red "         Please verify this is correct! If not, edit cluster.conf file and try again!" >&2
-			apps_ingress_ip=$actual_ip_of_ingress
+			ingress_vip=$actual_ip_of_ingress
 		else
-			[ "$INFO_ABA" ] && echo_red "Error: Value 'apps_ingress_ip' must be defined for this cluster configuration!" >&2 && exit 1
+			[ "$INFO_ABA" ] && echo_red "Error: Value 'ingress_vip' must be defined for this cluster configuration!" >&2 && exit 1
 		fi
 	fi
 else
-	[ "$api_ingress_ip" -o "$apps_ingress_ip" ] && \
-		[ "$INFO_ABA" ] && echo_red "Warning: Values 'api_ingress_ip' and 'apps_ingress_ip' are not required for SNO configuration, they will be ignored." >&2 
+	[ "$api_vip" -o "$ingress_vip" ] && \
+		[ "$INFO_ABA" ] && echo_red "Warning: Values 'api_vip' and 'ingress_vip' are not required for SNO configuration, they will be ignored." >&2 
 fi
 
 [ ! "$actual_ip_of_api" ] && actual_ip_of_api="<empty>"
@@ -88,15 +88,15 @@ fi
 # If NOT SNO...
 if [ ! "$SNO" ]; then
 	# Ensure api DNS exists and points to correct ip
-	[ "$actual_ip_of_api" != "$api_ingress_ip" ] && \
-		echo_red "Error: DNS record $cl_api_domain does not resolve to $api_ingress_ip, it resolves to $actual_ip_of_api!" >&2 && \
+	[ "$actual_ip_of_api" != "$api_vip" ] && \
+		echo_red "Error: DNS record $cl_api_domain does not resolve to $api_vip, it resolves to $actual_ip_of_api!" >&2 && \
 		exit 1
 
 	[ "$INFO_ABA" ] && echo_white "DNS record for OCP api ($cl_api_domain) exists: $actual_ip_of_api."
 
 	# Ensure apps DNS exists and points to correct ip
-	[ "$actual_ip_of_ingress" != "$apps_ingress_ip" ] && \
-		echo_red "Error: DNS record $cl_ingress_domain does not resolve to $apps_ingress_ip, it resolves to $actual_ip_of_ingress!" >&2 && \
+	[ "$actual_ip_of_ingress" != "$ingress_vip" ] && \
+		echo_red "Error: DNS record $cl_ingress_domain does not resolve to $ingress_vip, it resolves to $actual_ip_of_ingress!" >&2 && \
 		exit 1
 
 	[ "$INFO_ABA" ] && echo_white "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress."
