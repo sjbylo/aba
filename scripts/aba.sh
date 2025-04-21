@@ -284,20 +284,20 @@ do
 	elif [ "$1" = "--api-ingress" -o "$1" = "-XX" ]; then # FIXME: opt?
 		# If arg missing remove from aba.conf
 		shift 
-		api_ingress_ip=
+		api_vip=
 		if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
-			api_ingress_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+			api_vip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
 		fi
-		BUILD_COMMAND="$BUILD_COMMAND api_ingress_ip='$api_ingress_ip'"
+		BUILD_COMMAND="$BUILD_COMMAND api_vip='$api_vip'"
 		shift 
 	elif [ "$1" = "--apps-ingress" -o "$1" = "-XX" ]; then # FIXME: opt?
 		# If arg missing remove from aba.conf
 		shift 
-		apps_ingress_ip=
+		ingress_vip=
 		if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
-			apps_ingress_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+			ingress_vip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
 		fi
-		BUILD_COMMAND="$BUILD_COMMAND apps_ingress_ip='$apps_ingress_ip'"
+		BUILD_COMMAND="$BUILD_COMMAND ingress_vip='$ingress_vip'"
 		shift 
 	elif [ "$1" = "--ports" -o "$1" = "-PP" ]; then #FIXME: opt name?
 		# If arg missing remove from aba.conf

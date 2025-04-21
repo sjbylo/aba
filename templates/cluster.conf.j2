@@ -4,8 +4,8 @@ cluster_name={{ cluster_name }}			# Set the cluster name.
 base_domain={{ domain }}			# Set the cluster base domain.
 					# These will form the cluster domain, e.g. sno.example.com
 
-api_ingress_ip={{ api_ingress_ip }}		# Set the OCP 'ingress' and 'api' IP addresses. Note that the values 'api_vip' and 
-apps_ingress_ip={{ apps_ingress_ip }}		# 'ingress_vip' are *ignored* for single node OpenShift (SNO).
+api_vip={{ api_vip }}		# Set the OCP 'ingress' and 'api' IP addresses. Note that the values 'api_vip' and 
+ingress_vip={{ ingress_vip }}		# 'ingress_vip' are *ignored* for single node OpenShift (SNO).
 					# OCP installation prerequisite:
 					# Be sure to set the two required A records *in your DNS server*.
 					# For SNO, be sure both DNS A records point to the IP of the SNO node.
