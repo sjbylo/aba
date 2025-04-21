@@ -35,8 +35,8 @@ echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_
 [ "$DEBUG_ABA" ] && echo_cyan "$0: Creating cluster directory for [$name] of type [$type]" >&2
 
 # Set any values from the shortcuts.conf file, but only if they exist, otherwise use the above default value
-[ ! "$api_vip" ]		&& [ "${shortcuts["$name:api_vip"]}" ]		&& export api_vip=${shortcuts["$name:api_vip"]}
-[ ! "$ingress_vip" ]		&& [ "${shortcuts["$name:ingress_vip"]}" ]	&& export ingress_vip=${shortcuts["$name:ingress_vip"]}
+[ ! "$api_ingress_ip" ]		&& [ "${shortcuts["$name:api_ingress_ip"]}" ]		&& export api_ingress_ip=${shortcuts["$name:api_ingress_ip"]}
+[ ! "$apps_ingress_ip" ]		&& [ "${shortcuts["$name:apps_ingress_ip"]}" ]	&& export apps_ingress_ip=${shortcuts["$name:apps_ingress_ip"]}
 [ ! "$starting_ip" ]		&& [ "${shortcuts["$name:starting_ip"]}" ]	&& export starting_ip=${shortcuts["$name:starting_ip"]}
 [ ! "$num_masters" ]		&& [ "${shortcuts["$name:num_masters"]}" ]	&& export num_masters=${shortcuts["$name:num_masters"]}
 [ ! "$num_workers" ]		&& [ "${shortcuts["$name:num_workers"]}" ]	&& export num_workers=${shortcuts["$name:num_workers"]}
