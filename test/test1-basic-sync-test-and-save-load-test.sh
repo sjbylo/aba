@@ -273,8 +273,8 @@ rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should sta
 mylog "Testing with smaller CIDR 10.0.1.200/30 with start ip 201"
 test-cmd -m "Configuring SNO cluster with" aba sno --step cluster.conf
 test-cmd -m "Setting machine_network=10.0.1.200/30" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g' sno/cluster.conf"
-test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
-test-cmd -m "Creating iso" aba sno --step iso
+####### test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
+test-cmd -m "Creating iso" aba sno --step iso --starting-ip 10.0.1.201
 
 mylog "Testing with larger CIDR 10.0.0.0/20 with start ip 10.0.1.201"
 test-cmd -m "Setting machine_network=10.0.0.0/20" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g' sno/cluster.conf"
