@@ -23,11 +23,12 @@ scripts/install-rpms.sh internal
 name=standard
 type=standard
 
-#echo "$*" | grep -Eq '^([a-zA-Z_][a-zA-Z0-9_]*=[^ ]+)( [a-zA-Z_][a-zA-Z0-9_]*=[^ ]+)*$' || { echo_red "Error: incorrect params [$*]"; exit 1; }
-echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: incorrect params [$*]"; exit 1; }
+##echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: incorrect params [$*]"; exit 1; }
+
+. <(process_args $*)
 
 # eval all key value args
-. <(echo $* | tr " " "\n")  # Get $name, $type etc from here
+#. <(echo $* | tr " " "\n")  # Get $name, $type etc from here
 
 # Override type from shortcuts?
 [ "${shortcuts["$name:type"]}" ] && export type=${shortcuts["$name:type"]}  #FIXME: Is this needed?

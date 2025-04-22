@@ -10,7 +10,8 @@ verify-aba-conf || exit 1
 name=standard
 cluster_type=standard
 
-echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: incorrect params [$*]"; exit 1; }
+. <(process_args $*)
+#echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: incorrect params [$*]"; exit 1; }
 
 # eval all key value args
 . <(echo $* | tr " " "\n")
