@@ -527,3 +527,12 @@ output_table() {
 	echo
 }
 
+process_args() {
+	[ ! "$*" ] && return 0
+
+	echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: invalid params [$*], not key=value pairs"; exit 1; }
+	# eval all key value args
+	#[ "$*" ] && . <(echo $* | tr " " "\n")  # Get $name, $type etc from here
+	echo $* | tr " " "\n"  # Get $name, $type etc from here
+}
+
