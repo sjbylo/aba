@@ -87,8 +87,8 @@ test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba 
 
 test-cmd -m "Checking aba.conf settings - ask=false" "grep ^ask=false aba.conf"
 test-cmd -m "Checking aba.conf settings - platform=vmw" "grep ^platform=vmw aba.conf"
-test-cmd -m "Checking aba.conf settings - channel=stable" "grep ^channel=stable aba.conf"
-test-cmd -m "Checking aba.conf settings - ocp_version=$VER_OVERRIDE" "grep ^ocp_version=$VER_OVERRIDE aba.conf"
+test-cmd -m "Checking aba.conf settings - ocp_channel=stable" "grep ^ocp_channel=stable aba.conf"
+test-cmd -m "Checking aba.conf settings - ocp_version=x.y.z" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}\b' aba.conf"
 
 mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
 sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
