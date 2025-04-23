@@ -14,7 +14,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
    1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
 1. [Start here](#start-here)
-   1. [Disconnected Scenario](#disconnected-scenario)
+   1. [Partially disconnected Scenario](#partially-disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
 1. [Creating a bundle archive with everything you need to install OpenShift in an fully disconnected (air-gapped) network](#Creating-a-bundle-archive-with-everything-you-need-to-install-OpenShift-in-a-fully-disconnected-air-gapped-network)
@@ -236,7 +236,7 @@ aba help
 [Back to top](#who-should-use-aba)
 
 
-### Disconnected Scenario
+### Partically disconnected Scenario
 
 In this scenario, the connected bastion has access to both the Internet and the private subnet (but not necessarily at the same time).
 
@@ -251,6 +251,11 @@ This command will:
     - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `mirror/regcreds/` first! See above for more).
     - or, installs Quay registry on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `mirror/regcreds` directory for later use.
   - pull images from the Internet and store them in the registry.
+
+```
+aba download
+```
+  - *Optionally* download the CLI binaries into the aba/cli dir.  Note: This is only required if you intend to sever the Internet connection before installing OpenShift.
 
 Now continue with "Installing OpenShift" below.
 
