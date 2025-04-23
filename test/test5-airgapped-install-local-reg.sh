@@ -620,7 +620,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~3 mins for node0 t
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~2 mins for node0 to config NTP" "i=0; until aba --dir $subdir/aba/$cluster_name ssh --cmd 'chronyc sources' | grep $ntp_ip ; do let i=\$i+1; [ \$i -gt 12 ] && exit 1; echo -n $i; sleep 10; done"
 
 # -i means ignore any error and let this script handle the error. I.e. restart workers.
-test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name mon" || \
+test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Monitoring $cluster_name cluster install progress" "aba --dir $subdir/aba/$cluster_name mon" || \
 (
 	test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes && aba ls"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Cluster creation failed? Restarting all worker nodes" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
