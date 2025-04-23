@@ -102,14 +102,14 @@ test-cmd -m "Removing sno dir" rm -rf sno
 test-cmd -m "testing direct internet config" aba sno --step cluster.conf
 test-cmd -m "Set int_connection=direct" "sed -i 's/.*int_connection=.*/int_connection=direct/g' sno/cluster.conf"
 test-cmd -m "Creating agentconf" aba -d sno agentconf
-test-cmd -m "Verifying direct internet config - 'registry.redhat.io' exists" "cat sno/install-config.yaml | grep registry.redhat.io"
-test-cmd -m "Verifying direct internet config - 'cloud.openshift.com' exists" "cat sno/install-config.yaml | grep cloud.openshift.com"
-test-cmd -m "Verifying direct internet config - 'sshKey' exists" "cat sno/install-config.yaml | grep sshKey:"
-test-cmd -m "Verifying direct internet config - proxy does not exist" "cat sno/install-config.yaml | grep ^proxy: | wc -l | grep ^0$"
-test-cmd -m "Verifying direct internet config - httpProxy does not exist" "cat sno/install-config.yaml | grep httpProxy | wc -l | grep ^0$"
-test-cmd -m "Verifying direct internet config - 'BEGIN CERTIFICATE' does not exist" "cat sno/install-config.yaml | grep 'BEGIN CERTIFICATE' | wc -l | grep ^0$"
-test-cmd -m "Verifying direct internet config - 'ImageDigestSources' does not exist" "cat sno/install-config.yaml | grep 'ImageDigestSources:' | wc -l | grep ^0$"
-test-cmd -m "Verifying direct internet config - 'mirrors:' does not exist" "cat sno/install-config.yaml | grep 'mirrors:' | wc -l | grep ^0$"
+test-cmd -m "Verifying direct internet config - 'registry.redhat.io' exists" 		"grep registry.redhat.io	sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - 'cloud.openshift.com' exists" 		"grep cloud.openshift.com	sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - 'sshKey:' exists" 			"grep sshKey:			sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - ^proxy does not exist"			"! grep ^proxy			sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - httpProxy does not exist" 		"! grep httpProxy		sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - 'BEGIN CERTIFICATE' does not exist"	"! grep 'BEGIN CERTIFICATE'	sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - 'ImageDigestSources' does not exist" 	"! grep ImageDigestSources	sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - 'mirrors:' does not exist" 		"! grep mirrors:		sno/install-config.yaml"
 test-cmd -m "Creating iso for 'int_connection-direct' SNO cluster" aba -d sno iso
 
 test-cmd -m "Removing sno dir" rm -rf sno
