@@ -5,8 +5,8 @@ Install & manage air-gapped OpenShift.
    installer there is no need to configure a load balancer, a bootstrap node or require DHCP.
 
 Usage: Interactive
-   aba [-i]                               # Interactive mode.
-                                          # Let Aba lead you through the disconnected install process.
+   aba [-i]                               # Interactive mode
+                                          # Let Aba lead you through the disconnected install process
 
 Usage: Create a install 'bundle archive'
    aba bundle \
@@ -27,37 +27,38 @@ Usage: Create a install 'bundle archive'
 Usage: Set up and load mirror registry
    aba mirror                            # Connect to existing, or create a, mirror registry. 
    <<options>>:
-     -H, --mirror-hostname <hostname>    # The hostname of the target mirror registry.
-     -u, --reg-user <username>           # The username used to access the registry (default it 'init').
-     -k, --reg-ssh-key ~/.ssh/mykey      # Path to ssh key to use to install Quay to a remote host.
-     -U, --reg-ssh-user myuser           # Username to use to access the remote host via ssh.
-         --reg-root /path/to/dir         # Install Quay files/images to this directory.
-         --reg-path <path>               # The path to use to store images in the mirror reg.
+     -H, --mirror-hostname <hostname>    # The hostname of the target mirror registry
+     -u, --reg-user <username>           # The username used to access the registry (default it 'init')
+     -k, --reg-ssh-key ~/.ssh/mykey      # Path to ssh key to use to install Quay to a remote host
+     -U, --reg-ssh-user myuser           # Username to use to access the remote host via ssh
+         --reg-root /path/to/dir         # Install Quay files/images to this directory
+         --reg-path <path>               # The path to use to store images in the mirror reg
 
-   aba sync                              # Copy images from the Internet into the mirror registry.
+   aba sync                              # Copy images from the Internet into the mirror registry
    <<options>>:
-     -r, --retry <count>                 # Retry <count> times on oc-mirror error.
+     -r, --retry <count>                 # Retry <count> times on oc-mirror error
 
-   aba save                              # Copy images from the Internet to disk.
+   aba save                              # Copy images from the Internet to disk
    <<options>>:
-     -r, --retry <count>                 # Retry <count> times on oc-mirror error.
+     -r, --retry <count>                 # Retry <count> times on oc-mirror error
 
-   aba load                              # Copy images from disk to the mirror registry.
+   aba load                              # Copy images from disk to the mirror registry
    <<options>>:
-     -r, --retry <count>                 # Retry <count> times on oc-mirror error.
+     -r, --retry <count>                 # Retry <count> times on oc-mirror error
 
 Usage: Provision OpenShift cluster
    aba cluster --name <mycluster>        # Create a cluster 
      -n, --name <cluster name>           # The name of the cluster to create. 
    <<options>>:
-     -t, --type <sno|compact|standard>   # Set type of cluster.
+     -t, --type <sno|compact|standard>   # Set type of cluster
          --step <step>                   # Process up to this step or command.  
-                                         # See commands with "aba -d mycluster help".
+                                         # See commands with "aba -d mycluster help"
          --starting-ip <ip>              # IP addr for the first cluster node
          --api-vip <ip>                  # IP addr for cluster API
          --ingress-vip <ip>              # IP addr for application ingress 
+     -I, --int-connection <proxy|direct> # Install from the public mirror over the Internet
 
-   aba --cmd "oc command"                # Run this oc command on the current cluster.
+   aba --cmd "oc command"                # Run this oc command on the current cluster
 
    aba clean                             # Clean up all generated files. 
    <<options>>:
@@ -66,25 +67,25 @@ Usage:
    aba <<other options>>                 # Update provided values in aba.conf
 
    <<other options>>:
-     -d, --dir <directory>               # Run Aba in this directory.
-     -h, --help                          # Show this help information.
+     -d, --dir <directory>               # Run Aba in this directory
+     -h, --help                          # Show this help information
      -S, --pull-secret <path/to/file>    # Location of your pull secret (json) file here. 
-     -c, --channel <channel>             # Set the OpenShift installation channel, e.g. fast, stable, eus or candidate.
-     -v, --version <version>             # Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest' or 'l' or 'previous' or 'p'.
+     -c, --channel <channel>             # Set the OpenShift installation channel, e.g. fast, stable, eus or candidate
+     -v, --version <version>             # Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest' or 'l' or 'previous' or 'p'
      -p, --platform vmw|bm               # Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
-     -b, --base-domain <domain>          # Set the OpenShift base domain, e.g. company.com.
-     -M, --machine-network <cidr>        # Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24.
-     -N, --dns <ip address(es)>          # Set one DNS IP address.
-     -R, --default-route <next hop ip>   # Set the default route of the internal network, if any (optional).
+     -b, --base-domain <domain>          # Set the OpenShift base domain, e.g. company.com
+     -M, --machine-network <cidr>        # Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24
+     -N, --dns <ip address(es)>          # Set one DNS IP address
+     -R, --default-route <next hop ip>   # Set the default route of the internal network, if any (optional)
      -T, --ntp <hostname(s) or IPs>      # Set the NTP hostname(s) or IP address(es) (optional but recommended!). 
-     -O, --ops [<list of operators>]     # Add individual operators to your image set config file (for oc-mirror).
-     -P, --op-sets [<operator set list>] # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted.
+     -O, --ops [<list of operators>]     # Add individual operators to your image set config file (for oc-mirror)
+     -P, --op-sets [<operator set list>] # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted
      -e, --editor <editor command>       # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
-     -a, --ask                           # Prompt user when needed.
-     -A, --noask                         # Do not prompt, assume default answers.
-     -o, --out <file|->                  # Bundle archive output destination, e.g. file or stdout (-).
+     -a, --ask                           # Prompt user when needed
+     -A, --noask                         # Do not prompt, assume default answers
+     -o, --out <file|->                  # Bundle archive output destination, e.g. file or stdout (-)
      -f, --force                         # Only used for 'aba reset --force'
-     -V, --vmware                        # Apply this VMware config file (for govc).
+     -V, --vmware                        # Apply this VMware config file (for govc)
      -D, --debug                         # Increase more output
          --info                          # Increase output
 

@@ -84,19 +84,19 @@ load: ## Load the saved images into a registry on the internal bastion (as defin
 
 .PHONY: sno
 sno: aba.conf  ## Install a Single Node OpenShift cluster.  Use 'aba sno --step iso' to create the iso.
-	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target)
+	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection)
 
 .PHONY: compact
 compact: aba.conf  ## Install a standard 3-node OpenShift cluster.  Use 'aba compact --step iso' to create the iso.
-	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target)
+	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection)
 
 .PHONY: standard
 standard: aba.conf  ## Install a standard 3+3-node OpenShift cluster.  Use 'aba standard --step iso' to create the iso.
-	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target)
+	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection)
 
 .PHONY: cluster
-cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step=<step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]
-	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip)
+cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step=<step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
+	$(SCRIPTS)/setup-cluster.sh name=$(name) cluster_type=$(cluster_type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection)
 
 #.PHONY: rsync
 #rsync:  ## Copy (rsync) all required files to internal bastion for testing purposes only.  ip=hostname is required. 
