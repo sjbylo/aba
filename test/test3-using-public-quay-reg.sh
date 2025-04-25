@@ -99,8 +99,8 @@ aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
 
 test-cmd -m "Removing sno dir" rm -rf sno
-test-cmd -m "testing direct internet config" aba sno --step cluster.conf
-test-cmd -m "Set int_connection=direct" "sed -i 's/.*int_connection=.*/int_connection=direct/g' sno/cluster.conf"
+test-cmd -m "Testing direct internet config" aba sno --step cluster.conf -I direct
+###test-cmd -m "Set int_connection=direct" "sed -i 's/.*int_connection=.*/int_connection=direct/g' sno/cluster.conf"
 test-cmd -m "Creating agentconf" aba -d sno agentconf
 test-cmd -m "Verifying direct internet config - 'registry.redhat.io' exists" 		"grep registry.redhat.io	sno/install-config.yaml"
 test-cmd -m "Verifying direct internet config - 'cloud.openshift.com' exists" 		"grep cloud.openshift.com	sno/install-config.yaml"

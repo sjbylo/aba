@@ -106,7 +106,8 @@ mac_prefix=$(replace_hash_with_random_hex "$mac_prefix")
 #export rendezvous_ip=$machine_ip_prefix$starting_ip
 ip_cnt=$(expr $num_masters + $num_workers)
 if ! echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-	echo_red "Error: value 'starting_ip' [$starting_ip] is missing or invalid. Should be ip address." >&2 
+	echo_red "Error: value 'starting_ip' [$starting_ip] is missing or invalid. Should be an IP address from within your machine CIDR." >&2 
+
 	exit 1
 fi
 

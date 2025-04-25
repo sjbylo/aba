@@ -21,7 +21,7 @@ scripts/install-rpms.sh internal
 [ -s ../shortcuts.conf ] && source ../shortcuts.conf  # Values can be set in this file for testing 
 
 name=standard
-type=standard
+cluster_type=standard
 
 ##echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: incorrect params [$*]"; exit 1; }
 
@@ -33,7 +33,7 @@ type=standard
 # Override type from shortcuts?
 [ "${shortcuts["$name:type"]}" ] && export type=${shortcuts["$name:type"]}  #FIXME: Is this needed?
 
-[ "$DEBUG_ABA" ] && echo_cyan "$0: Creating cluster directory for [$name] of type [$type]" >&2
+[ "$DEBUG_ABA" ] && echo_cyan "$0: Creating cluster directory for [$name] of type [$cluster_type]" >&2
 
 # Set any values from the shortcuts.conf file, but only if they exist, otherwise use the above default value
 [ ! "$api_vip" ]		&& [ "${shortcuts["$name:api_vip"]}" ]		&& export api_vip=${shortcuts["$name:api_vip"]}
@@ -73,11 +73,11 @@ type=standard
 export cluster_name=$name
 
 # Set reasonable defaults for sno and compact
-if [ "$type" = "sno" ]; then
+if [ "$cluster_type" = "sno" ]; then
 	export num_masters=1
 	export num_workers=0
 	export mac_prefix=00:50:56:0x:xx:
-elif [ "$type" = "compact" ]; then
+elif [ "$cluster_type" = "compact" ]; then
 	export num_masters=3
 	export num_workers=0
 	export mac_prefix=00:50:56:1x:xx:
@@ -86,7 +86,7 @@ fi
 scripts/j2 templates/cluster.conf.j2 > cluster.conf 
 
 # For sno, ensure these values are commented out as they are not needed!
-[ "$type" = "sno" ] && sed -E -i -e "s/^api_vip=[^ \t]*/#api_vip=not-required/g" -e "s/^ingress_vip=[^ \t]*/#ingress_vip=not-required/g" cluster.conf
+[ "$cluster_type" = "sno" ] && sed -E -i -e "s/^api_vip=[^ \t]*/#api_vip=not-required/g" -e "s/^ingress_vip=[^ \t]*/#ingress_vip=not-required/g" cluster.conf
 
 edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift" #### don't want error here, just stop || exit 1
 

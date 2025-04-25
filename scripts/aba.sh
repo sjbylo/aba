@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250417191106
+ABA_VERSION=20250425183341
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -382,10 +382,21 @@ do
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-			#replace-value-conf cluster.conf starting_ip $2 
 			BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'"  # FIXME: This is confusing and prone to error
 		else
 			echo_red "Argument invalid [$2] after $1" >&2
+		fi
+		shift 2
+	elif [ "$1" = "--int-connection" -o "$1" = "-I" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		if echo "$2" | grep -q -E '^(proxy|p|direct|d)$'; then
+			val=$2
+			[ "$2" = "p" ] && val=proxy 
+			[ "$2" = "d" ] && val=direct
+			BUILD_COMMAND="$BUILD_COMMAND int_connection='$val'"  # FIXME: This is confusing and prone to error
+		else
+			echo_red "Argument invalid [$2] after $1.  Should be one of: proxy|p|direct|d" >&2
+			exit 1
 		fi
 		shift 2
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
@@ -396,7 +407,7 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		# If there's another arg and it's an expected cluster type, accept it, otherwise error.
 		if echo "$2" | grep -qE "^sno$|^compact$|^standard$"; then
-			BUILD_COMMAND="$BUILD_COMMAND type='$2'"
+			BUILD_COMMAND="$BUILD_COMMAND cluster_type='$2'"
 			shift 2
 		else
 			echo_red "Error: Missing or incorrect argument (sno|compact|standard) after option [$1]" >&2
@@ -760,7 +771,7 @@ if [ ! -f .bundle ]; then
 	echo
 	echo "Configure the installation to use a proxy or NAT (optional)."
 	echo
-	echo "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
+	echo "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]"
 	echo 
 
 else
