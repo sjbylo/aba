@@ -177,8 +177,8 @@ if [ "$reg_ssh_key" ]; then
 	# Note that the mirror-registry installer does not open the port for us
 	echo Allowing firewall access to the registry at $reg_host/$reg_port ...
 	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host -- "sudo firewall-cmd --state && \
-		$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
-			$SUDO firewall-cmd --reload"
+		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
+			sudo firewall-cmd --reload"
 
 	if [ "$reg_root" ]; then
 		# Fetch the actual absolute dir path for $reg_root.  "~" on remote host may be diff. to this localhost. Ansible installer does not eval "~"
