@@ -307,9 +307,13 @@ END
 
 	test-cmd -m "Verify ssh to root@$int_bastion_hostname" ssh root@$int_bastion_hostname whoami
 
+	# This is required for tput, so aba must install it or give user directions
+	ssh $test_user@$int_bastion_hostname -- "which tput && sudo dnf autoremove ncurses -y"
+
 	# Delete images
 	mylog "Cleaning up podman images ..."
-	ssh $test_user@$int_bastion_hostname -- "sudo dnf install podman -y && podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+	ssh $test_user@$int_bastion_hostname -- "which podman || sudo dnf install podman -y"
+	ssh $test_user@$int_bastion_hostname -- "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 	mylog "Cleaning up .pull-secret.json on $int_bastion_hostname ..."
 	# This file is not needed in a fully air-gapped env. 

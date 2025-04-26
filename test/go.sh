@@ -8,6 +8,8 @@ test5 \
 test3 \
 "
 
+sudo dnf autoremove ncurses -y
+
 export VER_OVERRIDE=l # Uncomment to use the 'latest' stable version of OCP
 #export VER_OVERRIDE=p # Uncomment to use the 'latest' stable version of OCP
 #export VER_OVERRIDE=4.16.30 # Uncomment to use the 'latest' stable version of OCP
