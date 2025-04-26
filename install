@@ -4,18 +4,21 @@
 uname -o | grep -q "^Darwin$" && echo "Install aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 # We need git, which and id commands ....
-required_pkgs=(git coreutils which)
-missing_pkgs=()
+! rpm -q which >/dev/null && echo "Missing required package: which" >&2 && echo "Please install it and try again." >&2 && exit 1
 
-for pkg in "${required_pkgs[@]}"; do
-	if ! rpm -q "$pkg" >/dev/null; then
-		missing_pkgs+=("$pkg")
+required_commands=(git id)
+missing_commands=()
+
+for cmd in "${required_commands[@]}"; do
+	#if ! rpm -q "$cmd" >/dev/null; then
+	if ! which "$cmd" >/dev/null; then
+		missing_commands+=("$cmd")
 	fi
 done
 
-if [ ${#missing_pkgs[@]} -gt 0 ]; then
-	echo "Missing required packages: ${missing_pkgs[*]}" >&2
-	echo "Please install them and try again." >&2
+if [ ${#missing_commands[@]} -gt 0 ]; then
+	echo "Missing required commands: ${missing_commands[*]}" >&2
+	echo "Please install the correct rpm packages (coreutils and/or git) and try again." >&2
 	exit 1
 fi
 
@@ -24,7 +27,7 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 # Check sudo or root access 
 # If user is not root
-if [ "$(id -run)" != "root" ]; then
+if [ "$(id -u)" != "0" ]; then
 	if [ "$SUDO" ]; then
 		# If sudo does not lead to root without using a password prompt (-n)
 		if [ "$($SUDO -n whoami)" != "root" ]; then
