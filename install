@@ -25,7 +25,7 @@ done
 if [ ${#missing_pkgs[@]} -gt 0 ]; then
 	# try our luck and to install ...
 	echo "Installing required rpms: ${missing_pkgs[*]} (logging to .dnf-install.log). Please wait!"
-	if ! dnf install ${missing_pkgs[*]} -y >.dnf-install.log 2>&1; then
+	if ! sudo dnf install ${missing_pkgs[*]} -y >.dnf-install.log 2>&1; then
 		echo
 		echo "Error installing missing required pkgs: ${missing_pkgs[*]}" >&2
 		echo "Please install the correct rpm packages (${missing_pkgs[*]}) and try again." >&2
