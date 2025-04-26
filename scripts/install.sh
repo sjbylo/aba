@@ -1,8 +1,45 @@
 #!/bin/bash
 # Simple Aba installer.  Copy aba command somewhere into the $PATH
 
+uname -o | grep -q "^Darwin$" && echo "Install aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
+
+# We need git, which and id commands ....
+required_pkgs=(git coreutils which)
+missing_pkgs=()
+
+for pkg in "${required_pkgs[@]}"; do
+	if ! rpm -q "$pkg" >/dev/null; then
+		missing_pkgs+=("$pkg")
+	fi
+done
+
+if [ ${#missing_pkgs[@]} -gt 0 ]; then
+	echo "Missing required packages: ${missing_pkgs[*]}" >&2
+	echo "Please install them and try again." >&2
+	exit 1
+fi
+
+SUDO=
+which sudo 2>/dev/null >&2 && SUDO=sudo
+
 # Check sudo or root access 
-[ "$(sudo id -run)" != "root" ] && echo "Please configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+# If user is not root
+if [ "$(id -run)" != "root" ]; then
+	if [ "$SUDO" ]; then
+		# If sudo does not lead to root without using a password prompt (-n)
+		if [ "$($SUDO -n whoami)" != "root" ]; then
+			echo "aba requires root access, directly or via sudo." >&2
+			# If there is no passwordless access
+			if ! $SUDO -ln 2>/dev/null | grep -q NOPASSWD; then
+				echo "Passwordless sudo access is recommended." >&2
+			fi
+			echo -n "You must enter your password to install and use aba: " >&2
+			[ "$($SUDO -p "Enter %p's password: " id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+		fi
+	else
+		echo "Warning: sudo command is not available and aba is not running as root!" >&2
+	fi
+fi
 
 # Check options
 while echo "$1" | grep -q "^-"
@@ -37,7 +74,7 @@ download_repo() {
 	fi
 
 	if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
-		echo Cloning into $PWD with "git clone -b $branch https://github.com/${repo}.git" >&2
+		echo Cloning aba with: "git clone -b $branch https://github.com/${repo}.git" >&2
 		if ! git clone -b $branch https://github.com/${repo}.git; then
 			echo "Error fetching git repo from https://github.com/${repo}.git (branch: $branch)" >&2
 
@@ -96,8 +133,8 @@ do
 		[ "$d" = "$HOME/bin" -a ! -d $d ] && mkdir -p $d
 
 		# Now, try to install aba
-		if sudo cp -p scripts/aba.sh $d/aba; then
-			sudo chmod +x $d/aba
+		if $SUDO cp -p scripts/aba.sh $d/aba; then
+			$SUDO chmod +x $d/aba
 			[ ! "$quiet" ] && echo aba has been $action to $d/aba >&2
 			[ ! "$quiet" -a -n "$msg" ] && source scripts/include_all.sh && echo_yellow "$msg" >&2
 

@@ -1,14 +1,20 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250425183341
+ABA_VERSION=20250426125505
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
 uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
+# Let's ensure we get the most important rpms installed
+install_rpms $(cat $ABA_PATH/templates/rpms-external.txt) || exit 1
+
+SUDO=
+which sudo 2>/dev/null >&2 && SUDO=sudo
+
 # Check we have sudo or root access 
-[ "$(sudo id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+[ "$SUDO" ] && [ "$(sudo id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
 
 # Having $1 = --dir is an exception only, $1 can point to the top-level repo dir only
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
@@ -106,9 +112,6 @@ chan=stable
 
 interactive_mode=
 [ "$*" ] && interactive_mode_none=1
-
-# Let's ensure we get the most important rpms installed
-install_rpms $(cat $ABA_PATH/templates/rpms-external.txt) || exit 1
 
 cur_target=
 
