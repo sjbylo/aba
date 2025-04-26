@@ -5,7 +5,7 @@ uname -o | grep -q "^Darwin$" && echo "Install aba on RHEL or Fedora. Most teste
 
 # We need git, which and id commands ....
 if ! rpm -q which >/dev/null 2>&1; then
-	if ! sudo dnf install which -y; then
+	if ! dnf install which -y; then
 		echo "Error installing missing package: make" >&2
 		echo "Please install it and try again." >&2 
 		exit 1
