@@ -4,7 +4,7 @@
 uname -o | grep -q "^Darwin$" && echo "Install aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 # We need git, which and id commands ....
-required_pkgs=(which git file)
+required_pkgs=(which git file hostname)
 missing_pkgs=()
 
 for pkg in "${required_pkgs[@]}"; do
