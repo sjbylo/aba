@@ -10,7 +10,7 @@ if [ ! -s sync/imageset-config-sync.yaml -a ! -s save/imageset-config-save.yaml 
 fi
 
 # python rpm package is diffeent on RHEL8 vs RHEL9!
-###rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y >> .dnf-install.log 2>&1
+###rpm -q --quiet python3 || rpm -q --quiet python36 || $SUDO dnf install python3 -y >> .dnf-install.log 2>&1
 #install_rpms python3-jinja2 python3-pyyaml || exit 1
 #install-rpms external || exit 1
 install_rpms $(cat templates/rpms-external.txt) || exit 1

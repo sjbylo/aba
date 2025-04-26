@@ -4,7 +4,7 @@
 uname -o | grep -q "^Darwin$" && echo "Install aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 # We need git, which and id commands ....
-! rpm -q which >/dev/null && echo "Missing required package: which" >&2 && echo "Please install it and try again." >&2 && exit 1
+! rpm -q which >/dev/null 2>&1 && echo "Missing required package: which" >&2 && echo "Please install it and try again." >&2 && exit 1
 
 required_commands=(git id)
 missing_commands=()
@@ -85,7 +85,7 @@ download_repo() {
 		fi
 
 		echo
-		echo "Cloned aba branch $branch into $PWD/aba" >&2
+		[ "$PWD" = "/" ] && echo "Cloned aba branch $branch into /aba" >&2 || echo "Cloned aba branch $branch into $PWD/aba" >&2
 		cd aba
 	fi
 }

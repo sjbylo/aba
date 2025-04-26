@@ -1,14 +1,11 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250426125505
+ABA_VERSION=20250426142838
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
 uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
-
-# Let's ensure we get the most important rpms installed
-install_rpms $(cat $ABA_PATH/templates/rpms-external.txt) || exit 1
 
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
@@ -92,6 +89,8 @@ fi
 #usage=$(cat $ABA_PATH/others/help.txt)
 
 source $ABA_PATH/scripts/include_all.sh
+
+install_rpms $(cat $ABA_PATH/templates/rpms-external.txt) || exit 1
 
 # This will be the actual 'make' command that will eventually be run
 BUILD_COMMAND=
