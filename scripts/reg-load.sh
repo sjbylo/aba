@@ -22,8 +22,8 @@ scripts/create-containers-auth.sh --load   # --load option indicates that the pu
 # Check if the cert needs to be updated
 if [ -s regcreds/rootCA.pem ]; then
 	if diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2; then
-		sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ 
-		sudo update-ca-trust extract
+		$SUDO cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ 
+		$SUDO update-ca-trust extract
 	fi
 else
 	echo "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 

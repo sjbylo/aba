@@ -54,7 +54,7 @@ if [ "$list_of_matching_arp_entries" ]; then
 
 	if [ "$ips" ]; then
 		# Delete arp cache and refresh IPs with ping...
-		echo "$ips" | xargs -L1 sudo arp -d
+		echo "$ips" | xargs -L1 $SUDO arp -d
 		for ip in $ips
 		do
 			ping -c1 $ip >/dev/null 2>&1 &

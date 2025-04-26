@@ -1,6 +1,9 @@
 # Code that all scripts need.  Ensure this script does not create any std output.
 # Add any arg1 to turn off the below Error trap
 
+SUDO=
+which sudo 2>/dev/null >&2 && SUDO=sudo
+
 echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 echo_green()	{ [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
@@ -294,7 +297,7 @@ install_rpms() {
 
 	if [ "$rpms_to_install" ]; then
 		echo "Installing required rpms:$rpms_to_install (logging to .dnf-install.log). Please wait!" >&2  # send to stderr so this can be seen during "aba bundle -o -"
-		if ! sudo dnf install $rpms_to_install -y >> .dnf-install.log 2>&1; then
+		if ! $SUDO dnf install $rpms_to_install -y >> .dnf-install.log 2>&1; then
 			echo_red "Warning: an error occurred during rpm installation. See the logs at .dnf-install.log." >&2
 			echo_red "If dnf cannot be used to install rpm packages, please install the following packages manually and try again!" >&2
 			echo_magenta $rpms_to_install

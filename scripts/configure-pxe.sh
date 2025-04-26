@@ -15,18 +15,18 @@ if [ ! -d iso-agent-based/boot-artifacts ]; then
 	exit 1
 fi
 
-sudo dnf install httpd -y
-sudo systemctl start httpd
-sudo systemctl enable httpd
+$SUDO dnf install httpd -y
+$SUDO systemctl start httpd
+$SUDO systemctl enable httpd
 
-sudo firewall-cmd --add-port=80/tcp --permanent
-sudo firewall-cmd --reload
+$SUDO firewall-cmd --add-port=80/tcp --permanent
+$SUDO firewall-cmd --reload
 
-sudo cp iso-agent-based/boot-artifacts/* /var/www/html
-sudo chown -R apache /var/www/html
+$SUDO cp iso-agent-based/boot-artifacts/* /var/www/html
+$SUDO chown -R apache /var/www/html
 
 # Open up SELinux
-sudo chcon -R -t httpd_sys_content_t /var/www/html
+$SUDO chcon -R -t httpd_sys_content_t /var/www/html
 
 echo 
 echo "PXE boot artifacts have been made available at:"

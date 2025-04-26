@@ -177,8 +177,8 @@ if [ "$reg_ssh_key" ]; then
 	# Note that the mirror-registry installer does not open the port for us
 	echo Allowing firewall access to the registry at $reg_host/$reg_port ...
 	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host -- "sudo firewall-cmd --state && \
-		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
-			sudo firewall-cmd --reload"
+		$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
+			$SUDO firewall-cmd --reload"
 
 	if [ "$reg_root" ]; then
 		# Fetch the actual absolute dir path for $reg_root.  "~" on remote host may be diff. to this localhost. Ansible installer does not eval "~"
@@ -227,9 +227,9 @@ if [ "$reg_ssh_key" ]; then
 	[ ! "$reg_user" ] && reg_user=init
 
 	# Check if the cert needs to be updated
-	sudo diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-		sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
-			sudo update-ca-trust extract
+	$SUDO diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+		$SUDO cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+			$SUDO update-ca-trust extract
 
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
@@ -290,9 +290,9 @@ ask "Install Quay mirror registry appliance locally on localhost ($(hostname)), 
 
 	# mirror-registry installer does not open the port for us
 	echo Allowing firewall access to this host at $reg_host/$reg_port ...
-	sudo firewall-cmd --state && \
-		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
-			sudo firewall-cmd --reload
+	$SUDO firewall-cmd --state && \
+		$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
+			$SUDO firewall-cmd --reload
 
 	# Create random password
 	if [ ! "$reg_pw" ]; then
@@ -337,9 +337,9 @@ ask "Install Quay mirror registry appliance locally on localhost ($(hostname)), 
 	## export reg_url=https://$reg_hostport
 
 	# Check if the cert needs to be updated
-	sudo diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-		sudo cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
-			sudo update-ca-trust extract
+	$SUDO diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+		$SUDO cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+			$SUDO update-ca-trust extract
 
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
