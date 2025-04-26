@@ -3,17 +3,9 @@
 
 uname -o | grep -q "^Darwin$" && echo "Install aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
+# We need git, which and id commands ....
 required_pkgs=(which git file)
 missing_pkgs=()
-
-# We need git, which and id commands ....
-#if ! rpm -q which >/dev/null 2>&1; then
-	#if ! dnf install which -y; then
-		#echo "Error installing missing package: make" >&2
-		#echo "Please install it and try again." >&2 
-		#exit 1
-	#fi
-#fi
 
 for pkg in "${required_pkgs[@]}"; do
 	#if ! which "$pkg" >/dev/null; then
@@ -22,6 +14,7 @@ for pkg in "${required_pkgs[@]}"; do
 	fi
 done
 
+# If sudo is not found, assume we are running as root
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
 
@@ -43,8 +36,8 @@ if ! which id >/dev/null 2>&1; then
 	exit 1
 fi
 
-SUDO=
-which sudo 2>/dev/null >&2 && SUDO=sudo
+##SUDO=
+##which sudo 2>/dev/null >&2 && SUDO=sudo
 
 # Check sudo or root access 
 # If user is not root
