@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250426142838
+ABA_VERSION=20250426160046
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -76,21 +76,9 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	fi
 fi
 
-# Set up a temp directory
-#export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
-#mkdir -p $tmp_dir 
-#cleanup() {
-#	[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..." >&2
-#	rm -rf "$tmp_dir"
-#}
-# Set up the trap to call cleanup on script exit or termination
-#trap cleanup EXIT
-
-#usage=$(cat $ABA_PATH/others/help.txt)
-
 source $ABA_PATH/scripts/include_all.sh
 
-install_rpms $(cat $ABA_PATH/templates/rpms-external.txt) || exit 1
+###install_rpms $(cat $ABA_PATH/templates/rpms-external.txt) || exit 1
 
 # This will be the actual 'make' command that will eventually be run
 BUILD_COMMAND=
@@ -99,7 +87,7 @@ BUILD_COMMAND=
 if [ ! -f $ABA_PATH/aba.conf ]; then
 	cp $ABA_PATH/templates/aba.conf $ABA_PATH
 
-	# Initial prep for interactive mode, unset ocp_version and ocp_channel
+	# Initial prep for interactive mode: unset ocp_version and ocp_channel
 	replace-value-conf $ABA_PATH/aba.conf ocp_version 
 	replace-value-conf $ABA_PATH/aba.conf ocp_channel
 fi
