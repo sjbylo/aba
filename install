@@ -4,7 +4,13 @@
 uname -o | grep -q "^Darwin$" && echo "Install aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 # We need git, which and id commands ....
-! rpm -q which >/dev/null 2>&1 && echo "Missing required package: which" >&2 && echo "Please install it and try again." >&2 && exit 1
+if ! rpm -q which >/dev/null 2>&1; then
+	if ! sudo dnf install which -y; then
+		echo "Error installing missing package: make" >&2
+		echo "Please install it and try again." >&2 
+		exit 1
+	fi
+fi
 
 required_commands=(git id file)
 missing_commands=()
@@ -17,9 +23,11 @@ for cmd in "${required_commands[@]}"; do
 done
 
 if [ ${#missing_commands[@]} -gt 0 ]; then
-	echo "Missing required commands: ${missing_commands[*]}" >&2
-	echo "Please install the correct rpm packages (coreutils and/or git) and try again." >&2
-	exit 1
+	if ! sudo dnf install git file -y; then
+		echo "Missing required commands: ${missing_commands[*]}" >&2
+		echo "Please install the correct rpm packages (coreutils and/or git) and try again." >&2
+		exit 1
+	fi
 fi
 
 SUDO=
