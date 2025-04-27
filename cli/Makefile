@@ -41,6 +41,11 @@ ifeq ($(arch),x86_64)
 	butane_arch := amd64
 endif
 
+govc_arch := $(arch)
+ifeq ($(arch),aarch64)
+	govc_arch := arm64
+endif
+
 # Include aba.conf if it exists
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
@@ -155,15 +160,17 @@ oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 
 
 ########################################
+# Use either x86_64 or arm64 
 govc: ~/bin/govc  ## Install govc to ~/bin/govc
-~/bin/govc: .init govc_Linux_x86_64.tar.gz
-	@echo Extracting govc_Linux_x86_64.tar.gz to ~/bin/govc
-	tar -C ~/bin -xmzf govc_Linux_x86_64.tar.gz govc
+~/bin/govc: .init govc_Linux_$(govc_arch).tar.gz
+	@echo Extracting govc_Linux_$(govc_arch).tar.gz to ~/bin/govc
+	tar -C ~/bin -xmzf govc_Linux_$(govc_arch).tar.gz govc
 
-govc_Linux_x86_64.tar.gz:   ## Download govc tarball
+govc_Linux_$(govc_arch).tar.gz:   ## Download govc tarball
 	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz
-	curl --progress-bar -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz"
+	curl --progress-bar -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz"
 
+# Use either amd64 or aarch64 
 butane: ~/bin/butane ## Install butane to ~/bin/butane
 ~/bin/butane: butane-binary
 	@echo Copying butane-binary to ~/bin/butane
