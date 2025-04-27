@@ -53,7 +53,7 @@ aba --dir ~/aba reset --force
 
 ntp_ip=10.0.1.8 # If available
 
-which make || sudo dnf install make -y
+###which make || sudo dnf install make -y
 
 sudo rm -f `which aba`
 sudo rm -f ~/bin/aba  # don't get mixed up!
@@ -62,6 +62,8 @@ sudo rm -f /usr/local/sbin/aba
 
 test-cmd -m "Install aba (1)" '../aba/install 2>&1 | grep " installed to "'
 test-cmd -m "Install aba (2)" '../aba/install 2>&1 | grep "already up-to-date"'
+
+test-cmd -m "Activating shortcuts.conf" cp .shortcuts.conf shortcuts.conf
 
 # Test update of aba script
 mylog Testing update of aba script
