@@ -9,12 +9,12 @@ proxy:
 metadata:
   name: {{ cluster_name }}
 compute:
-- architecture: amd64
+- architecture: {{ arch }}
   hyperthreading: Enabled
   name: worker
   replicas: {{ num_workers }}
 controlPlane:
-  architecture: amd64
+  architecture: {{ arch }}
   hyperthreading: Enabled
   name: master
   replicas: {{ num_masters }}
