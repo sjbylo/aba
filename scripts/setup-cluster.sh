@@ -23,6 +23,7 @@ if [ ! -d $name ]; then
 	make -s init
 else
 	cd $name 
+	rm -f cluster.conf  # Refresh/overwrite the config if creating the cluster dir
 	make -s clean init
 fi
 
