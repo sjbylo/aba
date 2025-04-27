@@ -34,7 +34,7 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 	export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-	echo_cyan "Generating initial image set configuration: 'save/imageset-config-save.yaml' to save images to local disk for OpenShift 'v$ocp_version' and channel '$ocp_channel' ..."
+	echo_cyan "Generating initial image set configuration: 'save/imageset-config-save.yaml' to save images to local disk for OpenShift 'v$ocp_version', channel '$ocp_channel' and arch '$arch_short' ..."
 
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && echo_red "Error: ocp_channel or ocp_version incorrectly defined in aba.conf" >&2 && exit 1
 

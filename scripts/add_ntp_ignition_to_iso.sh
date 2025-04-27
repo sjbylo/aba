@@ -16,9 +16,9 @@ verify-aba-conf || exit 1
 
 [ "$INFO_ABA" ] && echo_cyan "Adding NTP server to early bootstrap ignition: $ntp_servers" 
 
-arch=$(uname -m)
+#arch=$(uname -m)
 iso_dir=iso-agent-based
-coreos-installer iso ignition show $iso_dir/agent.$arch.iso > $iso_dir/tmp.ign
+coreos-installer iso ignition show $iso_dir/agent.$arch_sys.iso > $iso_dir/tmp.ign
 
 # Do not use tr -d "[:space:]", since that also deleted newlines which are needed for read to work for the last line!
 # Want to keep a record of chrony.conf for debugging
@@ -46,5 +46,5 @@ jq '.storage.files += [{
   "mode": 420
 }]' $iso_dir/tmp.ign > $iso_dir/custom_ign.ign
 
-coreos-installer iso ignition embed -fi $iso_dir/custom_ign.ign $iso_dir/agent.$arch.iso
+coreos-installer iso ignition embed -fi $iso_dir/custom_ign.ign $iso_dir/agent.$arch_sys.iso
 
