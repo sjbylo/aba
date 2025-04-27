@@ -75,7 +75,7 @@ elif [ "$int_connection" = "proxy" ]; then
 		use_mirror=
 	else
 		echo_red "Warning: The proxy value in cluster.conf is set but not all proxy vars are set. Ignoring." >&2
-		echo_red "If you want to configure the cluster wide proxy, set 'proxy=true' or override by" >&2
+		echo_red "If you want to configure the cluster wide proxy, set 'int_connection=proxy' or override by" >&2
 		echo_red "setting the '*_proxy' values in 'cluster.conf'" >&2
 
 		sleep 2

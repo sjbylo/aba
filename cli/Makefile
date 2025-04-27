@@ -80,16 +80,26 @@ help: ## Help
 
 # The preference to download the oc tar files is for rhel9, then rhel8 and then the generic tar file.
 
-full_oc_tar_file  := openshift-client-$(os)-amd64-$(rhel_ver)-$(ocp_version).tar.gz
+#openshift-client-linux-amd64-rhel8.tar.gz
+#openshift-client-linux-amd64-rhel9-4.18.9.tar.gz
+#openshift-client-linux-amd64-rhel9.tar.gz
+#openshift-client-linux-amd64.tar.gz
+
+#openshift-client-linux-arm64-rhel8-4.18.9.tar.gz
+#openshift-client-linux-arm64-rhel8.tar.gz
+#openshift-client-linux-arm64-rhel9-4.18.9.tar.gz
+#openshift-client-linux-arm64-rhel9.tar.gz
+
+full_oc_tar_file  := openshift-client-$(os)-$(arch)-$(rhel_ver)-$(ocp_version).tar.gz
 full_oc_url       := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
 
 gen_oc_tar_file   := openshift-client-$(os)-$(ocp_version).tar.gz
 gen_url           := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
 
-rhel9_oc_tar_file := openshift-client-$(os)-amd64-rhel9-$(ocp_version).tar.gz
+rhel9_oc_tar_file := openshift-client-$(os)-$(arch)-rhel9-$(ocp_version).tar.gz
 rhel9_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
 
-rhel8_oc_tar_file := openshift-client-$(os)-amd64-rhel8-$(ocp_version).tar.gz
+rhel8_oc_tar_file := openshift-client-$(os)-$(arch)-rhel8-$(ocp_version).tar.gz
 rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
 
 # Only download *all* the tar files to use in the disconnected env
