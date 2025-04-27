@@ -167,7 +167,7 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 	tar -C ~/bin -xmzf govc_Linux_$(govc_arch).tar.gz govc
 
 govc_Linux_$(govc_arch).tar.gz:   ## Download govc tarball
-	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz
+	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz
 	curl --progress-bar -sL -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz"
 
 # Use either amd64 or aarch64 
