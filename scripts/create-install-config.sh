@@ -174,9 +174,10 @@ if [ "$INFO_ABA" ]; then
 	echo
 fi
 
-export arch=$(uname -m)
-[ "$arch" = "aarch64" ] && arch=arm64  # ARM
-[ "$arch" = "x86_64" ] && arch=amd64   # Intel
+# Added to include all sh
+#export arch=$(uname -m)
+#[ "$arch" = "aarch64" ] && arch=arm64  # ARM
+#[ "$arch" = "x86_64" ] && arch=amd64   # Intel
 
 # Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret, use_proxy, arch ...
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
