@@ -80,15 +80,14 @@ help: ## Help
 
 # The preference to download the oc tar files is for rhel9, then rhel8 and then the generic tar file.
 
-#openshift-client-linux-amd64-rhel8.tar.gz
+# See:
+# https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.9/ 
+# Example x86:
 #openshift-client-linux-amd64-rhel9-4.18.9.tar.gz
-#openshift-client-linux-amd64-rhel9.tar.gz
-#openshift-client-linux-amd64.tar.gz
-
+#openshift-client-linux-amd64-rhel8-4.18.9.tar.gz
+# Example ARM:
 #openshift-client-linux-arm64-rhel8-4.18.9.tar.gz
-#openshift-client-linux-arm64-rhel8.tar.gz
 #openshift-client-linux-arm64-rhel9-4.18.9.tar.gz
-#openshift-client-linux-arm64-rhel9.tar.gz
 
 full_oc_tar_file  := openshift-client-$(os)-$(arch)-$(rhel_ver)-$(ocp_version).tar.gz
 full_oc_url       := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
