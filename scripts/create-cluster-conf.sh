@@ -18,6 +18,7 @@ scripts/install-rpms.sh internal
 
 [ -s cluster.conf ] && exit 0
 
+declare -A shortcuts  # Need to declare just in case the shortcuts.conf file is not available
 [ -s ../shortcuts.conf ] && source ../shortcuts.conf  # Values can be set in this file for testing 
 
 name=standard
