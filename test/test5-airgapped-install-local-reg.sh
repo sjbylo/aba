@@ -47,7 +47,8 @@ rm -f ~/.aba.previous.backup
 
 which make || sudo dnf install make -y
 
-./install 
+test-cmd -m "Installing aba" ./install 
+test-cmd -m "Activating shortcuts.conf" cp .shortcuts.conf shortcuts.conf
 
 test-cmd -m "Cleaning up - aba reset --force" 
 aba reset -f
@@ -180,6 +181,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 5 3 -m "Checking regcreds/ do
 mylog Runtest: START - airgap
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m  "Install aba script" "cd $subdir/aba; ./install" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Activating shortcuts.conf" "cd $subdir/aba; cp .shortcuts.conf shortcuts.conf"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cluster images into mirror on internal bastion (this will install quay)" "aba -d $subdir/aba load --retry" 
 
