@@ -82,7 +82,7 @@ Usage:
      -P, --op-sets [<operator set list>] # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted
      -e, --editor <editor command>       # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
      -a, --ask                           # Prompt user when needed
-     -A, --noask                         # Do not prompt, assume default answers
+     -y, --noask                         # Do not prompt, assume default answers
      -o, --out <file|->                  # Bundle archive output destination, e.g. file or stdout (-)
      -f, --force                         # Only used for 'aba reset --force'
      -V, --vmware                        # Apply this VMware config file (for govc)

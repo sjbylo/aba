@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250426160046
+ABA_VERSION=20250427234350
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -366,7 +366,7 @@ do
 	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
 		replace-value-conf $ABA_PATH/aba.conf ask true
 		shift 
-	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then
+	elif [ "$1" = "--noask" -o "$1" = "-A" -o "$1" = "-y" ]; then
 		replace-value-conf $ABA_PATH/aba.conf ask false 
 		shift 
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
