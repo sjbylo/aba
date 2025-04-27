@@ -5,6 +5,8 @@ storageConfig:
     path: .
 mirror:
   platform:
+    architectures:
+    - {{ arch_short }}
     channels:
     - name: {{ ocp_channel }}-{{ ocp_ver_major }}
       minVersion: {{ ocp_ver }}

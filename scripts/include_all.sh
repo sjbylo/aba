@@ -1,8 +1,14 @@
 # Code that all scripts need.  Ensure this script does not create any std output.
 # Add any arg1 to turn off the below Error trap
 
+# Check is sudo exists 
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
+
+# Set up the arch vars
+export arch_sys=$(uname -m)
+[ "$arch_sys" = "aarch64" ]	&& export arch_short=arm64  # ARM
+[ "$arch_sys" = "x86_64" ]	&& export arch_short=amd64   # Intel
 
 echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
