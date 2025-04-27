@@ -36,6 +36,11 @@ ifeq ($(os),mac)
 	endif
 endif
 
+butane_arch := $(arch)
+ifeq ($(arch),x86_64)
+	butane_arch := amd64
+endif
+
 # Include aba.conf if it exists
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
@@ -166,7 +171,8 @@ butane: ~/bin/butane ## Install butane to ~/bin/butane
 	chmod +x ~/bin/butane
 
 butane-binary: ## Download butane binary 
-	curl -s --connect-timeout 10 --retry 3 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane-binary
+	echo Downloading https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch)
+	curl -s --connect-timeout 10 --retry 3 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch) --output butane-binary
 
 
 ########################################
