@@ -6,9 +6,9 @@
 export INFO_ABA=1
 
 ### TEST for clean start with or without the rpms.  
-if false; then
+if true; then
 	# Assuming user will NOT install all rpms in advance and aba will install them.
-	sudo dnf remove make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y
+	sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer ncurses -y
 else
 	# FIXME: test for pre-existing rpms!  In this case we don't want yum to run *at all* as it may error out
 	# Assuming user will install all rpms in advance.
