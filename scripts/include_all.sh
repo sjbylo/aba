@@ -8,7 +8,7 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 # Set up the arch vars
 export arch_sys=$(uname -m)
 export arch_short=amd64
-[ "$arch_sys" = "aarch64" -o "$arch_sys" = "arm64"] && export arch_short=arm64  # ARM
+[ "$arch_sys" = "aarch64" -o "$arch_sys" = "arm64" ] && export arch_short=arm64  # ARM
 #[ "$arch_sys" = "x86_64" ]	&& export arch_short=amd64   # Intel
 
 echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
