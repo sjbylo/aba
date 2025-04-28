@@ -165,7 +165,7 @@ test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Activating shortcuts.conf on remote host" cp .shortcuts.conf shortcuts.conf
+###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Activating shortcuts.conf on remote host" "cd $subdir/aba; cp .shortcuts.conf shortcuts.conf"
 
 # FIXME: Is this needed since we use "full tar" copy above?
 [ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
