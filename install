@@ -3,8 +3,9 @@
 
 uname -o | grep -q "^Darwin$" && echo "Install aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
-# We need git, which and id commands .... the other rpm packages are listed in templates/rpms-external.txt
-required_pkgs=(which file hostname git make jq python3-jinja2 python3-pyyaml ncurses)
+# We need git, which, id, diff commands (not always available in a container) ... 
+# the other rpm packages are copied from templates/rpms-external.txt which isn't available yet!
+required_pkgs=(which file hostname diffutils git make jq python3-jinja2 python3-pyyaml ncurses)
 missing_pkgs=()
 
 for pkg in "${required_pkgs[@]}"; do
