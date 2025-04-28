@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250427234350
+ABA_VERSION=20250428181120
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -271,7 +271,7 @@ do
 		fi
 		replace-value-conf $ABA_PATH/aba.conf next_hop_address "$def_route_ip"
 		shift 
-	elif [ "$1" = "--api-ingress" -o "$1" = "-XX" ]; then # FIXME: opt?
+	elif [ "$1" = "--api-vip" -o "$1" = "-XXX" ]; then # FIXME: opt?
 		# If arg missing remove from aba.conf
 		shift 
 		api_vip=
@@ -280,7 +280,7 @@ do
 		fi
 		BUILD_COMMAND="$BUILD_COMMAND api_vip='$api_vip'"
 		shift 
-	elif [ "$1" = "--apps-ingress" -o "$1" = "-XX" ]; then # FIXME: opt?
+	elif [ "$1" = "--ingress-vip" -o "$1" = "-YYY" ]; then # FIXME: opt?
 		# If arg missing remove from aba.conf
 		shift 
 		ingress_vip=

@@ -49,15 +49,18 @@ if [ ! "$SNO" ]; then
 	if [ "$api_vip" ] && echo "$api_vip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 		[ "$INFO_ABA" ] && echo_white "Value 'api_vip' ($api_vip) is defined."
 	else
-		if echo "$actual_ip_of_api" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+		if [ ! "$actual_ip_of_api" ]; then
+			echo_red "Error: Missing DNS record $cl_api_domain" >&2 && exit 1
+		elif echo "$actual_ip_of_api" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			# Add into cluster.conf
 			###sed -E -i "s/^^#{,1}api_vip=[^ \t]*/api_vip=$actual_ip_of_api /g" cluster.conf
 			replace-value-conf cluster.conf api_vip $actual_ip_of_api
-			echo_red "Warning: adding in actual IP address ($actual_ip_of_api) into cluster.conf" >&2
+			echo_red "Warning: inserting actual IP address ($actual_ip_of_api) into cluster.conf" >&2
 			echo_red "         Please verify this is correct! If not, edit cluster.conf file and try again!" >&2
+			sleep 1
 			api_vip=$actual_ip_of_api
 		else
-			[ "$INFO_ABA" ] && echo_red "Error: Value 'api_vip' must be defined for this cluster configuration!" >&2 && exit 1
+			echo_red "Error: Value 'api_vip' must be defined for this cluster configuration!" >&2 && exit 1
 		fi
 	fi
 
@@ -66,15 +69,17 @@ if [ ! "$SNO" ]; then
 		[ "$INFO_ABA" ] && echo_white "Value 'ingress_vip' ($ingress_vip) is defined."
 	else
 		# If ingress_vip not defined or an IP address
-		if echo "$actual_ip_of_ingress" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+		if [ ! "$actual_ip_of_ingress" ]; then
+			echo_red "Error: Missing DNS record $cl_ingress_domain" >&2 && exit 1
+		elif echo "$actual_ip_of_ingress" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			# Add into cluster.conf
-			###sed -E -i "s/^^#{,1}ingress_vip=[^ \t]*/ingress_vip=$actual_ip_of_ingress /g" cluster.conf
 			replace-value-conf cluster.conf ingress_vip $actual_ip_of_ingress
-			echo_red "Warning: adding in actual IP address ($actual_ip_of_ingress) into cluster.conf" >&2
+			echo_red "Warning: inserting actual IP address ($actual_ip_of_ingress) into cluster.conf" >&2
 			echo_red "         Please verify this is correct! If not, edit cluster.conf file and try again!" >&2
+			sleep 1
 			ingress_vip=$actual_ip_of_ingress
 		else
-			[ "$INFO_ABA" ] && echo_red "Error: Value 'ingress_vip' must be defined for this cluster configuration!" >&2 && exit 1
+			echo_red "Error: Value 'ingress_vip' must be defined for this cluster configuration!" >&2 && exit 1
 		fi
 	fi
 else
