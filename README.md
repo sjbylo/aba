@@ -627,6 +627,8 @@ aba mon
 
 - Use PXE boot as alternative to ISO upload.
 
+- Enable aba to work in a container (this has been partially implemented, see below)
+
 - ~~Assist in adding OpenShift Update Service (OSUS) to the cluster.~~
 
 - ~~Support bonding and vlan.~~
@@ -691,6 +693,21 @@ aba
 [Back to top](#who-should-use-aba)
 
 ## Advanced
+
+- **Aba now runs in a containerized environment (partial support):**
+  - Tested on Mac M1 (`arm64`) with successful results.
+  - You can run Aba in a container, for example:
+    ```bash
+    docker run -it --rm --name centos9 quay.io/centos/centos:stream9
+    ```
+  - Aba can:
+    - Connect to an existing remote registry (installation of a new registry (from) inside the container is not yet supported).
+    - Access public registries over the Internet (directly or through a proxy).
+    - Generate an `arm64` ISO image suitable for OpenShift installation on `arm64` systems.
+
+- **Tested Use Case:**
+  - ISO generated from within the container was successfully used to install OpenShift on an M1 Mac using VMware Fusion.
+
 
 <!--
 ### You need more control with your mirror registry folders?
