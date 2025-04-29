@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250429185009
+ABA_VERSION=20250430075548
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -371,6 +371,22 @@ do
 	elif [ "$1" = "--noask" -o "$1" = "-A" -o "$1" = "-y" ]; then
 		replace-value-conf $ABA_PATH/aba.conf ask false 
 		shift 
+	elif [ "$1" = "--mcpu" -o "$1" = "-qqq" ]; then  # FIXME opt.
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		if echo "$2" | grep -q -E '^[0-9]+$'; then
+			BUILD_COMMAND="$BUILD_COMMAND master_cpu_count='$2'"
+		else
+			echo_red "Argument invalid [$2] after $1" >&2
+		fi
+		shift 2
+	elif [ "$1" = "--mmem" -o "$1" = "-QQQ" ]; then  # FIXME opt.
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		if echo "$2" | grep -q -E '^[0-9]+$'; then
+			BUILD_COMMAND="$BUILD_COMMAND master_mem='$2'"
+		else
+			echo_red "Argument invalid [$2] after $1" >&2
+		fi
+		shift 2
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then

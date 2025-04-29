@@ -53,13 +53,13 @@ type=standard
 [ ! "$data_disk" ]		&& [ "${shortcuts["$name:data_disk"]}" ]	&& export data_disk=${shortcuts["$name:data_disk"]}
 [ ! "$int_connection" ]		&& [ "${shortcuts["$name:int_connection"]}" ]	&& export int_connection=${shortcuts["$name:int_connection"]}
 
-# Set reasonable defaults
+# If not already set, set reasonable defaults
 # Note: VMware mac address range for VMs is 00:50:56:00:00:00 to 00:50:56:3F:FF:FF 
 [ ! "$starting_ip" ]		&& export starting_ip="ADD-IP-ADDR-HERE"
 [ ! "$mac_prefix" ]		&& export mac_prefix=00:50:56:2x:xx:
 [ ! "$num_masters" ]		&& export num_masters=3
 [ ! "$num_workers" ]		&& export num_workers=3
-[ ! "$ports" ]			&& export ports=ens160
+[ ! "$ports" ]			&& export ports=ens160   #FIXME: unused 
 [ ! "$port0" ]			&& export port0=ens160
 [ ! "$port1" ]			&& export port1=
 [ ! "$vlan" ]			&& export vlan=
