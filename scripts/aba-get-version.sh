@@ -3,6 +3,7 @@
 
 #uname -o | grep -q "^Darwin$" && echo "Please run 'aba' on RHEL or Fedora. Most tested is RHEL 9." && exit 1
 
+arch_sys=$(uname -m)
 dir=$(dirname $0)
 cd $dir
 
@@ -27,7 +28,7 @@ export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
 
 echo -n "Looking up OpenShift release versions ..."
 
-if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt > $tmp_dir/.release.txt; then
+if ! curl --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt > $tmp_dir/.release.txt; then
 	[ "$TERM" ] && tput setaf 1
 	echo
 	echo "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
@@ -62,7 +63,7 @@ target_ver=
 #do
 	# Exit loop if release version exists
 	if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-		if curl --connect-timeout 10 --retry 2 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
+		if curl --connect-timeout 10 --retry 2 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 			break
 		else
 			echo "Error: Failed to find release $target_ver"

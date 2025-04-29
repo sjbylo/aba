@@ -102,7 +102,7 @@ rhel8_oc_tar_file := openshift-client-$(os)-$(arch)-rhel8-$(ocp_version).tar.gz
 rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
 
 # Only download *all* the tar files to use in the disconnected env
-download: $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_x86_64.tar.gz butane-binary
+download: $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_$(govc_arch).tar.gz butane-binary
 
 
 ########################################
