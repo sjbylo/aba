@@ -5,7 +5,7 @@
 
 source scripts/include_all.sh
 
-scripts/install-govc.sh
+###scripts/install-govc.sh
 
 while [ "$1" ]
 do
