@@ -115,14 +115,18 @@ test-cmd -m "Verifying direct internet config - 'mirrors:' does not exist" 		"! 
 test-cmd -m "Creating iso for 'int_connection-direct' SNO cluster" aba -d sno iso
 
 test-cmd -m "Removing sno dir" rm -rf sno
-test-cmd -m "Creating sno/cluster.conf." aba sno --step cluster.conf
-test-cmd -m "Adding int_connection=proxy to sno/cluster.conf" "sed -i 's/^#int_connection=.*/int_connection=proxy/g' sno/cluster.conf"
+test-cmd -m "Creating sno/cluster.conf." aba sno --step cluster.conf -I proxy
+####test-cmd -m "Adding int_connection=proxy to sno/cluster.conf" "sed -i 's/^#int_connection=.*/int_connection=proxy/g' sno/cluster.conf"
 
-test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." aba sno 
-test-cmd -m "Checking cluster operators" aba --dir sno cmd
+test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." "aba -d sno"  # Not, this is NOT the same as "aba sno" command
+# aba sno will overwrite the cluster.conf file, but the other will not.
+
+test-cmd -m "Checking cluster operators" "aba --dir sno cmd"
+
 # keep it #test-cmd -m "Deleting sno cluster" aba --dir sno delete
 ###test-cmd -m "Stopping sno cluster" "yes|aba --dir sno shutdown"
 #test-cmd -m "If cluster up, stopping cluster" ". <(aba --dir sno shell) && . <(aba --dir sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
+
 test-cmd -m "If cluster up, stopping cluster" "                                                      yes|aba --dir sno shutdown --wait"
 
 #test-cmd "aba reset --force"
