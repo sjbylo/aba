@@ -1,9 +1,11 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250429155411
+ABA_VERSION=20250429185009
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
+
+arch_sys=$(uname -m)
 
 uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
@@ -184,7 +186,7 @@ do
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		ver=$2
-		###url="https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$chan/release.txt"
+		###url="https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt"
 		[ "$ver" = "latest" -o "$ver" = "l" ] && ver=$(fetch_latest_version $chan)
 		[ "$ver" = "previous" -o "$ver" = "p" ] && ver=$(fetch_previous_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
@@ -522,7 +524,7 @@ if [ ! -f .bundle ]; then
 	# Fresh GitHub clone of Aba repo detected!
 
 	echo -n "Checking Internet connectivity ..."
-	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt); then
+	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
 		echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again." >&2
@@ -559,7 +561,7 @@ if [ ! -f .bundle ]; then
 	##############################################################################################################################
 	# Fetch release.txt
 
-	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$ocp_channel/release.txt); then
+	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Failed to access https://mirror.openshift.com" >&2
 
@@ -601,7 +603,7 @@ if [ ! -f .bundle ]; then
 		do
 			# Exit loop if release version exists
 			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-				if curl -f --connect-timeout 10 --retry 2 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
+				if curl -f --connect-timeout 10 --retry 2 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 					break
 				else
 					echo_red "Error: Failed to find release: $target_ver" >&2

@@ -2,6 +2,8 @@ ifndef DEBUG_ABA
 .SILENT:
 endif
 
+arch   := $(strip $(shell uname -m))
+
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 debug    ?= 		# Set debug=1 for some commands will: set -x
@@ -74,7 +76,7 @@ mirror.conf: .init ## Set up the mirror.conf file.
 	@echo Using `pwd`/mirror.conf file 
 
 vmware.conf: .init ## Use VMW vCenter or ESXi to create cluster.
-	@make -sC ../cli ~/bin/govc
+	@make -sC ../cli govc
 	@make -sC .. vmw
 	@#test -f ../vmware.conf &&                          ln -fs ../vmware.conf || true
 	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo vmware.conf initialized || true
@@ -112,8 +114,8 @@ agent-config.yaml: .init             cluster.conf mirror.conf  ## Create the age
 	@touch .bm-message
 
 # The following "auto" targets are meant just for the full end-to-end automation, to build a cluster
-iso: iso-agent-based/agent.x86_64.iso ## Build the agent-based iso file.
-iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note that install-config.yaml can itself be dependent on vmware.conf params
+iso: iso-agent-based/agent.$(arch).iso ## Build the agent-based iso file.
+iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml   # Note that install-config.yaml can itself be dependent on vmware.conf params
 	$(SCRIPTS)/generate-image.sh $(debug)
 
 .bm-nextstep:
@@ -124,7 +126,7 @@ iso-agent-based/agent.x86_64.iso: install-config.yaml agent-config.yaml   # Note
 	@touch .bm-nextstep
 	@exit 0
 
-.autopoweroff: iso-agent-based/agent.x86_64.iso
+.autopoweroff: iso-agent-based/agent.$(arch).iso
 	$(SCRIPTS)/vmw-kill.sh $(debug) || true 
 	@touch .autopoweroff
 

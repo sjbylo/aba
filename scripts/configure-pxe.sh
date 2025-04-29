@@ -30,6 +30,6 @@ $SUDO chcon -R -t httpd_sys_content_t /var/www/html
 
 echo 
 echo "PXE boot artifacts have been made available at:"
-echo "http://<this host ip>/agent.x86_64-vmlinuz"
+echo "http://<this host ip>/agent.$arch_sys-vmlinuz"
 echo
 
