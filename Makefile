@@ -29,6 +29,7 @@ init: aba .init
 ###vmware.conf:
 .PHONY: vmw
 vmw:
+	@make -sC cli govc
 	$(SCRIPTS)/install-vmware.conf.sh
 
 cli:  ## Download and install the CLI binaries into ~/bin
