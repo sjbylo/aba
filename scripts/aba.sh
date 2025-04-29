@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250428181120
+ABA_VERSION=20250429155411
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -397,7 +397,7 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		# If there's another arg and it's an expected cluster type, accept it, otherwise error.
 		if echo "$2" | grep -qE "^sno$|^compact$|^standard$"; then
-			BUILD_COMMAND="$BUILD_COMMAND cluster_type='$2'"
+			BUILD_COMMAND="$BUILD_COMMAND type='$2'"
 			shift 2
 		else
 			echo_red "Error: Missing or incorrect argument (sno|compact|standard) after option [$1]" >&2

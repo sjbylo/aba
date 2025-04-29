@@ -8,7 +8,7 @@ source <(normalize-aba-conf)   # Fetch the domain name
 verify-aba-conf || exit 1
 
 name=standard
-cluster_type=standard
+type=standard
 
 . <(process_args $*)
 #echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: incorrect params [$*]"; exit 1; }
@@ -27,8 +27,8 @@ else
 	make -s clean init
 fi
 
-echo_cyan "Creating '$name/cluster.conf' file for cluster type '$cluster_type'."
-scripts/create-cluster-conf.sh name=$name cluster_type=$cluster_type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip
+echo_cyan "Creating '$name/cluster.conf' file for cluster type '$type'."
+scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip
 
 msg="Install the cluster with 'cd $name; aba'"
 [ "$target" ] && msg="Process until step '$target' with 'cd $name; aba $target'"
