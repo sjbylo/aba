@@ -1,1 +1,1 @@
-make jq python3-jinja2 python3-pyyaml ncurses which diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd
+make jq python3-jinja2 python3-pyyaml ncurses which file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd
