@@ -96,7 +96,7 @@ standard: aba.conf  ## Install a standard 3+3-node OpenShift cluster.  Use 'aba 
 
 .PHONY: cluster
 cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step=<step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
-	$(SCRIPTS)/setup-cluster.sh name=$(name) cluster_type=$(cluster_type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection)
+	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection)
 
 #.PHONY: rsync
 #rsync:  ## Copy (rsync) all required files to internal bastion for testing purposes only.  ip=hostname is required. 
