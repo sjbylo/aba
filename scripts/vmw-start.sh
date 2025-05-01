@@ -3,7 +3,11 @@
 
 source scripts/include_all.sh
 
-[ "$1" ] && set -x
+. <(process_args $*)
+# eval all key value args
+. <(echo $* | tr " " "\n")
+
+[ "$debug" ] && set -x
 
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
@@ -23,9 +27,14 @@ verify-aba-conf || exit 1
 
 cluster_folder=$VC_FOLDER/$CLUSTER_NAME
 
+hosts="$WORKER_NAMES $CP_NAMES"
+[ "$workers" ] && hosts="$WORKER_NAMES"
+[ "$masters" ] && hosts="$CP_NAMES"
+[ ! "$hosts" ] && hosts="$CP_NAMES"
+
 # If at least one VM exists, then show vms.
 if scripts/vmw-exists.sh; then
-	for name in $CP_NAMES $WORKER_NAMES; do
+	for name in $hosts; do
 		[ "$VC" ] && echo $cluster_folder/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
 	done
 
@@ -34,7 +43,7 @@ else
 	exit 1
 fi
 
-for name in $WORKER_NAMES $CP_NAMES ; do
+for name in $hosts ; do
 	govc vm.power -on ${CLUSTER_NAME}-$name || true
 done
 
