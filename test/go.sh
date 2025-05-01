@@ -34,6 +34,14 @@ if [ "$1" ]; then
 	#####git checkout 2fc137962da8c643724b09dca02a8e493c362f3c
 fi
 
+# This is a hack just for testing since standard clusters don't come up sometimes.
+if [ -x scripts/vmw-create.sh ]; then
+	if ! cat scripts/vmw-create.sh | grep -q "WAITING 10 mins BEFORE STARTING WORKERS"; then
+		sed -i '/Create the Vms for the workers/a echo_cyan WAITING 10 mins BEFORE STARTING WORKERS ... && sleep $(expr 60 \* 10)' scripts/vmw-create.sh
+	fi
+fi
+
+
 # Clear the tmux screen buffer
 #[ "$TMUX" ] && s=$(echo $TMUX |cut -d, -f3) && tmux clear-history -t $s
 [ "$TMUX" ] && tmux clear-history 
