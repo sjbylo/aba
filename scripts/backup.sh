@@ -54,7 +54,6 @@ file_list=$(find		\
 	aba/.bundle		\
 	aba/cli			\
 	aba/rpms		\
-	aba/mirror		\
 	aba/others		\
 	aba/scripts		\
 	aba/templates		\
@@ -62,6 +61,7 @@ file_list=$(find		\
 	aba/README.md		\
 	aba/Troubleshooting.md	\
 	aba/test		\
+	aba/mirror		\
 								\
 	! -path "aba/.git*"  					\
 	! -path "aba/cli/.init"  				\
