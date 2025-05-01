@@ -1,3 +1,12 @@
+# Set up hack just for tests
+
+# This is a hack just for testing since standard clusters don't come up sometimes. 
+if [ -x scripts/vmw-create.sh ]; then
+	if ! cat scripts/vmw-create.sh | grep -q "WAITING 10 mins BEFORE STARTING WORKERS"; then
+		sed -i '/Create the Vms for the workers/a echo_cyan WAITING 10 mins BEFORE STARTING WORKERS ... && sleep $(expr 60 \* 10)' scripts/vmw-create.sh
+	fi
+fi
+
 # Code that all scripts need.  Ensure this script does not create any std output.
 
 echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
