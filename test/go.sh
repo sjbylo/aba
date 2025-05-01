@@ -37,7 +37,7 @@ fi
 # This is a hack just for testing since standard clusters don't come up sometimes.
 if [ -x scripts/vmw-create.sh ]; then
 	if ! cat scripts/vmw-create.sh | grep -q "WAITING 10 mins BEFORE STARTING WORKERS"; then
-		sed -i '/Create the Vms for the workers/a echo_cyan WAITING 10 mins BEFORE STARTING WORKERS ... && sleep $(expr 60 \* 10)' scripts/vmw-create.sh
+		sed -i '/Create the Vms for the workers/a [ "$WORKER_NAMES" ] && echo_cyan WAITING 10 mins BEFORE STARTING WORKERS ... && sleep $(expr 60 \\* 5)' scripts/vmw-create.sh
 	fi
 fi
 
