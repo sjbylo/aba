@@ -22,9 +22,19 @@ if [ ! -d $name ]; then
 	ln -fs ../templates/Makefile 
 	make -s init
 else
-	cd $name 
-	rm -f cluster.conf  # Refresh/overwrite the config if creating the cluster dir
-	make -s clean init
+	if [ -s $name/Makefile ]; then
+	       	if grep -q "Cluster Makefile" $name/Makefile; then
+			cd $name 
+			rm -f cluster.conf  # Refresh/overwrite the config if creating the cluster dir
+			make -s clean init
+		else
+			echo_red "Error: Directory $name invalid cluster dir." >&2 && exit 1
+		fi
+	else
+		cd $name
+		ln -fs ../templates/Makefile 
+		make -s init
+	fi
 fi
 
 echo_cyan "Creating '$name/cluster.conf' file for cluster type '$type'."
