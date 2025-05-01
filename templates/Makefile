@@ -139,12 +139,12 @@ upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images
 
 # The following targets are meant for interactive use only
 
-# This target is a duplicate of .autorefresh below, except for the touch command.  'aba refresh' is for interactive use and should always run.
+# This target is a duplicate of .autorefresh below, except for the touch command.  'aba refresh' is for interactive use and will always run.
 .PHONY: refresh
 refresh: vmw agentconf  ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
-	$(SCRIPTS)/vmw-refresh.sh
+	$(SCRIPTS)/vmw-refresh.sh workers=$(workers) masters=$(masters) 
 
-# This target is the same as 'refresh' but should only run once.
+# This target is the same as 'refresh' but should only run once depending on .init .autoupload & vmware.conf
 .autorefresh: .init .autoupload vmware.conf
 	$(SCRIPTS)/vmw-refresh.sh
 	@touch .autorefresh
@@ -174,11 +174,11 @@ rescue: ## If a cluster does not start due to login/CSR issues, rescue the clust
 # $(wait) $(workers) are set in aba.sh 
 .PHONY: stop
 stop: .init vmware.conf                     agent-config.yaml ## Shut down all VMs gracefully. This will stop the cluster. Be warned that clusters don't always start up correctly again! Try using 'aba shutdown' for graceful cluster shutdown.
-	$(SCRIPTS)/vmw-stop.sh $(wait) $(workers) $(debug)
+	$(SCRIPTS)/vmw-stop.sh wait=$(wait) workers=$(workers) masters=$(masters) debug=$(debug)
 
 .PHONY: start
-start: .init vmware.conf                     agent-config.yaml ## Power on all VMs.  Use 'aba startup' to ensure all nodes are uncordoned. 
-	$(SCRIPTS)/vmw-start.sh $(debug) || exit 0
+start: .init vmware.conf                     agent-config.yaml ## Power on all VMs or limit by workers=1 or masters=1.  Use 'aba startup' to ensure all nodes are uncordoned. 
+	$(SCRIPTS)/vmw-start.sh debug=$(debug) workers=$(workers) masters=$(masters) || exit 0
 
 .PHONY: poweroff
 poweroff: .init vmware.conf                     agent-config.yaml ## Power off all VMs immediately.  This will stop the cluster abruptly. 

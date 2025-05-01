@@ -3,6 +3,10 @@
 
 source scripts/include_all.sh
 
+. <(process_args $*)
+# eval all key value args
+. <(echo $* | tr " " "\n")
+
 [ "$1" ] && set -x
 
 ask "To restart the installation, delete, re-create & start the VM(s)" || exit 0
@@ -10,5 +14,11 @@ ask "To restart the installation, delete, re-create & start the VM(s)" || exit 0
 # If "n" to delete, then stop
 scripts/vmw-delete.sh || true
 
-scripts/vmw-create.sh --start --nomac 
+# If only mastwrs should be started (masters=1) then do just that
+#if [ "$masters" ]; then
+#	scripts/vmw-create.sh --nomac
+#	scripts/vmw-start.sh masters=1  # We only start masters, assuming the worker will be started by later by some other process
+#else
+	scripts/vmw-create.sh --start --nomac
+#fi
 

@@ -5,24 +5,9 @@
 
 source scripts/include_all.sh
 
-###scripts/install-govc.sh
-
-while [ "$1" ]
-do
-	if [ "$1" = "--wait" ]; then
-		wait=1
-		shift
-	elif [ "$1" = "--workers" ]; then
-		workers_only=1
-		shift
-	elif [ "$1" = "--debug" ]; then
-		set -x
-		shift
-	else
-		echo "$(basename $0): Warning: ignoring unknown option $1" >&2
-		shift
-	fi
-done
+. <(process_args $*)
+# eval all key value args
+. <(echo $* | tr " " "\n")
 
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
@@ -43,7 +28,8 @@ verify-aba-conf || exit 1
 cluster_folder=$VC_FOLDER/$CLUSTER_NAME
 
 hosts="$WORKER_NAMES $CP_NAMES"
-[ "$workers_only" ] && hosts="$WORKER_NAMES"
+[ "$workers" ] && hosts="$WORKER_NAMES"
+[ "$masters" ] && hosts="$CP_NAMES"
 [ ! "$hosts" ] && hosts="$CP_NAMES"
 
 if [ "$ask" ]; then

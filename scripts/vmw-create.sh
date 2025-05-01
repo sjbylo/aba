@@ -131,6 +131,9 @@ for name in $CP_NAMES ; do
 	let i=$i+1
 done
 
+echo_cyan WAITING 10 mins BEFORE STARTING WORKERS ...
+sleep $(expr 60 \* 10)
+
 i=1
 for name in $WORKER_NAMES ; do
 	a=`expr $i-1`

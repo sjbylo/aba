@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250430075548
+ABA_VERSION=20250501174429
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -443,9 +443,12 @@ do
 		BUILD_COMMAND="$BUILD_COMMAND force=1"  # FIXME: Should only allow force=1 after the appropriate target
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
 		shift
-		BUILD_COMMAND="$BUILD_COMMAND wait=--wait"  #FIXME: Should only allow this after the appropriate target
+		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target
 	elif [ "$1" = "--workers" ]; then
-		BUILD_COMMAND="$BUILD_COMMAND workers=--workers"  #FIXME: Should only allow this after the appropriate target
+		BUILD_COMMAND="$BUILD_COMMAND workers=1"
+		shift
+	elif [ "$1" = "--masters" ]; then
+		BUILD_COMMAND="$BUILD_COMMAND masters=1"
 		shift
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
