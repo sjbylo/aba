@@ -84,6 +84,8 @@ mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.c
 # for upgrade tests - reduce the version so it can be upgraded later (see below)
 mylog Fetching ocp_version
 source <(normalize-aba-conf)
+echo ocp_channel=$ocp_channel
+echo ocp_version=$ocp_version
 ocp_version_desired=$ocp_version  # Get the version from aba.conf since that will be the "latest & previous" version.
 mylog ocp_version_desired is $ocp_version_desired
 ocp_version_major=$(echo $ocp_version_desired | cut -d\. -f1-2)
@@ -91,12 +93,25 @@ ocp_version_point=$(echo $ocp_version_desired | cut -d\. -f3)
 mylog ocp_version_point is $ocp_version_point
 ## Reduce the version to create 'bundle' (below) with by about half
 #ocp_version_older=$ocp_version_major.$(expr $ocp_version_point / 2 + 1)
-ocp_version_older=$ocp_version_major.$(expr $ocp_version_point / 2 )
+ocp_version_older_point=$(expr $ocp_version_point / 2 )
+ocp_version_older=$ocp_version_major.$ocp_version_older_point
+# Ensure the version is available!
+###make -C cli oc-mirror
+ver_list=$(~/bin/oc-mirror list releases --channel=$ocp_channel-$ocp_version_major)
+i=0
+until echo "$ver_list" | grep "^$ocp_version_older$"
+do
+	let ocp_version_older_point=$ocp_version_older_point+1
+	ocp_version_older=$ocp_version_major.$ocp_version_older_point
+	let i=$i+1
+	[ $i -gt 50 ] && echo "Can't find ocp_version_older_point to use ($ocp_version_older)!" && exit 1
+done
 mylog ocp_version_older is $ocp_version_older
-sed -i "s/^ocp_version=[^ \t]*/ocp_version=$ocp_version_older /g" aba.conf  # add the older version
+
+test-cmd -m "Setting version to install in aba.conf" aba -v $ocp_version_older
+###sed -i "s/^ocp_version=[^ \t]*/ocp_version=$ocp_version_older /g" aba.conf  # add the older version
 mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
 # for upgrade
-
 
 mylog "ask set to $(grep -o '^ask=[^ ]*' aba.conf) in $PWD/aba.conf"
 
@@ -143,10 +158,6 @@ sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
 test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_sets=.*/op_sets=abatest /g' ./mirror/mirror.conf"
 echo kiali-ossm > templates/operator-set-abatest 
 # kiali is installed in later tests below
-
-# Uncomment this line
-# NOT NEEDED.  This is a local reg on host $int_bastion_hostname!
-#### test-cmd -m "Setting for local mirror" "sed -i 's/.*reg_ssh_key=/reg_ssh_key=/g' ./mirror/mirror.conf"
 
 # This is needed for below VM reset!
 aba --dir cli ~/bin/govc
