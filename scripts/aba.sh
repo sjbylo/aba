@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250501174429
+ABA_VERSION=20250503104216
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -15,6 +15,14 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 # Check we have sudo or root access 
 [ "$SUDO" ] && [ "$(sudo id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
 
+# If aba is called with relative path, e.g. aba/aba or ../aba then why not try cd to the top-level dir?
+# A relative path will contain a '/'
+if echo "$0" | grep -qe /; then
+	d=$(dirname $0)
+	# If we are not at the top level repo dir then change back again
+	[ -s $d/Makefile ] && grep -q "Top level Makefile" $d/Makefile && cd $d
+fi
+
 # Having $1 = --dir is an exception only, $1 can point to the top-level repo dir only
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
@@ -24,14 +32,6 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ "$DEBUG_ABA" ] && echo "$0: change dir to: \"$2\"" >&2
 	cd "$2"
 	shift 2
-fi
-
-# If aba is called with relative path, e.g. aba/aba or ../aba then why not try cd to the top-level dir?
-# A relative path will contain a '/'
-if echo "$0" | grep -qe /; then
-	d=$(dirname $0)
-	# If we are not at the top level repo dir then change back again
-	[ -s $d/Makefile ] && grep -q "Top level Makefile" $d/Makefile && cd $d
 fi
 
 # Check the repo location
@@ -396,17 +396,22 @@ do
 		fi
 		shift 2
 	elif [ "$1" = "--int-connection" -o "$1" = "-I" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		# If -I without any arg, then undefine int_connection 
+		#[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^(proxy|p|direct|d)$'; then
 			val=$2
 			[ "$2" = "p" ] && val=proxy 
 			[ "$2" = "d" ] && val=direct
+			###replace-value-conf cluster.conf int_connection $2
 			BUILD_COMMAND="$BUILD_COMMAND int_connection='$val'"  # FIXME: This is confusing and prone to error
+			shift
 		else
-			echo_red "Argument invalid [$2] after $1.  Should be one of: proxy|p|direct|d" >&2
-			exit 1
+			#echo_red "Argument invalid [$2] after $1.  Should be one of: proxy|p|direct|d" >&2
+			BUILD_COMMAND="$BUILD_COMMAND int_connection="  # FIXME: This is confusing and prone to error
+			shift
+			#exit 1
 		fi
-		shift 2
+		shift 
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
 		BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
