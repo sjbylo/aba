@@ -89,14 +89,13 @@ test-cmd() {
 	if [ "$msg" ]; then
 		log-test -t "$mark" "$msg" "($cmd)" "[$host:$PWD]"
 	else
-		log-test -t "$mark Running ($cmd)" "[$host:$PWD]"
+		log-test -t "$mark" "Running: $cmd" "[$host:$PWD]"
 	fi
-	##draw-line
 
 	# Loop to repeat the command if user requests
 	while true
 	do
-		cd $PWD  # Just in case the dir is re-created
+		cd $PWD  # Just in case the dir is re-created during testing
 
 		local sleep_time=5     # Initial sleep time
 		local i=1
@@ -126,10 +125,10 @@ test-cmd() {
 
 			[ $ret -eq 0 ] && return 0 # Command successful 
 
-			echo Return value = $ret
+			log-test "Non-zero return value: $ret"
 
-			echo_cyan "Attempt ($i/$tot_cnt) failed with error $ret for command \"$cmd\""
-			[ $i -ge $tot_cnt ] && echo "Giving up with command \"$cmd\"!" && break
+			echo_cyan "Attempt ($i/$tot_cnt) failed with error $ret for command: \"$cmd\""
+			[ $i -ge $tot_cnt ] && echo "Giving up on command!" && break
 
 			
 			# For first failure, send all logs 
@@ -137,7 +136,6 @@ test-cmd() {
 				( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh -i "Command failed: $cmd" || true
 			else
 				( echo -e "test.log:\n"; tail -1 test/test.log; echo -e "\noutput.log:\n"; tail -10 test/output.log ) | notify.sh -i "Command failed: $cmd" || true
-				#( notify.sh "Failed cmd: $cmd" || true )
 			fi
 
 			let i=$i+1
@@ -149,7 +147,7 @@ test-cmd() {
 			#trap cleanup_tests SIGINT
 			sleep_time=`expr $sleep_time + $backoff \* 8`
 
-			log-test -t "Attempting command again ($i/$tot_cnt) - ($cmd)"
+			log-test -t "Attempting command again ($i/$tot_cnt): \"$cmd\""
 		done
 
 		[ "$reset_xtrace" ] && set -x
@@ -157,31 +155,33 @@ test-cmd() {
 		# FIXME: Added above now (as we want to return the actual error)
 		#[ "$ignore_result" ] && echo "Ignoring result [$ret] and returning 0" && return 0  # We want to return 0 to ignore any errors (-i)
 
-		sub_pid=
+		sub_pid=  #FIXME
 		if [[ $ret -eq 130 ]]; then
 			sub_pid=
 		fi
 			
 		( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh -i "Aborting cmd: $cmd" || true
 
-		#echo $(date "+%b %e %H:%M:%S") COMMAND FAILED WITH RET=$ret >> test/test.log
-		log-test COMMAND FAILED WITH RET=$ret
-		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N) OR ENTER NEW COMMAND OR Ctrl-C? (Y/n/<cmd>): "
+		log-test COMMAND FAILED WITH RETURN VALUE: $ret
+		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N/S) OR ENTER NEW COMMAND OR Ctrl-C? (Y/n/s/<cmd>): "
 		read ans
 
-		if [ "$ans" = "n" -o "$ans" = "N" ]; then
-			echo Skipping this command ...
+		if [ "$ans" = "n" -o "$ans" = "N" -o "$ans" = "s" -o "$ans" = "S" ]; then
+			#echo Skipping this command ... | tee -a 
+			log-test "Skipping command ..."
 
 			return 0  # If return non-zero then this shell is lost!
 		elif [ "$ans" = "Y" -o "$ans" = "y" -o ! "$ans" ]; then
-			echo Trying same command again ...
+			#echo Trying same command again ...
+			log-test "Trying command again ..."
 		else
 			cmd="$ans"
-			echo "Running new command: $cmd"
+			#echo "Running new command: $cmd"
+			log-test "Running new command: $cmd"
 		fi
 	done
 
-	# Remember we don't to process this signal after command execution.
+	# Remember we don't want to process this signal after command execution.
 	trap - SIGINT
 
 	echo Returning val $ret
