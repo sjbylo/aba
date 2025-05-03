@@ -522,11 +522,27 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding master RAM" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/$cluster_name/cluster.conf"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Adding worker RAM" "sed -i 's/^worker_mem=.*/worker_mem=16/g' $subdir/aba/$cluster_name/cluster.conf"
 
-	# This will run make in $subdir/aba/$cluster_name
-	if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name"; then
+
+	# This will run "make refresh" in $subdir/aba/$cluster_name which will do all and trigger an install
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name refesh"
+
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Monitor bootstrap for cluster '$cluster_name'" "aba --dir $subdir/aba/$cluster_name bootstrap"
+
+	test-cmd -m  "Wait 2 mins" sleep 120
+
+####	mins=0; until oc get node | grep worker | wc -l | grep ^3$; do sleep 60; let mins=$mins+1; [ $mins -ge 15 ] && return 1; done
+
+	# This will check the workers come online, if not restart them!
+	if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Wait 20 mins for workers to come online" "cd $subdir/aba/$cluster_name; . <(aba shell); mins=0; until oc get node | grep worker | wc -l | grep ^3$; do sleep 60; let mins=\$mins+1; [ \$mins -ge 20 ] && return 1; done"; then
 		test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes && aba ls"
 		test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Restarting all worker nodes of failed cluster" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
 	fi
+
+	# This will run make in $subdir/aba/$cluster_name
+	##if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Creating '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name"; then
+	##	test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes && aba ls"
+	##	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Restarting all worker nodes of failed cluster" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
+	##fi
 
 	if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -r 2 1 -m  "Checking '$cluster_name' cluster with 'mon'" "aba --dir $subdir/aba/$cluster_name mon"; then
 		mylog "CLUSTER INSTALL FAILED: REBOOTING ALL NODES ..."
