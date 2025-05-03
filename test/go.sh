@@ -35,9 +35,11 @@ if [ "$1" ]; then
 fi
 
 # This is a hack just for testing since standard clusters don't come up sometimes.
+# Insert a wait time after creating the masters and beofer creating any workers (if needed)
 if [ -x scripts/vmw-create.sh ]; then
-	if ! cat scripts/vmw-create.sh | grep -q "WAITING 10 mins BEFORE STARTING WORKERS"; then
-		sed -i '/Create the Vms for the workers/a [ "$WORKER_NAMES" ] && echo_cyan WAITING 10 mins BEFORE STARTING WORKERS ... && sleep $(expr 60 \\* 5)' scripts/vmw-create.sh
+	m=2
+	if ! cat scripts/vmw-create.sh | grep -q "WAITING $m MINS BEFORE STARTING WORKERS"; then
+		sed -i '/Create the Vms for the workers/a [ "$WORKER_NAMES" ] && echo_cyan WAITING $m MINS BEFORE STARTING WORKERS ... && sleep $(expr 60 \\* $m)' scripts/vmw-create.sh
 	fi
 fi
 
