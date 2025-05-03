@@ -205,6 +205,12 @@ mon:  ## Monitor the agent-based installation of OpenShift.
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 
+.PHONY: bootstrap
+# monitor for bootstrap complete 
+bootstrap:  ## Monitor the agent-based bootstrap installation of OpenShift.
+	$(SCRIPTS)/monitor-bootstrap.sh $(debug)
+	#@touch .install-complete
+
 .PHONY: info
 info:  ## Show cluster access credentials 
 	$(SCRIPTS)/cluster-info.sh $(debug)
