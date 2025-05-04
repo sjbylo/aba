@@ -524,7 +524,7 @@ build_and_test_cluster() {
 
 
 	# This will run "make refresh" in $subdir/aba/$cluster_name which will do all and trigger an install
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name refresh"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name .autorefresh"
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Monitor bootstrap for cluster '$cluster_name'" "aba --dir $subdir/aba/$cluster_name bootstrap"
 
