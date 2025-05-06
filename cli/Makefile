@@ -41,8 +41,9 @@ ifneq ($(arch),x86_64)
 	arch_short := arm64
 endif
 
-butane_arch := $(arch)
+amd_arch := $(arch)
 ifeq ($(arch),x86_64)
+	amd_arch := amd64
 	butane_arch := amd64
 endif
 
@@ -149,8 +150,11 @@ openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/b
 	@touch .$(ocp_version)-openshift-install-$(os)-installed 
 
 openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install tarball
-	@echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
+	#@echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
+	#curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
+	@echo Downloading       https://mirror.openshift.com/pub/openshift-v4/multi/clients/ocp/$(ocp_version)/$(amd_arch)/openshift-install-$(os)-$(ocp_version).tar.gz
+	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/multi/clients/ocp/$(ocp_version)/$(amd_arch)/openshift-install-$(os)-$(ocp_version).tar.gz
+	                        #https://mirror.openshift.com/pub/openshift-v4/multi/clients/ocp/stable/amd64/openshift-install-linux-4.18.10.tar.goz
 
 
 ########################################
