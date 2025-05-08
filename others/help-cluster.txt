@@ -1,7 +1,7 @@
 Install OpenShift
 
-Usage:
-  aba cluster --name <name> [options]
+Usage (from top level directory):
+  aba cluster --name <name> [options]                                # Create a cluster directory
 
 Examples:
   aba cluster --name mycluster --type standard                       # Create the cluster dir and install OpenShift
@@ -11,13 +11,24 @@ Examples:
 
 Options:
 
-  aba cluster --name string              # Create a cluster
-    -n, --name string                    # The name of the cluster to create
-    -t, --type <sno|compact|standard>    # Set type of cluster
-        --step <step>                    # Process up to this step or command <cluster.conf|agentconf|iso|mon>
-                                         # See steps (commands) with "aba --dir mycluster help"
-        --starting-ip <ip>               # IP addr for the first cluster node
-        --api-vip <ip>                   # IP addr for cluster API
-        --ingress-vip <ip>               # IP addr for application ingress 
-     -I, --int-connection <proxy|direct> # Install from the public mirror over the Internet
-  aba --cmd "oc command"                 # Run this oc command on the current cluster
+  aba cluster                             # Create a cluster
+    -n, --name string                     # The name of the cluster to create
+    -t, --type <sno|compact|standard>     # Set type of cluster
+    -s, --step <step>                     # Process up to this step or target <cluster.conf|agentconf|iso|mon>
+                                          # See steps (targets) with "aba --dir mycluster help"
+    -i, --starting-ip <ip>                # IP addr for the first cluster node
+        --api-vip <ip>                    # IP addr for cluster API
+        --ingress-vip <ip>                # IP addr for application ingress 
+    -I, --int-connection [<proxy|direct>] # Install from the public reg. or set to empty to use mirror
+        --mcpu <count>                    # Set the master cpu count in vCPU (only for virt target)
+        --mmem <count>                    # Set the master memory in GB (only for virt target)
+        --wcpu <count>                    # Set the worker cpu count in vCPU (only for virt target)
+        --wmem <count>                    # Set the worker memory in GB (only for virt target)
+        --data-disk [<size>]              # Size of ectra data disk in GB or empty for no data disk
+
+Usage (from a cluster directory):
+  aba --cmd "oc command"                  # Run this 'oc command' on the current cluster
+  aba ls                                  # List all cluster node VMs (for VMware only)
+  aba shutdown                            # Gracefully shut down the cluster
+  aba startup                             # Gracefully start up the cluster
+  aba help                                # See help for all targets

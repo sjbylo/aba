@@ -69,7 +69,8 @@ if $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet
 
 	echo "Certificate expiration date of cluster: $cluster_id: $cluster_exp_date"
 	echo_yellow "The cluster certificate will expire in $days_diff days."
-	echo "Make sure the cluster is started beforehand to allow the CA certificate to renew automatically."
+	#echo "Make sure the cluster is started beforehand to allow the CA certificate to renew automatically."
+	echo "Start the cluster beforehand to ensure the cluster's CA certificate renews automatically."
 
 else
 	echo_red "Unable to discover cluster's certificate expiration date." >&2
