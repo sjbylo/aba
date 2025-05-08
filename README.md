@@ -652,6 +652,8 @@ export OC_MIRROR_CACHE=/path/to/big-drive
 
 - By default, aba sets the cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by reg_root in mirror/mirror.conf. You can override these locations by exporting the environment variables, as shown above.
 
+- You can list the dependent images of operators using this script: scripts/listopdeps.sh 4.18 odf-operator
+
 - If you want to install workers with different CPU/MEM sizes (which can be used to install Operators, e.g. Ceph, ODF, ACM etc, on infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed (if using VMs).
 
 - Govc is used to create and manage VMs on ESXi or vSphere.
