@@ -85,19 +85,19 @@ load: ## Load the saved images into a registry on the internal bastion (as defin
 
 .PHONY: sno
 sno: aba.conf  ## Install a Single Node OpenShift cluster.  Use 'aba sno --step iso' to create the iso.
-	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem)
+	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
 
 .PHONY: compact
 compact: aba.conf  ## Install a standard 3-node OpenShift cluster.  Use 'aba compact --step iso' to create the iso.
-	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem)
+	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
 
 .PHONY: standard
 standard: aba.conf  ## Install a standard 3+3-node OpenShift cluster.  Use 'aba standard --step iso' to create the iso.
-	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem)
+	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
 
 .PHONY: cluster
 cluster:  aba.conf  ## Initialize install dir & install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step=<step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
-	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem)
+	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
 
 #.PHONY: rsync
 #rsync:  ## Copy (rsync) all required files to internal bastion for testing purposes only.  ip=hostname is required. 

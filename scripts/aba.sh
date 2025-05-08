@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250503104216
+ABA_VERSION=20250508184032
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -17,11 +17,11 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 # If aba is called with relative path, e.g. aba/aba or ../aba then why not try cd to the top-level dir?
 # A relative path will contain a '/'
-if echo "$0" | grep -qe /; then
-	d=$(dirname $0)
-	# If we are not at the top level repo dir then change back again
-	[ -s $d/Makefile ] && grep -q "Top level Makefile" $d/Makefile && cd $d
-fi
+###if echo "$0" | grep -qe /; then
+###	d=$(dirname $0)
+###	# If we are not at the top level repo dir then change back again
+###	[ -s $d/Makefile ] && grep -q "Top level Makefile" $d/Makefile && cd $d
+###fi
 
 # Having $1 = --dir is an exception only, $1 can point to the top-level repo dir only
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
@@ -174,7 +174,7 @@ do
 		fi
 		shift
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		shift 
 		chan=$(echo $1 | grep -E -o '^(stable|s|fast|f|eus|e|candidate|c)$')
 		[ "$chan" = "s" ] && chan=stable
@@ -184,13 +184,13 @@ do
 		replace-value-conf $ABA_PATH/aba.conf ocp_channel $chan
 		shift 
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		ver=$2
 		###url="https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt"
 		[ "$ver" = "latest" -o "$ver" = "l" ] && ver=$(fetch_latest_version $chan)
 		[ "$ver" = "previous" -o "$ver" = "p" ] && ver=$(fetch_previous_version $chan)
 		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
-		[ ! "$ver" ] && echo_red "Missing or wrong value after $1 option" >&2 && exit 1
+		[ ! "$ver" ] && echo_red "Missing or wrong value after option $1" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf ocp_version $ver
 		target_ver=$ver
 
@@ -202,37 +202,37 @@ do
 		shift 2
 
 	elif [ "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
 		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_host "$2"
 		shift 2
 	elif [ "$1" = "--reg-ssh-key" -o "$1" = "-k" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
 		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_key "$2"
 		shift 2
 	elif [ "$1" = "--reg-ssh-user" -o "$1" = "-U" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
 		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_user "$2"
 		shift 2
 	elif [ "$1" = "--reg-root" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
 		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_root "$2"
 		shift 2
 	elif [ "$1" = "--reg-path" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
 		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_path "$2"
 		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		[ ! "$domain" ] && echo_red "Error: Domain format incorrect [$2]" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf domain "$domain"
@@ -273,24 +273,59 @@ do
 		fi
 		replace-value-conf $ABA_PATH/aba.conf next_hop_address "$def_route_ip"
 		shift 
-	elif [ "$1" = "--api-vip" -o "$1" = "-XXX" ]; then # FIXME: opt?
-		# If arg missing remove from aba.conf
-		shift 
+	elif [ "$1" = "--api-vip" -o "$1" = "-XXXXXX" ]; then # FIXME: opt?
+		# If arg ip addr replace value in cluster.conf
+		# If arg missing remove from cluster.conf
 		api_vip=
-		if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
-			api_vip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+		# If arg is available and not an opt
+		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+			# If arg is an ip addr
+			if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+				api_vip=$2
+			else
+				echo_red "Argument invalid [$2] after option: $1" >&2
+				exit 1
+			fi
+			shift
+		else
+			# Do nothing, remove value in cluster.conf
+			:
 		fi
-		BUILD_COMMAND="$BUILD_COMMAND api_vip='$api_vip'"
-		shift 
-	elif [ "$1" = "--ingress-vip" -o "$1" = "-YYY" ]; then # FIXME: opt?
-		# If arg missing remove from aba.conf
-		shift 
+		# If conf file is available, edit the value
+		if [ -f cluster.conf ]; then
+			echo replace-value-conf cluster.conf api_vip "$api_vip"
+			replace-value-conf cluster.conf api_vip "$api_vip"
+			echo done $*
+		else
+			BUILD_COMMAND="$BUILD_COMMAND api_vip=$api_vip"
+		fi
+		shift
+	elif [ "$1" = "--ingress-vip" -o "$1" = "-YYYYY" ]; then # FIXME: opt?
+		# If arg ip addr replace value in cluster.conf
+		# If arg missing remove from cluster.conf
 		ingress_vip=
-		if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
-			ingress_vip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+		# If arg is available and not an opt
+		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+			# If arg is an ip addr
+			if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+				ingress_vip=$2
+			else
+				echo_red "Argument invalid [$2] after option: $1" >&2
+				exit 1
+			fi
+			shift
+		else
+			# Do nothing, remove value in cluster.conf
+			:
 		fi
-		BUILD_COMMAND="$BUILD_COMMAND ingress_vip='$ingress_vip'"
-		shift 
+		# If conf file is available, edit the value
+		if [ -f cluster.conf ]; then
+			replace-value-conf cluster.conf ingress_vip "$ingress_vip"
+			echo done $*
+		else
+			BUILD_COMMAND="$BUILD_COMMAND ingress_vip=$ingress_vip"
+		fi
+		shift
 	elif [ "$1" = "--ports" -o "$1" = "-PP" ]; then #FIXME: opt name?
 		# If arg missing remove from aba.conf
 		# Check arg after --ports, if "empty" then remove value from aba.conf, otherwise add valid ip addr
@@ -304,7 +339,7 @@ do
 		BUILD_COMMAND="$BUILD_COMMAND ports='$ports_vals'"
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf platform "$2"
 		shift 2
 	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
@@ -344,12 +379,12 @@ do
 			replace-value-conf $ABA_PATH/aba.conf ops $ops_list
 		fi
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		editor="$2"
 		replace-value-conf $ABA_PATH/aba.conf editor $editor
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
 			replace-value-conf $ABA_PATH/aba.conf machine_network "$2"
 		else
@@ -358,76 +393,142 @@ do
 		fi
 		shift 2
 	elif [ "$1" = "--pull-secret" -o "$1" = "-S" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf pull_secret_file "$2"
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		[ -s $1 ] && cp "$2" vmware.conf
 		shift 2
 	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
 		replace-value-conf $ABA_PATH/aba.conf ask true
 		shift 
-	elif [ "$1" = "--noask" -o "$1" = "-A" -o "$1" = "-y" ]; then
+	elif [ "$1" = "--noask" -o "$1" = "-A" -o "$1" = "-y" ]; then  # FIXME: make -y work only for a single command execution (not write into file)
 		replace-value-conf $ABA_PATH/aba.conf ask false 
 		shift 
 	elif [ "$1" = "--mcpu" -o "$1" = "-qqq" ]; then  # FIXME opt.
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			BUILD_COMMAND="$BUILD_COMMAND master_cpu_count='$2'"
+			if [ -f cluster.conf ]; then
+				replace-value-conf cluster.conf master_cpu $2
+			else
+				BUILD_COMMAND="$BUILD_COMMAND master_cpu_count=$2"
+			fi
 		else
-			echo_red "Argument invalid [$2] after $1" >&2
+			echo_red "Argument invalid [$2] after option $1" >&2
 		fi
 		shift 2
-	elif [ "$1" = "--mmem" -o "$1" = "-QQQ" ]; then  # FIXME opt.
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+	elif [ "$1" = "--mmem" -o "$1" = "-QQQQ" ]; then  # FIXME opt.
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			BUILD_COMMAND="$BUILD_COMMAND master_mem='$2'"
+			if [ -f cluster.conf ]; then
+				replace-value-conf cluster.conf master_mem $2
+			else
+				BUILD_COMMAND="$BUILD_COMMAND master_mem=$2"
+			fi
 		else
-			echo_red "Argument invalid [$2] after $1" >&2
+			echo_red "Argument invalid [$2] after option $1" >&2
+		fi
+		shift 2
+	elif [ "$1" = "--wcpu" -o "$1" = "-qqq" ]; then  # FIXME opt.
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		if echo "$2" | grep -q -E '^[0-9]+$'; then
+			if [ -f cluster.conf ]; then
+				replace-value-conf cluster.conf worker_cpu $2
+			else
+				BUILD_COMMAND="$BUILD_COMMAND worker_cpu_count=$2"
+			fi
+		else
+			echo_red "Argument invalid [$2] after option $1" >&2
+		fi
+		shift 2
+	elif [ "$1" = "--wmem" -o "$1" = "-QQQQ" ]; then  # FIXME opt.
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		if echo "$2" | grep -q -E '^[0-9]+$'; then
+			if [ -f cluster.conf ]; then
+				replace-value-conf cluster.conf worker_mem $2
+			else
+				BUILD_COMMAND="$BUILD_COMMAND worker_mem=$2"
+			fi
+		else
+			echo_red "Argument invalid [$2] after option $1" >&2
 		fi
 		shift 2
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'"  # FIXME: This is confusing and prone to error
 		else
-			echo_red "Argument invalid [$2] after $1" >&2
+			echo_red "Argument invalid [$2] after option $1" >&2
+		fi
+		shift 2
+	elif [ "$1" = "--data-disk" -o "$1" = "-dd" ]; then
+		if echo "$2" | grep -q -E '^[0-9]+$'; then
+			if [ -f cluster.conf ]; then
+				replace-value-conf cluster.conf data_disk $2
+			else
+				BUILD_COMMAND="$BUILD_COMMAND data_disk=$2"
+			fi
+		else
+			echo_red "Argument invalid [$2] after option $1" >&2
 		fi
 		shift 2
 	elif [ "$1" = "--int-connection" -o "$1" = "-I" ]; then
-		# If -I without any arg, then undefine int_connection 
-		#[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
-		if echo "$2" | grep -q -E '^(proxy|p|direct|d)$'; then
-			val=$2
-			[ "$2" = "p" ] && val=proxy 
-			[ "$2" = "d" ] && val=direct
-			###replace-value-conf cluster.conf int_connection $2
-			BUILD_COMMAND="$BUILD_COMMAND int_connection='$val'"  # FIXME: This is confusing and prone to error
+		# If arg ip addr replace value in cluster.conf
+		# If arg missing remove from cluster.conf
+		int_connection=
+		# If arg is available and not an opt
+		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+			# If arg is an ip addr
+			if echo "$2" | grep -q -E '^(proxy|p|direct|d)$'; then
+				int_connection=$2
+				[ "$2" = "p" ] && int_connection=proxy
+				[ "$2" = "d" ] && int_connection=direct
+			else
+				echo_red "Argument invalid [$int_connection] after option: $1" >&2
+				exit 1
+			fi
 			shift
 		else
-			#echo_red "Argument invalid [$2] after $1.  Should be one of: proxy|p|direct|d" >&2
-			BUILD_COMMAND="$BUILD_COMMAND int_connection="  # FIXME: This is confusing and prone to error
-			shift
-			#exit 1
+			# Do nothing, remove value in cluster.conf
+			:
 		fi
-		shift 
+		# If conf file is available, edit the value
+		if [ -f cluster.conf ]; then
+			replace-value-conf cluster.conf int_connection "$int_connection"
+			echo done $*
+		else
+			BUILD_COMMAND="$BUILD_COMMAND int_connection=$int_connection"
+		fi
+		shift
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
-		BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		if [ "$cur_target" = "cluster" ]; then
+			BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
+		else
+			echo_red "Can only use option $1 after target 'cluster'.  See aba cluster -h" >&2
+
+			exit 1
+		fi
+
 		shift 2
 	elif [ "$1" = "--type" -o "$1" = "-t" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# If there's another arg and it's an expected cluster type, accept it, otherwise error.
 		if echo "$2" | grep -qE "^sno$|^compact$|^standard$"; then
-			BUILD_COMMAND="$BUILD_COMMAND type='$2'"
-			shift 2
+			if [ "$cur_target" = "cluster" ]; then
+				BUILD_COMMAND="$BUILD_COMMAND type='$2'"
+				shift 2
+			else
+				echo_red "Can only use option $1 after target 'cluster'.  See aba cluster -h" >&2
+				exit 1
+			fi
 		else
-			echo_red "Error: Missing or incorrect argument (sno|compact|standard) after option [$1]" >&2
+			echo_red "Error: Missing or incorrect argument (sno|compact|standard) after option $1" >&2
 			exit 1
 		fi
 	elif [ "$1" = "--step" -o "$1" = "-s" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# If there's another arg and it's NOT an option (^-) then accept it, otherwise error
 		BUILD_COMMAND="$BUILD_COMMAND target='$2'"  # FIXME: Also confusing, similar to --name
 		shift 2
@@ -475,7 +576,7 @@ do
 		fi
 	else
 		if echo "$1" | grep -q "^-"; then
-			echo_red "$(basename $0): Error: no such option [$1]" >&2
+			echo_red "$(basename $0): Error: no such option $1" >&2
 			exit 1
 		else
 			#if [ "$1" = "cluster" ]; then

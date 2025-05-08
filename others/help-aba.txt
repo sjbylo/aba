@@ -5,42 +5,43 @@ Install & manage air-gapped OpenShift.
   installer there is no need to configure a load balancer, a bootstrap node or require DHCP.
 
 Main commands: 
-  aba                                   # Interactive mode.  Let Aba lead you through the process.
-  aba mirror                            # Install Quay (or connect to existing) mirror registry. 
-  aba sync                              # Copy images from the Internet into the mirror registry (m2m).
-  aba save|load                         # Copy images from the Internet to disk (m2d) and/or load to mirror (d2m).
-  aba bundle                            # Create a bundle archive file for use in disconnected environment (m2d).
-  aba cluster                           # Install OpenShift cluster.
+  aba                                   # Interactive mode.  Let Aba lead you through the process
+  aba mirror                            # Install Quay (or connect to existing) mirror registry
+  aba sync                              # Copy images from the Internet into the mirror registry (m2m)
+  aba save|load                         # Copy images from the Internet to disk (m2d) and/or load to mirror (d2m)
+  aba bundle                            # Create a bundle archive file for use in disconnected environment (m2d)
+  aba cluster                           # Install OpenShift cluster
 
 Other commands:
-  aba clean                             # Clean up all generated files.
-  aba download                          # Download all required CLI files.
-  aba cli                               # Download and install the CLI binaries into ~/bin
+  aba clean                             # Clean up all generated files
+  aba download                          # Download all required CLI files only
+  aba cli                               # Download and install the all CLI binaries into ~/bin
+  aba help                              # See help for all targets
 
 Options:
-  -d, --dir <directory>                 # Run Aba in this directory.
-  -h, --help                            # Show this help information.
-  -S, --pull-secret <path/to/file>      # Location of your pull secret (json) file here. 
-  -c, --channel <channel>               # Set the OpenShift installation channel, e.g. fast, stable, eus or candidate.
-  -v, --version <version>               # Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest' or 'l' or 'previous' or 'p'.
-  -p, --platform vmw|bm                 # Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
-  -b, --base-domain <domain>            # Set the OpenShift base domain, e.g. company.com.
-  -M, --machine-network <cidr>          # Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24.
-  -N, --dns <ip address(es)>            # Set one DNS IP address.
-  -R, --default-route <next hop ip>     # Set the default route of the internal network, if any (optional).
-  -T, --ntp <hostname(s) or IPs>        # Set the NTP hostname(s) or IP address(es) (optional but recommended!). 
-  -O, --ops [<list of operators>]       # Add individual operators to your image set config file (for oc-mirror).
-  -P, --op-sets [<operator set list>]   # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted.
-  -e, --editor <editor command>         # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
-  -a, --ask                             # Prompt user when needed.
-  -y, --noask                           # Do not prompt, assume default answers.
-  -o, --out <file|->                    # Bundle archive output destination, e.g. file or stdout (-).
+  -d, --dir <directory>                 # Run Aba in this directory
+  -h, --help                            # Show this help information
+  -S, --pull-secret <path/to/file>      # Location of your pull secret (json) file here
+  -c, --channel <channel>               # Set the OpenShift installation channel, e.g. fast, stable, eus or candidate
+  -v, --version <version>               # Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest' or 'l' or 'previous' or 'p'
+  -p, --platform <vmw|bm>               # Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow
+  -b, --base-domain <domain>            # Set the OpenShift base domain, e.g. company.com
+  -M, --machine-network <cidr>          # Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24
+  -N, --dns <ip address(es)>            # Set one DNS IP address
+  -R, --default-route <next hop ip>     # Set the default route of the internal network, if any (optional)
+  -T, --ntp <hostname(s) or IPs>        # Set the NTP hostname(s) or IP address(es) (optional but recommended!)
+  -O, --ops [<list of operators>]       # Add individual operators to your image set config file (for oc-mirror)
+  -P, --op-sets [<operator set list>]   # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted
+  -e, --editor <editor command>         # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files
+  -a, --ask                             # Prompt user when needed
+  -y, --noask                           # Do not prompt, assume default answers
+  -o, --out <file|->                    # Bundle archive output destination, e.g. file or stdout (-)
   -f, --force                           # Only used for 'aba reset --force'
-  -V, --vmware                          # Apply this VMware config file (for govc).
+  -V, --vmware                          # Apply this VMware config file (for govc)
   -D, --debug                           # Increase more output
       --info                            # Increase output
 
 Usage:
   aba <command> [options]
 
-Use "aba <command> -h|--help" for more information about a given command.
+Use "aba <command> -h|--help" for more information about a given command

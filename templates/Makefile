@@ -84,7 +84,7 @@ vmware.conf: .init ## Use VMW vCenter or ESXi to create cluster.
 	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo vmware.conf initialized || true
 
 cluster.conf: .init mirror.conf  ## Set up the OpenShift cluster.conf file.
-	$(SCRIPTS)/create-cluster-conf.sh name=$(name) type=$(type) int_connection=$(int_connection)
+	$(SCRIPTS)/create-cluster-conf.sh name=$(name) type=$(type) int_connection=$(int_connection) master_mem=$(master_mem) master_cpu_count=$(master_cpu_count) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem)  worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip) ingress_vip=$(ingress_vip)
 
 agentconf: install-config.yaml agent-config.yaml  ## Convenient target to only generate the agent config files, so they can be edited. 
 
