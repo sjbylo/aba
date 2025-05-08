@@ -32,6 +32,8 @@ if ! echo "$version" | grep -q -E "^[0-9]\.[0-9]+$"; then
 	exit 1
 fi
 
+! which podman &>/dev/null && echo "Please install podman!" >&2 && exit 1
+
 if [ "$clean" ]; then
 	existing_id=$(podman ps -a | grep registry.redhat.io/redhat/redhat-operator-index:v$version | awk '{print $1}')
 	[ "$existing_id" ] && podman stop $existing_id >/dev/null && sleep 1 && podman rm $existing_id >/dev/null
