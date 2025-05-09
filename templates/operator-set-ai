@@ -1,0 +1,7 @@
+rhods-operator
+authorino-operator
+serverless-operator
+servicemeshoperator
+
+# Required for OSUS
+cincinnati-operator
