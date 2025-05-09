@@ -187,7 +187,7 @@ cd aba
 aba          # Let Aba guide you through the installation process
 ```
 - clones the repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
-- If needed, add any required operators to the `aba.conf` file by setting 'op-sets' and/or 'ops' values.
+- If needed, add any required operators to the `aba.conf` file by setting 'op_sets' and/or 'ops' values.
 - helps you decide the method of deployment and how you should proceed.
 
 Note that 'aba' will create the `aba.conf` file which contains some values that you *must change*, e.g. your preferred platform, your domain name, your network address (if known) and any operators you will require etc.
