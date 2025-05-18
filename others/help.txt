@@ -1,150 +1,153 @@
-Install & manage air-gapped OpenShift. 
+Install & manage OpenShift in disconnected environments.
 
-   Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially
-   disconnected environment, either onto bare-metal, vSphere or ESXi. Because Aba uses the Agent-based
-   installer there is no need to configure a load balancer, a bootstrap node or require DHCP.
+	Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully (air-gapped) or partially
+	disconnected environment, either onto bare-metal, vSphere or ESXi. Because Aba uses the Agent-based
+	installer, there is no need to configure a load balancer, a bootstrap node, or require DHCP.
 
-Usage: Interactive
-   aba [-i]                               # Interactive mode
-                                          # Let Aba lead you through the disconnected install process
+=====================================================================
+  INTERACTIVE / HIGH-LEVEL USAGE
+=====================================================================
 
-Usage: Create a install 'bundle archive'
-   aba bundle \
-    <<options>>:
+  aba [-i]                           Interactive mode
+                                     Let Aba guide you through the install process
+
+  aba help                           Show this help output
+
+=====================================================================
+  BUNDLE CREATION (AIR-GAPPED)
+=====================================================================
+
+  aba bundle                         Create a full install bundle archive
      -c, --channel <channel>
      -v, --version <version>
-     -o, --out </path/to/mybundle|->
-     -S, --pull-secret ~/.pull-secret.json
-     -P, --op-sets [<list of operator sets>]
-     -O, --ops [<list of operator names>]
+     -o, --out <path|->
+     -S, --pull-secret <path>
+     -P, --op-sets <sets>
+     -O, --ops <operators>
      -f, --force
-        <<other options>> 
 
-   The 'bundle' command creates an install 'bundle archive' file which is used to install OpenShift in a
-   fully disconnected (air-gapped) environment.  The above command also writes the provided args (channel,
-   version, operators ...) to 'aba.conf'.  See below for <<other options>>.
+  The bundle includes images, CLI tools, and metadata needed to install OpenShift offline.
 
-Usage: Set up and load mirror registry
-   aba mirror                            # Connect to existing, or create a, mirror registry. 
-   <<options>>:
-     -H, --mirror-hostname <hostname>    # The hostname of the target mirror registry
-     -u, --reg-user <username>           # The username used to access the registry (default it 'init')
-     -k, --reg-ssh-key ~/.ssh/mykey      # Path to ssh key to use to install Quay to a remote host
-     -U, --reg-ssh-user myuser           # Username to use to access the remote host via ssh
-         --reg-root /path/to/dir         # Install Quay files/images to this directory
-         --reg-path <path>               # The path to use to store images in the mirror reg
+=====================================================================
+  MIRROR REGISTRY OPERATIONS
+=====================================================================
 
-   aba sync                              # Copy images from the Internet into the mirror registry
-   <<options>>:
-     -r, --retry <count>                 # Retry <count> times on oc-mirror error
+  aba mirror                         Install or connect to mirror registry
+     -H, --mirror-hostname <host>
+     -u, --reg-user <user>
+     -k, --reg-ssh-key <path>
+     -U, --reg-ssh-user <user>
+         --reg-root <dir>
+         --reg-path <path>
 
-   aba save                              # Copy images from the Internet to disk
-   <<options>>:
-     -r, --retry <count>                 # Retry <count> times on oc-mirror error
+  aba sync                           Pull and sync images into mirror registry
+     -r, --retry <count>
 
-   aba load                              # Copy images from disk to the mirror registry
-   <<options>>:
-     -r, --retry <count>                 # Retry <count> times on oc-mirror error
+  aba save                           Save images to local disk
+     -r, --retry <count>
 
-Usage: Provision OpenShift cluster
-   aba cluster --name <mycluster>        # Create a cluster 
-     -n, --name <cluster name>           # The name of the cluster to create. 
-   <<options>>:
-     -t, --type <sno|compact|standard>   # Set type of cluster
-         --step <step>                   # Process up to this step or command.  
-                                         # See commands with "aba -d mycluster help"
-         --starting-ip <ip>              # IP addr for the first cluster node
-         --api-vip <ip>                  # IP addr for cluster API
-         --ingress-vip <ip>              # IP addr for application ingress 
-     -I, --int-connection <proxy|direct> # Install from the public mirror over the Internet
+  aba load                           Load saved images into internal registry
+     -r, --retry <count>
 
-   aba --cmd "oc command"                # Run this oc command on the current cluster
+  aba tar / aba tarrepo              Create bundle archives (optionally skipping image layers)
 
-   aba clean                             # Clean up all generated files. 
-   <<options>>:
+=====================================================================
+  CLUSTER INSTALL & LIFECYCLE MGMT
+=====================================================================
 
-Usage:
-   aba <<other options>>                 # Update provided values in aba.conf
+  aba cluster --name <name>          Create OpenShift cluster definition
+     -t, --type sno|compact|standard
+         --step <step>
+         --starting-ip <ip>
+         --api-vip <ip>
+         --ingress-vip <ip>
+     -I, --int-connection proxy|direct
 
-   <<other options>>:
-     -d, --dir <directory>               # Run Aba in this directory
-     -h, --help                          # Show this help information
-     -S, --pull-secret <path/to/file>    # Location of your pull secret (json) file here. 
-     -c, --channel <channel>             # Set the OpenShift installation channel, e.g. fast, stable, eus or candidate
-     -v, --version <version>             # Set the (x.y.z) OpenShift version, e.g. 4.16.20 or 'latest' or 'l' or 'previous' or 'p'
-     -p, --platform vmw|bm               # Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow. 
-     -b, --base-domain <domain>          # Set the OpenShift base domain, e.g. company.com
-     -M, --machine-network <cidr>        # Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24
-     -N, --dns <ip address(es)>          # Set one DNS IP address
-     -R, --default-route <next hop ip>   # Set the default route of the internal network, if any (optional)
-     -T, --ntp <hostname(s) or IPs>      # Set the NTP hostname(s) or IP address(es) (optional but recommended!). 
-     -O, --ops [<list of operators>]     # Add individual operators to your image set config file (for oc-mirror)
-     -P, --op-sets [<operator set list>] # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted
-     -e, --editor <editor command>       # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
-     -a, --ask                           # Prompt user when needed
-     -y, --noask                         # Do not prompt, assume default answers
-     -o, --out <file|->                  # Bundle archive output destination, e.g. file or stdout (-)
-     -f, --force                         # Only used for 'aba reset --force'
-     -V, --vmware                        # Apply this VMware config file (for govc)
-     -D, --debug                         # Increase more output
-         --info                          # Increase output
+  aba mon                            Monitor installation
+  aba create                         Create cluster VMs
+  aba delete                         Delete all cluster VMs
+  aba refresh                        Reinstall the entire cluster
+  aba start                          Power on all VMs
+  aba stop                           Gracefully shut down all VMs
+  aba shutdown                       Gracefully shutdown OpenShift cluster
+  aba poweroff / aba kill            Force-off all VMs
+  aba startup                        Start the OpenShift cluster (after shutdown)
 
+=====================================================================
+  DAY 2 OPERATIONS
+=====================================================================
 
-Examples:
+  aba info                           Print console access, login info, kubeconfig paths
+  aba day2                           Configure OperatorHub to use mirror registry
+  aba day2-ntp                       Ensure all nodes use correct NTP
+  aba day2-osus                     Configure OpenShift Update Service (OSUS)
 
-  Install Aba:
-    bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-    cd aba
+=====================================================================
+  CLI ACCESS AND DEBUGGING
+=====================================================================
 
-  Run aba in interactive mode:
-    aba
+  aba --cmd "oc <command>"           Run an oc command on the cluster
+  . <(aba login)                     Log in using kubeadmin credentials
+  . <(aba shell)                     Load kubeconfig into shell
+  scripts/cluster-config.sh          View parsed cluster config from YAML
 
+=====================================================================
+  COMMON OPTIONS (for all commands)
+=====================================================================
 
-Examples of fully disconnected mode (air-gapped):
+  -d, --dir <directory>              Target working directory
+  -S, --pull-secret <file>           Path to pull-secret.json
+  -c, --channel <channel>            OpenShift release channel
+  -v, --version <version>            OpenShift version (e.g. 4.17.16 or 'p' for previous)
+  -p, --platform vmw|bm              Deployment platform: VMware or bare-metal
+  -b, --base-domain <domain>         Base domain (e.g. example.com)
+  -M, --machine-network <cidr>       Network CIDR (e.g. 10.0.0.0/24)
+  -N, --dns <IP>                     DNS IP
+  -R, --default-route <IP>           Internal default gateway (optional)
+  -T, --ntp <host/IP>                NTP server(s)
+  -O, --ops <ops>                    List of individual Operators
+  -P, --op-sets <sets>               Operator sets from templates/
+  -e, --editor <editor>              Editor (vi, nano, none, etc.)
+  -a, --ask                          Prompt interactively
+  -y, --noask                        Use default answers
+  -o, --out <file|->                 Output destination (stdout = -)
+  -f, --force                        Overwrite existing files
+  -V, --vmware                       Use vmware.conf (govc config)
+  -D, --debug                        Enable debug mode
+      --info                         Show additional logging
 
-  Create install bundle:
-    aba bundle --force -c stable -v latest -S ~/.pull-secret.json -P ocp ocpv mesh3 -O web-terminal -o /path/to/portable/media/ocp-install-bundle
-    # Now transfer the "ocp-install-bundle*" tar file to the air-gapped env.
+=====================================================================
+  EXAMPLES
+=====================================================================
 
-  Extracting the bundle on internal bastion:
-    tar xvf ocp-install-bundle-4.17.11.tar 
-    cd aba
-    ./install
-    aba 
+  # Install Aba and run interactively
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/main/install)"
+  aba
 
-  Configure mirror registry on localhost (ensure 'registry.example.com' points to the mirror registry):
-    aba mirror -H registry.example.com 
+  # Create install bundle for air-gapped env
+  aba bundle -S ~/.pull-secret.json -c stable -v latest -P ocp -O web-terminal -o /media/bundle.tgz
 
-  Configure mirror registry on *remote host* with 'registry.example.com' using 'remote-ssh-user':
-    aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
+  # Mirror registry setup (local or remote)
+  aba mirror -H registry.example.com
+  aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U sshuser
 
-  Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
-    aba load -H registry.example.com  --retry
+  # Save and load images
+  aba save --retry 3
+  aba load --retry 3
 
-  Install OpenShift:
-    aba cluster --name mycluster --type standard 
+  # Create and install cluster
+  aba cluster --name mycluster --type compact
+  cd mycluster
+  aba agentconf
+  aba iso
+  aba mon
 
+  # Post-install actions
+  aba info
+  aba day2
+  aba day2-ntp
+  aba day2-osus
 
-Examples of partially disconnected mode (e.g. via a proxy)
-
-  Configure mirror registry on localhost (ensure 'registry.example.com' points to the mirror registry) AND sync the images to the mirror:
-    aba sync -H registry.example.com  --retry
-
-  Configure mirror registry on localhost with 'registry.example.com' AND sync the images/operators ('operator sets' & individual operators) to the mirror:
-    aba sync -H registry.example.com --op-sets ocp ocpv mesh3 --ops web-terminal --retry
-
-  Configure mirror registry on localhost with 'registry.example.com', sync *all* operators and install Quay files into custom directory:
-    aba sync -H registry.example.com --op-sets all --retry --quay-root ~/my-quay-dir
-
-  Save images to local disk (note, it's recommended to run the above 'bundle' command which will run 'save' for you):
-    aba save --retry
-
-  Save images and operators to local disk:
-    aba save --op-sets ocp ocpv mesh3 --ops web-terminal --retry
-
-  Create the bundle archive:
-    aba tar --out /path/to/external/media
-
-  Install OpenShift:
-    aba cluster --name mycluster --type standard 
-
+  # Access cluster CLI
+  . <(aba shell)
+  oc get nodes
