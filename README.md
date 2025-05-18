@@ -666,12 +666,11 @@ aba login
 . <(aba shell)
 ```
 - Sets the `KUBECONFIG` environment variable.
-- You can now run:
+- To confirm cluster status and operator health, you can now run:
 ```
 oc whoami
 watch -n 5 oc get co
 ```
-To confirm cluster status and operator health.
 
 
 [Back to top](#who-should-use-aba)
