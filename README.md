@@ -791,7 +791,7 @@ bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubuserc
 [Back to top](#who-should-use-aba)
 
 
-## FAQ
+## Frequently Asked Questions (FAQ)
 
 **Q: Does ABA know what packages to install beforehand?**  
 Yes. ABA uses predefined package lists depending on whether you're in a connected or air-gapped environment:
