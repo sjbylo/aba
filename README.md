@@ -21,6 +21,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
 1. [Aba Flow Chart](#aba-flow-chart)
 1. [About configuration files](#configuration-files)
 1. [Customizing the Agent-based config files](#customizing-the-agent-based-config-files)
+1. [Day 2 Operations](#day-2-operations)
 1. [Feature Backlog and Ideas](#feature-backlog-and-ideas)
 1. [Miscellaneous](#miscellaneous)
 1. [Advanced](#advanced)
@@ -619,6 +620,63 @@ aba mon
 
 [Back to top](#who-should-use-aba)
 
+
+## Day 2 Operations
+
+Once your OpenShift cluster is installed using Aba, there are several recommended "Day 2" tasks to finalize configuration and ensure cluster health.
+
+Start with:
+```
+aba info
+```
+This displays access information for your cluster, including OpenShift Console URL, kubeadmin credentials, and next-step guidance.
+
+### 1. Connect OperatorHub to Internal Mirror Registry
+
+```
+aba day2
+```
+Configures OpenShift to use your internal mirror registry for OperatorHub, ensuring it works even in disconnected environments.
+
+### 2. Synchronize NTP Across Cluster Nodes
+
+```
+aba day2-ntp
+```
+Ensures all nodes are aligned with an NTP server. Time drift can cause OpenShift installation or operation to fail.
+
+### 3. Enable OpenShift Update Service (OSUS)
+
+```
+aba day2-osus
+```
+Configures OpenShift to receive updates via your internal mirror. Useful for enabling controlled cluster upgrades in disconnected setups.
+
+### 4. Login and Verify Cluster State
+
+#### Option A: Use kubeadmin credentials
+```
+aba login
+```
+- Prompts for username/password unless provided with `-u` and `-p`.
+- Logs into OpenShift using the `oc` CLI.
+
+#### Option B: Use kubeconfig export
+```
+. <(aba shell)
+```
+- Sets the `KUBECONFIG` environment variable.
+- You can now run:
+```
+oc whoami
+watch -n 5 oc get co
+```
+To confirm cluster status and operator health.
+
+
+[Back to top](#who-should-use-aba)
+
+
 ## Feature Backlog and Ideas
 
 - Configure ACM (if installed) to be ready to install clusters from the mirror registry.
@@ -641,6 +699,7 @@ aba mon
 
 
 [Back to top](#who-should-use-aba)
+
 
 ## Miscellaneous
 
@@ -691,6 +750,7 @@ aba
 ```
 
 [Back to top](#who-should-use-aba)
+
 
 ## Advanced
 
