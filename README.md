@@ -24,6 +24,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
 1. [Feature Backlog and Ideas](#feature-backlog-and-ideas)
 1. [Miscellaneous](#miscellaneous)
 1. [Advanced](#advanced)
+1. [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
 
 
 ![Demo](./images/aba-bundle-demo.gif)
@@ -790,4 +791,43 @@ bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubuserc
 [Back to top](#who-should-use-aba)
 
 
+## FAQ
 
+**Q: Does ABA know what packages to install beforehand?**  
+Yes. ABA uses predefined package lists depending on whether you're in a connected or air-gapped environment:
+- External bastion: `templates/rpms-external.txt`
+- Internal bastion: `templates/rpms-internal.txt`  
+ABA can install them automatically (via `dnf`) or you can install them manually.
+
+---
+
+**Q: Can ABA run inside a container?**  
+ABA is officially tested on x86 RHEL 8/9 systems (VM or physical). It may also work in a container, but there are limitations — for example, installing Quay or managing certain system-level dependencies might not work.
+
+---
+
+**Q: Does ABA support ARM?**  
+Partial support. While the README documents a working Mac M1 (arm64) setup using containers, full support on ARM is not guaranteed. Proceed with caution and test thoroughly if using non-x86 systems.
+
+---
+
+**Q: How much disk space do I need?**  
+Minimum: 30GB for OpenShift base images only.  
+Recommended: 500GB–1TB if you plan to include Operators, additional CLI tools, or create full bundle archives.
+
+---
+
+**Q: Can I install Operators from community catalogs (outside Red Hat)?**  
+Not directly. ABA currently mirrors only Red Hat’s official Operator catalogs. To add external/community Operators:
+- Manually mirror the container images and update `imageset-save.yaml` or `imageset-sync.yaml`
+- This is an advanced operation and not officially supported
+
+---
+
+**Q: Where are cluster types (SNO, compact, standard) configured?**  
+These are set during cluster creation using:
+```
+aba cluster --name mycluster --type sno|compact|standard
+```
+
+[Back to top](#who-should-use-aba)
