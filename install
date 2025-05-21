@@ -129,7 +129,7 @@ fi
 [ ! -x $PREFIX/scripts/aba.sh ] && echo "Abort: Incomplete aba repo! aba script not found in $PREFIX/scripts/aba.sh" >&2 && exit 1
 
 source $PREFIX/scripts/include_all.sh
-install_rpms $(cat templates/rpms-external.txt)
+install_rpms $(cat $PREFIX/templates/rpms-external.txt)
 
 # Install aba somewhere into the $PATH 
 for d in /usr/local/bin /usr/local/sbin $HOME/bin
