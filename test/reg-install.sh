@@ -11,7 +11,14 @@ if ! rpm -q podman || ! rpm -q rsync; then
 	sudo dnf install podman rsync -y
 fi
 
-[ ! -x ./mirror-registry ] && tar xvmzf mirror-registry-amd64.tar.gz
+if [ ! -x ./mirror-registry ]; then
+	if file mirror-registry-amd64.tar.gz | grep -i "gzip compressed data"; then
+		tar xvmzf mirror-registry-amd64.tar.gz 
+	else
+		echo "File corrupt? mirror-registry-amd64.tar.gz"
+		exit 1
+	fi
+fi
 
 reg_root=~/quay-install  # ~ must be evaluated here
 reg_pw=p4ssw0rd
