@@ -36,44 +36,46 @@ fi
 
 # Check the repo location
 # Need to be sure location of the top of the repo in order to find the important files
-if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
-	ABA_PATH=.
-elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
-	ABA_PATH=..
-elif [ -s ../../Makefile ] && grep -q "Top level Makefile" ../../Makefile; then
-	ABA_PATH=../..
-elif [ -s ../../../Makefile ] && grep -q "Top level Makefile" ../../../Makefile; then
-	ABA_PATH=../../..
-else
-	# Give an error to change to the top level dir. Text must be coded here.
-	(
-		echo "  __   ____   __  "
-		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
-		echo "/    \ ) _ (/    \    Follow the instructions below or see the aba/README.md file for more."
-		echo "\_/\_/(____/\_/\_/"
-		echo
-		echo "Run Aba from the top of its repository."
-		echo
-		echo "For example:                          cd aba"
-		echo "                                      aba"
-		echo "                                      aba -h"
-		echo
-		echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
-		echo "Change to the Aba repo directory:     cd aba"
-		echo "Install latest Aba:                   ./install"
-		echo "Run Aba:                              aba" 
-		echo "                                      aba -h" 
-	) >&2
+# opt work if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
+# opt work 	ABA_PATH=.
+# opt work elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
+# opt work 	ABA_PATH=..
+# opt work elif [ -s ../../Makefile ] && grep -q "Top level Makefile" ../../Makefile; then
+# opt work	ABA_PATH=../..
+# opt work elif [ -s ../../../Makefile ] && grep -q "Top level Makefile" ../../../Makefile; then
+# opt work	ABA_PATH=../../..
+# opt work else
+# opt work	# Give an error to change to the top level dir. Text must be coded here.
+# opt work	(
+# opt work		echo "  __   ____   __  "
+# opt work		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
+# opt work		echo "/    \ ) _ (/    \    Follow the instructions below or see the aba/README.md file for more."
+# opt work		echo "\_/\_/(____/\_/\_/"
+# opt work		echo
+# opt work		echo "Run Aba from the top of its repository."
+# opt work		echo
+# opt work		echo "For example:                          cd aba"
+# opt work		echo "                                      aba"
+# opt work		echo "                                      aba -h"
+# opt work		echo
+# opt work		echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
+# opt work		echo "Change to the Aba repo directory:     cd aba"
+# opt work		echo "Install latest Aba:                   ./install"
+# opt work		echo "Run Aba:                              aba" 
+# opt work		echo "                                      aba -h" 
+# opt work ) >&2
+# opt work
+# opt work exit 1
+# opt work fi
 
-	exit 1
-fi
+export ABA_PATH=.  # FIXME: need to force 'aba init' command to set up directory with aba.conf
 
 ## install will check if aba needs to be updated, if so it will return 0 ... so we re-execute it!
 if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	$ABA_PATH/install -q
 	if [ $? -eq 2 ]; then
 		export ABA_DO_NOT_UPDATE=1
-		aba "$@"  # This means aba was updated and needs top be called again
+		aba "$@"  # This means aba was updated and needs to be called again
 		exit
 	fi
 fi
