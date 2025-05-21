@@ -8,13 +8,7 @@ help: ## Help
 
 # Having to add fix for "file not found using "latest" in the URL path!
 mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball
-	curl --progress-bar -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
-
-#	file mirror-registry-amd64.tar.gz | grep "gzip compressed data" || \
-#	curl --progress-bar -OL \
-#	   https://developers.redhat.com/content-gateway/file/pub/openshift-v4/clients/mirror-registry/1.3.11/mirror-registry.tar.gz
-#	curl --progress-bar -OL \
-#	   https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz 
+	curl -f --retry 3 --progress-bar -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
 
 # Note, don't clean up the test.log*
 .PHONY: clean

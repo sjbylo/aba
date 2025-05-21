@@ -132,8 +132,8 @@ if [ ! "$1" ]; then
 
 	ssh $TEST_USER@$int_bastion_hostname "rpm -q make  || sudo yum install make -y"
 
-	mylog "Install 'existing' test mirror registry on internal bastion: $int_bastion_hostname"
-	test-cmd test/reg-test-install-remote.sh $int_bastion_hostname
+	##mylog "Install 'existing' test mirror registry on internal bastion: $int_bastion_hostname"
+	test-cmd -m "Install 'existing' test mirror registry on internal bastion: $int_bastion_hostname" test/reg-test-install-remote.sh $int_bastion_hostname
 
 	################################
 
