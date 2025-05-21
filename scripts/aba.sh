@@ -1,13 +1,13 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250508184032
+ABA_VERSION=20250521082000
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
 arch_sys=$(uname -m)
 
-uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL or Fedora. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
+uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a Centos-Stream container. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
