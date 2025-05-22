@@ -793,29 +793,29 @@ bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubuserc
 
 ## Frequently Asked Questions (FAQ)
 
-**Q: Does ABA know what packages to install beforehand?**  
+**Q: Does Aba know what packages to install beforehand?**  
 
-**Yes.** ABA uses predefined package lists depending on whether you're in a connected or air-gapped environment:
+**Yes.** Aba uses predefined package lists depending on whether you're in a connected or air-gapped environment:
 - External bastion: `templates/rpms-external.txt`
 - Internal bastion: `templates/rpms-internal.txt`  
 
-You can let ABA install them automatically (if `dnf` is configured) or install them manually using the package lists.
+You can let Aba install them automatically (if `dnf` is configured) or install them manually using the package lists.
 
 ---
 
-**Q: Can ABA run inside a container?**  
+**Q: Can Aba run inside a container?**  
 
-**Preferably, run ABA in a RHEL 8 or 9 VM.** ABA has been officially tested on x86 RHEL 8/9 systems (VM or physical). However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing Quay or managing certain system-level dependencies might not work.
-
----
-
-**Q: Does ABA support ARM?**
-
-**Yes.** ABA is developed and validated for x86_64 architecture, but running on ARM is also supported. You can have a RHEL ARM or CentOs Stream Instance as the bastion.
+**Preferably, run Aba in a RHEL 8 or 9 VM.** Aba has been officially tested on x86 RHEL 8/9 systems (VM or physical). However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing Quay or managing certain system-level dependencies might not work.
 
 ---
 
-**Q: How much disk space do I need when using ABA?**  
+**Q: Does Aba support ARM?**
+
+**Yes.** Aba is developed and validated for x86_64 architecture, but running on ARM is also supported. You can have a RHEL ARM or CentOs Stream Instance as the bastion.
+
+---
+
+**Q: How much disk space do I need when using Aba?**  
 
 **Minimum:** 30GB for OpenShift base images only.  
 **Recommended:** 500GB–1TB if you plan to include Operators, additional CLI tools, or create full bundle archives.
@@ -824,7 +824,7 @@ You can let ABA install them automatically (if `dnf` is configured) or install t
 
 **Q: Can I install Operators from community catalogs (outside Red Hat)?**  
 
-**Not directly.** ABA currently supports Red Hat’s official catalog via `oc-mirror`. If you want Operators from external/community catalogs:
+**Not directly.** Aba currently supports Red Hat’s official catalog via `oc-mirror`. If you want Operators from external/community catalogs:
 - You will need to manually fetch and mirror those images
 - Update `imageset-save.yaml` or `imageset-sync.yaml` with correct image references
 
@@ -838,5 +838,9 @@ These are set during cluster creation using:
 ```
 aba cluster --name mycluster --type sno|compact|standard
 ```
+The following parameters and values in cluster.conf are used to set the cluster topology:
+1. num_masters
+2. num_workers
+
 
 [Back to top](#who-should-use-aba)
