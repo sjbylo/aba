@@ -643,7 +643,7 @@ Configures OpenShift to use your internal mirror registry for OperatorHub, ensur
 ```
 aba day2-ntp
 ```
-Ensures all nodes are aligned with an NTP server. Time drift can cause OpenShift installation or operation to fail.
+Ensures all nodes are connected to NTP servers. Time drift can cause OpenShift installation or operation to fail.
 
 ### 3. Enable OpenShift Update Service (OSUS)
 
@@ -652,14 +652,21 @@ aba day2-osus
 ```
 Configures OpenShift to receive updates via your internal mirror. Useful for enabling controlled cluster upgrades in disconnected setups.
 
+**NOTE:** The `cincinnati-operator` must be available in the mirror for OSUS to work.
+
 ### 4. Login and Verify Cluster State
 
 #### Option A: Use kubeadmin credentials
 ```
 aba login
 ```
-- Prompts for username/password unless provided with `-u` and `-p`.
 - Logs into OpenShift using the `oc` CLI.
+
+Alternatively, you can try
+```
+. <(aba login)
+```
+This just means the output of `aba login` gets executed in the shell as if you typed the command yourself.
 
 #### Option B: Use kubeconfig export
 ```
