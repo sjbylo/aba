@@ -28,6 +28,7 @@ if [ "$1" ]; then
 	rm -rf ~/testing && mkdir -p ~/testing
 	cd ~/testing
 	rm -rf aba
+	which git || sudo dnf install git -y 
 	git clone https://github.com/sjbylo/aba.git 
 	cd aba
 	git checkout $1
