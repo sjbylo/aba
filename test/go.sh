@@ -8,6 +8,8 @@ test5 \
 test3 \
 "
 
+export ABA_TESTING=1  # This will disable tracking to api.counterapi.dev
+
 sudo dnf autoremove ncurses -y
 
 export VER_OVERRIDE=l # Uncomment to use the 'latest' stable version of OCP

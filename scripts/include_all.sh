@@ -546,3 +546,7 @@ process_args() {
 	echo $* | tr " " "\n"  # Get $name, $type etc from here
 }
 
+# Track anonymous events run by any aba using name "$1" (optional)
+aba-track() {
+	[ ! "$ABA_TESTING" ] && ( curl --fail --connect-timeout 8 -X GET "https://api.counterapi.dev/v1/sjbylo/aba$1/up" >/dev/null 2>&1 & disown ) & disown
+}

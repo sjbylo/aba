@@ -8,6 +8,7 @@
 # Be sure no mirror registries are installed on either bastion before running.  Internal int_bastion_hostname can be a fresh "minimal install" of RHEL8/9.
 
 export INFO_ABA=1
+export ABA_TESTING=1  # No usage reporting
 
 ### TEST for clean start with or without the rpms.  
 if true; then

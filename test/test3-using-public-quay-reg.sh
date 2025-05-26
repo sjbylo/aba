@@ -4,6 +4,7 @@
 # This test requires a valid ~/.vmware.conf file.
 
 export INFO_ABA=1
+export ABA_TESTING=1  # No usage reporting
 
 ### TEST for clean start with or without the rpms.  
 if true; then

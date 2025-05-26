@@ -159,6 +159,8 @@ do
 			[ ! "$quiet" ] && echo aba has been $action to $d/aba >&2
 			[ ! "$quiet" -a -n "$msg" ] && source scripts/include_all.sh && echo_yellow "$msg" >&2
 
+			aba-track Installed
+
 			exit $ret  # Success
 		fi
 	fi
