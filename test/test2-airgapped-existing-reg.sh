@@ -9,6 +9,7 @@
 
 export INFO_ABA=1
 export ABA_TESTING=1  # No usage reporting
+hash -r  # Forget all command locations in $PATH
 
 ### TEST for clean start with or without the rpms.  
 if true; then

@@ -9,6 +9,7 @@ test3 \
 "
 
 export ABA_TESTING=1  # This will disable tracking to api.counterapi.dev
+hash -r  # Forget all command locations in $PATH
 
 sudo dnf autoremove ncurses -y
 

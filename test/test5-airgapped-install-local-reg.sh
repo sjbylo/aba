@@ -4,6 +4,7 @@
 
 export INFO_ABA=1
 export ABA_TESTING=1  # No usage reporting
+hash -r  # Forget all command locations in $PATH
 
 # Required: 2 bastions (internal and external), for internal (no direct Internet) only yum works via a proxy/NAT. For external, the proxy is fully configured. 
 # I.e. Internal bastion has no access to the Internet.  External has full access. 
