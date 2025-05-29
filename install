@@ -147,6 +147,7 @@ do
 			fi
 		else
 			action=installed
+			aba-track # Note this tracker has only one counter: 'installed'
 			ret=0
 		fi
 
@@ -158,8 +159,6 @@ do
 			$SUDO chmod +x $d/aba
 			[ ! "$quiet" ] && echo aba has been $action to $d/aba >&2
 			[ ! "$quiet" -a -n "$msg" ] && source scripts/include_all.sh && echo_yellow "$msg" >&2
-
-			aba-track Installed
 
 			exit $ret  # Success
 		fi
