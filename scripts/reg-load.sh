@@ -75,7 +75,7 @@ do
 		cmd="oc-mirror --v1 $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
 		echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh
 	else
-		cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port/$reg_path --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+		cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://\$PWD docker://$reg_host:$reg_port/$reg_path --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 		echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 	fi
 
