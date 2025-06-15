@@ -5,6 +5,7 @@
 
 export INFO_ABA=1
 export ABA_TESTING=1  # No usage reporting
+[ ! "$TEST_CHANNEL" ] && export TEST_CHANNEL=latest
 hash -r  # Forget all command locations in $PATH
 
 ### TEST for clean start with or without the rpms.  
@@ -74,7 +75,7 @@ rm -f aba.conf
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 [ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
-test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --platform vmw --channel stable --version $VER_OVERRIDE ### --vmw $vf
+test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE ### --vmw $vf
 #test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ### --vmw $vf
 
 mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"

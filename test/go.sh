@@ -17,8 +17,13 @@ export VER_OVERRIDE=l # Uncomment to use the 'latest' stable version of OCP
 #export VER_OVERRIDE=p # Uncomment to use the 'latest' stable version of OCP
 #export VER_OVERRIDE=4.16.30 # Uncomment to use the 'latest' stable version of OCP
 #export VER_OVERRIDE=4.14.30 # Uncomment to use the 'latest' stable version of OCP
-export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
-#export internal_bastion_rhel_ver=rhel8  # rhel8 or rhel9
+#export internal_bastion_rhel_ver=rhel10
+export internal_bastion_rhel_ver=rhel9
+export internal_bastion_rhel_ver=rhel8
+#export TEST_CHANNEL=fast
+export TEST_CHANNEL=stable
+export TEST_CHANNEL=candidate  # This only works if e.g. 4.19.0 is available, does not work for release candidate versions e.g. 4.19.0.rc#
+export internal_bastion_rhel_ver=rhel8  # rhel8 or rhel9
 export TEST_USER=$(whoami)   # This can be any user or $(whoami) 
 export oc_mirror_ver_override=v1
 #export oc_mirror_ver_override=v2
@@ -62,7 +67,7 @@ echo "START TESTS @ $(date)" 								>> test/test.log
 echo "==========================================================================" 	>> test/test.log
 
 echo Starting tests: $all_tests
-echo "$all_tests [$VER_OVERRIDE] [$internal_bastion_rhel_ver] [$TEST_USER] [$oc_mirror_ver_override]" | tee -a test/test.log | notify.sh -i Starting tests:
+echo "$all_tests [$TEST_CHANNEL] [$VER_OVERRIDE] [$internal_bastion_rhel_ver] [$TEST_USER] [$oc_mirror_ver_override]" | tee -a test/test.log | notify.sh -i Starting tests:
 
 time for t in $all_tests
 do
