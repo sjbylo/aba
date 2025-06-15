@@ -5,6 +5,7 @@
 
 export INFO_ABA=1
 export ABA_TESTING=1  # No usage reporting
+[ ! "$TEST_CHANNEL" ] && export TEST_CHANNEL=latest
 hash -r  # Forget all command locations in $PATH
 
 ### TEST for clean start with or without the rpms.  
@@ -87,11 +88,11 @@ v=4.16.3
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 [ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
-test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba -A --platform vmw --channel stable --version $VER_OVERRIDE ### --vmw $vf
+test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba -A --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE ### --vmw $vf
 
 test-cmd -m "Checking aba.conf settings - ask=false" "grep ^ask=false aba.conf"
 test-cmd -m "Checking aba.conf settings - platform=vmw" "grep ^platform=vmw aba.conf"
-test-cmd -m "Checking aba.conf settings - ocp_channel=stable" "grep ^ocp_channel=stable aba.conf"
+test-cmd -m "Checking aba.conf settings - ocp_channel=$TEST_CHANNEL" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
 test-cmd -m "Checking aba.conf settings - ocp_version=x.y.z" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}\b' aba.conf"
 
 mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
