@@ -32,10 +32,8 @@ platform:
   none: {}
   {%- elif GOVC_URL is defined %}
   vsphere:
-    apiVIPs:
-    - {{ api_vip }}
-    ingressVIPs:
-    - {{ ingress_vip }}
+    apiVIP: {{ api_vip }}
+    ingressVIP: {{ ingress_vip }}
     failureDomains:
     - name: failure-domain-{{ cluster_name }}
       region: region-{{ cluster_name }}
