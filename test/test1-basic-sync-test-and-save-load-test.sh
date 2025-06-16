@@ -182,26 +182,31 @@ do
 	# Remove some of the params which either change or cannot be placed into git (FIXME: specify the VC password exactly) 
 	# Remove all empty lines
 	cat $cname/install-config.yaml | \
-		yq 'del(.additionalTrustBundle,.platform.vsphere.vcenters,.pullSecret)' | \
+		yq 'del(.additionalTrustBundle,.pullSecret\
+.platform.vsphere.vcenters[].password,\
+.platform.vsphere.failureDomains[0].name,\
+.platform.vsphere.failureDomains[0].region,\
+.platform.vsphere.failureDomains[0].zone,\
+.platform.vsphere.failureDomains[0].topology.datastore,\
+)' | \
 		sed '/^[ \t]*$/d' | \
 		cat > test/$cname/install-config.yaml
+
 	cat $cname/agent-config.yaml | \
 		sed '/^[ \t]*$/d' | \
 		cat > test/$cname/agent-config.yaml
 
         # Check if the files DO NOT match (are different)
 
-# This now breaks due to password in the file ####################################################
-#	mylog "Checking test/$cname/install-config.yaml"
-#
-#        if ! test-cmd -m "Comparing test/$cname/install-config.yaml with test/$cname/install-config.yaml.example" diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example | tee -a test/$cname/install-config.yaml.diff; then
-#		cp test/$cname/install-config.yaml test/$cname/install-config.yaml.failed
-#		cat test/$cname/install-config.yaml.diff
-#		mylog "Config mismatch! See file test/$cname/install-config.yaml.failed and test/$cname/install-config.yaml.diff"
-#        fi
-#
-#	mylog "Checking test/$cname/agent-config.yaml"
-# This now breaks due to password in the file ####################################################
+	mylog "Checking test/$cname/install-config.yaml"
+
+        if ! test-cmd -m "Comparing test/$cname/install-config.yaml with test/$cname/install-config.yaml.example" diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example | tee -a test/$cname/install-config.yaml.diff; then
+		cp test/$cname/install-config.yaml test/$cname/install-config.yaml.failed
+		cat test/$cname/install-config.yaml.diff
+		mylog "Config mismatch! See file test/$cname/install-config.yaml.failed and test/$cname/install-config.yaml.diff"
+        fi
+
+	mylog "Checking test/$cname/agent-config.yaml"
 
         if ! test-cmd -m "Comparing test/$cname/agent-config.yaml with test/$cname/agent-config.yaml.example" diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example | tee -a test/$cname/agent-config.yaml.diff; then
 		cp test/$cname/agent-config.yaml test/$cname/agent-config.yaml.failed
