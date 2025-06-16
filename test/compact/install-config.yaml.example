@@ -23,8 +23,24 @@ networking:
     - 172.30.0.0/16
 platform:
   vsphere:
-    apiVIP: "10.0.1.216"
-    ingressVIP: "10.0.1.226"
+    apiVIPs: 10.0.1.216
+    ingressVIPs: 10.0.1.226
+    failureDomains:
+      - server: vcenter.lan
+        topology:
+          computeCluster: "/Datacenter/host/Cluster"
+          datacenter: Datacenter
+          networks:
+            - VMNET-DPG
+          #        resourcePool: "/Datacenter/host/Cluster/Resources/"
+          folder: "/Datacenter/vm/abatesting"
+    vcenters:
+      - datacenters:
+          - Datacenter
+        port: 443
+        server: vcenter.lan
+        user: administrator@vsphere.local
+    diskType: thin
 sshKey: |
   ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDmV+i4k1y9R7umYkRMVMCrpIFebRYnjXdsP3uex+Tti9g3WE+SriQhh9FcpkdZQkLV1nF0VaOKjVEF3lif7DeJfOlMwO0x8wLSqFUv94JccnlG8+Nwab+UJ3yinQXC3r1dJ330uoT44Qc0dHn8fiJm0jCDozcvVV9dPUOkONcGkBMWmZgxbjeBW1JgtM6t1NTB1Zu7yVpG1P+Ot4jlBxREqzGx/O3UGk97CJMncaT7wfgODovp0yo86lzc1UshChXYv6JeO360rmvILsmnOdZlzSVYiq+czSWztMDQMfT9fOCp8SZH1M2/puhRf+w7vcyAAgzF30BHYgU9CyIE/tkZ sbylo@ovpn-117-52.sin2.redhat.com
 ImageDigestSources:
