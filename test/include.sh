@@ -232,11 +232,14 @@ init_bastion() {
 	# govc vm.network.change -vm "$test_vm" -net.adapter "vmxnet3" -net.address "00:50:56:12:99:99" ethernet-0
 	##### DO NOT DO THIS!! TOO MANY CHANGES TO RUN MULTIPLE TESTS 
 
-	govc vm.power -off bastion-internal-rhel8 || true
-	govc vm.power -off bastion-internal-rhel9 || true
-	echo "Reverting vms to snapshot aba-test ..."   # Do both to ensure all disk space is recovered
-	govc snapshot.revert -vm bastion-internal-rhel8  aba-test || exit 1
-	govc snapshot.revert -vm bastion-internal-rhel9  aba-test || exit 1
+	govc vm.power -off bastion-internal-rhel8  || true
+	govc vm.power -off bastion-internal-rhel9  || true
+	govc vm.power -off bastion-internal-rhel10 || true
+	echo "Reverting the required VM to snapshot aba-test ..."   # Do we need to revert all to ensure all disk space is recovered??
+	#govc snapshot.revert -vm bastion-internal-rhel8  aba-test || exit 1
+	#govc snapshot.revert -vm bastion-internal-rhel9  aba-test || exit 1
+	#govc snapshot.revert -vm bastion-internal-rhel10 aba-test || exit 1
+	govc snapshot.revert -vm $int_bastion_vm_name $snap_name || exit 1
 	sleep 8
 	govc vm.power -on $int_bastion_vm_name
 	sleep 5

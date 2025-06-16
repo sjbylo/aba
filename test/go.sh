@@ -14,18 +14,22 @@ hash -r  # Forget all command locations in $PATH
 sudo dnf autoremove ncurses -y
 
 export VER_OVERRIDE=l # Uncomment to use the 'latest' stable version of OCP
-#export VER_OVERRIDE=p # Uncomment to use the 'latest' stable version of OCP
-#export VER_OVERRIDE=4.16.30 # Uncomment to use the 'latest' stable version of OCP
-#export VER_OVERRIDE=4.14.30 # Uncomment to use the 'latest' stable version of OCP
+#export VER_OVERRIDE=p # Uncomment to use the 'previous' stable version of OCP
+#export VER_OVERRIDE=4.16.30
+#export VER_OVERRIDE=4.14.30
+
 #export internal_bastion_rhel_ver=rhel10
 export internal_bastion_rhel_ver=rhel9
-export internal_bastion_rhel_ver=rhel8
-#export TEST_CHANNEL=fast
+#export internal_bastion_rhel_ver=rhel8
+
 export TEST_CHANNEL=stable
-export TEST_CHANNEL=candidate  # This only works if e.g. 4.19.0 is available, does not work for release candidate versions e.g. 4.19.0.rc#
-export internal_bastion_rhel_ver=rhel8  # rhel8 or rhel9
+#export TEST_CHANNEL=fast
+#export TEST_CHANNEL=candidate  # This only works if e.g. 4.19.0 is available, does not yet work for release candidate versions e.g. 4.19.0.rc#
+
 export TEST_USER=$(whoami)   # This can be any user or $(whoami) 
-export oc_mirror_ver_override=v1
+#export TEST_USER=root   # This can be any user or $(whoami) 
+
+export oc_mirror_ver_override=v1   # oc-mirror version to use 
 #export oc_mirror_ver_override=v2
 
 # This is for testing a specific branch ($1) directly from "git clone", otherwise it will test
@@ -56,6 +60,7 @@ export target_full=    # Build only iso
 
 echo "Removing all traces of images from this host!"
 podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage
+rm -rf $(sudo find ~/ -type d -name .oc-mirror)
 
 all_tests=$(echo $all_tests| sed "s/ $//g")
 
