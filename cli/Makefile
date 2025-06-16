@@ -54,6 +54,8 @@ endif
 # Include aba.conf if it exists
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
+ocp_minor_version := $(shell echo $(ocp_version) | cut -d. -f1-2)
+ocp_channel := $(strip $(shell echo $(ocp_channel)))
 
 all: oc openshift-install oc-mirror govc butane
 
@@ -94,20 +96,33 @@ help: ## Help
 #openshift-client-linux-arm64-rhel8-4.18.9.tar.gz
 #openshift-client-linux-arm64-rhel9-4.18.9.tar.gz
 
-full_oc_tar_file  := openshift-client-$(os)-$(arch_short)-$(rhel_ver)-$(ocp_version).tar.gz
-full_oc_url       := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
+#full_oc_tar_file  := openshift-client-$(os)-$(arch_short)-$(rhel_ver)-$(ocp_version).tar.gz
+#full_oc_url       := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
+# Adding $(ocp_channel)-$(ocp_minor_version)
+full_oc_tar_file  := openshift-client-$(os)-$(arch_short)-$(rhel_ver).tar.gz
+full_oc_url       := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_channel)-$(ocp_minor_version)/$(full_oc_tar_file)
 
+#gen_oc_tar_file   := openshift-client-$(os)-$(ocp_version).tar.gz
+#gen_url           := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
+# Adding $(ocp_channel)-$(ocp_minor_version)
 gen_oc_tar_file   := openshift-client-$(os)-$(ocp_version).tar.gz
-gen_url           := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
+gen_url           := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_channel)-$(ocp_minor_version)/$(gen_oc_tar_file)
 
+#rhel9_oc_tar_file := openshift-client-$(os)-$(arch_short)-rhel9-$(ocp_version).tar.gz
+#rhel9_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
+# Adding $(ocp_channel)-$(ocp_minor_version)
 rhel9_oc_tar_file := openshift-client-$(os)-$(arch_short)-rhel9-$(ocp_version).tar.gz
-rhel9_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
+rhel9_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_channel)-$(ocp_minor_version)/$(rhel9_oc_tar_file)
 
+#rhel8_oc_tar_file := openshift-client-$(os)-$(arch_short)-rhel8-$(ocp_version).tar.gz
+#rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
+# Adding $(ocp_channel)-$(ocp_minor_version)
 rhel8_oc_tar_file := openshift-client-$(os)-$(arch_short)-rhel8-$(ocp_version).tar.gz
-rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
+rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_channel)-$(ocp_minor_version)/$(rhel8_oc_tar_file)
 
 # Only download *all* the tar files to use in the disconnected env
-download: $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_$(govc_arch).tar.gz butane-binary
+#download: $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_$(govc_arch).tar.gz butane-binary
+download: $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_$(govc_arch).tar.gz butane-binary
 
 
 ########################################
@@ -138,19 +153,24 @@ $(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
 ########################################
 # Be sure that the correct version is installed by creating .*installed flag file
 
+#ocp_install_tar_file   := openshift-install-$(os)-$(ocp_version).tar.gz
+ocp_install_tar_file   := openshift-install-$(os).tar.gz
+ocp_install_download := https://mirror.openshift.com/pub/openshift-v4/$(butane_arch)/clients/ocp/$(ocp_channel)-$(ocp_minor_version)/$(ocp_install_tar_file)
+
 openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/bin
-~/bin/openshift-install: .init .$(ocp_version)-openshift-install-$(os)-installed
-	@file openshift-install-$(os)-$(ocp_version).tar.gz | grep -q "gzip compressed data" || { echo ERROR: Invalid file: openshift-install-$(os)-$(ocp_version).tar.gz; exit 1;}
-	@echo Extracting  openshift-install-$(os)-$(ocp_version).tar.gz to ~/bin/openshift-install
-	tar -C ~/bin -xmzf openshift-install-$(os)-$(ocp_version).tar.gz openshift-install
+##~/bin/openshift-install: .init .$(ocp_version)-openshift-install-$(os)-installed
+~/bin/openshift-install: .init $(ocp_install_tar_file)
+	@file $(ocp_install_tar_file) | grep -q "gzip compressed data" || { echo ERROR: Invalid file: $(ocp_install_tar_file); exit 1;}
+	@echo Extracting  $(ocp_install_tar_file) to ~/bin/openshift-install
+	tar -C ~/bin -xmzf $(ocp_install_tar_file) openshift-install
 
-.$(ocp_version)-openshift-install-$(os)-installed: openshift-install-$(os)-$(ocp_version).tar.gz
-	@rm -f .??*-openshift-install-$(os)-installed
-	@touch .$(ocp_version)-openshift-install-$(os)-installed 
+#.$(ocp_version)-openshift-install-$(os)-installed: $(ocp_install_tar_file)
+#	@rm -f .??*-openshift-install-$(os)-installed
+#	@touch .$(ocp_version)-openshift-install-$(os)-installed 
 
-openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install tarball
-	@echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
+$(ocp_install_tar_file):  ## Download openshift-install tarball
+	@echo Downloading $(ocp_install_download)
+	curl --progress-bar -OL $(ocp_install_download)
 
 
 ########################################
