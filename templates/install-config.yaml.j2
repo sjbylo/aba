@@ -32,8 +32,32 @@ platform:
   none: {}
   {%- elif GOVC_URL is defined %}
   vsphere:
-    apiVIP: "{{ api_vip }}"
-    ingressVIP: "{{ ingress_vip}}"
+    apiVIPs:
+    - {{ api_vip }}
+    ingressVIPs:
+    - {{ ingress_vip }}
+    failureDomains:
+    - name: failure-domain-{{ cluster_name }}
+      region: region-{{ cluster_name }}
+      server: {{ GOVC_URL }}
+      topology:
+        computeCluster: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}"
+        datacenter: {{ GOVC_DATACENTER }}
+        datastore: "/{{ GOVC_DATACENTER }}/datastore/{{ GOVC_DATASTORE }}"
+        networks:
+        - {{ GOVC_NETWORK }}
+#        resourcePool: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}/Resources/{{ GOVC_RESOURCE_POOL }}"
+        folder: "{{ VC_FOLDER }}"
+      zone: zone-{{ cluster_name }}
+    vcenters:
+    - datacenters:
+      - {{ GOVC_DATACENTER }}
+      password: '{{ GOVC_PASSWORD }}'
+      port: 443
+      server: {{ GOVC_URL }}
+      user: {{ GOVC_USERNAME }}
+    diskType: thin
+
 #    vcenters:
 #    - datacenters:
 #      - {{ GOVC_DATACENTER }}
@@ -44,8 +68,12 @@ platform:
 #    diskType: thin 
   {%- else %}
   baremetal:
-    apiVIP: "{{ api_vip }}"
-    ingressVIP: "{{ ingress_vip}}"
+#    apiVIP: "{{ api_vip }}"
+    apiVIPs:
+    - {{ api_vip }}
+#    ingressVIP: "{{ ingress_vip}}"
+    ingressVIPs:
+    - {{ ingress_vip}}
   {%- endif %}
 pullSecret: |
   {{ pull_secret|indent(2) }}
