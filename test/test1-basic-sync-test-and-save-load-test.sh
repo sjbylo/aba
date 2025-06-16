@@ -182,13 +182,13 @@ do
 	# Remove some of the params which either change or cannot be placed into git (FIXME: specify the VC password exactly) 
 	# Remove all empty lines
 	cat $cname/install-config.yaml | \
-		yq 'del(.additionalTrustBundle,.pullSecret\
+		yq "del(.additionalTrustBundle,.pullSecret,\
 .platform.vsphere.vcenters[].password,\
 .platform.vsphere.failureDomains[0].name,\
 .platform.vsphere.failureDomains[0].region,\
 .platform.vsphere.failureDomains[0].zone,\
-.platform.vsphere.failureDomains[0].topology.datastore,\
-)' | \
+.platform.vsphere.failureDomains[0].topology.datastore\
+)" | \
 		sed '/^[ \t]*$/d' | \
 		cat > test/$cname/install-config.yaml
 
