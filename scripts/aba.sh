@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250615085154
+ABA_VERSION=20250626220205
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -649,7 +649,7 @@ if [ ! -f .bundle ]; then
 	# Fresh GitHub clone of Aba repo detected!
 
 	echo -n "Checking Internet connectivity ..."
-	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt); then
+	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
 		echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again." >&2
@@ -686,7 +686,7 @@ if [ ! -f .bundle ]; then
 	##############################################################################################################################
 	# Fetch release.txt
 
-	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
+	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
 		echo_red "Failed to access https://mirror.openshift.com" >&2
 
@@ -727,11 +727,16 @@ if [ ! -f .bundle ]; then
 		while true
 		do
 			# Exit loop if release version exists
-			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-				if curl -f --connect-timeout 10 --retry 2 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
-					break
+			if [ "$target_ver" ]; then
+				if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
+					url="https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$target_ver/release.txt"
+					if curl -f --connect-timeout 10 --retry 2 -sSL -o /dev/null -w "%{http_code}\n" $url| grep -q ^200$; then
+						break
+					else
+						echo_red "Error: Failed to fetch release.txt file from $url" >&2
+					fi
 				else
-					echo_red "Error: Failed to find release: $target_ver" >&2
+					echo_red "Invalid input: Enter a valid OpenShift version, e.g. 4.18.10" >&2
 				fi
 			fi
 
@@ -741,6 +746,7 @@ if [ ! -f .bundle ]; then
 			echo_cyan -n "Enter version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
 
 			read target_ver
+
 			[ ! "$target_ver" ] && target_ver=$default_ver          # use default
 			[ "$target_ver" = "l" ] && target_ver=$stable_ver       # latest
 			[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev  # previous latest
