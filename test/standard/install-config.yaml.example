@@ -23,8 +23,8 @@ networking:
     - 172.30.0.0/16
 platform:
   vsphere:
-    apiVIPs: 10.0.1.217
-    ingressVIPs: 10.0.1.227
+    apiVIP: 10.0.1.217
+    ingressVIP: 10.0.1.227
     failureDomains:
       - server: vcenter.lan
         topology:
