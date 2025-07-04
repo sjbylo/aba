@@ -40,6 +40,8 @@ cd ..
 # vmware only needed on "private" bastion
 #aba/vmware.conf		\
 
+#	aba/shortcuts.conf	\
+
 # Add the bundle flag file to the archive so when aba is run again it knows it's a bundle!
 touch aba/.bundle  # Flag this archive as a bundle
 rm -f aba/.aba.conf.seen   # Ensure user can be offered to edit this conf file again on the internal/private network
@@ -50,7 +52,6 @@ file_list=$(find		\
 	aba/aba-*		\
 	aba/aba			\
 	aba/aba.conf		\
-	aba/shortcuts.conf	\
 	aba/.bundle		\
 	aba/cli			\
 	aba/rpms		\
