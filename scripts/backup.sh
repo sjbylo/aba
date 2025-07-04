@@ -46,8 +46,11 @@ cd ..
 touch aba/.bundle  # Flag this archive as a bundle
 rm -f aba/.aba.conf.seen   # Ensure user can be offered to edit this conf file again on the internal/private network
 
+# FIXME: The aba/shortcuts.conf should not be needed!
+
 # All 'find expr' below are by default "and"
 file_list=$(find		\
+	aba/shortcuts.conf	\
 	aba/install		\
 	aba/aba-*		\
 	aba/aba			\
@@ -90,7 +93,9 @@ file_list=$(find		\
 	\( -type f -o -type l \)				\
 								\
 	-newer ~/.aba.previous.backup 				\
+	|| true \
 )
+# The true line above is a HACK to allow the aba/shortcuts.conf file to be missing! #FIXME
 
 # Notes on the above
 # See the "tar cf" command below and consider....
