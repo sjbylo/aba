@@ -211,7 +211,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config fil
 # Test node0 is accessible - start
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/standard upload" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/standard refresh" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m  "Waiting ~3 mins for node0 to be reachabe" "i=0; until aba --dir $subdir/aba/standard ssh --cmd hostname; do let i=\$i+1; [ \$i -gt 18 ] && exit 1; echo -n .; sleep 10; done"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m  "Waiting ~3 mins for node0 to be reachable" "i=0; until aba --dir $subdir/aba/standard ssh --cmd hostname; do let i=\$i+1; [ \$i -gt 18 ] && exit 1; echo -n .; sleep 10; done"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m  "Waiting ~2 mins for node0 to config NTP" "i=0; until aba --dir $subdir/aba/standard ssh --cmd 'chronyc sources' | grep $ntp_ip ; do let i=\$i+1; [ \$i -gt 12 ] && exit 1; echo -n $i; sleep 10; done"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/standard delete" 
 # Test node0 is accessible - ned
@@ -225,7 +225,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config fil
 # Test node0 is accessible - start
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/standard upload" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/standard refresh" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m  "Waiting ~3 mins for node0 to be reachabe" "i=0; until aba --dir $subdir/aba/standard ssh --cmd hostname; do let i=\$i+1; [ \$i -gt 18 ] && exit 1; echo -n .; sleep 10; done"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m  "Waiting ~3 mins for node0 to be reachable" "i=0; until aba --dir $subdir/aba/standard ssh --cmd hostname; do let i=\$i+1; [ \$i -gt 18 ] && exit 1; echo -n .; sleep 10; done"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m  "Waiting ~2 mins for node0 to config NTP" "i=0; until aba --dir $subdir/aba/standard ssh --cmd 'chronyc sources' | grep $ntp_ip ; do let i=\$i+1; [ \$i -gt 12 ] && exit 1; echo -n $i; sleep 10; done"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/standard delete" 
 # Test node0 is accessible - end
