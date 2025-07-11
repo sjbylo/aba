@@ -1,7 +1,12 @@
 rhods-operator
 authorino-operator
 serverless-operator
+
+# Mesh v2 operators are also needed
+kiali-ossm
+jaeger-product
 servicemeshoperator
+elasticsearch-operator
 
 # Required for OSUS
 cincinnati-operator
