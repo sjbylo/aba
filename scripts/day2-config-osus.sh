@@ -25,7 +25,7 @@ echo "Logging into cluster ..."
 #####################
 if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
 	if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
-		echo_red "Error: cincinnati-operator not available in OperatorHub on this cluster"
+		echo_red "Error: cincinnati-operator not available in OperatorHub for this cluster.  Load the operator into your registry and run 'aba day2' again?" >&2
 
 		exit 1
 	fi
