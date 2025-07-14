@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250714151517
+ABA_VERSION=20250714182512
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -111,7 +111,7 @@ do
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		if [ ! "$cur_target" ]; then
 			cat $ABA_PATH/others/help-aba.txt
-		elif [ "$cur_target" = "mirror" ]; then
+		elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" ]; then
 			cat $ABA_PATH/others/help-mirror.txt
 		elif [ "$cur_target" = "cluster" ]; then
 			cat $ABA_PATH/others/help-cluster.txt

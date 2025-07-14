@@ -39,3 +39,5 @@ Examples of fully disconnected mode (air-gapped):
   Install OpenShift:
     aba cluster --name mycluster --type standard [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
 
+Note that the command 'mirror' can be substituted with one of 'save', 'load' or 'sync', in which case the 'mirror' command will also be called if needed. 
+The options above [-k, -U etc] can be used also for 'save', 'load' and/or 'sync'.
