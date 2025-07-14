@@ -1,5 +1,5 @@
 #!/bin/bash 
-# Create a bundle archive which can be used to install OCP in an air-gapped env.
+# Create a install bundle which can be used to install OCP in an air-gapped env.
 
 source scripts/include_all.sh
 
@@ -14,13 +14,13 @@ source <(normalize-aba-conf)
 
 verify-aba-conf || exit 1
 
-[ ! "$bundle_dest_path" ] && echo_red "Error: missing bundle archive filename! Example: /mnt/usb-media/my-bundle" >&2 && exit 1
+[ ! "$bundle_dest_path" ] && echo_red "Error: missing install bundle filename! Example: /mnt/usb-media/my-bundle" >&2 && exit 1
 
 if [ "$bundle_dest_path" = "-" ]; then
-	echo_cyan "A bundle archive will be generated and written to standard output using the following parameters:" >&2
+	echo_cyan "An install bundle will be generated and written to standard output using the following parameters:" >&2
 else
 	[ -d $bundle_dest_path ] && bundle_dest_path=$bundle_dest_path/ocp-bundle	# Correct the output location as it needs to be a file
-	echo_cyan "A bundle archive file will be generated and saved to disk using the following parameters:" >&2
+	echo_cyan "An install bundle file will be generated and saved to disk using the following parameters:" >&2
 	bundle_dest_path="$bundle_dest_path-$ocp_version"
 fi
 
@@ -68,21 +68,21 @@ if [ "$bundle_dest_path" = "-" ]; then
 	#make -s download save retry=7 2>&1 | cat -v >>.bundle.log
 	make -s download save retry=7 >&2 || exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
 
-	echo_cyan "Writing 'all-in-one' bundle archive (tar format) to stdout ..." >&2
+	echo_cyan "Writing 'all-in-one' install bundle (tar format) to stdout ..." >&2
 	make -s tar out=-   # Be sure the output of this command is ONLY tar output!
 
 	exit
 fi
 
 if files_on_same_device mirror $bundle_dest_path; then
-	echo_cyan "Creating 'split' bundle archive (because the bundle is on the same file-system as the image set archive file) ..."
+	echo_cyan "Creating 'split' install bundle (because the bundle is on the same file-system as the image set archive file) ..."
 	echo_magenta "TO CREATE A FULL BUNDLE INSTEAD, WRITE THE ARCHIVE DIRECTLY TO EXTERNAL MEDIA OR A SEPARATE DRIVE."
 	echo
 	sleep 2
 	#make download save tarrepo out="$bundle_dest_path" retry=7 || exit 1	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
 	aba download save tarrepo --out "$bundle_dest_path" --retry 7 || exit 1	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
 else
-	echo_cyan "Creating 'all-in-one' bundle archive (assuming destination file is on portable media or a different file-system) ..."
+	echo_cyan "Creating 'all-in-one' install bundle (assuming destination file is on portable media or a different file-system) ..."
 	#make download save tar out="$bundle_dest_path" retry=7 || exit 1    	# Try save 8 times, then create all-in-one archive, including all files. 
 	aba download save tar     --out "$bundle_dest_path" --retry 7 || exit 1    	# Try save 8 times, then create all-in-one archive, including all files. 
 fi
