@@ -116,25 +116,25 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 
 # Output reminder message
 if [ "$repo_only" ]; then
-	echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE BUNDLE ARCHIVE ('SPLIT BUNDLE')." >&2
+	echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE INSTALL BUNDLE ('SPLIT BUNDLE')." >&2
 	echo_magenta "           The image set archive file(s) are located at aba/mirror/save/mirror_*.tar." >&2
-	echo_magenta "           You will need to copy them to your internal bastion, along with the bundle file ($dest), and combine them." >&2
+	echo_magenta "           You will need to copy them to your internal bastion, along with the install bundle file ($dest), and combine them." >&2
 	echo_magenta "           READ THE BELOW INSTRUCTIONS CAREFULLY!" >&2
-	echo_magenta "           To avoid this write the full archive bundle to *external media* or to a *separate drive*." >&2
+	echo_magenta "           To avoid this write the full install bundle to *external media* or to a *separate drive*." >&2
 fi
 
 # If destination is NOT stdout (i.e. if in interactive mode)
 if [ "$dest" != "-" ]; then
 	if [ "$repo_only" ]; then
 		echo
-		echo_cyan "Writing 'split' bundle file to $dest ... (to create a full bundle, write the bundle directly to external media)."
+		echo_cyan "Writing 'split' bundle file to $dest ... (to create a full install bundle, write the bundle directly to external media)."
 		echo
-		echo_white "After the bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
+		echo_white "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo_white "Also transfer the image set archive file(s), for example, with:"
 		echo_white " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "After transfering the bundle file and the image set archive file(s) to your internal bastion"
+		echo_white "After transfering the install bundle file and the image set archive file(s) to your internal bastion"
 		echo_white "extract them into your home directory and"
 		echo_white "then move the image set archive file(s) into the aba/mirror/save/ directory & continue by installing & running 'aba', for example, with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
@@ -147,12 +147,12 @@ if [ "$dest" != "-" ]; then
 		echo
 	else
 		echo
-		echo_cyan "Writing 'all-in-one' bundle file to $dest ..."
+		echo_cyan "Writing 'all-in-one' install bundle file to $dest ..."
 		echo
-		echo_white "After the bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
+		echo_white "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "After transfering the bundle file to your internal bastion"
+		echo_white "After transfering the install bundle file to your internal bastion"
 		echo_white "extract it into your home directory and"
 		echo_white "then continue by installing & running 'aba', for example, with the commands:"
 		echo_white "  tar xvf $(basename $dest)"
@@ -199,4 +199,4 @@ rm -f aba/.bundle  # We don't want this repo to be labeled as 'bundle', only the
 [ "$INFO_ABA" ] && echo_white "Touching file ~/.aba.previous.backup" >&2
 touch ~/.aba.previous.backup
 
-[ "$dest" != "-" ] && echo_green "Bundle archive written successfully to $dest!" >&2 || echo_green "Bundle archive streamed successfully to stdout!" >&2
+[ "$dest" != "-" ] && echo_green "Install bundle written successfully to $dest!" >&2 || echo_green "Install bundle streamed successfully to stdout!" >&2

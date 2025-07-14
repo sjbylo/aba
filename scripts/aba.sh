@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250626220205
+ABA_VERSION=20250714151517
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -168,7 +168,7 @@ do
 		else
 			echo "$1" | grep -q "^-" && echo_red "Error in parsing --out path argument" >&2 && exit 1
 			[ "$1" ] && [ ! -d $(dirname $1) ] && echo_red "Directory: [$(dirname $1)] incorrect or missing!" >&2 && exit 1
-			[ -f "$1.tar" ] && echo_red "Bundle archive file [$1.tar] already exists!" >&2 && exit 1
+			[ -f "$1.tar" ] && echo_red "Install bundle file [$1.tar] already exists!" >&2 && exit 1
 
 			BUILD_COMMAND="$BUILD_COMMAND out='$1'"
 		fi
@@ -846,12 +846,12 @@ if [ ! -f .bundle ]; then
 	echo
 	echo_white "Fully Disconnected (air-gapped)"
 	echo_white "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, Aba can download all required software"
-	echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'bundle archive' for you to transfer into your disconnected environment."
+	echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'install bundle' for you to transfer into your disconnected environment."
 	if ask "Install OpenShift into a fully disconnected network environment"; then
 		echo
 		echo_yellow Instructions
 		echo
-		echo "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the bundle archive"
+		echo "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the install bundle"
 		echo "                                                          # (size ~20-30GB for a base installation)."
 		echo "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
 		echo "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more manageable files."
