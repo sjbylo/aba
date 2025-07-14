@@ -305,6 +305,7 @@ chmod 600 /root/.ssh/authorized_keys
 mkdir -p ~/subdir
 echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bashrc
 echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bash_profile
+dnf update -y   # I guess we should do this and add to the vmw snap every now and then
 END
 
 	# Copy over the ssh config to /root on bastion (in case test_user = root)
