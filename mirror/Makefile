@@ -168,6 +168,16 @@ uninstall: .init             mirror-registry .uninstalled     ## Uninstall any p
 checkversion: init
 	$(SCRIPTS)/check-version-mismatch.sh
 
+.PHONY: tidy
+tidy:    # Tidy up so that this repo can be (re-)used to install/configure a registry again (assuming aba bundle repo on USB stick).
+	rm -f  .installed
+	rm -f  mirror.conf
+	rm -rf regcreds
+	rm -f  reg-uninstall.sh 
+	rm -f  .rpms* 
+	rm -f  save/oc-mirror-workspace 
+	rm -f  save/publish 
+
 # Note that 'mirror-registry-amd64.tar.gz' is needed to 'uninstall' the registry.
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
