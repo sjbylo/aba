@@ -55,7 +55,8 @@ mylog
 ######################
 # Set up test 
 
-export subdir=\~/subdir   # Unpack repo tar into this dir on internal bastion
+#export subdir=\~/subdir   # Unpack repo tar into this dir on internal bastion
+export subdir=subdir   # Unpack repo tar into this dir on internal bastion
 
 # Exec script with any arg to skip reg. install and load
 if [ ! "$1" ]; then
