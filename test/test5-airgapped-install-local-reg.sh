@@ -174,6 +174,8 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 
 source <(cd mirror && normalize-mirror-conf)
 
+reg_ssh_user=$TEST_USER
+
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
