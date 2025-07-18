@@ -22,15 +22,15 @@ export VER_OVERRIDE=l # Uncomment to use the 'latest' stable version of OCP
 export internal_bastion_rhel_ver=rhel9
 #export internal_bastion_rhel_ver=rhel8
 
-export TEST_CHANNEL=fast
-#export TEST_CHANNEL=stable
+#export TEST_CHANNEL=fast
+export TEST_CHANNEL=stable
 #export TEST_CHANNEL=candidate  # This only works if e.g. 4.19.0 is available, does not yet work for release candidate versions e.g. 4.19.0.rc#
 
 export TEST_USER=$(whoami)   # This can be any user or $(whoami) 
 #export TEST_USER=root   # This can be any user or $(whoami) 
 
-export oc_mirror_ver_override=v1   # oc-mirror version to use 
-#export oc_mirror_ver_override=v2
+#export oc_mirror_ver_override=v1   # oc-mirror version to use 
+export oc_mirror_ver_override=v2
 
 # This is for testing a specific branch ($1) directly from "git clone", otherwise it will test
 # the local dir. ($PWD)
