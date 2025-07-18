@@ -3,7 +3,7 @@
 Easily install an OpenShift cluster - "Cluster Zero" - into a fully or partially disconnected environment, either onto bare-metal or VMware (vSphere/ESXi).
 Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP.
 
-**For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://drive.google.com/drive/u/0/folders/1sO7_G3f8cU1Y7oeUwTib8_sqn8FM_LZQ**
+>> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://drive.google.com/drive/u/0/folders/1sO7_G3f8cU1Y7oeUwTib8_sqn8FM_LZQ**
 
 ## Who should use Aba?
 
@@ -272,7 +272,7 @@ Note that the above 'disconnected scenario' can be repeated, for example to down
 
 **Please note that it is now recommended to use the above `aba bundle` command to initiate a fully air-gapped installation which will complete the below for you.**
 
-**For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://drive.google.com/drive/u/0/folders/1sO7_G3f8cU1Y7oeUwTib8_sqn8FM_LZQ**
+>> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://drive.google.com/drive/u/0/folders/1sO7_G3f8cU1Y7oeUwTib8_sqn8FM_LZQ**
 
 In this scenario, your connected workstation has access to the Internet but no access to the private network.
 You also require a bastion in a private subnet.
