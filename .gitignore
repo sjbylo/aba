@@ -46,6 +46,7 @@ target-ocp-version.conf
 test/mirror-registry.tar.gz
 test/.ssh.conf
 test/test.log*
+test/output.log
 vmware.conf
 rpms/*.rpm
 mirror/reg-uninstall.sh.provision

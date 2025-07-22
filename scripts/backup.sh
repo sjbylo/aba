@@ -40,17 +40,12 @@ cd ..
 # vmware only needed on "private" bastion
 #aba/vmware.conf		\
 
-#	aba/shortcuts.conf	\
-
 # Add the bundle flag file to the archive so when aba is run again it knows it's a bundle!
 touch aba/.bundle  # Flag this archive as a bundle
 rm -f aba/.aba.conf.seen   # Ensure user can be offered to edit this conf file again on the internal/private network
 
-# FIXME: The aba/shortcuts.conf should not be needed!
-
 # All 'find expr' below are by default "and"
 file_list=$(find		\
-	aba/shortcuts.conf	\
 	aba/install		\
 	aba/aba-*		\
 	aba/aba			\
@@ -64,7 +59,6 @@ file_list=$(find		\
 	aba/Makefile		\
 	aba/README.md		\
 	aba/Troubleshooting.md	\
-	aba/test		\
 	aba/mirror		\
 								\
 	! -path "aba/.git*"  					\
@@ -93,9 +87,7 @@ file_list=$(find		\
 	\( -type f -o -type l \)				\
 								\
 	-newer ~/.aba.previous.backup 				\
-	|| true \
 )
-# The true line above is a HACK to allow the aba/shortcuts.conf file to be missing! #FIXME
 
 # Notes on the above
 # See the "tar cf" command below and consider....
