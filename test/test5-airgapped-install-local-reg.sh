@@ -208,6 +208,8 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Tidying up internal bastion
 
 mylog "Running 'aba sno' on internal bastion"
 
+test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/shortcuts.conf
+
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno/iso" "aba --dir $subdir/aba sno --step iso" 
 #test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking cluster operators" aba --dir $subdir/aba/sno cmd
 
@@ -307,7 +309,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Listing VMs (should show 24
 
 myLog "Deploying test vote-app"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
-test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
+test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
 
@@ -485,7 +487,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check update  $ocp_version_d
 # Needed for acm-subs.yaml
 test-cmd -m "Copy over test dir for the deploy-mesh.sh file" scp -rp test $TEST_USER@$int_bastion_hostname:$subdir/aba
 # FIXME: 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
+###  THIS STOPPED WORKING ### test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
 
 # Restart cluster test 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/sno login)"

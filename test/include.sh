@@ -112,7 +112,8 @@ test-cmd() {
 				eval "$cmd" &
 			fi
 			sub_pid=$!  # Capture the PID of the subprocess
-			echo "> waiting for $(ps -p $sub_pid -o cmd=)"
+			psc=$(ps -p $sub_pid -o cmd=)
+			echo "> waiting for: $sub_pid '$psc'"
 			wait "$sub_pid"
 			ret=$?
 			sub_pid=
