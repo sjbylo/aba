@@ -70,7 +70,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
 		try_cmd 5 5 15 oc delete imagestream -n openshift oauth-proxy
 
-		echo Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 2-3 minutes.
+		echo Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 2 to 3 minutes.
 
 		sleep 30
 

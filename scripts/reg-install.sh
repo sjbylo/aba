@@ -285,7 +285,7 @@ else
 #		fi
 #	fi
 
-ask "Install Quay mirror registry appliance locally on localhost ($(hostname)), accessable via $reg_hostport" || exit 1
+ask "Install Quay mirror registry appliance to '$(hostname)' (localhost), accessable via $reg_hostport" || exit 1
 	echo "Installing Quay registry on localhost ..."
 
 	# mirror-registry installer does not open the port for us

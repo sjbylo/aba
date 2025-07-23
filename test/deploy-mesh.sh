@@ -10,8 +10,8 @@ pwd
 
 cd test/mesh/openshift-service-mesh-demo
 
-if ! echo "y" | ./00-install-all.sh; then
-	echo y| ./99-uninstall-all.sh
-	echo "y" | ./00-install-all.sh
+if ! echo "y" | ./00-install-all-mesh3.sh; then
+	echo y| ./99-uninstall-all-mesh3.sh
+	#echo "y" | ./00-install-all.sh
 fi
 

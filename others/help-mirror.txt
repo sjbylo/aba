@@ -34,7 +34,7 @@ Examples of fully disconnected mode (air-gapped):
       --reg-root /mnt/large/drive/my-quay-data
 
   Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
-    aba load -H registry.example.com  --retry
+    aba load -H registry.example.com  --retry 8
 
   Install OpenShift:
     aba cluster --name mycluster --type standard [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
