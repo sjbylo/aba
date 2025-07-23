@@ -29,7 +29,7 @@ echo
 echo_cyan "Now saving (mirror2disk) images from external network to mirror/save/ directory."
 echo
 echo_cyan "Warning: Ensure there is enough disk space under $PWD/save.  "
-echo_cyan "This can take 5-20+ minutes to complete or even longer if Operator images are being saved!"
+echo_cyan "This can take 5 to 20 or more minutes to complete or even longer if Operator images are being saved!"
 echo 
 
 #FIXME: Instead of using reg_root, why not have data_vol=/mnt/large-disk and put all data in there? reg_root can be = $data_vol/quay-install

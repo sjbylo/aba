@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250714182512
+ABA_VERSION=20250723191659
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -919,21 +919,24 @@ else
 	echo_magenta "IMPORTANT: Check the values in aba.conf and ensure they are all complete and match your disconnected environment."
 
 	echo_white "Current values in aba.conf:"
-	#to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d" | paste -d '  ' - - - | column -t --output-separator " | ")
 	to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d")
 	output_table 3 "$to_output"
 
 	echo
 	echo "Set up the mirror registry and load it with the necessary container images from disk."
 	echo
-	echo "To store container images, Aba can install the Quay mirror appliance or you can utilize an existing container registry."
+	echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 	echo
-	echo "Run:"
+	echo "To install the registry on the local machine, accessible via registry.example.com, run:"
+	echo "  aba mirror load -H registry.example.com --retry"
+	echo
+	echo "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
+	echo "  aba mirror load -H registry.example.com -k ~/.ssh/id_rsa -U user --retry 8"
+	echo
+	echo "If unsure, run:"
 	echo "  aba mirror                         # to configure and/or install Quay."
-	echo "  aba load --retry <count>           # to load the image set archive file(s) into the mirror registry."
-	echo "Or run:"
-	echo "  aba mirror load --retry <count>    # to complete both actions and ensure the 'load' process is repeated should there be any issues."
 	echo
+	echo "See 'aba load -h' for more."
 fi
 
 echo "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
