@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250723191659
+ABA_VERSION=20250801160149
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -68,12 +68,12 @@ else
 	exit 1
 fi
 
-## install will check if aba needs to be updated, if so it will return 0 ... so we re-execute it!
+## install will check if aba needs to be updated, if so it will return 2 ... so we re-execute it!
 if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	$ABA_PATH/install -q
 	if [ $? -eq 2 ]; then
 		export ABA_DO_NOT_UPDATE=1
-		aba "$@"  # This means aba was updated and needs top be called again
+		aba "$@"  # This means aba was updated and needs to be called again
 		exit
 	fi
 fi
