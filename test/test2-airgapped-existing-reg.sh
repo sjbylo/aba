@@ -72,6 +72,9 @@ if [ ! "$1" ]; then
 	# clean up all, assuming reg. is not running (deleted)
 	#test-cmd "echo ocp_version=$v > aba.conf"
 	####make -C ~/aba reset --force
+	[ "$(which aba)" ] && sudo rm -f $(which aba)  # Be sure to remove any existing aba scripts
+	[ "$(which aba)" ] && sudo rm -f $(which aba)
+	[ "$(which aba)" ] && sudo rm -f $(which aba)
 	test-cmd -m "Installing aba" ./install
 	test-cmd -m "Activating shortcuts.conf" cp .shortcuts.conf shortcuts.conf
 	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
