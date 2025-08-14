@@ -307,7 +307,10 @@ mkdir -p ~/subdir
 echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bashrc
 echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bash_profile
 dnf update -y   # I guess we should do this and add to the vmw snap every now and then
+reboot
 END
+
+	sleep 15  # Wait for restart 
 
 	# Copy over the ssh config to /root on bastion (in case test_user = root)
 	eval scp ~$def_user/.ssh/config root@$int_bastion_hostname:.ssh/config
