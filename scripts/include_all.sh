@@ -551,5 +551,5 @@ aba-track() {
 	# Note this tracker has only one counter: 'installed'
 	#[ ! "$1" ] && return 0
 	#[ ! "$ABA_TESTING" ] && ( curl --fail --connect-timeout 8 -X GET "https://api.counterapi.dev/v1/sjbylo/aba$1/up" >/dev/null 2>&1 & disown ) & disown
-	[ ! "$ABA_TESTING" ] && ( curl --fail --connect-timeout 8 -s https://abacus.jasoncameron.dev/hit/bylo.de-aba/installed >/dev/null 2>&1 & disown ) & disown
+	[ ! "$ABA_TESTING" ] && ( curl --retry 3 --fail -s https://abacus.jasoncameron.dev/hit/bylo.de-aba/installed >/dev/null 2>&1 & disown ) & disown
 }
