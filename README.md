@@ -15,7 +15,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
    1. [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
    1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
-1. [Start here](#start-here)
+1. [Install Aba](#install-abe)
    1. [Partially disconnected Scenario](#partially-disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
@@ -49,7 +49,7 @@ Aba helps you with the following and more:
 1. Monitors the installation progress.
 1. Allows for adding more images (e.g. Operators) when synchronizing the mirror registry (day 1 or 2 operation).
 1. Configures the OperatorHub integration with the mirror registry.
-1. Can create an "archive bundle" containing all the files needed to complete a fully air-gapped installation.
+1. Can create an "install bundle" containing all the files needed to complete a fully air-gapped installation.
 1. Executes several workarounds, if needed, for some typical issues with disconnected environments.
 1. Now works with oc-mirror v1 or v2!
 1. Installs and integrates OpenShift Update Service (OSUS) to make upgrades a single-click.
@@ -57,7 +57,7 @@ Aba helps you with the following and more:
 1. Enables graceful cluster shutdown and startup.
 1. Allows for the modification of generated configuration files (image set & agent based), if more control is required. 
 
-All commands and actions in Aba are *idempotent*.  If you hit a snag, fix it and try again should always be the right way forward!
+All commands and actions in Aba are *idempotent*.  If you hit a problem, fix it and try again should always be the right way forward!
 
 <!--
 ## Quick Start Guide for the Impatient:
@@ -90,7 +90,7 @@ The diagram above illustrates two scenarios for installing OpenShift in a discon
 Each scenario includes two main network zones:
 
 - **Connected Network**: Located on the left side of the diagram, where external resources are accessible.
-- **Private Network**: Located on the right side of the diagram, isolated from direct internet access.
+- **Private Network**: Located on the right side of the diagram, isolated from direct Internet access.
 
 Bastion Requirements
 
@@ -107,43 +107,40 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 ### Fully Disconnected (Air-Gapped) Prerequisites
 
-In a fully disconnected environment, where no internet access is available, two bastions are required: one connected to the internet and the other on the private network.
+In a fully disconnected environment, where no Internet access is available, one laptop/workstation and one bastion are required: one connected to the Internet and the other on the private network.
 
-- **Connected Bastion or Workstation**
-   - An x86 RHEL 8/9 or Fedora (e.g. VM) with internet access, typically on a laptop.
+- **Connected Laptop or Workstation**
+   - An x86 RHEL 8/9 or Fedora (e.g. VM) with Internet access, typically on a laptop.
    - Clone or download this Git repository (https://github.com/sjbylo/aba.git) to any location in your home directory.
    - Download and store the Red Hat registry pull secret to `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs listed in `templates/rpms-external.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
-   - Password-less sudo root access is recommended.
-   - Aba has also been tested with root user.
+   - Password-less sudo root access or with root user.
 
 - **Internal Bastion**
    - A RHEL 8/9 VM or host within your private, air-gapped network.
    - Install required RPMs as listed in `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
-   - Password-less sudo root access is recommended.
-   - Aba has also been tested with root user.
+   - Password-less sudo root access or with root user.
 
 ### Partially Disconnected Prerequisites
 
-In a partially disconnected environment, the internal network has limited or proxy-based internet access, allowing data synchronization directly.
+In a partially disconnected environment, the internal network has limited or proxy-based Internet access, allowing data synchronization directly.
 
 - **Bastion**
-   - A single RHEL 8/9 VM with internet access and connectivity to the private network.
+   - A single RHEL 8/9 VM with Internet access and connectivity to the private network.
    - Download and copy this Git repository to any location in your home directory on the bastion.
    - Download and store your Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs from `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
-   - Password-less sudo root access is recommended.
-   - Aba has also been tested with root user.
+   - Password-less sudo root access or with root user.
 
 ### Common Requirements for Both Environments
 
 - **Registry Storage**
-   - Minimum of 30 GB is required for OpenShift base images only, with additional Operators requiring more (500 GB or more is recommended).
+   - Minimum of 30 GB is required for the OpenShift platform release images only, with additional Operators requiring much more (500 GB or more is recommended).
 
 - **Network Configuration**
-   - **DNS**: Configure the following DNS A records which match the intended cluster name and base domain ('ocp1' and 'example.com' are just examples!):
+   - **DNS**: Configure the following DNS A records which match the intended cluster name and base domain ('ocp1' and 'example.com' in this example):
       - **OpenShift API**: `api.ocp1.example.com` pointing to a free IP in the private subnet.
       - **OpenShift Ingress**: `*.apps.ocp1.example.com` (wildcard A record) pointing to a free IP in the private subnet.
       - **Mirror Registry**: `registry.example.com` pointing to the IP address of your internal mirror registry (or where Aba should install it).
@@ -151,7 +148,7 @@ In a partially disconnected environment, the internal network has limited or pro
    - **NTP**: An NTP server is recommended to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
 
 - **Platform**
-   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.openshift.com/container-platform/4.17/installing/installing_vsphere/ipi/ipi-vsphere-installation-reqs.html#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
+   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
    - For bare-metal installations, manually boot the nodes using the generated ISO file.
 
 - **Registry**
@@ -161,15 +158,13 @@ In a partially disconnected environment, the internal network has limited or pro
 
 After configuring these prerequisites, run `aba` to start the OpenShift installation process.
 
-Note: that Aba also works in connected environments without a private mirror registry, e.g. by accessing public container registries via a proxy.  To do this, configure the proxy values in `cluster.conf`.
+Note: that Aba also works in connected environments without a private mirror registry, e.g. by accessing public container registries via a proxy or directly.  To do this, configure the `int_connection` value in `cluster.conf`.
 
 
 [Back to top](#who-should-use-aba)
 
 
-## Start here
-
-Installing Aba:
+## Install Aba
 
 ### Method 1: Install Aba in one command
 
@@ -263,7 +258,7 @@ aba download
 
 Now continue with "Installing OpenShift" below.
 
-Note that the above 'disconnected scenario' can be repeated, for example to download and install Operators as a day 2 operation or to upgrade OpenShift, by updating the `sync/imageset-sync.yaml` file and running `aba sync/day2` again.
+Note that the above 'disconnected scenario' can be repeated, for example to download and install Operators as a day 2 operation or to upgrade OpenShift, by updating the `sync/imageset-sync.yaml` file and running `aba sync` & `aba day2` again.
 
 
 [Back to top](#who-should-use-aba)
