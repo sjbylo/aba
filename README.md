@@ -26,7 +26,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
 1. [Day 2 Operations](#day-2-operations)
 1. [Feature Backlog and Ideas](#feature-backlog-and-ideas)
 1. [Miscellaneous](#miscellaneous)
-1. [Advanced](#advanced)
+1. [Advanced Use](#advanced-use)
 1. [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
 
 
@@ -278,7 +278,7 @@ aba save
 
 - pulls the images from the Internet and saves them into the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators)!
 
-Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repository (including templates, scripts, images, CLIs and other install files) to your internal bastion (in your private network) via a portable storage device, e.g. a thumb drive.
+Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repository (including templates, scripts, images, CLIs and other install files) to your disconnected bastion (in your private network) via a portable storage device, e.g. a thumb drive.
 
 Example:
 
@@ -325,7 +325,7 @@ aba load
 - Required RPMs:
   - Note that the bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure `dnf` to use a proxy).
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation.
-  - If rpms are not readily available in your private network, the command `aba rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your external bastion and internal bastions are running the exact same version of RHEL (at least, that was the experience when testing!).
+  - If rpms are not readily available in your private network, the command `aba rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your connected workstation and disconnected bastions are running the exact same version of RHEL (at least, that was the experience when testing!).
 
 Now continue with "Installing OpenShift" below.
 
@@ -356,12 +356,8 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 cd aba
 aba cluster --name mycluster [--type sno|compact|standard] [--step xyz] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]
 ```
-- creates and initializes a directory `mycluster` (you should name the directory with the same name of your cluster),
-- prompts you to run `aba` inside the directory. The most useful 'steps' are 'agentconf', 'iso' and 'mon'.
-
-<!--
-- Note, *all* advanced preset parameters in the 'shortcuts.conf' configuration file must be completed for the "--type" option to take affect.
--->
+- creates and initializes a directory `mycluster` (the same name as your cluster),
+- prompts you to run `aba` inside the directory. The most useful steps are 'agentconf', 'iso' and 'mon'.
 
 Once the nodes have booted from the iso the following command should be run to monitor the progress of the installation. For example:
 
@@ -372,7 +368,7 @@ aba mon
 
 <!--Get help with `aba -h`.-->
 
-After OpenShift has been installed you will see the following output:
+After OpenShift has been installed you will see output similar to the following:
 
 ```
 INFO Install complete!
@@ -402,7 +398,7 @@ oc whoami
 - provides access via "oc login".
 
 
-You can run commands against the cluster, e.g. to show the installation progress:
+If needed, you can also run commands against the cluster, e.g. to show the cluster operator progress:
 
 ```
 watch aba --cmd "get co"
@@ -430,25 +426,33 @@ If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) rea
 
 Other examples of commands (aba <command>):
 
-cd mycluster     # change to the directory with the agent-based install files, using `mycluster` as an example.
+cd mycluster     # change to the `cluster directory` with the agent-based install files, using `mycluster` as an example.
 
-| Target | Description |
+| Command | Description |
 | :----- | :---------- |
-| `aba day2`        | Integrate the private mirror into OpenShift. |
-| `aba ls`          | Show list of VMs and their state. |
-| `aba startup`     | Gracefully start up a cluster |
-| `aba shutdown`    | Gracefully shut down (or hibernate) a cluster. `aba shutdown --wait` wait for power-off |
-| `aba start`       | Power on all VMs |
-| `aba stop`        | Gracefully shut down all VMs (guest shutdown only!) |
-| `aba poweroff `   | Power off all VMs immediately |
-| `aba kill`        | Same as `poweroff` |
-| `aba create`      | Create all VMs  |
-| `aba refresh`     | Delete, re-create and boot the VMs causing the cluster to be re-installed. |
-| `aba delete`      | Delete all the VMs  |
+| `aba info`        | Display kubeadmin password and other information. |
 | `aba login`       | Display the `oc login` command for the cluster.  Use: . <(aba login)  |
 | `aba shell`       | Display the command to access the cluster using the kubeconfig file.  Use: . <(aba shell) |
+| `aba day2`        | Integrate the private mirror into OpenShift. |
+| `aba day2-ntp     | Configure the cluster with NTP. |
+| `aba day2-osus    | Configure the cluster with OpenShift Update Service. |
+| `aba startup`     | Gracefully start up a cluster. |
+| `aba shutdown`    | Gracefully shut down (or hibernate) a cluster. `aba shutdown --wait` wait for power-off |
 | `aba help`        | Help is available in all Makefiles (in `aba/Makefile`,  `aba/mirror/Makefile`,  `aba/cli/Makefile` and `aba/<mycluster>/Makefile`)  |
 
+Commands for VMs (vCenter or ESXi)
+
+| Command | Description |
+| :----- | :---------- |
+| `aba ls`          | Show list of VMs and their state (for VMs only). |
+| `aba start`       | Power on all VMs (for VMs only). |
+| `aba stop`        | Gracefully shut down all VMs (guest shutdown). |
+| `aba poweroff `   | Power off all VMs immediately. |
+| `aba kill`        | Same as `poweroff` |
+| `aba create`      | Create all VMs. |
+| `aba refresh`     | Delete, re-create and start the VMs causing the cluster to be re-installed. |
+| `aba delete`      | Delete all the VMs.  |
+| `aba help`        | Help is available in all Makefiles (in `aba/Makefile`,  `aba/mirror/Makefile`,  `aba/cli/Makefile` and `aba/<mycluster>/Makefile`)  |
 
 
 [Back to top](#who-should-use-aba)
@@ -459,7 +463,7 @@ cd mycluster     # change to the directory with the agent-based install files, u
 
 Do you need to download a set of images and CLI tools to install OpenShift into a fully disconnected (air-gapped) environment?
 
-Here is how you can use Aba to create an `install bundle` to do that!
+To do that, here is how you can use Aba to create an `install bundle`!
 
 Store your pull secret in this file:
 
@@ -554,7 +558,7 @@ This chart explains the flow of Aba and how Aba works, showing the main choices:
 
 [Back to top](#who-should-use-aba)
 
-## About configuration files
+## About the Aba configuration files
 
 | Config file | Description |
 | :---------- | :---------- |
@@ -640,6 +644,7 @@ This displays access information for your cluster, including OpenShift Console U
 aba day2
 ```
 Configures OpenShift to use your internal mirror registry for OperatorHub, ensuring it works even in disconnected environments.
+Important: Re-run this command every time new Operators are pushed to your registry, e.g. after repeated runs of `aba load` or `aba sync`.
 
 ### 2. Synchronize NTP Across Cluster Nodes
 
@@ -688,13 +693,29 @@ watch -n 5 oc get co
 
 ## Feature Backlog and Ideas
 
+- Support other catalogs (indexes) too, e.g. "community", "certified", and not just "redhat".
+
 - Configure ACM (if installed) to be ready to install clusters from the mirror registry.
 
 - Configure htpasswd login, add users, disable kubeadmin.
 
 - Use PXE boot as alternative to ISO upload.
 
-- Enable aba to work in a container (this has been partially implemented, see below)
+- Enable aba to work in a container (this has been partially implemented, see below).
+
+- Allow to keep platform and operator images separate in the registry and not all under a single path.
+
+- Using oc-mirror v2, fetch all operator dependencies automatically using the script. 
+
+- Prompt user to run `aba day2`, after (new) operators have been pushed to the registry. 
+
+- Auto-refresh the Operator Catalogs (indexes) after they become stale (e.g. after 1 day). 
+
+- Support libvirt (as well as only vSphere). 
+
+- Allow to specify the path to a large data volume (and not only the top dir of the Quay registry). Store all large files/cache there. 
+
+- Generally improve the user experience (UX) of Aba.
 
 - ~~Assist in adding OpenShift Update Service (OSUS) to the cluster.~~
 
@@ -739,7 +760,7 @@ execution of diverse tasks through predefined rules!
 
 - How to clean up and remove aba
 
-Run on the internal bastion:
+Run on the disconnected bastion:
 ```
 cd aba
 aba uninstall    # uninstall the registry (if needed)
@@ -763,21 +784,21 @@ aba
 [Back to top](#who-should-use-aba)
 
 
-## Advanced
+## Advanced Use
 
 - **Aba now runs in a containerized environment (partial support):**
   - Tested on Mac M1 (`arm64`) with successful results.
   - You can run Aba in a container, for example:
-    ```bash
+    ```
     docker run -it --rm --name centos9 quay.io/centos/centos:stream9
     ```
-  - Aba can:
-    - Connect to an existing remote registry (installation of a new registry (from) inside the container is not yet supported).
+  - In the arm63 container, Aba can:
+    - Connect to an existing remote registry (installation of a new registry from inside the container is not yet supported since the `mirror-registry` installer only seems to run on x86).
     - Access public registries over the Internet (directly or through a proxy).
     - Generate an `arm64` ISO image suitable for OpenShift installation on `arm64` systems.
 
-- **Tested Use Case:**
-  - ISO generated from within the container was successfully used to install OpenShift on an M1 Mac using VMware Fusion.
+  - Tested Use Case:
+    - An ISO, generated from within the container, was successfully used to install OpenShift on an M1 Mac using VMware Fusion.
 
 
 <!--
@@ -839,6 +860,8 @@ aba load --reg-path ocp4/operators
 ### Cluster presets are used mainly to automate the testing of Aba.
 
 ```
+mv .shortcuts.conf shortcuts.conf
+<edit> shortcuts.conf to add/adjust any settings
 aba sno
 ```
 - This will create a directory `sno` and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `shortcut.conf` must be completed for this to work).  If you are using VMware the VMs will be created for you.
@@ -865,27 +888,29 @@ bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubuserc
 
 **Q: Does Aba know what packages to install beforehand?**  
 
-**Yes.** Aba uses predefined package lists depending on whether you're in a connected or air-gapped environment:
-- External bastion: `templates/rpms-external.txt`
-- Internal bastion: `templates/rpms-internal.txt`  
+**Yes.** Aba uses predefined package list files depending on whether you're in a connected or air-gapped environment:
+- Connected workstation or laptop: `templates/rpms-external.txt`
+- Disconnected bastion: `templates/rpms-internal.txt`  
 
-You can let Aba install them automatically (if `dnf` is configured) or install them manually using the package lists.
+You can let Aba install them automatically (if `dnf` is configured) or install them manually.
 
 ---
 
 **Q: Can Aba run inside a container?**  
 
-**Preferably, run Aba in a RHEL 8 or 9 VM.** Aba has been officially tested on x86 RHEL 8 or 9 systems (VM or physical). However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing Quay or managing certain system-level dependencies might not work.
+**Preferably, run Aba in a RHEL 8 or 9 VM.** Aba has been officially tested on x86 RHEL 8 or 9 systems (VM or physical). Aba has been tested in a container, see the `Advanced` section. However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing Quay or managing certain system-level dependencies might not work.
 
 ---
 
 **Q: Does Aba support ARM?**
 
-**Yes.** Aba is developed and validated for x86_64 architecture, but running on ARM is also supported. You can have a RHEL ARM or CentOs Stream Instance as the bastion.
+**Yes.** Aba is developed and validated for x86_64 architecture, but running on ARM is also supported. You can have a RHEL ARM or CentOs Stream Instance as the bastion.  See the `Advanced` section.
 
 ---
 
 **Q: How much disk space do I need when using Aba?**  
+
+Running out of disk space is the most likely problem you will encounter when configuring your registry!
 
 **Minimum:** 30GB for OpenShift base images only.  
 **Recommended:** 500GB–1TB if you plan to include Operators, additional CLI tools, or create full install bundles.
@@ -908,7 +933,7 @@ These are set during cluster creation using:
 ```
 aba cluster --name mycluster --type sno|compact|standard
 ```
-The following parameters and values in cluster.conf are used to set the cluster topology:
+The following parameters and values in cluster.conf are used to determine the cluster topology:
 1. num_masters
 2. num_workers
 
