@@ -19,7 +19,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
    1. [Partially disconnected Scenario](#partially-disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
-1. [Creating an install bundle with everything you need to install OpenShift in an fully disconnected (air-gapped) network](#Creating-an-install-bundle-with-everything-you-need-to-install-OpenShift-in-a-fully-disconnected-air-gapped-network)
+1. [Creating an install bundle with everything you need to install OpenShift in an fully disconnected (air-gapped) environment](#Creating-an-install-bundle-with-everything-you-need-to-install-OpenShift-in-a-fully-disconnected-air-gapped-environment)
 1. [Aba Flow Chart](#aba-flow-chart)
 1. [About configuration files](#configuration-files)
 1. [Customizing the Agent-based config files](#customizing-the-agent-based-config-files)
@@ -92,10 +92,10 @@ Each scenario includes two main network zones:
 - **Connected Network**: Located on the left side of the diagram, where external resources are accessible.
 - **Private Network**: Located on the right side of the diagram, isolated from direct Internet access.
 
-Bastion Requirements
+OS Requirements
 
-- **Connected Bastion**: Can be a workstation or virtual machine (VM) running on a laptop, configured with RHEL 8/9 or Fedora.
-- **Internal Bastion**: Must be running RHEL 8/9 to support OpenShift installation in the private network.
+- **Workstation**: RHEL 8 or 9, Centos Stream 8 or 9 or Fedora
+- **Bastion**: Must be running RHEL 8 or 9 to support OpenShift installation in the air-gapped environment.
 
 These configurations ensure that each network zone meets OpenShift’s requirements for disconnected or fully air-gapped installations.
 
@@ -110,7 +110,7 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 In a fully disconnected environment, where no Internet access is available, one laptop/workstation and one bastion are required: one connected to the Internet and the other on the private network.
 
 - **Connected Laptop or Workstation**
-   - An x86 RHEL 8/9 or Fedora (e.g. VM) with Internet access, typically on a laptop.
+   - An x86 RHEL 8 or 9 or Fedora (e.g. VM) with Internet access, typically on a laptop.
    - Clone or download this Git repository (https://github.com/sjbylo/aba.git) to any location in your home directory.
    - Download and store the Red Hat registry pull secret to `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs listed in `templates/rpms-external.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
@@ -118,7 +118,7 @@ In a fully disconnected environment, where no Internet access is available, one 
    - Password-less sudo root access or with root user.
 
 - **Internal Bastion**
-   - A RHEL 8/9 VM or host within your private, air-gapped network.
+   - A RHEL 8 or 9 VM or host within your private, air-gapped network.
    - Install required RPMs as listed in `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Password-less sudo root access or with root user.
 
@@ -126,11 +126,11 @@ In a fully disconnected environment, where no Internet access is available, one 
 
 In a partially disconnected environment, the internal network has limited or proxy-based Internet access, allowing data synchronization directly.
 
-- **Bastion**
-   - A single RHEL 8/9 VM with Internet access and connectivity to the private network.
+- **Connected Bastion**
+   - A single RHEL 8 or 9 VM configured with access to both the Internet and the private network.
    - Download and copy this Git repository to any location in your home directory on the bastion.
    - Download and store your Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
-   - Install required RPMs from `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
+   - Install required RPMs as defined in the file `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
    - Password-less sudo root access or with root user.
 
@@ -453,9 +453,11 @@ cd mycluster     # change to the directory with the agent-based install files, u
 
 [Back to top](#who-should-use-aba)
 
-## Creating an install bundle with everything you need to install OpenShift in a fully disconnected (air-gapped) network
+## Creating an install bundle with everything you need to install OpenShift in a fully disconnected (air-gapped) environment
 
-Do you need to download a set of images and CLI tools to install OpenShift into a fully disconnected (air-gapped) network?
+>> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://drive.google.com/drive/u/0/folders/1sO7_G3f8cU1Y7oeUwTib8_sqn8FM_LZQ**
+
+Do you need to download a set of images and CLI tools to install OpenShift into a fully disconnected (air-gapped) environment?
 
 Here is how you can use Aba to create an `install bundle` to do that!
 
@@ -465,7 +467,7 @@ Store your pull secret in this file:
 ~/.pull-secret.json
 ```
 
-Run these commands on a RHEL 8/9 or Fedora VM:
+Run these commands on a RHEL 8 or 9 or Fedora VM:
 
 ```
 git clone https://github.com/sjbylo/aba.git
@@ -475,20 +477,21 @@ cd aba
 
 Connect a large USB media stick (or other device) to your VM and write the `install bundle` to it:
 
-Set the version oc OpenShift you want to install:
+Set the version of OpenShift you want to install:
+
 ```
 v=4.17.16
 ```
 
-Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any pre-existing files under aba/mirror/save. 
+Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any pre-existing files that may exist under aba/mirror/save. 
 
-Create the install bundle with this single command:
+Create the install bundle with a single command, for example:
 ```
 aba bundle \
     --pull-secret "~/.pull-secret.json" \
     --channel stable \
     --version $v \
-    --op-sets ocp odf \
+    --op-sets ocp odf ocpv \
     --ops web-terminal devworkspace-operator \
     --base-domain example.com \
     --machine-network 10.0.0.0/20 \
@@ -499,18 +502,18 @@ aba bundle \
     --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
 ```
 
-- This will output several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.
+- This will generate several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.
 - Depending on the channel chosen, the OpenShift version can be set to the most recent 'previous' point version (using '--version p').
 - If needed, --op-sets refers to predefined sets of operators, as defined in the files `templates/operator-set-*`.
 - If needed, add individual operators after "--ops".
-- If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise these values must be set in aba.conf on the internal bastion).
+- If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise, these values must be set in aba.conf on the bastion after unpacking the bundle).
 - Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
-- Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_*`.  It is important that the files are not damaged or incomplete in any way!
+- Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_*`.  It is essential to verify the files after copying them into the air-gapped environment!
 - Warning: --force will overwrite any image set files already under aba/mirror/save!
 
 
-Copy the files to your RHEL 8/9 internal bastion within the private internal network.
+Copy the files to your RHEL 8 or 9 bastion within the private internal network.
 
 Verify the files are intact by comparing the checksum values with the original files:
 
@@ -872,7 +875,7 @@ You can let Aba install them automatically (if `dnf` is configured) or install t
 
 **Q: Can Aba run inside a container?**  
 
-**Preferably, run Aba in a RHEL 8 or 9 VM.** Aba has been officially tested on x86 RHEL 8/9 systems (VM or physical). However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing Quay or managing certain system-level dependencies might not work.
+**Preferably, run Aba in a RHEL 8 or 9 VM.** Aba has been officially tested on x86 RHEL 8 or 9 systems (VM or physical). However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing Quay or managing certain system-level dependencies might not work.
 
 ---
 
