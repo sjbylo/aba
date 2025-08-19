@@ -19,7 +19,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
    1. [Partially disconnected Scenario](#partially-disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
-1. [Creating an install bundle with everything you need to install OpenShift in an fully disconnected (air-gapped) network](#Creating-a-bundle-archive-with-everything-you-need-to-install-OpenShift-in-a-fully-disconnected-air-gapped-network)
+1. [Creating an install bundle with everything you need to install OpenShift in an fully disconnected (air-gapped) network](#Creating-an-install-bundle-with-everything-you-need-to-install-OpenShift-in-a-fully-disconnected-air-gapped-network)
 1. [Aba Flow Chart](#aba-flow-chart)
 1. [About configuration files](#configuration-files)
 1. [Customizing the Agent-based config files](#customizing-the-agent-based-config-files)
@@ -321,7 +321,7 @@ sudo dnf install make -y     # If dnf does not work in the private environment (
                              # ensure all required RPMs are pre-installed, e.g. from a DVD drive at the time of installation.
 aba load
 ```
-- will (if required) install Quay (from the bundle archive) and then load the images into Quay.
+- will (if required) install Quay (from the install bundle) and then load the images into Quay.
 - Required RPMs:
   - Note that the bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure `dnf` to use a proxy).
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation.
@@ -457,7 +457,7 @@ cd mycluster     # change to the directory with the agent-based install files, u
 
 Do you need to download a set of images and CLI tools to install OpenShift into a fully disconnected (air-gapped) network?
 
-Here is how you can use Aba to create a `bundle archive` to do that!
+Here is how you can use Aba to create an `install bundle` to do that!
 
 Store your pull secret in this file:
 
@@ -473,7 +473,7 @@ cd aba
 ./install
 ```
 
-Connect a large USB media stick (or other device) to your VM and write the `bundle archive` to it:
+Connect a large USB media stick (or other device) to your VM and write the `install bundle` to it:
 
 Set the version oc OpenShift you want to install:
 ```
@@ -482,7 +482,7 @@ v=4.17.16
 
 Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any pre-existing files under aba/mirror/save. 
 
-Create the bundle archive with this single command:
+Create the install bundle with this single command:
 ```
 aba bundle \
     --pull-secret "~/.pull-secret.json" \
@@ -518,7 +518,7 @@ Verify the files are intact by comparing the checksum values with the original f
 cksum ocp_mycluster_4.17.16_*
 ```
 
-Extract the bundle archive:
+Extract the install bundle:
 
 ```
 cat /path/to/ocp_mycluster_4.17.16_* | tar xvf -
@@ -885,7 +885,7 @@ You can let Aba install them automatically (if `dnf` is configured) or install t
 **Q: How much disk space do I need when using Aba?**  
 
 **Minimum:** 30GB for OpenShift base images only.  
-**Recommended:** 500GB–1TB if you plan to include Operators, additional CLI tools, or create full bundle archives.
+**Recommended:** 500GB–1TB if you plan to include Operators, additional CLI tools, or create full install bundles.
 
 ---
 
