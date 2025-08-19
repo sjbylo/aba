@@ -434,10 +434,10 @@ cd mycluster     # change to the `cluster directory` with the agent-based instal
 | `aba login`       | Display the `oc login` command for the cluster.  Use: . <(aba login)  |
 | `aba shell`       | Display the command to access the cluster using the kubeconfig file.  Use: . <(aba shell) |
 | `aba day2`        | Integrate the private mirror into OpenShift. |
-| `aba day2-ntp     | Configure the cluster with NTP. |
-| `aba day2-osus    | Configure the cluster with OpenShift Update Service. |
-| `aba startup`     | Gracefully start up a cluster. |
+| `aba day2-ntp`    | Configure the cluster with NTP. |
+| `aba day2-osus    | Configure the cluster with OpenShift Update Service for easier cluster upgrades. |
 | `aba shutdown`    | Gracefully shut down (or hibernate) a cluster. `aba shutdown --wait` wait for power-off |
+| `aba startup`     | Gracefully start up a cluster. |
 | `aba help`        | Help is available in all Makefiles (in `aba/Makefile`,  `aba/mirror/Makefile`,  `aba/cli/Makefile` and `aba/<mycluster>/Makefile`)  |
 
 Commands for VMs (vCenter or ESXi)
