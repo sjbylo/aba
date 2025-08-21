@@ -444,14 +444,14 @@ Commands for VMs (vCenter or ESXi)
 
 | Command | Description |
 | :----- | :---------- |
-| `aba ls`          | Show list of VMs and their state (for VMs only). |
-| `aba start`       | Power on all VMs (for VMs only). |
-| `aba stop`        | Gracefully shut down all VMs (guest shutdown). |
+| `aba ls`          | Show list of cluster VMs and their state. |
+| `aba start`       | Power on all cluster VMs. |
+| `aba stop`        | Gracefully shut down all cluster VMs (guest shutdown). |
 | `aba poweroff `   | Power off all VMs immediately. |
 | `aba kill`        | Same as `poweroff` |
-| `aba create`      | Create all VMs. |
-| `aba refresh`     | Delete, re-create and start the VMs causing the cluster to be re-installed. |
-| `aba delete`      | Delete all the VMs.  |
+| `aba create`      | Create all cluster VMs. |
+| `aba refresh`     | Delete, re-create and start the cluster VMs causing the cluster to be re-installed. |
+| `aba delete`      | Delete all the cluster VMs.  |
 | `aba help`        | Help is available in all Makefiles (in `aba/Makefile`,  `aba/mirror/Makefile`,  `aba/cli/Makefile` and `aba/<mycluster>/Makefile`)  |
 
 
