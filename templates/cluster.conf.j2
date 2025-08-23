@@ -56,7 +56,7 @@ ssh_key_file=~/.ssh/id_rsa		# Optional: Path to your ssh key pair files (recomme
 					# The public key (e.g. ~/.ssh/id_rsa.pub) is copied to all OCP nodes.
 					# The private key (e.g. ~/.ssh/id_rsa) is used for ssh access to your nodes.
 
-# All the below values are only required if VMware is used to create VMs for the cluster.
+# Important: All the below values are only required if you want to use vCenter or ESXi to create VMs for the cluster.
 
 mac_prefix={{ mac_prefix }}		# If file "macs.conf" exists containing mac addresses, those addresses are used.
 					# Otherwise, all VMs will be created using this mac address prefix. 
@@ -67,7 +67,7 @@ mac_prefix={{ mac_prefix }}		# If file "macs.conf" exists containing mac address
 
 master_cpu_count={{ master_cpu_count }}			# Set the number of CPUs (cores) and Memory (GB of RAM).  
 master_mem={{ master_mem }}				# For SNO, the minimum is 16 CPUs.
-worker_cpu_count={{ worker_cpu_count }}			# Note: Only required for nodes based on VMs
+worker_cpu_count={{ worker_cpu_count }}			# Note: Only required for nodes based on VMs. For SNO, worker_* values are ignored.
 worker_mem={{ worker_mem }}
 
 data_disk={{ data_disk }}				# Add optional data disk (thin prov.). Leave data_disk undefined for 'no disk'.
