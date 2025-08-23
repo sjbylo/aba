@@ -134,9 +134,9 @@ test-cmd() {
 			
 			# For first failure, send all logs 
 			if [ $i -eq 1 ]; then
-				( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh -i "Command failed: $cmd" || true
+				( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Command failed: $cmd" || true
 			else
-				( echo -e "test.log:\n"; tail -1 test/test.log; echo -e "\noutput.log:\n"; tail -10 test/output.log ) | notify.sh -i "Command failed: $cmd" || true
+				( echo -e "test.log:\n"; tail -1 test/test.log; echo -e "\noutput.log:\n"; tail -10 test/output.log ) | notify.sh "Command failed: $cmd" || true
 			fi
 
 			let i=$i+1
@@ -161,7 +161,7 @@ test-cmd() {
 			sub_pid=
 		fi
 			
-		( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh -i "Aborting cmd: $cmd" || true
+		( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Aborting cmd: $cmd" || true
 
 		log-test COMMAND FAILED WITH RETURN VALUE: $ret
 		echo_red -n "COMMAND FAILED WITH RET=$ret, TRY AGAIN (Y) OR SKIP (N/S) OR ENTER NEW COMMAND OR Ctrl-C? (Y/n/s/<cmd>): "

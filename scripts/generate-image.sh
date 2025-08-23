@@ -24,7 +24,7 @@ echo
 echo_cyan Cluster configuration
 printf '=%.0s' $(seq 1 "$len")
 echo
-$openshift_install_mirror version 2>&1 | cat_cyan
+$openshift_install_mirror version 2>&1 | echo_cyan
 printf '=%.0s' $(seq 1 "$len")
 echo
 echo_cyan "$conf_display"
