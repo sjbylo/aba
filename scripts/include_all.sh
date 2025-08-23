@@ -11,17 +11,91 @@ export arch_short=amd64
 [ "$arch_sys" = "aarch64" -o "$arch_sys" = "arm64" ] && export arch_short=arm64  # ARM
 #[ "$arch_sys" = "x86_64" ]	&& export arch_short=amd64   # Intel
 
-echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_green()	{ [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_yellow()	{ [ "$TERM" ] && tput setaf 3; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_blue()	{ [ "$TERM" ] && tput setaf 4; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_magenta()	{ [ "$TERM" ] && tput setaf 5; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_cyan()	{ [ "$TERM" ] && tput setaf 6; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+# ===========================
+# Color Echo Functions
+# ===========================
 
-cat_cyan()	{ [ "$TERM" ] && tput setaf 6; cat; [ "$TERM" ] && tput sgr0; }
-cat_red()	{ [ "$TERM" ] && tput setaf 1; cat; [ "$TERM" ] && tput sgr0; }
+_color_echo() {
+    local color="$1"; shift
+    local text
+
+    # Collect input from args or stdin
+    if [ $# -gt 0 ]; then
+        text="$*"
+    else
+        text="$(cat)"
+    fi
+
+    # Apply color only if stdout is a terminal and terminal supports >= 8 colors
+    if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ]; then
+        tput setaf "$color"
+        echo -e "$text"
+        tput sgr0
+    else
+        echo -e "$text"
+    fi
+}
+
+# Standard 8 colors
+echo_black()   { _color_echo 0 "$@"; }
+echo_red()     { _color_echo 1 "$@"; }
+echo_green()   { _color_echo 2 "$@"; }
+echo_yellow()  { _color_echo 3 "$@"; }
+echo_blue()    { _color_echo 4 "$@"; }
+echo_magenta() { _color_echo 5 "$@"; }
+echo_cyan()    { _color_echo 6 "$@"; }
+echo_white()   { _color_echo 7 "$@"; }
+
+# Bright colors (8–15)
+echo_bright_black()   { _color_echo 8 "$@"; }
+echo_bright_red()     { _color_echo 9 "$@"; }
+echo_bright_green()   { _color_echo 10 "$@"; }
+echo_bright_yellow()  { _color_echo 11 "$@"; }
+echo_bright_blue()    { _color_echo 12 "$@"; }
+echo_bright_magenta() { _color_echo 13 "$@"; }
+echo_bright_cyan()    { _color_echo 14 "$@"; }
+echo_bright_white()   { _color_echo 15 "$@"; }
+
+# ===========================
+# Demo (optional)
+# ===========================
+color_demo() {
+    echo_black       "black"
+    echo_red         "red"
+    echo_green       "green"
+    echo_yellow      "yellow"
+    echo_blue        "blue"
+    echo_magenta     "magenta"
+    echo_cyan        "cyan"
+    echo_white       "white"
+    echo_bright_black   "bright black (gray)"
+    echo_bright_red     "bright red"
+    echo_bright_green   "bright green"
+    echo_bright_yellow  "bright yellow"
+    echo_bright_blue    "bright blue"
+    echo_bright_magenta "bright magenta"
+    echo_bright_cyan    "bright cyan"
+    echo_bright_white   "bright white"
+}
+
+#####################
+
+#echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+#echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+#echo_green()	{ [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+#echo_yellow()	{ [ "$TERM" ] && tput setaf 3; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+#echo_blue()	{ [ "$TERM" ] && tput setaf 4; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+#echo_magenta()	{ [ "$TERM" ] && tput setaf 5; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+#echo_cyan()	{ [ "$TERM" ] && tput setaf 6; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+#echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+
+#cat_cyan()	{ [ "$TERM" ] && tput setaf 6; cat; [ "$TERM" ] && tput sgr0; }
+#cat_red()	{ [ "$TERM" ] && tput setaf 1; cat; [ "$TERM" ] && tput sgr0; }
+
+cat_cyan()	{ echo_cyan; }
+cat_red()	{ echo_red; }
+
+####################
 
 if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
 	[ "$DEBUG_ABA" ] && echo "$0: Adding $HOME/bin to \$PATH for user $(whoami)" >&2
