@@ -16,24 +16,29 @@ export arch_short=amd64
 # ===========================
 
 _color_echo() {
-    local color="$1"; shift
-    local text
+	local color="$1"; shift
+	local text
 
-    # Collect input from args or stdin
-    if [ $# -gt 0 ]; then
-        text="$*"
-    else
-        text="$(cat)"
-    fi
+	# Collect input from args or stdin
+	if [ $# -gt 0 ]; then
+	n_opt=
+	if [ "$1" = "-n" ]; then
+		n_opt="-n"
+		shift
+	fi
+		text="$*"
+	else
+		text="$(cat)"
+	fi
 
-    # Apply color only if stdout is a terminal and terminal supports >= 8 colors
-    if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ]; then
-        tput setaf "$color"
-        echo -e "$text"
-        tput sgr0
-    else
-        echo -e "$text"
-    fi
+	# Apply color only if stdout is a terminal and terminal supports >= 8 colors
+	if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ]; then
+		tput setaf "$color"
+		echo -e $n_opt "$text"
+		tput sgr0
+	else
+		echo -e $n_opt "$text"
+	fi
 }
 
 # Standard 8 colors
@@ -61,20 +66,20 @@ echo_bright_white()   { _color_echo 15 "$@"; }
 # ===========================
 color_demo() {
     echo_black       "black"
-    echo_red         "red"
-    echo_green       "green"
-    echo_yellow      "yellow"
-    echo_blue        "blue"
-    echo_magenta     "magenta"
-    echo_cyan        "cyan"
-    echo_white       "white"
     echo_bright_black   "bright black (gray)"
+    echo_red         "red"
     echo_bright_red     "bright red"
+    echo_green       "green"
     echo_bright_green   "bright green"
+    echo_yellow      "yellow"
     echo_bright_yellow  "bright yellow"
+    echo_blue        "blue"
     echo_bright_blue    "bright blue"
+    echo_magenta     "magenta"
     echo_bright_magenta "bright magenta"
+    echo_cyan        "cyan"
     echo_bright_cyan    "bright cyan"
+    echo_white       "white"
     echo_bright_white   "bright white"
 }
 
@@ -92,8 +97,8 @@ color_demo() {
 #cat_cyan()	{ [ "$TERM" ] && tput setaf 6; cat; [ "$TERM" ] && tput sgr0; }
 #cat_red()	{ [ "$TERM" ] && tput setaf 1; cat; [ "$TERM" ] && tput sgr0; }
 
-cat_cyan()	{ echo_cyan; }
-cat_red()	{ echo_red; }
+#cat_cyan()	{ echo_cyan; }
+#cat_red()	{ echo_red; }
 
 ####################
 

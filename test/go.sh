@@ -72,7 +72,7 @@ echo "START TESTS @ $(date)" 								>> test/test.log
 echo "==========================================================================" 	>> test/test.log
 
 echo Starting tests: $all_tests
-echo "$all_tests [$TEST_CHANNEL] [$VER_OVERRIDE] [$internal_bastion_rhel_ver] [$TEST_USER] [$oc_mirror_ver_override]" | tee -a test/test.log | notify.sh -i Starting tests:
+echo "$all_tests [$TEST_CHANNEL] [$VER_OVERRIDE] [$internal_bastion_rhel_ver] [$TEST_USER] [$oc_mirror_ver_override]" | tee -a test/test.log | notify.sh Starting tests:
 
 time for t in $all_tests
 do
