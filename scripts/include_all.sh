@@ -32,7 +32,7 @@ _color_echo() {
 	fi
 
 	# Apply color only if stdout is a terminal and terminal supports >= 8 colors
-	if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ]; then
+	if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ ! "$PLAIN_OUTPUT" ]; then
 		tput setaf "$color"
 		echo -e $n_opt "$text"
 		tput sgr0

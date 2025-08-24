@@ -192,4 +192,4 @@ for name in $WORKER_NAMES ; do
 done
 
 echo
-echo Now run: aba mon
+[ "$START_VM" ] && echo_green "Starting installation at $(date "+%b %e %H:%M:%S")" || echo_green Now run: aba mon

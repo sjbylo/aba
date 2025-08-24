@@ -11,7 +11,26 @@ os     := $(strip $(shell uname -o))
 arch   := $(strip $(shell uname -m))
 os_ver := $(strip $(shell grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f2 | tr -d '"' | grep -o -E "[0-9]+\.[0-9]+"))
 
+##########################
+# Allow env variable to force plain output (e.g., PLAIN_OUTPUT=1)
+# Otherwise auto-detect from TTY
+ifeq ($(PLAIN_OUTPUT),1)
+  IS_TTY := no
+  HAS_COLORS := 0
+else
+  IS_TTY := yes
+endif
+
+# Pick curl option depending on plain/tty
+ifeq ($(IS_TTY),yes)
+  CURL_PROGRESS := "--progress-bar"
+else
+  CURL_PROGRESS := "-s"
+endif
+##########################
+
 # Check and set default version 'os_ver' variable, e.g. if Fedora version 40, then we want to convert "40" to 9.x
+# If os_ver empty
 ifeq ($(os_ver),)
 	os_ver := 9.5
 endif
@@ -118,20 +137,20 @@ oc: ~/bin/oc  ## Install oc into ~/bin
 
 octars: $(gen_oc_tar_file) $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download
 $(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
-	@curl -sfkLI $(gen_url) >/dev/null && echo Downloading $(gen_url) ... && curl -f --progress-bar -O -L $(gen_url) || (echo $(gen_oc_tar_file) not available; > $(gen_oc_tar_file))
+	@curl -sfkLI $(gen_url) >/dev/null && echo Downloading $(gen_url) ... && curl -f $(CURL_PROGRESS) -O -L $(gen_url) || (echo $(gen_oc_tar_file) not available; > $(gen_oc_tar_file))
 
 $(full_oc_tar_file):  ## Downlaod oc tarball for this hosts rhel version, otherwise download the fallback tarball.
-	@curl -sfkLI $(full_oc_url) >/dev/null && echo Downloading $(full_oc_url) ... && curl -f --progress-bar -O -L $(full_oc_url) || (echo "Downloading fallback file $(gen_url) ..."; curl --progress-bar -O -L $(gen_url))
+	@curl -sfkLI $(full_oc_url) >/dev/null && echo Downloading $(full_oc_url) ... && curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || (echo "Downloading fallback file $(gen_url) ..."; curl $(CURL_PROGRESS) -O -L $(gen_url))
 	touch $(full_oc_tar_file)
 
 # Ensure all possible tarballs are downloaded
 $(rhel9_oc_tar_file)-download:  ## Downlaod oc tarball for rhel9, if available
-	@curl -sfkLI $(rhel9_oc_url) >/dev/null && echo Downloading $(rhel9_oc_url) ... && curl -f --progress-bar -OL $(rhel9_oc_url) || (echo $(rhel9_oc_tar_file) not available; > $(rhel9_oc_tar_file))
+	@curl -sfkLI $(rhel9_oc_url) >/dev/null && echo Downloading $(rhel9_oc_url) ... && curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || (echo $(rhel9_oc_tar_file) not available; > $(rhel9_oc_tar_file))
 	touch $(rhel9_oc_tar_file)-download
 
 # Ensure all possible tarballs are downloaded
 $(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
-	@curl -sfkLI $(rhel8_oc_url) >/dev/null && echo Downloading $(rhel8_oc_url) ... && curl -f --progress-bar -OL $(rhel8_oc_url) || (echo $(rhel8_oc_tar_file) not available; > $(rhel8_oc_tar_file))
+	@curl -sfkLI $(rhel8_oc_url) >/dev/null && echo Downloading $(rhel8_oc_url) ... && curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || (echo $(rhel8_oc_tar_file) not available; > $(rhel8_oc_tar_file))
 	touch $(rhel8_oc_tar_file)-download
 
 
@@ -150,7 +169,7 @@ openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/b
 
 openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install tarball
 	@echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
-	curl --progress-bar -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
+	curl $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
 
 
 ########################################
@@ -165,12 +184,12 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 oc_mirror_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.tar.gz
 oc-mirror.tar.gz: ## Download oc-mirror tarball
 	echo Downloading $(oc_mirror_url)
-	curl --progress-bar -OL $(oc_mirror_url)
+	curl $(CURL_PROGRESS) -OL $(oc_mirror_url)
 
 oc_mirror_url_rhel9 = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.rhel9.tar.gz
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 	echo Downloading $(oc_mirror_url_rhel9)
-	curl --progress-bar -OL $(oc_mirror_url_rhel9)
+	curl $(CURL_PROGRESS) -OL $(oc_mirror_url_rhel9)
 
 
 ########################################
@@ -182,7 +201,7 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 
 govc_Linux_$(govc_arch).tar.gz:   ## Download govc tarball
 	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz
-	curl --progress-bar -L -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz"
+	curl $(CURL_PROGRESS) -L -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz"
 
 # Use either amd64 or aarch64 
 butane: ~/bin/butane ## Install butane to ~/bin/butane
@@ -193,7 +212,7 @@ butane: ~/bin/butane ## Install butane to ~/bin/butane
 
 butane-binary: ## Download butane binary 
 	echo Downloading https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch)
-	curl --progress-bar -L -o butane-binary --connect-timeout 10 --retry 3 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch)
+	curl $(CURL_PROGRESS) -L -o butane-binary --connect-timeout 10 --retry 3 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch)
 
 
 ########################################
