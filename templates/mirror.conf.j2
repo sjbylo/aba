@@ -19,8 +19,9 @@ reg_user=init				# Set your existing registry's username. Note that the Quay app
 reg_pw="p4ssw0rd"			# Registry password. Leave blank if a random password should be created e.g. reg_pw=
 					# The password must be at least 8 characters and contain no white-space.
 
-reg_root=				# Optional: Set an *absolute path* to a directory where Quay's storage should be kept. 
-					# Default is ~/quay-install.  Note that '~' can be used after the '='.
+data_dir=				# Optional: Absolute Path to large data disk for storing images and temporary files. 
+					# Quay is installed as $data_dir/quay-install & the oc-mirror cache as $data_dir/.oc-mirror. 
+					# Default is the local or remote home directory. Note that '~' can be used after the '='.
 
 # Important: The below 2 values are only needed if you want aba to install Quay on a remote host.
 

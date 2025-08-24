@@ -226,7 +226,8 @@ normalize-mirror-conf()
 			sed -E	-e "s/^\s*#.*//g" \
 				-e "s/^reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
 				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-				-e 's/^reg_root=~/reg_root=\\~/g' \
+				-e 's/^data_dir= /data_dir=\\~/g' \
+				-e 's/^data_dir=~/data_dir=\\~/g' \
 				-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
 				-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
 				-e 's#^reg_path=/#reg_path=#g' \
@@ -237,11 +238,26 @@ normalize-mirror-conf()
 		# Append always
 		echo export tls_verify=true
 	)
-
-	# FIXME: delete
-	#		-e "s/^tls_verify=0\b/tls_verify= /g" -e "s/tls_verify=false/tls_verify= /g" \
-	#		-e "s/^tls_verify=1\b/tls_verify=true /g" \
 }
+
+#fix_data_dir() {
+#	. normalize-mirror-conf
+#
+#	if [ "$data_dir" ]; then
+#		echo "export data_dir=~"
+#		echo "export reg_root=$data_dir/quay-install"
+#	else
+#		if [ ! "$reg_root" ]; then
+#			echo "export data_dir=~"
+#			echo "export reg_root=~/quay-install"
+#		else
+#			local d=$(dirname $reg_root)
+#			echo "export reg_root=$d/quay-install"
+#			echo "export data_dir=$d"
+#		fi
+#	fi
+#
+#}
 
 verify-mirror-conf() {
 	[ ! "$verify_conf" ] && return 0

@@ -8,7 +8,7 @@ Options:
   -u, --reg-user string                # The username used to access the registry (default it 'init').
   -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key to use to install Quay to a remote host.
   -U, --reg-ssh-user string            # Username to use to access the remote host via ssh.
-      --reg-root /path/to/dir          # Install Quay files/images to this dir instead of ~/quay-install.
+      --data-dir /path/to/dir          # Install Quay images/cache to this dir instead of ~/quay-install.
       --reg-path string                # The path to use to store images in the mirror reg.
 
 Related commands:
@@ -31,7 +31,7 @@ Examples of fully disconnected mode (air-gapped):
 
   Configure mirror registry and use path ocp4/openshift4 and store data under /mnt/...
     aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user --reg-path ocp4/openshift4 \
-      --reg-root /mnt/large/drive/my-quay-data
+      --data-dir /mnt/large/drive/my-data
 
   Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
     aba load -H registry.example.com  --retry 8

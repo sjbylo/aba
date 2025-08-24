@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250801160149
+ABA_VERSION=20250824195113
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -219,11 +219,11 @@ do
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
 		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_user "$2"
 		shift 2
-	elif [ "$1" = "--reg-root" ]; then
+	elif [ "$1" = "--data-dir" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_root "$2"
+		replace-value-conf $ABA_PATH/mirror/mirror.conf data_dir "$2"
 		shift 2
 	elif [ "$1" = "--reg-path" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1

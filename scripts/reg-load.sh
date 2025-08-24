@@ -29,8 +29,11 @@ else
 	echo "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 
 fi
 
+[ ! "$data_dir" ] && data_dir=\~
+reg_root=$data_dir/quay-install
+
 #FIXME: Instead of using reg_root, why not have data_vol=/mnt/large-disk and put all data in there? reg_root can be = $data_vol/quay-install
-[ "$reg_root" ] || reg_root=$HOME/quay-install  # $reg_root is needed for the below 'disk space' message AND for TMPDIR / OC_MIRROR_CACHE below
+#####[ "$reg_root" ] || reg_root=$HOME/quay-install  # $reg_root is needed for the below 'disk space' message AND for TMPDIR / OC_MIRROR_CACHE below
 
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
@@ -44,7 +47,7 @@ echo
 echo "Now loading (disk2mirror) the images from mirror/save/ directory to registry $reg_host:$reg_port/$reg_path."
 echo
 
-# Check if aba installed Quay or it's an existing reg.
+# Check if aba installed Quay (show warning) or it's an existing reg. (no need to show warning)
 if [ -s ./reg-uninstall.sh ]; then
 	echo "Warning: Ensure there is enough disk space under $reg_root.  This can take 5 to 20 minutes to complete or even longer if Operator images are being loaded!"
 fi
@@ -52,10 +55,10 @@ echo
 
 # If not already set, set the cache and tmp dirs to where there should be more disk space
 # Had to use [[ && ]] here, as without it got "mkdir -p <missing operand>" error!
-[[ ! "$TMPDIR" && "$reg_root" ]] && eval export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
+[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && eval mkdir -p $TMPDIR
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
-# Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $reg_root, if it's defined
-[[ ! "$OC_MIRROR_CACHE" && "$reg_root" ]] && eval export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
+# Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $data_dir.
+[[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && eval mkdir -p $OC_MIRROR_CACHE
 
 # oc-mirror v2 tuning params
 parallel_images=8

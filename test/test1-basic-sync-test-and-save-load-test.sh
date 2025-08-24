@@ -251,8 +251,10 @@ reg_ssh_key=${reg_ssh_user}_rsa
 #sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=\~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
-mylog "Setting reg_root=~/my-quay-mirror-test1"
-sed -i "s#^reg_root=[^ \t]*#reg_root=\~/my-quay-mirror-test1 #g" ./mirror/mirror.conf	     	# test other storage location
+mylog "Setting data_dir=~/my-quay-mirror-test1"
+sed -i "s#^data_dir=[^ \t]*#data_dir=\~/my-quay-mirror-test1 #g" ./mirror/mirror.conf	     	# test other storage location
+#mylog "Setting reg_root=~/my-quay-mirror-test1"
+#sed -i "s#^reg_root=[^ \t]*#reg_root=\~/my-quay-mirror-test1 #g" ./mirror/mirror.conf	     	# test other storage location
 
 mylog "Setting reg_pw=  (empty)"
 sed -i "s#^reg_pw=[^ \t]*#reg_pw= #g" ./mirror/mirror.conf	    	# test random password 
