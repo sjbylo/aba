@@ -31,7 +31,7 @@ Usage: Set up and load mirror registry
      -u, --reg-user <username>           # The username used to access the registry (default it 'init')
      -k, --reg-ssh-key ~/.ssh/mykey      # Path to ssh key to use to install Quay to a remote host
      -U, --reg-ssh-user myuser           # Username to use to access the remote host via ssh
-         --reg-root /path/to/dir         # Install Quay files/images to this directory
+         --data-dir /path/to/dir         # Install Quay files/images under this directory
          --reg-path <path>               # The path to use to store images in the mirror reg
 
    aba sync                              # Copy images from the Internet into the mirror registry
@@ -134,7 +134,7 @@ Examples of partially disconnected mode (e.g. via a proxy)
     aba sync -H registry.example.com --op-sets ocp ocpv mesh3 --ops web-terminal --retry
 
   Configure mirror registry on localhost with 'registry.example.com', sync *all* operators and install Quay files into custom directory:
-    aba sync -H registry.example.com --op-sets all --retry --quay-root ~/my-quay-dir
+    aba sync -H registry.example.com --op-sets all --retry --data-dir ~/my-data-dir
 
   Save images to local disk (note, it's recommended to run the above 'bundle' command which will run 'save' for you):
     aba save --retry

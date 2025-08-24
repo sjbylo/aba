@@ -10,6 +10,9 @@ source <(normalize-mirror-conf)
 verify-aba-conf  || true # || exit 1  # ocp_version and ocp_channel can be missing
 verify-mirror-conf || exit 1
 
+[ ! "$data_dir" ] && data_dir=\~
+reg_root=$data_dir/quay-install
+
 if [ -s reg-uninstall.sh ]; then
 	source reg-uninstall.sh  # Source the reg_host_to_del var and reg_delete fn()
 
@@ -39,14 +42,14 @@ fi
 # Try to uninstall any existing registry
 
 # Has user defined a registry root dir?
-if [ "$reg_root" ]; then
+##if [ "$reg_root" ]; then
 	reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
-else
-	# The default path
-	## FIX # reg_root=/home/$reg_ssh_user/quay-install   # Not used in thie script!
-	reg_root="~/quay-install"   # Used in $reg_root_opt above
-	## FIX # [ "$reg_ssh_user" = "root" ] && reg_root=/root/quay-install
-fi
+##else
+#	# The default path
+#	## FIX # reg_root=/home/$reg_ssh_user/quay-install   # Not used in thie script!
+#	reg_root="~/quay-install"   # Used in $reg_root_opt above
+#	## FIX # [ "$reg_ssh_user" = "root" ] && reg_root=/root/quay-install
+#fi
 
 if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registry; then
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then

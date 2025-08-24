@@ -66,6 +66,9 @@ fi
 ## FIX # fix_home=/home/$reg_ssh_user
 ## FIX # [ "$reg_ssh_user" = "root" ] && fix_home=/root
 
+[ ! "$data_dir" ] && data_dir=\~
+reg_root=$data_dir/quay-install
+
 # Is registry root dir value defined?
 if [ "$reg_root" ]; then
 	## FIX # if echo "$reg_root" | grep -q ^~; then
@@ -151,7 +154,7 @@ if [ "$reg_ssh_key" ]; then
 		echo "Ssh access to remote host ($reg_ssh_user@$reg_host using key $reg_ssh_key) is working ..."
 	fi
 
-	ask "Install Quay mirror registry appliance on remote host, accessable via $reg_hostport" || exit 1
+	ask "Install Quay mirror registry on remote host ($reg_ssh_user@reg_host:$reg_root), accessable via $reg_hostport" || exit 1
 	echo "Installing Quay registry to remote host at $reg_ssh_user@$reg_host ..."
 
 	# Workaround START ########

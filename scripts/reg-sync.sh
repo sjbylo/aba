@@ -59,7 +59,10 @@ reg_code=$(curl --connect-timeout 10 --retry 3 -ILsk -o /dev/null -w "%{http_cod
 # This is needed since sometimes an existing registry may already be available
 scripts/create-containers-auth.sh
 
-[ ! "$reg_root" ] && reg_root=$HOME/quay-install  # Needed for below TMPDIR
+[ ! "$data_dir" ] && data_dir=\~
+reg_root=$data_dir/quay-install
+
+###[ ! "$reg_root" ] && reg_root=$HOME/quay-install  # Needed for below TMPDIR
 
 echo
 echo "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port/$reg_path. "
@@ -73,10 +76,10 @@ echo
 # If not already set, set the cache and tmp dirs to where there should be more disk space
 # Had to use [[ && ]] here, as without it got "mkdir -p <missing operand>" error!
 #[[ ! "$TMPDIR" && "$reg_root" ]] && export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
-[[ ! "$TMPDIR" && "$reg_root" ]] && eval export TMPDIR=$reg_root/.tmp && eval mkdir -p $TMPDIR
+[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && eval mkdir -p $TMPDIR
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
-# Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $reg_root, if it's defined
-## [[ ! "$OC_MIRROR_CACHE" && "$reg_root" ]] && eval export OC_MIRROR_CACHE=$reg_root && eval mkdir -p $OC_MIRROR_CACHE
+# Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $data_dir, if it's defined
+## [[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && eval mkdir -p $OC_MIRROR_CACHE
 
 # oc-mirror v2 tuning params
 parallel_images=8
