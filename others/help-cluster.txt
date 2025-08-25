@@ -12,6 +12,7 @@ Examples:
 Options:
 
   aba cluster                             # Create a cluster
+    -y                                    # Automatically accept the default answer to all prompts
     -n, --name string                     # The name of the cluster to create
     -t, --type <sno|compact|standard>     # Set type of cluster
     -s, --step <step>                     # Process up to this step or target <cluster.conf|agentconf|iso|mon>
