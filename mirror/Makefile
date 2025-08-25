@@ -8,6 +8,24 @@ debug   ?=
 force   ?= no
 bg   ?=
 
+##########################
+# Allow env variable to force plain output (e.g., PLAIN_OUTPUT=1)
+# Otherwise auto-detect from TTY
+ifeq ($(PLAIN_OUTPUT),1)
+  IS_TTY := no
+  HAS_COLORS := 0
+else
+  IS_TTY := yes
+endif
+
+# Pick curl option depending on plain/tty
+ifeq ($(IS_TTY),yes)
+  CURL_PROGRESS := "--progress-bar"
+else
+  CURL_PROGRESS := "-s"
+endif
+##########################
+
 all: mirror
 
 ##@ Help-related tasks
@@ -101,7 +119,7 @@ mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry bin
 
 mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball
 	echo "Downloading mirror-registry-amd64.tar.gz ..."
-	curl --progress-bar -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
+	curl $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
 	@#$(SCRIPTS)/download-mirror-registry.sh  # FIXME: delete script
 
 # mirror.conf depends on aba.conf for the 'domain aalue
