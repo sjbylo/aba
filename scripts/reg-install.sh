@@ -102,6 +102,8 @@ cat > .ssh.conf <<END
 StrictHostKeyChecking no
 UserKnownHostsFile=/dev/null
 ConnectTimeout=15
+PreferredAuthentications=publickey
+PasswordAuthentication=no
 LogLevel=ERROR
 END
 
@@ -154,7 +156,7 @@ if [ "$reg_ssh_key" ]; then
 		echo "Ssh access to remote host ($reg_ssh_user@$reg_host using key $reg_ssh_key) is working ..."
 	fi
 
-	ask "Install Quay mirror registry on remote host ($reg_ssh_user@reg_host:$reg_root), accessable via $reg_hostport" || exit 1
+	ask "Install Quay mirror registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessable via $reg_hostport" || exit 1
 	echo "Installing Quay registry to remote host at $reg_ssh_user@$reg_host ..."
 
 	# Workaround START ########
@@ -262,10 +264,11 @@ else
 	# We will leave this only as a warning, not an error since sometimes there is a NAT in use which is difficult to check
 	if ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
 		echo
-		echo_red "Warning: The mirror registry is configured on this localhost ($(hostname)) but '$reg_host'" >&2
-		echo_red "         resolves to $fqdn_ip, which DOES NOT reach this localhost via ssh!" >&2
+		echo_red "Warning: The mirror registry is configured to be installed on this localhost '$(hostname)'" >&2
+		echo_red "         but '$reg_host' resolves to $fqdn_ip, which *does not* reach this localhost via ssh!" >&2
 		echo_red "         If '$reg_host' is meant to point to a remote host, set 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
-		echo_red "         If '$reg_host' should point to this *localhost*, update the DNS record to resolve to an IP address that correctly reaches $(hostname)." >&2
+		echo_red "         If '$reg_host' should point to this *localhost*, update the DNS record to resolve to an IP address that correctly reaches localhost '$(hostname)'." >&2
+		echo_red "         Correct the problem and try again." >&2
 
 		echo
 		sleep 2

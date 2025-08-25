@@ -693,29 +693,29 @@ watch -n 5 oc get co
 
 ## Feature Backlog and Ideas
 
-- Support other catalogs (indexes) too, e.g. "community", "certified", and not just "redhat".
+- Support other operator catalogs (indexes) too, e.g. "community", "certified", and not just "redhat".
 
 - Configure ACM (if installed) to be ready to install clusters from the mirror registry.
 
 - Configure htpasswd login, add users, disable kubeadmin.
 
-- Use PXE boot as alternative to ISO upload.
+- Use PXE boot as alternative to ISO.
 
 - Enable aba to work in a container (this has been partially implemented, see below).
 
-- Allow to keep platform and operator images separate in the registry and not all under a single path.
+- Allow to keep platform and operator images separate in the registry and not all under the same path.
 
-- Using oc-mirror v2, fetch all operator dependencies automatically using the script. 
+- Using oc-mirror v2, fetch all operator dependencies automatically.
 
-- Prompt user to run `aba day2`, after (new) operators have been pushed to the registry. 
+- Prompt user to run `aba day2` (or run it automatically), after (new) operators have been pushed to the registry. 
 
 - Auto-refresh the Operator Catalogs (indexes) after they become stale (e.g. after 1 day). 
 
-- Support libvirt (as well as only vSphere). 
-
-- Allow to specify the path to a large data volume (and not only the top dir of the Quay registry). Store all large files/cache there. 
+- Support libvirt (as well as vSphere). 
 
 - Generally improve the user experience (UX) of Aba.
+
+- ~~Allow to specify the path to a large data volume (and not only the top dir of the Quay registry). Store all large files/cache there.~~
 
 - ~~Assist in adding OpenShift Update Service (OSUS) to the cluster.~~
 
