@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250824195113
+ABA_VERSION=20250825114221
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -403,10 +403,14 @@ do
 	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
 		replace-value-conf $ABA_PATH/aba.conf ask true
 		shift 
-	elif [ "$1" = "--noask" -o "$1" = "-A" -o "$1" = "-y" ]; then  # FIXME: make -y work only for a single command execution (not write into file)
+	elif [ "$1" = "-y" ]; then  # make -y work only for a single command execution (not write into file)
+		###replace-value-conf $ABA_PATH/aba.conf ask false 
+		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
+		shift 
+	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then  # FIXME: make -y work only for a single command execution (not write into file)
 		replace-value-conf $ABA_PATH/aba.conf ask false 
 		shift 
-	elif [ "$1" = "--mcpu" -o "$1" = "-qqq" ]; then  # FIXME opt.
+	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then  # FIXME opt.
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
@@ -418,7 +422,7 @@ do
 			echo_red "Argument invalid [$2] after option $1" >&2
 		fi
 		shift 2
-	elif [ "$1" = "--mmem" -o "$1" = "-QQQQ" ]; then  # FIXME opt.
+	elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then  # FIXME opt.
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
@@ -430,7 +434,7 @@ do
 			echo_red "Argument invalid [$2] after option $1" >&2
 		fi
 		shift 2
-	elif [ "$1" = "--wcpu" -o "$1" = "-qqq" ]; then  # FIXME opt.
+	elif [ "$1" = "--wcpu" -o "$1" = "--worker-cpu" ]; then  # FIXME opt.
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
@@ -442,7 +446,7 @@ do
 			echo_red "Argument invalid [$2] after option $1" >&2
 		fi
 		shift 2
-	elif [ "$1" = "--wmem" -o "$1" = "-QQQQ" ]; then  # FIXME opt.
+	elif [ "$1" = "--wmem" -o "$1" = "--worker-memory" ]; then  # FIXME opt.
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
@@ -627,20 +631,14 @@ cd $ABA_PATH
 # ###########################################
 # From now on it's all considered INTERACTIVE
 
-# If in interactive mode then ensure questions are asked!
-replace-value-conf aba.conf ask true 
-
+# If in interactive mode then ensure all prompts are active!
+### replace-value-conf aba.conf ask true   # Do not make this permanent!
 source <(normalize-aba-conf)
+export ask=1
 
 #verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_version or channel defined
 
-export ask=1
-
-# Include aba bin path and common scripts
-### export PATH=$PWD/bin:$PATH  # done in include.sh
-
 cat others/message.txt
-
 
 ##############################################################################################################################
 # Determine if this is an "aba bundle" or just a clone from GitHub

@@ -19,6 +19,7 @@ Other commands:
   aba help                              # See help for all targets
 
 Options:
+  -y                                    # Automatically accept the default answer to all prompts
   -d, --dir <directory>                 # Run Aba in this directory
   -h, --help                            # Show this help information
   -S, --pull-secret <path/to/file>      # Location of your pull secret (json) file here

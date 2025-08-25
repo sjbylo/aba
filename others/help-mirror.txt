@@ -4,6 +4,7 @@ Usage:
   aba mirror [options]
 
 Options:
+  -y                                   # Automatically accept the default answer to all prompts
   -H, --mirror-hostname string         # The hostname of the target mirror registry.
   -u, --reg-user string                # The username used to access the registry (default it 'init').
   -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key to use to install Quay to a remote host.

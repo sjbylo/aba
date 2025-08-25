@@ -5,12 +5,13 @@ Install & manage air-gapped OpenShift.
    installer there is no need to configure a load balancer, a bootstrap node or require DHCP.
 
 Usage: Interactive
-   aba [-i]                               # Interactive mode
-                                          # Let Aba lead you through the disconnected install process
+   aba [-i]                              # Interactive mode
+                                         # Let Aba lead you through the disconnected install process
 
 Usage: Create a install 'bundle archive'
    aba bundle \
     <<options>>:
+     -y                                  # Automatically accept the default answer to all prompts
      -c, --channel <channel>
      -v, --version <version>
      -o, --out </path/to/mybundle|->

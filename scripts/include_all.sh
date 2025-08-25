@@ -159,6 +159,8 @@ normalize-aba-conf() {
 		awk '{print $1}' | \
 		sed	-e "s/^/export /g";
 
+	[ "$ASK_OVERRIDE" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
+	# "true" needed, otherwise this function returns non-zero (error)
 }
 
 verify-aba-conf() {
