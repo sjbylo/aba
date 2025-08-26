@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250826162554
+ABA_VERSION=20250826211610
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -197,7 +197,6 @@ do
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
 
-		set -x
 		( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=redhat-operator & ) & 
 		( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=certified-operator & ) & 
 		( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=redhat-marketplace & ) & 
