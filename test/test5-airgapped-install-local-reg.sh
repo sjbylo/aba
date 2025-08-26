@@ -345,9 +345,9 @@ tee -a mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/kiali/demo_travels_travels:v1
 END
 
-test-cmd -m "Checking for file mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "test -s mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
-test-cmd -m "Checking for servicemeshoperator3 in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 servicemeshoperator3$"
-### Added from op-set 'abatest' test-cmd -m "Checking for kiali-ossm in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 kiali-ossm$"
+test-cmd -m "Checking for file mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml" "test -s mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml"
+test-cmd -m "Checking for servicemeshoperator3 in mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 servicemeshoperator3$"
+### Added from op-set 'abatest' test-cmd -m "Checking for kiali-ossm in mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 kiali-ossm$"
 
 # This header is needed for both v1 and v2
 tee -a mirror/save/imageset-config-save.yaml <<END
@@ -358,8 +358,8 @@ END
 
 # Append the correct values for each operator
 mylog Append sm and kiali operators to imageset conf
-grep -A2 -e "name: servicemeshoperator3$"  mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
-### Added from op-set 'abatest' grep -A2 -e "name: kiali-ossm$"	          mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+grep -A2 -e "name: servicemeshoperator3$"  mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+### Added from op-set 'abatest' grep -A2 -e "name: kiali-ossm$"	          mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
 ########
 test-cmd -r 3 3 -m "Saving mesh operators to local disk" "aba --dir mirror save --retry"
@@ -377,8 +377,8 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type --cmd 'oc get packagemanifests'"
 
-## REMOVE jaeger # ##mylog "Checking for jaeger-product in mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml"
-## REMOVE jaeger # test-cmd -m "Checking jaeger-product operator exists in the catalog file" "cat mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | grep jaeger-product$"
+## REMOVE jaeger # ##mylog "Checking for jaeger-product in mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml"
+## REMOVE jaeger # test-cmd -m "Checking jaeger-product operator exists in the catalog file" "cat mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | grep jaeger-product$"
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
@@ -399,11 +399,11 @@ fi
 # For oc-miror v2
 
 ## REMOVE jaeger # mylog Appending jaeger operator to imageset conf
-## REMOVE jaeger # grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+## REMOVE jaeger # grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
 ## upgrade tests
 mylog Appending cincinnati operator to imageset conf
-grep -A2 -e "name: cincinnati-operator$"	mirror/imageset-config-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+grep -A2 -e "name: cincinnati-operator$"	mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
 ####### upgrade cluster?  Change channel from stable (as set above) to "fast"
 # DONE ABOVE NOW ocp_version_desired=$ocp_version
