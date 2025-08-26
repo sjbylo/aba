@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250825114221
+ABA_VERSION=20250826162554
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -197,7 +197,11 @@ do
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
 
-		( make -s -C $ABA_PATH/mirror catalog bg=true & ) & 
+		set -x
+		( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=redhat-operator & ) & 
+		( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=certified-operator & ) & 
+		( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=redhat-marketplace & ) & 
+		( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=community-operator & ) & 
 
 		shift 2
 
@@ -817,7 +821,11 @@ if [ ! -f .bundle ]; then
 			#install_rpms make || exit 1  # rpms installed above
 
 			# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-			( make -s -C mirror catalog bg=true & ) & 
+			##( make -s -C mirror catalog bg=true & ) & 
+			( make -s -C mirror catalog bg=true catalog-name=redhat-operator & ) & 
+			( make -s -C mirror catalog bg=true catalog-name=certified-operator & ) & 
+			( make -s -C mirror catalog bg=true catalog-name=redhat-marketplace & ) & 
+			( make -s -C mirror catalog bg=true catalog-name=community-operator & ) & 
 
 			sleep 0.3
 		else

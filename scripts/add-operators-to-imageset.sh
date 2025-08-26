@@ -70,8 +70,9 @@ cat <<END
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
     packages:
 END
+
 else
-	[ "$INFO_ABA" ] && echo_cyan "No 'op*' values set in aba.conf. Not adding operators to the image set config file." >&2
+	[ "$INFO_ABA" ] && echo_cyan "No 'op*' values set in aba.conf or mirror.conf. Not adding operators to the image set config file." >&2
 
 	exit 0
 fi
@@ -94,7 +95,7 @@ do
 		done
 		#echo >&2
 	else
-		echo_red "Warning: Missing operator set file: 'templates/operator-set-$set'.  Please adjust your operator settings in aba.conf or create the file." >&2
+		echo_red "Warning: Missing operator set file: 'templates/operator-set-$set'.  Please adjust your operator settings in aba.conf or create the missing file." >&2
 	fi
 done
 

@@ -695,15 +695,13 @@ watch -n 5 oc get co
 
 - Support other operator catalogs (indexes) too, e.g. "community", "certified", and not just "redhat".
 
-- Configure ACM (if installed) to be ready to install clusters from the mirror registry.
-
 - Configure htpasswd login, add users, disable kubeadmin.
 
 - Use PXE boot as alternative to ISO.
 
 - Enable aba to work in a container (this has been partially implemented, see below).
 
-- Allow to keep platform and operator images separate in the registry and not all under the same path.
+- Keep platform and operator images types separate in the registry and not all under the same path.
 
 - Using oc-mirror v2, fetch all operator dependencies automatically.
 
@@ -714,6 +712,8 @@ watch -n 5 oc get co
 - Support libvirt (as well as vSphere). 
 
 - Generally improve the user experience (UX) of Aba.
+
+- Configure ACM (if installed) to be ready to install clusters from the mirror registry.
 
 - ~~Allow to specify the path to a large data volume (and not only the top dir of the Quay registry). Store all large files/cache there.~~
 

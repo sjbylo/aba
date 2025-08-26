@@ -14,8 +14,22 @@ if [ "$1" = "true" ]; then
 	exit 0
 fi
 
-[ "$1" = "--bg" ] && bg=1 && shift  # Now we know if this script is running as a daemon 
-[ "$1" ] && set -x
+# Set default catalog name
+catalog_name=redhat-operator
+
+while [ "$*" ]
+do
+	if [ "$1" = "--bg" ]; then
+		shift  # Now we know this script is running as a daemon 
+		bg=1
+	elif [ "$1" = "--debug" ]; then
+		shift
+		set -x
+	else
+		catalog_name="$1"
+		shift
+	fi
+done
 
 source <(normalize-aba-conf)
 
@@ -25,26 +39,6 @@ verify-aba-conf || exit 1
 
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
-
-mkdir -p .index
-index_file=.index/redhat-operator-index-v$ocp_ver_major
-lock_file=.index/redhat-operator-index-v$ocp_ver_major.lock
-log_file=.index/redhat-operator-index-v$ocp_ver_major.log
-pid_file=.index/redhat-operator-index-v$ocp_ver_major.pid
-done_file=.index/redhat-operator-index-v$ocp_ver_major.done
-
-# Clean up on INT
-handle_interupt() { echo_red "Aborting catalog download." >&2; [ ! -f $done_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0;}
-trap 'handle_interupt' INT
-
-# Check if this script is running in the background, if it is then output to a log file
-#if [ ! -t 0 ]; then
-if [ "$bg" ]; then
-	#echo "Downloading operator index in the background from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major (see $log_file) ..." >&2
-
-	exec > $log_file 
-	exec 2> $log_file
-fi
 
 # Check connectivity to registry
 if ! curl --connect-timeout 15 --retry 3 -IL http://registry.redhat.io/v2 >/dev/null 2>&1; then
@@ -57,7 +51,44 @@ fi
 #scripts/create-containers-auth.sh >/dev/null 2>&1
 scripts/create-containers-auth.sh >/dev/null  # Ensure any errors are output
 
-[[ -s $index_file && -f $done_file ]] && echo_white "Operator index v$ocp_ver_major already downloaded to file mirror/$index_file" && exit 0
+################################################################
+# Start of download ...
+
+#catalog_name in redhat-operator certified-operator redhat-marketplace community-operator
+
+#catalog_name=redhat-operator
+
+mkdir -p .index
+index_file=.index/$catalog_name-index-v$ocp_ver_major
+lock_file=.index/$catalog_name-index-v$ocp_ver_major.lock
+log_file=.index/$catalog_name-index-v$ocp_ver_major.log
+pid_file=.index/$catalog_name-index-v$ocp_ver_major.pid
+done_file=.index/$catalog_name-index-v$ocp_ver_major.done
+
+# Clean up on INT
+handle_interupt() { echo_red "Aborting catalog download." >&2; [ ! -f $done_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0;}
+trap 'handle_interupt' INT
+
+# Check if this script is running in the background, if it is then output to a log file
+#if [ ! -t 0 ]; then
+if [ "$bg" ]; then
+	#echo "Downloading operator index in the background from registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major (see $log_file) ..." >&2
+
+	exec > $log_file 
+	exec 2> $log_file
+fi
+
+if [[ -s $index_file && -f $done_file ]]; then
+	echo_white "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file"
+
+	# Check age of file is older than one day
+	if [ "$(find $index_file -type f -mtime +0)" ]; then
+		echo_white "Operator index needs to be refreshed as it's older than one day."
+		rm -f $lock_file
+	else
+		exit 0  # Index already exists and is less than a day old
+	fi
+fi
 
 # See if the index is already downloaded
 [ ! -f $index_file ] && touch $index_file
@@ -119,16 +150,16 @@ echo $$ > $pid_file
 ## NOT A GOOD IDEA [ -t 0 ] && handle_interupt() { echo_red "Putting download into background" >&2; rm -f $lock_file; ( $0 $* > .fetch-index.log 2>&1 & ) & exit 0; }
 ### FIX ME [ -t 0 ] && handle_interupt() { echo_red "Stopping download" >&2; rm -f $lock_file;  exit 0; }
 
-echo_cyan "Downloading Operator index v$ocp_ver_major to $index_file, please wait a few minutes ..."
+echo_cyan "Downloading $catalog_name Operator index v$ocp_ver_major to $index_file, please wait a few minutes ..."
 
 make -sC ../cli ~/bin/oc-mirror 
 
 # Fetch latest operator catalog and default channels
-echo Running: oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major >&2
-oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major > $index_file
+echo Running: oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major >&2
+oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major > $index_file
 ret=$?
 if [ $ret -ne 0 ]; then
-	echo_red "Error: oc-mirror returned $ret whilst downloading operator index from registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major." >&2
+	echo_red "Error: oc-mirror returned $ret whilst downloading operator index from registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major." >&2
 	rm -f $lock_file $pid_file
 
 	exit 1
@@ -147,13 +178,13 @@ do
     - name: $op_name
       channels:
       - name: $op_default_channel"
-done > imageset-config-operator-catalog-v${ocp_ver_major}.yaml
+done > imageset-config-$catalog_name-catalog-v${ocp_ver_major}.yaml
 
-echo_white "Generated imageset-config-operator-catalog-v${ocp_ver_major}.yaml file for easy reference when editing your image set config file."
+echo_white "Generated mirror/imageset-config-$catalog_name-catalog-v${ocp_ver_major}.yaml file for easy reference when editing your image set config file."
 
 # Keep the lock file since we assume the catalog was downloaded ok
 ##rm -f $lock_file $pid_file
 
 # Adding this to log file since it will run in the background
-echo_green "Downloaded operator index for v$ocp_ver_major successfully"
+echo_green "Downloaded $catalog_name index for v$ocp_ver_major successfully"
 
