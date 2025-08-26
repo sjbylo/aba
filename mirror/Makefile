@@ -174,7 +174,9 @@ index: init catalog
 # -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
 catalog: init ## Render all the latest Operators into a file which can be used in an imageset config file. 
 	@#make -sC ../cli ~/bin/oc-mirror
-	$(SCRIPTS)/download-operator-index.sh $(bg) $(catalog-name)
+	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-operator
+	$(SCRIPTS)/download-operator-index.sh $(bg) certified-operator
+	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-marketplace
 
 #uninstall: .init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
 uninstall: .init             mirror-registry .uninstalled     ## Uninstall any previously installed registry  

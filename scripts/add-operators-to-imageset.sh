@@ -17,8 +17,11 @@ export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 declare -A added_operators  # Associative array to track added operators
 
 add_op() {
+	local op=$1
+	local catalog=$2
+
 	# Extract operator name and default channel from the file
-	read op_name op_default_channel < <(grep "^$1 " .index/redhat-operator-index-v$ocp_ver_major | awk '{print $1, $NF}')
+	read op_name op_default_channel < <(grep "^$op " .index/$catalog-index-v$ocp_ver_major | awk '{print $1, $NF}')
 
 	# Check if the operator name exists
 	if [ "$op_name" ]; then
@@ -34,16 +37,18 @@ add_op() {
 
 		# Output the operator information
 		if [ "$op_default_channel" ]; then
-			echo "\
-    - name: $op_name
-      channels:
-      - name: $op_default_channel"
+			cat <<-END
+			    - name: $op_name
+			      channels:
+			      - name: $op_default_channel
+			END
 		else
-			echo "\
-    - name: $op_name"
+			cat <<-END
+			    - name: $op_name
+			END
 		fi
 	else
-		echo_red "Warning: Operator '$1' not found in index file mirror/.index/redhat-operator-index-v$ocp_ver_major" >&2
+		echo_red "Warning: Operator '$op' not found in index file mirror/.index/$catalog-index-v$ocp_ver_major" >&2
 	fi
 }
 
@@ -65,12 +70,6 @@ if [ "$ops" -o "$op_sets" ]; then
 		exit 1  # We want to ensure the user gets what they expect, i.e. operators downloaded!
 	fi
 
-cat <<END
-  operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
-    packages:
-END
-
 else
 	[ "$INFO_ABA" ] && echo_cyan "No 'op*' values set in aba.conf or mirror.conf. Not adding operators to the image set config file." >&2
 
@@ -82,36 +81,97 @@ fi
 # 'all' is a special operator set which allows all operators to be downloaded!  The above "operators->catalog" entry will enable all op.
 echo $op_sets | grep -qe "^all$" -e "^all," -e ",all$" -e ",all," && echo_yellow "Adding all operators to your image set config file!" >&2 && exit 0
 
+redhat_operators=()
+certified_operators=()
+redhat_marketplace=()
+community_operator=()
+
+# Step though all the operator sets and determine which catalog they exist in,
+# with priority order: redhat-operator, certified-operator, redhat-marketplace, community-operator
 for set in $(echo $op_sets | tr "," " ")
 do
+	declare -A op_set
+
 	# read in op list from template
 	if [ -s templates/operator-set-$set ]; then
-		echo "# $set operators"
+		#echo "# $set operators"
 		[ "$INFO_ABA" ] && echo_cyan -n "$set: " >&2
 		for op in $(cat templates/operator-set-$set | sed -e 's/#.*//' -e '/^\s*$/d' -e 's/^\s*//g' -e 's/\s*$//g')
 		do
 			[ "$INFO_ABA" ] && echo_cyan -n "$op " >&2
-			add_op $op
+
+			# Check if this operator exists in each of the three catalogs
+			#echo op=$op
+			#ls -l .index/redhat-operator-index-v$ocp_ver_major
+			if grep -q "^$op " .index/redhat-operator-index-v$ocp_ver_major; then
+				[ ! "${op_set[$set]}" ] && redhat_operator+=("#-$set-operators") && op_set[$set]=1 # A bit of a hack!
+				redhat_operator+=("$op")
+			elif grep -q "^$op " .index/certified-operator-index-v$ocp_ver_major; then
+				[ ! "${op_set[$set]}" ] && certified_operator+=("#-$set-operators") && op_set[$set]=1
+				certified_operator+=("$op")
+			elif grep -q "^$op " .index/redhat-marketplace-index-v$ocp_ver_major; then
+				[ ! "${op_set[$set]}" ] && redhat_marketplace+=("#-$set-operators") && op_set[$set]=1
+				redhat_marketplace+=("$op")
+			elif grep -q "^$op " .index/community-operator-index-v$ocp_ver_major; then
+				[ ! "${op_set[$set]}" ] && community_operator+=("#-$set-operators") && op_set[$set]=1
+				community_operator+=("$op")
+			fi
 		done
-		#echo >&2
 	else
 		echo_red "Warning: Missing operator set file: 'templates/operator-set-$set'.  Please adjust your operator settings in aba.conf or create the missing file." >&2
 	fi
 done
 
+# Step though all the operators and determine which catalog they exist in,
+# with priority order: redhat-operator, certified-operator, redhat-marketplace, community-operator
 if [ "$ops" ]; then
-	echo "# misc operators"
+	declare -A op_set
+	set=misc
+
 	[ "$INFO_ABA" ] && echo_cyan -n "Op: " >&2
 
 	for op in $(echo $ops | tr "," " ")
 	do
 		[ "$INFO_ABA" ] && echo_cyan -n "$op " >&2
-		add_op $op
+
+		# Check if this operator exists in each of the three catalogs
+		if grep -q "^$op " .index/redhat-operator-index-v$ocp_ver_major; then
+			[ ! "${op_set1[$set]}" ] && redhat_operator+=("#-$set-operators") && op_set1[$set]=1 # A bit of a hack!
+			redhat_operator+=("$op")
+		elif grep -q "^$op " .index/certified-operator-index-v$ocp_ver_major; then
+			[ ! "${op_set2[$set]}" ] && certified_operator+=("#-$set-operators") && op_set2[$set]=1
+			certified_operator+=("$op")
+		elif grep -q "^$op " .index/redhat-marketplace-index-v$ocp_ver_major; then
+			[ ! "${op_set3[$set]}" ] && redhat_marketplace+=("#-$set-operators") && op_set3[$set]=1
+			redhat_marketplace+=("$op")
+		elif grep -q "^$op " .index/community-operator-index-v$ocp_ver_major; then
+			[ ! "${op_set4[$set]}" ] && community_operator+=("#-$set-operators") && op_set4[$set]=1
+			community_operator+=("$op")
+		fi
 	done
-	#echo >&2
 else
 	[ "$INFO_ABA" ] && echo_cyan "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image set config file." >&2
 fi
+
+for catalog in redhat_operator certified_operator redhat_marketplace community_operator
+do
+	list=$(eval echo '${'$catalog'[@]}')   # This is a bit of a hack
+	c_name=$(echo $catalog | sed "s/_/-/g")
+
+	if [ "$list" ]; then
+		cat <<-END
+		  operators:
+		  - catalog: registry.redhat.io/redhat/$c_name-index:v$ocp_ver_major
+		    packages:
+		END
+
+		for op in $list
+		do
+			echo $op | grep -q "^#" && echo $op | sed "s/-/ /g" && continue  # Print just the operator "heading" (a hack)
+			add_op $op $c_name
+		done
+	fi
+done
 
 echo_cyan "Number of operators added: ${#added_operators[@]}" >&2
 
