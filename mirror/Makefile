@@ -177,6 +177,7 @@ catalog: init ## Render all the latest Operators into a file which can be used i
 	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-operator
 	$(SCRIPTS)/download-operator-index.sh $(bg) certified-operator
 	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-marketplace
+	$(SCRIPTS)/download-operator-index.sh $(bg) community-operator
 
 #uninstall: .init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
 uninstall: .init             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
