@@ -562,7 +562,7 @@ fetch_latest_version() {
 
 	[ "$1" ] && chan=$1
 	[ "$chan" = "eus" ] && chan=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
-	rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt) || return 1
+	rel=$(curl -f --connect-timeout 30 --retry 3 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt) || return 1
 	# Get the latest OCP version number, e.g. 4.14.6
 	#ver=$(echo "$rel" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 	ver=$(echo "$rel" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
@@ -576,7 +576,7 @@ fetch_previous_version() {
 
 	[ "$1" ] && chan=$1
 	[ "$chan" = "eus" ] && chan=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
-	rel=$(curl -f --connect-timeout 10 --retry 2 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt) || return 1
+	rel=$(curl -f --connect-timeout 30 --retry 3 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt) || return 1
 	# Get the previous OCP version number, e.g. 4.14.6
 	stable_ver=$(echo "$rel" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
 

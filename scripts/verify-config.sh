@@ -41,7 +41,7 @@ fi
 [ "$INFO_ABA" ] && echo_white "Worker count: $num_workers is valid."
 
 actual_ip_of_api=$(dig +time=8 +short $cl_api_domain)
-actual_ip_of_ingress=$(dig +time=8 +short x.apps.$cl_domain)
+actual_ip_of_ingress=$(dig +time=8 +short $RANDOM.apps.$cl_domain)   # Use $RANDOM to avoid DNS cache issue
 
 # If not SNO, then ensure api_vip and ingress_vip are defined 
 if [ ! "$SNO" ]; then
