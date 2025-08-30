@@ -22,7 +22,7 @@ Access the OpenShift web-console here: https://console-openshift-console.apps.$c
 Login to the console with user: "kubeadmin", and password: "$pw"
 END
 cat <<END
-Run '. <(aba shell)' to access the cluster using the kubeconfig file (client cert), or
+Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or
 Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.
 END
 [ -f regcreds/pull-secret-mirror.json ] && \

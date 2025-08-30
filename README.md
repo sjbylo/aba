@@ -693,8 +693,6 @@ watch -n 5 oc get co
 
 ## Feature Backlog and Ideas
 
-- Support other operator catalogs (indexes) too, e.g. "community", "certified", and not just "redhat".
-
 - Configure htpasswd login, add users, disable kubeadmin.
 
 - Use PXE boot as alternative to ISO.
@@ -714,6 +712,8 @@ watch -n 5 oc get co
 - Generally improve the user experience (UX) of Aba.
 
 - Configure ACM (if installed) to be ready to install clusters from the mirror registry.
+
+- ~~Support all four operator catalogs (indexes), e.g. "certified-operator", "redhat-marketplace" & "community-operator" and not just "redhat-operator".~~
 
 - ~~Allow to specify the path to a large data volume (and not only the top dir of the Quay registry). Store all large files/cache there.~~
 
