@@ -17,7 +17,7 @@ fi
 # Set default catalog name
 catalog_name=redhat-operator
 
-while [ "$*" ]
+while [ $# -gt 0 ]
 do
 	if [ "$1" = "--bg" ]; then
 		shift  # Now we know this script is running as a daemon 
