@@ -64,21 +64,21 @@ test-cmd() {
 
 	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
 	local tot_cnt=2		# Try to run the command max tot_cnt times. If it fails, try one more time by def.
-	local backoff=8		# Default to wait after failed command is a few sec.
+	local backoff=20	# Default to wait after failed command is a few sec.
 	local host=localhost	# def. host to run on
-	local mark=L
+	local mark=L		# Mark in the log output, L (local) or R (remote)
 
 	#trap - ERR  # FIXME: needed?
 
 	while echo $1 | grep -q ^-
 	do
-		[ "$1" = "-i" ] && local ignore_result=1 && shift
+		[ "$1" = "-i" ] && local ignore_result=1 && shift    # Ignore the return value
 
-		[ "$1" = "-h" ] && local host="$2" && shift 2
+		[ "$1" = "-h" ] && local host="$2" && shift 2	     # Remote host to run command on
 
-		[ "$1" = "-r" ] && local tot_cnt="$2" && local backoff=$3 && shift 3
+		[ "$1" = "-r" ] && local tot_cnt="$2" && local backoff=$3 && shift 3  # Retry <count> & <backoff>
 
-		[ "$1" = "-m" ] && local msg="$2" && shift 2
+		[ "$1" = "-m" ] && local msg="$2" && shift 2 	     # Message, description of the test
 	done
 
 	local cmd="$@"
@@ -315,7 +315,8 @@ END
 	# Copy over the ssh config to /root on bastion (in case test_user = root)
 	eval scp ~$def_user/.ssh/config root@$int_bastion_hostname:.ssh/config
 
-	test-cmd -m "Verify ssh to root@$int_bastion_hostname" ssh root@$int_bastion_hostname whoami
+	##test-cmd -m "Verify ssh to root@$int_bastion_hostname" ssh root@$int_bastion_hostname whoami
+	test-cmd -r 4 10 -h root@$int_bastion_hostname -m "Verify ssh to root@$int_bastion_hostname" whoami
 
 	# This is required for tput, so aba must install it or give user directions
 	ssh $test_user@$int_bastion_hostname -- "which tput && sudo dnf autoremove ncurses -y"
