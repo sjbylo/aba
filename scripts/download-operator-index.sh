@@ -72,7 +72,7 @@ trap 'handle_interupt' INT
 # Check if this script is running in the background, if it is then output to a log file
 #if [ ! -t 0 ]; then
 if [ "$bg" ]; then
-	#echo "Downloading operator index in the background from registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major (see $log_file) ..." >&2
+	#echo "Downloading operator $catalog_name index in the background from registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major (see $log_file) ..." >&2
 
 	exec > $log_file 
 	exec 2> $log_file
@@ -83,7 +83,7 @@ if [[ -s $index_file && -f $done_file ]]; then
 
 	# Check age of file is older than one day
 	if [ "$(find $index_file -type f -mtime +0)" ]; then
-		echo_white "Operator index needs to be refreshed as it's older than one day."
+		echo_white "Operator $catalog_name index needs to be refreshed as it's older than one day."
 		rm -f $lock_file
 	else
 		exit 0  # Index already exists and is less than a day old
@@ -100,7 +100,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 
 	# Check if still downloading...
 	if [[ -s $index_file && -f $done_file ]]; then
-		echo_white "Operator index v$ocp_ver_major already downloaded to file mirror/$index_file"
+		echo_white "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file"
 	else
 		# No need to wait if operator vars are not defined in aba.conf!
 		if [ ! "$op_sets" -a ! "$ops" ]; then
@@ -128,15 +128,15 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 		fi
 
 		handle_interupt() { echo_red "Stopped waiting for download to complete" >&2; exit 0; }
-		echo_magenta "Waiting for operator index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
+		echo_magenta "Waiting for operator $catalog_name index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
 		if ! try_cmd -q 5 0 120 test -f $done_file; then
-		       	echo "Giving up waiting for index download! Please check: mirror/$log_file"  # keep checking completion for max 600s (5 x 120s)
+		       	echo "Giving up waiting for $catalog_name index download! Please check: mirror/$log_file"  # keep checking completion for max 600s (5 x 120s)
 			rm -f $lock_file  # Remove just the lock file
 
 			exit 1
 		fi
 
-		echo_white "Operator index v$ocp_ver_major download to file mirror/$index_file has completed"
+		echo_white "Operator $catalog_name index v$ocp_ver_major download to file mirror/$index_file has completed"
 	fi
 
 	exit 0
@@ -150,7 +150,7 @@ echo $$ > $pid_file
 ## NOT A GOOD IDEA [ -t 0 ] && handle_interupt() { echo_red "Putting download into background" >&2; rm -f $lock_file; ( $0 $* > .fetch-index.log 2>&1 & ) & exit 0; }
 ### FIX ME [ -t 0 ] && handle_interupt() { echo_red "Stopping download" >&2; rm -f $lock_file;  exit 0; }
 
-echo_cyan "Downloading $catalog_name Operator index v$ocp_ver_major to $index_file, please wait a few minutes ..."
+echo_cyan "Downloading Operator $catalog_name index v$ocp_ver_major to $index_file, please wait a few minutes ..."
 
 make -sC ../cli ~/bin/oc-mirror 
 
@@ -159,7 +159,7 @@ echo Running: oc-mirror list operators --catalog registry.redhat.io/redhat/$cata
 oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major > $index_file
 ret=$?
 if [ $ret -ne 0 ]; then
-	echo_red "Error: oc-mirror returned $ret whilst downloading operator index from registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major." >&2
+	echo_red "Error: oc-mirror returned $ret whilst downloading operator $catalog_name index from registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major." >&2
 	rm -f $lock_file $pid_file
 
 	exit 1
