@@ -5,7 +5,7 @@
 source scripts/include_all.sh
 
 # Only d/l the opertor index in the background to save time!
-if [ "$1" = "true" ]; then
+if [ "$1" = "true" -o "$1" = "1" ]; then
 	shift
 	# Daemonify the script!
 	( $0 --bg $* & ) & 
@@ -60,10 +60,10 @@ scripts/create-containers-auth.sh >/dev/null  # Ensure any errors are output
 
 mkdir -p .index
 index_file=.index/$catalog_name-index-v$ocp_ver_major
-lock_file=.index/$catalog_name-index-v$ocp_ver_major.lock
-log_file=.index/$catalog_name-index-v$ocp_ver_major.log
-pid_file=.index/$catalog_name-index-v$ocp_ver_major.pid
-done_file=.index/$catalog_name-index-v$ocp_ver_major.done
+lock_file=.index/.$catalog_name-index-v$ocp_ver_major.lock
+log_file=.index/.$catalog_name-index-v$ocp_ver_major.log
+pid_file=.index/.$catalog_name-index-v$ocp_ver_major.pid
+done_file=.index/.$catalog_name-index-v$ocp_ver_major.done
 
 # Clean up on INT
 handle_interupt() { echo_red "Aborting catalog download." >&2; [ ! -f $done_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0;}
@@ -147,6 +147,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 fi
 
 echo $$ > $pid_file
+rm -f $done_file  # Just to be sure
 
 # Lock successful, now download the index ...
 
