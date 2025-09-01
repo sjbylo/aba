@@ -9,7 +9,7 @@ if [ "$1" = "true" -o "$1" = "1" ]; then
 	shift
 	# Daemonify the script!
 	( $0 --bg $* & ) & 
-	sleep 1
+	sleep 0.2
 
 	exit 0
 fi
@@ -39,13 +39,6 @@ verify-aba-conf || exit 1
 
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
-
-# Check connectivity to registry
-if ! curl --connect-timeout 15 --retry 3 -IL http://registry.redhat.io/v2 >/dev/null 2>&1; then
-	echo_red "Error: cannot access the registry: https://registry.redhat.io/.  Aborting." >&2
-
-	exit 1
-fi
 
 # FIXME: this is a hack. Better implement as dep in makefile?
 #scripts/create-containers-auth.sh >/dev/null 2>&1
@@ -91,6 +84,13 @@ if [[ -s $index_file && -f $done_file ]]; then
 	fi
 fi
 
+# Check connectivity to registry (Keep this here so it does not slow the script down for the ".done" case)
+if ! curl --connect-timeout 15 --retry 3 -IL http://registry.redhat.io/v2 >/dev/null 2>&1; then
+	echo_red "Error: cannot access the registry: https://registry.redhat.io/.  Aborting." >&2
+
+	exit 1
+fi
+
 # See if the index is already downloaded
 [ ! -f $index_file ] && touch $index_file
 
@@ -124,7 +124,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 			[ "$DEBUG_ABA" ] && echo "Background process with pid [$bg_pid] not running." >&2
 			rm -f $lock_file $pid_file
 			[ "$DEBUG_ABA" ] && echo "Re-running script $0" >&2
-			sleep 1
+			sleep 0.5
 			exec $0 --bg $catalog_name
 		fi
 
@@ -172,6 +172,8 @@ if [ $ret -ne 0 ]; then
 fi
 
 touch $done_file   # This marks successful completion of download!
+rm -f $lock_file 
+rm -f $pid_file
 
 # If the catalog is downloaded ok, we leave the lock file so there's no risk of it being overwritten. 
 
