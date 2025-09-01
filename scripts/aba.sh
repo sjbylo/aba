@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250826211610
+ABA_VERSION=20250901102545
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -817,10 +817,7 @@ if [ ! -f .bundle ]; then
 		if jq empty $pull_secret_file; then
 			[ "$INFO_ABA" ] && echo_cyan "Pull secret found at '$pull_secret_file'."
 
-			#install_rpms make || exit 1  # rpms installed above
-
 			# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-			##( make -s -C mirror catalog bg=true & ) & 
 			( make -s -C mirror catalog bg=true catalog-name=redhat-operator & ) & 
 			( make -s -C mirror catalog bg=true catalog-name=certified-operator & ) & 
 			( make -s -C mirror catalog bg=true catalog-name=redhat-marketplace & ) & 
