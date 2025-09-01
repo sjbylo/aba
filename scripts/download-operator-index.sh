@@ -67,15 +67,15 @@ done_file=.index/.$catalog_name-index-v$ocp_ver_major.done
 
 # Clean up on INT
 handle_interupt() { echo_red "Aborting catalog download." >&2; [ ! -f $done_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0;}
-trap 'handle_interupt' INT
+trap 'handle_interupt' INT TERM
 
 # Check if this script is running in the background, if it is then output to a log file
 #if [ ! -t 0 ]; then
 if [ "$bg" ]; then
 	#echo "Downloading operator $catalog_name index in the background from registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major (see $log_file) ..." >&2
 
-	exec > $log_file 
-	exec 2> $log_file
+	exec >> $log_file 
+	exec 2>> $log_file
 fi
 
 if [[ -s $index_file && -f $done_file ]]; then
@@ -84,6 +84,7 @@ if [[ -s $index_file && -f $done_file ]]; then
 	# Check age of file is older than one day
 	if [ "$(find $index_file -type f -mtime +0)" ]; then
 		echo_white "Operator $catalog_name index needs to be refreshed as it's older than one day."
+
 		rm -f $lock_file
 	else
 		exit 0  # Index already exists and is less than a day old
