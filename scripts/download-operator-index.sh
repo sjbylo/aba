@@ -101,43 +101,47 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 	# Check if still downloading...
 	if [[ -s $index_file && -f $done_file ]]; then
 		echo_white "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file"
-	else
-		# No need to wait if operator vars are not defined in aba.conf!
-		if [ ! "$op_sets" -a ! "$ops" ]; then
-			[ "$DEBUG_ABA" ] && echo "No operators defined ... exiting"
-			exit 0
-		fi
 
-		# Check to be sure the command with the expected pid is running
-
-		# If the bg process is no longer running, then reset and try to download again
-		if [ -f $pid_file ]; then
-			[ "$DEBUG_ABA" ] && echo "PID file $pid_file found ..." >&2
-			bg_pid=$(cat $pid_file)
-			if ! pgrep -u $(whoami) -f download-operator-index.sh | grep -q "^$bg_pid$"; then
-				[ "$DEBUG_ABA" ] && echo "Background process with pid [$bg_pid] not running" >&2
-				rm -f $lock_file $pid_file
-				[ "$DEBUG_ABA" ] && echo "Re-running script $0" >&2
-				sleep 1
-				exec $0
-			fi
-
-			# OK, oc-mirror bg process is still running
-		else
-			[ "$DEBUG_ABA" ] && echo "Expected pid file $pid_file not found!" >&2
-		fi
-
-		handle_interupt() { echo_red "Stopped waiting for download to complete" >&2; exit 0; }
-		echo_magenta "Waiting for operator $catalog_name index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
-		if ! try_cmd -q 5 0 120 test -f $done_file; then
-		       	echo "Giving up waiting for $catalog_name index download! Please check: mirror/$log_file"  # keep checking completion for max 600s (5 x 120s)
-			rm -f $lock_file  # Remove just the lock file
-
-			exit 1
-		fi
-
-		echo_white "Operator $catalog_name index v$ocp_ver_major download to file mirror/$index_file has completed"
+		exit 0
 	fi
+
+	# No need to wait if operator vars are not defined in aba.conf!
+	if [ ! "$op_sets" -a ! "$ops" ]; then
+		[ "$DEBUG_ABA" ] && echo "No operators defined ... exiting"
+
+		exit 0
+	fi
+
+	# Check to be sure the command with the expected pid is running
+
+	# If the bg process is no longer running, then reset and try to download again
+	if [ -f $pid_file ]; then
+		[ "$DEBUG_ABA" ] && echo "PID file $pid_file found ..." >&2
+		bg_pid=$(cat $pid_file)
+		#if ! pgrep -u $(whoami) -f download-operator-index.sh | grep -q "^$bg_pid$"; then
+		if ! ps -p $bg_pid >/dev/null; then
+			[ "$DEBUG_ABA" ] && echo "Background process with pid [$bg_pid] not running." >&2
+			rm -f $lock_file $pid_file
+			[ "$DEBUG_ABA" ] && echo "Re-running script $0" >&2
+			sleep 1
+			exec $0 --bg $catalog_name
+		fi
+
+		# OK, oc-mirror bg process is still running
+	else
+		[ "$DEBUG_ABA" ] && echo "Expected pid file $pid_file not found!" >&2
+	fi
+
+	handle_interupt() { echo_red "Stopped waiting for download to complete" >&2; exit 0; }
+	echo_magenta "Waiting for operator $catalog_name index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
+	if ! try_cmd -q 5 0 120 test -f $done_file; then
+	       	echo "Giving up waiting for $catalog_name index download! Please check: mirror/$log_file"  # keep checking completion for max 600s (5 x 120s)
+		rm -f $lock_file  # Remove just the lock file
+
+		exit 1
+	fi
+
+	echo_white "Operator $catalog_name index v$ocp_ver_major download to file mirror/$index_file has completed"
 
 	exit 0
 fi
@@ -152,7 +156,7 @@ echo $$ > $pid_file
 
 echo_cyan "Downloading Operator $catalog_name index v$ocp_ver_major to $index_file, please wait a few minutes ..."
 
-make -sC ../cli ~/bin/oc-mirror 
+###make -sC ../cli ~/bin/oc-mirror 
 
 # Fetch latest operator catalog and default channels
 echo Running: oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major >&2
