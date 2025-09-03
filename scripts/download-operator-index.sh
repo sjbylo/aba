@@ -158,7 +158,7 @@ rm -f $done_file  # Just to be sure
 
 echo_cyan "Downloading Operator $catalog_name index v$ocp_ver_major to $index_file, please wait a few minutes ..."
 
-# Cannot run this in concurrently
+# Cannot be run concurrently!  This is now done from the aba/Makefile:catalog
 ###make -sC ../cli ~/bin/oc-mirror 
 
 # Fetch latest operator catalog and default channels

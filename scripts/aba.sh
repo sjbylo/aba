@@ -197,12 +197,8 @@ do
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
 
-		( make -s -C $ABA_PATH/mirror catalog bg=true & ) & 
-
-		#( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=redhat-operator & ) & 
-		#( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=certified-operator & ) & 
-		#( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=redhat-marketplace & ) & 
-		#( make -s -C $ABA_PATH/mirror catalog bg=true catalog-name=community-operator & ) & 
+		#( make -s -C $ABA_PATH/mirror catalog bg=true & ) & 
+		( make -s -C $ABA_PATH catalog bg=true & ) & 
 
 		shift 2
 
@@ -812,7 +808,8 @@ if [ ! -f .bundle ]; then
 	scripts/install-rpms.sh external 
 
 	# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-	( make -s -C mirror catalog bg=true >/dev/null 2>&1 & ) & 
+#	( make -s -C mirror catalog bg=true >/dev/null 2>&1 & ) & 
+	( make -s catalog bg=true & ) & 
 
 	##############################################################################################################################
 	# Determine pull secret
@@ -823,10 +820,6 @@ if [ ! -f .bundle ]; then
 
 			# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 			#### FIXME ( make -s -C mirror catalog bg=true & ) & 
-			#( make -s -C mirror catalog bg=true catalog-name=redhat-operator & ) & 
-			#( make -s -C mirror catalog bg=true catalog-name=certified-operator & ) & 
-			#( make -s -C mirror catalog bg=true catalog-name=redhat-marketplace & ) & 
-			#( make -s -C mirror catalog bg=true catalog-name=community-operator & ) & 
 
 			sleep 0.3
 		else

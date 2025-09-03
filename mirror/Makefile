@@ -171,8 +171,8 @@ inc:   ## Same as 'make tar' except a timestamp file is used to only backup file
 index: init catalog
 
 .PHONY: catalog
-# -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
-catalog: init cli-oc-mirror ## Render all the latest Operators into a file which can be used in an imageset config file. 
+# Note that this runs in the background (called by aba) and output is sent to /dev/null
+catalog: init               ## Render all the latest Operators into a file which can be used in an imageset config file. 
 	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-operator
 	$(SCRIPTS)/download-operator-index.sh $(bg) certified-operator
 	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-marketplace
