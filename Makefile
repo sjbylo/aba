@@ -53,7 +53,8 @@ sync: ## Sync images from the Internet directly to an internal registry (as defi
 .PHONY: catalog
 # -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
 catalog: ## Render all the latest Operators into a file which can be used in an imageset config file. 
-	@make -C mirror catalog bg=$(bg)  #catalog-name=$(catalog-name)
+	@make -sC cli oc-mirror >/dev/null 2>&1
+	@make -C mirror catalog bg=$(bg)
 
 # These are the targets needed to create the 'bundle' archive
 .PHONY: bundle
