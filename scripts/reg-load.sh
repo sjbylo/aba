@@ -126,11 +126,14 @@ fi
 
 echo
 echo_green -n "Images loaded successfully!"
-[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
+[ $try_tot -gt 1 ] && echo_white " (after $try attempts!)" || echo
 
 echo 
-echo "OpenShift can now be installed with the command:"
-echo "  cd aba"
-echo "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]   # and follow the instructions."
+echo "OpenShift can now be installed. cd to aba's top-level directory and use the command:"
+echo "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
+echo "Use 'aba cluster --help' for more information about installing clusters"
+
+echo
+echo_green "If you have already installed a cluster, consider (re-)running the command 'aba day2' to configure or refresh OperatorHub."
 
 exit 0
