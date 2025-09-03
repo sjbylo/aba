@@ -113,5 +113,11 @@ fi
 
 echo
 echo_green -n "Images saved successfully!"
-[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
+[ $try_tot -gt 1 ] && echo_white " (after $try attempts!)" || echo
 echo 
+
+echo_green "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which you transfer to your disconnected environment."
+echo_green "In your disconnected environment, unpack the install bundle and run 'cd aba; aba' for further instructions."
+echo
+
+exit 0
