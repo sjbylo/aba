@@ -21,7 +21,7 @@ reg_pw="p4ssw0rd"			# Registry password. Leave blank if a random password should
 
 data_dir=				# Optional: Absolute Path to large data disk for storing images and temporary files. 
 					# Quay is installed as $data_dir/quay-install & the oc-mirror cache as $data_dir/.oc-mirror. 
-					# Default is the local or remote home directory. Note that '~' can be used after the '='.
+					# Default is the local (or remote) home directory. Note that '~' can be used after the '='.
 
 # Important: The below 2 values are only needed if you want aba to install Quay on a remote host.
 
@@ -29,5 +29,5 @@ data_dir=				# Optional: Absolute Path to large data disk for storing images and
 					# IMPORTANT: If undefined (the default) Quay will be installed on **localhost**.
 					# The key must allow password-less access to the remote host (defined by reg_host above).
 
-reg_ssh_user=				# Optional: Username to use for *remote* install of Quay. Default is current user.
+#reg_ssh_user=				# Optional: Username to use for *remote* install of Quay. Default is current user.
 
