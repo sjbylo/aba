@@ -85,7 +85,7 @@ aba            # Let Aba guide you through the installation process
 The diagram above illustrates two scenarios for installing OpenShift in a disconnected network environment.
 
 - **Top Section**: The *Disconnected Scenario* (partial network access, e.g. via a proxy).
-- **Bottom Section**: The *Fully Disconnected (Air-Gapped) Scenario* (data transfer only through physical means, such as "sneaker net" into a private data center).
+- **Bottom Section**: The *Fully Disconnected (Air-Gapped) Scenario* (data transfer only through physical means, such as "sneaker net" into a private (disconnected) data center).
 
 Each scenario includes two main network zones:
 
@@ -107,7 +107,7 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 ### Fully Disconnected (Air-Gapped) Prerequisites
 
-In a fully disconnected environment, where no Internet access is available, one laptop/workstation and one bastion are required: one connected to the Internet and the other on the private network.
+In a fully disconnected environment, where no Internet access is available, one connected workstation/laptop and one disconnected bastion are required.
 
 - **Connected Laptop or Workstation**
    - An x86 RHEL 8 or 9 or Fedora (e.g. VM) with Internet access, typically on a laptop.
@@ -127,7 +127,7 @@ In a fully disconnected environment, where no Internet access is available, one 
 In a partially disconnected environment, the internal network has limited or proxy-based Internet access, allowing data synchronization directly.
 
 - **Connected Bastion**
-   - A single RHEL 8 or 9 VM configured with access to both the Internet and the private network.
+   - A single RHEL 8 or 9 VM configured with access to both the Internet and the disconnected environment.
    - Download and copy this Git repository to any location in your home directory on the bastion.
    - Download and store your Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs as defined in the file `templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
@@ -269,7 +269,7 @@ Note that the above 'disconnected scenario' can be repeated, for example to down
 
 >> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://drive.google.com/drive/u/0/folders/1sO7_G3f8cU1Y7oeUwTib8_sqn8FM_LZQ**
 
-In this scenario, your connected workstation has access to the Internet but no access to the private network.
+In this scenario, your connected workstation has access to the Internet but no access to the disconnected environment.
 You also require a bastion in a private subnet.
 
 ```
@@ -278,7 +278,7 @@ aba save
 
 - pulls the images from the Internet and saves them into the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators)!
 
-Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repository (including templates, scripts, images, CLIs and other install files) to your disconnected bastion (in your private network) via a portable storage device, e.g. a thumb drive.
+Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repository (including templates, scripts, images, CLIs and other install files) to your disconnected bastion (in your disconnected environment) via a portable storage device, e.g. a thumb drive.
 
 Example:
 
@@ -317,7 +317,7 @@ Copy the "aba.tgz" file to the bastion and unpack the archive. Note the director
 Copy or move the "seq" tar file(s), as is, from the "mirror/save" directory to the  bastion, into the "mirror/save" directory on the bastion.
 
 ```
-sudo dnf install make -y     # If dnf does not work in the private environment (i.e. no Satalite),
+sudo dnf install make -y     # If dnf does not work in the disconnected environment (i.e. no Satalite),
                              # ensure all required RPMs are pre-installed, e.g. from a DVD drive at the time of installation.
 aba load
 ```
@@ -325,7 +325,7 @@ aba load
 - Required RPMs:
   - Note that the bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure `dnf` to use a proxy).
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation.
-  - If rpms are not readily available in your private network, the command `aba rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your connected workstation and disconnected bastions are running the exact same version of RHEL (at least, that was the experience when testing!).
+  - If rpms are not available in your disconnected environment, the command `aba rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your connected workstation and disconnected bastions are running the exact same version of RHEL (at least, that was the experience when testing!).
 
 Now continue with "Installing OpenShift" below.
 
@@ -517,7 +517,7 @@ aba bundle \
 - Warning: --force will overwrite any image set files already under aba/mirror/save!
 
 
-Copy the files to your RHEL 8 or 9 bastion within the private internal network.
+Copy the files to your RHEL 8 or 9 bastion within the private disconnected network.
 
 Verify the files are intact by comparing the checksum values with the original files:
 
@@ -562,7 +562,7 @@ This chart explains the flow of Aba and how Aba works, showing the main choices:
 
 | Config file | Description |
 | :---------- | :---------- |
-| `aba/aba.conf`                    | the 'global' config, used to set the target version of OpenShift, your domain name, private network address, DNS IP etc |
+| `aba/aba.conf`                    | 'global' config sets the channel and version of OpenShift, your domain name, private network address, DNS IP etc |
 | `aba/mirror/mirror.conf`          | describes your private/internal mirror registry (either existing or to-be-installed)  |
 | `aba/`cluster-name`/cluster.conf` | describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, bonding etc |
 | `aba/vmware.conf`                 | vCenter/ESXi access configuration using `govc` CLI (optional) |
@@ -733,24 +733,24 @@ watch -n 5 oc get co
 
 ## Miscellaneous
 
-- oc-mirror v2 is now also supported by aba . To change oc-mirror's default cache location (~/.oc-mirror), export the OC_MIRROR_CACHE environment variable to a path with sufficient disk space, e.g.:
+- oc-mirror v2 is also supported by aba (and is not the default). To change oc-mirror's default cache location (~/.oc-mirror), export the `OC_MIRROR_CACHE` environment variable to a path with sufficient disk space, e.g.:
 
 ```
 export OC_MIRROR_CACHE=/path/to/big-drive
 ```
 
-- By default, aba sets the cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by reg_root in mirror/mirror.conf. You can override these locations by exporting the environment variables, as shown above.
+- By default, aba sets the cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by `data_dir` in mirror/mirror.conf (default is $HOME). You can override these locations by exporting the environment variables, as shown above.
 
-- You can list the dependent images of operators using this script: scripts/listopdeps.sh 4.18 odf-operator
+- You can list the dependent images of operators using this script, for example: scripts/listopdeps.sh 4.18 odf-operator
 
-- If you want to install workers with different CPU/MEM sizes (which can be used to install Operators, e.g. Ceph, ODF, ACM etc, on infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed (if using VMs).
+- If using `platform=vmw` and you want to install nodes with different CPU/MEM sizes (which can be used to install Operators, e.g. Ceph, ODF, ACM etc, e.g. on infra nodes), change the VM resources (CPU/RAM) as needed after OpenShift is installed and restart OpenShift with `aba shutdown` and `aba startup`.
 
 - Govc is used to create and manage VMs on ESXi or vSphere.
   - https://github.com/vmware/govmomi/tree/main/govc
 
 Be sure to set the correct (govc) values to access vCenter in the `vmware.conf` file.  Note that ESXi is also supported.
 
-Aba uses `make` to define and process all dependencies.  Due to this, Aba will usually know what to do next, so just run `aba` again.
+Aba uses `make` to define and process all dependencies.  Due to this, Aba will usually know what to do next, so just run `aba` again after making changes to configuration files. 
 
 Why `make` was chosen to build Aba?
 
@@ -769,7 +769,7 @@ rm -rf aba
 sudo rm $(which aba)
 ```
 
-Run on the external bastion or laptop:
+Run on the workstation or laptop:
 
 ```
 rm -rf aba
@@ -777,7 +777,6 @@ sudo rm $(which aba)
 # re-install aba
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
 cd aba
-./install
 aba
 ```
 

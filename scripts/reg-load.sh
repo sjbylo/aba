@@ -32,9 +32,6 @@ fi
 [ ! "$data_dir" ] && data_dir=\~
 reg_root=$data_dir/quay-install
 
-#FIXME: Instead of using reg_root, why not have data_vol=/mnt/large-disk and put all data in there? reg_root can be = $data_vol/quay-install
-#####[ "$reg_root" ] || reg_root=$HOME/quay-install  # $reg_root is needed for the below 'disk space' message AND for TMPDIR / OC_MIRROR_CACHE below
-
 [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
 if [ ! -d save ]; then
@@ -53,8 +50,8 @@ if [ -s ./reg-uninstall.sh ]; then
 fi
 echo
 
+# Now using data_dir so reg_root=$data_dir/quay-install 
 # If not already set, set the cache and tmp dirs to where there should be more disk space
-# Had to use [[ && ]] here, as without it got "mkdir -p <missing operand>" error!
 [[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && eval mkdir -p $TMPDIR
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $data_dir.
