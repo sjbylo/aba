@@ -147,6 +147,12 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 	exit 0
 fi
 
+# Check size of /tmp (tmpfs) on Fedora to see if it needs to be increased (oc-mirror uses up a lot of /tmp space)
+if [ ! "$bg" ] && grep -qi '^ID=fedora' /etc/os-release; then
+  size=$(df --output=size -BG /tmp | tail -1 | tr -dc '0-9')
+  (( size < 10 )) && sudo mount -o remount,size=10G /tmp || true
+fi
+
 echo $$ > $pid_file
 rm -f $done_file  # Just to be sure
 
