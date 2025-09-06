@@ -225,11 +225,13 @@ normalize-mirror-conf()
 
 	(
 		cat mirror.conf | \
-			sed -E	-e "s/^\s*#.*//g" \
+			sed -E	\
 				-e "s/^reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
+				-e "s/^#reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
+				-e "s/^\s*#.*//g" \
 				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-				-e 's/^data_dir= /data_dir=\\~/g' \
-				-e 's/^data_dir=~/data_dir=\\~/g' \
+				-e 's/^data_dir=[[:space:]]/data_dir=\\~ /g' \
+				-e 's/^data_dir=~/data_dir=\\~ /g' \
 				-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
 				-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
 				-e 's#^reg_path=/#reg_path=#g' \
