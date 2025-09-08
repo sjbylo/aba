@@ -114,7 +114,7 @@ done
 
 if [ "$failed" ]; then
 	echo_red -n "Image loading aborted ..."
-	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
+	[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." >&2
 	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
 
@@ -123,7 +123,7 @@ fi
 
 echo
 echo_green -n "Images loaded successfully!"
-[ $try_tot -gt 1 ] && echo_white " (after $try attempts!)" || echo
+[ $try_tot -gt 1 -a $try -gt 1 ] && echo_white " (after $try attempts!)" || echo   # Show if more than 1 attempt
 
 echo 
 echo "OpenShift can now be installed. cd to aba's top-level directory and use the command:"

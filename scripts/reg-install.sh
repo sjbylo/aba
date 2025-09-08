@@ -89,12 +89,13 @@ if [ "$reg_root" ]; then
 	##reg_root_opts="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
 	##reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
 	##echo_white "Using registry root dir: $reg_root and options: $reg_root_opts"
-else
+### else
 	# The default path
 	# This must be the path *where Quay will be installed*
 	## FIX # reg_root=$fix_home/quay-install
-	reg_root="~/quay-install"
-	echo_white "Using default registry root dir: $reg_root"
+	# FIXME: This is never run!
+###	reg_root="~/quay-install"
+###	echo_white "Using default registry root dir: $reg_root"
 fi
 
 
@@ -110,7 +111,7 @@ END
 flag_file=/tmp/.$(whoami).$RANDOM
 rm -f $flag_file
 
-# Check the hostname (FDQN) resolveds to an expected IP address
+# Check the hostname (FDQN) resolves to an expected IP address
 fqdn_ip=$(dig +short $reg_host | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}') || true
 if [ ! "$fqdn_ip" ]; then
 	echo
@@ -135,26 +136,26 @@ if [ "$reg_ssh_key" ]; then
 		echo
 
 		exit 1
-	else
-		# If the flag file exists, then the FQDN points to this host (config wrong!) 
-		if [ -f $flag_file ]; then
-			echo
-			echo_red "Error: The mirror registry is configured to be on a *remote* host but '$reg_host'" >&2
-			echo_red "       resolves to $fqdn_ip, which reaches this localhost ($(hostname)) instead!" >&2
-			echo_red "       If '$reg_host' should point to this localhost ($(hostname)), undefine 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
-			echo_red "       If '$reg_host' is meant be point to a remote host, update the DNS record ($reg_host) to resolve to an IP that can reach the *remote* host via ssh." >&2
-			echo_red "       Correct the problem and try again." >&2
-			echo
-
-			rm -f $flag_file
-
-			exit 1
-		fi
-
-		ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host rm -f $flag_file
-
-		echo "Ssh access to remote host ($reg_ssh_user@$reg_host using key $reg_ssh_key) is working ..."
 	fi
+
+	# If the flag file exists, then the FQDN points to this host (config wrong!) 
+	if [ -f $flag_file ]; then
+		echo
+		echo_red "Error: The mirror registry is configured to be on a *remote* host but '$reg_host'" >&2
+		echo_red "       resolves to $fqdn_ip, which reaches this localhost ($(hostname)) instead!" >&2
+		echo_red "       If '$reg_host' should point to this localhost ($(hostname)), undefine 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
+		echo_red "       If '$reg_host' is meant be point to a remote host, update the DNS record ($reg_host) to resolve to an IP that can reach the *remote* host via ssh." >&2
+		echo_red "       Correct the problem and try again." >&2
+		echo
+
+		rm -f $flag_file
+
+		exit 1
+	fi
+
+	ssh -i $reg_ssh_key -F .ssh.conf $reg_ssh_user@$reg_host rm -f $flag_file
+
+	echo "Ssh access to remote host ($reg_ssh_user@$reg_host using key $reg_ssh_key) is working ..."
 
 	ask "Install Quay mirror registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessable via $reg_hostport" || exit 1
 	echo "Installing Quay registry to remote host at $reg_ssh_user@$reg_host ..."
