@@ -103,7 +103,7 @@ done
 
 if [ "$failed" ]; then
 	echo_red -n "Image saving aborted ..." >&2
-	[ $try_tot -gt 1 ] && echo_white " (after $try_tot/$try_tot attempts!)" || echo
+	[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." >&2
 	echo_red "         View https://status.redhat.com/ for any current issues or planned maintenance." >&2
 	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
@@ -113,7 +113,7 @@ fi
 
 echo
 echo_green -n "Images saved successfully!"
-[ $try_tot -gt 1 ] && echo_white " (after $try attempts!)" || echo
+[ $try_tot -gt 1 -a $try -gt 1 ] && echo_white " (after $try attempts!)" || echo   # Show if more than 1 attempt
 echo 
 
 echo_green "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which you transfer to your disconnected environment."

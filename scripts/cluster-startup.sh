@@ -21,7 +21,7 @@ if [ ! -s vmware.conf ]; then
 	# Quick check to see if servers are up?
 	if ! try_cmd -q 1 0 2 curl --connect-timeout 10 --retry 1 -skIL $server_url; then
 		# If not, then wait check for longer ...
-		echo_white "Waiting for cluster endpoint $server_url to become available ..."
+		echo_white "Waiting for cluster API endpoint to become alive at $server_url ..."
 
 		# Usage: try_cmd [-q] <pause> <interval> <total>
 		if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 1 -skIL $server_url; then
@@ -36,7 +36,7 @@ fi
 
 # Have quick check if endpoint is available (cluster may already be running)
 if ! try_cmd -q 1 0 1 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
-	echo Waiting for cluster endpoint $server_url ...
+	echo Waiting for cluster API endpoint to become alive at $server_url ...
 
 	# Now wait for longer...
 	if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 3 -skIL $server_url; then
