@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250903231324
+ABA_VERSION=20250908224656
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -186,10 +186,9 @@ do
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		ver=$2
-		###url="https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt"
 		[ "$ver" = "latest" -o "$ver" = "l" ] && ver=$(fetch_latest_version $chan)
 		[ "$ver" = "previous" -o "$ver" = "p" ] && ver=$(fetch_previous_version $chan)
-		ver=$(echo $ver | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+" || true)
+		ver=$(echo $ver | grep -E -o "^[0-9]+\.[0-9]+\.[0-9]+$" || true)
 		[ ! "$ver" ] && echo_red "Missing or wrong value after option $1" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf ocp_version $ver
 		target_ver=$ver
@@ -234,15 +233,16 @@ do
 		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
-		domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
+		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
+		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
 		[ ! "$domain" ] && echo_red "Error: Domain format incorrect [$2]" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf domain "$domain"
 		shift 2
 	elif [ "$1" = "--dns" -o "$1" = "-N" ]; then
 		# If arg missing remove from aba.conf
 		dns_ips=""
-		while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
-		do
+		##while [ "$2" ] && ! echo "$2" | grep -q -e "^-"; do
+		while [[ -n $2 && $2 != -* ]]; do  # no need for grep
 			# Skip invalid values (ip)
 			if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 				[ "$dns_ips" ] && dns_ips="$dns_ips,$2" || dns_ips="$2"
@@ -258,8 +258,8 @@ do
 		# Check arg after --ntp, if "empty" then remove value from aba.conf, otherwise add valid ip addr
 		ntp_vals=""
 		# While there is a valid arg...
-		while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
-		do
+		#while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
+		while [[ -n $2 && $2 != -* ]]; do  # no need for grep
 			[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
 			shift	
 		done
@@ -269,9 +269,12 @@ do
 		# If arg missing remove from aba.conf
 		shift 
 		def_route_ip=
-		if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
-			def_route_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+		if [[ -n $1 && $1 != -* && $1 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+			def_route_ip=$1
 		fi
+	#	if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
+	#		def_route_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+	#	fi
 		replace-value-conf $ABA_PATH/aba.conf next_hop_address "$def_route_ip"
 		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-XXXXXX" ]; then # FIXME: opt?
@@ -279,24 +282,40 @@ do
 		# If arg missing remove from cluster.conf
 		api_vip=
 		# If arg is available and not an opt
-		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-			# If arg is an ip addr
-			if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-				api_vip=$2
+		#####
+		if [[ -n $2 && $2 != -* ]]; then
+			if [[ $2 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+				IFS=. read -r o1 o2 o3 o4 <<< "$2"
+				if (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 )); then
+					api_vip=$2
+				else
+					echo_red "Invalid IPv4 address [$2]" >&2
+					exit 1
+				fi
 			else
 				echo_red "Argument invalid [$2] after option: $1" >&2
 				exit 1
 			fi
 			shift
-		else
-			# Do nothing, remove value in cluster.conf
-			:
 		fi
+
+		#####
+#		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+#			# If arg is an ip addr
+#			if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+#				api_vip=$2
+#			else
+#				echo_red "Argument invalid [$2] after option: $1" >&2
+#				exit 1
+#			fi
+#			shift
+#		else
+#			# Do nothing, remove value in cluster.conf
+#			:
+#		fi
 		# If conf file is available, edit the value
 		if [ -f cluster.conf ]; then
-			echo replace-value-conf cluster.conf api_vip "$api_vip"
 			replace-value-conf cluster.conf api_vip "$api_vip"
-			echo done $*
 		else
 			BUILD_COMMAND="$BUILD_COMMAND api_vip=$api_vip"
 		fi
@@ -539,7 +558,7 @@ do
 		shift 2
 	elif [ "$1" = "--retry" -o "$1" = "-r" ]; then
 		# If there's another arg and it's a number then accept it
-		if [ "$2" ] && echo "$2" | grep -qE "^[0-9]+"; then
+		if [ "$2" ] && echo "$2" | grep -qE "^[0-9]+$"; then
 			BUILD_COMMAND="$BUILD_COMMAND retry='$2'"
 			[ "$DEBUG_ABA" ] && echo $0: Adding retry=$2 to BUILD_COMMAND >&2
 			shift 2
@@ -647,25 +666,26 @@ cat others/message.txt
 if [ ! -f .bundle ]; then
 	# Fresh GitHub clone of Aba repo detected!
 
-	echo -n "Checking Internet connectivity ..."
-	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt); then
-		[ "$TERM" ] && tput el1 && tput cr
-		echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
-		echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora or RHEL and try again." >&2
-
-		exit 1
-	fi
-
-	[ "$TERM" ] && tput el1 && tput cr
-
 	##############################################################################################################################
 	# Determine OCP channel
 
-	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # .../ocp/eus/release.txt does not exist!
+	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # btw .../ocp/eus/release.txt does not exist!
 
 	if [ "$ocp_channel" ]; then
 		echo_cyan "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
 	else
+
+		echo_white -n "Checking Internet connectivity ..."
+		if ! release_text=$(curl -f --connect-timeout 20 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt); then
+			[ "$TERM" ] && tput el1 && tput cr
+			echo_red "Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." >&2
+			echo_red "To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." >&2
+
+			exit 1
+		fi
+
+		[ "$TERM" ] && tput el1 && tput cr
+
 		echo_cyan -n "Which OpenShift update channel do you want to use? (f)ast, (s)table, or (c)andidate) [s]: "
 		read ans
 		[ ! "$ans" ] && ocp_channel=stable
@@ -674,23 +694,25 @@ if [ ! -f .bundle ]; then
 		#[ "$ans" = "e" ] && ocp_channel=eus
 		[ "$ans" = "c" ] && ocp_channel=candidate
 
-		#sed -i "s/ocp_channel=[^ \t]*/ocp_channel=$ocp_channel /g" aba.conf
 		replace-value-conf aba.conf ocp_channel $ocp_channel
 		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
-		sleep 0.3
 
 		chan=$ocp_channel # Used below
 	fi
 
+	sleep 0.3
+
 	##############################################################################################################################
 	# Fetch release.txt
 
-	if ! rel=$(curl -f --connect-timeout 10 --retry 2 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
-		[ "$TERM" ] && tput el1 && tput cr
-		echo_red "Failed to access https://mirror.openshift.com" >&2
+#	#echo_white -n "Fetching OpenShift versions ..."
 
-		exit 1
-	fi
+#	#if ! release_text=$(curl -f --connect-timeout 30 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
+#		[ "$TERM" ] && tput el1 && tput cr
+#		echo_red "Failed to access https://mirror.openshift.com" >&2
+#
+#		exit 1
+#	fi
 
 	###[ "$TERM" ] && tput el1 && tput cr
 
@@ -700,16 +722,27 @@ if [ ! -f .bundle ]; then
 	if [ "$ocp_version" ]; then
 		echo_cyan "OpenShift version is defined in aba.conf as '$ocp_version'."
 	else
+	##############################################################################################################################
+	# Fetch release.txt
+
+	echo_white -n "Fetching OpenShift versions ..."
+
+	if ! release_text=$(curl -f --connect-timeout 30 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
+		[ "$TERM" ] && tput el1 && tput cr
+		echo_red "Failed to access https://mirror.openshift.com" >&2
+
+		exit 1
+	fi
+
 		## Get the latest stable OCP version number, e.g. 4.14.6
-		stable_ver=$(echo "$rel" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
-		default_ver=$stable_ver
+		channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+		default_ver=$channel_ver
 
 		# Extract the previous stable point version, e.g. 4.13.23
-		major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
-		stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
-		[ "$stable_ver_point" ] && \
-			stable_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${stable_ver_point} 2>/dev/null | tail -1)  # This is better way to fetch the newest previous version!
-			#stable_ver_prev=$(echo "$rel"| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+		major_ver=$(echo $channel_ver | grep ^[0-9] | cut -d\. -f1)
+		channel_ver_point=`expr $(echo $channel_ver | grep ^[0-9] | cut -d\. -f2) - 1`
+		[ "$channel_ver_point" ] && \
+			channel_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${channel_ver_point} 2>/dev/null | tail -1)  # better way to fetch newest previous version!
 
 		# Determine any already installed tool versions
 		which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
@@ -718,37 +751,46 @@ if [ ! -f .bundle ]; then
 		[ "$cur_ver" ] && or_ret="or [current version] " && default_ver=$cur_ver
 
 		[ "$TERM" ] && tput el1 && tput cr
-		sleep 0.3
 
-		echo_cyan "Which version of OpenShift do you want to install?"
+		echo "Which version of OpenShift do you want to install?"
 
 		target_ver=
 		while true
 		do
 			# Exit loop if release version exists
 			if [ "$target_ver" ]; then
-				if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
+				if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+$"; then
 					url="https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$target_ver/release.txt"
-					if curl -f --connect-timeout 10 --retry 2 -sSL -o /dev/null -w "%{http_code}\n" $url| grep -q ^200$; then
+					if curl -f --connect-timeout 60 --retry 3 -sSL -o /dev/null -w "%{http_code}\n" $url| grep -q ^200$; then
 						break
 					else
 						echo_red "Error: Failed to fetch release.txt file from $url" >&2
 					fi
 				else
-					echo_red "Invalid input: Enter a valid OpenShift version, e.g. 4.18.10" >&2
+					echo_red "Invalid input. Enter a valid OpenShift version (e.g., 4.18.10 or 4.17)." >&2
 				fi
 			fi
 
-			[ "$stable_ver" ] && or_s="or $stable_ver (l)atest "
-			[ "$stable_ver_prev" ] && or_p="or $stable_ver_prev (p)revious "
+			[ "$channel_ver" ] && or_s="or $channel_ver (l)atest "
+			[ "$channel_ver_prev" ] && or_p="or $channel_ver_prev (p)revious "
 
-			echo_cyan -n "Enter version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
+			echo_cyan -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
 
 			read target_ver
 
 			[ ! "$target_ver" ] && target_ver=$default_ver          # use default
-			[ "$target_ver" = "l" ] && target_ver=$stable_ver       # latest
-			[ "$target_ver" = "p" ] && target_ver=$stable_ver_prev  # previous latest
+			[ "$target_ver" = "l" -a "$channel_ver" ] && target_ver=$channel_ver       # latest
+			[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev  # previous latest
+
+			# If user enters just a point version, x.y, fetch the latest .z value for that point version of OCP
+			if echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$"; then
+				# https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.19/release.txt
+				if release_text=$(curl -f --connect-timeout 20 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/${chan}-$target_ver/release.txt 2>/dev/null); then
+					target_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+				else
+					target_ver=invalid
+				fi
+			fi
 		done
 
 		# Update the conf file
@@ -758,6 +800,8 @@ if [ ! -f .bundle ]; then
 
 		sleep 0.3
 	fi
+
+	sleep 0.3
 
 	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
 	# FIXME: Any better way to do this?! .. or just keep this check in 'aba sync' and 'aba save' (i.e. before we d/l the images
