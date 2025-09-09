@@ -123,7 +123,7 @@ echo_green "All servers in the cluster will complete shutdown and power off in a
 
 if [ "$wait" -a -s vmware.conf ]; then
 	echo_cyan "Waiting for all nodes to power down ..." | tee -a $logfile
-	until make -s ls | grep poweredOn | wc -l | grep -q ^0$; do sleep 10; done
+	until make -s ls | grep poweredOn || true | wc -l | grep -q ^0$; do sleep 10; done
 fi
 
 exit 0

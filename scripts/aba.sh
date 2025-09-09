@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250909214720
+ABA_VERSION=20250910074430
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -609,10 +609,15 @@ do
 			#else
 				# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
 				# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
-				cur_target=$1
+			cur_target=$1
+
+			if [ "$cur_target" = "shutdown" ]; then
+				eval $ABA_PATH/scripts/cluster-graceful-shutdown.sh   # Run such scripts directly and not via 'make'
+				cur_target=
+			else
 				BUILD_COMMAND="$BUILD_COMMAND $1"
 				[ "$DEBUG_ABA" ] && echo $0: Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
-			#fi
+			fi
 		fi
 		shift 
 	fi
