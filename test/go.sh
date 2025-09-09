@@ -11,7 +11,7 @@ test3 \
 export ABA_TESTING=1  # This will disable tracking to api.counterapi.dev
 hash -r  # Forget all command locations in $PATH
 
-sudo dnf autoremove ncurses -y
+##sudo dnf autoremove ncurses -y
 
 #export TEST_CHANNEL=fast
 export TEST_CHANNEL=stable
@@ -81,7 +81,7 @@ do
 	set -o pipefail
 	eval time test/$t-*.sh 2>&1 | tee -a test/output.log && notify.sh "Success $t (`date`)" || ret=1
 	set +o pipefail
-	[ $ret -ne 0 ] && echo Script $t existed with ret=$ret && break
+	[ $ret -ne 0 ] && echo Script $t exited with ret=$ret && break
 done
 
 if [ $ret -eq 0 ]; then

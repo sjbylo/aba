@@ -319,8 +319,9 @@ END
 	test-cmd -r 4 10 -h root@$int_bastion_hostname -m "Verify ssh to root@$int_bastion_hostname" whoami
 
 	# This is required for tput, so aba must install it or give user directions
-	ssh $test_user@$int_bastion_hostname -- "which tput && sudo dnf autoremove ncurses -y"
-	ssh $test_user@$int_bastion_hostname -- "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml ncurses -y"
+	#ssh $test_user@$int_bastion_hostname -- "which tput && sudo dnf autoremove ncurses -y"
+	#ssh $test_user@$int_bastion_hostname -- "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml ncurses -y"
+	ssh $test_user@$int_bastion_hostname -- "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml         -y"
 
 	# Delete images
 	mylog "Cleaning up podman images ..."
