@@ -63,7 +63,7 @@ test-cmd() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
 	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
-	local tot_cnt=2		# Try to run the command max tot_cnt times. If it fails, try one more time by def.
+	local tot_cnt=3		# Try to run the command max tot_cnt times. If it fails, try one more time by def.
 	local backoff=20	# Default to wait after failed command is a few sec.
 	local host=localhost	# def. host to run on
 	local mark=L		# Mark in the log output, L (local) or R (remote)
@@ -87,9 +87,9 @@ test-cmd() {
 
 	draw-line
 	if [ "$msg" ]; then
-		log-test -t "$mark" "$msg" "($cmd)" "[$host:$PWD]"
+		log-test -t "$mark" "$msg" "($cmd)" "[$PWD -> $host]"
 	else
-		log-test -t "$mark" "Running: $cmd" "[$host:$PWD]"
+		log-test -t "$mark" "Running: $cmd" "[$PWD -> $host]"
 	fi
 
 	# Loop to repeat the command if user requests
@@ -106,7 +106,8 @@ test-cmd() {
 			if [ "$host" != "localhost" ]; then
 				echo "Running command: \"$cmd\" on host $host"
 				# Added ". ~/.bash_profile" for RHEL8!
-				ssh -o LogLevel=ERROR $host -- "export TERM=xterm;. \$HOME/.bash_profile;$cmd" &    # For testing, TERM sometimes needs to be set to anything
+				#ssh -o LogLevel=ERROR $host -- "export TERM=xterm;. \$HOME/.bash_profile;$cmd" &    # For testing, TERM sometimes needs to be set to anything
+				ssh -t -o LogLevel=ERROR $host -- ". \$HOME/.bash_profile;$cmd" &    # For testing, force tty with -t
 			else
 				echo "Running command: \"$cmd\" from localhost:$PWD"
 				eval "$cmd" &
