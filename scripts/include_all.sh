@@ -604,6 +604,20 @@ fetch_previous_version() {
 
 }
 
+# https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.19/release.txt
+fetch_latest_z_version() {
+	local arch_sys=$1
+	local chan=$2
+	local target_ver=$3
+
+	if release_text=$(curl -f --connect-timeout 20 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/${chan}-$target_ver/release.txt 2>/dev/null); then
+		target_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+	else
+		target_ver=invalid
+	fi
+	echo $target_ver
+}
+
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {
 	# $1 file

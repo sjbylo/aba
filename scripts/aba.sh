@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250909104435
+ABA_VERSION=20250909110812
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -188,6 +188,7 @@ do
 		ver=$2
 		[ "$ver" = "latest" -o "$ver" = "l" ] && ver=$(fetch_latest_version $chan)
 		[ "$ver" = "previous" -o "$ver" = "p" ] && ver=$(fetch_previous_version $chan)
+		echo $ver | grep -E -q "^[0-9]+\.[0-9]+$" && ver=$(fetch_latest_z_version $arch_sys $chan $ver)
 		ver=$(echo $ver | grep -E -o "^[0-9]+\.[0-9]+\.[0-9]+$" || true)
 		[ ! "$ver" ] && echo_red "Missing or wrong value after option $1" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf ocp_version $ver
@@ -768,14 +769,7 @@ if [ ! -f .bundle ]; then
 			[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev  # previous latest
 
 			# If user enters just a point version, x.y, fetch the latest .z value for that point version of OCP
-			if echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$"; then
-				# https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.19/release.txt
-				if release_text=$(curl -f --connect-timeout 20 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/${chan}-$target_ver/release.txt 2>/dev/null); then
-					target_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
-				else
-					target_ver=invalid
-				fi
-			fi
+			echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version $arch_sys $chan $ver)
 		done
 
 		# Update the conf file
