@@ -6,7 +6,7 @@
 # -u : treat unset variables as an error
 # -o pipefail : catch errors in any part of a pipeline
 #set -euo pipefail
-set -eo pipefail
+set -o pipefail
 
 # Check is sudo exists 
 SUDO=
