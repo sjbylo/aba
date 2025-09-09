@@ -9,7 +9,6 @@ required_pkgs=(which file hostname diffutils git make jq python3-jinja2 python3-
 missing_pkgs=()
 
 for pkg in "${required_pkgs[@]}"; do
-	#if ! which "$pkg" >/dev/null; then
 	if ! rpm -q "$pkg" >/dev/null; then
 		missing_pkgs+=("$pkg")
 	fi
@@ -27,6 +26,7 @@ if [ ${#missing_pkgs[@]} -gt 0 ]; then
 		echo
 		echo "Error installing missing required pkgs: ${missing_pkgs[*]}" >&2
 		echo "Please install the correct rpm packages (${missing_pkgs[*]}) and try again." >&2
+
 		exit 1
 	fi
 fi
@@ -36,9 +36,6 @@ if ! which id >/dev/null 2>&1; then
 
 	exit 1
 fi
-
-##SUDO=
-##which sudo 2>/dev/null >&2 && SUDO=sudo
 
 # Check sudo or root access 
 # If user is not root
@@ -134,7 +131,8 @@ do
 		if [ -s "$d/aba" -a -x "$d/aba" ]; then
 			repo_ver=$(get_repo_ver)
 			INSTALLED_VER=$(grep "^ABA_VERSION=[0-9]" $d/aba | cut -d= -f2)
-			[ "$DEBUG_ABA" ] && echo INSTALLED_VER=$INSTALLED_VER and repo_ver=$repo_ver >&2
+			#[ "$DEBUG_ABA" ] && echo INSTALLED_VER=$INSTALLED_VER and repo_ver=$repo_ver >&2
+			[ -n "${DEBUG_ABA-}" ] && echo "INSTALLED_VER=${INSTALLED_VER-} and repo_ver=${repo_ver-}" >&2
 			if [ "$INSTALLED_VER" -a "$repo_ver" ] && [ $INSTALLED_VER -lt $repo_ver ]; then
 				action=updated
 				ret=2 # If aba is updated we want aba to re-execute itself (see aba)

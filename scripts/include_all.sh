@@ -1,6 +1,13 @@
 # Code that all scripts need.  Ensure this script does not create any std output.
 # Add any arg1 to turn off the below Error trap
 
+# Strict mode:
+# -e : exit immediately if a command fails
+# -u : treat unset variables as an error
+# -o pipefail : catch errors in any part of a pipeline
+#set -euo pipefail
+set -eo pipefail
+
 # Check is sudo exists 
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
@@ -133,8 +140,9 @@ show_error() {
 }
 
 # Set the trap to call the show_error function on ERR signal
-[ ! "$1" ] && trap 'show_error' ERR
-
+#[ ! "$1" ] && trap 'show_error' ERR
+# If no first argument is provided, set a trap for errors
+[ -z "${1-}" ] && trap 'show_error' ERR
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
@@ -652,3 +660,80 @@ aba-track() {
 	# Note this tracker has only one counter: 'installed'
 	[ ! "$ABA_TESTING" ] && ( curl --retry 3 --fail -s https://abacus.jasoncameron.dev/hit/bylo.de-aba/installed >/dev/null 2>&1 & disown ) & disown
 }
+
+# =========================================================
+# Deduce reasonable defaults for OpenShift cluster config
+# =========================================================
+
+# -------------------------
+# Functions
+# -------------------------
+
+# Get base domain
+get_domain() {
+    # hostname -d gives the domain part of the FQDN
+    local d
+    d=$(hostname -d 2>/dev/null || true)
+    # fallback default
+    echo "${d:-example.com}"
+}
+
+# Get the default gateway / next hop
+get_next_hop() {
+    local gw
+    # extract the "via" IP from the default route
+    gw=$(ip route show default 2>/dev/null \
+         | awk '/default/ {for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
+    # fallback
+    echo "${gw:-10.0.0.1}"
+}
+
+# Get machine network (CIDR of the main interface)
+get_machine_network() {
+    local def_if net
+    # find default network interface
+    def_if=$(ip route show default 2>/dev/null \
+             | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+
+    # Try to get subnet CIDR of the default interface
+    net=$(ip -o -4 route list dev "${def_if:-}" proto kernel scope link 2>/dev/null \
+          | awk '$1 ~ "/" {print $1; exit}')
+
+    # fallback: first RFC1918 route not associated with container/VM bridges
+    if [[ -z "${net:-}" ]]; then
+        net=$(ip -o -4 route list proto kernel scope link 2>/dev/null \
+              | awk '$1 ~ "/" && $0 !~ /(docker|podman|cni|virbr|br-|veth|tun|tap)/ {print $1}' \
+              | awk '/^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/ {print; exit}')
+    fi
+
+    # final fallback
+    echo "${net:-10.0.0.0/20}"
+}
+
+# Get DNS servers
+get_dns_servers() {
+    local dns
+    # Try resolvectl first (Fedora / systemd-resolved)
+    if command -v resolvectl >/dev/null 2>&1; then
+        dns=$(resolvectl status \
+              | awk '/DNS Servers/ {for(i=3;i<=NF;i++) printf "%s%s",$i,(i<NF?"," : "\n")}')
+    fi
+
+    # Fallback to /etc/resolv.conf if nothing found
+    if [[ -z "${dns:-}" ]]; then
+        dns=$(awk '/^nameserver/ {print $2}' /etc/resolv.conf | paste -sd,)
+    fi
+
+    # Final fallback
+    echo "${dns:-8.8.8.8,1.1.1.1}"
+}
+
+# Get NTP servers
+get_ntp_servers() {
+    local ntp
+    # Read server lines from chrony.conf, join with commas
+    ntp=$(awk '/^server / {print $2}' /etc/chrony.conf 2>/dev/null | paste -sd,)
+    # fallback
+    echo "${ntp:-pool.ntp.org}"
+}
+
