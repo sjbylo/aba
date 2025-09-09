@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250908224656
+ABA_VERSION=20250909104435
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -15,15 +15,7 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 # Check we have sudo or root access 
 [ "$SUDO" ] && [ "$(sudo id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
 
-# If aba is called with relative path, e.g. aba/aba or ../aba then why not try cd to the top-level dir?
-# A relative path will contain a '/'
-###if echo "$0" | grep -qe /; then
-###	d=$(dirname $0)
-###	# If we are not at the top level repo dir then change back again
-###	[ -s $d/Makefile ] && grep -q "Top level Makefile" $d/Makefile && cd $d
-###fi
-
-# Having $1 = --dir is an exception only, $1 can point to the top-level repo dir only
+# Change dir if asked
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
 	[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
@@ -36,6 +28,7 @@ fi
 
 # Check the repo location
 # Need to be sure location of the top of the repo in order to find the important files
+# FIXME: Place the files (scripts and templates etc) into a well known location, e.g. /opt/aba/...
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
 	ABA_PATH=.
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
@@ -73,25 +66,32 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	$ABA_PATH/install -q
 	if [ $? -eq 2 ]; then
 		export ABA_DO_NOT_UPDATE=1
-		aba "$@"  # This means aba was updated and needs to be called again
+		$0 "$@"  # This means aba was updated and needs to be called again
 		exit
 	fi
 fi
 
 source $ABA_PATH/scripts/include_all.sh
 
-###install_rpms $(cat $ABA_PATH/templates/rpms-external.txt) || exit 1
-
 # This will be the actual 'make' command that will eventually be run
 BUILD_COMMAND=
 
 # Init aba.conf
 if [ ! -f $ABA_PATH/aba.conf ]; then
-	cp $ABA_PATH/templates/aba.conf $ABA_PATH
+
+	# Determine resonable default for ...
+	export domain=$(get_domain)
+	export machine_network=$(get_machine_network)
+	export dns_servers=$(get_dns_servers)
+	export next_hop_address=$(get_next_hop)
+	export ntp_servers=$(get_ntp_servers)
+
+	scripts/j2 templates/aba.conf.j2 > aba.conf
+	#cp $ABA_PATH/templates/aba.conf $ABA_PATH
 
 	# Initial prep for interactive mode: unset ocp_version and ocp_channel
-	replace-value-conf $ABA_PATH/aba.conf ocp_version 
-	replace-value-conf $ABA_PATH/aba.conf ocp_channel
+#	replace-value-conf $ABA_PATH/aba.conf ocp_version 
+#	replace-value-conf $ABA_PATH/aba.conf ocp_channel
 fi
 
 # Set some defaults 
@@ -102,7 +102,7 @@ chan=stable
 interactive_mode=
 [ "$*" ] && interactive_mode_none=1
 
-cur_target=
+cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
 
 while [ "$*" ] 
 do
@@ -424,7 +424,6 @@ do
 		replace-value-conf $ABA_PATH/aba.conf ask true
 		shift 
 	elif [ "$1" = "-y" ]; then  # make -y work only for a single command execution (not write into file)
-		###replace-value-conf $ABA_PATH/aba.conf ask false 
 		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
 		shift 
 	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then  # FIXME: make -y work only for a single command execution (not write into file)
@@ -703,36 +702,22 @@ if [ ! -f .bundle ]; then
 	sleep 0.3
 
 	##############################################################################################################################
-	# Fetch release.txt
-
-#	#echo_white -n "Fetching OpenShift versions ..."
-
-#	#if ! release_text=$(curl -f --connect-timeout 30 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
-#		[ "$TERM" ] && tput el1 && tput cr
-#		echo_red "Failed to access https://mirror.openshift.com" >&2
-#
-#		exit 1
-#	fi
-
-	###[ "$TERM" ] && tput el1 && tput cr
-
-	##############################################################################################################################
 	# Determine OCP version 
 
 	if [ "$ocp_version" ]; then
 		echo_cyan "OpenShift version is defined in aba.conf as '$ocp_version'."
 	else
-	##############################################################################################################################
-	# Fetch release.txt
+		##############################################################################################################################
+		# Fetch release.txt
 
-	echo_white -n "Fetching OpenShift versions ..."
+		echo_white -n "Fetching available versions ..."
 
-	if ! release_text=$(curl -f --connect-timeout 30 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
-		[ "$TERM" ] && tput el1 && tput cr
-		echo_red "Failed to access https://mirror.openshift.com" >&2
+		if ! release_text=$(curl -f --connect-timeout 30 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
+			[ "$TERM" ] && tput el1 && tput cr
+			echo_red "Failed to access https://mirror.openshift.com" >&2
 
-		exit 1
-	fi
+			exit 1
+		fi
 
 		## Get the latest stable OCP version number, e.g. 4.14.6
 		channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
@@ -851,8 +836,7 @@ if [ ! -f .bundle ]; then
 	# make & jq are needed below and in the next steps 
 	scripts/install-rpms.sh external 
 
-	# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-#	( make -s -C mirror catalog bg=true >/dev/null 2>&1 & ) & 
+	# Now we have the required ocp version, we can fetch the operator indexes (in the background to save time).
 	( make -s catalog bg=true & ) & 
 
 	##############################################################################################################################
@@ -888,12 +872,15 @@ if [ ! -f .bundle ]; then
 	# Determine air-gapped
 
 	echo
-	echo_white "Fully Disconnected (air-gapped)"
-	echo_white "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, Aba can download all required software"
-	echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'install bundle' for you to transfer into your disconnected environment."
+	echo       "Fully Disconnected (air-gapped)"
+	echo_white "If you plan to install OpenShift in a fully disconnected (air-gapped) environment, Aba can download all required components—including"
+	echo_white "the Quay mirror registry install file, container images, and CLI install files—and package them into an install bundle that you can"
+	echo_white "transfer into your disconnected environment."
+	#echo_white "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, Aba can download all required software"
+	#echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'install bundle' for you to transfer into your disconnected environment."
 	if ask "Install OpenShift into a fully disconnected network environment"; then
 		echo
-		echo_yellow Instructions
+		echo_yellow Instructions for a fully disconnected installation
 		echo
 		echo "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the install bundle"
 		echo "                                                          # (size ~20-30GB for a base installation)."
@@ -909,12 +896,12 @@ if [ ! -f .bundle ]; then
 	# Determine online installation (e.g. via a proxy/NAT)
 
 	echo
-	echo_white "Partially Disconnected"
+	echo "Partially Disconnected"
 	echo_white "A mirror registry can be synchronized directly from the Internet, allowing OpenShift to be installed from the mirrored content."
 	if ask "Install OpenShift from a mirror registry that is synchonized directly from the Internet"; then
 
 		echo 
-		echo_yellow Instructions to sync images directly to a mirror registry
+		echo_yellow Instructions for synchronizing images directly to a mirror registry
 		echo 
 		echo "Action required: Set up the mirror registry and sync it with the necessary container images."
 		echo
@@ -928,17 +915,19 @@ if [ ! -f .bundle ]; then
 		echo "  aba mirror sync --retry <count>   # to complete both actions and ensure any image synchronization issues are retried."
 		echo
 
+		echo "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
+		echo
+
 		exit 0
 	fi
 
 	echo 
-	echo_yellow Instructions
-	echo 
-	echo "Install OpenShift directly from the Internet"
+	echo_yellow Instructions for installing from the Internet
 	echo
-	echo "Configure the installation to use a proxy or NAT (optional)."
+	echo_white "Configure the installation to use a proxy or NAT (optional)."
 	echo
-	echo "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]"
+	echo_white "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]"
+	echo_white "See aba cluster -help for more"
 	echo 
 
 else
@@ -983,6 +972,4 @@ else
 	echo "See 'aba load -h' for more."
 fi
 
-echo "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
-echo
 
