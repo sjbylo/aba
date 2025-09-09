@@ -47,7 +47,7 @@ if ! try_cmd -q 1 0 1 curl --connect-timeout 10 --retry 2 -skIL $server_url; the
 	fi
 fi
 
-OC="oc --kubeconfig iso-agent-based/auth/kubeconfig"
+OC="oc --kubeconfig $PWD/iso-agent-based/auth/kubeconfig"
 
 # Just to be as sure as possible we can access the cluster!
 if ! try_cmd -q 1 0 2 $OC get nodes ; then
@@ -87,22 +87,27 @@ all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditi
 
 check_and_approve_csrs() {
 	# Keep on watching for and approving those CSRs ...
+	local i=0
+	local pause=5
 	while true
 	do
 		# Check any pending CSRs
-		$OC get csr -A --no-headers -w 2>/dev/null | grep -i pending | awk '{print $1}' | while read csr
-		do
-			#$OC adm certificate approve $CSRs
-			echo "$OC adm certificate approve $csr"
-			$OC adm certificate approve $csr
-		done
-		sleep 1
+		CSRS=$($OC get csr -A --no-headers 2>/dev/null | grep -i pending | awk '{print $1}')
+		if [ "$CSRS" ]; then
+			echo "$OC adm certificate approve $CSRS"
+			$OC adm certificate approve $CSRS
+		fi
+
+		sleep $pause
+		let i=$i+$pause
+		[ $i -gt 3600 ] && exit 0  # Try for ~1 hour
 	done
 }
 
 (check_and_approve_csrs) &>/dev/null & 
 pid=$!
 myexit() { [ ! "$pid" ] && return; kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; exit $1; }
+trap myexit SIGINT SIGTERM
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
