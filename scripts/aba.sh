@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250909110812
+ABA_VERSION=20250909214720
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -564,7 +564,7 @@ do
 			shift 2
 		# In all other cases, use '3' 
 		else
-			BUILD_COMMAND="$BUILD_COMMAND retry=3"  # FIXME: Also confusing, similar to --name
+			BUILD_COMMAND="$BUILD_COMMAND retry=2"  # FIXME: Also confusing, similar to --name
 			[ "$DEBUG_ABA" ] && echo $0: Setting $1 to 3 >&2
 			shift
 		fi

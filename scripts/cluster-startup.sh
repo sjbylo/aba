@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 # Start up the cluster.  Need to uncordon to allow pods to run again.
 
 source scripts/include_all.sh
@@ -83,7 +83,8 @@ do
 	sleep 10
 done
 
-all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v "^True$" | wc -l | grep -q "^0$"; }
+#all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v "^True$" || true | wc -l | grep -q "^0$"; }
+all_nodes_ready() { [ -z "$($OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v ^True$)" ]; }
 
 check_and_approve_csrs() {
 	# Keep on watching for and approving those CSRs ...
@@ -106,7 +107,8 @@ check_and_approve_csrs() {
 
 (check_and_approve_csrs) &>/dev/null & 
 pid=$!
-myexit() { [ ! "$pid" ] && return; kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; exit $1; }
+#myexit() { [ ! "$pid" ] && return; kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; exit $1; }
+myexit() { [ "$pid" ] && { kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; }; exit $1; }
 trap myexit SIGINT SIGTERM
 
 # Wait for all nodes in Ready state
@@ -114,14 +116,6 @@ if ! all_nodes_ready; then
 	echo_white "Waiting for all nodes to be 'Ready' ..."
 
 	sleep 8
-
-	#check_and_approve_csrs
-
-	until all_nodes_ready
-	do
-		#check_and_approve_csrs
-		sleep 8
-	done
 fi
 ##$OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
 
@@ -157,10 +151,8 @@ fi
 if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
 	echo "Waiting for all cluster operators ..."
 
-	#check_and_approve_csrs
-
 	echo
-	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False$' | wc -l| grep '^0$'"; then
+	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False$' || true | wc -l| grep '^0$'"; then
 		echo "Giving up waiting for the operators!"
 		myexit 0
 	fi
