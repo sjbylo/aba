@@ -11,7 +11,7 @@ Examples:
 
 Options:
 
-  aba cluster                             # Create a cluster
+  aba cluster                             # Create a cluster configuration
     -y                                    # Automatically accept the default answer to all prompts
     -n, --name string                     # The name of the cluster to create
     -t, --type <sno|compact|standard>     # Set type of cluster
@@ -25,7 +25,7 @@ Options:
         --mmem <count>                    # Set the master memory in GB (only for virt target)
         --wcpu <count>                    # Set the worker cpu count in vCPU (only for virt target)
         --wmem <count>                    # Set the worker memory in GB (only for virt target)
-        --data-disk [<size>]              # Size of ectra data disk in GB or empty for no data disk
+        --data-disk [<size>]              # Size of additional data disk in GB or empty for no data disk
 
 Usage (from a cluster directory):
   aba --cmd "oc command"                  # Run this 'oc command' on the current cluster

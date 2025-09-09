@@ -3,7 +3,7 @@ Create bundle archive file
 Usage:
   aba bundle \
     -c, --channel <channel>                   # Choose OpenShift install channel.
-    -v, --version <version>                   # OpenShift version to insyall (x.y.z or latest).
+    -v, --version <version>                   # OpenShift version to install (x.y.z or latest).
     -o, --out string                          # Path to write bundle archive file to.
     -S, --pull-secret ~/.pull-secret.json     # Location of your Red Hat pull secret.
     -P, --op-sets [<list of operator sets>]   # Define a set(s) of operators (ocp,odf,ocpv...)
