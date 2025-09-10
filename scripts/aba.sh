@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250910074430
+ABA_VERSION=20250910080757
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -611,9 +611,22 @@ do
 				# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
 			cur_target=$1
 
-			if [ "$cur_target" = "shutdown" ]; then
+			if [ "$cur_target" = "startup" ]; then
+				eval $ABA_PATH/scripts/cluster-startup.sh   # Run such scripts directly and not via 'make'
+				cur_target=
+				interactive_mode_none=1
+				interactive_mode=
+				# FIXME: Need to simplify this logic!  Need to not allow calling "make -s" if $BUILD_COMMAND is ""
+				# or we just exit here and only allow/assume one single 'command'
+				exit
+			elif [ "$cur_target" = "shutdown" ]; then
 				eval $ABA_PATH/scripts/cluster-graceful-shutdown.sh   # Run such scripts directly and not via 'make'
 				cur_target=
+				interactive_mode_none=1
+				interactive_mode=
+				# FIXME: Need to simplify this logic!  Need to not allow calling "make -s" if $BUILD_COMMAND is ""
+				# or we just exit here and only allow/assume one single 'command'
+				exit
 			else
 				BUILD_COMMAND="$BUILD_COMMAND $1"
 				[ "$DEBUG_ABA" ] && echo $0: Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
@@ -636,7 +649,7 @@ BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $
 # We want interactive mode if aba is running at the top of the repo and without any args
 [ ! "$BUILD_COMMAND" -a "$ABA_PATH" = "." ] && interactive_mode=1
 
-if [ ! "$interactive_mode" ]; then
+if [ ! "$interactive_mode" -a -z "$interactive_mode_none" ]; then
 	[ "$DEBUG_ABA" ] && echo "DEBUG: $0: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
 
 	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
@@ -645,6 +658,7 @@ if [ ! "$interactive_mode" ]; then
 	exit 
 fi
 
+##################################################################
 # We don't want interactive mode if there were args in the command
 #[ "$interactive_mode_none" ] && echo Exiting ... >&2 && exit 
 [ "$interactive_mode_none" ]                          && exit 

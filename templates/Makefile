@@ -160,14 +160,14 @@ create: vmw agentconf      ## Create the VMs based on the 'agent-based' config f
 ls: vmw                           agent-config.yaml ## List all VMs and their power state.
 	$(SCRIPTS)/vmw-ls.sh || echo "No vm(s)."
 
-.PHONY: shutdown 
-shutdown: ## Trigger the cluster to gracefully shut itself down by draining all the nodes of pods and running shutdown command.
-	$(SCRIPTS)/cluster-graceful-shutdown.sh 
+###.PHONY: shutdown 
+###shutdown: ## Trigger the cluster to gracefully shut itself down by draining all the nodes of pods and running shutdown command.
+###	$(SCRIPTS)/cluster-graceful-shutdown.sh 
 
-.PHONY: startup
-#startup: vmware.conf ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
-startup:             ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
-	$(SCRIPTS)/cluster-startup.sh 
+###.PHONY: startup
+####startup: vmware.conf ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
+###startup:             ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
+###	$(SCRIPTS)/cluster-startup.sh 
 
 .PHONY: rescue
 rescue: ## If a cluster does not start due to login/CSR issues, rescue the cluster using ssh, if available. 
