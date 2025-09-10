@@ -157,8 +157,11 @@ do
 			$SUDO chmod +x $d/aba
 			if [ ! "$quiet" ]; then
 				echo aba has been $action to $d/aba >&2
+				if [ -n "$msg" ]; then
+					source scripts/include_all.sh
+					echo_yellow "$msg" >&2
+				fi
 			fi
-			[ ! "$quiet" -a -n "$msg" ] && source scripts/include_all.sh && echo_yellow "$msg" >&2 || true
 
 			exit $ret  # Success
 		fi
