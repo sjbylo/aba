@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250910080757
+ABA_VERSION=20250910083357
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -649,7 +649,8 @@ BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $
 # We want interactive mode if aba is running at the top of the repo and without any args
 [ ! "$BUILD_COMMAND" -a "$ABA_PATH" = "." ] && interactive_mode=1
 
-if [ ! "$interactive_mode" -a -z "$interactive_mode_none" ]; then
+#if [ ! "$interactive_mode" -a -z "$interactive_mode_none" ]; then
+if [ ! "$interactive_mode" ]; then
 	[ "$DEBUG_ABA" ] && echo "DEBUG: $0: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
 
 	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
