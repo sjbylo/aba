@@ -155,8 +155,10 @@ do
 		# Now, try to install aba
 		if $SUDO cp -p scripts/aba.sh $d/aba; then
 			$SUDO chmod +x $d/aba
-			[ ! "$quiet" ] && echo aba has been $action to $d/aba >&2
-			[ ! "$quiet" -a -n "$msg" ] && source scripts/include_all.sh && echo_yellow "$msg" >&2
+			if [ ! "$quiet" ]; then
+				echo aba has been $action to $d/aba >&2
+			fi
+			[ ! "$quiet" -a -n "$msg" ] && source scripts/include_all.sh && echo_yellow "$msg" >&2 || true
 
 			exit $ret  # Success
 		fi
