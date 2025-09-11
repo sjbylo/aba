@@ -132,7 +132,7 @@ echo
 
 console=$($OC whoami --show-console)/
 if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
-	echo_green "The cluster will complete startup and become fully available in a short while!"
+	echo_green "The cluster will complete startup and become fully available shortly!"
 	echo
 	echo "Waiting for the console to become available at $console"
 

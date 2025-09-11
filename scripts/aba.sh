@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250910083357
+ABA_VERSION=20250911105807
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -610,27 +610,8 @@ do
 				# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
 				# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
 			cur_target=$1
-
-			if [ "$cur_target" = "startup" ]; then
-				eval $ABA_PATH/scripts/cluster-startup.sh   # Run such scripts directly and not via 'make'
-				cur_target=
-				interactive_mode_none=1
-				interactive_mode=
-				# FIXME: Need to simplify this logic!  Need to not allow calling "make -s" if $BUILD_COMMAND is ""
-				# or we just exit here and only allow/assume one single 'command'
-				exit
-			elif [ "$cur_target" = "shutdown" ]; then
-				eval $ABA_PATH/scripts/cluster-graceful-shutdown.sh   # Run such scripts directly and not via 'make'
-				cur_target=
-				interactive_mode_none=1
-				interactive_mode=
-				# FIXME: Need to simplify this logic!  Need to not allow calling "make -s" if $BUILD_COMMAND is ""
-				# or we just exit here and only allow/assume one single 'command'
-				exit
-			else
-				BUILD_COMMAND="$BUILD_COMMAND $1"
-				[ "$DEBUG_ABA" ] && echo $0: Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
-			fi
+			BUILD_COMMAND="$BUILD_COMMAND $1"
+			[ "$DEBUG_ABA" ] && echo $0: Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
 		fi
 		shift 
 	fi
