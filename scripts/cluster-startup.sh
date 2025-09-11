@@ -155,11 +155,11 @@ if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v
 	echo
 	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False$' || true | wc -l| grep '^0$'"; then
 		echo "Giving up waiting for the operators!"
-		myexit 0
+		exit 0
 	fi
 fi
 
 echo_green "All cluster operators are fully available!"
 
-myexit 0
+exit 0
 
