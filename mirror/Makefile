@@ -119,7 +119,7 @@ mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry bin
 	tar xmvzf mirror-registry-amd64.tar.gz
 
 mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball
-	echo "Downloading mirror-registry-amd64.tar.gz ..."
+	echo "Downloading https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz ..."
 	curl $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
 	@#$(SCRIPTS)/download-mirror-registry.sh  # FIXME: delete script
 

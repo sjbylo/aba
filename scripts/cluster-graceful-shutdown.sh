@@ -81,7 +81,7 @@ echo_cyan -n "Gracefully shut down the cluster? (Y/n): "
 read yn
 [ "$yn" = "n" ] && exit 1
 
-# wait for all debug pods to have worked ok
+# wait for all debug pods to have completed successfully.
 wait
 
 echo "Cluster ready for gracefull shutdown!  Sending all output to $logfile ..." | tee -a $logfile
@@ -119,11 +119,11 @@ done >> $logfile 2>&1
 wait
 
 echo 
-echo_green "All servers in the cluster will complete shutdown and power off in a short while!" | tee -a $logfile
+echo_green "All servers in the cluster will complete shutdown and power off shortly!" | tee -a $logfile
 
 if [ "$wait" -a -s vmware.conf ]; then
 	echo_cyan "Waiting for all nodes to power down ..." | tee -a $logfile
-	until make -s ls | grep poweredOn || true | wc -l | grep -q ^0$; do sleep 10; done
+	until make -s ls | grep poweredOn | wc -l | grep -q ^0$; do sleep 10; done
 fi
 
 exit 0

@@ -90,8 +90,17 @@ do
 		./load-mirror.sh && failed= && break
 	else
 		if ./load-mirror.sh; then
-			# Check for errors
-			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
+			# Check for error files
+			#error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null || true | head -1)
+
+			# This is a better way to implement file globbing ...
+			shopt -s nullglob  # Be sure error_file != "mirroring_errors_*_*.txt"
+			files=(save/working-dir/logs/mirroring_errors_*_*.txt)
+			error_file=""
+			if (( ${#files[@]} )); then
+				error_file=$(ls -t "${files[@]}" | head -1)
+			fi
+
 			if [ ! "$error_file" ]; then
 				failed=
 				break
