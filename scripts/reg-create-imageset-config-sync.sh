@@ -37,6 +37,8 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 	scripts/j2 ./templates/imageset-config-sync-$oc_mirror_version.yaml.j2 > sync/imageset-config-sync.yaml 
 	scripts/add-operators-to-imageset.sh >> sync/imageset-config-sync.yaml
 
+	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" sync/imageset-config-sync.yaml
+
 	touch sync/.created
 
 	echo_green "Image set config file created: mirror/sync/imageset-config-sync.yaml"

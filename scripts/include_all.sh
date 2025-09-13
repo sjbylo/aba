@@ -161,6 +161,7 @@ normalize-aba-conf() {
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
+			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
 			-e "s/verify_conf=0\b/verify_conf=/g" -e "s/verify_conf=false/verify_conf=/g" \
 			-e "s/verify_conf=1\b/verify_conf=true/g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
