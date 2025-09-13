@@ -342,7 +342,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Checking cluster operator statu
 
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deploying vote-app on cluster" $subdir/aba/test/deploy-test-app.sh $subdir
 test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/sno --cmd 'oc delete project demo || true'"
-test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/sno --cmd 'oc new-project demo'"
+test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/sno --cmd 'oc new-project demo'"
 
 test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" sleep 30
 # error: Post "https://api.sno.example.com:6443/api/v1/namespaces/demo/services": dial tcp 10.0.1.201:6443: connect: connection refused

@@ -18,6 +18,8 @@ op_sets=			# Optional: Add sets of operators, e.g. op_sets=odf,ocpv,acm,mesh3 to
 
 ops=				# Optional: Add individual operators, e.g. ops=web-terminal,devworkspace-operator
 
+excl_platform=false		# If the platform images should be excluded. In nearly all cases, this will be 'false'.
+
 domain={{ domain }}              # The base domain name you want to use for OpenShift.
 machine_network={{ machine_network }}	# OpenShift will be installed into this private network (use CIDR format).
 dns_servers={{ dns_servers }}   # Your DNS server(s) IP addresses (comma separated).
