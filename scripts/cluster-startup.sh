@@ -108,9 +108,10 @@ check_and_approve_csrs() {
 (check_and_approve_csrs) &>/dev/null & 
 pid=$!
 #myexit() { [ ! "$pid" ] && return; kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; exit $1; }
-#myexit() { [ "$pid" ] && { kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; }; exit $1; }
+myexit() { [ "$pid" ] && { kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; }; exit $1; }
 #trap myexit SIGINT SIGTERM
-trap 'kill 0' EXIT
+trap myexit EXIT
+#trap 'kill 0' EXIT
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
@@ -155,11 +156,11 @@ if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v
 	echo
 	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False$' || true | wc -l| grep '^0$'"; then
 		echo "Giving up waiting for the operators!"
-		exit 0
+		myexit 0
 	fi
 fi
 
 echo_green "All cluster operators are fully available!"
 
-exit 0
+myexit 0
 
