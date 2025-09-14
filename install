@@ -128,6 +128,7 @@ do
 	# Check is the proposed dir exists in $PATH
 	if echo $PATH | grep -q -e "$d:" -e "$d$"; then
 		action=
+		ret=0 # default return value
 		if [ -s "$d/aba" -a -x "$d/aba" ]; then
 			repo_ver=$(get_repo_ver)
 			INSTALLED_VER=$(grep "^ABA_VERSION=[0-9]" $d/aba | cut -d= -f2)
