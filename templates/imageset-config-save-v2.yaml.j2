@@ -23,6 +23,8 @@ mirror:
 #  - name: quay.io/containerdisks/centos-stream:9
 #  - name: quay.io/containerdisks/fedora:latest
 #  helm: {}
+{%- if ops == '' and op_sets == '' %}
 #  operators:
 #  - catalog: registry.redhat.io/redhat/redhat-operator-index:v{{ ocp_ver_major }}
 #    packages:
+{%- endif %}

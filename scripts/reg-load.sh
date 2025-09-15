@@ -85,25 +85,26 @@ do
 	echo
 
 	# v1/v2 switch. For v2 need to do extra check!
-	#####./load-mirror.sh && failed= && break
 	if [ "$oc_mirror_version" = "v1" ]; then
 		./load-mirror.sh && failed= && break
 	else
 		if ./load-mirror.sh; then
-			# Check for error files
-			#error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null || true | head -1)
+			# Check for error files (only required for v2 of oc-mirror)
+			ls -lt save/working-dir/logs > /tmp/error_file.out
+			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
+			# Example error file:  mirroring_errors_20250914_230908.txt 
 
 			# This is a better way to implement file globbing ...
-			shopt -s nullglob  # Be sure error_file != "mirroring_errors_*_*.txt"
-			files=(save/working-dir/logs/mirroring_errors_*_*.txt)
-			error_file=""
-			if (( ${#files[@]} )); then
-				error_file=$(ls -t "${files[@]}" | head -1)
-			fi
+			#shopt -s nullglob  # Be sure error_file != "mirroring_errors_*_*.txt"
+			#files=(save/working-dir/logs/mirroring_errors_*_*.txt)
+			#error_file=""
+			#if (( ${#files[@]} )); then
+			#	error_file=$(ls -t "${files[@]}" | head -1)
+			#fi
 
 			if [ ! "$error_file" ]; then
 				failed=
-				break
+				break    # stop the "try loop"
 			fi
 			mkdir -p save/saved_errors
 			cp $error_file save/saved_errors

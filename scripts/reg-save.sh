@@ -79,20 +79,21 @@ do
 	else
 		# v2 will return zero even if some images failed to mirror
 		if ./save-mirror.sh; then
-			# Check for errors
-			#error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null || true | head -1)
+			# Check for error files (only required for v2 of oc-mirror)
+			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
+			# Example error file:  mirroring_errors_20250914_230908.txt 
 
 			# This is a better way to implement file globbing ...
-			shopt -s nullglob  # Be sure error_file != "mirroring_errors_*_*.txt"
-			files=(save/working-dir/logs/mirroring_errors_*_*.txt)
-			error_file=""
-			if (( ${#files[@]} )); then
-				error_file=$(ls -t "${files[@]}" | head -1)
-			fi
+			#shopt -s nullglob  # Be sure error_file != "mirroring_errors_*_*.txt"
+			#files=(save/working-dir/logs/mirroring_errors_*_*.txt)
+			#error_file=""
+			#if (( ${#files[@]} )); then
+			#	error_file=$(ls -t "${files[@]}" | head -1)
+			#fi
 
 			if [ ! "$error_file" ]; then
 				failed=
-				break
+				break    # stop the "try loop"
 			fi
 			mkdir -p save/saved_errors
 			cp $error_file save/saved_errors
