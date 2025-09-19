@@ -62,7 +62,6 @@ hosts:
             {%- for port in arr_ports %}
               - {{ port }}
             {%- endfor %}
-
       {%- if arr_dns_servers %}
       dns-resolver:
         config:
@@ -71,7 +70,6 @@ hosts:
             - {{ dns }}
           {%- endfor %}
       {%- endif %}
-
       routes:
         config:
           - destination: 0.0.0.0/0
@@ -79,4 +77,3 @@ hosts:
             next-hop-interface: bond0.{{ vlan }}
   {%- endfor %}
 {%- endfor %}
-
