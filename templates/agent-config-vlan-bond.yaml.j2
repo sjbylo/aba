@@ -3,24 +3,38 @@ kind: AgentConfig
 metadata:                 
   name: {{ cluster_name }}
 rendezvousIP: {{ rendezvous_ip }}           
-hosts:                    
-  {%- for role, prefix, count, mac_offset, ip_offset in [("master", master_prefix, num_masters|int, 0, 0), ("worker", worker_prefix, num_workers|int, 6, 3)] %}
+hosts:
+{#--------------------------------------------------------------
+  Precompute offsets so they scale dynamically
+  - Each host consumes (arr_ports|length) MACs
+  - Each host consumes 1 IP
+---------------------------------------------------------------#}
+{%- set ports_per_host   = arr_ports | length %}
+{%- set master_mac_offset = 0 %}
+{%- set worker_mac_offset = num_masters * ports_per_host %}
+{%- set master_ip_offset  = 0 %}
+{%- set worker_ip_offset  = num_masters %}
+
+{%- for role, prefix, count, mac_offset, ip_offset in [
+    ("master", master_prefix, num_masters|int, master_mac_offset, master_ip_offset),
+    ("worker", worker_prefix, num_workers|int, worker_mac_offset, worker_ip_offset)
+] %}
   {%- for hostcnt in range(count) %}
-  {%- if role == 'master' and num_workers == '0' and num_masters == '1' %}
+    {%- if role == 'master' and num_workers == '0' and num_masters == '1' %}
   - hostname: {{ cluster_name }}
-  {%- else %}                               
+    {%- else %}                               
   - hostname: {{ prefix }}{{ loop.index }}
-  {% endif %}             
+    {%- endif %}             
     role: {{ role }}
-    interfaces:                                                                         
-     - name: {{ port0 }}                                                                
-       macAddress: {{ arr_macs[hostcnt * 2 + mac_offset] }}
-     - name: {{ port1 }}                    
-       macAddress: {{ arr_macs[hostcnt * 2 + mac_offset + 1] }}
-    networkConfig:                                                                      
-      interfaces:                                                                       
+    interfaces:
+    {%- for port in arr_ports %}
+      - name: {{ port }}
+        macAddress: {{ arr_macs[hostcnt * ports_per_host + loop.index0 + mac_offset] }}
+    {%- endfor %}
+    networkConfig:
+      interfaces:
         - name: bond0.{{ vlan }}  
-          description: VLAN {{ vlan }} with bond using ports {{ port0 }} and {{ port1 }}
+          description: VLAN {{ vlan }} with bond using ports {{ arr_ports | join(", ") }}
           type: vlan                                                                    
           state: up                                                                     
           vlan:           
@@ -35,7 +49,7 @@ hosts:
         - name: bond0 
           type: bond 
           state: up
-          mac-address: {{ arr_macs[hostcnt * 2 + mac_offset] }}
+          mac-address: {{ arr_macs[hostcnt * ports_per_host + mac_offset] }}
           ipv4:
             enabled: false
           ipv6:
@@ -45,16 +59,17 @@ hosts:
             options:
               miimon: "150" 
             port:
-             - {{ port0 }}
-             - {{ port1 }}
+            {%- for port in arr_ports %}
+              - {{ port }}
+            {%- endfor %}
 
       {%- if arr_dns_servers %}
       dns-resolver:
         config:
           server:
-            {%- for dns in arr_dns_servers %}
+          {%- for dns in arr_dns_servers %}
             - {{ dns }}
-            {%- endfor %}
+          {%- endfor %}
       {%- endif %}
 
       routes:
@@ -62,5 +77,6 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
             next-hop-interface: bond0.{{ vlan }}
-{% endfor %}
+  {%- endfor %}
 {%- endfor %}
+
