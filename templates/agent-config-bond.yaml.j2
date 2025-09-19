@@ -7,11 +7,11 @@ hosts:
 {#--------------------------------------------------------------
   Precompute offsets for MACs and IPs based on number of ports
 ---------------------------------------------------------------#}
-{%- set ports_per_host   = arr_ports | length %}
-{%- set master_mac_offset = 0 %}
-{%- set worker_mac_offset = num_masters * ports_per_host %}
-{%- set master_ip_offset  = 0 %}
-{%- set worker_ip_offset  = num_masters %}
+{%- set ports_per_host   = arr_ports | length | int %}
+{%- set master_mac_offset = 0 | int %}
+{%- set worker_mac_offset = ( num_masters | int ) * ports_per_host %}
+{%- set master_ip_offset  = 0 | int %}
+{%- set worker_ip_offset  = num_masters | int %}
 
 {%- for role, prefix, count, mac_offset, ip_offset in [
     ("master", master_prefix, num_masters|int, master_mac_offset, master_ip_offset),

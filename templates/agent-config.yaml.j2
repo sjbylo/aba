@@ -4,44 +4,61 @@ metadata:
   name: {{ cluster_name }}
 rendezvousIP: {{ rendezvous_ip }}
 hosts:
-{%- for role, prefix, count, mac_offset, ip_offset in [("master", master_prefix, num_masters|int, 0, 0), ("worker", worker_prefix, num_workers|int, 3, 3)] %}
-{%- for hostcnt in range(count) %}
-{%- if role == 'master' and num_workers == '0' and num_masters == '1' %}
+{#--------------------------------------------------------------
+  Compute offsets for MACs and IPs, ensure integers
+---------------------------------------------------------------#}
+{%- set ports_per_host   = arr_ports | length | int %}
+{%- set master_mac_offset = 0 | int %}
+{%- set worker_mac_offset = (num_masters | int) * ports_per_host %}
+{%- set master_ip_offset  = 0 | int %}
+{%- set worker_ip_offset  = num_masters | int %}
+
+{%- for role, prefix, count, mac_offset, ip_offset in [
+    ("master", master_prefix, num_masters|int, master_mac_offset, master_ip_offset),
+    ("worker", worker_prefix, num_workers|int, worker_mac_offset, worker_ip_offset)
+] %}
+  {%- for hostcnt in range(count | int) %}
+    {%- if role == 'master' and num_workers | int == 0 and num_masters | int == 1 %}
   - hostname: {{ cluster_name }}
-{% else %}
-  - hostname: {{ prefix }}{{ loop.index }}
-{% endif %}
+    {%- else %}
+  - hostname: {{ prefix }}{{ loop.index | int }}
+    {%- endif %}
     role: {{ role }}
     interfaces:
-      - name: {{ port0 }}
-        macAddress: {{ arr_macs[hostcnt + mac_offset] }}
+    {%- for port in arr_ports %}
+      - name: {{ port }}
+        macAddress: {{ arr_macs[(hostcnt | int) * ports_per_host + (loop.index0 | int) + (mac_offset | int)] }}
+    {%- endfor %}
     networkConfig:
       interfaces:
-        - name: {{ port0 }}
-          description: Access mode port {{ port0 }}
+      {%- for port in arr_ports %}
+        - name: {{ port }}
+          description: Access mode port {{ port }}
           type: ethernet
           state: up
-          mac-address: {{ arr_macs[hostcnt + mac_offset] }}
+          mac-address: {{ arr_macs[(hostcnt | int) * ports_per_host + (loop.index0 | int) + (mac_offset | int)] }}
           ipv4:
             enabled: true
             address:
-              - ip: {{ arr_ips[hostcnt + ip_offset] }}
-                prefix-length: {{ prefix_length }}
+              - ip: {{ arr_ips[(hostcnt | int) + (ip_offset | int)] }}
+                prefix-length: {{ prefix_length | int }}
             dhcp: false
+      {%- endfor %}
 
       {%- if arr_dns_servers %}
       dns-resolver:
         config:
           server:
-            {%- for dns in arr_dns_servers %}
+          {%- for dns in arr_dns_servers %}
             - {{ dns }}
-            {%- endfor %}
+          {%- endfor %}
       {%- endif %}
 
       routes:
         config:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
-            next-hop-interface: {{ port0 }}
-{% endfor %}
+            next-hop-interface: {{ arr_ports[0] }}
+  {%- endfor %}
 {%- endfor %}
+
