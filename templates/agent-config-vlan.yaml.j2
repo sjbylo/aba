@@ -30,7 +30,6 @@ hosts:
             - ip: {{ arr_ips[hostcnt + ip_offset] }}
               prefix-length: {{ prefix_length }}
           dhcp: false
-
       {%- if arr_dns_servers %}
       dns-resolver:
         config:
@@ -39,7 +38,6 @@ hosts:
             - {{ dns }}
             {%- endfor %}
       {%- endif %}
-
       routes:
         config:
           - destination: 0.0.0.0/0

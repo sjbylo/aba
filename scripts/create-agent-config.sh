@@ -119,6 +119,7 @@ export arr_ips=$(generate_ip_array "$machine_network/$prefix_length" "$starting_
 # Create ports array
 export arr_ports=$(echo $ports | tr "," " " | tr -s "[:space:]")
 
+# Just to count the number of items
 read -r -a arr <<< "$arr_ports"
 num_ports=${#arr[@]}
 
@@ -143,11 +144,11 @@ export arr_macs=$(cat .macs.conf | tr "\n" " " | tr -s "[:space:]")  # scripts/j
 rm -f .macs.conf
 
 # Set up the dns server(s)
-export arr_dns_servers=$(echo $dns_servers | tr -d "[:space:]" | tr "," " ")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
+export arr_dns_servers=$(echo $dns_servers | tr "," " " | tr -s "[:space:]")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
 [ "$INFO_ABA" ] && echo_cyan "Adding DNS server(s): $arr_dns_servers"
 
 # Set up the ntp server(s)
-export arr_ntp_servers=$(echo $ntp_servers | tr -d "[:space:]" | tr "," " ")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
+export arr_ntp_servers=$(echo $ntp_servers | tr "," " " | tr -s "[:space:]")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
 [ "$INFO_ABA" ] && echo_cyan "Adding NTP server(s): $arr_ntp_servers"
 
 # Use j2cli to render the templates
@@ -179,6 +180,7 @@ fi
 
 # echo "arr_ips=${arr_ips[@]}"
 # DEBUG # echo "arr_dns_servers=${arr_dns_servers[@]}"
+# DEBUG # echo "arr_ports=${arr_ports[@]}"
 # DEBUG # echo "arr_ntp_servers=${arr_ntp_servers[@]}"
 # DEBUG # echo "arr_macs=${arr_macs[@]}"
 

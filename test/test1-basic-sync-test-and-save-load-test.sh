@@ -170,6 +170,7 @@ do
 
         rm -rf $cname
 
+	test-cmd -m "Adding 10.0.2.8 to ntp servers" "aba --dns 10.0.1.8 10.0.2.8"
 	test-cmd -m "Creating cluster.conf for '$cname' cluster" "aba $cname --step cluster.conf"
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # Make sure all mac addr are the same, not random
         test-cmd -m "Creating install-config.yaml for $cname cluster" "aba --dir $cname install-config.yaml"
