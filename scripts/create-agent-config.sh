@@ -140,7 +140,6 @@ else
 	done > .macs.conf
 fi
 export arr_macs=$(cat .macs.conf | tr "\n" " " | tr -s "[:space:]")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.
-cat .macs.conf
 rm -f .macs.conf
 
 # Set up the dns server(s)

@@ -225,7 +225,8 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding" "sed -i 's/^.*port1=.*/port1=ens192 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding" "sed -i 's/^.*ports=.*/ports=ens160,ens192 /g' $subdir/aba/standard/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
 
 # Test node0 is accessible - start
@@ -239,13 +240,14 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan=.*/vlan=888 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 # Note, I can't test vlan in my lab
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface, port1" "sed -i 's/^port1=.*/#port1= /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface from ports" "sed -i 's/^ports=.*/ports=ens160 /g' $subdir/aba/standard/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 # Note, I can't test vlan in my lab
