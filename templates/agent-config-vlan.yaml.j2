@@ -13,16 +13,16 @@ hosts:
 {% endif %}
     role: {{ role }}
     interfaces:
-     - name: {{ port0 }}
+     - name: {{ arr_ports[0] }}
        macAddress: {{ arr_macs[hostcnt + mac_offset] }}
     networkConfig:
       interfaces:
-      - name: {{ port0 }}.{{ vlan }}
-        description: VLAN {{ vlan }} using port {{ port0 }}
+      - name: {{ arr_ports[0] }}.{{ vlan }}
+        description: VLAN {{ vlan }} using port {{ arr_ports[0] }}
         type: vlan 
         state: up 
         vlan:
-          base-iface: {{ port0 }}
+          base-iface: {{ arr_ports[0] }}
           id: {{ vlan }}
         ipv4:
           enabled: true
@@ -44,6 +44,6 @@ hosts:
         config:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
-            next-hop-interface: {{ port0 }}.{{ vlan }}
+            next-hop-interface: {{ arr_ports[0] }}.{{ vlan }}
 {% endfor %}
 {%- endfor %}

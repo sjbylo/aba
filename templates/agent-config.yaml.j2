@@ -25,15 +25,12 @@ hosts:
     {%- endif %}
     role: {{ role }}
     interfaces:
-    {%- for port in arr_ports %}
-      - name: {{ port }}
+      - name: {{ arr_ports[0] }}
         macAddress: {{ arr_macs[(hostcnt | int) * ports_per_host + (loop.index0 | int) + (mac_offset | int)] }}
-    {%- endfor %}
     networkConfig:
       interfaces:
-      {%- for port in arr_ports %}
-        - name: {{ port }}
-          description: Access mode port {{ port }}
+        - name: {{ arr_ports[0] }}
+          description: Access mode port {{ arr_ports[0] }}
           type: ethernet
           state: up
           mac-address: {{ arr_macs[(hostcnt | int) * ports_per_host + (loop.index0 | int) + (mac_offset | int)] }}
@@ -43,7 +40,6 @@ hosts:
               - ip: {{ arr_ips[(hostcnt | int) + (ip_offset | int)] }}
                 prefix-length: {{ prefix_length | int }}
             dhcp: false
-      {%- endfor %}
 
       {%- if arr_dns_servers %}
       dns-resolver:
