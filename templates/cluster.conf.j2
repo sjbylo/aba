@@ -39,9 +39,9 @@ next_hop_address={{ next_hop_address }} 		# The private network's default route 
 ntp_servers={{ ntp_servers }}		# Optional: Comma-separated list of NTP servers. Configure NTP during bootstrap and
 					# the installed cluster. Required if platform clock not synchronized!
 
-port0={{ port0 }}			# Name of the port to use for the default network. 	    Example: ens1f0, ens3, eth0 etc.
-port1={{ port1 }}			# Optional: Name of 2nd port to use if bonding is required. Example: ens1f1, ens4, eth1 etc.
-#ports={{ ports }}                      # ports not in use yet
+#port0={{ port0 }}			# Name of the port to use for the default network. 	    Example: ens1f0, ens3, eth0 etc.
+#port1={{ port1 }}			# Optional: Name of 2nd port to use if bonding is required. Example: ens1f1, ens4, eth1 etc.
+ports={{ ports }}                       # Define all the ports (comma separated) that need to be bonded 
 vlan={{ vlan }}				# Optional: Vlan tag to use, works with or without bonding.
 
 int_connection={{ int_connection }}		# Optional: Set int_connection=proxy if you want to configure the 'cluster wide proxy' by reusing any existing shell proxy vars.

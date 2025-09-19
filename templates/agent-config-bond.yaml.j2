@@ -4,23 +4,35 @@ metadata:
   name: {{ cluster_name }}
 rendezvousIP: {{ rendezvous_ip }}
 hosts:
-{%- for role, prefix, count, mac_offset, ip_offset in [("master", master_prefix, num_masters|int, 0, 0), ("worker", worker_prefix, num_workers|int, 6, 3)] %}
-{%- for hostcnt in range(count) %}
-{%- if role == 'master' and num_workers == '0' and num_masters == '1' %}
+{#--------------------------------------------------------------
+  Precompute offsets for MACs and IPs based on number of ports
+---------------------------------------------------------------#}
+{%- set ports_per_host   = arr_ports | length %}
+{%- set master_mac_offset = 0 %}
+{%- set worker_mac_offset = num_masters * ports_per_host %}
+{%- set master_ip_offset  = 0 %}
+{%- set worker_ip_offset  = num_masters %}
+
+{%- for role, prefix, count, mac_offset, ip_offset in [
+    ("master", master_prefix, num_masters|int, master_mac_offset, master_ip_offset),
+    ("worker", worker_prefix, num_workers|int, worker_mac_offset, worker_ip_offset)
+] %}
+  {%- for hostcnt in range(count) %}
+    {%- if role == 'master' and num_workers == '0' and num_masters == '1' %}
   - hostname: {{ cluster_name }}
-{% else %}
+    {%- else %}
   - hostname: {{ prefix }}{{ loop.index }}
-{% endif %}
+    {%- endif %}
     role: {{ role }}
     interfaces:
-     - name: {{ port0 }}
-       macAddress: {{ arr_macs[hostcnt * 2 + mac_offset] }}
-     - name: {{ port1 }}
-       macAddress: {{ arr_macs[hostcnt * 2 + mac_offset + 1] }}
+    {%- for port in arr_ports %}
+      - name: {{ port }}
+        macAddress: {{ arr_macs[hostcnt * ports_per_host + loop.index0 + mac_offset] }}
+    {%- endfor %}
     networkConfig:
       interfaces:
         - name: bond0
-          description: Access mode bond using ports {{ port0 }} and {{ port1 }}
+          description: Access mode bond using ports {{ arr_ports | join(", ") }}
           type: bond
           state: up
           ipv4:
@@ -34,16 +46,17 @@ hosts:
             options:
               miimon: '140'
             port:
-            - {{ port0 }}
-            - {{ port1 }}
+            {%- for port in arr_ports %}
+              - {{ port }}
+            {%- endfor %}
 
       {%- if arr_dns_servers %}
       dns-resolver:
         config:
           server:
-            {%- for dns in arr_dns_servers %}
+          {%- for dns in arr_dns_servers %}
             - {{ dns }}
-            {%- endfor %}
+          {%- endfor %}
       {%- endif %}
 
       routes:
@@ -51,6 +64,6 @@ hosts:
           - destination: 0.0.0.0/0
             next-hop-address: {{ next_hop_address }}
             next-hop-interface: bond0
-{% endfor %}
+  {%- endfor %}
 {%- endfor %}
 
