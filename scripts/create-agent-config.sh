@@ -116,14 +116,25 @@ export rendezvous_ip=$starting_ip
 # Generate list of ip addresses from the CIDR and starting ip address
 export arr_ips=$(generate_ip_array "$machine_network/$prefix_length" "$starting_ip" "$ip_cnt")
 
+# Create ports array
+export arr_ports=$(echo $ports | tr "," " " | tr -s "[:space:]")
+
+read -r -a arr <<< "$arr_ports"
+num_ports=${#arr[@]}
+
+#echo arr_ports=${arr_ports[@]}
+#num_ports=$(echo "$arr_ports" | wc -l)
+#echo num_ports=${#arr_ports[@]}
+[ "$INFO_ABA" ] && echo_white "Ports=${arr_ports[@]} and num_ports=$num_ports"
+
 # Generate the mac addresses or get them from 'macs.conf'
 # Goal is to allow user to BYO mac addresses for bare-metal use-case. So, we generate the addresses in advance into an array "arr_". scripts/j2 will create a python list.
 if [ -s macs.conf ]; then
 	grep -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' macs.conf > .macs.conf
 else
 	# Since the jinja2 template now uses a simple list, we can also auto-generate the addresses in a similar way for VMs. 
-	# Note, double the number of mac addresses are genrated in case port bonding is required (port0/1 and vlan in cluster.conf)
-	for i in $(seq 1 `expr $num_masters \* 2 + $num_workers \* 2`); do
+	# Note, double the number of mac addresses are genrated in case port bonding is required (ports and vlan in cluster.conf)
+	for i in $(seq 1 `expr $num_masters \* $num_ports + $num_workers \* $num_ports`); do
 		printf "%s%02d\n" $mac_prefix $i
 	done > .macs.conf
 fi
@@ -145,18 +156,24 @@ if [ "$INFO_ABA" ]; then
 	echo
 fi
 
-if [ "$port0" -a "$port1" -a "$vlan" ]; then
-	template_file=agent-config-vlan-bond.yaml.j2
-	[ "$INFO_ABA" ] && echo_white "Using vlan and bonding agent config template: templates/$template_file (port0=$port0 port1=$port1 vlan=$vlan)"
-elif [ "$port0" -a "$port1" -a ! "$vlan" ]; then
-	template_file=agent-config-bond.yaml.j2
-	[ "$INFO_ABA" ] && echo_white "Using access mode bonding agent config template: templates/$template_file (port0=$port0 port1=$port1)"
-elif [ "$port0" -a ! "$port1" -a "$vlan" ]; then
+if [ $num_ports -gt 1 ]; then
+	if [ "$vlan" ]; then
+		# Multiple ports and vlan defined
+		template_file=agent-config-vlan-bond.yaml.j2
+		[ "$INFO_ABA" ] && echo_white "Using vlan and bonding agent config template: templates/$template_file (ports=${arr_ports[@]} vlan=$vlan)"
+	else
+		# Multiple ports and no vlan
+		template_file=agent-config-bond.yaml.j2
+		[ "$INFO_ABA" ] && echo_white "Using access mode bonding agent config template: templates/$template_file (ports=${arr_ports[@]})"
+	fi
+elif [ "$vlan" ]; then
+	# Only one port and vlan defined
 	template_file=agent-config-vlan.yaml.j2
-	[ "$INFO_ABA" ] && echo_white "Using vlan agent config template: templates/$template_file (port0=$port0 vlan=$vlan)"
+	[ "$INFO_ABA" ] && echo_white "Using vlan agent config template: templates/$template_file (ports=${arr_ports[@]} vlan=$vlan)"
 else
+	# Only one port no vlan defined
 	template_file=agent-config.yaml.j2
-	[ "$INFO_ABA" ] && echo_white "Using standard agent config template: templates/$template_file (port0=$port0)"
+	[ "$INFO_ABA" ] && echo_white "Using standard agent config template: templates/$template_file (ports=${arr_ports[@]})"
 fi
 
 # echo "arr_ips=${arr_ips[@]}"
@@ -164,7 +181,7 @@ fi
 # DEBUG # echo "arr_ntp_servers=${arr_ntp_servers[@]}"
 # DEBUG # echo "arr_macs=${arr_macs[@]}"
 
-# Note that arr_ips, arr_dns_servers, arr_ntp_servers, arr_macs, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 
+# Note that arr_ports, arr_ips, arr_dns_servers, arr_ntp_servers, arr_macs, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
 scripts/j2 templates/$template_file > agent-config.yaml
 
