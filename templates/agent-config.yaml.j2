@@ -27,7 +27,7 @@ hosts:
     role: {{ role }}
     interfaces:
       - name: {{ arr_ports[0] }}
-        mac-address: {{ arr_macs[hostcnt + mac_offset] }}
+        macAddress: {{ arr_macs[hostcnt + mac_offset] }}
     networkConfig:
       interfaces:
         - name: {{ arr_ports[0] }}
