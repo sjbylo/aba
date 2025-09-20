@@ -17,6 +17,7 @@ hosts:
     ("master", master_prefix, num_masters|int, master_mac_offset, master_ip_offset),
     ("worker", worker_prefix, num_workers|int, worker_mac_offset, worker_ip_offset)
 ] %}
+
   {%- for hostcnt in range(count | int) %}
     {%- if role == 'master' and num_workers | int == 0 and num_masters | int == 1 %}
   - hostname: {{ cluster_name }}
@@ -26,21 +27,20 @@ hosts:
     role: {{ role }}
     interfaces:
       - name: {{ arr_ports[0] }}
-        macAddress: {{ arr_macs[(hostcnt | int) * ports_per_host + (loop.index0 | int) + (mac_offset | int)] }}
+        mac-address: {{ arr_macs[hostcnt + mac_offset] }}
     networkConfig:
       interfaces:
         - name: {{ arr_ports[0] }}
           description: Access mode port {{ arr_ports[0] }}
           type: ethernet
           state: up
-          mac-address: {{ arr_macs[(hostcnt | int) * ports_per_host + (loop.index0 | int) + (mac_offset | int)] }}
+          mac-address: {{ arr_macs[hostcnt + mac_offset] }}
           ipv4:
             enabled: true
             address:
               - ip: {{ arr_ips[(hostcnt | int) + (ip_offset | int)] }}
                 prefix-length: {{ prefix_length | int }}
             dhcp: false
-
       {%- if arr_dns_servers %}
       dns-resolver:
         config:

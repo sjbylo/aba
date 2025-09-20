@@ -149,7 +149,7 @@ echo
 
 # Install yq for below test only!
 which yq || (
-	mylog Install yq
+	mylog Install yq for tests
 	curl --retry 3 -sSL -o - https://github.com/mikefarah/yq/releases/download/v4.41.1/yq_linux_amd64.tar.gz | tar -C ~/bin -xzf - ./yq_linux_amd64 && \
 		mv ~/bin/yq_linux_amd64 ~/bin/yq && \
 		chmod 755 ~/bin/yq
@@ -202,7 +202,8 @@ do
 
 	mylog "Checking test/$cname/install-config.yaml"
 
-        if ! test-cmd -m "Comparing test/$cname/install-config.yaml with test/$cname/install-config.yaml.example" diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example | tee -a test/$cname/install-config.yaml.diff; then
+	# Run only once
+        if ! test-cmd -r 0 0 -m "Comparing test/$cname/install-config.yaml with test/$cname/install-config.yaml.example" diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example | tee -a test/$cname/install-config.yaml.diff; then
 		cp test/$cname/install-config.yaml test/$cname/install-config.yaml.failed
 		cat test/$cname/install-config.yaml.diff
 		mylog "Config mismatch! See file test/$cname/install-config.yaml.failed and test/$cname/install-config.yaml.diff"
@@ -210,7 +211,8 @@ do
 
 	mylog "Checking test/$cname/agent-config.yaml"
 
-        if ! test-cmd -m "Comparing test/$cname/agent-config.yaml with test/$cname/agent-config.yaml.example" diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example | tee -a test/$cname/agent-config.yaml.diff; then
+	# Run only once
+        if ! test-cmd -r 0 0 -m "Comparing test/$cname/agent-config.yaml with test/$cname/agent-config.yaml.example" diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example | tee -a test/$cname/agent-config.yaml.diff; then
 		cp test/$cname/agent-config.yaml test/$cname/agent-config.yaml.failed
 		cat test/$cname/agent-config.yaml.diff
 		mylog "Config mismatch! See file test/$cname/agent-config.yaml.failed and test/$cname/agent-config.yaml.diff"

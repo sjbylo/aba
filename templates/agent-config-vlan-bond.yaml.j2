@@ -9,7 +9,7 @@ hosts:
   - Each host consumes (arr_ports|length) MACs
   - Each host consumes 1 IP
 ---------------------------------------------------------------#}
-{%- set ports_per_host   = arr_ports | length %}
+{%- set ports_per_host   = arr_ports | length | int %}
 {%- set master_mac_offset = 0 | int %}
 {%- set worker_mac_offset = ( num_masters | int ) * ports_per_host %}
 {%- set master_ip_offset  = 0 | int %}
