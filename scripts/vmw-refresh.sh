@@ -5,9 +5,9 @@ source scripts/include_all.sh
 
 . <(process_args $*)
 # eval all key value args
-. <(echo $* | tr " " "\n")
+###. <(echo $* | tr " " "\n")
 
-[ "$1" ] && set -x
+# FIXME: [ "$1" ] && set -x  # Not really needed
 
 ask "To (re)start the installation, delete, re-create & start the VM(s)" || exit 0
 
