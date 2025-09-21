@@ -280,7 +280,7 @@ verify-mirror-conf() {
 
 	#echo $reg_host | grep -q -E '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]{2,})+$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
 	echo $reg_host | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
-	[ ! "$reg_host" ] && echo_red "Error: reg_host is missing in mirror.conf" >&2 && ret=1
+	[ ! "$reg_host" ] && echo_red "Error: reg_host value is missing in mirror.conf" >&2 && ret=1
 
 	[ ! "$reg_ssh_user" ] && echo_red "Error: reg_ssh_user not defined!" >&2 && ret=1   # This should never happen as the user name (whoami) is added above if its empty.
 
@@ -315,7 +315,8 @@ normalize-cluster-conf()
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
 	grep -q ^port0= cluster.conf 		|| echo export port0=eth0
-	#grep -q ^ports= cluster.conf 		|| echo export ports=
+	# Convert 'port0/1=' to 'ports=' for backwards compatibility
+	grep -q ^ports= cluster.conf 		|| echo export ports=$(cat cluster.conf | sed -n '/^port[0-9]=/s/.*=//p' | awk '{print $1}' | paste -sd, -)
 	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
 	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
 }
@@ -354,8 +355,12 @@ verify-cluster-conf() {
 	# The next few values are all optional
 	#[ "$port0" ] && ! echo $port0 | grep -q -E '^[a-zA-Z0-9_.-]+$' && { echo_red "Error: port0 is invalid in cluster.conf: [$port0]" >&2; ret=1; }
 	#[ "$port1" ] && ! echo $port1 | grep -q -E '^[a-zA-Z0-9_.-]+$' && { echo_red "Error: port1 is invalid in cluster.conf: [$port1]" >&2; ret=1; }
-	#[[ -n $ports && $ports =~ ^[a-zA-Z0-9_.-]+(,[a-zA-Z0-9_.-]+)*$ ]] || { echo_red "Error: ports list is invalid in cluster.conf: [$ports]" >&2; ret=1; }
-
+	if [ ! -n $ports ]; then
+		echo_red "Error: ports value is missing in cluster.conf" >&2
+		ret=1;
+	else
+		[[ $ports =~ ^[a-zA-Z0-9_.-]+(,[a-zA-Z0-9_.-]+)*$ ]] || { echo_red "Error: ports list is invalid in cluster.conf: [$ports]" >&2; ret=1; }
+	fi
 
 	[[ -z "$vlan" || ( "$vlan" =~ ^[0-9]+$ && vlan -ge 1 && vlan -le 4094 ) ]] || { echo_red "Error: vlan is invalid in cluster.conf: [$vlan]" >&2; ret=1; }
 

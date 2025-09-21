@@ -178,12 +178,10 @@ else
 	[ "$INFO_ABA" ] && echo_white "Using standard agent config template: templates/$template_file (ports=${arr_ports[@]})"
 fi
 
-# echo "arr_ips=${arr_ips[@]}"
 # DEBUG # echo "arr_dns_servers=${arr_dns_servers[@]}"
 # DEBUG # echo "arr_ports=${arr_ports[@]}"
 # DEBUG # echo "arr_ntp_servers=${arr_ntp_servers[@]}"
 # DEBUG # echo "arr_macs=${arr_macs[@]}"
-
 # Note that arr_ports, arr_ips, arr_dns_servers, arr_ntp_servers, arr_macs, mac_prefix, rendezvous_ip and others are exported vars and used by scripts/j2 
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
 scripts/j2 templates/$template_file > agent-config.yaml
