@@ -675,6 +675,7 @@ output_table() {
 	echo
 }
 
+# Turn all key=val args into $vars
 process_args() {
 	[ ! "$*" ] && return 0
 
@@ -682,6 +683,7 @@ process_args() {
 	# eval all key value args
 	#[ "$*" ] && . <(echo $* | tr " " "\n")  # Get $name, $type etc from here
 	echo $* | tr " " "\n"  # Get $name, $type etc from here
+	shift $#
 }
 
 # Track anonymous events run by any aba using name "$1" (optional)
