@@ -210,8 +210,9 @@ verify-aba-conf() {
 			{ echo_red "Error: ntp_servers is invalid in aba.conf [$ntp_servers]" >&2; ret=1; }
 
 	REGEX='^(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3}))(,(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3})))*$'
+	PERL_DNS_IP_REGEX='^(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3}(?:,(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3})*$'
 	#[ "$dns_servers" ] && echo $dns_servers | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}(,([0-9]{1,3}\.){3}[0-9]{1,3})*$' || { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
-	[ "$dns_servers" ] && ! echo $dns_servers | grep -q -E $REGEX && { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
+	[ "$dns_servers" ] && ! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
 	[ "$next_hop_address" ] && ! echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && { echo_red "Error: next_hop_address is invalid in aba.conf [$next_hop_address]" >&2; ret=1; }
 
 	echo $oc_mirror_version | grep -q -E '^v[12]$' || { echo_red "Error: oc_mirror_version is invalid in aba.conf [$oc_mirror_version]" >&2; ret=1; }
@@ -316,7 +317,8 @@ normalize-cluster-conf()
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
 	grep -q ^port0= cluster.conf 		|| echo export port0=eth0
 	# Convert 'port0/1=' to 'ports=' for backwards compatibility
-	grep -q ^ports= cluster.conf 		|| echo export ports=$(cat cluster.conf | sed -n '/^port[0-9]=/s/.*=//p' | awk '{print $1}' | paste -sd, -)
+	#grep -q ^ports= cluster.conf 		|| echo export ports=$(cat cluster.conf | sed -n '/^port[0-9]=/s/.*=//p' | awk '{print $1}' | paste -sd, -)
+	grep -q ^ports= cluster.conf 		|| echo export ports=$(grep -E "^port[01]=\S" cluster.conf | cut -d= -f2 | awk '{print $1}' | paste -sd, -)
 	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
 	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
 }
@@ -348,7 +350,9 @@ verify-cluster-conf() {
 	echo $num_workers | grep -q -E '^[0-9]+$' || { echo_red "Error: num_workers is invalid in cluster.conf" >&2; ret=1; }
 
 	REGEX='^(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3}))(,(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3})))*$'
-	echo $dns_servers | grep -q -E $REGEX || { echo_red "Error: dns_servers is invalid in cluster.conf [$dns_servers]" >&2; ret=1; }
+	PERL_DNS_IP_REGEX='^(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3}(?:,(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3})*$'
+	#! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in cluster.conf [$dns_servers]" >&2; ret=1; }
+	[ "$dns_servers" ] && ! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
 
 	echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: next_hop_address is invalid in cluster.conf" >&2; ret=1; }
 
