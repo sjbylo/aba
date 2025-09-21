@@ -206,51 +206,81 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)
 
 #############
 ### Tests for standard cluster configs, e.g. bonding and vlan
+for ctype in sno compact standard
+do
+
 mylog "Starting tests to check out agent config files for various cluster configs, e.g. bonding and vlan"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete standard dir: $subdir/aba/standard" rm -rf $subdir/aba/standard
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster --name standard --type standard --step cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i 's#^machine_network=.*#machine_network=10.0.0.0/22 #g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting starting_ip" "sed -i 's/^starting_ip=.*/starting_ip=10.0.2.253 /g' $subdir/aba/standard/cluster.conf"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete $ctype dir: $subdir/aba/standard" rm -rf $subdir/aba/$ctype
 
-# Test node0 is accessible - start
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/standard upload" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/standard refresh" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m  "Waiting ~3 mins for node0 to be reachable" "i=0; until aba --dir $subdir/aba/standard ssh --cmd hostname; do let i=\$i+1; [ \$i -gt 18 ] && exit 1; echo -n .; sleep 10; done"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m  "Waiting ~2 mins for node0 to config NTP" "i=0; until aba --dir $subdir/aba/standard ssh --cmd 'chronyc sources' | grep $ntp_ip ; do let i=\$i+1; [ \$i -gt 12 ] && exit 1; echo -n $i; sleep 10; done"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/standard delete" 
-# Test node0 is accessible - ned
+# Init
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster --name $ctype --type $ctype --step cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i 's#^machine_network=.*#machine_network=10.0.0.0/22 #g' $subdir/aba/$ctype/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting starting_ip" "sed -i 's/^starting_ip=.*/starting_ip=10.0.2.253 /g' $subdir/aba/$ctype/cluster.conf"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
+# Standard config (no vlan, no bonding) 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting ports" "sed -i 's/^.*ports=.*/ports=ens160 /g' $subdir/aba/$ctype/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting vlan" "sed -i 's/^.*vlan=.*/vlan= /g' $subdir/aba/$ctype/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$ctype/cluster.conf | awk '{print $1}'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/$ctype iso" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$ctype upload" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
+# Test node0 is accessible
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Waiting for node0 to be reachable" "aba --dir $subdir/aba/$ctype ssh --cmd hostname"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'ens160'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, port1=ens192 (deprecated!)" "sed -i 's/^.*port1=.*/port1=ens192 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype delete" 
 
-# Test node0 is accessible - start
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/standard upload" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/standard refresh" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m  "Waiting ~3 mins for node0 to be reachable" "i=0; until aba --dir $subdir/aba/standard ssh --cmd hostname; do let i=\$i+1; [ \$i -gt 18 ] && exit 1; echo -n .; sleep 10; done"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m  "Waiting ~2 mins for node0 to config NTP" "i=0; until aba --dir $subdir/aba/standard ssh --cmd 'chronyc sources' | grep $ntp_ip ; do let i=\$i+1; [ \$i -gt 12 ] && exit 1; echo -n $i; sleep 10; done"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/standard delete" 
-# Test node0 is accessible - end
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$ctype clean
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan=.*/vlan=888 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
-# Note, I can't test vlan in my lab
+# Test basic bonding
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, port1=ens192 (deprecated!)" "sed -i 's/^.*port1=.*/port1=ens192 /g' $subdir/aba/$ctype/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/$ctype/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$ctype/cluster.conf | awk '{print $1}'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/$ctype iso" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$ctype upload" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
+# Test node0 is accessible
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Waiting for node0 to be reachable" "aba --dir $subdir/aba/$ctype ssh --cmd hostname"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'bond'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interfac, port1=" "sed -i 's/^port1=.*/#port1= /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface from ports" "sed -i 's/^ports=.*/ports=ens160 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/standard/cluster.conf | awk '{print $1}'"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/standard iso" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/standard clean
-# Note, I can't test vlan in my lab
+# Test node0 is accessible
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting ~3 mins for node0 to be reachable" "i=0; until aba --dir $subdir/aba/$ctype ssh --cmd hostname; do let i=\$i+1; [ \$i -gt 18 ] && exit 1; echo -n .; sleep 10; done"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting ~2 mins for node0 to config NTP" "i=0; until aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip ; do let i=\$i+1; [ \$i -gt 12 ] && exit 1; echo -n $i; sleep 10; done"
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype delete" 
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$ctype clean
+
+
+# Test vlan with bond
+# Note, can't test a full install using vlan in my test lab
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan=.*/vlan=888 /g' $subdir/aba/$ctype/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$ctype/cluster.conf | awk '{print $1}'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting ports" "sed -i 's/^.*ports=.*/ports=ens160,ens192 /g' $subdir/aba/$ctype/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$ctype upload" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep '\.888'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep bond"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Check NTP connect ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip"
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$ctype clean
+
+
+# Test vlan, no bond
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface, port1=" "sed -i 's/^port1=.*/#port1= /g' $subdir/aba/$ctype/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface from ports" "sed -i 's/^ports=.*/ports=ens160 /g' $subdir/aba/$ctype/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$ctype/cluster.conf | awk '{print $1}'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$ctype upload" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'ens160.888@ens160'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Check NTP connect ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$ctype clean
+
+done
 
 mylog "Completed tests to check out agent config files for various cluster configs, e.g. bonding and vlan"
 #############
