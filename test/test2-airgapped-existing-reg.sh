@@ -233,7 +233,7 @@ mylog "Starting tests to check out agent config files for various cluster config
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete $ctype dir: $subdir/aba/standard" rm -rf $subdir/aba/$ctype
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Create ssh test script" "echo aba --dir $subdir/aba/$ctype ssh --cmd hostname > \~/test_ssh.sh"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Create ssh test script" "echo aba --dir $subdir/aba/$ctype ssh --cmd hostname > test_ssh.sh"
 
 # Init
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster --name $ctype --type $ctype --step cluster.conf"
@@ -249,7 +249,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
 # Test node0 is accessible
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Waiting for node0 to be reachable" "aba --dir $subdir/aba/$ctype ssh --cmd hostname"
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 2m bash \~/test_ssh.sh"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 2m bash test_ssh.sh"
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'ens160'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip"
 
