@@ -695,23 +695,25 @@ watch -n 5 oc get co
 
 - Configure htpasswd login, add users, disable kubeadmin.
 
-- Use PXE boot as alternative to ISO.
+- Offer PXE boot as alternative to ISO.
 
-- Enable aba to work in a container (this has been partially implemented, see below).
+- Enable aba to work in a container (this has been partially verified/implemented, see below).
 
-- Keep platform and operator images types separate in the registry and not all under the same path.
+- Keep platform and operator image types separate in the registry and not all under the same path.
 
 - Using oc-mirror v2, fetch all operator dependencies automatically.
 
 - Prompt user to run `aba day2` (or run it automatically), after (new) operators have been pushed to the registry. 
 
-- Auto-refresh the Operator Catalogs (indexes) after they become stale (e.g. after 1 day). 
+- ~~Auto-refresh the Operator Catalogs (indexes) after they become stale (e.g. after 1 day).~~
 
 - Support libvirt (as well as vSphere). 
 
 - Generally improve the user experience (UX) of Aba.
 
 - Configure ACM (if installed) to be ready to install clusters from the mirror registry.
+
+- ~~Enable any number of ports for interface bonding, using `ports` value instead of `port0` and `port1` values in `cluster.conf`.~~
 
 - ~~Support all four operator catalogs (indexes), e.g. "certified-operator", "redhat-marketplace" & "community-operator" and not just "redhat-operator".~~
 
