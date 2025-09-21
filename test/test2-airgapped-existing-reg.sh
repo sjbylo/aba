@@ -233,7 +233,7 @@ mylog "Starting tests to check out agent config files for various cluster config
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete $ctype dir: $subdir/aba/standard" rm -rf $subdir/aba/$ctype
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Create ssh test script" "echo aba --dir $subdir/aba/$ctype ssh --cmd hostname > test_ssh.sh"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 20 0 -m "Create ssh test script" "echo until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do sleep 10\; done > test_ssh.sh"
 
 # Init
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster --name $ctype --type $ctype --step cluster.conf"
