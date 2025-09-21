@@ -23,10 +23,10 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval `scripts/cluster-config.sh || exit 1`
 fi
 
-CP_MAC_ADDR_ARRAY=($CP_MAC_ADDR)
-CP_MAC_ADDR_ARRAY2=($CP_MAC_ADDR_2ND)
-WKR_MAC_ADDR_ARRAY=($WKR_MAC_ADDR)
-WKR_MAC_ADDR_ARRAY2=($WKR_MAC_ADDR_2ND)
+CP_MAC_ADDRS_ARRAY=($CP_MAC_ADDRS)
+#CP_MAC_ADDR_ARRAY2=($CP_MAC_ADDR_2ND)
+WKR_MAC_ADDRS_ARRAY=($WKR_MAC_ADDRS)
+#WKR_MAC_ADDR_ARRAY2=($WKR_MAC_ADDR_2ND)
 
 echo
 echo_magenta "Provisioning VMs to build the cluster ..."
@@ -73,16 +73,18 @@ master_nested_hv=false
 echo Setting hardware virtualization on worker nodes ...
 worker_nested_hv=true
 
-i=1
-for name in $CP_NAMES ; do
-	a=`expr $i-1`
+num_ports_per_node=$PORTS_PER_NODE
+max_ports_per_node=$(($num_ports_per_node - 1))
 
+i=0
+for name in $CP_NAMES ; do
 	vm_name=${CLUSTER_NAME}-$name
-	mac=${CP_MAC_ADDR_ARRAY[$a]}
-	mac2=${CP_MAC_ADDR_ARRAY2[$a]}
+
+	n=$(( $i * $num_ports_per_node ))
+	mac=${CP_MAC_ADDRS_ARRAY[$n]}
 
 	echo_cyan -n "Create VM: "
-	echo "$vm_name: [$master_cpu_count/$master_mem] [$GOVC_DATASTORE] [$mac] [$GOVC_NETWORK] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
+	echo "$vm_name: [${master_cpu_count}C/${master_mem}G] [$GOVC_DATASTORE] [$mac] [$GOVC_NETWORK] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 	govc vm.create \
 		-annotation="Created on '$(date)' as control node for OCP cluster $cluster_name.$base_domain version v$ocp_version from $(hostname):$PWD" \
 		-version vmx-15 \
@@ -90,25 +92,30 @@ for name in $CP_NAMES ; do
 		-firmware=efi \
 		-c=$master_cpu_count \
 		-m=`expr $master_mem \* 1024` \
-		-disk-datastore=$GOVC_DATASTORE \
 		-net.adapter vmxnet3 \
 		-net.address="$mac" \
+		-disk-datastore=$GOVC_DATASTORE \
 		-iso-datastore=$ISO_DATASTORE \
 		-iso="images/agent-${CLUSTER_NAME}.iso" \
 		-folder="$cluster_folder" \
 		-on=false \
 		 $vm_name
 
-	if [ "$mac2" ]; then
-		echo "Adding 2nd network interface with mac address: $mac2"
-		govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address $mac2
-	fi
+	# Add the rest of the NICs?
+	for cnt in $(seq 1 $max_ports_per_node)
+	do
+		#n=`expr \( $i \* $num_ports_per_node \) + $cnt || true`
+		n=$(( ($i * $num_ports_per_node) + $cnt))
+		mac=${CP_MAC_ADDRS_ARRAY[$n]}
+		echo "Adding network interface [$(( $cnt + 1 ))/$num_ports_per_node] with mac address: $mac"
+		govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address $mac
+	done
 
 	govc device.boot -secure -vm $vm_name
 
 	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true -nested-hv-enabled=$master_nested_hv
 
-	echo "Create and attach thin OS disk on [$GOVC_DATASTORE]"
+	echo "Attaching thin OS disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
 		-vm $vm_name \
 		-name $vm_name/$vm_name \
@@ -117,7 +124,7 @@ for name in $CP_NAMES ; do
 		-ds=$GOVC_DATASTORE
 
 	if [ "$data_disk" ]; then
-		echo "Create and attach a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
+		echo "Attaching a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
 		govc vm.disk.create \
 			-vm $vm_name \
 			-name $vm_name/${vm_name}_data \
@@ -133,16 +140,15 @@ done
 
 # Create the Vms for the workers
 
-i=1
+i=0
 for name in $WORKER_NAMES ; do
-	a=`expr $i-1`
-
 	vm_name=${CLUSTER_NAME}-$name
-	mac=${WKR_MAC_ADDR_ARRAY[$a]}
-	mac2=${WKR_MAC_ADDR_ARRAY2[$a]}
+
+	n=$(( $i * $num_ports_per_node ))
+	mac=${WKR_MAC_ADDRS_ARRAY[$n]}
 
 	echo_cyan -n "Create VM: "
-	echo "$vm_name: [$worker_cpu_count/$worker_mem] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
+	echo "$vm_name: [${worker_cpu_count}C/${worker_mem}G] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 	govc vm.create \
 		-annotation="Created on '$(date)' as worker node for OCP cluster $cluster_name.$base_domain version v$ocp_version from $(hostname):$PWD" \
 		-version vmx-15 \
@@ -159,16 +165,20 @@ for name in $WORKER_NAMES ; do
 		-on=false \
 		 $vm_name
 
-	if [ "$mac2" ]; then
-		echo "Adding 2nd network interface with mac address: $mac2"
-		govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address $mac2
-	fi
+	# Add the rest of the NICs?
+	for cnt in $(seq 1 $max_ports_per_node)
+	do
+		n=$(( ($i * $num_ports_per_node) + $cnt))
+		mac=${WKR_MAC_ADDRS_ARRAY[$n]}
+		echo "Adding network interface [$(( $cnt + 1 ))/$num_ports_per_node] with mac address: $mac"
+		govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address $mac
+	done
 
 	govc device.boot -secure -vm $vm_name
 
 	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true -nested-hv-enabled=$worker_nested_hv
 
-	echo "Create and attach thin OS disk on [$GOVC_DATASTORE]"
+	echo "Attaching thin OS disk on [$GOVC_DATASTORE]"
 	govc vm.disk.create \
 		-vm $vm_name \
 		-name $vm_name/$vm_name \
@@ -177,7 +187,7 @@ for name in $WORKER_NAMES ; do
 		-ds=$GOVC_DATASTORE
 
 	if [ "$data_disk" ]; then
-		echo "Create and attach a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
+		echo "Attaching a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
 		govc vm.disk.create \
 			-vm $vm_name \
 			-name $vm_name/${vm_name}_data \
@@ -193,3 +203,5 @@ done
 
 echo
 [ "$START_VM" ] && echo_green "Starting installation at $(date "+%b %e %H:%M")" || echo_green Now run: aba mon
+
+exit 0
