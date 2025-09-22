@@ -221,14 +221,6 @@ do
 		;;
 	esac
 
-	#if [ $ctype = "sno" ]; then
-	#	start_ip=10.0.1.201
-	#elif [ $ctype = "compact" ]; then
-	#	start_ip=10.0.1.71
-	#else
-	#	start_ip=10.0.1.81
-	#fi
-
 mylog "Starting tests to check out agent config files for various cluster configs, e.g. bonding and vlan"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete $ctype dir: $subdir/aba/standard" rm -rf $subdir/aba/$ctype
