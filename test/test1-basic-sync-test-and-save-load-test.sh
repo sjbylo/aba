@@ -141,8 +141,8 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key ~/.ssh/id_rsa and then ..."
 test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba --dir mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
-test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$"
-test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$"
+test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
+test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 
 source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* values (see below)
 echo
@@ -241,8 +241,8 @@ test-cmd -i -m "Deleting sno cluster (if it was created)" aba --dir sno delete
 #  This will save the images, install (the reg.) then load the images
 test-cmd -r 15 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
 
-test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$"
-test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$"
+test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
+test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 
 # Should we delete the seq file here? #FIXME
 
@@ -300,8 +300,8 @@ mylog "Using remote container mirror at $reg_host:$reg_port and using reg_ssh_us
 # This will install the reg. and sync the images
 test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync --retry
 
-test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$"
-test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$"
+test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
+test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 
 aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should start from scratch next time
@@ -330,8 +330,8 @@ test-cmd -m "Delete the registry so it will be re-created again during 'aba save
 #  This will save the images, install (the reg.) then load the images
 test-cmd -r 15 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
 
-test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$"
-test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$"
+test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
+test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 
 aba --dir sno clean # This should clean up the cluster and 'make' should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
