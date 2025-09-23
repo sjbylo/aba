@@ -14,10 +14,10 @@ verify-mirror-conf || exit 1
 openshift_install_mirror=./openshift-install-$ocp_version-$reg_host
 [ ! -x "$openshift_install_mirror" ] && openshift_install_mirror=openshift-install # fallback to the regular binary
 
-# Output the cluster configuration, to be installed.
+# Output the cluster configuration, to be installed. FIXME: put into function
 
 config=$(scripts/cluster-config.sh) 
-conf_display=$(echo "$config" | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t --output-separator " | ")
+conf_display=$(echo "$config" | grep -v "MAC_ADDRS" | sed "s/export /  /g"  | sed -e "s/=\"/=/g" -e "s/\"$//g"| tr "=" " " | column -t --output-separator " | ")
 len=$(echo "$conf_display" | longest_line)
 printf '=%.0s' $(seq 1 "$len")
 echo
