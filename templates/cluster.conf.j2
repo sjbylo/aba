@@ -1,26 +1,29 @@
+######################################################################################################################
 # This is the main cluster configuration file.  Please go through all values carefully and adjust to match your needs!
 
-cluster_name={{ cluster_name }}			# Set the cluster name.
-base_domain={{ domain }}			# Set the cluster base domain.
-					# These will form the cluster domain, e.g. sno.example.com
+cluster_name={{ cluster_name }}			# Set the cluster name and base domain.
+base_domain={{ domain }}			# These will form the cluster domain, e.g. sno.example.com
 
-api_vip={{ api_vip }}		# Set the OCP 'ingress' and 'api' IP addresses. Note that the values 'api_vip' and 
-ingress_vip={{ ingress_vip }}		# 'ingress_vip' are *ignored* for single node OpenShift (SNO).
-					# OCP installation prerequisite:
-					# Be sure to set the two required A records *in your DNS server*.
-					# For SNO, be sure both DNS A records point to the IP of the SNO node.
-					# For non-SNO, ensure the records match the above IP addresses set in
-					# the above api_vip and ingress_vip values. 
-					# Example: 
-					#   api.<cluster_name>.<base_domain>     => ip of api_vip
-					#   *.apps.<cluster_name>.<base_domain>  => ip of ingress_vip
+api_vip={{ api_vip }}			# The Virtual IP address used by the OpenShift API endpoint.
+ingress_vip={{ ingress_vip }}			# The Virtual IP address used by application ingress (*.apps).
+					# - These values (api_vip, ingress_vip) are ignored in
+					#   Single Node OpenShift (SNO).
+					# Prerequisite:
+					# - Create the required DNS A records in your DNS server.
+					#   • For SNO: both records must resolve to the single node’s IP.
+					#   • For multi-node clusters: the records must match the
+					#     api_vip and ingress_vip values set above.
+					# Example DNS records:
+					#   api.<cluster_name>.<base_domain>    -> api_vip
+					#   *.apps.<cluster_name>.<base_domain> -> ingress_vip
 
-machine_network={{ machine_network }}/{{ prefix_length }}		# Set the network CIDR for the cluster nodes. 
+machine_network={{ machine_network }}/{{ prefix_length }}		# Set the machine network CIDR for all cluster nodes. 
 
-starting_ip={{ starting_ip }}				# All nodes will be configured with static IPs starting from this IP address.  
-					# Ensure IPs are within the range of the above 'machine_network' CIDR.
-					# Be sure these IP addresses are not already in use!
-					# This will also be the IP of the agent-based rendezvous node (node0).
+starting_ip={{ starting_ip }}			# The first static IP address to assign to cluster nodes.
+					# - All nodes will receive sequential static IPs starting from this address.
+					# - The IP range must fall within the 'machine_network' CIDR.
+					# - Ensure these IPs are not already in use.
+					# - The starting_ip will also be assigned to the rendezvous node (node0).
 
 hostPrefix=23				# A hostPrefix value of 23 provides 510 (2^(32 - 23) - 2) pod IP addresses per node. 
 					# Set this lower, e.g. to 22 for more IP addresses, esp. for bare-metal servers. 
@@ -28,25 +31,25 @@ hostPrefix=23				# A hostPrefix value of 23 provides 510 (2^(32 - 23) - 2) pod I
 master_prefix=master			# Prefix names for masters and workers.
 worker_prefix=worker 			# OpenShift nodes will be named: master1, master2 ... worker1, worker2 etc.
 
-num_masters={{ num_masters }} 				# Number of master (control plane) nodes.
-num_workers={{ num_workers }}				# Number of worker (compute) nodes.
-					# Default (standard cluster) is 3 masters & 2 (or more) workers.  
-					# Compact cluster is 3 masters and no workers 
+num_masters={{ num_masters }} 				# Number of master (control plane) and worker (compute) nodes.
+num_workers={{ num_workers }}				# Default (standard cluster) is 3 masters & 2 (or more) workers.
+					# Compact cluster is 3 masters and no workers.
 					# Single Node OpenShift (SNO) is 1 master and zero workers.
 
-dns_servers={{ dns_servers }}		# Comma-separated list of DNS server IPs, reachable from within the private network.
-next_hop_address={{ next_hop_address }} 		# The private network's default route IP (optional).
-ntp_servers={{ ntp_servers }}		# Optional: Comma-separated list of NTP servers. Configure NTP during bootstrap and
-					# the installed cluster. Required if platform clock not synchronized!
+dns_servers={{ dns_servers }}			# Comma-separated list of DNS server IP addresses reachable from within the private network.
+next_hop_address={{ next_hop_address }}		# The default gateway IP address for the private network (optional).
+ntp_servers={{ ntp_servers }}			# Optional: comma-separated list of NTP servers.
+					# - NTP will be configured during bootstrap and on the installed cluster.
+					# - Required if the platform clock is not synchronized.
 
-#port0={{ port0 }}			# Name of the port to use for the default network. 	    Example: ens1f0, ens3, eth0 etc.
-#port1={{ port1 }}			# Optional: Name of 2nd port to use if bonding is required. Example: ens1f1, ens4, eth1 etc.
-ports={{ ports }}                       # Define all the ports (comma separated) that need to be bonded 
-vlan={{ vlan }}				# Optional: Vlan tag to use, works with or without bonding.
+ports={{ ports }}				# The name(s) of the node network interface(s) to use for the machine network.
+					# - Single interface example: ports=ens1f0   (or ens3, eth0, etc.)
+					# - Multiple interfaces (comma-separated) will be bonded: ports=ens1f0,ens2f0,ens3f0,ens4f0
+vlan={{ vlan }}					# Optional: VLAN tag to use for the machine network.  Works with or without bonding.
 
-int_connection={{ int_connection }}		# Optional: Set int_connection=proxy if you want to configure the 'cluster wide proxy' by reusing any existing shell proxy vars.
-					# Set int_connection=direct  if you want to use direct access to the Internet, e.g. via NAT.
-					# Set int_connection=none or int_connection= to use a mirror registry (default) which has been configured with "aba mirror"
+int_connection={{ int_connection }}				# Optional: Set int_connection=proxy to configure the 'cluster wide proxy' by reusing any existing shell proxy vars.
+					# Set int_connection=direct  to use direct access to the Internet, e.g. via NAT.
+					# Set int_connection= to use a mirror registry (default) configured using "aba mirror"
 
 #http_proxy=http://10.0.1.8:3128	# Set these three '*_proxy' vars to override (or if no existing shell proxy vars set).
 #https_proxy=http://10.0.1.8:3128
@@ -56,6 +59,7 @@ ssh_key_file=~/.ssh/id_rsa		# Optional: Path to your ssh key pair files (recomme
 					# The public key (e.g. ~/.ssh/id_rsa.pub) is copied to all OCP nodes.
 					# The private key (e.g. ~/.ssh/id_rsa) is used for ssh access to your nodes.
 
+#####################################################################################################################
 # Important: All the below values are only required if you want to use vCenter or ESXi to create VMs for the cluster.
 
 mac_prefix={{ mac_prefix }}		# If file "macs.conf" exists containing mac addresses, those addresses are used.
@@ -63,12 +67,12 @@ mac_prefix={{ mac_prefix }}		# If file "macs.conf" exists containing mac address
 					# Be sure these mac addresses are not already in use!
 					# To avoid overlap, 'x' characters will be replaced by random hex values. 
 					# Note that if the target platform is bare-metal, the mac addresses can also be
-	  				# manually adjusted directly in the 'agent-config.yaml' file (after running 'aba agent-config.yaml').
+					# manually adjusted directly in the 'agent-config.yaml' file (after running 'aba agent-config.yaml').
 
 master_cpu_count={{ master_cpu_count }}			# Set the number of CPUs (cores) and Memory (GB of RAM).  
-master_mem={{ master_mem }}				# For SNO, the minimum is 16 CPUs.
+master_mem={{ master_mem }}				# For SNO, the minimum is 8 CPUs.
 worker_cpu_count={{ worker_cpu_count }}			# Note: Only required for nodes based on VMs. For SNO, worker_* values are ignored.
 worker_mem={{ worker_mem }}
 
-data_disk={{ data_disk }}				# Add optional data disk (thin prov.). Leave data_disk undefined for 'no disk'.
+data_disk={{ data_disk }}				# Add optional thin provisioned data disk. Leave data_disk undefined for 'no disk'.
 
