@@ -137,7 +137,7 @@ else
 	# Note, double the number of mac addresses are genrated in case port bonding is required (ports and vlan in cluster.conf)
 	#for i in $(seq 1 `expr $num_masters \* $num_ports + $num_workers \* $num_ports`); do
 	for i in $(seq 1 `expr \( $num_masters + $num_workers \) \* $num_ports`); do
-		printf "%s%02d\n" $mac_prefix $i
+		printf "%s%02x\n" $mac_prefix $i   # append running hex value
 	done > .macs.conf
 fi
 export arr_macs=$(cat .macs.conf | tr "\n" " " | tr -s "[:space:]")  # scripts/j2 converts arr env vars starting with "arr_" into a python list which jinja2 can work with.

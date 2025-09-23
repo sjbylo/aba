@@ -22,6 +22,38 @@ yaml2json()
 	python3 -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'
 }
 
+# This fn() prints the macs out on a per node basis, just for display purposes
+distribute_macs() {
+    local macs="$1"
+    local nodes="$2"
+    local prefix="$3"
+
+    # Convert string to array
+    local mac_array=($macs)
+    local -a addr
+    for ((i=0; i<nodes; i++)); do
+        addr[i]=""
+    done
+
+    ports=$(( ${#mac_array[@]} / nodes ))
+
+    # Distribute MACs column-wise
+    for ((i=0; i<${#mac_array[@]}; i++)); do
+        pidx=$(( i % ports ))
+        idx=$(( i % nodes ))
+        if [ -z "${addr[pidx]}" ]; then
+            addr[pidx]="${mac_array[i]}"
+        else
+            addr[pidx]="${addr[pidx]} ${mac_array[i]}"
+        fi
+    done
+
+    # Print result
+    for ((i=0; i<ports; i++)); do
+        echo "export ${prefix}MAC_ADDR$((i+1))=\"${addr[i]}\""
+    done
+}
+
 export MANIFEST_SRC_DIR=.
 
 ICONF=$MANIFEST_SRC_DIR/install-config.yaml  
@@ -29,8 +61,8 @@ ACONF=$MANIFEST_SRC_DIR/agent-config.yaml
 
 # If the files don't exist, nothing to do but exit!
 if [ ! -s $ICONF -o ! -s $ACONF ]; then
-	echo "One of the files $ICONF and/or $ACONF does not exist."
-	echo "Cannot parse cluster configuration. Are you running this in your 'cluster' directory?" 
+	echo "One of the files $ICONF and/or $ACONF does not exist." >&2
+	echo "Cannot parse cluster configuration. Are you running this in your 'cluster' directory?"  >&2
 	exit 1
 fi
 
@@ -65,6 +97,8 @@ CP_MAC_ADDRS_ARRAY=($CP_MAC_ADDRS)
 PORTS_PER_NODE=$(expr ${#CP_MAC_ADDRS_ARRAY[@]} / $CP_REPLICAS)
 echo export PORTS_PER_NODE=\"$PORTS_PER_NODE\"
 
+distribute_macs "$CP_MAC_ADDRS" $CP_REPLICAS "CP_"
+
 ### CP_MAC_ADDR=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .interfaces[].macAddress'`
 ### echo "$CP_MAC_ADDR" | grep -q "null" && CP_MAC_ADDR=
 ### echo export CP_MAC_ADDR=\"$CP_MAC_ADDR\"
@@ -92,6 +126,8 @@ if [ $WORKER_REPLICAS -ne 0 ]; then
 	WKR_MAC_ADDRS=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .interfaces[].macAddress'`
 	echo "$WKR_MAC_ADDRS" | grep -q "null" && WKR_MAC_ADDRS=
 	echo export WKR_MAC_ADDRS=\"$WKR_MAC_ADDRS\"
+
+	[ "$WKR_MAC_ADDRS" ] && distribute_macs "$WKR_MAC_ADDRS" "$WORKER_REPLICAS" "WKR_"
 
 	#WKR_MAC_ADDR_2ND=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .interfaces[1].macAddress'`
 	#echo "$WKR_MAC_ADDR_2ND" | grep -q "null" && WKR_MAC_ADDR_2ND=
