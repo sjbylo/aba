@@ -108,9 +108,11 @@ do
 	# v1/v2 switch. For v2 need to do extra check!
 	#####./load-mirror.sh && failed= && break
 	if [ "$oc_mirror_version" = "v1" ]; then
-		./sync-mirror.sh && failed= && break
+		./sync-mirror.sh && failed= && break || ret=$?
 	else
-		if ./sync-mirror.sh; then
+		./sync-mirror.sh
+		ret=$?
+		if [ $ret -eq 0 ]; then
 			# Check for error files (only required for v2 of oc-mirror)
 			error_file=$(ls -t sync/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 			# Example error file:  mirroring_errors_20250914_230908.txt 
@@ -140,7 +142,7 @@ do
 	fi
 
 	let try=$try+1
-	[ $try -le $try_tot ] && echo_red -n "Image synchronization failed ... Trying again. "
+	[ $try -le $try_tot ] && echo_red -n "Image synchronization failed ($ret) ... Trying again. "
 done
 
 if [ "$failed" ]; then

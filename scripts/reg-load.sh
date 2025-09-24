@@ -86,9 +86,12 @@ do
 
 	# v1/v2 switch. For v2 need to do extra check!
 	if [ "$oc_mirror_version" = "v1" ]; then
-		./load-mirror.sh && failed= && break
+		./load-mirror.sh && failed= && break || ret=$?
 	else
-		if ./load-mirror.sh; then
+		./load-mirror.sh
+		ret=$?
+		if [ $ret -eq 0 ]; then
+		#if ./load-mirror.sh; then
 			# Check for error files (only required for v2 of oc-mirror)
 			ls -lt save/working-dir/logs > /tmp/error_file.out
 			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
@@ -119,7 +122,7 @@ do
 	fi
 
 	let try=$try+1
-	[ $try -le $try_tot ] && echo_red -n "Image loading failed ... Trying again. "
+	[ $try -le $try_tot ] && echo_red -n "Image loading failed ($ret) ... Trying again. "
 done
 
 if [ "$failed" ]; then
