@@ -75,10 +75,13 @@ do
 
 	# v1/v2 switch. For v2 need to do extra error checks!
 	if [ "$oc_mirror_version" = "v1" ]; then
-		./save-mirror.sh && failed= && break
+		./save-mirror.sh && failed= && break || ret=$?
 	else
 		# v2 will return zero even if some images failed to mirror
-		if ./save-mirror.sh; then
+		./save-mirror.sh
+		ret=$?
+		if [ $ret -eq 0 ]; then
+		#if ./save-mirror.sh; then
 			# Check for error files (only required for v2 of oc-mirror)
 			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 			# Example error file:  mirroring_errors_20250914_230908.txt 
@@ -108,7 +111,7 @@ do
 	fi
 
 	let try=$try+1
-	[ $try -le $try_tot ] && echo_red -n "Image saving failed ... Trying again. " >&2
+	[ $try -le $try_tot ] && echo_red -n "Image saving failed ($ret) ... Trying again. " >&2
 done
 
 if [ "$failed" ]; then
