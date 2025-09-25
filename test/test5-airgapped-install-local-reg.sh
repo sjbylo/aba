@@ -550,8 +550,13 @@ build_and_test_cluster() {
 
 ####	mins=0; until oc get node | grep worker | wc -l | grep ^3$; do sleep 60; let mins=$mins+1; [ $mins -ge 15 ] && return 1; done
 
+## until [ "$(oc get node --no-headers | grep -c worker)" -eq 3 ]; do sleep 60; done
+### until (( $(oc get node --no-headers | grep -c worker) == 3 )); do sleep 60; done
+
+
 	# This will check the workers come online, if not restart them!
-	if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Wait 15 mins for workers to come online" "cd $subdir/aba/$cluster_name; . <(aba shell); mins=0; until oc get node | grep worker | wc -l | grep ^3$; do sleep 60; let mins=\$mins+1; [ \$mins -ge 15 ] && exit 1; done; echo 3 workers seen; exit 0"; then
+	#if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Wait 15 mins for workers to come online" "cd $subdir/aba/$cluster_name; . <(aba shell); mins=0; until oc get node | grep worker | wc -l | grep ^3$; do sleep 60; let mins=\$mins+1; [ \$mins -ge 15 ] && exit 1; done; echo 3 workers seen; exit 0"; then
+	if ! test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Wait 15 mins for workers to come online" "cd $subdir/aba/$cluster_name; . <(aba shell); mins=0; until (( \$(oc get node --no-headers | grep -c worker) == 3 )); do sleep 60; let mins=\$mins+1; [ \$mins -ge 15 ] && exit 1; done; echo 3 workers seen; exit 0"; then
 		test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes && aba ls"
 		test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Restarting all worker nodes of failed cluster" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
 	fi
