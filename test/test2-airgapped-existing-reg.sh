@@ -240,7 +240,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config fil
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$ctype upload" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
 # Test node0 is accessible
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 2m bash test_ssh.sh"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 5m bash test_ssh.sh"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'ens160'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip"
 
@@ -257,12 +257,12 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config fil
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$ctype upload" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
 # Test node0 is accessible
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 2m bash test_ssh.sh"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 5m bash test_ssh.sh"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'bond'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip"
 
 # Test node0 is accessible
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 2m bash test_ssh.sh"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 5m bash test_ssh.sh"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype delete" 

@@ -125,8 +125,10 @@ fi
 butane .99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
 butane .99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
-###export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
+echo "Accessing the cluster ..."
+
 [ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
+oc whoami || { echo_red "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"; exit 1; }
 
 oc apply -f 99-master-chrony-conf-override.yaml
 oc apply -f 99-worker-chrony-conf-override.yaml
