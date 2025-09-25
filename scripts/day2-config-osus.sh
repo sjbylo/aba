@@ -18,9 +18,10 @@ NAME=osus
 NAMESPACE=openshift-update-service
 
 #####################
-echo "Logging into cluster ..."
-###. <(aba shell)
+echo "Accessing the cluster ..."
+
 [ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
+oc whoami || { echo_red "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"; exit 1; }
 
 #####################
 if ! oc get packagemanifests | grep -q ^cincinnati-operator; then

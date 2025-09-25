@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250913185938
+ABA_VERSION=20250926001055
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -18,7 +18,7 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 # Change dir if asked
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
-	[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
+	[ ! -e "$2" ] && echo "Error: directory [$2] does not exist!" >&2 && exit 1
 	[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
 	[ "$DEBUG_ABA" ] && echo "$0: change dir to: \"$2\"" >&2
@@ -133,7 +133,7 @@ do
 		# Check id --dir already specified
 		if [ ! "$WORK_DIR" ]; then
 			[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
-			[ ! -e "$2" ] && echo "Error: directory [$2] missing!" >&2 && exit 1
+			[ ! -e "$2" ] && echo "Error: directory [$2] does not exist!" >&2 && exit 1
 			[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
 			# Note that make will take *one* -C option only, so we only use one also

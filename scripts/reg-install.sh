@@ -145,7 +145,7 @@ if [ "$reg_ssh_key" ]; then
 		echo_red "       resolves to $fqdn_ip, which reaches this localhost ($(hostname)) instead!" >&2
 		echo_red "       If '$reg_host' should point to this localhost ($(hostname)), undefine 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
 		echo_red "       If '$reg_host' is meant be point to a remote host, update the DNS record ($reg_host) to resolve to an IP that can reach the *remote* host via ssh." >&2
-		echo_red "       Correct the problem and try again." >&2
+		echo_red "       Correct the problem in 'aba/mirror/mirror.conf' and try again." >&2
 		echo
 
 		rm -f $flag_file
@@ -269,7 +269,7 @@ else
 		echo_red "         but '$reg_host' resolves to $fqdn_ip, which *does not* reach this localhost via ssh!" >&2
 		echo_red "         If '$reg_host' is meant to point to a remote host, set 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
 		echo_red "         If '$reg_host' should point to this *localhost*, update the DNS record to resolve to an IP address that correctly reaches localhost '$(hostname)'." >&2
-		echo_red "         Correct the problem and try again." >&2
+		echo_red "         Correct the problem in 'aba/mirror/mirror.conf' and try again." >&2
 
 		echo
 		sleep 2

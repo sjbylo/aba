@@ -690,12 +690,21 @@ watch -n 5 oc get co
 
 [Back to top](#who-should-use-aba)
 
+We need help!  Here are some ideas for new features and enhacements.  
 
 ## Feature Backlog and Ideas
 
-- Configure htpasswd login, add users, disable kubeadmin.
+- Generally improve the user experience (UX) of Aba.
+
+- Support libvirt (as well as vSphere). 
 
 - Offer PXE boot as alternative to ISO.
+
+- Prompt user to run `aba day2` (or run it automatically), after (new) operators have been pushed to the registry. 
+
+- Finish full testing for arm64, partial testing complete.
+
+- Configure htpasswd login, add users, disable kubeadmin.
 
 - Enable aba to work in a container (this has been partially verified/implemented, see below).
 
@@ -703,15 +712,9 @@ watch -n 5 oc get co
 
 - Using oc-mirror v2, fetch all operator dependencies automatically.
 
-- Prompt user to run `aba day2` (or run it automatically), after (new) operators have been pushed to the registry. 
+- Configure ACM (if installed) to be ready to install clusters from the mirror registry (HostInv).
 
 - ~~Auto-refresh the Operator Catalogs (indexes) after they become stale (e.g. after 1 day).~~
-
-- Support libvirt (as well as vSphere). 
-
-- Generally improve the user experience (UX) of Aba.
-
-- Configure ACM (if installed) to be ready to install clusters from the mirror registry.
 
 - ~~Enable any number of ports for interface bonding, using `ports` value instead of `port0` and `port1` values in `cluster.conf`.~~
 
