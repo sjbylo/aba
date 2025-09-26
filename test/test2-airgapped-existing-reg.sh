@@ -284,12 +284,12 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$ctype clean
 
 
-# Test vlan, no bond
+# Test vlan, no bond (cannot start VMs without vlan switch)
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface, port1=" "sed -i 's/^port1=.*/#port1= /g' $subdir/aba/$ctype/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface from ports" "sed -i 's/^ports=.*/ports=ens160 /g' $subdir/aba/$ctype/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$ctype/cluster.conf | awk '{print $1}'"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$ctype upload" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "create iso" "aba --dir $subdir/aba/$ctype iso" 
+#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'ens160.888@ens160'"
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP connect ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip"
 
