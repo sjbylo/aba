@@ -80,7 +80,7 @@ do
 		# v2 will return zero even if some images failed to mirror
 		./save-mirror.sh
 		ret=$?
-		if [ $ret -eq 0 ]; then
+		#if [ $ret -eq 0 ]; then
 		#if ./save-mirror.sh; then
 			# Check for error files (only required for v2 of oc-mirror)
 			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
@@ -101,7 +101,7 @@ do
 			mkdir -p save/saved_errors
 			cp $error_file save/saved_errors
 			echo_red "Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
-		fi
+		#fi
 
 		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
 		#parallel_images=$(( parallel_images / 2 < 2 ? 2 : parallel_images / 2 ))	# half the value but it must always be at least 1
@@ -130,7 +130,7 @@ echo_green -n "Images saved successfully!"
 echo 
 
 echo_green "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which you transfer to your disconnected environment."
-echo_green "In your disconnected environment, unpack the install bundle and run 'cd aba; aba' for further instructions."
+echo_green "In your disconnected environment, unpack the install bundle and run 'cd aba; ./install; aba' for further instructions."
 echo
 
 exit 0

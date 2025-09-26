@@ -632,6 +632,7 @@ replace-value-conf() {
 	[ ! "$2" ] && echo "Error: missing value!" >&2 && exit 1
 	[ "$DEBUG_ABA" ] && echo "Replacing config value [$2] with [$3] in file: $1" >&2
 	sed -i "s|^[# \t]*${2}=[^ \t#]*\(.*\)|${2}=${3}\1|g" $1
+	echo_green "Added value ${2}=${3} to file $1"
 }
 
 output_table() {
