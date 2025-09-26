@@ -311,7 +311,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Listing VMs (should show 24
 myLog "Deploying test vote-app"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
 test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
@@ -432,7 +432,7 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 	pwd && \
 	cd openshift-service-mesh-demo && \
 	pwd && \
-	sed -i "s#quay\.io#$reg_host:$reg_port/$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml && \
+	sed -i "s#quay\.io#$reg_host:$reg_port$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml && \
 	sed -i "s/source: .*/source: redhat-operators/g" operators/* 
 ) 
 
@@ -622,7 +622,7 @@ build_and_test_cluster() {
 	# Deploy test app
 	test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name --cmd 'oc delete project demo || true'" 
 	test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name --cmd 'oc new-project demo' || true" # || true
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_name --cmd 'oc rollout status deployment vote-app -n demo'"
 }
 
