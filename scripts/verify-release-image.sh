@@ -51,7 +51,7 @@ if ! skopeo inspect $tls_verify_opts docker://$reg_host:$reg_port/$reg_path/open
 fi
 
 # Extract openshift-install binary from the mirror, if not already.  Use this binary to install OCP. 
-openshift_install_mirror="./openshift-install-$ocp_version-$reg_host"
+openshift_install_mirror="./openshift-install-$ocp_version-$reg_host-$reg_port-$(echo $reg_path | tr / -)"
 if [ ! -x $openshift_install_mirror ]; then
 	# HACK
 	cat > .idms.yaml <<-END
