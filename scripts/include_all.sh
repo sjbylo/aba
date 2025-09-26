@@ -230,6 +230,7 @@ normalize-mirror-conf()
 	# Prepend "export "
 	# reg_path must not start with a /, if so, remove it
 	# Force tls_verify=true 
+	# Fix reg_path if it a) does not start with / or starts with anything other than space or tab, then prepend a '/'
 
 	[ ! -s mirror.conf ] &&                                                              return 0
 
@@ -244,7 +245,7 @@ normalize-mirror-conf()
 				-e 's/^data_dir=~/data_dir=\\~ /g' \
 				-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
 				-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
-				-e 's#^reg_path=([^/])#reg_path=/\1#g' \
+				-e 's#^reg_path=([^/ \t])#reg_path=/\1#g' \
 				| \
 			awk '{print $1}' | \
 			sed	-e "s/^/export /g"
@@ -254,24 +255,6 @@ normalize-mirror-conf()
 	)
 }
 
-#fix_data_dir() {
-#	. normalize-mirror-conf
-#
-#	if [ "$data_dir" ]; then
-#		echo "export data_dir=~"
-#		echo "export reg_root=$data_dir/quay-install"
-#	else
-#		if [ ! "$reg_root" ]; then
-#			echo "export data_dir=~"
-#			echo "export reg_root=~/quay-install"
-#		else
-#			local d=$(dirname $reg_root)
-#			echo "export reg_root=$d/quay-install"
-#			echo "export data_dir=$d"
-#		fi
-#	fi
-#
-#}
 
 verify-mirror-conf() {
 	[ ! "$verify_conf" ] && return 0
@@ -279,7 +262,6 @@ verify-mirror-conf() {
 
 	local ret=0
 
-	#echo $reg_host | grep -q -E '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]{2,})+$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
 	echo $reg_host | grep -q -E '^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$' || { echo_red "Error: reg_host is invalid in mirror.conf [$reg_host]" >&2; ret=1; }
 	[ ! "$reg_host" ] && echo_red "Error: reg_host value is missing in mirror.conf" >&2 && ret=1
 
@@ -289,11 +271,11 @@ verify-mirror-conf() {
 
 	REGEX_ABS_PATH='^(~(/([A-Za-z0-9._-]+(/)?)*|$)|/([A-Za-z0-9._-]+(/)?)*$)'
 
-	[ "$data_dir" ] && echo $data_dir | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: data_dir is invalid in mirror.conf [$data_dir]" >&2; ret=1; }
+	[ "$data_dir" ] && { echo $data_dir | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: data_dir is invalid in mirror.conf [$data_dir]" >&2; ret=1; }; }
 
-	[ "$reg_path" ] && echo $reg_path | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_path is invalid in mirror.conf [$reg_path]" >&2; ret=1; }
+	[ "$reg_path" ] && { echo $reg_path | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_path is invalid in mirror.conf [$reg_path]" >&2; ret=1; }; }
 
-	[ "$reg_ssh_key" ] && echo $reg_ssh_key | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }
+	[ "$reg_ssh_key" ] && { echo $reg_ssh_key | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
 
 	return $ret
 }
