@@ -65,7 +65,7 @@ reg_root=$data_dir/quay-install
 ###[ ! "$reg_root" ] && reg_root=$HOME/quay-install  # Needed for below TMPDIR
 
 echo
-echo "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port/$reg_path. "
+echo "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 
 # Check if aba installed Quay or it's an existing reg.
 if [ -s ./reg-uninstall.sh ]; then
@@ -91,10 +91,10 @@ do
 	if [ "$oc_mirror_version" = "v1" ]; then
 		# Set up script to help for manual re-sync
 		# --continue-on-error : do not use this option. In testing the registry became unusable! 
-		cmd="oc-mirror --v1 --config=imageset-config-sync.yaml docker://$reg_host:$reg_port/$reg_path"
+		cmd="oc-mirror --v1 --config=imageset-config-sync.yaml docker://$reg_host:$reg_port$reg_path"
 		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	else
-		cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://\$PWD docker://$reg_host:$reg_port/$reg_path --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+		cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://\$PWD docker://$reg_host:$reg_port$reg_path --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	fi
 

@@ -41,7 +41,7 @@ if [ ! -d save ]; then
 fi
 
 echo 
-echo "Now loading (disk2mirror) the images from mirror/save/ directory to registry $reg_host:$reg_port/$reg_path."
+echo "Now loading (disk2mirror) the images from mirror/save/ directory to registry $reg_host:$reg_port$reg_path."
 echo
 
 # Check if aba installed Quay (show warning) or it's an existing reg. (no need to show warning)
@@ -72,10 +72,10 @@ do
 		# Set up script to help for manual re-sync
 		# --continue-on-error : do not use this option. In testing the registry became unusable! 
 		# Note: If 'aba save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
-		cmd="oc-mirror --v1 $tls_verify_opts --from=. docker://$reg_host:$reg_port/$reg_path"
+		cmd="oc-mirror --v1 $tls_verify_opts --from=. docker://$reg_host:$reg_port$reg_path"
 		echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh
 	else
-		cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://\$PWD docker://$reg_host:$reg_port/$reg_path --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+		cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://\$PWD docker://$reg_host:$reg_port$reg_path --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 		echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 	fi
 

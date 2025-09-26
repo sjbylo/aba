@@ -132,8 +132,8 @@ done
 #####################
 echo "Deploying OpenShift Update Service ..."
 
-graph_image=$reg_host:$reg_port/$reg_path/openshift/graph-image:latest
-release_repo=$reg_host:$reg_port/$reg_path/openshift/release-images
+graph_image=$reg_host:$reg_port$reg_path/openshift/graph-image:latest
+release_repo=$reg_host:$reg_port$reg_path/openshift/release-images
 
 #echo graph_image=$graph_image
 #echo release_repo=$release_repo
