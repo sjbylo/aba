@@ -90,7 +90,7 @@ do
 	else
 		./load-mirror.sh
 		ret=$?
-		if [ $ret -eq 0 ]; then
+		#if [ $ret -eq 0 ]; then
 		#if ./load-mirror.sh; then
 			# Check for error files (only required for v2 of oc-mirror)
 			ls -lt save/working-dir/logs > /tmp/error_file.out
@@ -112,7 +112,7 @@ do
 			mkdir -p save/saved_errors
 			cp $error_file save/saved_errors
 			echo_red "Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
-		fi
+		#fi
 
 		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
 		#parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# half the value but it must always be at least 1
@@ -126,6 +126,7 @@ do
 done
 
 if [ "$failed" ]; then
+	let try=$try-1
 	echo_red -n "Image loading aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." >&2
