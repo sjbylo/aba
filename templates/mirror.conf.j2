@@ -11,7 +11,7 @@ reg_host=registry.{{ domain }}		# FQDN (domain) of registry. No IP addr allowed.
 reg_port=8443				# The port used by any *existing* mirror registry. 
 					# Note that Quay mirror registry appliance always uses 8443. 
 
-reg_path=ocp4/openshift4		# This is the path where the OCP images will be stored,
+reg_path=/ocp4/openshift4		# This is the path where the OCP images will be stored,
 					# e.g. https://registry.example.com:8443/ocp4/openshift4/...
 
 reg_user=init				# Set your existing registry's username. Note that the Quay appliance username is fixed: 'init'.

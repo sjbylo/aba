@@ -20,7 +20,7 @@ if [ "$public_pull_secret_file_needed" -a ! -s "$pull_secret_file" ]; then
 		exit 1
 	fi
 
-	echo_red "Error: Your pull secret file '$pull_secret_file' does not exist!" >&2
+	echo_red   "Error: Your pull secret file '$pull_secret_file' does not exist!" >&2
 	echo_white "       Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
 
 	exit 1
