@@ -246,7 +246,9 @@ test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_
 
 # Should we delete the seq file here? #FIXME
 
-rm -rf sno
+test-cmd -m "Checking sno dir" ls -ld sno
+test-cmd -m "Deleting existing sno dir" rm -rf sno
+
 test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
 test-cmd -m "Delete cluster (if needed)" aba --dir sno delete 
 test-cmd -m "Delete the registry" aba --dir mirror uninstall 
