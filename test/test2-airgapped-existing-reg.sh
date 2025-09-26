@@ -396,7 +396,7 @@ test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" 
 
 test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" sleep 30
 # error: Post "https://api.sno.example.com:6443/api/v1/namespaces/demo/services": dial tcp 10.0.1.201:6443: connect: connection refused
-test-cmd -r 5 10 -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/sno --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port/$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+test-cmd -r 5 10 -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/sno --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for vote-app rollout" "aba --dir $subdir/aba/sno --cmd 'oc rollout status deployment vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting vote-app" "aba --dir $subdir/aba/sno --cmd 'oc delete project demo'"
