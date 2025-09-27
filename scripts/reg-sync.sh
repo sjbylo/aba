@@ -112,27 +112,19 @@ do
 	else
 		./sync-mirror.sh
 		ret=$?
-		if [ $ret -eq 0 ]; then
+		#if [ $ret -eq 0 ]; then
 			# Check for error files (only required for v2 of oc-mirror)
 			error_file=$(ls -t sync/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 			# Example error file:  mirroring_errors_20250914_230908.txt 
 
-			# This is a better way to implement file globbing ...
-			#shopt -s nullglob  # Be sure error_file != "mirroring_errors_*_*.txt"
-			#files=(save/working-dir/logs/mirroring_errors_*_*.txt)
-			#error_file=""
-			#if (( ${#files[@]} )); then
-			#	error_file=$(ls -t "${files[@]}" | head -1)
-			#fi
-
-			if [ ! "$error_file" ]; then
+			if [ ! "$error_file" -a $ret -eq 0 ]; then
 				failed=
 				break    # stop the "try loop"
 			fi
 			mkdir -p sync/saved_errors
 			cp $error_file sync/saved_errors
 			echo_red "Error detected and log file saved in sync/saved_errors/$(basename $error_file)" >&2
-		fi
+		#fi
 
 		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
 		#parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# half the value but it must always be at least 1
@@ -146,6 +138,7 @@ do
 done
 
 if [ "$failed" ]; then
+	let try=$try-1
 	echo_red -n "Image synchronization aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." >&2
