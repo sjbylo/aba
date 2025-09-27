@@ -97,15 +97,7 @@ do
 			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 			# Example error file:  mirroring_errors_20250914_230908.txt 
 
-			# This is a better way to implement file globbing ...
-			#shopt -s nullglob  # Be sure error_file != "mirroring_errors_*_*.txt"
-			#files=(save/working-dir/logs/mirroring_errors_*_*.txt)
-			#error_file=""
-			#if (( ${#files[@]} )); then
-			#	error_file=$(ls -t "${files[@]}" | head -1)
-			#fi
-
-			if [ ! "$error_file" ]; then
+			if [ ! "$error_file" -a $ret -eq 0 ]; then
 				failed=
 				break    # stop the "try loop"
 			fi

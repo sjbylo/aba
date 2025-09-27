@@ -86,15 +86,7 @@ do
 			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 			# Example error file:  mirroring_errors_20250914_230908.txt 
 
-			# This is a better way to implement file globbing ...
-			#shopt -s nullglob  # Be sure error_file != "mirroring_errors_*_*.txt"
-			#files=(save/working-dir/logs/mirroring_errors_*_*.txt)
-			#error_file=""
-			#if (( ${#files[@]} )); then
-			#	error_file=$(ls -t "${files[@]}" | head -1)
-			#fi
-
-			if [ ! "$error_file" ]; then
+			if [ ! "$error_file" -a $ret -eq 0 ]; then
 				failed=
 				break    # stop the "try loop"
 			fi
@@ -115,6 +107,7 @@ do
 done
 
 if [ "$failed" ]; then
+	let try=$try-1
 	echo_red -n "Image saving aborted ..." >&2
 	[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
 	echo_red "Warning: Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." >&2
