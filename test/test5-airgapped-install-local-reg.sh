@@ -378,6 +378,12 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type --cmd 'oc get packagemanifests'"
 
+# Test for operators: web-terminal yaks vault-secrets-operator flux
+for op in web-terminal yaks vault-secrets-operator flux
+do
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/$cluster_type --cmd 'oc get packagemanifests' | grep -i $op"
+done
+
 ## REMOVE jaeger # ##mylog "Checking for jaeger-product in mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml"
 ## REMOVE jaeger # test-cmd -m "Checking jaeger-product operator exists in the catalog file" "cat mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | grep jaeger-product$"
 

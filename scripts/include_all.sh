@@ -28,11 +28,11 @@ _color_echo() {
 
 	# Collect input from args or stdin
 	if [ $# -gt 0 ]; then
-	n_opt=
-	if [ "$1" = "-n" ]; then
-		n_opt="-n"
-		shift
-	fi
+		n_opt=
+		if [ "$1" = "-n" ]; then
+			n_opt="-n"
+			shift
+		fi
 		text="$*"
 	else
 		text="$(cat)"
@@ -46,6 +46,8 @@ _color_echo() {
 	else
 		echo -e $n_opt "$text"
 	fi
+
+	return 0
 }
 
 # Standard 8 colors

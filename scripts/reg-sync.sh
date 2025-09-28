@@ -17,14 +17,14 @@ verify-mirror-conf || exit 1
 
 # Show warning if 'aba save' has been used previously.
 #if [ -s save/mirror_seq1_000000.tar ]; then
-if [ -s save/mirror_*.tar ]; then
-	echo 
-	echo_red "Warning: Existing image set archive files found at $PWD/save." >&2
-	echo_red "         Note that you also have the option to load them into the mirror registry at $reg_host (aba load)?" >&2
-	echo 
-
-	##ask "Continue with 'sync'" || exit 1
-fi
+##if [ -s save/mirror_*.tar ]; then
+##	echo 
+##	echo_red "Warning: Existing image set archive files found at $PWD/save." >&2
+##	echo_red "         Note that you also have the option to load them into the mirror registry at $reg_host (aba load)?" >&2
+##	echo 
+##
+##	##ask "Continue with 'sync'" || exit 1
+##fi
 
 # This is a pull secret for RH registry
 pull_secret_mirror_file=pull-secret-mirror.json
