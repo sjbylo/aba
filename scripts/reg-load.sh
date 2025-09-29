@@ -97,13 +97,17 @@ do
 			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 			# Example error file:  mirroring_errors_20250914_230908.txt 
 
+			# v2 of oc-mirror can be in error, even if ret=0!
 			if [ ! "$error_file" -a $ret -eq 0 ]; then
 				failed=
 				break    # stop the "try loop"
 			fi
-			mkdir -p save/saved_errors
-			cp $error_file save/saved_errors
-			echo_red "Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
+
+			if [ -s "$error_file" ]; then
+				mkdir -p save/saved_errors
+				cp $error_file save/saved_errors
+				echo_red "Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
+			fi
 		#fi
 
 		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry

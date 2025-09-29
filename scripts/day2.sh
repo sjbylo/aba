@@ -257,27 +257,27 @@ echo
 file_list=$(find mirror/{save,sync}/oc-mirror-workspace/results-* -type f -name catalogSource*.yaml 2>/dev/null || true)
 if [ "$file_list" ]; then
 	cs_file=$(ls -tr $file_list | tail -1 || true)
-	##sed -i "s/name: cs-redhat-operator-index/name: redhat-operators/g" $cs_file  # Change to a better name
+	##sed -i "s/name: cs-redhat-operator-index/name: redhat-operator/g" $cs_file  # Change to a better name
 	echo Looking for latest CatalogSource file:
 	echo "Running: oc apply -f $cs_file"
 
 	##if oc create -f $cs_file 2>/dev/null; then
-	if cat $cs_file | sed "s/name: cs-redhat-operator-index/name: redhat-operators/g" | oc apply -f - 2>/dev/null; then
+	if cat $cs_file | sed "s/name: cs-redhat-operator-index/name: redhat-operator/g" | oc apply -f - 2>/dev/null; then
 		# Setting: displayName: Private Catalog (registry.example.com)
-		echo "Patching registry display name: '$cs_name ($reg_host)' for CatalogSource redhat-operators"
-		oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "$cs_name ('$reg_host')"}}'
+		echo "Patching registry display name: '$cs_name ($reg_host)' for CatalogSource redhat-operator"
+		oc patch CatalogSource redhat-operator  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "$cs_name ('$reg_host')"}}'
 
-		echo "Patching registry poll interval for CatalogSource redhat-operators"
-		oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
+		echo "Patching registry poll interval for CatalogSource redhat-operator"
+		oc patch CatalogSource redhat-operator  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
 		echo Pausing ...
 		sleep 60
 	else
 		:
 	fi
 
-	echo "Waiting for CatalogSource 'redhat-operators' to become 'ready' ..."
+	echo "Waiting for CatalogSource 'redhat-operator' to become 'ready' ..."
 	i=2
-	time while ! oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$
+	time while ! oc get catalogsources.operators.coreos.com  redhat-operator -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$
 	do
 		echo -n .
 		sleep $i
@@ -285,7 +285,7 @@ if [ "$file_list" ]; then
 		[ $i -gt 40 ] && echo_red "Warning: Giving up waiting ..." >&2 && break
 	done
 
-	oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$ && \
+	oc get catalogsources.operators.coreos.com  redhat-operator -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$ && \
 		echo "The CatalogSource is 'ready'"
 	###echo "The CatalogSource is 'ready'"
 
