@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20250926001055
+ABA_VERSION=20250929094654
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -399,7 +399,7 @@ do
 			ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
 			replace-value-conf $ABA_PATH/aba.conf ops $ops_list
 		fi
-	elif [ "$1" = "--incl-platform" ]; then
+	elif [ "$1" = "--incl-platform" ]; then  # FIXME: Only have "--excl-platform" option and add true or false (remove: --incl-platform ??)
 		replace-value-conf $ABA_PATH/aba.conf excl_platform "false"
 		shift
 	elif [ "$1" = "--excl-platform" ]; then

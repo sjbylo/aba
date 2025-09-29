@@ -20,9 +20,9 @@ metadata:
   name: advanced-cluster-management
   namespace: open-cluster-management
 spec:
-  channel: release-2.12
+#  channel: release-2.12
   installPlanApproval: Automatic
   name: advanced-cluster-management
-  source: redhat-operators
+  source: redhat-operator
   sourceNamespace: openshift-marketplace
 
