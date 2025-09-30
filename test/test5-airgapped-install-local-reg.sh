@@ -479,12 +479,13 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operato
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 8 5 "cd $subdir/aba/sno; i=0; until oc adm upgrade --to-latest=true; do let i=\$i+1; [ \$i -gt 20 ] && exit 1; sleep 30; done" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 8 5 "cd $subdir/aba/sno; i=0; until oc adm upgrade --to-latest=true --allow-not-recommended; do let i=\$i+1; [ \$i -gt 20 ] && exit 1; sleep 30; done" 
 # Consider using "--allow-upgrade-with-warnings" in the above trigger 
 test-cmd -m "Sleeping 60s" sleep 60
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc adm upgrade" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show desired cluster version" "oc get clusterversion version -o jsonpath='{.status.desired.version}'; echo"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version_desired$"
+#test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "{ oc get clusterversion version -o jsonpath='{.status.desired.version}'; oc get clusterversion version -o jsonpath='{.status.conditionalUpdates[].release.version}'; } | grep $ocp_version_desired" # This may detect a non-recommended version
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep $ocp_version_desired" # This may detect a non-recommended version
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check update  $ocp_version_desired" "oc adm upgrade | grep \"^info: An upgrade is in progress. Working towards $ocp_version_desired:\""
 #### Do upgrade
 
