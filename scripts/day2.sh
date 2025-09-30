@@ -23,21 +23,31 @@ verify-mirror-conf || exit 1
 
 echo "Accessing the cluster ..."
 
-[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
-oc whoami || { echo_red "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"; exit 1; }
+if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
+	[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
+	if ! oc whoami; then
+		echo_red "Unable to access the cluster using KUBECONFIG=$KUBECONFIG" >&2
+
+		. <(aba login)
+
+		if ! oc whoami --request-timeout='20s' >/dev/null; then
+			echo_red "Unable to log into the cluster" >&2
+			exit 1
+		fi
+	fi
+fi
 
 echo_white "What this 'day2' script does:"
 echo_white "- Add the internal mirror registry's Root CA to the cluster trust store."
 echo_white "- Configure OperatorHub to integrate with the internal mirror registry."
-echo_white "- Apply any/all imageContentSourcePolicy resource files under mirror/{save,sync}/oc-mirror-workspace that were created by oc-mirror (aba sync/load)."
+echo_white "- Apply any/all idms/itms resource files under working-dir/cluster-resources that were created by oc-mirror (aba sync/load)."
 echo_white "- For fully disconnected environments, disable online public catalog sources."
-echo_white "- Install any CatalogSources found under mirror/{save,sync}/oc-mirror-workspace."
-echo_white "- Apply any release image signatures found under mirror/{save,sync}/oc-mirror-workspace."
+echo_white "- Install any CatalogSources found under working-dir/cluster-resources."
+echo_white "- Apply any release image signatures found under working-dir/cluster-resources."
 echo
 
 
-echo For disconnected environments, disabling online public catalog sources
-echo
+echo_green For disconnected environments, disabling online public catalog sources
 
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
 if [ ! "$int_connection" ]; then
@@ -45,16 +55,16 @@ if [ ! "$int_connection" ]; then
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
        		echo "Patched OperatorHub, disabled Red Hat default catalog sources"
 else
-	echo "Assuming internet connection (proxy) in use, not disabling default catalog sources"
+	echo "Assuming internet connection (e.g. proxy) in use, not disabling default catalog sources"
 fi
 
 
 echo_white "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
 echo_white "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image'."
 echo_white "Adding registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331 for more."
-echo_white "This CA problem might affect other applications in the cluster."
 echo
 cm_existing=$(oc get cm registry-config -n openshift-config || true)
+# If installed from mirror reg. and trust CA missing (cm/registry-config) does not exist...
 if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 	echo "Adding the trust CA of the registry ($reg_host) ..."
 	echo "To fix https://access.redhat.com/solutions/5514331 and solve 'image pull errors in disconnected environment'."
@@ -143,54 +153,97 @@ else
 ############### v2 ################## START
 
 	# For oc-mirror v2
-	# note for oc-mirror v2
+	# Note for oc-mirror v2:
 	# resources/idms-oc-mirror.yaml
 	# mirror/sync/working-dir/cluster-resources/itms-oc-mirror.yaml
 	# ls mirror/{save,sync}/working-dir/cluster-resources/{idms,itms}*yaml
 
-	latest_dir=$(ls -dt mirror/{save,sync} 2>/dev/null | head -1)  # One of these should exist!
+	latest_working_dir=$(ls -dt mirror/{save,sync}/working-dir 2>/dev/null | head -1 || true)  # One of these should exist!
+	# FIXME: Since v2, use just one dir, e.g. "aba/mirror/data" 
 
-	if [ "$latest_dir" ]; then
-		for f in $(ls -t $latest_dir/working-dir/cluster-resources/{idms,itms}*yaml 2>/dev/null) 
+	ns=openshift-marketplace
+
+	if [ "$latest_working_dir" ]; then
+		# Apply any idms/itms files created by oc-mirror v2
+		for f in $(ls $latest_working_dir/cluster-resources/{idms,itms}*yaml 2>/dev/null || true) 
 		do
-			echo oc apply -f $f
-			oc apply -f $f
+			if [ -s $f ]; then
+				echo oc apply -f $f
+				oc apply -f $f
+			else
+				echo_red "Warning: no such file: $f" >&2
+			fi
 		done
 
-		f=$(ls -t1 $latest_dir/working-dir/cluster-resources/cs-redhat-operator-index*yaml | head -1)
-		echo "###########"
-		[ -s "$f" ] && cat $f | sed "s/name: cs-redhat-operator-index.*/name: redhat-operators/g" 
-		echo "###########"
-		#oc delete CatalogSource redhat-operators  -n openshift-marketplace 2>/dev/null || true
-		# FIXME: Can apply and need to delete?
-		if [ -s "$f" ] && cat $f | sed "s/name: cs-redhat-operator-index.*/name: redhat-operators/g" | oc apply -f - 2>/dev/null; then
-	
-			echo "Patching registry display name: 'Private Catalog ($reg_host)' for CatalogSource redhat-operators"
-			oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "Private Catalog ('$reg_host')"}}'
-	
-			echo "Patching registry poll interval for CatalogSource redhat-operators"
-			oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
-			echo Pausing 30s ...
-			sleep 30
+		# Apply any CatalogSource files created by oc-mirror v2
+
+		##f=$(ls -t1 $latest_working_dir/cluster-resources/cs-redhat-operator-index*yaml | head -1)
+		#cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
+		cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-redhat-operator-index*yaml 2>/dev/null || true)
+
+		[ ! "$cs_file_list" ] && echo_red "Warning: No CatalogSource files in $latest_working_dir/cluster-resources to process" >&2
+
+		echo cs_file_list=$cs_file_list
+		for f in $cs_file_list
+		do
+			if [ ! -s "$f" ]; then
+				echo_red "Error: CatalogSource file does not exist: [$f]" >&2
+				
+				continue
+			fi
+
+			cs_name=$(echo $f | sed "s/.*cs-\(.*\)-index.*/\1/g")
+
+			if [ ! "$cs_name" ]; then
+				echo_red "Error: Cannot parse CatalogSource name: [$f]" >&2
+
+				continue
+			fi
+
+			echo Applying CatalogSource: $cs_name
+		       	cat $f | sed "s/name: cs-.*-index.*/name: $cs_name/g" | oc apply -f - 2>/dev/null
+
+			echo "Patching CatalogSource display name for $cs_name: $cs_name ($reg_host)"
+			oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"displayName": "'$cs_name' ('$reg_host')"}}'
+
+			echo "Patching CatalogSource poll interval for $cs_name to 2m"
+			oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
+
+			wait_for_cs=true
+
+			# Start a sub-process to wait for CatalogSource 'ready'
+			( 
+				sleep 1
+
+				until oc -n "$ns" get catalogsource "$cs_name" >/dev/null 2>&1; do sleep 1; done
+
+				for _ in {1..60}; do
+					state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
+
+					if [ "$state" = "READY" ]; then
+						echo "CatalogSource $cs_name is ready!"
+
+						break
+					fi
+					[ "$state" ] && echo "Waiting for CatalogSource $cs_name... (current state: $state)"
+
+					sleep 5
+				done
+			) &
+		done
+
+		# Wait for all sub-processes
+		[ "$wait_for_cs" ] && wait
+
+		sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
+		if [ -s $sig_file ]; then
+			echo "Applying signatures from: $sig_file ..."
+			oc apply -f $sig_file
+		else
+			echo_white "No Signatire files in $latest_working_dir/cluster-resources to process" >&2
 		fi
-
-		echo "Waiting for CatalogSource 'redhat-operators' to become 'ready' ..."
-		i=2
-		time while ! oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$
-		do
-			echo -n .
-			sleep $i
-			let i=$i+1
-			[ $i -gt 40 ] && echo_red "Warning: Giving up waiting ..." >&2 && break
-		done
-
-		oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$ && \
-			echo "The CatalogSource is 'ready'"
-
-		sig_file=$latest_dir/working-dir/cluster-resources/signature-configmap.json
-		echo "Applying signatures from: $sig_file ..."
-		[ -s $sig_file ] && oc apply -f $sig_file
 	else
+		# FIXME: Only show warning IF the mirror has been used for this cluster
 		echo_red "Warning: missing directory $PWD/mirror/save and/or $PWD/mirror/sync" >&2
 	fi
 
@@ -204,28 +257,28 @@ echo "Applying any CatalogSources resources found under mirror/{save,sync}/oc-mi
 echo
 file_list=$(find mirror/{save,sync}/oc-mirror-workspace/results-* -type f -name catalogSource*.yaml 2>/dev/null || true)
 if [ "$file_list" ]; then
-	cs_file=$(ls -tr $file_list | tail -1)
-	##sed -i "s/name: cs-redhat-operator-index/name: redhat-operators/g" $cs_file  # Change to a better name
+	cs_file=$(ls -tr $file_list | tail -1 || true)
+	##sed -i "s/name: cs-redhat-operator-index/name: redhat-operator/g" $cs_file  # Change to a better name
 	echo Looking for latest CatalogSource file:
 	echo "Running: oc apply -f $cs_file"
 
 	##if oc create -f $cs_file 2>/dev/null; then
-	if cat $cs_file | sed "s/name: cs-redhat-operator-index/name: redhat-operators/g" | oc apply -f - 2>/dev/null; then
+	if cat $cs_file | sed "s/name: cs-redhat-operator-index/name: redhat-operator/g" | oc apply -f - 2>/dev/null; then
 		# Setting: displayName: Private Catalog (registry.example.com)
-		echo "Patching registry display name: 'Private Catalog ($reg_host)' for CatalogSource redhat-operators"
-		oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "Private Catalog ('$reg_host')"}}'
+		echo "Patching registry display name: '$cs_name ($reg_host)' for CatalogSource redhat-operator"
+		oc patch CatalogSource redhat-operator  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "$cs_name ('$reg_host')"}}'
 
-		echo "Patching registry poll interval for CatalogSource redhat-operators"
-		oc patch CatalogSource redhat-operators  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
+		echo "Patching registry poll interval for CatalogSource redhat-operator"
+		oc patch CatalogSource redhat-operator  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
 		echo Pausing ...
 		sleep 60
 	else
 		:
 	fi
 
-	echo "Waiting for CatalogSource 'redhat-operators' to become 'ready' ..."
+	echo "Waiting for CatalogSource 'redhat-operator' to become 'ready' ..."
 	i=2
-	time while ! oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$
+	time while ! oc get catalogsources.operators.coreos.com  redhat-operator -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$
 	do
 		echo -n .
 		sleep $i
@@ -233,7 +286,7 @@ if [ "$file_list" ]; then
 		[ $i -gt 40 ] && echo_red "Warning: Giving up waiting ..." >&2 && break
 	done
 
-	oc get catalogsources.operators.coreos.com  redhat-operators -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$ && \
+	oc get catalogsources.operators.coreos.com  redhat-operator -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$ && \
 		echo "The CatalogSource is 'ready'"
 	###echo "The CatalogSource is 'ready'"
 
