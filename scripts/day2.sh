@@ -179,7 +179,6 @@ else
 
 		##f=$(ls -t1 $latest_working_dir/cluster-resources/cs-redhat-operator-index*yaml | head -1)
 		cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
-		#cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-redhat-operator-index*yaml 2>/dev/null || true)
 
 		[ ! "$cs_file_list" ] && echo_red "Warning: No CatalogSource files in $latest_working_dir/cluster-resources to process" >&2
 
