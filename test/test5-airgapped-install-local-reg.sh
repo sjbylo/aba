@@ -202,6 +202,9 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m  "Install aba script" 
 ####test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Activating shortcuts.conf" "cd $subdir/aba; cp -f .shortcuts.conf shortcuts.conf"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cluster images into mirror on internal bastion (this will install quay)" "aba -d $subdir/aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 # TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set archive file to make space: '$subdir/aba/mirror/save/mirror_*.tar'" "rm -v $subdir/aba/mirror/save/mirror_*.tar" 
 
@@ -260,6 +263,7 @@ test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
@@ -297,6 +301,7 @@ test-cmd -m "Copy over image set conf file" "scp mirror/save/imageset-config-sav
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $(ls -tr $subdir/aba/mirror/save/mirror_*.tar | tail -1)"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading vote-app image into mirror" "aba -d $subdir/aba/mirror load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
@@ -371,6 +376,7 @@ aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
@@ -444,6 +450,7 @@ test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirr
 
 $$ REMOVE jaeger # test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading jaeger and cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
