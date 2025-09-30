@@ -45,9 +45,10 @@ reg_url=https://$reg_host:$reg_port
 #scp -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
 
 # Check if the cert needs to be updated
-sudo diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-	sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
-		sudo update-ca-trust extract
+trust_root_ca $reg_root/quay-rootCA/rootCA.pem
+#sudo diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+#	sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+#		sudo update-ca-trust extract
 
 podman logout --all 
 echo -n "Checking registry access is working using 'podman login': "

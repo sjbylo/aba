@@ -32,18 +32,20 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 
 	if [ -s regcreds/rootCA.pem ]; then
 		# Check if the cert needs to be updated
-		if ! $SUDO diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2; then
-			$SUDO cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 
-			$SUDO update-ca-trust extract
-			echo "Cert 'regcreds/rootCA.pem' updated in system trust"
-		else
-			echo "regcreds/rootCA.pem already in system trust"
-		fi
+		trust_root_ca regcreds/rootCA.pem
+		#if ! $SUDO diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 2>/dev/null >&2; then
+			#$SUDO cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA-existing.pem 
+			#$SUDO update-ca-trust extract
+			#echo "Cert 'regcreds/rootCA.pem' updated in system trust"
+		#else
+			#echo "regcreds/rootCA.pem already in system trust"
+		#fi
 	else
 		echo
 		echo_red "Warning: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' cert file found." >&2
 		echo
 
+		# FIXME: Remove "tls_verify"
 		if [ "$tls_verify" ]; then
 			echo_red "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again." >&2
 			echo

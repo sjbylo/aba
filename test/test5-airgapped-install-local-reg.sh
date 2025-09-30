@@ -445,7 +445,7 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 	cd openshift-service-mesh-demo && \
 	pwd && \
 	sed -i "s#quay\.io#$reg_host:$reg_port$reg_path#g" */*.yaml */*/*.yaml */*/*/*.yaml && \
-	sed -i "s/source: .*/source: redhat-operator/g" operators/* 
+	sed -i "s/source: .*/source: redhat-operators/g" operators/* 
 ) 
 
 mylog Copy tar+ssh archives to internal bastion

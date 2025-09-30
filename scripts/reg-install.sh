@@ -233,9 +233,10 @@ if [ "$reg_ssh_key" ]; then
 	[ ! "$reg_user" ] && reg_user=init
 
 	# Check if the cert needs to be updated
-	$SUDO diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-		$SUDO cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
-			$SUDO update-ca-trust extract
+	trust_root_ca regcreds/rootCA.pem
+	#$SUDO diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+		#$SUDO cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+			#$SUDO update-ca-trust extract
 
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 

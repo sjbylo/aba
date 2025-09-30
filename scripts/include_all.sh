@@ -761,3 +761,19 @@ get_ntp_servers() {
     echo "${ntp:-pool.ntp.org}"
 }
 
+trust_root_ca() {
+	if [ -s $1 ]; then
+		if diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2; then
+			$SUDO cp $1 /etc/pki/ca-trust/source/anchors/ 
+			$SUDO update-ca-trust extract
+			echo_white "Cert 'regcreds/rootCA.pem' updated in system trust"
+		else
+			echo_white "$1 already in system trust"
+		fi
+	else
+		echo_white "No $1 cert file found" 
+	fi
+
+	return 0
+}
+
