@@ -202,6 +202,9 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m  "Install aba script" 
 ####test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Activating shortcuts.conf" "cd $subdir/aba; cp -f .shortcuts.conf shortcuts.conf"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cluster images into mirror on internal bastion (this will install quay)" "aba -d $subdir/aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 # TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set archive file to make space: '$subdir/aba/mirror/save/mirror_*.tar'" "rm -v $subdir/aba/mirror/save/mirror_*.tar" 
 
@@ -260,6 +263,7 @@ test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
@@ -297,6 +301,7 @@ test-cmd -m "Copy over image set conf file" "scp mirror/save/imageset-config-sav
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $(ls -tr $subdir/aba/mirror/save/mirror_*.tar | tail -1)"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading vote-app image into mirror" "aba -d $subdir/aba/mirror load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
@@ -371,6 +376,7 @@ aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
@@ -450,6 +456,7 @@ test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirr
 
 $$ REMOVE jaeger # test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading jaeger and cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
@@ -474,7 +481,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Waiting for 'cincinnati-operator' to become available ..." "i=0; until oc get packagemanifests | grep ^cincinnati-operator; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Run 'day2-osus' to install the update service" "aba --dir $subdir/aba/sno day2-osus"  # Install Update Service
 test-cmd -m "Sleeping 90s" sleep 90
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc adm upgrade" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc adm upgrade --include-not-recommended" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Set update channel" "oc adm upgrade channel fast-$ocp_version_major" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show cluster version" "oc get clusterversion"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check cluster version is $ocp_version" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version$; echo"
@@ -485,12 +492,13 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operato
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 8 5 "cd $subdir/aba/sno; i=0; until oc adm upgrade --to-latest=true; do let i=\$i+1; [ \$i -gt 20 ] && exit 1; sleep 30; done" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 8 5 "cd $subdir/aba/sno; i=0; until oc adm upgrade --to-latest=true --allow-not-recommended; do let i=\$i+1; [ \$i -gt 20 ] && exit 1; sleep 30; done" 
 # Consider using "--allow-upgrade-with-warnings" in the above trigger 
 test-cmd -m "Sleeping 60s" sleep 60
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc adm upgrade" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc adm upgrade --include-not-recommended" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show desired cluster version" "oc get clusterversion version -o jsonpath='{.status.desired.version}'; echo"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep ^$ocp_version_desired$"
+#test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "{ oc get clusterversion version -o jsonpath='{.status.desired.version}'; oc get clusterversion version -o jsonpath='{.status.conditionalUpdates[].release.version}'; } | grep $ocp_version_desired" # This may detect a non-recommended version
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep $ocp_version_desired" # This may detect a non-recommended version
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check update  $ocp_version_desired" "oc adm upgrade | grep \"^info: An upgrade is in progress. Working towards $ocp_version_desired:\""
 #### Do upgrade
 
