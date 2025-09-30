@@ -101,215 +101,120 @@ else
 	echo_cyan "Registry trust bundle already added (cm registry-config -n openshift-config). Assuming workaround has already been applied or not necessary."
 fi
 
-############### v1 ##################
-if [ "$oc_mirror_version" = "v1" ]; then
-############### v1 ##################
+####################################
+# Only oc-mirror v2 is supported now
 
-	file_list=$(ls mirror/{sync,save}/oc-mirror-workspace 2>/dev/null || true)
-	if [ ! "$file_list" ]; then
-		echo
-		echo_red "Missing oc-mirror meta-data (mirror/{save,sync}/oc-mirror-workspace* not be available). Please copy this directory from where it was created to this location and try again!" >&2
-		echo
-	fi
+# For oc-mirror v2
+# Note for oc-mirror v2:
+# resources/idms-oc-mirror.yaml
+# mirror/sync/working-dir/cluster-resources/itms-oc-mirror.yaml
+# ls mirror/{save,sync}/working-dir/cluster-resources/{idms,itms}*yaml
 
-	echo
-	echo "Applying any imageContentSourcePolicy resource files that were created by oc-mirror under mirror/{save,sync}/oc-mirror-workspace* (aba sync/load)"
-	echo
+latest_working_dir=$(ls -dt mirror/{save,sync}/working-dir 2>/dev/null | head -1 || true)  # One of these should exist!
+# FIXME: Since v2, use just one dir, e.g. "aba/mirror/data" 
 
-	# If one should clash with an existing ICSP resource, change its name by incrementing the value (-x) and try to apply it again.
-	# See this issue: https://github.com/openshift/oc-mirror/issues/597
-	# "|| true" needed in case no "oc-mirror-workspace" dir exist (e.g. no mirror meta data available) 
-	file_list=$(find mirror/{save,sync}/oc-mirror-workspace* -type f 2> /dev/null | grep /imageContentSourcePolicy.yaml$ || true)
-	if [ "$file_list" ]; then
-		for f in $file_list
-		do
-			echo "Running: oc create -f $f"
-			oc create -f $f 2>/dev/null && continue   # If it can be created, move to the next file
+ns=openshift-marketplace
 
-			# If it can't be created....
-			# If it's different, then apply the resource with a different name
-			v=$(cat $f | grep "^  name: .*" | head -1 | cut -d- -f2)
-			while ! oc diff -f $f > /dev/null
-			do
-				# oc-mirror creates resources with names xxx-0 fetch the digit after the '-' and increment.
-				# head needed since sometimes the files have more than one resource!
-				let v=$v+1
-				###echo $v | grep -E "^[0-9]+$" || continue  # Check $v is an integer
-
-				echo "Applying resource(s):" 
-				grep -E -o 'name: [^-]+' $f
-
-				# Adjust the name: in the file
-				sed -i "s/^\(  name: [^-]*\)-[0-9]\{1,\}/\1-$v/g" $f
-				echo "Running: oc create -f $f"
-				oc create -f $f 2>/dev/null || true
-			done
-		done
-	else
-		echo_cyan "No imageContentSourcePolicy.yaml files found under 'mirror/{save,sync}/oc-mirror-workspace*' (no operators mirrored?)."
-	fi
-else
-
-############### v2 ################## START
-
-	# For oc-mirror v2
-	# Note for oc-mirror v2:
-	# resources/idms-oc-mirror.yaml
-	# mirror/sync/working-dir/cluster-resources/itms-oc-mirror.yaml
-	# ls mirror/{save,sync}/working-dir/cluster-resources/{idms,itms}*yaml
-
-	latest_working_dir=$(ls -dt mirror/{save,sync}/working-dir 2>/dev/null | head -1 || true)  # One of these should exist!
-	# FIXME: Since v2, use just one dir, e.g. "aba/mirror/data" 
-
-	ns=openshift-marketplace
-
-	if [ "$latest_working_dir" ]; then
-		# Apply any idms/itms files created by oc-mirror v2
-		for f in $(ls $latest_working_dir/cluster-resources/{idms,itms}*yaml 2>/dev/null || true) 
-		do
-			if [ -s $f ]; then
-				echo oc apply -f $f
-				oc apply -f $f
-			else
-				echo_red "Warning: no such file: $f" >&2
-			fi
-		done
-
-		# Apply any CatalogSource files created by oc-mirror v2
-
-		##f=$(ls -t1 $latest_working_dir/cluster-resources/cs-redhat-operator-index*yaml | head -1)
-		cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
-
-		[ ! "$cs_file_list" ] && echo_red "Warning: No CatalogSource files in $latest_working_dir/cluster-resources to process" >&2
-
-		echo cs_file_list=$cs_file_list
-		for f in $cs_file_list
-		do
-			if [ ! -s "$f" ]; then
-				echo_red "Error: CatalogSource file does not exist: [$f]" >&2
-				
-				continue
-			fi
-
-			cs_name=$(echo $f | sed "s/.*cs-\(.*\)-index.*/\1/g")
-
-			if [ ! "$cs_name" ]; then
-				echo_red "Error: Cannot parse CatalogSource name: [$f]" >&2
-
-				continue
-			fi
-
-			echo Applying CatalogSource: $cs_name
-		       	cat $f | sed "s/name: cs-.*-index.*/name: $cs_name/g" | oc apply -f - 2>/dev/null
-
-			echo "Patching CatalogSource display name for $cs_name: $cs_name ($reg_host)"
-			oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"displayName": "'$cs_name' ('$reg_host')"}}'
-
-			echo "Patching CatalogSource poll interval for $cs_name to 2m"
-			oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
-
-			wait_for_cs=true
-
-			# Start a sub-process to wait for CatalogSource 'ready'
-			( 
-				sleep 1
-
-				until oc -n "$ns" get catalogsource "$cs_name" >/dev/null 2>&1; do sleep 1; done
-
-				for _ in {1..60}; do
-					state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
-
-					if [ "$state" = "READY" ]; then
-						echo "CatalogSource $cs_name is ready!"
-
-						break
-					fi
-					[ "$state" ] && echo "Waiting for CatalogSource $cs_name... (current state: $state)"
-
-					sleep 5
-				done
-			) &
-		done
-
-		# Wait for all sub-processes
-		[ "$wait_for_cs" ] && wait
-
-		sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
-		if [ -s $sig_file ]; then
-			echo "Applying signatures from: $sig_file ..."
-			oc apply -f $sig_file
-		else
-			echo_white "No Signatire files in $latest_working_dir/cluster-resources to process" >&2
-		fi
-	else
-		# FIXME: Only show warning IF the mirror has been used for this cluster
-		echo_red "Warning: missing directory $PWD/mirror/save and/or $PWD/mirror/sync" >&2
-	fi
-
-	exit 0
-############### v2 ################## END
-fi
-
-
-echo
-echo "Applying any CatalogSources resources found under mirror/{save,sync}/oc-mirror-workspace/results-*"
-echo
-file_list=$(find mirror/{save,sync}/oc-mirror-workspace/results-* -type f -name catalogSource*.yaml 2>/dev/null || true)
-if [ "$file_list" ]; then
-	cs_file=$(ls -tr $file_list | tail -1 || true)
-	##sed -i "s/name: cs-redhat-operator-index/name: redhat-operator/g" $cs_file  # Change to a better name
-	echo Looking for latest CatalogSource file:
-	echo "Running: oc apply -f $cs_file"
-
-	##if oc create -f $cs_file 2>/dev/null; then
-	if cat $cs_file | sed "s/name: cs-redhat-operator-index/name: redhat-operator/g" | oc apply -f - 2>/dev/null; then
-		# Setting: displayName: Private Catalog (registry.example.com)
-		echo "Patching registry display name: '$cs_name ($reg_host)' for CatalogSource redhat-operator"
-		oc patch CatalogSource redhat-operator  -n openshift-marketplace --type merge -p '{"spec": {"displayName": "$cs_name ('$reg_host')"}}'
-
-		echo "Patching registry poll interval for CatalogSource redhat-operator"
-		oc patch CatalogSource redhat-operator  -n openshift-marketplace --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
-		echo Pausing ...
-		sleep 60
-	else
-		:
-	fi
-
-	echo "Waiting for CatalogSource 'redhat-operator' to become 'ready' ..."
-	i=2
-	time while ! oc get catalogsources.operators.coreos.com  redhat-operator -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$
+if [ "$latest_working_dir" ]; then
+	# Apply any idms/itms files created by oc-mirror v2
+	for f in $(ls $latest_working_dir/cluster-resources/{idms,itms}*yaml 2>/dev/null || true) 
 	do
-		echo -n .
-		sleep $i
-		let i=$i+1
-		[ $i -gt 40 ] && echo_red "Warning: Giving up waiting ..." >&2 && break
+		if [ -s $f ]; then
+			echo oc apply -f $f
+			oc apply -f $f
+		else
+			echo_red "Warning: no such file: $f" >&2
+		fi
 	done
 
-	oc get catalogsources.operators.coreos.com  redhat-operator -n openshift-marketplace -o json | jq -r .status.connectionState.lastObservedState | grep -qi ^ready$ && \
-		echo "The CatalogSource is 'ready'"
-	###echo "The CatalogSource is 'ready'"
+	# Apply any CatalogSource files created by oc-mirror v2
 
-	#### Force all default sources to be disabled, since we use the internal mirror.
-	###echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'" 
-	###oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' 
+	##f=$(ls -t1 $latest_working_dir/cluster-resources/cs-redhat-operator-index*yaml | head -1)
+	cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
 
-	# Now add any signatures
-	echo "Applying any signature files under: mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures:"
-	file_list=$(find mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures -type f -name signature*json 2>/dev/null || true)
-	if [ "$file_list" ]; then
-		for f in $file_list
-		do
-			echo Applying: $f
-			oc apply -f $f 2>/dev/null
-		done
+	[ ! "$cs_file_list" ] && echo_red "Warning: No CatalogSource files in $latest_working_dir/cluster-resources to process" >&2
+
+	for f in $cs_file_list
+	do
+		if [ ! -s "$f" ]; then
+			echo_red "Error: CatalogSource file does not exist: [$f]" >&2
+			
+			continue
+		fi
+
+		# Fetch the catalog (index) names and adjust them to suit the standard names
+		# Extract the base catalog name and normalize it
+		# Example filename: cs-redhat-operator-index.yaml
+		cs_name=${f#*cs-}            # remove everything up to 'cs-'
+		cs_name=${cs_name%-index*}    # remove everything from '-index' onward
+
+		# Normalize standard names
+		case "$cs_name" in
+    			redhat-operator)	cs_name="redhat-operators" ;;
+    			certified-operator)	cs_name="certified-operators" ;;
+    			community-operator)	cs_name="community-operators" ;;
+		esac
+
+		# FIXME: delete
+		#cs_name=$(echo $f | sed "s/.*cs-\(.*\)-index.*/\1/g")
+		#cs_name=$(echo $cs_name | \
+			#sed \
+				#-e "s/^redhat-operator$/redhat-operators/g" \
+				#-e "s/^certified-operator$/certified-operators/g" \
+				#-e "s/^community-operator$/community-operators/g" \
+			#)
+
+		if [ ! "$cs_name" ]; then
+			echo_red "Error: Cannot parse CatalogSource name: [$f]" >&2
+
+			continue
+		fi
+
+		echo Applying CatalogSource: $cs_name
+	       	cat $f | sed "s/name: cs-.*-index.*/name: $cs_name/g" | oc apply -f - # 2>/dev/null
+
+		echo "Patching CatalogSource display name for $cs_name: $cs_name ($reg_host)"
+		oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"displayName": "'$cs_name' ('$reg_host')"}}'
+
+		echo "Patching CatalogSource poll interval for $cs_name to 2m"
+		oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
+
+		wait_for_cs=true
+
+		# Start a sub-process to wait for CatalogSource 'ready'
+		( 
+			sleep 1
+
+			until oc -n "$ns" get catalogsource "$cs_name" >/dev/null; do sleep 1; done
+
+			for _ in {1..60}; do
+				state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
+
+				if [ "$state" = "READY" ]; then
+					echo "CatalogSource $cs_name is ready!"
+
+					break
+				fi
+				[ "$state" ] && echo "Waiting for CatalogSource $cs_name... (current state: $state)"
+
+				sleep 5
+			done
+		) &
+	done
+
+	# Wait for all sub-processes
+	[ "$wait_for_cs" ] && wait
+
+	sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
+	if [ -s $sig_file ]; then
+		echo "Applying signatures from: $sig_file ..."
+		oc apply -f $sig_file
 	else
-		echo_cyan "No release signatures found in mirror/{sync,save}/oc-mirror-workspace/results-*/release-signatures (no new OCP versions mirrored?)."
+		echo_white "No Signatire files in $latest_working_dir/cluster-resources to process" >&2
 	fi
 else
-	echo
-	echo_cyan "No Operator CatalogSources found under mirror/{save,sync}/oc-mirror-workspace (no operators mirrored?)."
-	echo_cyan "Operator images can be loaded into the mirror registry first by a) editing the mirror/save/imageset-config-save.yaml file and b) running 'aba save/load'. See the README.md for more."
-	echo
+	# FIXME: Only show warning IF the mirror has been used for this cluster
+	echo_red "Warning: missing directory $PWD/mirror/save/working-dir and/or $PWD/mirror/sync/working-dir" >&2
 fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
