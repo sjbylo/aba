@@ -103,7 +103,7 @@ metadata:
 spec:
   channel: v1
   installPlanApproval: "Automatic"
-  source: "redhat-operators"
+  source: "redhat-operator"
   sourceNamespace: "openshift-marketplace"
   name: "cincinnati-operator"
 END
