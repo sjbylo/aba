@@ -272,6 +272,8 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file ex
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/$cluster_type day2"
+
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
@@ -314,7 +316,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated 
 
 cluster_type=sno  # Choose either sno, compact or standard
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing $cluster_type cluster, ready to deploy test app" "aba --dir $subdir/aba $cluster_type"
+#### DONE ABOVE NOW !!! test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing $cluster_type cluster, ready to deploy test app" "aba --dir $subdir/aba $cluster_type"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking cluster operators" aba --dir $subdir/aba/$cluster_type cmd
 
@@ -325,6 +327,10 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --d
 test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
+test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app --name vote-app -n demo'"
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -467,7 +473,7 @@ test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion_h
 
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 
-$$ REMOVE jaeger # test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading jaeger and cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
+## REMOVE jaeger # test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading jaeger and cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
