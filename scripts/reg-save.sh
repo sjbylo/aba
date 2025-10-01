@@ -61,10 +61,11 @@ do
 	if [ "$oc_mirror_version" = "v1" ]; then
 		# Set up script to help for re-sync
 		# --continue-on-error : do not use this option. In testing the registry became unusable! 
-		cmd="oc-mirror --v1 --config=imageset-config-save.yaml file://\$PWD"
+		cmd="oc-mirror --v1 --config=imageset-config-save.yaml file://."
 		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 	else
-		cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://\$PWD --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+		# --since string Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored (only m2d)
+		cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01 --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 	fi
 

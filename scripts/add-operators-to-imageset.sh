@@ -40,7 +40,7 @@ add_op() {
 			cat <<-END
 			    - name: $op_name
 			      channels:
-			      - name: $op_default_channel
+			      - name: "$op_default_channel"
 			END
 		else
 			cat <<-END
