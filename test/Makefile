@@ -8,6 +8,7 @@ help: ## Help
 
 # Having to add fix for "file not found using "latest" in the URL path!
 mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball
+	echo "curl -f --retry 3 --progress-bar -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz"
 	curl -f --retry 3 --progress-bar -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
 
 # Note, don't clean up the test.log*

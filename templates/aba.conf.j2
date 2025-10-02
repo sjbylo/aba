@@ -33,7 +33,7 @@ ntp_servers={{ ntp_servers }}    # Optional: IP addresses or hostnames (comma se
 verify_conf=true		# Verify syntax of values in config files
 
 oc_mirror_version=v2		# v2 of "oc-mirror" is the default version that aba uses.  v1 can also be used but official support has already stopped.
-                                #
+                                # Note: v1 of oc-mirror is no longer supported, all related code is being/has been removed. 
                                 # IMPORTANT NOTES FOR V2 OF OC-MIRROR (3 FEB 2025):
                                 # - v2 does not handle operator dependencies the same way as v1.  You will need to add all
                                 #   operator dependencies into the image set config file yourself.
