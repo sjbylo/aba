@@ -210,7 +210,7 @@ if [ "$latest_working_dir" ]; then
 		echo "Applying signatures from: $sig_file ..."
 		oc apply -f $sig_file
 	else
-		echo_white "No Signatire files in $latest_working_dir/cluster-resources to process" >&2
+		echo_white "No Signature files found in $latest_working_dir/cluster-resources" >&2
 	fi
 else
 	# FIXME: Only show warning IF the mirror has been used for this cluster

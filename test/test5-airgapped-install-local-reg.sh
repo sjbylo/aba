@@ -98,7 +98,8 @@ ocp_version_point=$(echo $ocp_version_desired | cut -d\. -f3)
 mylog ocp_version_point is $ocp_version_point
 ## Reduce the version to create 'bundle' (below) with by about half
 #ocp_version_older=$ocp_version_major.$(expr $ocp_version_point / 2 + 1)
-ocp_version_older_point=$(expr $ocp_version_point / 2 )
+#ocp_version_older_point=$(expr $ocp_version_point / 2 )  # can have too much image data involved - out of disk space during testing
+ocp_version_older_point=$(expr $ocp_version_point - 1 )  # Change to one patch version lower
 ocp_version_older=$ocp_version_major.$ocp_version_older_point
 # Ensure the version is available!
 ###make -C cli oc-mirror
@@ -217,6 +218,14 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node cpu to 24 for
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno/iso" "aba --dir $subdir/aba sno" 
 
+test-cmd -m "Sleep 30" sleep 30
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking cluster operators" aba --dir $subdir/aba/$cluster_type cmd
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Listing VMs (should show 24G memory)" "aba --dir $subdir/aba/$cluster_type ls"
+
+
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Run day2: configure OperatorHub" "aba --dir $subdir/aba/sno day2" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests'"
@@ -272,7 +281,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file ex
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/$cluster_type day2"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/sno day2"
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
@@ -312,15 +321,13 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file ex
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading vote-app image into mirror" "aba -d $subdir/aba/mirror load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/sno day2"
+
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
 cluster_type=sno  # Choose either sno, compact or standard
 
 #### DONE ABOVE NOW !!! test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing $cluster_type cluster, ready to deploy test app" "aba --dir $subdir/aba $cluster_type"
-
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking cluster operators" aba --dir $subdir/aba/$cluster_type cmd
-
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Listing VMs (should show 24G memory)" "aba --dir $subdir/aba/$cluster_type ls"
 
 myLog "Deploying test vote-app"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
@@ -330,7 +337,21 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
 test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app --name vote-app -n demo'"
+
+mylog "Applying ImageDigestMirrorSet for quay.io/sjbylo at $TEST_USER@$int_bastion_hostname"
+# This is also needed
+cat <<END | ssh $TEST_USER@$int_bastion_hostname --dir subdir/aba/sno --cmd "'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
+kind: ImageDigestMirrorSet
+metadata:
+  name: idms-generic-0-vote-app
+spec:
+  imageDigestMirrors:
+  - mirrors:
+    - registry.example.com:8443/ocp4/openshift4/sjbylo
+    source: quay.io/sjbylo
+END
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -393,9 +414,11 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated 
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/$cluster_type day2"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/sno day2"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type --cmd 'oc get packagemanifests'"
+
+test-cmd -m "Sleep 2m" sleep 2m
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
 for op in servicemeshoperator3 #web-terminal yaks vault-secrets-operator flux
