@@ -2,7 +2,7 @@ apiVersion: operator.open-cluster-management.io/v1
 kind: MultiClusterHub
 metadata:
   annotations:
-    installer.open-cluster-management.io/mce-subscription-spec: '{"source": "redhat-operator"}'
+    installer.open-cluster-management.io/mce-subscription-spec: '{"source": "redhat-operators"}'
   name: multiclusterhub
   namespace: open-cluster-management
 spec:
