@@ -133,8 +133,8 @@ if [ -d save/ARCHIVES ]; then
 		#n2=$(echo $f|sed -E 's#^save/\(ARCHIVES.*-[0-9]+\.[0-9]+\.[0-9]+-imageset-config.yaml\)$#\1#g')
 		n2=$(echo $f|sed -E 's#^save/(ARCHIVES/.*-.*-imageset-config.yaml)$#\1#g')
 
-		echo n=$n
-		echo n2=$n2
+		[ "$ABA_DEBUG" ] && echo n=$n
+		[ "$ABA_DEBUG" ] && echo n2=$n2
 		[ ! "$n2" ] && echo Error exatrcting name && exit 9
 		[ ! "$n" ] && echo Error exatrcting name && exit 9
 
@@ -144,8 +144,8 @@ if [ -d save/ARCHIVES ]; then
                 (
 			cd save
                 	ln -sf ARCHIVES/$n-*-mirror.tar mirror_000001.tar
-                	ls -l
-                	ls -lL mirr*tar
+                	[ "$ABA_DEBUG" ] && ls -l
+                	[ "$ABA_DEBUG" ] && ls -lL mirr*tar
 		)
                 #cd ..
 
@@ -165,7 +165,7 @@ if [ -d save/ARCHIVES ]; then
 	done
 	cd ..
 else
-       	reg-load $try_tot
+       	reg-load $try_tot || exit 1
 fi
 
 
