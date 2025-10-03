@@ -341,7 +341,8 @@ test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" 
 
 mylog "Applying ImageDigestMirrorSet for quay.io/sjbylo at $TEST_USER@$int_bastion_hostname"
 # This is also needed
-cat <<END | ssh $TEST_USER@$int_bastion_hostname --dir subdir/aba/sno --cmd "'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
+cat <<END | ssh $TEST_USER@$int_bastion_hostname aba --dir subdir/aba/sno --cmd "'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
+apiVersion: config.openshift.io/v1
 kind: ImageDigestMirrorSet
 metadata:
   name: idms-generic-0-vote-app
@@ -352,7 +353,11 @@ spec:
     source: quay.io/sjbylo
 END
 
+test-cmd -m "Wait 30s for ImageDigestMirrorSet to process" sleep 30
+
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
+test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -405,10 +410,16 @@ grep -A2 -e "name: servicemeshoperator3$"  mirror/imageset-config-redhat-operato
 ########
 test-cmd -r 3 3 -m "Saving mesh operators to local disk" "aba --dir mirror save --retry"
 
-mylog Create incremental tar and ssh to internal bastion
-aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
-
+### ADDED
+test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
+test-cmd -m "Copy over image set archive file" "scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
+test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
+### ADDED
+## REMOVED #mylog Create incremental tar and ssh to internal bastion
+## REMOVED test-cmd -m "Create incremental tar and ssh to internal bastion" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -"
+## REMOVED test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
