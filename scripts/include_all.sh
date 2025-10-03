@@ -226,6 +226,7 @@ normalize-mirror-conf()
 {
 	# Normalize or sanitize the config file
 	# Ensure any ~/ is masked, e.g. \~/ ('cos ~ may need to be expanded on remote host)
+	# Ensure data_disk has ~ masked in each case of: ^data_dir=$ ^data_disk=~ ^data_disk=  
 	# Ensure reg_ssh_user has a value
 	# Ensure only one arg after 'export'   # Note that all values are now single string, e.g. single value or comma-sep list (one string)
 	# Verify oc_mirror_version exists and is somewhat correct and defaults to v1
@@ -243,8 +244,7 @@ normalize-mirror-conf()
 				-e "s/^#reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
 				-e "s/^\s*#.*//g" \
 				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-				-e 's/^data_dir=[[:space:]]/data_dir=\\~ /g' \
-				-e 's/^data_dir=~/data_dir=\\~ /g' \
+				-e 's/^(data_dir=)([[:space:]].*|#.*|~|$)/\1\\~/' \
 				-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
 				-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
 				-e 's#^reg_path=([^/ \t])#reg_path=/\1#g' \
@@ -763,12 +763,13 @@ get_ntp_servers() {
 
 trust_root_ca() {
 	if [ -s $1 ]; then
-		if diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2; then
+		#if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null; then
+		if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null; then
+			echo_white "$1 already in system trust"
+		else
 			$SUDO cp $1 /etc/pki/ca-trust/source/anchors/ 
 			$SUDO update-ca-trust extract
 			echo_white "Cert 'regcreds/rootCA.pem' updated in system trust"
-		else
-			echo_white "$1 already in system trust"
 		fi
 	else
 		echo_white "No $1 cert file found" 
