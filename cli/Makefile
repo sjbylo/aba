@@ -126,7 +126,7 @@ rhel8_oc_tar_file := openshift-client-$(os)-$(arch_short)-rhel8-$(ocp_version).t
 rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
 
 # Only download *all* the tar files to use in the disconnected env
-download: $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_$(govc_arch).tar.gz butane-binary
+download: .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_$(govc_arch).tar.gz butane-binary
 
 
 ########################################
@@ -135,7 +135,7 @@ oc: ~/bin/oc  ## Install oc into ~/bin
 ~/bin/oc: .init $(full_oc_tar_file)
 	@(file $(full_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(full_oc_tar_file) to ~/bin/oc ... && tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl) || (file $(gen_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(gen_oc_tar_file) to ~/bin/oc ... && tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl) || echo ERROR: Invalid files: $(full_oc_tar_file) or $(gen_oc_tar_file)
 
-octars: $(gen_oc_tar_file) $(rhel9_oc_tar_file)-download $(rhel8_oc_tar_file)-download
+octars: $(gen_oc_tar_file) .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download
 $(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
 	@curl -sfkLI $(gen_url) >/dev/null && echo Downloading $(gen_url) ... && curl -f $(CURL_PROGRESS) -O -L $(gen_url) || (echo $(gen_oc_tar_file) not available; > $(gen_oc_tar_file))
 
@@ -144,14 +144,14 @@ $(full_oc_tar_file):  ## Downlaod oc tarball for this hosts rhel version, otherw
 	touch $(full_oc_tar_file)
 
 # Ensure all possible tarballs are downloaded
-$(rhel9_oc_tar_file)-download:  ## Downlaod oc tarball for rhel9, if available
+.$(rhel9_oc_tar_file)-download:  ## Downlaod oc tarball for rhel9, if available
 	@curl -sfkLI $(rhel9_oc_url) >/dev/null && echo Downloading $(rhel9_oc_url) ... && curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || (echo $(rhel9_oc_tar_file) not available; > $(rhel9_oc_tar_file))
-	touch $(rhel9_oc_tar_file)-download
+	touch .$(rhel9_oc_tar_file)-download
 
 # Ensure all possible tarballs are downloaded
-$(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
+.$(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
 	@curl -sfkLI $(rhel8_oc_url) >/dev/null && echo Downloading $(rhel8_oc_url) ... && curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || (echo $(rhel8_oc_tar_file) not available; > $(rhel8_oc_tar_file))
-	touch $(rhel8_oc_tar_file)-download
+	touch .$(rhel8_oc_tar_file)-download
 
 
 ########################################
@@ -227,5 +227,5 @@ clean: ## Clean up installed binaries
 
 .PHONY: reset
 reset: clean # Clean up everything. Only use if you know what you are doing!
-	rm -f *.tar.gz .init butane-binary *-download
+	rm -f *.tar.gz .init butane-binary .*-download
 
