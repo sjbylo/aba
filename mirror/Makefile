@@ -121,6 +121,7 @@ mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry bin
 mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball
 	echo "Downloading https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz ..."
 	curl $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
+	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
 	@#$(SCRIPTS)/download-mirror-registry.sh  # FIXME: delete script
 
 # mirror.conf depends on aba.conf for the 'domain aalue
