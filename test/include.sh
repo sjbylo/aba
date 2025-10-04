@@ -30,11 +30,12 @@ umask 077
 #trap 'show_error' ERR
 
 draw-line() {
+	c=${1:-=};
 	# Get the number of columns (width of the terminal)
 	cols=$(tput cols)
 
 	# Create a line of dashes or any character you prefer
-	printf '%*s\n' "$cols" '' | tr ' ' '-'
+	printf '%*s\n' "$cols" '' | tr ' ' $c
 }
 
 # Define a cleanup function to handle Ctrl-C
@@ -64,7 +65,7 @@ test-cmd() {
 
 	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
 	local tot_cnt=3		# Try to run the command max tot_cnt times. If it fails, try one more time by def.
-	local backoff=20	# Default to wait after failed command is a few sec.
+	local backoff=10	# Default to wait after failed command is a few sec.
 	local host=localhost	# def. host to run on
 	local mark=L		# Mark in the log output, L (local) or R (remote)
 
@@ -85,7 +86,7 @@ test-cmd() {
 
 	[ "$host" != "localhost" ] && mark=R
 
-	draw-line
+	draw-line \#
 	if [ "$msg" ]; then
 		log-test -t "$mark" "$msg" "($cmd)" "[$PWD -> $host]"
 	else
@@ -114,7 +115,8 @@ test-cmd() {
 			fi
 			sub_pid=$!  # Capture the PID of the subprocess
 			psc=$(ps -p $sub_pid -o cmd=)
-			echo "> waiting for: $sub_pid '$psc'"
+			draw-line -
+			#echo "> waiting for: $sub_pid '$psc'"
 			wait "$sub_pid"
 			ret=$?
 			sub_pid=
@@ -147,7 +149,7 @@ test-cmd() {
 			#trap - SIGINT  # This will cause Ctl-C to quit everything during sleep $sleep_time
 			sleep $sleep_time
 			#trap cleanup_tests SIGINT
-			sleep_time=`expr $sleep_time + $backoff \* 8`
+			sleep_time=`expr $sleep_time + $backoff \* 5`
 
 			log-test -t "Attempting command again ($i/$tot_cnt): \"$cmd\""
 		done
@@ -205,8 +207,12 @@ log-test() {
 mylog() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
-	draw-line
-	echo "$(date "+%b %e %H:%M:%S")   $@" | tee -a test/test.log
+	draw-line \#
+	#echo "$(date "+%b %e %H:%M:%S")   $@" | tee -a test/test.log
+	(
+		echo -n "$(date '+%b %e %H:%M:%S')   "
+		echo_green "$@"
+	) | tee -a test/test.log
 
 	[ "$reset_xtrace" ] && set -x
 
@@ -233,6 +239,9 @@ init_bastion() {
 	# govc vm.clone -vm $source_bastion_vm_name -on=false "$test_vm"
 	# govc vm.network.change -vm "$test_vm" -net.adapter "vmxnet3" -net.address "00:50:56:12:99:99" ethernet-0
 	##### DO NOT DO THIS!! TOO MANY CHANGES TO RUN MULTIPLE TESTS 
+
+
+	aba --dir cli ~/bin/govc
 
 	govc vm.power -off bastion-internal-rhel8  || true
 	govc vm.power -off bastion-internal-rhel9  || true

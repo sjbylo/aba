@@ -56,8 +56,7 @@ which make || sudo dnf install make -y
 test-cmd -m "Installing aba" ./install 
 test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
 
-test-cmd -m "Cleaning up - aba reset --force" 
-aba reset -f
+test-cmd -m "Cleaning up - aba reset --force" aba reset -f
 
 ####mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
@@ -86,7 +85,7 @@ vf=~steve/.vmware.conf
 export VER_OVERRIDE=p  # Must set to p since we do upgrade test below
 [ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
 test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE
-mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
+test-cmd -m "Show ocp_version in $PWD/aba.conf" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
 # for upgrade tests - reduce the version so it can be upgraded later (see below)
 mylog Fetching ocp_version
@@ -103,28 +102,29 @@ mylog ocp_version_point is $ocp_version_point
 #ocp_version_older_point=$(expr $ocp_version_point / 2 )  # can have too much image data involved - out of disk space during testing
 ocp_version_older_point=$(expr $ocp_version_point - 1 )  # Change to one patch version lower
 ocp_version_older=$ocp_version_major.$ocp_version_older_point
-# Ensure the version is available!
+# Ensure the version is available! # No need, since we use "- 1" now
 ###make -C cli oc-mirror
-ver_list=$(~/bin/oc-mirror list releases --channel=$ocp_channel-$ocp_version_major)
-i=0
-until echo "$ver_list" | grep "^$ocp_version_older$"
-do
-	let ocp_version_older_point=$ocp_version_older_point+1
-	ocp_version_older=$ocp_version_major.$ocp_version_older_point
-	let i=$i+1
-	[ $i -gt 50 ] && echo "Can't find ocp_version_older_point to use ($ocp_version_older)!" && exit 1
-done
+#ver_list=$(~/bin/oc-mirror list releases --channel=$ocp_channel-$ocp_version_major)
+#i=0
+#until echo "$ver_list" | grep "^$ocp_version_older$"
+#do
+#	let ocp_version_older_point=$ocp_version_older_point+1
+#	ocp_version_older=$ocp_version_major.$ocp_version_older_point
+#	let i=$i+1
+#	[ $i -gt 50 ] && echo "Can't find ocp_version_older_point to use ($ocp_version_older)!" && exit 1
+#done
 mylog ocp_version_older is $ocp_version_older
 
 test-cmd -m "Setting version to install in aba.conf" aba -v $ocp_version_older
 ###sed -i "s/^ocp_version=[^ \t]*/ocp_version=$ocp_version_older /g" aba.conf  # add the older version
-mylog "ocp_version set to $(grep -o '^ocp_version=[^ ]*' aba.conf) in $PWD/aba.conf"
+test-cmd -m "Show ocp_version in $PWD/aba.conf" "grep -o '^ocp_version=[^ ]*' aba.conf"
 # for upgrade
 
-mylog "ask set to $(grep -o '^ask=[^ ]*' aba.conf) in $PWD/aba.conf"
+test-cmd "Show setting of ask in $PWD/aba.conf" "grep -o '^ask=[^ ]*' aba.conf"
 
-mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
-sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
+#mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
+#sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
+test-cmd -m "Setting oc_mirror_version=$oc_mirror_ver_override in $PWD/aba.conf" aba -v $oc_mirror_ver_override
 
 # Set up govc 
 cp $vf vmware.conf 
@@ -135,10 +135,10 @@ test-cmd -m "Setting ask=false" aba --noask
 
 #mylog "Setting ntp_servers=$ntp_ip" 
 #[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip,ntp.example.com    #\2/g" aba.conf
-test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in aba.conf" aba --ntp $ntp_ip ntp.example.com
+test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in $PWD/aba.conf" aba --ntp $ntp_ip ntp.example.com
 
-mylog "Setting op_sets=abatest in aba.conf"
-sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
+test-cmd -m "Setting op_sets=abatest in aba.conf" aba --op-sets abatest
+#sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
 echo kiali-ossm > templates/operator-set-abatest 
 # kiali is installed in later tests below
 
@@ -152,23 +152,24 @@ test-cmd -m "Init test: download mirror-registry-amd64.tar.gz" "aba --dir test m
 #################################
 # Copy and edit mirror.conf 
 
-rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
+#### NEEDED??? rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
 # Simulate creation and edit of mirror.conf file
-scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 # FIXME: Why not use 'aba mirror.conf'?
+aba -d mirror mirror.conf
+###scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Test the internal bastion ($int_bastion_hostname) as mirror"
 
-mylog "Setting reg_host=$int_bastion_hostname"
-sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
+test-cmd -m "Setting reg_host=$int_bastion_hostname" aba -d mirror -H $int_bastion_hostname
+###sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
 
-# This is also a test that overriding vakues works ok, e.g. this is an override in the mirror.connf gile, overriding from aba.conf file
+# This is also a test that overriding vakues works ok, e.g. this is an override in the mirror.connf file, overriding from aba.conf file
 test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_sets=.*/op_sets=abatest /g' ./mirror/mirror.conf"
 echo kiali-ossm > templates/operator-set-abatest 
 # kiali is installed in later tests below
 
-# This is needed for below VM reset!
-aba --dir cli ~/bin/govc
+# This is needed for below VM reset (init_bastion)!
+###aba --dir cli ~/bin/govc
 
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
@@ -183,6 +184,8 @@ reg_ssh_user=$TEST_USER
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
+### CREATE BUNDLE & COPY TO BASTION ###
+
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
 test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and extract to '$reg_ssh_user@$int_bastion_hostname:$subdir'" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks vault-secrets-operator flux --base-domain example.com --machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp $ntp_ip  ntp.example.com --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
@@ -194,6 +197,7 @@ test-cmd -m  "Verifying existance of file 'mirror/save/mirror_*.tar'" "ls -lh mi
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar' on remote host" "ls -lh $subdir/aba/mirror/save/mirror_*.tar" 
 test-cmd -m  "Delete this file that's already been copied to internal bastion: 'mirror/save/mirror_*.tar'" "rm -v mirror/save/mirror_*.tar" 
 
+# FIXME: aba should do this?
 ssh $reg_ssh_user@$int_bastion_hostname "rpm -q make || sudo yum install make -y"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 5 3 -m "Checking regcreds/ does not exist on $int_bastion_hostname" "test ! -d $subdir/aba/mirror/regcreds" 
@@ -213,7 +217,10 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Tidying up internal bastion
 
 mylog "Running 'aba sno' on internal bastion"
 
-test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/shortcuts.conf
+### INSTALL SNO ###
+
+#FIXME: eliminiate shortcuts.conf ... it was a bad idea! Use lags/options instead!
+test-cmd -m "Copy over shortcuts.conf, needed to create 'cluster.conf' file (next command)" scp .shortcuts.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/shortcuts.conf
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno/iso" "aba --dir $subdir/aba sno --step cluster.conf" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"
@@ -227,6 +234,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for al
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking cluster operators" aba --dir $subdir/aba/$cluster_type cmd
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Listing VMs (should show 24G memory)" "aba --dir $subdir/aba/$cluster_type ls"
 
+### CONFIG & CHECK OPERATORS ###
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Run day2: configure OperatorHub" "aba --dir $subdir/aba/sno day2" 
 
@@ -243,6 +251,8 @@ done
 ######################
 mylog Now adding more images to the mirror registry
 ######################
+
+### SAVE/LOAD VOTE-APP IMAGES ###
 
 mylog Runtest: vote-app
 
@@ -349,7 +359,7 @@ test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" 
 
 mylog "Applying ImageDigestMirrorSet for quay.io/sjbylo at $TEST_USER@$int_bastion_hostname"
 # This is also needed
-cat <<END | ssh $TEST_USER@$int_bastion_hostname aba --dir subdir/aba/sno --cmd "'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
+ssh $TEST_USER@$int_bastion_hostname "aba --dir subdir/aba/sno --cmd 'oc apply -f -'" <<END
 apiVersion: config.openshift.io/v1
 kind: ImageDigestMirrorSet
 metadata:
@@ -446,7 +456,8 @@ do
 done
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
-for op in web-terminal yaks vault-secrets-operator flux
+#for op in web-terminal yaks vault-secrets-operator flux
+for op in              yaks vault-secrets-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/$cluster_type --cmd 'oc get packagemanifests' | grep -i $op"
 done

@@ -708,6 +708,10 @@ get_next_hop() {
     # extract the "via" IP from the default route
     gw=$(ip route show default 2>/dev/null \
          | awk '/default/ {for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
+
+    # Double check it's an IP addr
+    echo $gw | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || gw=
+
     # fallback
     echo "${gw:-10.0.0.1}"
 }
@@ -730,6 +734,9 @@ get_machine_network() {
               | awk '/^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/ {print; exit}')
     fi
 
+    # Double check it's a CIDR
+    echo $net | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$' || net=
+
     # final fallback
     echo "${net:-10.0.0.0/20}"
 }
@@ -748,6 +755,9 @@ get_dns_servers() {
         dns=$(awk '/^nameserver/ {print $2}' /etc/resolv.conf | paste -sd,)
     fi
 
+    # Double check it's a list of IP addr
+    echo $dns | grep -q -E '^([0-9]{1,3}(\.[0-9]{1,3}){3})(,([0-9]{1,3}(\.[0-9]{1,3}){3}))*$' || dns=
+
     # Final fallback
     echo "${dns:-8.8.8.8,1.1.1.1}"
 }
@@ -757,13 +767,16 @@ get_ntp_servers() {
     local ntp
     # Read server lines from chrony.conf, join with commas
     ntp=$(awk '/^server / {print $2}' /etc/chrony.conf 2>/dev/null | paste -sd,)
+
+    # Double check it's a list of IP and/or domain names
+    echo $ntp | grep -q -E '^(([0-9]{1,3}(\.[0-9]{1,3}){3})|([A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*))(,(([0-9]{1,3}(\.[0-9]{1,3}){3})|([A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)))*$' || ntp=
+
     # fallback
     echo "${ntp:-pool.ntp.org}"
 }
 
 trust_root_ca() {
 	if [ -s $1 ]; then
-		#if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null; then
 		if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null; then
 			echo_white "$1 already in system trust"
 		else
