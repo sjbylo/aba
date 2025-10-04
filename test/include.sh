@@ -86,7 +86,7 @@ test-cmd() {
 
 	[ "$host" != "localhost" ] && mark=R
 
-	draw-line \#
+	draw-line -
 	if [ "$msg" ]; then
 		log-test -t "$mark" "$msg" "($cmd)" "[$PWD -> $host]"
 	else
@@ -115,7 +115,8 @@ test-cmd() {
 			fi
 			sub_pid=$!  # Capture the PID of the subprocess
 			psc=$(ps -p $sub_pid -o cmd=)
-			draw-line -
+			#draw-line .
+			echo
 			#echo "> waiting for: $sub_pid '$psc'"
 			wait "$sub_pid"
 			ret=$?
@@ -207,7 +208,7 @@ log-test() {
 mylog() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
-	draw-line \#
+	draw-line -
 	#echo "$(date "+%b %e %H:%M:%S")   $@" | tee -a test/test.log
 	(
 		echo -n "$(date '+%b %e %H:%M:%S')   "

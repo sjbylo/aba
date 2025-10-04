@@ -122,9 +122,8 @@ test-cmd -m "Show ocp_version in $PWD/aba.conf" "grep -o '^ocp_version=[^ ]*' ab
 
 test-cmd -m "Show setting of ask in $PWD/aba.conf" "grep -o '^ask=[^ ]*' aba.conf"
 
-#mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
-#sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
-test-cmd -m "Setting oc_mirror_version=$oc_mirror_ver_override in $PWD/aba.conf" aba -v $oc_mirror_ver_override
+mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
+sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
 
 # Set up govc 
 cp $vf vmware.conf 
