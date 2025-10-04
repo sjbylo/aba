@@ -57,15 +57,15 @@ if [ ! "$op_sets" ]; then
 fi
 
 if [ "$ops" -o "$op_sets" ]; then
-    cat_file_error=
-    for catalog in redhat-operator certified-operator redhat-marketplace community-operator
-    do
-	# Check for the index file
-	if [ ! -s .index/$catalog-index-v$ocp_ver_major ]; then
-		cat_file_error=1
-		echo_red "Error: Missing operator catalog file: $PWD/.index/$catalog-index-v$ocp_ver_major" >&2
-	fi
-    done
+	cat_file_error=
+	for catalog in redhat-operator certified-operator redhat-marketplace community-operator
+	do
+		# Check for the index file
+		if [ ! -s .index/$catalog-index-v$ocp_ver_major ]; then
+			cat_file_error=1
+			echo_red "Error: Missing operator catalog file: $PWD/.index/$catalog-index-v$ocp_ver_major" >&2
+		fi
+	done
 
     	if [ "$cat_file_error" ]; then
 		echo_red "       Cannot add required operators to the image set config file!" >&2
@@ -88,13 +88,13 @@ fi
 [ "$INFO_ABA" ] && echo_cyan "Adding operators to the image set config file ..." >&2
 
 
-# FIXME: WHat about the other catalogs? certified, marketplace and community?
-# 'all' is a special operator set which allows all operators to be downloaded!  The above "operators->catalog" entry will enable all op.
+# FIXME: What about the other catalogs? certified, marketplace and community?
+# 'all' is a special operator set which allows all operators to be downloaded!  The below "operators->catalog" entry will enable all op.
 if echo $op_sets | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
 	echo_yellow "Adding all redhat-operator operators to your image set config file!" >&2
 	cat <<-END
 	  operators:
-	  - catalog: registry.redhat.io/redhat/$c_name-index:v$ocp_ver_major
+	  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
 	    packages:
 	END
 
@@ -108,6 +108,7 @@ community_operator=()
 
 # Step though all the operator sets and determine which catalog they exist in,
 # with priority order: redhat-operator, certified-operator, redhat-marketplace, community-operator
+# Operator names are selected from the catalogs in the above catalog order.
 for set in $(echo $op_sets | tr "," " ")
 do
 	declare -A op_set
@@ -138,12 +139,13 @@ do
 			fi
 		done
 	else
-		echo_red "Warning: Missing operator set file: 'templates/operator-set-$set'.  Please adjust your operator settings in aba.conf or create the missing file." >&2
+		echo_red "Warning: Missing operator set file: 'templates/operator-set-$set'.  Please adjust your operator settings (in aba.conf) or create the missing file." >&2
 	fi
 done
 
 # Step though all the operators and determine which catalog they exist in,
 # with priority order: redhat-operator, certified-operator, redhat-marketplace, community-operator
+# Operator names are selected from the catalogs in the above catalog order.
 if [ "$ops" ]; then
 	declare -A op_set
 	set=misc
@@ -196,5 +198,6 @@ do
 done
 
 echo_cyan "Number of operators added: ${#added_operators[@]}" >&2
+echo_cyan "Operators added: ${added_operators[@]:0:12} ..." >&2
 
 exit 0

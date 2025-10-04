@@ -93,8 +93,8 @@ file_list=$(find		\
 # See the "tar cf" command below and consider....
 # Note, don't copy over any of the ".init", ".installed", ".rpms" flag files etc, since these components are needed on the internal/private bastion
 # Don't include/compress the 'image set' tar files since they are compressed already!
-# Don't need to copy over the oc-mirror-workspace (or working-dir 'v2') dirs.  The needed yaml files for 'aba day2' are created at 'aba load'.
-# Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop since it's actively written to. 
+# Don't need to copy over the oc-mirror-workspace (or working-dir 'v2') dirs.  The needed yaml files for 'aba day2' are created at 'aba load' (???).
+# Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop since output.log is actively written to. 
 # Added [! -path "aba/mirror/reg-uninstall.sh"] to be sure no old scripts are added. Intent is to install the registry *from* internal bastion/net.
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
