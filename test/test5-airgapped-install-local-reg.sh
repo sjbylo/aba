@@ -136,6 +136,7 @@ test-cmd -m "Setting ask=false" aba --noask
 #[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip,ntp.example.com    #\2/g" aba.conf
 test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in $PWD/aba.conf" aba --ntp $ntp_ip ntp.example.com
 
+echo kiali-ossm > templates/operator-set-abatest 
 test-cmd -m "Setting op_sets=abatest in aba.conf" aba --op-sets abatest
 #sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
 echo kiali-ossm > templates/operator-set-abatest 
@@ -164,7 +165,6 @@ test-cmd -m "Setting reg_host=$int_bastion_hostname" aba -d mirror -H $int_basti
 
 # This is also a test that overriding vakues works ok, e.g. this is an override in the mirror.connf file, overriding from aba.conf file
 test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_sets=.*/op_sets=abatest /g' ./mirror/mirror.conf"
-echo kiali-ossm > templates/operator-set-abatest 
 # kiali is installed in later tests below
 
 # This is needed for below VM reset (init_bastion)!
