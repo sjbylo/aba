@@ -120,7 +120,7 @@ test-cmd -m "Setting version to install in aba.conf" aba -v $ocp_version_older
 test-cmd -m "Show ocp_version in $PWD/aba.conf" "grep -o '^ocp_version=[^ ]*' aba.conf"
 # for upgrade
 
-test-cmd "Show setting of ask in $PWD/aba.conf" "grep -o '^ask=[^ ]*' aba.conf"
+test-cmd -m "Show setting of ask in $PWD/aba.conf" "grep -o '^ask=[^ ]*' aba.conf"
 
 #mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
 #sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
@@ -798,7 +798,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "If cluster up, shutting clus
 
 # keep it # test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Running 'aba clean' in $subdir/aba/stanadard" "aba --dir $subdir/aba/$cluster_name clean" 
 
-#test-cmd "aba reset --force"
+#test-cmd -m "aba reset --force"
 # keep it # aba --dir ~/aba reset --force
 # keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 
