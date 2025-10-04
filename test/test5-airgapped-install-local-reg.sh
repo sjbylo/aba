@@ -168,7 +168,8 @@ test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_s
 # kiali is installed in later tests below
 
 # This is needed for below VM reset (init_bastion)!
-###aba --dir cli ~/bin/govc
+mylog "Fetching govc"
+aba --dir cli ~/bin/govc
 
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
