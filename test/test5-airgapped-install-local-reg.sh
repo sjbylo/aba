@@ -159,9 +159,8 @@ aba -d mirror mirror.conf
 ###scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Test the internal bastion ($int_bastion_hostname) as mirror"
-
-test-cmd -m "Setting reg_host=$int_bastion_hostname" aba -d mirror -H $int_bastion_hostname
-###sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
+#test-cmd -m "Setting reg_host=$int_bastion_hostname" aba -d mirror -H $int_bastion_hostname # THis will INSTALL mirror!
+sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
 
 # This is also a test that overriding vakues works ok, e.g. this is an override in the mirror.connf file, overriding from aba.conf file
 test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_sets=.*/op_sets=abatest /g' ./mirror/mirror.conf"
