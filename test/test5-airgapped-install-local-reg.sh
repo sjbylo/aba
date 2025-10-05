@@ -167,8 +167,8 @@ test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_s
 # kiali is installed in later tests below
 
 # This is needed for below VM reset (init_bastion)!
-mylog "Fetching govc"
-aba --dir cli ~/bin/govc
+#mylog "Fetching govc"
+#aba --dir cli ~/bin/govc
 
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
@@ -374,7 +374,7 @@ test-cmd -m "Wait 30s for ImageDigestMirrorSet to process" sleep 30
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
-test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
+test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name --cmd 'oc delete project demo'" 
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -615,7 +615,12 @@ rm -rf test/mesh
 ###
 build_and_test_cluster() {
 	cluster_name=$1
-	cnt=$2  # Number of nodes to check/validate in the cluster
+
+	cnt=1
+	[ "$cluster_name" = "sno" ] && cnt=1
+	[ "$cluster_name" = "compact" ] && cnt=3
+	[ "$cluster_name" = "standard" ] && cnt=6
+	#cnt=$2  # Number of nodes to check/validate in the cluster
 
 	# Create cluster.conf
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating '$cluster_name' cluster.conf" "cd $subdir/aba; aba cluster --name $cluster_name --type $cluster_name --step cluster.conf || true" # || true
@@ -715,11 +720,8 @@ build_and_test_cluster() {
 #for c in sno compact standard
 for c in standard
 do
-	mylog "Building cluster $c"
-	[ "$c" = "sno" ] && cnt=1
-	[ "$c" = "compact" ] && cnt=3
-	[ "$c" = "standard" ] && cnt=6
-	build_and_test_cluster $c $cnt
+	mylog "Running: build_and_test_cluster $c $cnt"
+	build_and_test_cluster $c ## $cnt
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Deleting '$c' cluster" "aba --dir $subdir/aba/$c delete" 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Running 'aba clean' in $subdir/aba/$c" "aba --dir $subdir/aba/$c clean" 
@@ -729,15 +731,15 @@ cluster_name=standard
 
 # Test bare-metal with BYO macs
 ##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster dir" "cd $subdir/aba; rm -rf $cluster_name; mkdir -p $cluster_name; ln -s ../templates/Makefile $cluster_name; aba --dir $cluster_name init" 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating cluster.conf" "aba -d $subdir/aba cluster --name $cluster_name --type $cluster_name --step cluster.conf"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating cluster.conf for 'macs.conf' test" "aba -d $subdir/aba cluster --name $cluster_name --type $cluster_name --step cluster.conf"
 mylog "Generating macs.conf file at $reg_ssh_user@$int_bastion_hostname:$subdir/aba/$cluster_name/macs.conf"
 echo -n "\
-00:50:56:20:xx:01
-00:50:56:20:xx:02
+00:50:56:20:xx:01  blah
+blah 00:50:56:20:xx:02
 00:50:56:20:xx:03
-00:50:56:20:xx:04
+blah 00:50:56:20:xx:04
 00:50:56:20:xx:05
-00:50:56:20:xx:06
+00:50:56:20:xx:06 blah
 " | sed -E "s/xx/$(printf '%02x' $((RANDOM%256)))/" | ssh $reg_ssh_user@$int_bastion_hostname -- "cat > $subdir/aba/$cluster_name/macs.conf"
 ##scp macs.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/$cluster_name
 
