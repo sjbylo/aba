@@ -30,12 +30,12 @@ umask 077
 #trap 'show_error' ERR
 
 draw-line() {
-	c=${1:-=};
+	local char=${1:-=};
 	# Get the number of columns (width of the terminal)
-	cols=$(tput cols)
+	local cols=$(tput cols)
 
 	# Create a line of dashes or any character you prefer
-	printf '%*s\n' "$cols" '' | tr ' ' $c
+	printf '%*s\n' "$cols" '' | tr ' ' $char
 }
 
 # Define a cleanup function to handle Ctrl-C
