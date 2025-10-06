@@ -720,7 +720,7 @@ build_and_test_cluster() {
 #for c in sno compact standard
 for c in standard
 do
-	mylog "Running: build_and_test_cluster $c $cnt"
+	mylog "Running: build_and_test_cluster $c"
 	build_and_test_cluster $c ## $cnt
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Deleting '$c' cluster" "aba --dir $subdir/aba/$c delete" 
