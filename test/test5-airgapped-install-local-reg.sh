@@ -40,7 +40,7 @@ source test/include.sh
 trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 
 [ ! "$target_full" ] && default_target="--step iso"   # Default is to generate 'iso' only   # Default is to only create iso
-mylog default_target=$default_target
+#mylog default_target=$default_target
 
 ntp_ip=10.0.1.8 # If available
 
@@ -374,7 +374,7 @@ test-cmd -m "Wait 30s for ImageDigestMirrorSet to process" sleep 30
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
-test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name --cmd 'oc delete project demo'" 
+test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo'" 
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
