@@ -64,7 +64,7 @@ test-cmd() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
 	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
-	local tot_cnt=3		# Try to run the command max tot_cnt times. If it fails, try one more time by def.
+	local tot_cnt=5		# Try to run the command max tot_cnt times. If it fails, try one more time by def.
 	local backoff=10	# Default to wait after failed command is a few sec.
 	local host=localhost	# def. host to run on
 	local mark=L		# Mark in the log output, L (local) or R (remote)
@@ -150,7 +150,8 @@ test-cmd() {
 			#trap - SIGINT  # This will cause Ctl-C to quit everything during sleep $sleep_time
 			sleep $sleep_time
 			#trap cleanup_tests SIGINT
-			sleep_time=`expr $sleep_time + $backoff \* 5`
+			#sleep_time=`expr $sleep_time + $backoff \* 5`
+			sleep_time=`expr $sleep_time + $backoff`
 
 			log-test -t "Attempting command again ($i/$tot_cnt): \"$cmd\""
 		done
