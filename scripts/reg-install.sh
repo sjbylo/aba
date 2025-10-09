@@ -345,9 +345,10 @@ ask "Install Quay mirror registry appliance to '$(hostname)' (localhost), access
 	## export reg_url=https://$reg_hostport
 
 	# Check if the cert needs to be updated
-	$SUDO diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-		$SUDO cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
-			$SUDO update-ca-trust extract
+	trust_root_ca regcreds/rootCA.pem
+	#$SUDO diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+		#$SUDO cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+			#$SUDO update-ca-trust extract
 
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
