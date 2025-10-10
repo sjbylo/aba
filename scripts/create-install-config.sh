@@ -19,6 +19,7 @@ verify-mirror-conf || exit 1
 to_output=$(normalize-cluster-conf | sed -e "s/^export //g")
 echo_white "Current values in cluster.conf:"
 output_table 3 "$to_output"
+echo_white "*Note that values mac_prefix, master/worker cpu/mem counts & data_disk are only requred for platform=vmw"
 echo
 
 # Set the rendezvous_ip to the the first master's ip

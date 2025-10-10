@@ -133,11 +133,11 @@ echo_green -n "Images loaded successfully!"
 [ $try_tot -gt 1 -a $try -gt 1 ] && echo_white " (after $try attempts!)" || echo   # Show if more than 1 attempt
 
 echo 
-echo "OpenShift can now be installed. cd to aba's top-level directory and use the command:"
-echo "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
-echo "Use 'aba cluster --help' for more information about installing clusters"
+echo_green "OpenShift can now be installed. cd to aba's top-level directory and use the command:"
+echo_green "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
+echo_green "Use 'aba cluster --help' for more information about installing clusters"
 
 echo
-echo_green "If you have already installed a cluster, consider (re-)running the command 'aba day2' to configure or refresh OperatorHub."
+echo_green "If you have already installed a cluster, (re-)run the command 'aba -d clustername day2' to configure/refresh OperatorHub/Catalogs, Signatures etc."
 
 exit 0
