@@ -15,6 +15,7 @@ export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 declare -A added_operators  # Associative array to track added operators
+op_names_arr=()  # Array to output op. list 
 
 add_op() {
 	local op=$1
@@ -34,6 +35,7 @@ add_op() {
 
 		# Mark the operator as added
 		added_operators["$op_name"]=1
+		op_names_arr+=("$op_name")
 
 		# Output the operator information
 		if [ "$op_default_channel" ]; then
@@ -197,7 +199,7 @@ do
 	fi
 done
 
-echo_cyan "Number of operators added: ${#added_operators[@]}" >&2
-echo_cyan "Operators added: ${added_operators[@]:0:12} ..." >&2
+echo_cyan "Number of operators added: ${#op_names_arr[@]}" >&2
+echo_cyan "Operators added: ${op_names_arr[@]} ..." >&2
 
 exit 0
