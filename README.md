@@ -568,7 +568,7 @@ This chart explains the flow of Aba and how Aba works, showing the main choices:
 
 ## How to customize the Agent-based config files
 
-Once a cluster configuration directory (e.g. `mycluster`) has been created and the Agent-based configuration initialized, you can modify the configuration files — `install-config.yaml` and `agent-config.yaml` — if needed.  You can then rerun `aba` to generate the ISO (and VMs, if required).  Aba automatically detects and preserves these configuration file changes for future runs.  Common updates such as changing IP or MAC addresses, updating default routes, or adding disk hints are work fine.
+Once a cluster configuration directory (e.g. `mycluster`) has been created and the Agent-based configuration initialized, you can modify the configuration files — `install-config.yaml` and `agent-config.yaml` — if needed.  You can then rerun `aba` to generate the ISO (and VMs, if required).  Aba automatically detects and preserves these configuration file changes for future runs.  Common updates such as changing IP or MAC addresses, updating default routes, or adding disk hints all work fine.
 
 <!--
 Once a cluster config directory has been created (e.g. `mycluster`) and Agent-based configuration has been created, changes can be made to the Agent-based configuration: `install-config.yaml` and `agent-config.yaml` files if needed. `aba` can be run again to re-create the ISO and the VMs etc (if required).  Aba should detect the changes and preserve them for future use.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.
@@ -586,7 +586,7 @@ Now manually edit the generated `install-config.yaml` and `agent-config.yaml` fi
 aba
 ```
 
-As an example, edit agent-config.yaml to include the following to direct agent-based installer to install RHCOS onto the 2nd disk, e.g. /dev/sdb:
+As an example, you could edit agent-config.yaml to include the following to direct agent-based installer to install RHCOS onto the 2nd disk, e.g. /dev/sdb:
 
 ```
     rootDeviceHints:
@@ -715,7 +715,7 @@ Alternatively, you can try
 
 ```
 oc whoami
-watch -n 5 oc get co
+oc get co
 ```
 
 
@@ -780,7 +780,7 @@ export OC_MIRROR_CACHE=/path/to/big-drive
 
 - You can list the dependent images of operators using this script, for example: `scripts/listopdeps.sh 4.18 odf-operator`
 
-- If you are using `platform=vmw` and want to configure nodes with different CPU or memory sizes — for example, to run Operators such as Ceph, ODF, or ACM on infrastructure nodes — you can adjust the VM resources after OpenShift is installed.  After making the changes, restart the cluster using `aba shutdown` followed by `aba startup` to apply the updated VM configurations.
+- If you are using `platform=vmw` and want to configure nodes with different CPU or memory sizes — for example, to run Operators such as Ceph, ODF, or ACM on infrastructure nodes — you can adjust the VM resources after OpenShift is installed.  After making the changes, restart the cluster using `aba shutdown --wait` followed by `aba startup` to apply the updated VM configurations.
 
 - Govc is used to create and manage VMs on ESXi or vSphere.
   - https://github.com/vmware/govmomi/tree/main/govc
@@ -800,7 +800,7 @@ execution of diverse tasks through predefined rules!
 Run on the disconnected bastion:
 ```
 cd aba
-aba uninstall    # uninstall the registry (if needed)
+aba-d mirror uninstall    # uninstall the registry (if needed)
 cd ..
 rm -rf aba
 sudo rm $(which aba)
@@ -822,7 +822,7 @@ aba
 
 ## Advanced Use
 
-- **Aba can run in a containerized environment (partial support):**
+- **Aba can run in a container (partial support):**
   - Tested on Mac M1 (`arm64`) with successful results.
   - You can run Aba in a container, for example:
     ```
