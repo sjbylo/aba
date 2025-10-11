@@ -7,7 +7,7 @@ Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/bl
 
 ## Who should use Aba?
 
-Use Aba to quickly set up OpenShift in an disconnected environment while letting it handle the heavy lifting for you.
+Use Aba to quickly set up OpenShift in a disconnected environment while letting it handle the heavy lifting for you.
 
 1. [Aba Overview](#aba-overview)
 1. [About installing OpenShift in a Disconnected Environment](#about-installing-openshift-in-a-disconnected-environment)
@@ -20,7 +20,7 @@ Use Aba to quickly set up OpenShift in an disconnected environment while letting
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
 1. [Creating a custom install bundle](#Creating-a-custom-install-bundle)
-1. [Aba Flow Chart](#aba-flow-chart)
+1. [Aba OpenShift Installation Workflow](#aba-openshift-installation-workflow)
 1. [About configuration files](#configuration-files)
 1. [How to customize the Agent-based config files](#how-to-customize-the-agent-based-config-files)
 1. [Day 2 Operations](#day-2-operations)
@@ -57,7 +57,7 @@ Aba helps you with the following and more:
 1. Enables graceful cluster shutdown and startup.
 1. Allows for the modification of generated configuration files (image set & agent based), if more control is required. 
 
-All commands and actions in Aba are *idempotent*.  If you hit a problem, fixing it and trying again should always be the right way forward!
+All Aba commands and actions are idempotent. If something goes wrong, fix it and run the command again — Aba will always try to do the right thing.
 
 
 ## About installing OpenShift in a Disconnected Environment
@@ -136,11 +136,11 @@ In a partially disconnected environment, the internal bastion has limited (or pr
    - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
 
 - **Registry**
-   - If using an existing registry, add its credentials (pull secret and root CA) in the `mirror/regcreds` directory:
-      - `mirror/regcreds/pull-secret-mirror.json`
-      - `mirror/regcreds/rootCA.pem`
+   - If you're using an existing registry, place its credentials (pull secret and root CA) in the `aba/mirror/regcreds` directory:
+      - `aba/mirror/regcreds/pull-secret-mirror.json`
+      - `aba/mirror/regcreds/rootCA.pem`
 
-After configuring these prerequisites, run `aba` to start the OpenShift installation process.
+After configuring these prerequisites, run `aba` to start the OpenShift installation workflow.
 
 Note: that Aba also works in connected environments without a mirror registry, e.g. by accessing public container registries via a proxy or directly.  To do this, configure the `int_connection` value in `cluster.conf` after creating the `cluster directory` (see section [Installing OpenShift](https://github.com/sjbylo/aba/tree/dev?tab=readme-ov-file#installing-openshift) for more).
 
@@ -150,7 +150,7 @@ Note: that Aba also works in connected environments without a mirror registry, e
 
 ## Install Aba
 
-### Method 1: Install Aba in one command
+### Method 1: Download and install Aba in one command (preferred) 
 
 ```
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
@@ -158,7 +158,7 @@ bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubuser
 
 ```
 cd aba
-aba          # Let Aba guide you through the installation process
+aba          # Let Aba guide you through the OpenShift installation workflow
 ```
 
 ### Method 2: Install Aba using 'git clone'
@@ -167,7 +167,7 @@ aba          # Let Aba guide you through the installation process
 git clone https://github.com/sjbylo/aba.git
 cd aba
 ./install
-aba          # Let Aba guide you through the installation process
+aba          # Let Aba guide you through the OpenShift installation workflow
 ```
 - clones the repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
 - If needed, add any required operators to the `aba.conf` file by setting 'op_sets' and/or 'ops' values.
@@ -231,8 +231,8 @@ aba sync
 ```
 This command:
   - triggers `aba mirror` (to configure the mirror registry), if needed.
-    - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `mirror/regcreds/` first! See above for more).
-    - or, installs _Mirror Registry for Red Hat OpenShift_ (Quay) on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `mirror/regcreds` directory for later use.
+    - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `aba/mirror/regcreds/` first! See above for more).
+    - or, installs _Mirror Registry for Red Hat OpenShift_ (Quay) on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `aba/mirror/regcreds` directory for later use.
   - pulls images from the Internet and store them in the registry.
 
 ```
@@ -345,7 +345,7 @@ aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--st
 - Note: that the most useful args for _--steps_ are 'agentconf', 'iso' and 'mon'.
 - Take a look into the `cluster.conf` file to see what can be configured, e.g. cluster topology, port names, bonding, vlan, int_connection (e.g for _connected_ mode) etc
 
-Aba will guide you through the installation process, first generating the agent-based configuration files, then the ISO file and finally monitoring the installation:
+Aba will guide you through the installation workflow, first generating the agent-based configuration files, then the ISO file and finally monitoring the installation:
 
 Once the nodes have booted from the iso the following command should be run to monitor the progress of the installation. For example:
 
@@ -546,7 +546,7 @@ aba cluster --name mycluster --type compact [--starting-ip <ip>] [--api-vip <ip>
 
 [Back to top](#who-should-use-aba)
 
-## Aba Flow Chart
+## Aba OpenShift Installation Workflow 
 
 This chart explains the flow of Aba and how Aba works, showing the main choices: fully disconnected (air-gapped), partially disconnected, connected and installation on VMW or bare-metal. 
 
@@ -836,7 +836,7 @@ aba
     aba
     ```
   - In the arm64 container, Aba can:
-    - Connect to an existing remote registry (installation of a new registry from inside the container is not yet working since the Quay `mirror-registry` installer only seems to run on x86).
+    - Connect to an existing remote registry (installation of a new registry from inside the container is not yet working since the Quay `aba/mirror-registry` installer only seems to run on x86).
     - Access public registries over the Internet (directly or through a proxy).
     - Generate an `arm64` ISO image suitable for OpenShift installation on `arm64` systems.
 
@@ -856,7 +856,7 @@ aba sno
 - This will create a directory `sno` and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `shortcut.conf` must be completed for this to work).  If you are using VMware the VMs will be created for you.
 - Be sure to go through *all* the values in `aba/vmware.conf` and `sno/cluster.conf`.
 - Be sure your DNS entries have been set up in advance. See above on Prerequisites.
-- Aba will show you the installation progress.  To troubleshoot cluster installation, run `aba ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands and actions in Aba are idempotent.  If you hit a problem, fixing it and trying again should always be the right way forward!
+- Aba will show you the installation progress.  To troubleshoot cluster installation, run `aba ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All Aba commands and actions are idempotent. If something goes wrong, fix it and run the command again — Aba will always try to do the right thing.
 
 ```
 aba compact    # for a 3 node cluster topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
@@ -894,7 +894,7 @@ You can let Aba install them automatically (if `dnf` is configured) or install t
 
 **Q: Does Aba support ARM?**
 
-**Yes.** Aba is developed and validated for x86_64 architecture, but running on ARM is also supported. You can have a RHEL ARM or CentOs Stream Instance as the bastion.  See the `Advanced` section.
+**Yes.** Aba is developed and validated for x86_64 architecture, but running on ARM is also supported. You can have a RHEL ARM or Centos Stream Instance as the bastion.  See the `Advanced` section.
 
 ---
 
