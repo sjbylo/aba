@@ -3,7 +3,7 @@
 Easily install an OpenShift cluster - "Cluster Zero" - into a fully or partially disconnected environment, either onto bare-metal or VMware (vSphere/ESXi).
 Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP.
 
->> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://red.ht/disco-easy**
+>> **For Red Hatters:  download curated, ready-made, up-to-date, and tested Aba install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy**
 
 ## Who should use Aba?
 
@@ -58,23 +58,6 @@ Aba helps you with the following and more:
 1. Allows for the modification of generated configuration files (image set & agent based), if more control is required. 
 
 All commands and actions in Aba are *idempotent*.  If you hit a problem, fix it and try again should always be the right way forward!
-
-<!--
-## Quick Start Guide for the Impatient:
-
-Run the following command to clone the Aba repository (https://github.com/sjbylo/aba.git) and install the aba command:
-
-```
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-```
-
-Run Aba:
-
-```
-cd aba         # Change into Aba's top-level directory to run all commands
-aba            # Let Aba guide you through the installation process
-```
--->
 
 
 ## About installing OpenShift in a Disconnected Network
@@ -164,9 +147,9 @@ Note: that Aba also works in connected environments without a mirror registry, e
 [Back to top](#who-should-use-aba)
 
 
-## Install Aba
+## [Install Aba](#install-aba)
 
-### Method 1: Install Aba in one command
+### Method 1: [Install Aba](#install-aba) in one command
 
 ```
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
@@ -177,7 +160,7 @@ cd aba
 aba          # Let Aba guide you through the installation process
 ```
 
-### Method 2: Install Aba using 'git clone'
+### Method 2: [Install Aba](#install-aba) using 'git clone'
 
 ```
 git clone https://github.com/sjbylo/aba.git
@@ -267,7 +250,7 @@ Note that the above 'disconnected scenario' can be repeated, for example to down
 
 **Please note that it is now recommended to use the above `aba bundle` command to initiate a fully air-gapped installation which will complete the below for you.**
 
->> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://red.ht/disco-easy**
+>> **For Red Hatters:  download curated, ready-made, up-to-date, and tested Aba install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy**
 
 In this scenario, your connected workstation has access to the Internet but no access to the disconnected environment.
 You also require a bastion in a disconnected environment.
@@ -470,9 +453,9 @@ Commands for VMs (vCenter or ESXi)
 
 You can create an install bundle with everything you need to install OpenShift in a fully disconnected (air-gapped) environment
 
->> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://red.ht/disco-easy**
+>> **For Red Hatters:  download curated, ready-made, up-to-date, and tested Aba install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy**
 
-Do you need to download a set of images and CLI tools to install OpenShift into a fully disconnected (air-gapped) environment?
+Do you need to download the necessary images and CLI tools to install OpenShift in a fully disconnected environment for a particular use-case?
 
 To do that, here is how you can use Aba to create an `install bundle` containing just the files and images you require for your use-case!
 
@@ -482,7 +465,7 @@ Store your pull secret in this file:
 ~/.pull-secret.json
 ```
 
-Install Aba. Run these commands on a RHEL 8 or 9 or Fedora VM:
+[Install Aba](#install-aba). Run these commands on a RHEL 8 or 9 or Fedora VM:
 
 ```
 git clone https://github.com/sjbylo/aba.git
