@@ -19,7 +19,7 @@ Use Aba to quickly set up OpenShift in an disconnected environment while letting
    1. [Partially disconnected scenario](#partially-disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
-1. [Creating an install bundle with everything you need to install OpenShift in an fully disconnected (air-gapped) environment](#Creating-an-install-bundle-with-everything-you-need-to-install-OpenShift-in-a-fully-disconnected-air-gapped-environment)
+1. [Creating a custom install bundle](#Creating-a-custom-install-bundle)
 1. [Aba Flow Chart](#aba-flow-chart)
 1. [About configuration files](#configuration-files)
 1. [How to customize the Agent-based config files](#how-to-customize-the-agent-based-config-files)
@@ -356,7 +356,7 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 cd aba
 aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]
 ```
-- creates and initializes a directory `mycluster` (the same name as your cluster),
+- the above, creates and initializes a directory `mycluster` (the same name as your cluster),
 - prompts you to run `aba` inside the directory. 
 - Note: that the most useful args for _--steps_ are 'agentconf', 'iso' and 'mon'.
 - Take a look into the `cluster.conf` file to see what can be configured, e.g. cluster topology, port names, bonding, vlan, int_connection (e.g for _connected_ mode) etc
@@ -384,12 +384,13 @@ INFO To access the cluster as the system:admin user when using 'oc', run
 INFO     export KUBECONFIG=/home/steve/aba/compact/iso-agent-based/auth/kubeconfig
 INFO Access the OpenShift web-console here: https://console-openshift-console.apps.compact.example.com
 INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ"
-
-The cluster has been successfully installed.
-Run '. <(aba shell)' to access the cluster using the kubeconfig file (x509 cert), or
-Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.
-Run 'aba help' for more options.
-
+Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or
+Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.                                                                                                                
+Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror).
+Run 'aba day2-osus' to configure the OpenShift Update Service.
+Run 'aba day2-ntp' to configure NTP on this cluster.
+Run 'aba info' to see this information again.
+Run 'aba -h' or 'aba help' for more.                                                                                                                                                        
 ```
 You can get access to the cluster using one of the commands:
 
@@ -465,7 +466,9 @@ Commands for VMs (vCenter or ESXi)
 
 [Back to top](#who-should-use-aba)
 
-## Creating an install bundle with everything you need to install OpenShift in a fully disconnected (air-gapped) environment
+## Creating a custom install bundle
+
+You can create an install bundle with everything you need to install OpenShift in a fully disconnected (air-gapped) environment
 
 >> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://red.ht/disco-easy**
 
@@ -648,11 +651,13 @@ INFO To access the cluster as the system:admin user when using 'oc', run
 INFO     export KUBECONFIG=/home/steve/aba/compact/iso-agent-based/auth/kubeconfig 
 INFO Access the OpenShift web-console here: https://console-openshift-console.apps.compact.example.com
 INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ"
-
-The cluster has been successfully installed.
-Run '. <(aba shell)' to access the cluster using the kubeconfig file (x509 cert), or
-Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.
-Run 'aba help' for more options.
+Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or
+Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.                                                                                                                
+Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror).
+Run 'aba day2-osus' to configure the OpenShift Update Service.
+Run 'aba day2-ntp' to configure NTP on this cluster.
+Run 'aba info' to see this information again.
+Run 'aba -h' or 'aba help' for more.                                                                                                                                                        
 ```
 
 [Back to top](#who-should-use-aba)
