@@ -199,7 +199,8 @@ do
 	fi
 done
 
+echo
 echo_cyan "Number of operators added: ${#op_names_arr[@]}" >&2
-echo_cyan "Operators added: ${op_names_arr[@]} ..." >&2
+echo_cyan "Operators added: ${op_names_arr[@]}" >&2
 
 exit 0

@@ -229,7 +229,7 @@ init_bastion() {
 
 	local def_user=steve  # This is the intial, pre-configured user to use
 
-	mylog Revert internal bastion vm to snapshot and powering on ...
+	mylog "Revert internal bastion vm ($int_bastion_vm_name) to snapshot and powering on ..."
 
 	##### DO NOT DO THIS!! TOO MANY CHANGES TO RUN MULTIPLE TESTS 
 	#test_vm=bastion-aba-$(hostname)
@@ -248,7 +248,7 @@ init_bastion() {
 	govc vm.power -off bastion-internal-rhel8  || true
 	govc vm.power -off bastion-internal-rhel9  || true
 	govc vm.power -off bastion-internal-rhel10 || true
-	echo "Reverting the required VM to snapshot aba-test ..."   # Do we need to revert all to ensure all disk space is recovered??
+	echo "Reverting VM: $int_bastion_vm_name to snapshot: aba-test ..."   # Do we need to revert all to ensure all disk space is recovered??
 	#govc snapshot.revert -vm bastion-internal-rhel8  aba-test || exit 1
 	#govc snapshot.revert -vm bastion-internal-rhel9  aba-test || exit 1
 	#govc snapshot.revert -vm bastion-internal-rhel10 aba-test || exit 1
