@@ -98,6 +98,11 @@ install-config.yaml: .init vmware.conf cluster.conf mirror.conf  ## Create the a
 agent-config.yaml: .init             cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
 	$(SCRIPTS)/create-agent-config.sh $(debug)
 
+
+.PHONY: verify
+verify: agentconf  ## Extract cluster configuration details from the generated agent-based configuration files
+	scripts/cluster-config.sh
+
 .bm-message:
 	@echo
 	@echo "Next steps:"
