@@ -10,7 +10,7 @@ Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/bl
 Use Aba to quickly set up OpenShift in an disconnected environment while letting it handle the heavy lifting for you.
 
 1. [Aba Overview](#aba-overview)
-1. [About installing OpenShift in a Disconnected Network](#about-installing-openshift-in-a-disconnected-network)
+1. [About installing OpenShift in a Disconnected Environment](#about-installing-openshift-in-a-disconnected-environment)
 1. [Prerequisites](#prerequisites)
    1. [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
@@ -60,7 +60,7 @@ Aba helps you with the following and more:
 All commands and actions in Aba are *idempotent*.  If you hit a problem, fix it and try again should always be the right way forward!
 
 
-## About installing OpenShift in a Disconnected Network
+## About installing OpenShift in a Disconnected Environment
 
 <img src="images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="80%">
 
@@ -68,19 +68,20 @@ All commands and actions in Aba are *idempotent*.  If you hit a problem, fix it 
 The diagram above illustrates two scenarios for installing OpenShift in a disconnected environment.
 
 - **Top Section**: The *Disconnected Scenario* (partial network access, e.g. via a proxy).
-- **Bottom Section**: The *Fully Disconnected (Air-Gapped) Scenario* (data transfer only through physical means, such as "sneaker net" into a disconnected environment).
+- **Bottom Section**: The *Fully Disconnected (Air-Gapped) Scenario* (data transfer only through physical means, such as "sneaker net" into a fully disconnected environment).
 
 Each scenario includes two main network zones:
 
 - **Connected Network**: Located on the left side of the diagram, where external resources are accessible.
 - **Private Network**: Located on the right side of the diagram, isolated from direct Internet access.
 
-OS Requirements
+Linux OS Requirements
 
-- **Workstation**: RHEL 8 or 9, Centos Stream 8 or 9 or Fedora
-- **Bastion**: Must be running RHEL 8 or 9 to support OpenShift installation in the disconnected environment.
+- **Workstation**: Use RHEL 8 or 9, Centos Stream 8 or 9 or Fedora for your connected `bastion` or `workstation`.
+- **Bastion**: Must be running RHEL 8 or 9 to support OpenShift installation in a disconnected environment.
 
 These configurations ensure that each network zone meets OpenShift’s requirements for partially disconnected or fully disconnected installations.
+
 
 
 [Back to top](#who-should-use-aba)
@@ -90,20 +91,20 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 ### Fully Disconnected (Air-Gapped) Prerequisites
 
-To install OpenShift in a fully disconnected environment, one connected workstation/laptop and one disconnected/internal bastion are required.
+To install OpenShift in a fully disconnected environment, one connected workstation or laptop and one disconnected/internal bastion are required.
 
 - **Connected Laptop or Workstation**
    - An x86 RHEL 8 or 9 or Fedora (e.g. VM) with Internet access, typically on a laptop.
+   - Aba requires root access, either directly or via password-less sudo.
    - [Install Aba](#install-aba). Clone or download this Git repository (https://github.com/sjbylo/aba.git) to any location in your home directory.
    - Download and store the Red Hat registry pull secret to `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs listed in `aba/templates/rpms-external.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
-   - Password-less sudo root access or with root user.
 
 - **Internal Bastion**
    - A RHEL 8 or 9 VM or host within your fully disconnected environment.
+   - Aba requires root access, either directly or via password-less sudo.
    - Install required RPMs as listed in `aba/templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
-   - Password-less sudo root access or with root user.
 
 ### Partially Disconnected Prerequisites
 
@@ -111,24 +112,24 @@ In a partially disconnected environment, the internal bastion has limited (or pr
 
 - **Connected Bastion**
    - A single RHEL 8 or 9 VM configured with access to both the Internet and the disconnected environment.
+   - Aba requires root access, either directly or via password-less sudo.
    - [Install Aba](#install-aba). Download and copy this Git repository to any location in your home directory on the bastion.
    - Download and store your Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs as defined in the file `aba/templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
-   - Password-less sudo root access or with root user.
 
 ### Common Requirements for Both Environments
 
 - **Registry Storage**
-   - An absolute minimum of 30 GB is required for the OpenShift platform release images only, with additional Operators requiring much more space (500 GB or more is recommended).
+   - An absolute minimum of 30 GB is required (for OpenShift platform release images only), with additional Operators requiring much more space (500 GB or more is recommended).
 
 - **Network Configuration**
    - **DNS**: Configure the following DNS A records which match the intended cluster name and base domain ('ocp1' and 'example.com' in the below example):
-      - **OpenShift API**: `api.ocp1.example.com` pointing to a free IP address in the internal subnet.
+      - **OpenShift API**: `api.ocp1.example.com` pointing to a free IP address in the internal subnet where OpenShift will be installed.
       - **OpenShift Ingress**: `*.apps.ocp1.example.com` (wildcard A record) pointing to a free IP address in the internal subnet.
       - **Mirror Registry**: `registry.example.com` pointing to the IP address of your internal mirror registry (or where Aba should install it).
-      - *Note*: For Single Node OpenShift (SNO), configure both OpenShift API and Ingress records to point to the *same IP*.
-   - **NTP**: An NTP server is recommended to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
+      - *Note*: For Single Node OpenShift (SNO), configure both OpenShift API and Ingress records to point to the *same IP address*.
+   - **NTP**: An NTP server is required to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
 
 - **Platform**
    - For bare-metal installations, manually boot the nodes using the generated ISO file.
