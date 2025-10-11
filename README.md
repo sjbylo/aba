@@ -844,7 +844,7 @@ aba
     - An ISO, generated from within the container, was successfully used to install OpenShift on an M1 Mac using VMware Fusion.
 
 
-### Cluster presets are used mainly to automate the testing of Aba.
+- Cluster presets are used mainly to automate the testing of Aba.
 
 >> **This feature is deprecated and will be removed in a future version!**
 
