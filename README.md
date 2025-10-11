@@ -568,10 +568,7 @@ This chart explains the flow of Aba and how Aba works, showing the main choices:
 
 ## How to customize the Agent-based config files
 
-Once a cluster configuration directory (e.g. `mycluster`) has been created and the Agent-based configuration initialized, you can modify the configuration files — `install-config.yaml` and `agent-config.yaml` — if needed.  
-You can then rerun `aba` to regenerate the ISO, VMs, and other resources if required.  
-Aba automatically detects and preserves these changes for future runs.  
-Common updates such as changing IP or MAC addresses, updating default routes, or adding disk hints are fully supported.
+Once a cluster configuration directory (e.g. `mycluster`) has been created and the Agent-based configuration initialized, you can modify the configuration files — `install-config.yaml` and `agent-config.yaml` — if needed.  You can then rerun `aba` to generate the ISO (and VMs, if required).  Aba automatically detects and preserves these configuration file changes for future runs.  Common updates such as changing IP or MAC addresses, updating default routes, or adding disk hints are work fine.
 
 <!--
 Once a cluster config directory has been created (e.g. `mycluster`) and Agent-based configuration has been created, changes can be made to the Agent-based configuration: `install-config.yaml` and `agent-config.yaml` files if needed. `aba` can be run again to re-create the ISO and the VMs etc (if required).  Aba should detect the changes and preserve them for future use.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.
