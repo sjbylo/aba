@@ -147,9 +147,9 @@ Note: that Aba also works in connected environments without a mirror registry, e
 [Back to top](#who-should-use-aba)
 
 
-## [Install Aba](#install-aba)
+## Install Aba
 
-### Method 1: [Install Aba](#install-aba) in one command
+### Method 1: Install Aba in one command
 
 ```
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
@@ -160,7 +160,7 @@ cd aba
 aba          # Let Aba guide you through the installation process
 ```
 
-### Method 2: [Install Aba](#install-aba) using 'git clone'
+### Method 2: Install Aba using 'git clone'
 
 ```
 git clone https://github.com/sjbylo/aba.git
