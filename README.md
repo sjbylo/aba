@@ -57,7 +57,7 @@ Aba helps you with the following and more:
 1. Enables graceful cluster shutdown and startup.
 1. Allows for the modification of generated configuration files (image set & agent based), if more control is required. 
 
-All commands and actions in Aba are *idempotent*.  If you hit a problem, fix it and try again should always be the right way forward!
+All commands and actions in Aba are *idempotent*.  If you hit a problem, fixing it and trying again should always be the right way forward!
 
 
 ## About installing OpenShift in a Disconnected Environment
@@ -856,7 +856,7 @@ aba sno
 - This will create a directory `sno` and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `shortcut.conf` must be completed for this to work).  If you are using VMware the VMs will be created for you.
 - Be sure to go through *all* the values in `aba/vmware.conf` and `sno/cluster.conf`.
 - Be sure your DNS entries have been set up in advance. See above on Prerequisites.
-- Aba will show you the installation progress.  To troubleshoot cluster installation, run `aba ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands and actions in Aba are idempotent.  If you hit a problem, fix it and try again should always be the right way forward!
+- Aba will show you the installation progress.  To troubleshoot cluster installation, run `aba ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All commands and actions in Aba are idempotent.  If you hit a problem, fixing it and trying again should always be the right way forward!
 
 ```
 aba compact    # for a 3 node cluster topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
