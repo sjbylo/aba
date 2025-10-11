@@ -235,7 +235,7 @@ aba help
 [Back to top](#who-should-use-aba)
 
 
-### Partically disconnected scenario
+### Partially disconnected scenario
 
 In this scenario, the connected bastion has access to both the Internet and the internal subnet (but not necessarily at the same time).
 
