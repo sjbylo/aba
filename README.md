@@ -15,8 +15,8 @@ Use Aba to quickly set up OpenShift in an disconnected environment while letting
    1. [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
    1. [Common Requirements for Both Environments](#common-requirements-for-both-environments)
-1. [Install Aba](#install-abe)
-   1. [Partially disconnected Scenario](#partially-disconnected-scenario)
+1. [Install Aba](#install-aba)
+   1. [Partially disconnected scenario](#partially-disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
 1. [Creating an install bundle with everything you need to install OpenShift in an fully disconnected (air-gapped) environment](#Creating-an-install-bundle-with-everything-you-need-to-install-OpenShift-in-a-fully-disconnected-air-gapped-environment)
@@ -235,7 +235,7 @@ aba help
 [Back to top](#who-should-use-aba)
 
 
-### Partically disconnected Scenario
+### Partically disconnected scenario
 
 In this scenario, the connected bastion has access to both the Internet and the internal subnet (but not necessarily at the same time).
 
