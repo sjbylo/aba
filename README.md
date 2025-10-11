@@ -94,7 +94,7 @@ To install OpenShift in a fully disconnected environment, one connected workstat
 
 - **Connected Laptop or Workstation**
    - An x86 RHEL 8 or 9 or Fedora (e.g. VM) with Internet access, typically on a laptop.
-   - Install aba. Clone or download this Git repository (https://github.com/sjbylo/aba.git) to any location in your home directory.
+   - [Install Aba](#install-aba). Clone or download this Git repository (https://github.com/sjbylo/aba.git) to any location in your home directory.
    - Download and store the Red Hat registry pull secret to `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs listed in `aba/templates/rpms-external.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
@@ -111,7 +111,7 @@ In a partially disconnected environment, the internal bastion has limited (or pr
 
 - **Connected Bastion**
    - A single RHEL 8 or 9 VM configured with access to both the Internet and the disconnected environment.
-   - Install aba. Download and copy this Git repository to any location in your home directory on the bastion.
+   - [Install Aba](#install-aba). Download and copy this Git repository to any location in your home directory on the bastion.
    - Download and store your Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
    - Install required RPMs as defined in the file `aba/templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
    - Run `sudo dnf update` to ensure all packages are up to date (optional).
