@@ -3,7 +3,7 @@
 Easily install an OpenShift cluster - "Cluster Zero" - into a fully or partially disconnected environment, either onto bare-metal or VMware (vSphere/ESXi).
 Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP.
 
->> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://drive.google.com/drive/u/0/folders/1sO7_G3f8cU1Y7oeUwTib8_sqn8FM_LZQ**
+>> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://red.ht/disco-easy**
 
 ## Who should use Aba?
 
@@ -41,7 +41,7 @@ Use Aba to quickly set up OpenShift in an air-gapped environment while letting i
 Aba helps you with the following and more:
 
 1. Helps install your first OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
-1. Installs the Quay mirror registry appliance for you or makes use of your existing container registry.
+1. Installs the `Mirror Registry for Red Hat OpenShift` for you or makes use of your existing container registry.
 1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
 1. Triggers the generation of the agent-based boot ISO.
 1. Configures NTP during installation to prevent time synchronization issues caused by nodes with incorrect date and time settings
@@ -51,7 +51,7 @@ Aba helps you with the following and more:
 1. Configures the OperatorHub integration with the mirror registry.
 1. Can create an "install bundle" containing all the files needed to complete a fully air-gapped installation.
 1. Executes several workarounds, if needed, for some typical issues with disconnected environments.
-1. Now works with oc-mirror v1 or v2!
+1. Works with oc-mirror v2 (v1 support has been removed)!
 1. Installs and integrates OpenShift Update Service (OSUS) to make upgrades a single-click.
 1. Helps configure OpenShift with your NTP servers.
 1. Enables graceful cluster shutdown and startup.
@@ -158,7 +158,7 @@ In a partially disconnected environment, the internal network has limited or pro
 
 After configuring these prerequisites, run `aba` to start the OpenShift installation process.
 
-Note: that Aba also works in connected environments without a private mirror registry, e.g. by accessing public container registries via a proxy or directly.  To do this, configure the `int_connection` value in `cluster.conf`.
+Note: that Aba also works in connected environments without a mirror registry, e.g. by accessing public container registries via a proxy or directly.  To do this, configure the `int_connection` value in `cluster.conf`.
 
 
 [Back to top](#who-should-use-aba)
@@ -197,7 +197,7 @@ Now, continue with either 'Disconnected scenario' or 'Fully disconnected (air-ga
 ```
 aba mirror
 ```
-- configures and connects to your existing container registry OR installs a fresh quay appliance registry.
+- configures and connects to your existing container registry OR installs a fresh Mirror Registry for Red Hat OpenShift.
 
 ```
 aba sync
@@ -248,7 +248,7 @@ aba sync
 This command will:
   - trigger `aba mirror` (to configure the mirror registry), if needed.
     - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `mirror/regcreds/` first! See above for more).
-    - or, installs Quay registry on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `mirror/regcreds` directory for later use.
+    - or, installs _Mirror Registry for Red Hat OpenShift_ (Quay) on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `mirror/regcreds` directory for later use.
   - pull images from the Internet and store them in the registry.
 
 ```
@@ -267,10 +267,10 @@ Note that the above 'disconnected scenario' can be repeated, for example to down
 
 **Please note that it is now recommended to use the above `aba bundle` command to initiate a fully air-gapped installation which will complete the below for you.**
 
->> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://drive.google.com/drive/u/0/folders/1sO7_G3f8cU1Y7oeUwTib8_sqn8FM_LZQ**
+>> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://red.ht/disco-easy**
 
 In this scenario, your connected workstation has access to the Internet but no access to the disconnected environment.
-You also require a bastion in a private subnet.
+You also require a bastion in a disconnected environment.
 
 ```
 aba save
@@ -288,15 +288,15 @@ Example:
 
 aba inc                                          # Write tar archive to /tmp
 or
-aba inc out=/dev/path/to/thumb-drive/aba.tgz     # Write archive 'aba.tgz' to the device
+aba inc out=/dev/path/to/thumb-drive/aba.tar     # Write archive 'aba.tar' to the device
                                                   # mounted at /dev/path/to/thumb-drive
 or
-aba inc out=- | ssh user@host "cat > aba.tgz"    # Archive and write to internal host (if possible).
+aba inc out=- | ssh user@host "cat > aba.tar"    # Archive and write to internal host (if possible).
 
-# Copy the file 'aba.tgz' to your bastion via your portable storage device.
+# Copy the file 'aba.tar' to your bastion via your portable storage device.
 
 # Then, on the bastion run:
-tar xvf aba.tgz                                   # Extract the tar file. Ensure file timestamps are
+tar xvf aba.tar                                   # Extract the tar file. Ensure file timestamps are
                                                   # kept the same as on the connected workstation.
 cd aba
 ./install
@@ -308,12 +308,12 @@ For such cases where it is not possible to write directly to a portable storage 
 Example:
 
 ```
-aba tarrepo out=/dev/path/to/drive/aba.tgz
+aba tarrepo out=/dev/path/to/drive/aba.tar
 ```
-- Write archive `aba.tgz` to the device mounted at /dev/path/to/drive, EXCEPT for the `seq#` tar files under save/
-- The `seq#` tar file(s) in the "mirror/save" directory and the repository tarball `aba.tgz` can be copied separately to a storage device, e.g. USB stick, S3 or other.
+- Write archive `aba.tar` to the device mounted at /dev/path/to/drive, EXCEPT for the `seq#` tar files under save/
+- The `seq#` tar file(s) in the "mirror/save" directory and the repository tarball `aba.tar` can be copied separately to a storage device, e.g. USB stick, S3 or other.
 
-Copy the "aba.tgz" file to the bastion and unpack the archive. Note the directory "aba/mirror/save".
+Copy the "aba.tar" file to the bastion and unpack the archive. Note the directory "aba/mirror/save".
 Copy or move the "seq" tar file(s), as is, from the "mirror/save" directory to the  bastion, into the "mirror/save" directory on the bastion.
 
 ```
@@ -321,7 +321,7 @@ sudo dnf install make -y     # If dnf does not work in the disconnected environm
                              # ensure all required RPMs are pre-installed, e.g. from a DVD drive at the time of installation.
 aba load
 ```
-- will (if required) install Quay (from the install bundle) and then load the images into Quay.
+- will (if required) install _Mirror Registry for Red Hat OpenShift_ (Quay) from the install bundle and then load the images into the mirror registry.
 - Required RPMs:
   - Note that the bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure `dnf` to use a proxy).
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation.
@@ -459,7 +459,7 @@ Commands for VMs (vCenter or ESXi)
 
 ## Creating an install bundle with everything you need to install OpenShift in a fully disconnected (air-gapped) environment
 
->> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://drive.google.com/drive/u/0/folders/1sO7_G3f8cU1Y7oeUwTib8_sqn8FM_LZQ**
+>> **For Red Hatters, it is now possible to download ready made, up-to-date and tested Aba install bundles from: https://red.ht/disco-easy**
 
 Do you need to download a set of images and CLI tools to install OpenShift into a fully disconnected (air-gapped) environment?
 
@@ -536,7 +536,7 @@ aba         # Run aba and follow the instructions
 
 Note: You will find the large image set tar file under `aba/mirror/save`.
 
-You can now install the Quay mirror registry to localhost and then load it with images using the following command (see below for more details):
+You can now install the _Mirror Registry for Red Hat OpenShift_ to localhost and then load it with images using the following command (see below for more details):
 
 ```
 aba mirror -H registry.example.com load --retry 3
@@ -902,7 +902,7 @@ You can let Aba install them automatically (if `dnf` is configured) or install t
 
 **Q: Can Aba run inside a container?**  
 
-**Preferably, run Aba in a RHEL 8 or 9 VM.** Aba has been officially tested on x86 RHEL 8 or 9 systems (VM or physical). Aba has been tested in a container, see the `Advanced` section. However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing Quay or managing certain system-level dependencies might not work.
+**Preferably, run Aba in a RHEL 8 or 9 VM.** Aba has been officially tested on x86 RHEL 8 or 9 systems (VM or physical). Aba has been tested in a container, see the `Advanced` section. However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing _Mirror Registry for Red Hat OpenShift_ (Quay) or managing certain system-level dependencies might not work.
 
 ---
 
