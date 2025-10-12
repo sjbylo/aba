@@ -1,15 +1,17 @@
 # Troubleshooting 
 
+## Quay mirror registry
+
 If you see the error "Cannot initialize user in a non-empty database" when trying to install Quay, this usually means that Quay files - from a previous installation - still exist 
 and should be deleted.  Delete any old files from ~/quay-install and try again.
 
-Try these commands to discover any problems with the installation of OCP using the Agent-based method.
+## Booting and Internet connection of the Rendezvous Node
+
+Try these commands to discover any problems with the installation of OpenShift using the Agent-based method.
 
 Ssh to the rendezvous server:
-
 ```
-cd sno
-aba ssh
+aba -d mycluster ssh
 # This will run `ssh core@<ip of rendezvous server>`
 
 [core@master1 ~]$ journalctl -u assisted-service.service -f 
@@ -145,14 +147,13 @@ ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadl
 
 ## Other Problems
 
-Sometimes or-mirror runs out of space under /tmp for temporary files.  You can fix this by increasing the space under /tmp or setting reg_root in mirror.conf to a directory with more disk space:
-
+Sometimes oc-mirror runs out of temporary disk space under /tmp.  You can fix this by increasing the space under /tmp or setting `data_dir` in `aba/mirror/mirror.conf` to a directory with more disk space:
 ```
 sudo mount -o remount,size=6G /tmp
 # or see: https://access.redhat.com/solutions/2843 
 ```
 
-The actual installation of OCP might fail with an error similar to:
+The actual installation of OpenShift might fail with an error similar to:
 
 ```
 ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadline exceeded
@@ -163,7 +164,7 @@ Use the following command to access the node to see if there are any problems:
 aba ssh
 ```
 
-In tests, it was found that repeated installation of OCP using the exact same mac addresses tends to cause the install to either fail or to take a long time to complete.
+In tests, it was found that repeated installation of OpenShift using the exact same mac addresses tends to cause the install to either fail or to take a long time to complete.
 When installing a fresh cluster, it is better not to run 'aba refresh' but to run 'aba clean' first and then run 'aba'. This will cause the configuration to be refreshed with random mac addresses (as long as "xx" is in use within the 'mac_prefix' parameter in the 'cluster.conf' file).
 
 
