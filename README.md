@@ -10,7 +10,7 @@ Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/bl
 Use Aba to quickly set up OpenShift in a disconnected environment while letting it handle the heavy lifting for you.
 
 1. [Aba Overview](#aba-overview)
-1. [About installing OpenShift in a Disconnected Environment](#about-installing-openshift-in-a-disconnected-environment)
+1. [About Installing OpenShift in a Disconnected Environment](#about-installing-openshift-in-a-disconnected-environment)
 1. [Prerequisites](#prerequisites)
    1. [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
    1. [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
@@ -19,7 +19,7 @@ Use Aba to quickly set up OpenShift in a disconnected environment while letting 
    1. [Partially disconnected scenario](#partially-disconnected-scenario)
    1. [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 1. [Installing OpenShift](#installing-openshift)
-1. [Creating a custom install bundle](#Creating-a-custom-install-bundle)
+1. [Creating a custom install bundle](#creating-a-custom-install-bundle)
 1. [Aba OpenShift Installation Workflow](#aba-openshift-installation-workflow)
 1. [About configuration files](#configuration-files)
 1. [How to customize the Agent-based config files](#how-to-customize-the-agent-based-config-files)
@@ -60,7 +60,7 @@ Aba helps you with the following and more:
 All Aba commands and actions are idempotent. If something goes wrong, fix it and run the command again — Aba will always try to do the right thing.
 
 
-## About installing OpenShift in a Disconnected Environment
+## About Installing OpenShift in a Disconnected Environment
 
 <img src="images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="80%">
 
@@ -80,7 +80,7 @@ Linux OS Requirements
 - **Workstation**: Use RHEL 8 or 9, Centos Stream 8 or 9 or Fedora for your connected `bastion` or `workstation`.
 - **Bastion**: Must be running RHEL 8 or 9 to support OpenShift installation in a disconnected environment.
 
-These configurations ensure that each network zone meets OpenShift’s requirements for partially disconnected or fully disconnected installations.
+These configurations ensure that each network zone meets OpenShift’s requirements for _partially disconnected_ or _fully disconnected_ installations.
 
 
 
@@ -91,17 +91,19 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 ### Fully Disconnected (Air-Gapped) Prerequisites
 
-To install OpenShift in a fully disconnected environment, one connected workstation or laptop and one disconnected/internal bastion are required.
+To install OpenShift in a fully disconnected (air-gapped) environment, one workstation or laptop that is connected to the Internet and one disconnected bastion are required. From now on, we will refer to these as _connected workstation_ and _internal bastion_ or just _bastion_.
 
-- **Connected Laptop or Workstation**
+#### Connected Workstation**
    - An x86 RHEL 8 or 9 or Fedora (e.g. VM) with Internet access, typically on a laptop.
    - Aba requires root access, either directly or via password-less sudo.
-   - [Install Aba](#install-aba). Clone or download this Git repository (https://github.com/sjbylo/aba.git) to any location in your home directory.
-   - Download and store the Red Hat registry pull secret to `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
-   - Install required RPMs listed in `aba/templates/rpms-external.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
-   - Run `sudo dnf update` to ensure all packages are up to date (optional).
+   - To install Aba refer to these [instructions](#install-aba).
+   - Download and store the Red Hat registry pull secret to `~/.pull-secret.json`.
+      - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret.
+   - Install required RPMs listed in `aba/templates/rpms-external.txt`
+      - Or, if dnf is configured, let Aba use dnf to install the packages.
+   - Optionally, run `sudo dnf update` to ensure all packages are up to date.
 
-- **Internal Bastion**
+#### Internal Bastion**
    - A RHEL 8 or 9 VM or host within your fully disconnected environment.
    - Aba requires root access, either directly or via password-less sudo.
    - Install required RPMs as listed in `aba/templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
@@ -110,20 +112,22 @@ To install OpenShift in a fully disconnected environment, one connected workstat
 
 In a partially disconnected environment, the internal bastion has limited (or proxy-based) Internet access, allowing data synchronization directly.
 
-- **Connected Bastion**
+#### Connected Bastion**
    - A single RHEL 8 or 9 VM configured with access to both the Internet and the disconnected environment.
    - Aba requires root access, either directly or via password-less sudo.
-   - [Install Aba](#install-aba). Download and copy this Git repository to any location in your home directory on the bastion.
-   - Download and store your Red Hat registry pull secret at `~/.pull-secret.json` (a pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret).
-   - Install required RPMs as defined in the file `aba/templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
-   - Run `sudo dnf update` to ensure all packages are up to date (optional).
+   - To install Aba refer to these [instructions](#install-aba).
+   - Download and store the Red Hat registry pull secret to `~/.pull-secret.json`.
+      - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret.
+   - Install required RPMs listed in `aba/templates/rpms-internal.txt`. Note: This is a different file from the one mentioned above.
+      - Or, if dnf is configured, let Aba use dnf to install the packages.
+   - Optionally, run `sudo dnf update` to ensure all packages are up to date.
 
 ### Common Requirements for Both Environments
 
-- **Registry Storage**
+#### Registry Storage**
    - An absolute minimum of 30 GB is required (for OpenShift platform release images only), with additional Operators requiring much more space (500 GB or more is recommended).
 
-- **Network Configuration**
+#### Network Configuration**
    - **DNS**: Configure the following DNS A records which match the intended cluster name and base domain ('ocp1' and 'example.com' in the below example):
       - **OpenShift API**: `api.ocp1.example.com` pointing to a free IP address in the internal subnet where OpenShift will be installed.
       - **OpenShift Ingress**: `*.apps.ocp1.example.com` (wildcard A record) pointing to a free IP address in the internal subnet.
@@ -131,11 +135,11 @@ In a partially disconnected environment, the internal bastion has limited (or pr
       - *Note*: For Single Node OpenShift (SNO), configure both OpenShift API and Ingress records to point to the *same IP address*.
    - **NTP**: An NTP server is required to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
 
-- **Platform**
-   - For bare-metal installations, manually boot the nodes using the generated ISO file.
+#### Platform**
+   - For bare-metal installations, you will set `platform=bm` in `aba.conf` and manually boot the nodes using the generated ISO file.
    - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
 
-- **Registry**
+#### Registry**
    - If you're using an existing registry, place its credentials (pull secret and root CA) in the `aba/mirror/regcreds` directory:
       - `aba/mirror/regcreds/pull-secret-mirror.json`
       - `aba/mirror/regcreds/rootCA.pem`
@@ -233,14 +237,15 @@ This command:
   - triggers `aba mirror` (to configure the mirror registry), if needed.
     - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `aba/mirror/regcreds/` first! See above for more).
     - or, installs _Mirror Registry for Red Hat OpenShift_ (Quay) on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `aba/mirror/regcreds` directory for later use.
-  - pulls images from the Internet and store them in the registry.
+  - pulls images from the Internet and stores them in the registry.
 
 ```
 aba download
 ```
-  - *Optionally* download the CLI binaries into the aba/cli dir.  Note: This is only required if you intend to sever the Internet connection before installing OpenShift.
+  - *Optionally* download the CLI binaries into `aba/cli`. This is only needed if you plan to disconnect from the Internet before installing OpenShift.
 
-Now continue with "Installing OpenShift" below.
+
+Now continue with [Installing OpenShift](#installing-openshift) below.
 
 Note that the above 'disconnected scenario' can be repeated, for example to download and install Operators as a day 2 operation or to upgrade OpenShift, by updating the `sync/imageset-sync.yaml` file and running `aba sync` & `aba day2` again.
 
@@ -249,18 +254,17 @@ Note that the above 'disconnected scenario' can be repeated, for example to down
 
 ### Fully disconnected (air-gapped) Scenario
 
-**Please note that it is now recommended to use the above `aba bundle` command to initiate a fully air-gapped installation which will complete the below for you.**
+**Please note that it is now recommended to use the above `aba bundle` [link](#creating-a-custom-install-bundle) command to initiate a fully air-gapped installation, which will complete the steps below for you.**
 
 >> **For Red Hatters:  download curated, ready-made, up-to-date, and tested Aba install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy**
 
 In this scenario, your connected workstation has access to the Internet but no access to the disconnected environment.
-You also require a bastion in a disconnected environment.
+You also require a bastion in a disconnected environment. See the [prerequisites](#prerequisites) above.
 
 ```
 aba save
 ```
-
-- pulls the images from the Internet and saves them into the local directory "mirror/save". Make sure there is enough disk space (30+ GB or much more for Operators)!
+- pulls the images from the Internet and saves them into the local directory `aba/mirror/save`. Make sure there is enough disk space (30+ GB or much more for Operators)!
 
 Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repository (including templates, scripts, images, CLIs and other install files) to your disconnected bastion (in your disconnected environment) via a portable storage device, e.g. a thumb drive.
 
@@ -294,29 +298,29 @@ Example:
 ```
 aba tarrepo out=/dev/path/to/drive/aba.tar
 ```
-- Write archive `aba.tar` to the device mounted at /dev/path/to/drive, EXCEPT for the `seq#` tar files under save/
-- The `seq#` tar file(s) in the "mirror/save" directory and the repository tarball `aba.tar` can be copied separately to a storage device, e.g. USB stick, S3 or other.
+- Write archive `aba.tar` to the device mounted at /dev/path/to/drive, EXCEPT for the image set archive tar files under `aba/mirror/save`
+- The image set archive tar file(s) in the `aba/mirror/save` directory and the repository tarball `aba.tar` can be copied separately to a storage device, e.g. USB stick, S3 or other.
 
-Copy the "aba.tar" file to the bastion and unpack the archive. Note the directory "aba/mirror/save".
-Copy or move the "seq" tar file(s), as is, from the "mirror/save" directory to the  bastion, into the "mirror/save" directory on the bastion.
+Copy the `aba.tar` file to the bastion and unpack the archive. Note the directory `aba/mirror/save`.
+Copy or move the image archive tar file(s), as is, from the `aba/mirror/save` directory to the connected workstation, into the `aba/mirror/save` directory on the bastion.
 
 ```
-sudo dnf install make -y     # If dnf does not work in the disconnected environment (i.e. no Satalite),
-                             # ensure all required RPMs are pre-installed, e.g. from a DVD drive at the time of installation.
+sudo dnf install make -y     # If dnf does not work in the disconnected environment (i.e. no Satalite), ensure all
+                             # required RPMs are pre-installed, e.g. from a DVD drive at the time of installation.
 aba load
 ```
 - will (if required) install _Mirror Registry for Red Hat OpenShift_ (Quay) from the install bundle and then load the images into the mirror registry.
 - Required RPMs:
-  - Note that the bastion will need to install RPMs from a suitable repository (for Aba testing purposes it's possible to configure `dnf` to use a proxy).
+  - Note that the bastion will need to install RPMs from a suitable repository (for Aba testing purposes Aba configures `dnf` to use a proxy).
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation.
   - If rpms are not available in your disconnected environment, the command `aba rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your connected workstation and disconnected bastions are running the exact same version of RHEL (at least, that was the experience when testing!).
 
-Now continue with "Installing OpenShift" below.
+Now continue with [Installing OpenShift](#installing-openshift) below.
 
 Note that the above 'air-gapped workflow' can be repeated in the *exact same way*, for example to incrementally install Operators or download new versions of images to upgrade OpenShift.
 
 For example, by:
-- editing the `save/imageset-save.yaml` file on the connected workstation to add more images or to fetch the latest images
+- editing the `mirror/save/imageset-save.yaml` file on the connected workstation to add more images or to fetch the latest images
 - running `aba save`
 - running `aba inc` (or aba tar or aba tarrepo) to create an install bundle (see above)
 - unpacking the tar archive on the bastion
