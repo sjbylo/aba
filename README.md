@@ -1,4 +1,4 @@
-# Aba makes it easier to install OpenShift in your disconnected (air-gapped) environment. <!-- omit in toc -->
+# Aba makes it easier to install OpenShift in a disconnected (air-gapped) environment. <!-- omit in toc -->
 
 Easily install an OpenShift cluster - "Cluster Zero" - into a fully or partially disconnected environment, either onto bare-metal or VMware (vSphere/ESXi).
 Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP.
@@ -17,28 +17,29 @@ Use Aba to quickly set up OpenShift in a disconnected environment while letting 
   - [Common Prerequisites for Both Environments](#common-prerequisites-for-both-environments)
   - [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
   - [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
+  - [Fully Connected Prerequisites](#fully-connected-prerequisites)
+- [Aba OpenShift Installation Workflow Diagram](#aba-openshift-installation-workflow-diagram)
 - [Install Aba](#install-aba)
   - [Method 1: Single command](#method-1-single-command)
   - [Method 2: Git clone](#method-2-git-clone)
-  - [Partially Disconnected Scenario](#partially-disconnected-scenario)
-  - [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
+- [Partially Disconnected Scenario](#partially-disconnected-scenario)
+- [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 - [Installing OpenShift](#installing-openshift)
 - [Creating a custom install bundle](#creating-a-custom-install-bundle)
-- [Aba OpenShift Installation Workflow](#aba-openshift-installation-workflow)
-- [About the Aba configuration files](#about-the-aba-configuration-files)
 - [How to Customize the Agent-based Configuration Files](#how-to-customize-the-agent-based-configuration-files)
+  - [About the Aba configuration files](#about-the-aba-configuration-files)
 - [Day 2 Operations](#day-2-operations)
-  - [1. Connect OperatorHub to Internal Mirror Registry](#1-connect-operatorhub-to-internal-mirror-registry)
-  - [2. Synchronize NTP Across Cluster Nodes](#2-synchronize-ntp-across-cluster-nodes)
-  - [3. Enable OpenShift Update Service (OSUS)](#3-enable-openshift-update-service-osus)
-  - [4. Login and Verify Cluster State](#4-login-and-verify-cluster-state)
-- [Feature Backlog and Ideas](#feature-backlog-and-ideas)
-- [Miscellaneous](#miscellaneous)
+  - [1. Login and Verify Cluster State](#1-login-and-verify-cluster-state)
+  - [2. Connect OperatorHub to Internal Mirror Registry](#2-connect-operatorhub-to-internal-mirror-registry)
+  - [3. Synchronize NTP Across Cluster Nodes](#3-synchronize-ntp-across-cluster-nodes)
+  - [4. Enable OpenShift Update Service (OSUS)](#4-enable-openshift-update-service-osus)
 - [Advanced Use](#advanced-use)
   - [Aba can run in a container (partial support)](#aba-can-run-in-a-container-partial-support)
   - [Creating an Install bundle on a Restricted VM or Laptop](#creating-an-install-bundle-on-a-restricted-vm-or-laptop)
   - [Cluster presets are used mainly to automate the testing of Aba.](#cluster-presets-are-used-mainly-to-automate-the-testing-of-aba)
   - [To install aba from the dev branch run the following:](#to-install-aba-from-the-dev-branch-run-the-following)
+- [Feature Backlog and Ideas](#feature-backlog-and-ideas)
+- [Miscellaneous](#miscellaneous)
 - [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
 
 
@@ -110,7 +111,7 @@ These configurations ensure that each network zone meets OpenShift’s requireme
    - **DNS**: Configure the following DNS A records which match the intended cluster name and base domain ('ocp1' and 'example.com' in the below example):
       - **OpenShift API**: `api.ocp1.example.com` pointing to a free IP address in the internal subnet where OpenShift will be installed.
       - **OpenShift Ingress**: `*.apps.ocp1.example.com` (wildcard A record) pointing to a free IP address in the internal subnet.
-      - **Mirror Registry**: `registry.example.com` pointing to the IP address of your internal mirror registry (or where Aba should install it).
+      - **Mirror Registry**: `registry.example.com` pointing to the IP address of your _internal mirror registry_ (or where Aba should install it).
       - *Note*: For Single Node OpenShift (SNO), configure both OpenShift API and Ingress records to point to the *same IP address*.
    - **NTP**: An NTP server is required to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
 
@@ -123,9 +124,7 @@ These configurations ensure that each network zone meets OpenShift’s requireme
       - `aba/mirror/regcreds/pull-secret-mirror.json`
       - `aba/mirror/regcreds/rootCA.pem`
 
-After configuring these prerequisites, run `aba` to start the OpenShift installation workflow.
 
->> Note: that Aba also works in connected environments without a mirror registry, e.g. by accessing public container registries via a proxy or directly.  To do this, configure the `int_connection` value in `cluster.conf` after creating the `cluster directory` (see section [Installing OpenShift](https://github.com/sjbylo/aba/tree/dev?tab=readme-ov-file#installing-openshift) for more).
 
 ### Fully Disconnected (Air-Gapped) Prerequisites
 
@@ -146,9 +145,11 @@ To install OpenShift in a fully disconnected (air-gapped) environment, one works
    - Aba requires root access, either directly or via password-less sudo.
    - Install required RPMs as listed in `aba/templates/rpms-internal.txt` (or, if dnf is configured, let Aba use dnf to install the packages).
 
+After configuring these prerequisites, run `aba` to start the OpenShift installation workflow.
+
 ### Partially Disconnected Prerequisites
 
-In a partially disconnected environment, the internal bastion has limited (or proxy-based) Internet access, allowing data synchronization directly.
+In a partially disconnected environment, the _internal bastion_ has limited (or proxy-based) Internet access, allowing data synchronization directly.
 
 #### Connected Bastion Prerequisites
    - A single RHEL 8 or 9 VM configured with access to both the Internet and the disconnected environment.
@@ -160,6 +161,28 @@ In a partially disconnected environment, the internal bastion has limited (or pr
       - Or, if dnf is configured, let Aba use dnf to install the packages.
    - Optionally, run `sudo dnf update` to ensure all packages are up to date.
 
+After configuring these prerequisites, run `aba` to start the OpenShift installation workflow.
+
+### Fully Connected Prerequisites
+
+Aba also works in connected environments without a _mirror registry_, e.g. by accessing public container registries on the Internet via a proxy or directly.  To do this, configure the `int_connection` value in `cluster.conf` after creating the `cluster directory` (see section [Installing OpenShift](https://github.com/sjbylo/aba/tree/dev?tab=readme-ov-file#installing-openshift) for more).
+
+
+
+
+[Back to top](#who-should-use-aba)
+
+## Aba OpenShift Installation Workflow Diagram
+
+This chart explains the flow of Aba and how Aba works, showing the main choices:
+- Fully disconnected (air-gapped)
+- Partially disconnected
+- Connected installation (without a mirror registry) and
+- Installation on VMware or bare-metal. 
+
+If you run `aba` (interactive mode), you will make use of this workflow. 
+
+<img src="images/aba-flow-diagram.png" alt="Aba Flow Chart" title="Aba Flow Chart" width="80%">
 
 [Back to top](#who-should-use-aba)
 
@@ -177,7 +200,7 @@ bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubuser
 
 ```
 cd aba
-aba          # Let Aba guide you through the OpenShift installation workflow
+aba          # Let Aba guide you through the OpenShift installation workflow (interactive mode)
 ```
 
 ### Method 2: Git clone
@@ -187,15 +210,15 @@ Install Aba using `git clone`:
 git clone https://github.com/sjbylo/aba.git
 cd aba
 ./install
-aba          # Let Aba guide you through the OpenShift installation workflow
+aba          # Let Aba guide you through the OpenShift installation workflow (interactive mode)
 ```
 - clones the Github repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
-- If needed, add any required operators to the `aba.conf` file by setting 'op_sets' and/or 'ops' values.
-- helps you decide the method of deployment and how you should proceed.  For omore, see the [Aba Installation Workflow][(#aba-openshift-installation-workflow). 
+- If needed, add any required operators to the `aba.conf` file by setting the `op_sets=` and/or `ops=` values.
+- helps you decide the method of deployment and how you should proceed.  For more, see the [Aba OpenShift Installation Workflow Diagram](#aba-openshift-installation-workflow-diagram). 
 
-Note that 'aba' will create the `aba.conf` file which contains some values that you *should change* as soon as you can, wuch as your _preferred platform_, your _domain name_, your _network address_ and any _operators_ you will require etc (if known).
+Note that 'aba' will create the `aba.conf` file which contains some values that you *should change* as soon as you can, such as your _preferred platform_, your _domain name_, your _network address_ and any _operators_ you will require etc (if known).
 
-Now, continue with either 'Disconnected scenario' or 'Fully disconnected (air-gapped) scenario' below.
+Now, continue with either [Partially Disconnected Scenario](#partially-disconnected-scenario) or [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario) below.
 
 <!--
 ```
@@ -239,19 +262,20 @@ aba help
 [Back to top](#who-should-use-aba)
 
 
-### Partially Disconnected Scenario
+## Partially Disconnected Scenario
 
 In this scenario, the connected bastion has access to both the Internet and the internal subnet (but not necessarily at the same time).
 
 <img src="images/make-sync.jpg" alt="Disconnected and Air-gapped Scenario" title="Disconnected and Air-gapped scenario" width="80%">
 
 
+Copy images from the Red Hat registriy to your _internal mirror registry_:
 ```
 aba sync
 ```
 This command:
-  - triggers `aba mirror` (to configure the mirror registry), if needed.
-    - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `aba/mirror/regcreds/` first! See above for more).
+  - triggers `aba mirror` (to configure or install the mirror registry).
+    - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `aba/mirror/regcreds/` first! See the [Existing Registry Prerequisites](#existing-registry-prerequisites) section for more).
     - or, installs _Mirror Registry for Red Hat OpenShift_ (Quay) on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `aba/mirror/regcreds` directory for later use.
   - pulls images from the Internet and stores them in the registry.
 
@@ -268,40 +292,43 @@ Note that the above 'disconnected scenario' can be repeated, for example to down
 
 [Back to top](#who-should-use-aba)
 
-### Fully disconnected (air-gapped) Scenario
+## Fully disconnected (air-gapped) Scenario
 
-**Please note that it is recommended to use the above `aba bundle` [command](#creating-a-custom-install-bundle) to initiate a fully air-gapped installation, which will automatically complete the below steps (`aba save` and `aba tar`) for you.**
+**Please note that it is recommended to use the `aba bundle` [command](#creating-a-custom-install-bundle) to create an _install bundle_ to start a fully air-gapped installation, which will automatically complete the below steps (`aba save` and `aba tar`) for you.  If, for any reason, you can't use the `aba bundel` command, use the steps below instead.**
 
 >> **For Red Hatters:  download curated, ready-made, up-to-date, and tested Aba install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy**
 
 In this scenario, your _connected workstation_ has access to the Internet but no access to the disconnected environment.
-You also require a bastion in a disconnected environment.  See the [prerequisites](#prerequisites) above.
+You also require a bastion in a disconnected environment.  See the [prerequisites](#fully-disconnected-air-gapped-prerequisites) above.
 
+To download and save the platform and operator images to disk, run:
 ```
 aba save
 ```
-- pulls the images from the Internet and saves them into the local directory `aba/mirror/save`. Make sure there is [enough disk space](#prerequisites) for that directory!
+- pulls the images from the Internet and saves them into the local directory `aba/mirror/save/mirror_000001.tar`. Make sure there is [enough disk space](#prerequisites) for that directory!
 
-Then, using `aba tar`, to copy the whole `aba/` repository (including templates, scripts, images, CLIs and other install files) to your disconnected bastion (in your disconnected environment) via a portable storage device, e.g. a thumb drive, or other method. 
+Then, create the _install bundle_ using the `aba tar` command, which will copy the whole `aba/` repository (including templates, scripts, images, CLIs and other install files) to the _installl bundle_ file.  You then need to move the _bundle_ to your disconnected bastion via a portable storage device, e.g. a thumb drive, or other method. 
+
+>> Note: you must use the `aba tar` command to create the _install bundle_. Do not copy the repository yourself, as-is, since some files and directories must be excluded when creating the _bundle_ file. 
 
 Example:
 
-On the connected workstation, mount your thumb drive and run:
+On the _connected workstation_, mount your thumb drive and run:
 
 ```
 aba tar --out /path/to/large/media-drive/aba.tar   # Write archive 'aba.tar' to the device
                                                    # mounted at /dev/path/to/thumb-drive
 ```
 
-Use your portable storage device to copy the file 'aba.tar' to your _internal bastion_.
+Use your portable storage device to transfer the file 'aba.tar' to your _internal bastion_.
 
 Then, on the bastion run:
 
 ```
-tar xvf aba.tar             # Extract the tar file. Ensure file timestamps are
-                            # kept the same as on the connected workstation.
+tar xvf aba.tar              # Extract the tar file. Ensure file timestamps are
+                             # kept the same as on the connected workstation.
 cd aba
-./install                   # Install aba on the bastion.
+./install                    # Install aba on the bastion.
 aba
 ```
 <!--
@@ -309,6 +336,7 @@ sudo dnf install make -y     # If dnf does not work in the disconnected environm
                              # required RPMs are pre-installed, e.g. from a DVD drive at the time of installation.
 -->
 
+Now load the images from disk into the _mirror registry_:
 ```
 aba load
 ```
@@ -316,14 +344,14 @@ aba load
 - Required RPMs:
   - Note that the bastion will need to install RPMs from a suitable repository (for Aba testing purposes Aba configures `dnf` to use a proxy).
   - If RPMs cannot be installed with "sudo dnf install", then ensure the RPMs are pre-installed, e.g. from a DVD at the time of RHEL installation.
-  - If rpms are not available in your disconnected environment, the command `aba rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your connected workstation and disconnected bastions are running the exact same version of RHEL (at least, that was the experience when testing!).
+  - If rpms are not available in your disconnected environment, the command `aba rpms` can help by downloading the required rpms, which can then be copied to the bastion and installed with `dnf localinstall rpms/*.rpm`.  Note this will only work if your _connected workstation_ and disconnected bastions are running the exact same version of RHEL (at least, that was the experience when testing!).
 
 Now continue with [Installing OpenShift](#installing-openshift) below.
 
 Note that the above 'air-gapped workflow' can be repeated in the *exact same way*, for example to incrementally install Operators or download new versions of images to upgrade OpenShift.
 
 For example, by:
-- editing the `mirror/save/imageset-save.yaml` file on the connected workstation to add more images or to fetch the latest images
+- editing the `mirror/save/imageset-save.yaml` file on the _connected workstation_ to add more images or to fetch the latest images
 - running `aba save`
 - running `aba tar` (or aba tar or aba tarrepo) to create an install bundle (see above)
 - unpacking the tar archive on the bastion
@@ -450,7 +478,7 @@ cd mycluster     # change to the `cluster directory` with the agent-based instal
 | `aba info`        | Display kubeadmin password and other information. |
 | `aba login`       | Display the `oc login` command for the cluster.  Use: . <(aba login)  |
 | `aba shell`       | Display the command to access the cluster using the kubeconfig file.  Use: . <(aba shell) |
-| `aba day2`        | Integrate the internal mirror into OpenShift. |
+| `aba day2`        | Integrate the _internal mirror_ into OpenShift. |
 | `aba day2-ntp`    | Configure the cluster with NTP. |
 | `aba day2-osus`   | Configure the cluster with OpenShift Update Service for easier cluster upgrades. |
 | `aba shutdown`    | Gracefully shut down (or hibernate) a cluster. `aba shutdown --wait` wait for power-off |
@@ -530,7 +558,7 @@ aba bundle \
 - The OpenShift version can be automatically set to the most recent 'previous' point version (using '--version p') or to the 'latest' (using --version l).
 - If needed, --op-sets refers to predefined sets of operators, as defined in the files `aba/templates/operator-set-*`.
 - If needed, add individual operators after "--ops".
-- If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise, these values must be set in aba.conf on the internal bastion after unpacking the bundle).
+- If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise, these values must be set in aba.conf on the _internal bastion_ after unpacking the bundle).
 - Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
 - Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_*`.  It is important to verify the files after copying them into the air-gapped environment!
@@ -573,30 +601,17 @@ aba cluster --name mycluster --type compact [--starting-ip <ip>] [--api-vip <ip>
 
 
 
-## Aba OpenShift Installation Workflow 
+## How to Customize the Agent-based Configuration Files
 
-This chart explains the flow of Aba and how Aba works, showing the main choices: fully disconnected (air-gapped), partially disconnected, connected and installation on VMW or bare-metal. 
-
-<img src="images/aba-flow-diagram.png" alt="Aba Flow Chart" title="Aba Flow Chart" width="80%">
-
-[Back to top](#who-should-use-aba)
-
-## About the Aba configuration files
+### About the Aba configuration files
 
 | Config file                       | Description |
 | :----------                       | :---------- |
 | `aba/aba.conf`                    | Global configuration file, sets the channel and version of OpenShift, your domain name, internal network address, DNS IP etc |
-| `aba/mirror/mirror.conf`          | Describes your internal mirror registry (either existing or to-be-installed)  |
+| `aba/mirror/mirror.conf`          | Describes your _internal mirror registry_ (either existing or to-be-installed)  |
 | `aba/`cluster-name`/cluster.conf` | Describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, bonding etc |
 | `aba/vmware.conf`                 | Optional vCenter/ESXi access configuration using `govc` CLI (optional) |
 
-
-[Back to top](#who-should-use-aba)
-
-
-
-
-## How to Customize the Agent-based Configuration Files
 
 Once a cluster configuration directory (e.g. `mycluster`) has been created and the Agent-based configuration initialized, you can modify the configuration files — `install-config.yaml` and `agent-config.yaml` — if needed.  You can then rerun `aba` to generate the ISO (and VMs, if using `platform=vmw`).  Aba automatically detects and preserves these configuration file changes for future runs.  Common updates such as changing IP or MAC addresses, updating default routes, or adding disk hints all work fine.
 
@@ -684,43 +699,7 @@ aba info
 ```
 - This displays access information for your cluster, including OpenShift Console URL, kubeadmin credentials, and next-step guidance.
 
-
-
-### 1. Connect OperatorHub to Internal Mirror Registry
-
-```
-aba day2
-```
-
-- This configures OpenShift to use your internal mirror registry as the source for OperatorHub content.  
-It also ensures that OperatorHub continues to work properly, even when the cluster is in a disconnected environment.  
-
-**Important:**  
-Re-run this command whenever new Operators are added or updated in your mirror registry — for example, after running `aba load` or `aba sync` again.  
-This step refreshes OpenShift’s OperatorHub configuration so it includes the latest mirrored Operators.
-
-
-### 2. Synchronize NTP Across Cluster Nodes
-
-```
-aba day2-ntp
-```
-- Ensures all nodes are connected to NTP servers. Note that time drift can cause OpenShift installation or operation to fail.
-
-
-
-### 3. Enable OpenShift Update Service (OSUS)
-
-```
-aba day2-osus
-```
-- Configures OpenShift to receive updates via your internal mirror. Useful for enabling controlled cluster upgrades in disconnected setups.
-
-**NOTE:** The `cincinnati-operator` must be available in the mirror for OSUS to work!
-
-
-
-### 4. Login and Verify Cluster State
+### 1. Login and Verify Cluster State
 
 #### Option A: Use kubeadmin credentials
 ```
@@ -752,6 +731,123 @@ oc get co
 [Back to top](#who-should-use-aba)
 
 We need help!  Here are some ideas for new features and enhancements.  
+
+
+### 2. Connect OperatorHub to Internal Mirror Registry
+
+```
+aba day2
+```
+
+- This configures OpenShift to use your _internal mirror registry_ as the source for OperatorHub content.  
+It also ensures that OperatorHub continues to work properly, even when the cluster is in a disconnected environment.  
+
+**Important:**  
+Re-run this command whenever new Operators are added or updated in your mirror registry — for example, after running `aba load` or `aba sync` again.  
+This step refreshes OpenShift’s OperatorHub configuration so it includes the latest mirrored Operators.
+
+
+### 3. Synchronize NTP Across Cluster Nodes
+
+```
+aba day2-ntp
+```
+- Ensures all nodes are connected to NTP servers. Note that time drift can cause OpenShift installation or operation to fail.
+
+
+
+### 4. Enable OpenShift Update Service (OSUS)
+
+```
+aba day2-osus
+```
+- Configures OpenShift to receive updates via your _internal mirror_. Useful for enabling controlled cluster upgrades in disconnected setups.
+
+**NOTE:** The `cincinnati-operator` must be available in the mirror for OSUS to work!
+
+
+## Advanced Use
+
+### Aba can run in a container (partial support)
+
+  - Tested on Mac M1 (`arm64`) with successful results.
+  - You can run Aba in a container, for example:
+    ```
+    docker run -it --rm --name centos9 quay.io/centos/centos:stream9
+    # Now install aba:
+    bash-5.1# bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
+    cd aba
+    aba
+    ```
+  - In the arm64 container, Aba can:
+    - Connect to an existing remote registry (installation of a new registry from inside the container is not yet working since the Quay `aba/mirror-registry` installer only seems to run on x86).
+    - Access public registries over the Internet (directly or through a proxy).
+    - Generate an `arm64` ISO image suitable for OpenShift installation on `arm64` systems.
+
+  - Tested Use Case:
+    - An ISO, generated from within the container, was successfully used to install OpenShift on an M1 Mac using VMware Fusion.
+
+
+
+### Creating an Install bundle on a Restricted VM or Laptop
+
+In some environments — such as public cloud providers or restricted laptops — it may **not** be possible to write to a portable storage device due to limited access.  
+In such cases, an alternative method can be used, where the files are copied separately.
+
+Example:
+```
+aba tarrepo --out $HOME/temp/dir/aba.tar      # Creates the install bundle, excluding the large image set archive file(s).
+```
+- Writes the _install bundle_ to the temporary directory, **excluding** the large image set archive tar files under `aba/mirror/save/mirror_000001.tar`.  
+- The image set archive file(s) under `aba/mirror/save` and the _install bundle_ (tarball `aba.tar`) can then be copied separately to a storage device, such as a USB stick, S3 bucket, or other method.
+
+Copy the `aba.tar` file to the _internal bastion_ and unpack the archive. Note the directory `aba/mirror/save` which does NOT contain archive files. 
+Copy or move the image archive tar file(s), as is, from where you stored them, into the `aba/mirror/save` directory on the _internal bastion_.
+
+Example:
+```
+tar xvf aba.tar
+mv ~/temp_storage_dir/mirror_000001.tar aba/mirror/save
+cd aba
+./install
+aba
+```
+
+After this, proceed with loading the images into your registry using `aba load`.  Continue to follow the instructions in the [Fully Disconnected (Air-Gapped) Scenario](#fully-disconnected-air-gapped) section.
+
+
+
+### Cluster presets are used mainly to automate the testing of Aba.
+
+>> **This feature is deprecated and will be removed in a future version!**
+
+```
+mv .shortcuts.conf shortcuts.conf
+<edit> shortcuts.conf to add/adjust any settings
+aba sno
+```
+- This will create a directory `sno` and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `shortcut.conf` must be completed for this to work).  If you are using VMware the VMs will be created for you.
+- Be sure to go through *all* the values in `aba/vmware.conf` and `sno/cluster.conf`.
+- Be sure your DNS entries have been set up in advance. See above on Prerequisites.
+- Aba will show you the installation progress.  To troubleshoot cluster installation, run `aba ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All Aba commands and actions are idempotent. If something goes wrong, fix it and run the command again — Aba will always try to do the right thing.
+
+```
+aba compact    # for a 3 node cluster topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
+aba standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
+```
+- Run this to create a compact cluster (works in a similar way to the above).
+
+
+### To install aba from the dev branch run the following:
+
+```
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+```
+
+[Back to top](#who-should-use-aba)
+
+
+
 
 ## Feature Backlog and Ideas
 
@@ -801,12 +897,11 @@ We need help!  Here are some ideas for new features and enhancements.
 ## Miscellaneous
 
 - oc-mirror v2 is now the only version supported by aba. 
-- To change oc-mirror's default cache location (~/.oc-mirror), export the `OC_MIRROR_CACHE` environment variable to a path with sufficient disk space, e.g.:
-
+- To change oc-mirror's default cache location (~/.oc-mirror/.cache), export the `OC_MIRROR_CACHE` environment variable to a path with sufficient disk space, e.g.:
 ```
-export OC_MIRROR_CACHE=/path/to/big-drive
+export OC_MIRROR_CACHE=/path/to/large-drive
 ```
-- By default, aba sets the cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by `data_dir` in mirror/mirror.conf (default is $HOME). You can override these locations by exporting the environment variables, as shown above.
+- By default, aba sets the cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by `data_dir` in `aba/mirror/mirror.conf` (default is $HOME/.oc-mirror). You can override these locations by exporting the environment variables, as shown above.
 
 - You can list the dependent images of operators using this script, for example: `scripts/listopdeps.sh 4.18 odf-operator`
 
@@ -850,93 +945,13 @@ aba
 [Back to top](#who-should-use-aba)
 
 
-## Advanced Use
-
-### Aba can run in a container (partial support)
-
-  - Tested on Mac M1 (`arm64`) with successful results.
-  - You can run Aba in a container, for example:
-    ```
-    docker run -it --rm --name centos9 quay.io/centos/centos:stream9
-    # Now install aba:
-    bash-5.1# bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-    cd aba
-    aba
-    ```
-  - In the arm64 container, Aba can:
-    - Connect to an existing remote registry (installation of a new registry from inside the container is not yet working since the Quay `aba/mirror-registry` installer only seems to run on x86).
-    - Access public registries over the Internet (directly or through a proxy).
-    - Generate an `arm64` ISO image suitable for OpenShift installation on `arm64` systems.
-
-  - Tested Use Case:
-    - An ISO, generated from within the container, was successfully used to install OpenShift on an M1 Mac using VMware Fusion.
-
-
-
-### Creating an Install bundle on a Restricted VM or Laptop
-
-In some environments — such as public cloud providers or restricted laptops — it may **not** be possible to write to a portable storage device due to limited access.  
-In such cases, an alternative method can be used, where the files are copied separately.
-
-Example:
-```
-aba tarrepo --out $HOME/temp/dir/aba.tar      # This creates the entire install bundle, excluding the large image set archive file(s).
-```
-- Writes the _install bundle_ to the temporary directory, **excluding** the large image set archive tar files under `aba/mirror/save`.  
-- The image set archive file(s) under `aba/mirror/save` and the _install bundle_ (repository tarball `aba.tar`) can then be copied separately to a storage device, such as a USB stick, S3 bucket, or other method.
-
-Copy the `aba.tar` file to the _internal bastion_ and unpack the archive. Note the directory `aba/mirror/save` which does not contain archive files. 
-Copy or move the image archive tar file(s), as is, from where you stored them, into the `aba/mirror/save` directory on the _internal bastion_.
-
-Example:
-```
-tar xvf aba.tar
-mv ~/temp_storage_dir/mirror_000001.tar aba/mirror/save
-cd aba
-./install
-aba
-```
-
-After this, proceed with loading the images into your registry using `aba load`.  Continue to follow the instructions in the [Fully Disconnected (Air-Gapped) Scenario](#fully-disconnected-air-gapped) section.
-
-
-
-### Cluster presets are used mainly to automate the testing of Aba.
-
->> **This feature is deprecated and will be removed in a future version!**
-
-```
-mv .shortcuts.conf shortcuts.conf
-<edit> shortcuts.conf to add/adjust any settings
-aba sno
-```
-- This will create a directory `sno` and then install SNO OpenShift using the Agent-based installer (note, *all* preset parameters in `shortcut.conf` must be completed for this to work).  If you are using VMware the VMs will be created for you.
-- Be sure to go through *all* the values in `aba/vmware.conf` and `sno/cluster.conf`.
-- Be sure your DNS entries have been set up in advance. See above on Prerequisites.
-- Aba will show you the installation progress.  To troubleshoot cluster installation, run `aba ssh` to log into the rendezvous node. If there are any issues - e.g. incorrect DNS records - fix them and try again.  All Aba commands and actions are idempotent. If something goes wrong, fix it and run the command again — Aba will always try to do the right thing.
-
-```
-aba compact    # for a 3 node cluster topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
-aba standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must be completed for this to work).
-```
-- Run this to create a compact cluster (works in a similar way to the above).
-
-
-### To install aba from the dev branch run the following:
-
-```
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
-```
-
-[Back to top](#who-should-use-aba)
-
 
 ## Frequently Asked Questions (FAQ)
 
 **Q: Does Aba know what RPM packages to install beforehand?**  
 
 **Yes.** Aba uses predefined package list files depending on whether you're in a connected or air-gapped environment:
-- Connected workstation or laptop: `aba/templates/rpms-external.txt`
+- _connected workstation_ or laptop: `aba/templates/rpms-external.txt`
 - Disconnected bastion: `aba/templates/rpms-internal.txt`  
 
 You can let Aba install them automatically (if `dnf` is configured) or install them manually.
