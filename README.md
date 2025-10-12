@@ -125,7 +125,7 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 After configuring these prerequisites, run `aba` to start the OpenShift installation workflow.
 
-Note: that Aba also works in connected environments without a mirror registry, e.g. by accessing public container registries via a proxy or directly.  To do this, configure the `int_connection` value in `cluster.conf` after creating the `cluster directory` (see section [Installing OpenShift](https://github.com/sjbylo/aba/tree/dev?tab=readme-ov-file#installing-openshift) for more).
+>> Note: that Aba also works in connected environments without a mirror registry, e.g. by accessing public container registries via a proxy or directly.  To do this, configure the `int_connection` value in `cluster.conf` after creating the `cluster directory` (see section [Installing OpenShift](https://github.com/sjbylo/aba/tree/dev?tab=readme-ov-file#installing-openshift) for more).
 
 ### Fully Disconnected (Air-Gapped) Prerequisites
 
@@ -168,7 +168,7 @@ In a partially disconnected environment, the internal bastion has limited (or pr
 
 ### Method 1: Single command
 
->> Aba requires root access, either directly or via password-less sudo. 
+>> Note that Aba requires root access, either directly or via password-less sudo. 
 
 Download and install Aba in one command (preferred):
 ```
@@ -304,10 +304,12 @@ cd aba
 ./install                   # Install aba on the bastion.
 aba
 ```
-
-```
+<!--
 sudo dnf install make -y     # If dnf does not work in the disconnected environment (i.e. no Satalite), ensure all
                              # required RPMs are pre-installed, e.g. from a DVD drive at the time of installation.
+-->
+
+```
 aba load
 ```
 - will (if required) install _Mirror Registry for Red Hat OpenShift_ (Quay) from the install bundle and then load the images into the mirror registry.
@@ -323,9 +325,9 @@ Note that the above 'air-gapped workflow' can be repeated in the *exact same way
 For example, by:
 - editing the `mirror/save/imageset-save.yaml` file on the connected workstation to add more images or to fetch the latest images
 - running `aba save`
-- running `aba inc` (or aba tar or aba tarrepo) to create an install bundle (see above)
+- running `aba tar` (or aba tar or aba tarrepo) to create an install bundle (see above)
 - unpacking the tar archive on the bastion
-- running `aba load` to load the images into the internal registry.
+- running `aba load` to load the images from disk into the _internal mirror registry_.
 
 Note that generated 'image sets' are sequential and must be pushed to the target mirror registry in order. You can derive the sequence number from the file name of the generated image set archive file in the mirror/save directory.
 
