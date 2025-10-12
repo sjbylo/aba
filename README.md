@@ -89,6 +89,32 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 ## Prerequisites
 
+### Common Prerequisites for Both Environments
+
+#### Registry Storage
+   - A minimum of 30 GB is required for OpenShift platform release images alone. Additional Operators will require significantly more space — 500 GB or more is recommended.
+
+#### Network Configuration
+   - **DNS**: Configure the following DNS A records which match the intended cluster name and base domain ('ocp1' and 'example.com' in the below example):
+      - **OpenShift API**: `api.ocp1.example.com` pointing to a free IP address in the internal subnet where OpenShift will be installed.
+      - **OpenShift Ingress**: `*.apps.ocp1.example.com` (wildcard A record) pointing to a free IP address in the internal subnet.
+      - **Mirror Registry**: `registry.example.com` pointing to the IP address of your internal mirror registry (or where Aba should install it).
+      - *Note*: For Single Node OpenShift (SNO), configure both OpenShift API and Ingress records to point to the *same IP address*.
+   - **NTP**: An NTP server is required to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
+
+#### Platform
+   - For bare-metal installations, you will set `platform=bm` in `aba.conf` and manually boot the nodes using the generated ISO file.
+   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
+
+#### Registry
+   - If you're using an existing registry, place its credentials (pull secret and root CA) in the `aba/mirror/regcreds` directory:
+      - `aba/mirror/regcreds/pull-secret-mirror.json`
+      - `aba/mirror/regcreds/rootCA.pem`
+
+After configuring these prerequisites, run `aba` to start the OpenShift installation workflow.
+
+Note: that Aba also works in connected environments without a mirror registry, e.g. by accessing public container registries via a proxy or directly.  To do this, configure the `int_connection` value in `cluster.conf` after creating the `cluster directory` (see section [Installing OpenShift](https://github.com/sjbylo/aba/tree/dev?tab=readme-ov-file#installing-openshift) for more).
+
 ### Fully Disconnected (Air-Gapped) Prerequisites
 
 To install OpenShift in a fully disconnected (air-gapped) environment, one workstation or laptop that is connected to the Internet and one disconnected bastion are required. From now on, we will refer to these as _connected workstation_ and _internal bastion_ or just _bastion_.
@@ -121,32 +147,6 @@ In a partially disconnected environment, the internal bastion has limited (or pr
    - Install required RPMs listed in `aba/templates/rpms-internal.txt`. Note: This is a different file from the one mentioned above.
       - Or, if dnf is configured, let Aba use dnf to install the packages.
    - Optionally, run `sudo dnf update` to ensure all packages are up to date.
-
-### Common Prerequisites for Both Environments
-
-#### Registry Storage
-   - An absolute minimum of 30 GB is required (for OpenShift platform release images only), with additional Operators requiring much more space (500 GB or more is recommended).
-
-#### Network Configuration
-   - **DNS**: Configure the following DNS A records which match the intended cluster name and base domain ('ocp1' and 'example.com' in the below example):
-      - **OpenShift API**: `api.ocp1.example.com` pointing to a free IP address in the internal subnet where OpenShift will be installed.
-      - **OpenShift Ingress**: `*.apps.ocp1.example.com` (wildcard A record) pointing to a free IP address in the internal subnet.
-      - **Mirror Registry**: `registry.example.com` pointing to the IP address of your internal mirror registry (or where Aba should install it).
-      - *Note*: For Single Node OpenShift (SNO), configure both OpenShift API and Ingress records to point to the *same IP address*.
-   - **NTP**: An NTP server is required to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
-
-#### Platform
-   - For bare-metal installations, you will set `platform=bm` in `aba.conf` and manually boot the nodes using the generated ISO file.
-   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
-
-#### Registry
-   - If you're using an existing registry, place its credentials (pull secret and root CA) in the `aba/mirror/regcreds` directory:
-      - `aba/mirror/regcreds/pull-secret-mirror.json`
-      - `aba/mirror/regcreds/rootCA.pem`
-
-After configuring these prerequisites, run `aba` to start the OpenShift installation workflow.
-
-Note: that Aba also works in connected environments without a mirror registry, e.g. by accessing public container registries via a proxy or directly.  To do this, configure the `int_connection` value in `cluster.conf` after creating the `cluster directory` (see section [Installing OpenShift](https://github.com/sjbylo/aba/tree/dev?tab=readme-ov-file#installing-openshift) for more).
 
 
 [Back to top](#who-should-use-aba)
@@ -254,55 +254,40 @@ Note that the above 'disconnected scenario' can be repeated, for example to down
 
 ### Fully disconnected (air-gapped) Scenario
 
-**Please note that it is now recommended to use the above `aba bundle` [link](#creating-a-custom-install-bundle) command to initiate a fully air-gapped installation, which will complete the steps below for you.**
+**Please note that it is recommended to use the above `aba bundle` [command](#creating-a-custom-install-bundle) to initiate a fully air-gapped installation, which will automatically complete the below steps (`aba save` and `aba tar`) for you.**
 
 >> **For Red Hatters:  download curated, ready-made, up-to-date, and tested Aba install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy**
 
-In this scenario, your connected workstation has access to the Internet but no access to the disconnected environment.
-You also require a bastion in a disconnected environment. See the [prerequisites](#prerequisites) above.
+In this scenario, your _connected workstation_ has access to the Internet but no access to the disconnected environment.
+You also require a bastion in a disconnected environment.  See the [prerequisites](#prerequisites) above.
 
 ```
 aba save
 ```
-- pulls the images from the Internet and saves them into the local directory `aba/mirror/save`. Make sure there is enough disk space (30+ GB or much more for Operators)!
+- pulls the images from the Internet and saves them into the local directory `aba/mirror/save`. Make sure there is [enough disk space](#prerequisites) for that directory!
 
-Then, using one of `aba inc/tar/tarrepo` (incremental/full or separate copies), copy the whole aba/ repository (including templates, scripts, images, CLIs and other install files) to your disconnected bastion (in your disconnected environment) via a portable storage device, e.g. a thumb drive.
+Then, using `aba tar`, to copy the whole `aba/` repository (including templates, scripts, images, CLIs and other install files) to your disconnected bastion (in your disconnected environment) via a portable storage device, e.g. a thumb drive, or other method. 
 
 Example:
 
+On the connected workstation, mount your thumb drive and run:
+
 ```
-# On the connected workstation:
-# Mount your thumb drive and:
+aba tar --out /path/to/large/media-drive/aba.tar   # Write archive 'aba.tar' to the device
+                                                   # mounted at /dev/path/to/thumb-drive
+```
 
-aba inc                                          # Write tar archive to /tmp
-or
-aba inc out=/dev/path/to/thumb-drive/aba.tar     # Write archive 'aba.tar' to the device
-                                                  # mounted at /dev/path/to/thumb-drive
-or
-aba inc out=- | ssh user@host "cat > aba.tar"    # Archive and write to internal host (if possible).
+Use your portable storage device to copy the file 'aba.tar' to your _internal bastion_.
 
-# Copy the file 'aba.tar' to your bastion via your portable storage device.
+Then, on the bastion run:
 
-# Then, on the bastion run:
-tar xvf aba.tar                                   # Extract the tar file. Ensure file timestamps are
-                                                  # kept the same as on the connected workstation.
+```
+tar xvf aba.tar             # Extract the tar file. Ensure file timestamps are
+                            # kept the same as on the connected workstation.
 cd aba
-./install
+./install                   # Install aba on the bastion.
 aba
 ```
-
-For such cases where it is not possible to write directly to a portable storage device, e.g. due to restrictions or access is not possible, an alternative command can be used.
-
-Example:
-
-```
-aba tarrepo out=/dev/path/to/drive/aba.tar
-```
-- Write archive `aba.tar` to the device mounted at /dev/path/to/drive, EXCEPT for the image set archive tar files under `aba/mirror/save`
-- The image set archive tar file(s) in the `aba/mirror/save` directory and the repository tarball `aba.tar` can be copied separately to a storage device, e.g. USB stick, S3 or other.
-
-Copy the `aba.tar` file to the bastion and unpack the archive. Note the directory `aba/mirror/save`.
-Copy or move the image archive tar file(s), as is, from the `aba/mirror/save` directory to the connected workstation, into the `aba/mirror/save` directory on the bastion.
 
 ```
 sudo dnf install make -y     # If dnf does not work in the disconnected environment (i.e. no Satalite), ensure all
@@ -333,6 +318,23 @@ Note that generated 'image sets' are sequential and must be pushed to the target
 
 
 [Back to top](#who-should-use-aba)
+
+<!--
+Then, using `aba tar`, copy the whole `aba/` repository (including templates, scripts, images, CLIs and other install files) to your disconnected bastion (in your disconnected environment) via a portable storage device, e.g. a thumb drive.
+
+Example:
+
+```
+# On the connected workstation:
+# Mount your thumb drive and:
+
+aba inc                                          # Write tar archive to /tmp
+or
+aba inc out=/dev/path/to/thumb-drive/aba.tar     # Write archive 'aba.tar' to the device
+                                                  # mounted at /dev/path/to/thumb-drive
+or
+aba inc out=- | ssh user@host "cat > aba.tar"    # Archive and write to internal host (if possible).
+-->
 
 
 ## Installing OpenShift
@@ -826,7 +828,8 @@ aba
 
 ## Advanced Use
 
-- **Aba can run in a container (partial support):**
+### Aba can run in a container (partial support)
+
   - Tested on Mac M1 (`arm64`) with successful results.
   - You can run Aba in a container, for example:
     ```
@@ -845,7 +848,36 @@ aba
     - An ISO, generated from within the container, was successfully used to install OpenShift on an M1 Mac using VMware Fusion.
 
 
-- Cluster presets are used mainly to automate the testing of Aba.
+
+### Creating an Install bundle on a Restricted VM or Laptop
+
+In some environments — such as public cloud providers or restricted laptops — it may **not** be possible to write to a portable storage device due to limited access.  
+In such cases, an alternative method can be used, where the files are copied separately.
+
+Example:
+```
+aba tarrepo --out $HOME/temp/dir/aba.tar      # This creates the entire install bundle, excluding the large image set archive file(s).
+```
+- Writes the _install bundle_ to the temporary directory, **excluding** the large image set archive tar files under `aba/mirror/save`.  
+- The image set archive file(s) under `aba/mirror/save` and the _install bundle_ (repository tarball `aba.tar`) can then be copied separately to a storage device, such as a USB stick, S3 bucket, or other method.
+
+Copy the `aba.tar` file to the _internal bastion_ and unpack the archive. Note the directory `aba/mirror/save` which does not contain archive files. 
+Copy or move the image archive tar file(s), as is, from where you stored them, into the `aba/mirror/save` directory on the _internal bastion_.
+
+Example:
+```
+tar xvf aba.tar
+mv ~/temp_storage_dir/mirror_000001.tar aba/mirror/save
+cd aba
+./install
+aba
+```
+
+After this, proceed with loading the images into your registry using `aba load`.  Continue to follow the instructions in the [Fully Disconnected (Air-Gapped) Scenario](#fully-disconnected-air-gapped) section.
+
+
+
+### Cluster presets are used mainly to automate the testing of Aba.
 
 >> **This feature is deprecated and will be removed in a future version!**
 
