@@ -148,7 +148,7 @@ echo_green -n "Images synchronized successfully!"
 echo 
 echo_green "OpenShift can now be installed. cd to aba's top-level directory and use the command:"
 echo_green "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
-echo_green "Use 'aba cluster --help' for more information about installing clusters"
+echo_green "Use 'aba cluster --help' for more information about installing clusters."
 
 echo
 echo_green "If you have already installed a cluster, (re-)run the command 'aba -d clustername day2' to configure/refresh OperatorHub/Catalogs, Signatures etc."
