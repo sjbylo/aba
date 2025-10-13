@@ -146,7 +146,7 @@ if [[ -s macs.conf ]]; then
 
 	# Check for uniqueness
 	uniq_count=$(echo "$mac_list" | sort -u | wc -l)
-	echo uniq_count=$uniq_count mac_count=$mac_count expected_mac_count=$expected_mac_count
+	###echo uniq_count=$uniq_count mac_count=$mac_count expected_mac_count=$expected_mac_count
 	if (( uniq_count != mac_count )); then
 	    echo_red "Error: Duplicate MAC addresses found in macs.conf! ($mac_count total, $uniq_count unique)" >&2
 	    exit 1

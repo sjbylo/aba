@@ -106,15 +106,15 @@ verify: agentconf  ## Extract cluster configuration details from the generated a
 .bm-message:
 	@echo
 	@echo "Next steps:"
-	@echo "1 cd <cluster name>    # if not already"
+	@echo "1 cd <cluster name>    # If not already, change into your cluster directory."
 	@echo "2 Check & edit the agent configuration files: "
 	@echo "   - $(PWD)/install-config.yaml:"
 	@echo "   - $(PWD)/agent-config.yaml:"
 	@echo "       You must modify the mac addresses to match your host's network interfaces."
-	@echo "       Optionally, add drive & NIC hints and any other network configurations, if needed."
+	@echo "       Optionally, add drive & NIC hints and any other network configurations."
 	@echo "3 Run 'aba iso' to create the ISO file."
-	@echo "4 Power on all your hosts and boot them with the ISO file."
-	@echo "5 Verify that the hosts start up and can connect to the registry successfully."
+	@echo "4 Power on all your servers and boot them with the ISO file."
+	@echo "5 Verify that the servers start up and can connect to the registry successfully."
 	@echo "   - aba ssh    # connect to node0 for any needed troubleshooting."
 	@echo "6 Then, run 'aba mon' to monitor the installation progress."
 	@echo 

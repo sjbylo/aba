@@ -19,7 +19,8 @@ ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-[ ! -s .99-master-chrony-conf-override.bu ] && cat > .99-master-chrony-conf-override.bu <<END
+#[ ! -s .99-master-chrony-conf-override.bu ] && cat > .99-master-chrony-conf-override.bu <<END
+cat > .99-master-chrony-conf-override.bu <<END
 variant: openshift
 version: 4.12.0
 metadata:
@@ -62,7 +63,8 @@ $(for svr in $ntp_servers; do echo "          server $svr iburst"; done)
           local stratum 3 orphan
 END
 
-[ ! -s .99-worker-chrony-conf-override.bu ] && cat > .99-worker-chrony-conf-override.bu <<END
+#[ ! -s .99-worker-chrony-conf-override.bu ] && cat > .99-worker-chrony-conf-override.bu <<END
+cat > .99-worker-chrony-conf-override.bu <<END
 variant: openshift
 version: 4.12.0
 metadata:
