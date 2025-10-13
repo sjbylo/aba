@@ -755,7 +755,7 @@ It also ensures that OperatorHub continues to work properly, even when the clust
 
 **Important:**  
 Re-run this command whenever new Operators are added or updated in your mirror registry — for example, after running `aba -d mirror load` or `aba -d mirror sync` again.  
-This step refreshes OpenShift’s OperatorHub configuration so it includes the latest mirrored Operators.
+This step refreshes OpenShift’s OperatorHub configuration (catalog) so it includes the latest mirrored Operators.
 
 
 ### Synchronize NTP Across Cluster Nodes
@@ -763,7 +763,7 @@ This step refreshes OpenShift’s OperatorHub configuration so it includes the l
 ```
 aba day2-ntp
 ```
-- Ensures all nodes are connected to NTP servers. Note that time drift can cause OpenShift installation or operation to fail.
+- Ensures all nodes are connected to NTP servers (after a node restart). Note that time drift can cause OpenShift installation or operation to fail.
 
 
 
@@ -772,7 +772,7 @@ aba day2-ntp
 ```
 aba day2-osus
 ```
-- Configures OpenShift to receive updates via your _internal mirror_. Useful for enabling controlled cluster upgrades in disconnected setups.
+- Configures OpenShift to receive updates via your _internal mirror_. Useful for enabling controlled cluster upgrades in disconnected environments.
 
 **NOTE:** The `cincinnati-operator` must be available in the mirror for OSUS to work!
 
@@ -782,18 +782,22 @@ aba day2-osus
 After Aba has installed it's first OpenShift cluster, the mirror should be managed using `oc-mirror` in the usual way or Aba can be used to assist. 
 The usual workflows with Aba can be repeated in the *same way*, for example, to incrementally install operators or download new versions of platform images to upgrade OpenShift.  
 
-In a fully disconnected environment, the following can be done:
+First enable OpenShift Update Service (see above).  
+
+In a fully disconnected environment, you can do one of the following:
 
 - Edit the `aba/mirror/save/imageset-save.yaml` image set configuration file on the _connected workstation_ to add more images or to fetch the latest platform images.
 - Run `aba -d mirror save`
-- Copy the imaege set archive file (mirror_000001.tar) from the _connected workstation_ to your _internal bastion_.
+- Copy the imaege set archive file (aba/mirror/save/mirror_000001.tar) from the _connected workstation_ to your _internal bastion_.
 - Run `aba -d mirror load` to load the images from disk into the _internal mirror registry_.
+- Upgrade OpenShift on the usual way. 
 
 In a partially disconnected environment, the following can be done:
 
 - Edit the `aba/mirror/sync/imageset-sync.yaml` image set configuration file on the _connected bastion_ to add more images or to fetch the latest platform images.
 - Run `aba -d mirror sync` to download and push the images into your internal mirror registry.
 - Run `aba -d mycluster day2` to update any operator catalogs and release signatures in your cluster(s).   
+- Upgrade OpenShift on the usual way. 
 
 
 
@@ -808,11 +812,11 @@ In a partially disconnected environment, the following can be done:
     docker run -it --rm --name centos9 quay.io/centos/centos:stream9
     # Now install aba:
     bash-5.1# bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-    cd aba
-    aba
+    bash-5.1# cd aba
+    bash-5.1# aba
     ```
   - In the arm64 container, Aba can:
-    - Connect to an existing remote registry (installation of a new registry from inside the container is not yet working since the Quay `aba/mirror-registry` installer only seems to run on x86).
+    - Connect to an existing remote registry (installation of a new registry - to a remote host - from inside the container was not working when we tested it. The Quay `aba/mirror-registry` installer only seems to run on x86). 
     - Access public registries over the Internet (directly or through a proxy).
     - Generate an `arm64` ISO image suitable for OpenShift installation on `arm64` systems.
 
