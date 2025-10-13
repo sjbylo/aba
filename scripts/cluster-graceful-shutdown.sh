@@ -121,6 +121,7 @@ wait
 echo 
 echo_green "All servers in the cluster will complete shutdown and power off shortly!" | tee -a $logfile
 
+# Only wait if installed on VMs
 if [ "$wait" -a -s vmware.conf ]; then
 	echo_cyan "Waiting for all nodes to power down ..." | tee -a $logfile
 	until make -s ls | grep poweredOn | wc -l | grep -q ^0$; do sleep 10; done
