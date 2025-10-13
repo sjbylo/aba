@@ -153,8 +153,7 @@ fi
 if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
 	echo "Waiting for all cluster operators ..."
 
-	echo
-	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False$' || true | wc -l| grep '^0$'"; then
+	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
 		echo "Giving up waiting for the operators!"
 		myexit 0
 	fi
