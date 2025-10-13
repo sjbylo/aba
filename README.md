@@ -18,6 +18,7 @@ Use Aba to quickly set up OpenShift in a disconnected environment while letting 
   - [Fully Disconnected (Air-Gapped) Prerequisites](#fully-disconnected-air-gapped-prerequisites)
   - [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
   - [Fully Connected Prerequisites](#fully-connected-prerequisites)
+- [Downloading an Install Bundle](#downloading-an-install-bundle)
 - [Aba OpenShift Installation Workflow Diagram](#aba-openshift-installation-workflow-diagram)
 - [Install Aba](#install-aba)
   - [Method 1: Single command](#method-1-single-command)
@@ -113,10 +114,15 @@ These configurations ensure that each network zone meets OpenShift’s requireme
    - For bare-metal installations, you will set `platform=bm` in `aba.conf` and manually boot the nodes using the generated ISO file.
    - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
 
-#### Existing Registry Prerequisites
+#### Existing Registry Prerequisites. <!-- this is a perma-link from Aba blog, Oct 2025 -->
    - If you're using an existing registry, place its credentials (pull secret and root CA) in the `aba/mirror/regcreds` directory. Here is an example:
       - `aba/mirror/regcreds/pull-secret-mirror.json`
       - `aba/mirror/regcreds/rootCA.pem`
+   - Once the files are in place, run the following command to verify the connection to your existing mirror registry:
+     ```
+     aba -d mirror verify
+     ```
+   - After the connection has been verified, proceed with pushing images into your registry with `aba -d mirror load` or `aba -d mirror sync`.
 
 For more, see the [Example Credentials](#example-credentials-for-an-existing-mirror-registry).
 
@@ -164,6 +170,19 @@ Aba also works in connected environments without a _mirror registry_, e.g. by ac
 
 
 
+
+[Back to top](#who-should-use-aba)
+
+
+# Downloading an Install Bundle
+
+The `Install Bundle` is a single archive that contains everything you need for a specific use case. It includes the install images, all matching CLI install files, the registry setup, and the automation needed to generate the configuration files required to install OpenShift in an air-gapped environment (tested, repeatable, and ready to go).
+
+You can download the latest Install Bundles from: https://red.ht/disco-easy  
+
+Note that if these bundles don’t suit your needs, let us know your requirements — including the use case and which images or operators are needed.  
+
+You can also create your own bundle.  See [Creating a Custom Install Bundle](#creating-a-custom-install-bundle) for more. 
 
 [Back to top](#who-should-use-aba)
 
