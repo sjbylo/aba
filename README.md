@@ -96,6 +96,7 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 # Prerequisites
 
 ## Common Prerequisites for Both Environments
+<!-- this is a perma-link from Aba blog, Oct 2025 -->
 
 #### Registry Storage
    - Registry images are stored by default under your home directory. Use the `data_dir=` value in `aba/mirror/mirror.conf` to change this. 
@@ -114,7 +115,9 @@ These configurations ensure that each network zone meets OpenShift’s requireme
    - For bare-metal installations, you will set `platform=bm` in `aba.conf` and manually boot the nodes using the generated ISO file.
    - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
 
-#### Existing Registry Prerequisites. <!-- this is a perma-link from Aba blog, Oct 2025 -->
+#### Existing Registry Prerequisites
+<!-- this is a perma-link from Aba blog, Oct 2025 -->
+
    - If you're using an existing registry, place its credentials (pull secret and root CA) in the `aba/mirror/regcreds` directory. Here is an example:
       - `aba/mirror/regcreds/pull-secret-mirror.json`
       - `aba/mirror/regcreds/rootCA.pem`
@@ -142,6 +145,8 @@ To install OpenShift in a fully disconnected (air-gapped) environment, one works
    - Optionally, run `sudo dnf update` to ensure all packages are up to date.
 
 #### Internal Bastion Prerequisites
+<!-- this is a perma-link from Aba blog, Oct 2025 -->
+
    - A RHEL 8 or 9 VM or host within your fully disconnected environment.
    - Aba requires root access, either directly or via passwordless sudo.
    - Install required RPMs as listed in the file `aba/templates/rpms-internal.txt`.  Note: This is a different file from the one mentioned above.
@@ -180,7 +185,7 @@ The `Install Bundle` is a single archive that contains everything you need for a
 
 You can download the latest Install Bundles from: https://red.ht/disco-easy  
 
-Note that if these bundles don’t suit your needs, let us know your requirements — including the use case and which images or operators are needed.  
+Note that if these bundles don’t suit your needs, [let us know](https://github.com/sjbylo/aba/issues/new) your requirements — including the use case and which images or operators are needed.  
 
 You can also create your own bundle.  See [Creating a Custom Install Bundle](#creating-a-custom-install-bundle) for more. 
 
@@ -696,6 +701,7 @@ Run 'aba -h' or 'aba help' for more.
 
 
 # Day 2 Operations
+<!-- this is a perma-link from Aba blog, Oct 2025 --> 
 
 Once your OpenShift cluster is installed using Aba, there are several recommended "Day 2" tasks to finalize configuration and ensure cluster health.
 
