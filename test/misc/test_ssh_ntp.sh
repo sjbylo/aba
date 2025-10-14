@@ -1,1 +1,2 @@
-until aba --dir $1 ssh --cmd 'chronyc sources' | grep $2; do echo -n .; sleep 10; done
+d=$1; shift
+until aba --dir $d ssh --cmd 'chronyc sources' | grep "$*"; do echo -n .; sleep 10; done
