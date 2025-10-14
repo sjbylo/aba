@@ -598,11 +598,13 @@ You can now install the _Mirror Registry for Red Hat OpenShift_ (Quay) to localh
 aba mirror -H registry.example.com load --retry 3
 ```
 
-To install OpenShift run the following command and follow the instructions (run: aba cluster --help or see below for more details):
+To install OpenShift run the following command and follow the instructions:
 
 ```
 aba cluster --name mycluster --type compact [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]
 ```
+
+Run: `aba cluster --help` or see the [Installing OpenShift](#installing-openshift) section for more details.
 
 [Back to top](#who-should-use-aba)
 
