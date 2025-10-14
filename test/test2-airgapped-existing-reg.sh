@@ -227,8 +227,8 @@ mylog "Starting tests to check out agent config files for various cluster config
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete $ctype dir: $subdir/aba/standard" rm -rf $subdir/aba/$ctype
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script for NTP" "echo until aba --dir \$1 ssh --cmd \'chronyc sources\' | grep \$2\; do echo -n .\; sleep 10\; done > test_ssh_ntp.sh"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "echo until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do echo -n .\; sleep 10\; done > test_ssh.sh"
+test-cmd "Copy test script" scp test/misc/test_ssh_ntp.sh $TEST_USER@$int_bastion_hostname:
+#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "echo until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do echo -n .\; sleep 10\; done > test_ssh.sh"
 
 # Init
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster --name $ctype --type $ctype --step cluster.conf"
@@ -247,10 +247,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'ens160'"
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip_grep"
 ##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "bash -x $subdir/aba/test/test_ssh_ntp.sh $subdir/aba/$ctype $ntp_ip_grep"
-### TEST
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config (loop)" "until bash -x test_ssh_ntp.sh $subdir/aba/$ctype $ntp_ip_grep; do sleep 10; done"
-### TEST
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype $ntp_ip_grep"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype delete" 
 
@@ -268,11 +265,13 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 5m bash -x test_ssh.sh"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'bond'"
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip_grep"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
+#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype $ntp_ip_grep"
 
 # Test node0 is accessible
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 5m bash -x test_ssh.sh"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
+#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype $ntp_ip_grep"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype delete" 
 
@@ -492,7 +491,8 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Waiting up to 8 mins for
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Initiate NTP config but not wait for completion" "aba --dir $subdir/aba/sno day2-ntp"
 test-cmd -m "Pausing 30s" sleep 60
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config" "until aba --dir $subdir/aba/sno ssh --cmd \"sudo chronyc sources | grep $ntp_ip_grep\"; do sleep 10; done"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config (loop)" "until bash -x test_ssh_ntp.sh $subdir/aba/sno $ntp_ip_grep; do sleep 10; done"
+###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config (loop)" "until bash -x test_ssh_ntp.sh $subdir/aba/sno $ntp_ip_grep; do sleep 10; done"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "bash -x ~/test_ssh_ntp.sh $subdir/aba/sno $ntp_ip_grep"
 # matches ^* 10.0.1.8    
 # for i in {100..105}; do echo $i:;ssh -o LogLevel=ERROR core@10.0.1.$i "sudo chronyc sources | grep ^\^" ; done
 test-cmd -m "Pausing 5s ..." sleep 5
