@@ -245,6 +245,9 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'ens160'"
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip_grep"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd "chronyc sources | grep $ntp_ip_grep"
+### TEST
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config (loop)" "until aba --dir $subdir/aba/$ctype ssh --cmd \"sudo chronyc sources | grep $ntp_ip_grep\"; do sleep 10; done"
+### TEST
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype delete" 
 
