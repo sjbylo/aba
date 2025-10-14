@@ -1066,6 +1066,18 @@ You can let Aba install them automatically (if `dnf` is configured) or install t
 
 ---
 
+**Q: Can bonds and vlan be configured?
+
+**Yes.** Configure bonds and/or vlan in the `cluster.conf` file, in your "cluster directory". If you provide more than one comma seperated network interfaces in the `ports` value, Aba will create a bond.  If you provide a value for the `vlan` tag, Aba will use that and configure vlan.  If you use both aba will configue vlan on bonded interfaces. 
+
+---
+
+**Q: How can I determine the network interface names of my bare-metal servers? 
+
+Boot your servers using the Red Hat CoreOS live DVD and check the output of the `ip a` command. 
+
+---
+
 **Q: Can Aba run inside a container?**  
 
 **Preferably, run Aba in an x86 RHEL 8 or 9 VM.** (VM or physical). Aba has been tested in a container, see the `Advanced` section. However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing _Mirror Registry for Red Hat OpenShift_ (Quay) or managing certain system-level dependencies might not work.
@@ -1105,10 +1117,16 @@ The following parameters and values in cluster.conf are used to determine the cl
 
 **Q: How to configure passwordless sudo?**
 
-Run the following as the user who you want to grant passwordless sudo permission:
+Run the following as the user who you want to grant passwordless sudo permission (enter the root password):
 
 ```
 echo "$(whoami) ALL=(root) NOPASSWD:ALL" | sudo tee -a /etc/sudoers.d/$(whoami)
+```
+
+Or, as root, write the following to a file under /etc.  Replace `username` with the actual username of the user that requires passwordless sudo access. 
+
+```
+echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 ```
 
 [Back to top](#who-should-use-aba)
