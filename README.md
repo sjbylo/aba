@@ -149,7 +149,8 @@ To install OpenShift in a fully disconnected (air-gapped) environment, one works
 
    - A RHEL 8 or 9 VM or host within your fully disconnected environment.
    - Aba requires root access, either directly or via passwordless sudo.
-   - Install required RPMs as listed in the file `aba/templates/rpms-internal.txt`.  Note: This is a different file from the one mentioned above.
+   - Install required RPMs as listed in the file `aba/templates/rpms-internal.txt`.  **Note:** This file lists the package names to be installed on the _internal bastion_ and is different from the file mentioned above for the _connected workstation_.
+
 
 After configuring these prerequisites, run `aba` to start the OpenShift installation workflow.
 
@@ -180,6 +181,7 @@ Aba also works in connected environments without a _mirror registry_, e.g. by ac
 
 
 # Downloading an Install Bundle
+<!-- this is a perma-link from Aba blog, Oct 2025 --> 
 
 The `Install Bundle` is a single archive that contains everything you need for a specific use case. It includes the install images, all matching CLI install files, the registry setup, and the automation needed to generate the configuration files required to install OpenShift in an air-gapped environment (tested, repeatable, and ready to go).
 
@@ -888,12 +890,12 @@ bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubuserc
 ### Installing RPMS
 
 - **Required RPMs:**
-  - The _bastion_ must be able to install required RPMs from an appropriate repository.
-  - If RPMs cannot be installed using `sudo dnf install`, ensure they are pre-installed (for example, from a DVD during RHEL installation).
-  - If RPMs are not available in your disconnected environment, you can use `aba -d rpms download` to download the required packages on a connected workstation.  
-    Copy them to the bastion and install using `dnf localinstall rpms/*.rpm`.  
+  - The _bastion_ must be able to install required RPM packages from an appropriate repository.
+  - If RPMs cannot be installed using `sudo dnf install ...`, ensure they are pre-installed (for example, from a DVD during RHEL installation).
+  - If RPMs are not available in your disconnected environment, you can use `aba -d rpms download` to download the required packages on a connected workstation.   Copy them to the bastion and install using `dnf localinstall rpms/*.rpm`.  
     **Note:** This works only if your connected workstation and internal bastion are running the **exact same version of RHEL** (based on testing experience).
 
+If you do not have those RPM packages installed, aba attempts to install them using dnf. If dnf is not configured in your disconnected environment, you’ll need to install the packages manually (e.g., from a DVD or another source). 
 
 
 
