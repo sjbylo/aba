@@ -40,8 +40,9 @@ rm -f ~/.aba.previous.backup
 int_bastion_hostname=registry.example.com
 int_bastion_vm_name=bastion-internal-$internal_bastion_rhel_ver
 ntp_ip=10.0.1.8 # If available
-#ntp_ip_grep='\\^\\*.*10.0.1.8'
-ntp_ip_grep='\^\*.*10\.0\.1\.8'
+#ntp_ip_grep='\^\*.*10\.0\.1\.8'
+ntp_ip_grep='\*\ 10\.0\.1\.8'
+ntp_ip_grep2='\*.*10\.0\.1\.8'
 
 source scripts/include_all.sh no-trap # Need for below normalize fn() calls
 source test/include.sh
@@ -245,14 +246,16 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir
 # Test node0 is accessible
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 5m bash -x test_ssh.sh"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'ens160'"
+
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip_grep"
 ##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype 10.0.1.8"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype 10\.0\.1\.8"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype \"\^\*\ 10\.0\.1\.8\""
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype \"\*\ 10\.0\.1\.8\""
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype $ntp_ip_grep"
+##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype 10.0.1.8"
+##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype 10\.0\.1\.8"
+##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype \"\^\*\ 10\.0\.1\.8\""
+##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype \"\*\ 10\.0\.1\.8\""
+##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype $ntp_ip_grep"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype '$ntp_ip_grep'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype '$ntp_ip_grep2'"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype delete" 
 
@@ -269,14 +272,12 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir
 # Test node0 is accessible
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 5m bash -x test_ssh.sh"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'bond'"
-#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP"   "aba --dir $subdir/aba/$ctype ssh --cmd 'chronyc sources' | grep $ntp_ip_grep"
-#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype $ntp_ip_grep"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype '$ntp_ip_grep'"
 
 # Test node0 is accessible
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "timeout 5m bash -x test_ssh.sh"
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype $ntp_ip_grep"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype '$ntp_ip_grep'"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype delete" 
 
@@ -497,7 +498,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Initiate NTP config but not wai
 test-cmd -m "Pausing 30s" sleep 60
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config" "until aba --dir $subdir/aba/sno ssh --cmd \"sudo chronyc sources | grep $ntp_ip_grep\"; do sleep 10; done"
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config (loop)" "until bash -x test_ssh_ntp.sh $subdir/aba/sno $ntp_ip_grep; do sleep 10; done"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/sno $ntp_ip_grep"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/sno '$ntp_ip_grep'"
 # matches ^* 10.0.1.8    
 # for i in {100..105}; do echo $i:;ssh -o LogLevel=ERROR core@10.0.1.$i "sudo chronyc sources | grep ^\^" ; done
 test-cmd -m "Pausing 5s ..." sleep 5
