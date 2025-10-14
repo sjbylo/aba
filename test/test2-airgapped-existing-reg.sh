@@ -42,7 +42,6 @@ int_bastion_vm_name=bastion-internal-$internal_bastion_rhel_ver
 ntp_ip=10.0.1.8 # If available
 #ntp_ip_grep='\^\*.*10\.0\.1\.8'
 ntp_ip_grep='\*\ 10\.0\.1\.8'
-ntp_ip_grep2='\*.*10\.0\.1\.8'
 
 source scripts/include_all.sh no-trap # Need for below normalize fn() calls
 source test/include.sh
@@ -255,7 +254,6 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected .
 ##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype \"\*\ 10\.0\.1\.8\""
 ##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype $ntp_ip_grep"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype '$ntp_ip_grep'"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "timeout 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype '$ntp_ip_grep2'"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype delete" 
 
