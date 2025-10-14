@@ -163,6 +163,7 @@ Use the following command to access the node to see if there are any problems:
 ```
 aba ssh
 ```
+Note: You can run `aba ssh` to easily log into the first node to troubleshoot the agent-based installation process. If ssh fails, you will need to take a look at the server's console and troubleshoot from there.  After fixing the problem, you may need to re-generate the agent configuration files, the ISO file, or both.  Run `aba clean` and then start again, such as by running `aba agentconf`. 
 
 In tests, it was found that repeated installation of OpenShift using the exact same mac addresses tends to cause the install to either fail or to take a long time to complete.
 When installing a fresh cluster, it is better not to run 'aba refresh' but to run 'aba clean' first and then run 'aba'. This will cause the configuration to be refreshed with random mac addresses (as long as "xx" is in use within the 'mac_prefix' parameter in the 'cluster.conf' file).
