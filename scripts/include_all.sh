@@ -191,6 +191,7 @@ verify-aba-conf() {
 		echo $op_sets | grep -q -E "^[a-z,]+" || { echo_red "Error: op_sets invalid in aba.conf: [$op_sets]" >&2; ret=1; }
 		for f in $(echo $op_sets | tr , " ")
 		do
+			[ "$f" = "all" ] && continue # Skip checking this since 'all' means all operators
 			test -s templates/operator-set-$f || { echo_red "Error: No such operator set [templates/operator-set-$f]!" >&2; ret=1; }
 		done
 	fi
