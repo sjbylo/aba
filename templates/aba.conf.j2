@@ -3,8 +3,8 @@
 ocp_channel=		# The channel to use to install OpenShift ('stable', 'fast', 'candidate' or 'eus').
 ocp_version=		# Target OpenShift version. See https://console.redhat.com/openshift/releases for available versions.
 
-platform=bm			# Possible values: 'vmw' (vCenter or ESXi) or 'bm' (bare-metal). 'bm' will skip VM creation. 
-pull_secret_file=~/.pull-secret.json	# Write your Red Hat registry pull secret to this file path. Only used for downloading images.
+platform=bm			# Possible values: 'vmw' (vCenter or ESXi) or 'bm' (bare-metal). 'bm' skips VM creation. 
+pull_secret_file=~/.pull-secret.json	# Write your Red Hat registry pull secret to this file. Only used for downloading images.
 					# Download from: https://console.redhat.com/openshift/downloads#tool-pull-secret
 editor=vi                       # The editor to use, e.g. nano.  Set to 'none' to allow manual edit of all config files.
 ask=true			# Prompt before major changes, e.g. VM/Cluster deletion, cluster installation etc. 
@@ -14,25 +14,25 @@ ask=true			# Prompt before major changes, e.g. VM/Cluster deletion, cluster inst
 op_sets=			# Optional: Add sets of operators, e.g. op_sets=odf,ocpv,acm,mesh3 to the imageset file.
 				# Sets of operators are defined in the files: 'templates/operator-set-*'. Edit them or add your own.
 				# Possible values are: ocp,acm,ocpv,odf,appdev,mesh2,mesh3,odfdr,quay,sec,ai
-				# Special value 'all' will enable all operators to be downloaded! (Ensure enough disk space!)
+				# Value 'all' will enable all operators from redhat-operator-index to be downloaded! (Ensure enough disk space!)
 
 ops=				# Optional: Add individual operators, e.g. ops=web-terminal,devworkspace-operator
 
 excl_platform=false		# If the platform images should be excluded. In nearly all cases, this will be 'false'.
 
 domain={{ domain }}              # The base domain name you want to use for OpenShift.
-machine_network={{ machine_network }}	# OpenShift will be installed into this private network (use CIDR format).
+machine_network={{ machine_network }}	# OpenShift will be installed into this network segment (use CIDR format).
 dns_servers={{ dns_servers }}   # Your DNS server(s) IP addresses (comma separated).
-next_hop_address={{ next_hop_address }}       # Your private network's default route IP.
+next_hop_address={{ next_hop_address }}       # Your private network's default route IP address.
 ntp_servers={{ ntp_servers }}    # Optional: IP addresses or hostnames (comma separated). Configure NTP during bootstrap and day2.
 				# Required if your target platform clock is not synchronized!
-				# Note: the above 5 values can be overridden later in 'cluster.conf', if needed.
+				# Note: the above 5 values can be overridden later in the cluster's 'cluster.conf' file, if needed.
 
-# Only change below values if you know what you're doing!
+# ONLY CHANGE BELOW VALUES IF YOU KNOW WHAT YOU'RE DOING!
 
 verify_conf=true		# Verify syntax of values in config files
 
-oc_mirror_version=v2		# v2 of "oc-mirror" is the default version that aba uses.  v1 can also be used but official support has already stopped.
+oc_mirror_version=v2		# v2 of "oc-mirror" is the default version that aba uses.
                                 # Note: v1 of oc-mirror is no longer supported, all related code is being/has been removed. 
                                 # IMPORTANT NOTES FOR V2 OF OC-MIRROR (3 FEB 2025):
                                 # - v2 does not handle operator dependencies the same way as v1.  You will need to add all
