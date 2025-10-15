@@ -34,7 +34,7 @@ Use Aba to quickly set up OpenShift in a disconnected environment while letting 
 - [Feature Backlog and Ideas](#feature-backlog-and-ideas)
 - [Miscellaneous](#miscellaneous)
 - [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
-  - [License](#license)
+- [License](#license)
 
 
 ![Demo](./images/aba-bundle-demo.gif)
@@ -1132,6 +1132,6 @@ echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 
 [Back to top](#who-should-use-aba)
 
-## License
+# License
 
 Aba is open source software licensed under the [Apache License 2.0](LICENSE).
