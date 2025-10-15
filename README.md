@@ -34,6 +34,7 @@ Use Aba to quickly set up OpenShift in a disconnected environment while letting 
 - [Feature Backlog and Ideas](#feature-backlog-and-ideas)
 - [Miscellaneous](#miscellaneous)
 - [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
+  - [License](#license)
 
 
 ![Demo](./images/aba-bundle-demo.gif)
@@ -1059,16 +1060,16 @@ aba
 **Q: Does Aba know what RPM packages to install beforehand?**  
 
 **Yes.** Aba uses predefined package list files depending on whether you're in a connected or air-gapped environment:
-- _connected workstation_ or laptop: `aba/templates/rpms-external.txt`
-- Disconnected bastion: `aba/templates/rpms-internal.txt`  
+- _Connected workstation_ or laptop: `aba/templates/rpms-external.txt`
+- Disconnected/internal bastion: `aba/templates/rpms-internal.txt`  
 
 You can let Aba install them automatically (if `dnf` is configured) or install them manually.
 
 ---
 
-**Q: Can bonds and vlan be configured?
+**Q: Can bonds and/or vlan be configured on my nodes?
 
-**Yes.** Configure bonds and/or vlan in the `cluster.conf` file, in your "cluster directory". If you provide more than one comma seperated network interfaces in the `ports` value, Aba will create a bond.  If you provide a value for the `vlan` tag, Aba will use that and configure vlan.  If you use both aba will configue vlan on bonded interfaces. 
+**Yes.** Configure bonds and/or vlan in the `cluster.conf` file, in your "cluster directory". If you provide more than one comma seperated network interface names in the `ports` value, Aba will create a bond.  If you provide a value for the `vlan` tag, Aba will use that and configure vlan.  If you use both aba will configue vlan on bonded interfaces. 
 
 ---
 
@@ -1131,3 +1132,6 @@ echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 
 [Back to top](#who-should-use-aba)
 
+## License
+
+Aba is open source software licensed under the [Apache License 2.0](LICENSE).
