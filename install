@@ -136,8 +136,9 @@ do
 			[ -n "${DEBUG_ABA-}" ] && echo "INSTALLED_VER=${INSTALLED_VER-} and repo_ver=${repo_ver-}" >&2
 			if [ "$INSTALLED_VER" -a "$repo_ver" ] && [ $INSTALLED_VER -lt $repo_ver ]; then
 				action=updated
-				ret=2 # If aba is updated we want aba to re-execute itself (see aba)
-				#quiet=1  # since aba has been updated, no need for guidance below
+				ret=2 # If aba is updated we want aba to re-execute itself (see scripts/aba.sh)
+				[ ! "$quiet" ] && ret=0	# Bit of a hack to stop returning non-zero when user runs ./install interactivly
+							# Note: Only aba.sh calls this script with -q flag
 			else
 				# Nothing to do
 				[ ! "$quiet" ] && echo aba is already up-to-date >&2
@@ -164,7 +165,7 @@ do
 				fi
 			fi
 
-			exit $ret  # Success
+			exit $ret  # Success - if aba updates itself, ret=2 
 		fi
 	fi
 done
