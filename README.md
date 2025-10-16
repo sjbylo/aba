@@ -291,7 +291,7 @@ In this scenario, the connected bastion has access to both the Internet and the 
 <img src="images/make-sync.jpg" alt="Disconnected and Air-gapped Scenario" title="Disconnected and Air-gapped scenario" width="80%">
 
 
-Copy images from the Red Hat registriy to your _internal mirror registry_:
+Copy images from the Red Hat registry to your _internal mirror registry_:
 ```
 aba -d mirror sync
 ```
@@ -315,7 +315,7 @@ Now continue with [Installing OpenShift](#installing-openshift) below.
 
 # Fully disconnected (air-gapped) Scenario
 
-**Please note that it is recommended to use the `aba bundle` [command](#creating-a-custom-install-bundle) to create an _install bundle_ to start a fully air-gapped installation, which will automatically complete the below steps (`aba -d mirror save` and `aba tar`) for you.  If, for any reason, you can't use the `aba bundel` command, use the steps below instead.**
+**Please note that it is recommended to use the `aba bundle` [command](#creating-a-custom-install-bundle) to create an _install bundle_ to start a fully air-gapped installation, which will automatically complete the below steps (`aba -d mirror save` and `aba tar`) for you.  If, for any reason, you can't use the `aba bundle` command, use the steps below instead.**
 
 >> **For Red Hatters:  download curated, ready-made, up-to-date, and tested Aba install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy**
 
@@ -333,7 +333,7 @@ aba -d mirror save
 ```
 - pulls the images from the Internet and saves them into the local directory `aba/mirror/save/mirror_000001.tar`. Make sure there is [enough disk space](#prerequisites) for that directory!
 
-Then, create the _install bundle_ using the `aba tar` command, which will copy the whole `aba/` repository (including templates, scripts, images, CLIs and other install files) to the _installl bundle_ file.  You then need to move the _bundle_ to your disconnected bastion via a portable storage device, e.g. a thumb drive, or other method. 
+Then, create the _install bundle_ using the `aba tar` command, which will copy the whole `aba/` repository (including templates, scripts, images, CLIs and other install files) to the _install bundle_ file.  You then need to move the _bundle_ to your disconnected bastion via a portable storage device, e.g. a thumb drive, or other method. 
 
 >> Note: you must use the `aba tar` command to create the _install bundle_. Do not copy the repository yourself, as-is, since some files and directories must be excluded when creating the _bundle_ file. 
 
@@ -358,7 +358,7 @@ cd aba
 aba
 ```
 <!--
-sudo dnf install make -y     # If dnf does not work in the disconnected environment (i.e. no Satalite), ensure all
+sudo dnf install make -y     # If dnf does not work in the disconnected environment (i.e. no Satellite), ensure all
                              # required RPMs are pre-installed, e.g. from a DVD drive at the time of installation.
 -->
 
@@ -419,7 +419,7 @@ aba mon
 
 Note that depending on the value of `platform` in aba.conf, the installation workflow will be different.  
 For `platform=vmw`, the installation is fully automated.  
-For `platform=bm`, aba will guide you through the necessary steps to generate the agent-baseed configuraiton files, the ISO file (boot all nodes) and then monitor the installation.
+For `platform=bm`, aba will guide you through the necessary steps to generate the agent-based configuration files, the ISO file (boot all nodes) and then monitor the installation.
 
 <!--Get help with `aba -h`.-->
 
@@ -625,7 +625,7 @@ Run: `aba cluster --help` or see the [Installing OpenShift](#installing-openshif
 | `aba/`cluster-name`/cluster.conf` | Describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, bonding etc |
 | `aba/vmware.conf`                 | Optional vCenter/ESXi access configuration using `govc` CLI (optional) |
 
-### Customizing Configuiraiton files
+### Customizing Configuration files
 
 If you modify the automatically generated Agent-based configuration files — `install-config.yaml` and `agent-config.yaml` - you take ownership of them, and Aba will no longer modify them.
 
@@ -793,7 +793,7 @@ In a fully disconnected environment, you can do one of the following:
 
 - Edit the `aba/mirror/save/imageset-save.yaml` image set configuration file on the _connected workstation_ to add more images or to fetch the latest platform images.
 - Run `aba -d mirror save`
-- Copy the imaege set archive file (aba/mirror/save/mirror_000001.tar) from the _connected workstation_ to your _internal bastion_.
+- Copy the image set archive file (aba/mirror/save/mirror_000001.tar) from the _connected workstation_ to your _internal bastion_.
 - Run `aba -d mirror load` to load the images from disk into the _internal mirror registry_.
 - Upgrade OpenShift on the usual way. 
 
@@ -956,7 +956,7 @@ We need help!  Here are some ideas for new features and enhancements.
 By default, aba sets the oc-mirror cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by `data_dir` in the configuration file `aba/mirror/mirror.conf` (default value is $HOME). You can explicitly override these locations by changing `data_dir` or exporting the environment variables. 
 
 - To change oc-mirror's default cache location (~/.oc-mirror/.cache), change the value `data_dir` in `aba/mirror/mirror.conf`. 
-  - Example: Set `data_dir=/mnt/large/disk` and the cache will be locted at `/mnt/large/disk/.oc-mirror/.cache` and the temporary directory at `/mnt/large/disk/.oc-mirror/.tmp`.
+  - Example: Set `data_dir=/mnt/large/disk` and the cache will be located at `/mnt/large/disk/.oc-mirror/.cache` and the temporary directory at `/mnt/large/disk/.oc-mirror/.tmp`.
 
 - To change only oc-mirror's default cache location (~/.oc-mirror/.cache), export the `OC_MIRROR_CACHE` environment variable to a path with sufficient disk space, such as:
 ```
@@ -1057,7 +1057,7 @@ aba
 
 # Frequently Asked Questions (FAQ)
 
-**Q: Does Aba know what RPM packages to install beforehand?**  
+**Q: Does Aba know what RPM packages to install?**  
 
 **Yes.** Aba uses predefined package list files depending on whether you're in a connected or air-gapped environment:
 - _Connected workstation_ or laptop: `aba/templates/rpms-external.txt`
@@ -1069,7 +1069,7 @@ You can let Aba install them automatically (if `dnf` is configured) or install t
 
 **Q: Can bonds and/or vlan be configured on my nodes?
 
-**Yes.** Configure bonds and/or vlan in the `cluster.conf` file, in your "cluster directory". If you provide more than one comma seperated network interface names in the `ports` value, Aba will create a bond.  If you provide a value for the `vlan` tag, Aba will use that and configure vlan.  If you use both aba will configue vlan on bonded interfaces. 
+**Yes.** Configure bonds and/or vlan in the `cluster.conf` file, in your "cluster directory". If you provide more than one comma separated network interface names in the `ports` value, Aba will create a bond.  If you provide a value for the `vlan` tag, Aba will use that and configure vlan.  If you use both aba will configure vlan on bonded interfaces. 
 
 ---
 
@@ -1100,9 +1100,9 @@ Running out of disk space is the most likely problem you will encounter when con
 
 ---
 
-**Q: Can I install Operators from community catalogs (outside Red Hat)?**  
+**Q: Can I install Operators from community catalogs?**  
 
-**Yes!** Aba currently supports all four of Red Hat’s official catalogs via `oc-mirror`. 
+**Yes!** Aba currently supports all four of Red Hat’s official catalogs (redhat-operator, certified-operator, redhat-marketplace and community-operator) via `oc-mirror`. 
 
 ---
 
@@ -1112,7 +1112,7 @@ These are set during cluster creation using:
 ```
 aba cluster --name mycluster --type sno|compact|standard
 ```
-The following parameters and values in cluster.conf are used to determine the cluster topology:
+The following values in cluster.conf define the cluster topology:
 1. num_masters
 2. num_workers
 
@@ -1129,6 +1129,11 @@ Or, as root, write the following to a file under /etc.  Replace `username` with 
 ```
 echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 ```
+
+**Q: Can I use Aba to install user provisioned infrastructure (UPI)?**  
+
+**Partially, yes!** Aba can be used to set up the registry and generate the `install-config.yaml` file which can be used to install OpenShift for UPI.  With some juggling, the day2 operations (OperatorHub, OSUS and NTP) can also be used for UPI too. 
+
 
 [Back to top](#who-should-use-aba)
 
