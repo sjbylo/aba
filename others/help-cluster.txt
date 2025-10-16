@@ -1,7 +1,7 @@
 Install OpenShift
 
-Usage (from top level directory):
-  aba cluster --name <name> [options]                                # Create a cluster directory
+Usage (from root of aba directory):
+  aba cluster --name <name> [options]                                # Create a cluster director
 
 Examples:
   aba cluster --name mycluster --type standard                       # Create the cluster dir and install OpenShift
@@ -11,25 +11,26 @@ Examples:
 
 Options:
 
-  aba cluster                             # Create a cluster configuration
+  aba cluster                             # Create a cluster dir with cluster configuration (cluster.conf)
     -y                                    # Automatically accept the default answer to all prompts
-    -n, --name string                     # The name of the cluster to create
-    -t, --type <sno|compact|standard>     # Set type of cluster
+    -n, --name <string>                   # The name of the cluster to create
+    -t, --type <sno|compact|standard>     # Set type of cluster. Default is 'standard'.
     -s, --step <step>                     # Process up to this step or target <cluster.conf|agentconf|iso|mon>
                                           # See steps (targets) with "aba --dir mycluster help"
-    -i, --starting-ip <ip>                # IP addr for the first cluster node
-        --api-vip <ip>                    # IP addr for cluster API
-        --ingress-vip <ip>                # IP addr for application ingress 
+    -i, --starting-ip <ip>                # IP addr for the first cluster node (rendevous/node0)
+        --api-vip <ip>                    # IP addr for cluster's API
+        --ingress-vip <ip>                # IP addr for application ingress
     -I, --int-connection [<proxy|direct>] # Install from the public reg. or set to empty to use mirror
-        --mcpu <count>                    # Set the master cpu count in vCPU (only for virt target)
-        --mmem <count>                    # Set the master memory in GB (only for virt target)
-        --wcpu <count>                    # Set the worker cpu count in vCPU (only for virt target)
-        --wmem <count>                    # Set the worker memory in GB (only for virt target)
-        --data-disk [<size>]              # Size of additional data disk in GB or empty for no data disk
+                                          # Below options ONLY for platform=vmw
+        --mcpu <count>                    # Set the master cpu count in vCPU
+        --mmem <count>                    # Set the master memory in GB
+        --wcpu <count>                    # Set the worker cpu count in vCPU
+        --wmem <count>                    # Set the worker memory in GB
+        --data-disk [<size>]              # Size, in GB, of thin prov. 'data disk' or empty for no data disk
 
 Usage (from a cluster directory):
   aba --cmd "oc command"                  # Run this 'oc command' on the current cluster
-  aba ls                                  # List all cluster node VMs (for VMware only)
-  aba shutdown                            # Gracefully shut down the cluster
-  aba startup                             # Gracefully start up the cluster
-  aba help                                # See help for all targets
+  aba ls                                  # List all cluster node VMs (for platform=vmw only)
+  aba shutdown                            # Gracefully shut down the cluster (any platform)
+  aba startup                             # Gracefully start up the cluster (any platform)
+  aba help                                # See help for all steps/targets
