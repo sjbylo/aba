@@ -72,8 +72,8 @@ save/imageset-config-save.yaml: ../aba.conf catalog
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
-#sync: .init .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf')
-sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror              install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'mirror/mirror.conf') Use retry=# to retry after failure.
+#sync: .init .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf')
+sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror              install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	###
 	### Upload images to the mirror registry from the Internet (mirror-to-mirror)
 	###
@@ -87,7 +87,7 @@ sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror              instal
 # Note that for a connected laptop or bastion there is no need to install all the required packages (i.e. only 'rpmsext') 
 # mirror-registry-amd64.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
-save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror mirror-registry-amd64.tar.gz save/imageset-config-save.yaml  ## Save images from the Internet to mirror/save/ & download 'mirror-registry-amd64.tar.gz' for later installation into your private network. Use retry=# to retry after failure.
+save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror mirror-registry-amd64.tar.gz save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
 	###
 	### Save images from the Internet to local disk (mirror-to-disk)
 	###
@@ -95,7 +95,7 @@ save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror mirror
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: .init cli-oc-mirror .rpmsint install verify  ## Load the saved images into a registry on the internal bastion (as defined in 'mirror/mirror.conf')  Use retry=# to retry after failure.
+load: .init cli-oc-mirror .rpmsint install verify  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
 	###
 	### Load images from local disk to mirror registry (disk-to-mirror)
 	###
@@ -147,7 +147,7 @@ pw:
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh $(debug)
 
 .PHONY: verify
-verify: .init ## Using the credential files in 'mirror/regcreds' dir and the values in 'mirror/mirror.conf', verify access to the registry. 
+verify: .init ## Using the credential files in 'aba/mirror/regcreds' dir and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
 	$(SCRIPTS)/reg-verify.sh $(debug)
 	@rm -f .uninstalled 
 	@touch .installed
@@ -161,7 +161,7 @@ tar:   ## Create a full tar backup of ~/aba & ~/bin, ready to be transported to 
 	@make -sC .. tar $(out)
 
 .PHONY: tarrepo
-tarrepo:   ## Same as 'make tar' but excludes all 'mirror_seq*tar' files under mirror/save/.
+tarrepo:   ## Same as 'make tar' but excludes all 'mirror_000*.tar' files under aba/mirror/save/.
 	@make -sC .. tarrepo $(out)
 
 .PHONY: inc
@@ -225,8 +225,8 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@[ -f .installed ] && echo "Important: to uninstall the registry, you must run 'aba uninstall' first!" || true
 	make clean
-	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && echo mirror/regcreds backed up to regcreds.bk || true
-	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo mirror/mirror.conf backed up to mirror.conf.bk || true
+	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && echo aba/mirror/regcreds backed up to regcreds.bk || true
+	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo aba/mirror/mirror.conf backed up to mirror.conf.bk || true
 	@#rm -rf *.tar.gz oc-mirror-workspace   # Leave this so the mirror can be uninstalled with reg-uninstall.sh 
 	rm -rf          oc-mirror-workspace 
 	rm -f *.conf *.yaml 
