@@ -630,12 +630,19 @@ fetch_latest_z_version() {
 replace-value-conf() {
 	# $1 file
 	# $2 is name of value to change
-	# $3 new value (optional)
-	[ ! -s $1 ] && echo "Error: No such file: $PWD/$1" >&2 && exit 1
-	[ ! "$2" ] && echo "Error: missing value!" >&2 && exit 1
+	# $3 new value. If missing, remove the value
+	[ ! "$1" ] && echo "Error: arg1 file missing!" >&2 && exit 1
+	[ ! -s "$1" ] && echo "Error: No such file: $PWD/$1" >&2 && exit 1
+	[ ! "$2" ] && echo "Error: missing value to add to file $1!" >&2 && exit 1
 	[ "$DEBUG_ABA" ] && echo "Replacing config value [$2] with [$3] in file: $1" >&2
-	sed -i "s|^[# \t]*${2}=[^ \t#]*\(.*\)|${2}=${3}\1|g" $1
-	echo_green "Added value ${2}=${3} to file $1" >&2 # FIXME: Add this to the "info" channel?
+
+	# Check if the value is already in the file along with the expected chars after the valie, e.g. space/tab/# or EOL
+	if grep -q -E "$2=$3[[:space:]]*(#.*)?$" $1; then
+		echo_green "Value ${2}=${3} already exists in file $1" >&2 
+	else
+		sed -i "s|^[# \t]*${2}=[^ \t#]*\(.*\)|${2}=${3}\1|g" $1
+		echo_green "Added value ${2}=${3} to file $1" >&2 # FIXME: Add this to the "info" channel?
+	fi
 }
 
 output_table() {
