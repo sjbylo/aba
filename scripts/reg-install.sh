@@ -27,6 +27,8 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 	exit
 fi
 
+[ ! "$reg_ssh_user" ] && reg_ssh_user=$(whoami)
+
 # Detect any existing mirror registry?
 
 # Check for Quay...
