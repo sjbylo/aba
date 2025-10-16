@@ -1,25 +1,28 @@
-Create bundle archive file
+Create install bundle
 
 Usage:
   aba bundle \
     -c, --channel <channel>                   # Choose OpenShift install channel (fast, stable, candidate).
     -v, --version <version>                   # OpenShift version to install (x.y.z, x.y, latest|l or previous|p).
-    -o, --out string                          # Path to write bundle archive file to.
+    -o, --out string                          # File to write install bundle to.
     -S, --pull-secret ~/.pull-secret.json     # Location of your Red Hat pull secret.
-    -P, --op-sets [<list of operator sets>]   # Provide operator set names: ocp, odf, ocpv, ai ...
+    -P, --op-sets [<list of operator sets>]   # Provide operator set names: ocp, odf, ocpv, ai etc.
     -O, --ops [<list of operator names>]      # Provide operator names.
     -f, --force                               # Remove any existing files under mirror/save or mirror/sync.
 
-  The 'bundle' command creates an install 'bundle archive' file which is used to install OpenShift in a
-  fully disconnected (air-gapped) environment.  The 'bundle' command also writes the provided args (channel,
-  version, operators ...) to 'aba.conf'.
+  The 'bundle' command creates an 'install bundle' which is used to install OpenShift in a fully disconnected
+  (air-gapped) environment. The 'bundle' command also writes the provided args (channel, version, operators ...)
+  to 'aba.conf'.
 
 Example of fully disconnected mode (air-gapped):
 
   Create install bundle:
+
     aba bundle --force -c stable -v latest -S ~/.pull-secret.json -P ocp ocpv mesh3 \
       -O web-terminal -o /path/to/portable/media/ocp-install-bundle
+
   Transfer the "ocp-install-bundle.tar" file to the air-gapped env. and unpack it.
+
   Then install and run aba:
     tar xvf ocp-install-bundle.tar
     cd aba
