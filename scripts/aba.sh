@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251016134817
+ABA_VERSION=20251016235213
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -79,7 +79,7 @@ BUILD_COMMAND=
 # Init aba.conf
 if [ ! -f $ABA_PATH/aba.conf ]; then
 
-	# Determine resonable default for ...
+	# Determine resonable defaults for ...
 	export domain=$(get_domain)
 	export machine_network=$(get_machine_network)
 	export dns_servers=$(get_dns_servers)
@@ -87,17 +87,15 @@ if [ ! -f $ABA_PATH/aba.conf ]; then
 	export ntp_servers=$(get_ntp_servers)
 
 	scripts/j2 templates/aba.conf.j2 > aba.conf
-	#cp $ABA_PATH/templates/aba.conf $ABA_PATH
-
-	# Initial prep for interactive mode: unset ocp_version and ocp_channel
-#	replace-value-conf $ABA_PATH/aba.conf ocp_version 
-#	replace-value-conf $ABA_PATH/aba.conf ocp_channel
 fi
 
-# Set some defaults 
-ops_list=
-op_set_list=
-chan=stable
+### Set some defaults 
+##ops_list=
+##op_set_list=
+###chan=stable  # value fetched from aba.conf now
+
+# Fetch any existing values (e.e. ocp_channel is used later for '-v')
+source <(normalize-aba-conf)
 
 interactive_mode=
 [ "$*" ] && interactive_mode_none=1
@@ -174,35 +172,55 @@ do
 		fi
 		shift
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
-		shift 
-		chan=$(echo $1 | grep -E -o '^(stable|s|fast|f|eus|e|candidate|c)$')
-		[ ! "$chan" ] && echo_red "Missing or wrong value [$1] after option $1" >&2 && exit 1
-		[ "$chan" = "s" ] && chan=stable
-		[ "$chan" = "f" ] && chan=fast
-		[ "$chan" = "c" ] && chan=candidate
-		[ "$chan" = "e" ] && chan=eus
+		opt=$1
+		# Be strict if arg missing
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $opt" >&2 && exit 1
+		chan=$2  # This $chan var can be used below for "--version"
+		# As far as possible, always ensure there is a valid value in aba.conf
+		case "$chan" in
+			stable | s)	chan=stable ;;
+			fast | f)	chan=fast ;;
+			eus | e)	chan=eus ;;
+			candidate | c)	chan=candidate ;;
+			*)
+				echo_red "Wrong value [$chan] after option $opt" >&2
+				exit 1
+				;;
+		esac
 		replace-value-conf $ABA_PATH/aba.conf ocp_channel $chan
-		shift 
+		shift 2
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		opt=$1
+		# Be strict if arg missing
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $opt" >&2 && exit 1
 		ver=$2
-		[ "$ver" = "latest" -o "$ver" = "l" ] && ver=$(fetch_latest_version $chan)
-		[ "$ver" = "previous" -o "$ver" = "p" ] && ver=$(fetch_previous_version $chan)
-		echo $ver | grep -E -q "^[0-9]+\.[0-9]+$" && ver=$(fetch_latest_z_version $arch_sys $chan $ver)
-		ver=$(echo $ver | grep -E -o "^[0-9]+\.[0-9]+\.[0-9]+$" || true)
-		[ ! "$ver" ] && echo_red "Missing or wrong value [$2] after option $1" >&2 && exit 1
+		[ ! "$chan" ] && chan=$ocp_channel  # Prioritize the $chan var (from above) or fetch from aba.conf file
+		case "$ver" in
+			latest | l)
+				ver=$(fetch_latest_version "$chan" "$arch_sys")
+			;;
+			previous | p)
+				ver=$(fetch_previous_version "$chan" "$arch_sys")
+			;;
+			# Matches major.minor (e.g. 4.16)
+			[0-9]*.[0-9]*)
+				ver=$(fetch_latest_z_version "$chan" "$ver" "$arch_sys")
+			;;
+		esac
+
+		# Extract only the full major.minor.patch version if present
+		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
+
+		# As far as possible, always ensure there is a valid value in aba.conf
+		[ ! "$ver" ] && echo_red "Wrong value [$2] after option $opt" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf ocp_version $ver
-		target_ver=$ver
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
 
-		#( make -s -C $ABA_PATH/mirror catalog bg=true & ) & 
 		( make -s -C $ABA_PATH catalog bg=true & ) & 
 
 		shift 2
-
 	elif [ "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
@@ -227,12 +245,13 @@ do
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
 		replace-value-conf $ABA_PATH/mirror/mirror.conf data_dir "$2"
 		shift 2
-	elif [ "$1" = "--reg-path" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
-		# force will skip over asking to edit the conf file
-		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_path "$2"
-		shift 2
+	# FIXME: Delete below. --reg-path depricated in favor of --data-dir
+	#elif [ "$1" = "--reg-path" ]; then
+	#	[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+	#	# force will skip over asking to edit the conf file
+	#	make -sC $ABA_PATH/mirror mirror.conf force=yes
+	#	replace-value-conf $ABA_PATH/mirror/mirror.conf reg_path "$2"
+	#	shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
@@ -280,11 +299,10 @@ do
 		replace-value-conf $ABA_PATH/aba.conf next_hop_address "$def_route_ip"
 		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-XXXXXX" ]; then # FIXME: opt?
-		# If arg ip addr replace value in cluster.conf
+		# If arg ip addr then replace value in cluster.conf
 		# If arg missing remove from cluster.conf
 		api_vip=
 		# If arg is available and not an opt
-		#####
 		if [[ -n $2 && $2 != -* ]]; then
 			if [[ $2 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
 				IFS=. read -r o1 o2 o3 o4 <<< "$2"
@@ -301,20 +319,6 @@ do
 			shift
 		fi
 
-		#####
-#		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-#			# If arg is an ip addr
-#			if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-#				api_vip=$2
-#			else
-#				echo_red "Argument invalid [$2] after option: $1" >&2
-#				exit 1
-#			fi
-#			shift
-#		else
-#			# Do nothing, remove value in cluster.conf
-#			:
-#		fi
 		# If conf file is available, edit the value
 		if [ -f cluster.conf ]; then
 			replace-value-conf cluster.conf api_vip "$api_vip"
@@ -327,30 +331,34 @@ do
 		# If arg missing remove from cluster.conf
 		ingress_vip=
 		# If arg is available and not an opt
-		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+		##if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
+		if [[ -n $2 && $2 != -* ]]; then
 			# If arg is an ip addr
-			if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-				ingress_vip=$2
+			if [[ $2 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+				IFS=. read -r o1 o2 o3 o4 <<< "$2"
+				if (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 )); then
+					ingress_vip=$2
+				else
+					echo_red "Invalid IPv4 address [$2]" >&2
+					exit 1
+				fi
 			else
 				echo_red "Argument invalid [$2] after option: $1" >&2
 				exit 1
 			fi
 			shift
-		else
-			# Do nothing, remove value in cluster.conf
-			:
 		fi
 		# If conf file is available, edit the value
 		if [ -f cluster.conf ]; then
 			replace-value-conf cluster.conf ingress_vip "$ingress_vip"
-			echo done $*
+			##echo done $*
 		else
 			BUILD_COMMAND="$BUILD_COMMAND ingress_vip=$ingress_vip"
 		fi
 		shift
 	elif [ "$1" = "--ports" -o "$1" = "-PP" ]; then #FIXME: opt name?
 		# If arg missing remove from aba.conf
-		# Check arg after --ports, if "empty" then remove value from aba.conf, otherwise add valid ip addr
+		# Check arg after --ports, if "empty" then remove value from cluster.conf
 		ports_vals=""
 		# While there is a valid arg...
 		while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
@@ -368,7 +376,7 @@ do
 		# If no arg after --op-sets
 		if [[ "$2" =~ ^- || -z "$2" ]]; then
 			# Remove value
-			replace-value-conf $ABA_PATH/aba.conf op_sets " "
+			replace-value-conf $ABA_PATH/aba.conf op_sets 
 			shift
 		else
 			shift
@@ -392,7 +400,7 @@ do
 	elif [ "$1" = "--ops" -o "$1" = "-O" ]; then
 		if [[ "$2" =~ ^- || -z "$2" ]]; then
 			# Remove value
-			replace-value-conf $ABA_PATH/aba.conf ops " "
+			replace-value-conf $ABA_PATH/aba.conf ops 
 			shift
 		else
 			shift
@@ -428,11 +436,15 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		[ -s $1 ] && cp "$2" vmware.conf
 		shift 2
+	elif [ "$1" = "-y" ]; then  # One off, accept the default answer to all prompts for this invocation
+		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
+		shift 
+	elif [ "$1" = "-Y" ]; then  # One off, accept the default answer to all prompts for this invocation
+		export ASK_OVERRIDE=1  
+		replace-value-conf $ABA_PATH/aba.conf ask false  # And make permanent change
+		shift 
 	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
 		replace-value-conf $ABA_PATH/aba.conf ask true
-		shift 
-	elif [ "$1" = "-y" ]; then  # make -y work only for a single command execution (not write into file)
-		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
 		shift 
 	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then  # FIXME: make -y work only for a single command execution (not write into file)
 		replace-value-conf $ABA_PATH/aba.conf ask false 
@@ -527,7 +539,7 @@ do
 		# If conf file is available, edit the value
 		if [ -f cluster.conf ]; then
 			replace-value-conf cluster.conf int_connection "$int_connection"
-			echo done $*
+			##echo done $*
 		else
 			BUILD_COMMAND="$BUILD_COMMAND int_connection=$int_connection"
 		fi
@@ -777,7 +789,7 @@ if [ ! -f .bundle ]; then
 			[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev  # previous latest
 
 			# If user enters just a point version, x.y, fetch the latest .z value for that point version of OCP
-			echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version $arch_sys $chan $target_ver)
+			echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version "$chan" "$target_ver" "$arch_sys")
 		done
 
 		# Update the conf file

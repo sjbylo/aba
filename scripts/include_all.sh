@@ -150,7 +150,9 @@ normalize-aba-conf() {
 	# Normalize or sanitize the config file
 	# Remove all chars from lines with <white-space>#<anything>
 	# Remove all white-space lines
+	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 	# Remove all leading and trailing white-space
+	# Remove all #commends except for pass="b#c" values -> 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/'
 	# Correct ask=? which must be either =1 or = (empty)
 	# Extract machine_network and prefix_length from the CIDR notation
 	# Ensure only one arg after 'export'
@@ -161,6 +163,7 @@ normalize-aba-conf() {
 		sed -E	\
 			-e "s/^\s*#.*//g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
@@ -229,6 +232,7 @@ normalize-mirror-conf()
 	# Ensure any ~/ is masked, e.g. \~/ ('cos ~ may need to be expanded on remote host)
 	# Ensure data_disk has ~ masked in each case of: ^data_dir=$ ^data_disk=~ ^data_disk=  
 	# Ensure reg_ssh_user has a value
+	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 	# Ensure only one arg after 'export'   # Note that all values are now single string, e.g. single value or comma-sep list (one string)
 	# Verify oc_mirror_version exists and is somewhat correct and defaults to v1
 	# Prepend "export "
@@ -241,10 +245,11 @@ normalize-mirror-conf()
 	(
 		cat mirror.conf | \
 			sed -E	\
-				-e "s/^reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
-				-e "s/^#reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
 				-e "s/^\s*#.*//g" \
 				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+				-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
+				-e "s/^reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
+				-e "s/^#reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
 				-e 's/^(data_dir=)([[:space:]].*|#.*|~|$)/\1\\~/' \
 				-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
 				-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
@@ -289,6 +294,7 @@ normalize-cluster-conf()
 	# Remove all chars from lines with <white-space>#<anything>
 	# Remove all white-space lines
 	# Remove all leading and trailing white-space
+	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 	# Extract machine_network and prefix_length from the CIDR notation
 	# Ensure only one arg after 'export'
 	# Prepend "export "
@@ -297,8 +303,10 @@ normalize-cluster-conf()
 	[ ! -s cluster.conf ] &&                                                               return 0
 
 	cat cluster.conf | \
-		sed -E	-e "s/^\s*#.*//g" \
+		sed -E	\
+			-e "s/^\s*#.*//g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' \
 			-e 's/^int_connection=none/int_connection= /g' | \
 		awk '{print $1}' | \
@@ -381,6 +389,7 @@ normalize-vmware-conf()
 {
         # Normalize or sanitize the config file
 	# Determine if ESXi or vCenter
+	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 	# Ensure only one arg after 'export'
 	# Prepend "export "
 	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
@@ -391,7 +400,9 @@ normalize-vmware-conf()
 	[ ! -s vmware.conf ] &&                                                              return 0  # vmware.conf can be empty
 
         vars=$(cat vmware.conf | \
-		sed -E	-e "s/^\s*#.*//g" \
+		sed -E	\
+			-e "s/^\s*#.*//g" \
+			-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 			-e "s/^VMW_FOLDER=/VC_FOLDER=/g" | \
                 sed	-e "s/^/export /g")
@@ -573,58 +584,205 @@ files_on_same_device() {
 	[ "$DEV1" == "$DEV2" ] && return 0 || return 1
 }
 
+## Reply with the latest version
+#fetch_latest_version() {
+#	# $1 must be one of 'stable', 'fast' or 'candidate'
+#	##[ "$1" ] && chan=$1
+#	local chan=${1:-stable}  # stable, fast or candidate
+#	local arch_sys=${2:-x86_64}  # amd64, arm64 or x86_64
+#	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
+#	local ver rel_txt
+#
+#	[ "$chan" = "eus" ] && chan=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
+#
+#	rel_txt=$(curl -f --connect-timeout 30 --retry 3 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt) || return 1
+#
+#	# Get the latest OCP version number, e.g. 4.14.6
+#	ver=$(echo "$rel_txt" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
+#	[ "$ver" ] && echo $ver || return 1
+#}
+#
+## Reply with the (newest) previous version, e.g. 4.19.10 -> 4.18.20
+#fetch_previous_version() {
+#	# $1 must be one of 'stable', 'fast' or 'candidate'
+#	#local chan=stable
+#	#[ "$1" ] && chan=$1
+#	local chan=${1:-stable}      # stable, fast, candidate
+#	local arch_sys=${2:-x86_64}  # amd64, arm64 or x86_64
+#	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
+#	local ver major_ver point_ver prev_ver
+#	##local rel_txt
+#
+#	[ "$chan" = "eus" ] && chan=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
+#
+#	ver=$(fetch_latest_version $chan $arch_sys) || return 1
+#
+#	# FIXME Delete?
+#	#rel_txt=$(curl -f --connect-timeout 30 --retry 3 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt) || return 1
+#	# Get the previous OCP version number, e.g. 4.14.6
+#	#ver=$(echo "$rel_txt" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
+#
+#	# Extract the previous stable point version, e.g. 4.13.23
+#	major_ver=$(echo $ver | grep ^[0-9] | cut -d\. -f1)
+#	point_ver=`expr $(echo $ver | grep ^[0-9] | cut -d\. -f2) - 1`
+#
+#	# We need oc-mirror!
+#	! which oc-mirror 2>/dev/null >&2 && echo Installing oc-mirror ... >&2 && make -s -C $ABA_PATH/cli oc-mirror >&2
+#
+#	prev_ver=$(oc-mirror list releases --channel=${chan}-${major_ver}.${point_ver} 2>/dev/null | tail -1)  # This is better way to fetch the newest previous version!
+#
+#	[ "$prev_ver" ] && echo $prev_ver || return 1
+#
+#}
+#
+## https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.19/release.txt
+#fetch_latest_z_version() {
+#	local chan=${1:-stable}      # stable, fast, candidate
+#	local point_ver=$2		# Given 4.19 -> reply the latest z version: 4.19.30
+#	local arch_sys=${3:-x86_64}  # amd64, arm64 or x86_64
+#	local rel_txt ver
+#
+#	[ ! "$point_ver" ] && point_ver=$(fetch_latest_version $chan $arch_sys)
+#	point_ver=$(echo $point_ver | cut -d\. -f 1-2)
+#	[ ! "$point_ver" ] && return 1
+#
+#	# FIXME Delete
+#	#if rel_txt=$(curl -f --connect-timeout 20 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/${chan}-$point_ver/release.txt 2>/dev/null); then
+#	#	point_ver=$(echo "$rel_txt" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+#	#else
+#	#	point_ver=invalid
+#	#fi
+#	#echo $point_ver
+#
+#	rel_txt=$(curl -f --connect-timeout 20 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/${chan}-$point_ver/release.txt 2>/dev/null)
+#
+#	[ "$rel_txt" ] && ver=$(echo "$rel_txt" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+#
+#	[ "$ver" ] && echo $ver || return 1
+#}
+
+
+# Helper: download and return release.txt content
+_fetch_release_txt() {
+    local chan="$1" arch_sys="$2" url
+    url="https://mirror.openshift.com/pub/openshift-v4/${arch_sys}/clients/ocp/${chan}/release.txt"
+
+    curl -fsSL --connect-timeout 30 --retry 3 "$url" 2>/dev/null || {
+        echo "Error: failed to fetch release info from $url" >&2
+        return 1
+    }
+}
+
+# Helper: extract version string (x.y.z) from release.txt
+_extract_version() {
+    grep -Eo "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}'
+}
+
+
+# ------------------------------------------------------------------------------
+# Fetch the latest OpenShift version from a channel (e.g. stable, fast)
+# Example: fetch_latest_version stable x86_64 → 4.15.13
+# ------------------------------------------------------------------------------
 fetch_latest_version() {
-	# $1 must be one of 'stable', 'fast' or 'candidate'
-	local chan=stable
-	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
+    local chan="${1:-stable}"              # stable, fast, candidate, eus
+    local arch_sys="${2:-x86_64}"          # x86_64, arm64, etc.
+    local rel_txt ver
 
-	[ "$1" ] && chan=$1
-	[ "$chan" = "eus" ] && chan=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
-	rel=$(curl -f --connect-timeout 30 --retry 3 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt) || return 1
-	# Get the latest OCP version number, e.g. 4.14.6
-	#ver=$(echo "$rel" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
-	ver=$(echo "$rel" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
-	[ "$ver" ] && echo $ver || return 1
+    # EUS fallback — release.txt not provided for eus
+    [[ "$chan" == "eus" ]] && chan="stable"
+
+    rel_txt=$(_fetch_release_txt "$chan" "$arch_sys") || return 1
+    ver=$(_extract_version <<<"$rel_txt")
+
+    if [[ -z "$ver" ]]; then
+        echo_white "Error: could not extract version from $chan release data" >&2
+        return 1
+    fi
+
+    echo "$ver"
 }
 
+
+# ------------------------------------------------------------------------------
+# Fetch the previous OpenShift version (e.g. 4.19.10 → 4.18.x)
+# Requires oc-mirror to list previous channel releases.
+# ------------------------------------------------------------------------------
 fetch_previous_version() {
-	# $1 must be one of 'stable', 'fast' or 'candidate'
-	local chan=stable
-	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
+    local chan="${1:-stable}"
+    local arch_sys="${2:-x86_64}"
+    local ver major minor patch prev_minor prev_ver
 
-	[ "$1" ] && chan=$1
-	[ "$chan" = "eus" ] && chan=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
-	rel=$(curl -f --connect-timeout 30 --retry 3 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt) || return 1
-	# Get the previous OCP version number, e.g. 4.14.6
-	stable_ver=$(echo "$rel" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
+    [[ "$chan" == "eus" ]] && chan="stable"
 
-	# Extract the previous stable point version, e.g. 4.13.23
-	major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
-	stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
+    ver=$(fetch_latest_version "$chan" "$arch_sys") || return 1
 
-	# We need oc-mirror!
-	which oc-mirror 2>/dev/null >&2 || { echo Installing oc-mirror ... >&2; make -s -C $ABA_PATH/cli oc-mirror >&2; }
+    # Split into parts: 4.19.10 → major=4, minor=19, patch=10
+    IFS=. read -r major minor patch <<<"$ver"
 
-	#[ "$stable_ver_point" ] && stable_ver_prev=$(echo "$rel"| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
-	stable_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${stable_ver_point} 2>/dev/null | tail -1)  # This is better way to fetch the newest previous version!
+    # Handle edge cases: avoid negative or missing minor version
+    if (( minor <= 0 )); then
+        echo_white "Error: cannot compute previous version from $ver" >&2
+        return 1
+    fi
+    prev_minor=$((minor - 1))
 
-	[ "$stable_ver_prev" ] && echo $stable_ver_prev || return 1
+    # Ensure oc-mirror is available
+    if ! command -v oc-mirror >/dev/null 2>&1; then
+        #echo "Installing oc-mirror..." >&2
+        make -s -C "$ABA_PATH/cli" oc-mirror >&2 || {
+            echo_white "Error: failed to build oc-mirror" >&2
+            return 1
+        }
+    fi
 
+    # Query the previous channel via oc-mirror
+    prev_ver=$(oc-mirror list releases --channel="${chan}-${major}.${prev_minor}" 2>/dev/null | tail -n1)
+
+    if [[ -z "$prev_ver" ]]; then
+        echo_white "Error: no previous version found for ${chan}-${major}.${prev_minor}" >&2
+        return 1
+    fi
+
+    echo "$prev_ver"
 }
 
-# https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.19/release.txt
+
+# ------------------------------------------------------------------------------
+# Fetch the latest z-stream version for a given x.y series
+# Example: fetch_latest_z_version stable 4.19 x86_64 → 4.19.32
+# ------------------------------------------------------------------------------
 fetch_latest_z_version() {
-	local arch_sys=$1
-	local chan=$2
-	local target_ver=$3
+    local chan="${1:-stable}"
+    local base_ver="$2"             # e.g. 4.19
+    local arch_sys="${3:-x86_64}"
+    local rel_txt ver url
 
-	if release_text=$(curl -f --connect-timeout 20 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/${chan}-$target_ver/release.txt 2>/dev/null); then
-		target_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
-	else
-		target_ver=invalid
-	fi
-	echo $target_ver
+    if [[ -z "$base_ver" ]]; then
+        base_ver=$(fetch_latest_version "$chan" "$arch_sys") || return 1
+        base_ver="${base_ver%.*}"   # Trim to x.y
+    fi
+
+    [[ "$chan" == "eus" ]] && chan="stable"
+
+    url="https://mirror.openshift.com/pub/openshift-v4/${arch_sys}/clients/ocp/${chan}-${base_ver}/release.txt"
+    rel_txt=$(curl -fsSL --connect-timeout 20 --retry 3 "$url" 2>/dev/null)
+
+    if [[ -z "$rel_txt" ]]; then
+        echo_white "Error: failed to fetch release info for ${chan}-${base_ver}" >&2
+        return 1
+    fi
+
+    ver=$(_extract_version <<<"$rel_txt")
+
+    if [[ -z "$ver" ]]; then
+        echo_white "Error: could not extract z-stream version for ${chan}-${base_ver}" >&2
+        return 1
+    fi
+
+    echo "$ver"
 }
+
+
 
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {
@@ -636,12 +794,12 @@ replace-value-conf() {
 	[ ! "$2" ] && echo "Error: missing value to add to file $1!" >&2 && exit 1
 	[ "$DEBUG_ABA" ] && echo "Replacing config value [$2] with [$3] in file: $1" >&2
 
-	# Check if the value is already in the file along with the expected chars after the valie, e.g. space/tab/# or EOL
+	# Check if the value is already in the file along with the expected chars after the value, e.g. space/tab/# or EOL
 	if grep -q -E "$2=$3[[:space:]]*(#.*)?$" $1; then
-		echo_green "Value ${2}=${3} already exists in file $1" >&2 
+		[ "$3" ] && echo_green "Value ${2}=${3} already exists in file $1" >&2 || echo_green "Value ${2} is already undefined in file $1" >&2
 	else
 		sed -i "s|^[# \t]*${2}=[^ \t#]*\(.*\)|${2}=${3}\1|g" $1
-		echo_green "Added value ${2}=${3} to file $1" >&2 # FIXME: Add this to the "info" channel?
+		[ "$3" ] && echo_green "Added value ${2}=${3} to file $1" >&2 || echo_green "Undefining value ${2} in file $1" >&2 
 	fi
 }
 
