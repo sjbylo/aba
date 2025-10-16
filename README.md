@@ -1132,7 +1132,7 @@ echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 
 **Q: Can I use Aba to install user provisioned infrastructure (UPI)?**  
 
-**Partially, yes!** Aba can be used to set up the registry and generate the `install-config.yaml` file which can be used to install OpenShift for UPI.  With some juggling, the day2 operations (OperatorHub, OSUS, Shutdown, Startup and NTP) can also be used for UPI too. 
+**Partially, yes!** Aba can be used to set up the registry and generate the `install-config.yaml` file which can be used to install OpenShift for UPI.  With some juggling, the day2 operations (OperatorHub, OSUS, Shutdown, Startup and NTP) can be used for UPI too. 
 
 
 [Back to top](#who-should-use-aba)

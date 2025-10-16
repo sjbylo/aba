@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251015105119
+ABA_VERSION=20251016134817
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -177,6 +177,7 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		shift 
 		chan=$(echo $1 | grep -E -o '^(stable|s|fast|f|eus|e|candidate|c)$')
+		[ ! "$chan" ] && echo_red "Missing or wrong value [$1] after option $1" >&2 && exit 1
 		[ "$chan" = "s" ] && chan=stable
 		[ "$chan" = "f" ] && chan=fast
 		[ "$chan" = "c" ] && chan=candidate
@@ -190,7 +191,7 @@ do
 		[ "$ver" = "previous" -o "$ver" = "p" ] && ver=$(fetch_previous_version $chan)
 		echo $ver | grep -E -q "^[0-9]+\.[0-9]+$" && ver=$(fetch_latest_z_version $arch_sys $chan $ver)
 		ver=$(echo $ver | grep -E -o "^[0-9]+\.[0-9]+\.[0-9]+$" || true)
-		[ ! "$ver" ] && echo_red "Missing or wrong value after option $1" >&2 && exit 1
+		[ ! "$ver" ] && echo_red "Missing or wrong value [$2] after option $1" >&2 && exit 1
 		replace-value-conf $ABA_PATH/aba.conf ocp_version $ver
 		target_ver=$ver
 
