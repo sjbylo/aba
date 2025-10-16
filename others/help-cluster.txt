@@ -1,7 +1,7 @@
 Install OpenShift
 
 Usage (from root of aba directory):
-  aba cluster --name <name> [options]                                # Create a cluster director
+  aba cluster --name <name> [options]                                # Create a cluster directory
 
 Examples:
   aba cluster --name mycluster --type standard                       # Create the cluster dir and install OpenShift
