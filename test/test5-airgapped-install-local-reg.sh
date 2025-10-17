@@ -125,9 +125,10 @@ test-cmd -m "Show setting of ask in $PWD/aba.conf" "grep -o '^ask=[^ ]*' aba.con
 mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
 sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
 
-# Set up govc 
-cp $vf vmware.conf 
+mylog Set up vmware.conf
+cp $vf -v vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
+test-cmd -m "Checking vmware.conf" grep vm/abatesting vmware.conf
 
 # Do not ask to delete things
 test-cmd -m "Setting ask=false" aba --noask
