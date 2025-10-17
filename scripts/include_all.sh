@@ -163,7 +163,7 @@ normalize-aba-conf() {
 		sed -E	\
 			-e "s/^\s*#.*//g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
+			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
@@ -173,6 +173,7 @@ normalize-aba-conf() {
 		awk '{print $1}' | \
 		sed	-e "s/^/export /g";
 
+			#-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 	[ "$ASK_OVERRIDE" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
 	# "true" needed, otherwise this function returns non-zero (error)
 }
@@ -247,7 +248,7 @@ normalize-mirror-conf()
 			sed -E	\
 				-e "s/^\s*#.*//g" \
 				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-				-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
+				-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
 				-e 's/^(data_dir=)([[:space:]].*|#.*|~|$)/\1\\~/' \
 				-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
 				-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
@@ -306,7 +307,7 @@ normalize-cluster-conf()
 		sed -E	\
 			-e "s/^\s*#.*//g" \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
+			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' \
 			-e 's/^int_connection=none/int_connection= /g' | \
 		awk '{print $1}' | \
@@ -402,8 +403,8 @@ normalize-vmware-conf()
         vars=$(cat vmware.conf | \
 		sed -E	\
 			-e "s/^\s*#.*//g" \
-			-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
 			-e "s/^VMW_FOLDER=/VC_FOLDER=/g" | \
                 sed	-e "s/^/export /g")
 	eval "$vars"
