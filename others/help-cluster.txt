@@ -1,7 +1,7 @@
 Install OpenShift
 
 Usage (from root of aba directory):
-  aba cluster --name <name> [options]                                # Create a cluster directory
+  aba cluster --name <string> [options]                              # Create a cluster directory
 
 Examples:
   aba cluster --name mycluster --type standard                       # Create the cluster dir and install OpenShift
@@ -14,6 +14,7 @@ Examples:
 Options:
 
   aba cluster                             # Create a cluster dir with cluster configuration (cluster.conf)
+    -d, --dir <path/to/dir>               # Run aba in the specified directory, or cd there and run without -d.
     -y                                    # Automatically accept the default answer to all prompts
     -n, --name <string>                   # The name of the cluster to create
     -t, --type <sno|compact|standard>     # Set type of cluster. Default is 'standard'.
@@ -22,7 +23,7 @@ Options:
     -i, --starting-ip <ip>                # IP address for the first cluster node (rendezvous/node0)
         --api-vip <ip>                    # IP address for cluster's API
         --ingress-vip <ip>                # IP address for application ingress
-    -I, --int-connection [<proxy|direct>] # Install from the public registry or set empty to use mirror
+    -I, --int-connection [proxy|direct]   # Install from the public registry or set empty to use mirror
         --ports [<string> ...]            # Space-separated list of network port names or empty to remove
                                           # ports in <cluster name>/cluster.conf
 
