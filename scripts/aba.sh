@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251016235213
+ABA_VERSION=20251017184251
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -202,11 +202,10 @@ do
 			previous | p)
 				ver=$(fetch_previous_version "$chan" "$arch_sys")
 			;;
-			# Matches major.minor (e.g. 4.16)
-			[0-9]*.[0-9]*)
-				ver=$(fetch_latest_z_version "$chan" "$ver" "$arch_sys")
-			;;
 		esac
+
+		# Expand ver to latest, if it's just a point version (x.y)
+		echo $ver | grep -q -E "^[0-9]+\.[0-9]+$" && ver=$(fetch_latest_z_version "$chan" "$ver" "$arch_sys")
 
 		# Extract only the full major.minor.patch version if present
 		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
