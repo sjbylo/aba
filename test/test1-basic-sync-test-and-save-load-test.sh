@@ -101,9 +101,10 @@ sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" ab
 
 ##test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba --noask
 
-# Set up govc 
-cp $vf vmware.conf 
+mylog Set up vmware.conf
+cp $vf -v vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
+test-cmd -m "Checking vmware.conf" grep vm/abatesting vmware.conf
 
 #mylog "Setting ntp_servers=$ntp_ip" 
 #[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip    #\2/g" aba.conf

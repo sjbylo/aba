@@ -82,9 +82,10 @@ test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba 
 mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
 sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
 
-# Set up govc 
-cp $vf vmware.conf 
+mylog Set up vmware.conf
+cp $vf -v vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
+test-cmd -m "Checking vmware.conf" grep vm/abatesting vmware.conf
 
 #mylog "Setting 'ask='"
 #sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
