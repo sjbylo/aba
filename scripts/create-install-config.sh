@@ -95,13 +95,13 @@ if [ "$use_mirror" ]; then
 		echo_white Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at: $reg_host
 
 		# If we pull from the local reg. then we define the image content sources
-		export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
+		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	elif [ -s regcreds/pull-secret-full.json ]; then
 		export pull_secret=$(cat regcreds/pull-secret-full.json) 
 		echo_white Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at: $reg_host
 
 		# If we pull from the local reg. then we define the image content sources
-		export image_content_sources=$(scripts/j2 templates/image-content-sources-$oc_mirror_version.yaml.j2)
+		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	else
 		echo_red "Warning: No pull secret files found in directory: aba/mirror/regcreds." >&2 
 		show_mirror_missing_err=1
