@@ -6,8 +6,10 @@ Usage (from root of aba directory):
 Examples:
   aba cluster --name mycluster --type standard                       # Create the cluster dir and install OpenShift
   aba cluster --name mycompact --type compact --step agentconf       # Create agent-based config files and stop
-  aba cluster --name sno --type sno --step iso                       # Create the agent-based iso and stop
+  aba cluster --name sno --type sno --step agentconf|iso|all         # Create cluster dir and process until 'step'
   aba cluster --name sno --type sno --starting-ip 10.0.0.1           # Install SNO cluster, setting the first node's IP
+  aba cluster --name ocp --api-vip 10.0.0.5 --ingress-vip 10.0.0.6   # Set VIPs for API and ingress endpoints
+  aba cluster --name mycluster --ports ens192 ens224                 # Specify network ports used for cluster nodes
 
 Options:
 
@@ -17,16 +19,19 @@ Options:
     -t, --type <sno|compact|standard>     # Set type of cluster. Default is 'standard'.
     -s, --step <step>                     # Process up to this step or target <cluster.conf|agentconf|iso|mon>
                                           # See steps (targets) with "aba --dir mycluster help"
-    -i, --starting-ip <ip>                # IP addr for the first cluster node (rendevous/node0)
-        --api-vip <ip>                    # IP addr for cluster's API
-        --ingress-vip <ip>                # IP addr for application ingress
-    -I, --int-connection [<proxy|direct>] # Install from the public reg. or set to empty to use mirror
-                                          # Below options ONLY for platform=vmw
-        --mcpu <count>                    # Set the master cpu count in vCPU
-        --mmem <count>                    # Set the master memory in GB
-        --wcpu <count>                    # Set the worker cpu count in vCPU
-        --wmem <count>                    # Set the worker memory in GB
-        --data-disk [<size>]              # Size, in GB, of thin prov. 'data disk' or empty for no data disk
+    -i, --starting-ip <ip>                # IP address for the first cluster node (rendezvous/node0)
+        --api-vip <ip>                    # IP address for cluster's API
+        --ingress-vip <ip>                # IP address for application ingress
+    -I, --int-connection [<proxy|direct>] # Install from the public registry or set empty to use mirror
+        --ports [<string> ...]            # Space-separated list of network port names or empty to remove
+                                          # ports in <cluster name>/cluster.conf
+
+  # Below options ONLY for platform=vmw
+        --mcpu <count>                    # Set master CPU count (vCPUs)
+        --mmem <count>                    # Set master memory (GB)
+        --wcpu <count>                    # Set worker CPU count (vCPUs)
+        --wmem <count>                    # Set worker memory (GB)
+        --data-disk [<size>]              # Size (GB) of thin-provisioned 'data disk' or empty for none
 
 Usage (from a cluster directory):
   aba --cmd "oc command"                  # Run this 'oc command' on the current cluster
