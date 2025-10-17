@@ -6,24 +6,24 @@ Install & manage air-gapped OpenShift.
 
 Main commands: 
   aba                                   # Interactive mode.  Let Aba guide you through the process.
-  aba mirror                            # Install Quay (or connect to existing) mirror registry
-  aba sync                              # Copy images from the Internet into the mirror registry (m2m)
-  aba save|load                         # Copy images from the Internet to disk (m2d) and/or load to mirror (d2m)
+  aba [-d mirror] install               # Install Quay (or connect to existing) mirror registry
+  aba [-d mirror] sync                  # Copy images from the Internet into the mirror registry (m2m)
+  aba [-d mirror] save|load             # Copy images from the Internet to disk (m2d) and/or load to mirror (d2m)
   aba bundle                            # Create a bundle archive file for use in disconnected environment (m2d)
-  aba cluster                           # Install OpenShift cluster
+  aba cluster                           # Install OpenShift cluster. See 'aba cluster --help'.
 
 Other commands:
   aba clean                             # Clean up all generated files
-  aba download                          # Download all required CLI files only
-  aba cli                               # Download and install the all CLI binaries into ~/bin
-  aba help                              # See help for all targets
+  aba [-d cli] download                 # Download all required CLI installation files only
+  aba [-d cli]                          # Download and install all the CLI binaries into ~/bin
+  aba help                              # See help for all steps/targets
 
 Options:
   -y                                    # Automatically accept the default answer to all prompts
-  -d, --dir <directory>                 # Run Aba in this directory
+  -d, --dir <path/to/dir>               # Run aba in the specified directory, or cd there and run without -d.
   -h, --help                            # Show this help information
   -S, --pull-secret <path/to/file>      # Location of your pull secret (json) file here
-  -c, --channel <channel>               # Set the OpenShift installation channel, e.g. fast, stable, eus or candidate
+  -c, --channel <fast|stable|candidate> # Set the OpenShift installation channel, e.g. fast|f, stable|s, eus or candidate|c
   -v, --version <version>               # Set (x.y.z) or (x.y) OpenShift version, e.g. 4.19.20 or 4.19 or 'latest' or 'l' or 'previous' or 'p'
   -p, --platform <vmw|bm>               # Set the target platform, e.g. vmw (vCenter or ESX) or bm (bare-metal). This changes the install flow
   -b, --base-domain <domain>            # Set the OpenShift base domain, e.g. company.com

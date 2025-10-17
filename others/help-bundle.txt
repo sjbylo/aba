@@ -12,7 +12,7 @@ Usage:
 
   The 'bundle' command creates an 'install bundle' which is used to install OpenShift in a fully disconnected
   (air-gapped) environment. The 'bundle' command also writes the provided args (channel, version, operators ...)
-  to 'aba.conf'.
+  to 'aba.conf'. Need more control? Use 'aba save' & then 'aba tar' commands to create an 'install bundle'.
 
 Example of fully disconnected mode (air-gapped):
 
@@ -21,7 +21,7 @@ Example of fully disconnected mode (air-gapped):
     aba bundle --force -c stable -v latest -S ~/.pull-secret.json -P ocp ocpv mesh3 \
       -O web-terminal -o /path/to/portable/media/ocp-install-bundle
 
-  Transfer the "ocp-install-bundle.tar" file to the air-gapped env. and unpack it.
+  Transfer the generated "ocp-install-bundle.tar" file to the air-gapped env. and unpack it.
 
   Then install and run aba:
     tar xvf ocp-install-bundle.tar

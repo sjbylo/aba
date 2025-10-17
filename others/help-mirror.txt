@@ -1,4 +1,4 @@
-Install 'Mirror Registry for Red Hat OpenShift' (Quay) or connect to existing mirror
+Install 'Mirror Registry for Red Hat OpenShift' (Quay) or connect to existing mirror registry.
 
 Usage:
   aba mirror [options]
@@ -7,10 +7,11 @@ Options:
   -y                                   # Automatically accept the default answer to all prompts
   -H, --mirror-hostname string         # The hostname of the mirror registry.
   -u, --reg-user string                # The username used to access the registry (default is 'init').
-  -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key, used to install Quay to a remote host.
-  -U, --reg-ssh-user string            # Username to use to access the remote host via ssh.
-      --data-dir /path/to/dir          # Install Quay images/cache to this dir instead of ~/quay-install.
-      --reg-path string                # The path to use to store images in the mirror reg.
+  -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key, used to install Quay to a *remote host*.
+  -U, --reg-ssh-user <string>          # Username to use to access the remote host via ssh.
+      --data-dir </path/to/dir>        # Install Quay images/cache to this dir instead of ~/quay-install.
+      --reg-path <string>              # The path to store images inside the mirror registry.
+  -d, --dir <path/to/dir>              # Run aba in the specified directory, or cd there and run without -d.
 
 Related commands:
   aba sync                             # Copy images from the Internet into the mirror registry (mirror2mirror).
@@ -22,23 +23,27 @@ Related commands:
   aba load                             # Copy images from disk to the mirror registry (disk2mirror).
     -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
 
+  aba verify                           # Verify mirror registry connection credentials are working
+
 Examples of fully disconnected mode (air-gapped):
 
   Configure mirror registry on *localhost* (ensure 'registry.example.com' points to the mirror registry):
-    aba mirror -H registry.example.com 
+    aba [-d mirror] install -H registry.example.com 
 
   Configure mirror registry on *remote host* with 'registry.example.com' using 'remote-ssh-user':
-    aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
+    aba [-d mirror] install -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
 
   Configure mirror registry and use path ocp4/openshift4 and store all data under /mnt/large/drive/my-data
-    aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user --reg-path ocp4/openshift4 \
-      --data-dir /mnt/large/drive/my-data
+    aba [-d mirror] install -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user --reg-path ocp4/openshift4 --data-dir /mnt/large/drive/my-data
 
   Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
-    aba load -H registry.example.com  --retry 8
+    aba [-d mirror] load -H registry.example.com  --retry 8
+
+  Verify connection to mirror registry. First, set up pull secret and CA cert files in aba/mirror/regcreds dir.
+    aba [-d mirror] verify
 
   Install OpenShift:
-    aba cluster --name mycluster --type standard [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
+    See: aba cluster --help
 
 Note that the command 'mirror' can be substituted with one of 'save', 'load' or 'sync', in which case the 'mirror' command will also be called if needed. 
 The options above [-k, -U etc] can be used also for 'save', 'load' and/or 'sync'.

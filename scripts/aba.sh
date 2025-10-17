@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251017184251
+ABA_VERSION=20251018002541
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -435,7 +435,7 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		[ -s $1 ] && cp "$2" vmware.conf
 		shift 2
-	elif [ "$1" = "-y" ]; then  # One off, accept the default answer to all prompts for this invocation
+	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # One off, accept the default answer to all prompts for this invocation
 		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
 		shift 
 	elif [ "$1" = "-Y" ]; then  # One off, accept the default answer to all prompts for this invocation
