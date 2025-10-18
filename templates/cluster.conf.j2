@@ -1,78 +1,73 @@
 ######################################################################################################################
-# This is the main cluster configuration file.  Please go through all values carefully and adjust to match your needs!
+# Main cluster configuration. Review and adjust all values as needed.
 
-cluster_name={{ cluster_name }}			# Set the cluster name and base domain.
-base_domain={{ domain }}			# These will form the cluster domain, e.g. sno.example.com
+cluster_name={{ cluster_name }}			# Cluster name (used with base_domain for full domain)
+base_domain={{ domain }}			# Forms the cluster domain, e.g. sno.example.com
 
-api_vip={{ api_vip }}			# The Virtual IP address used by the OpenShift API endpoint.
-ingress_vip={{ ingress_vip }}			# The Virtual IP address used by application ingress (*.apps).
-					# - These values (api_vip, ingress_vip) are ignored in
-					#   Single Node OpenShift (SNO).
-					# Prerequisite:
-					# - Create the required DNS A records in your DNS server.
-					#   - For SNO: both records must resolve to the single node’s IP.
-					#   - For multi-node clusters: the records must match the
-					#     api_vip and ingress_vip values set above.
-					# Example DNS records:
+api_vip={{ api_vip }}				# VIP for the OpenShift API endpoint
+ingress_vip={{ ingress_vip }}			# VIP for app ingress (*.apps)
+					# - Ignored for Single Node OpenShift (SNO)
+					# DNS requirements:
 					#   api.<cluster_name>.<base_domain>    -> api_vip
 					#   *.apps.<cluster_name>.<base_domain> -> ingress_vip
+					# For SNO: both records point to the same node IP
 
-machine_network={{ machine_network }}/{{ prefix_length }}		# Set the machine network CIDR for all cluster nodes. 
+machine_network={{ machine_network }}/{{ prefix_length }}		# CIDR for all cluster nodes
 
-starting_ip={{ starting_ip }}			# The first static IP address to assign to cluster nodes.
-					# - All nodes will receive sequential static IPs starting from this address.
-					# - The IP range must fall within the 'machine_network' CIDR.
-					# - Ensure these IPs are not already in use.
-					# - The starting_ip will also be assigned to the rendezvous node (node0).
+starting_ip={{ starting_ip }}			# First static node IP (node0 / rendezvous)
+					# - Sequential IPs assigned from this address
+					# - Must be inside the machine_network range
+					# - Ensure IPs are unused
 
-hostPrefix=23				# A hostPrefix value of 23 provides 510 (2^(32 - 23) - 2) pod IP addresses per node. 
-					# Set this lower, e.g. to 22 for more IP addresses, esp. for bare-metal servers. 
+hostPrefix=23				# Pod subnet per node; 23 gives 510 pod IPs
+					# Use 22 or lower for more pod IPs (bare metal)
 
-master_prefix=master			# Prefix names for masters and workers.
-worker_prefix=worker 			# OpenShift nodes will be named: master1, master2 ... worker1, worker2 etc.
+master_prefix=master			# Node name prefix for masters
+worker_prefix=worker 			# Node name prefix for workers
 
-num_masters={{ num_masters }} 				# Number of master (control plane) and worker (compute) nodes.
-num_workers={{ num_workers }}				# Default (standard cluster) is 3 masters & 2 (or more) workers.
-					# Compact cluster is 3 masters and no workers.
-					# Single Node OpenShift (SNO) is 1 master and zero workers.
+num_masters={{ num_masters }} 				# Number of masters (control plane)
+num_workers={{ num_workers }}				# Number of workers (compute)
+					# Standard: 3 masters + ≥2 workers
+					# Compact: 3 masters only
+					# SNO: 1 master only
 
-dns_servers={{ dns_servers }}			# Comma-separated list of DNS server IP addresses reachable from within the private network.
-next_hop_address={{ next_hop_address }}		# The default gateway IP address for the private network (optional).
-ntp_servers={{ ntp_servers }}			# Optional: comma-separated list of NTP servers.
-					# - NTP will be configured during bootstrap and on the installed cluster.
-					# - Required if the platform clock is not synchronized.
+dns_servers={{ dns_servers }}			# Comma-separated list of DNS servers
+next_hop_address={{ next_hop_address }}		# Default gateway IP (optional)
+ntp_servers={{ ntp_servers }}			# Comma-separated NTP servers (optional)
+					# Used during bootstrap and post-install
+					# Needed if host clock isn't synced
 
-ports={{ ports }}				# The name(s) of the node network interface(s) to use for the machine network.
-					# - Single interface example: ports=ens1f0   (or ens3, eth0, etc.)
-					# - Multiple interfaces (comma-separated) will be bonded: ports=ens1f0,ens2f0,ens3f0,ens4f0
-vlan={{ vlan }}					# Optional: VLAN tag to use for the machine network.  Works with or without bonding.
+ports={{ ports }}				# Space-separated interface names for machine network
+					# Single: ports=ens1f0
+					# Multiple (bonded): ports="ens1f0 ens2f0 ens3f0 ens4f0"
+vlan={{ vlan }}					# Optional VLAN tag (works with or without bonding)
 
-int_connection={{ int_connection }}				# Optional: Set int_connection=proxy to configure the 'cluster wide proxy' by reusing any existing shell proxy vars.
-					# Set int_connection=direct  to use direct access to the Internet, e.g. via NAT.
-					# Set int_connection= to use a mirror registry (default) configured using "aba mirror"
+int_connection={{ int_connection }}				# Internal connection mode:
+					#   proxy  - use cluster-wide proxy (from env vars)
+					#   direct - use NAT / direct Internet
+					#   empty  - use local mirror (default)
 
-#http_proxy=http://10.0.1.8:3128	# Set these three '*_proxy' vars to override (or if no existing shell proxy vars set).
+#http_proxy=http://10.0.1.8:3128	# Optional proxy overrides (if env vars not set)
 #https_proxy=http://10.0.1.8:3128
 #no_proxy=.example.com,.lan
 
-ssh_key_file=~/.ssh/id_rsa		# Optional: Path to your ssh key pair files (recommended).
-					# The public key (e.g. ~/.ssh/id_rsa.pub) is copied to all OCP nodes.
-					# The private key (e.g. ~/.ssh/id_rsa) is used for ssh access to your nodes.
+ssh_key_file=~/.ssh/id_rsa		# Path to SSH key (recommended)
+					# - Public key (~/.ssh/id_rsa.pub) copied to all nodes
+					# - Private key (~/.ssh/id_rsa) used for SSH node access
 
 #####################################################################################################################
-# Important: All the below values are only required if you want to use vCenter or ESXi to create VMs for the cluster.
+# The values below apply only if using vCenter or ESXi for VM-based clusters.
 
-mac_prefix={{ mac_prefix }}		# If file "macs.conf" exists containing mac addresses, those addresses are used.
-					# Otherwise, all VMs will be created using this mac address prefix. 
-					# Be sure these mac addresses are not already in use!
-					# To avoid overlap, 'x' characters will be replaced by random hex values. 
-					# Note that if the target platform is bare-metal, the mac addresses can also be
-					# manually adjusted directly in the 'agent-config.yaml' file (after running 'aba agent-config.yaml').
+mac_prefix={{ mac_prefix }}		# MAC prefix for VMs; replaced by random hex if 'x'
+					# If macs.conf exists, its values override this
+					# Ensure addresses are unique and unused
+					# For bare metal, MACs can be edited in agent-config.yaml
 
-master_cpu_count={{ master_cpu_count }}			# Set the number of CPUs (cores) and Memory (GB of RAM).  
-master_mem={{ master_mem }}				# For SNO, the minimum is 8 CPUs.
-worker_cpu_count={{ worker_cpu_count }}			# Note: Only required for nodes based on VMs. For SNO, worker_* values are ignored.
-worker_mem={{ worker_mem }}
+master_cpu_count={{ master_cpu_count }}			# CPU cores and memory per master
+master_mem={{ master_mem }}				# Minimum for SNO: 8 CPUs
+worker_cpu_count={{ worker_cpu_count }}			# CPU cores and memory per worker
+worker_mem={{ worker_mem }}				# Ignored for SNO
 
-data_disk={{ data_disk }}				# Add optional thin provisioned data disk. Leave data_disk undefined for 'no disk'.
+data_disk={{ data_disk }}				# Optional thin-provisioned data disk
+					# Leave undefined for no data disk
 
