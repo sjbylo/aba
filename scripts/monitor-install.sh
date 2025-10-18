@@ -17,29 +17,28 @@ echo ===========================================================================
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
 
+# Wait for the Agent port to become alive on the rendezvous node0...
+if [ ! -f .install-complete ]; then
+	AGENT_HOST=$(cat iso-agent-based/rendezvousIP)
+	AGENT_PORT=8090
+	agent_url="http://$AGENT_HOST:$AGENT_PORT/"
+	max_retries=30
+	delay=8
 
-AGENT_HOST=$(cat iso-agent-based/rendezvousIP)
-AGENT_PORT=8090
-agent_url="http://$AGENT_HOST:$AGENT_PORT/"
-max_retries=30
-delay=8
+	echo "Waiting for Agent to come alive at $agent_url ..."
+	for ((i=1; i<=max_retries; i++)); do
+		code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "$agent_url")
+		[ "$ABA_DEBUG" ] && echo return code=$code
+		if [[ $code =~ ^4..$ ]]; then
+			break
+		fi
 
-echo "Waiting for Agent to come alive at $agent_url ..."
-for ((i=1; i<=max_retries; i++)); do
-	code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "$agent_url")
-	[ "$ABA_DEBUG" ] && echo return code=$code
-	if [[ $code =~ ^4..$ ]]; then
-	#if [[ $code =~ ^[4-9][0-9]{2}$ ]]; then
-		#echo "✅ Agent API responded ($code) at $agent_url"
-		#exit 0
-		break
-	fi
-	#echo "⏳ Attempt $i/$max_retries: waiting for agent..."
-	sleep "$delay"
-	let delay=$delay+2
-done
+		sleep "$delay"
+		let delay=$delay+2
+	done
+fi
 
-sleep 10
+sleep 8
 
 echo_yellow "Running: openshift-install agent wait-for install-complete --dir $ASSETS_DIR"
 
