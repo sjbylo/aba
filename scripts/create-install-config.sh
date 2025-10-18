@@ -16,10 +16,14 @@ verify-cluster-conf || exit 1
 verify-mirror-conf || exit 1
 
 #to_output=$(normalize-cluster-conf | sed -e "s/^export //g" | paste -d '  ' - - - | column -t --output-separator " | ")
-to_output=$(normalize-cluster-conf | sed -e "s/^export //g")
+if [ "$platform" = "bm" ]; then
+	to_output=$(normalize-cluster-conf | sed -E -e "s/^export //g" -e 's/^(mac_prefix|master_cpu_count|master_mem|worker_cpu_count|worker_mem|data_disk)=.*//g')
+elif [ "$platform" = "vmw" ]; then
+	to_output=$(normalize-cluster-conf | sed -e "s/^export //g")
+fi
 echo_white "Current values in cluster.conf:"
 output_table 3 "$to_output"
-echo_white "*Note that values mac_prefix, master/worker cpu/mem counts & data_disk are only requred for platform=vmw"
+###[ "$platform" = "bm" ] && echo_white "*Note that values mac_prefix, master/worker cpu/mem counts & data_disk are only used for platform=vmw"
 echo
 
 # Set the rendezvous_ip to the the first master's ip
