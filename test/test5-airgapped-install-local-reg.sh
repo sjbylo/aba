@@ -567,7 +567,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operato
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|                                              awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 8 5 "cd $subdir/aba/sno; i=0; until oc adm upgrade --to-latest=true --allow-not-recommended; do let i=\$i+1; [ \$i -gt 20 ] && exit 1; sleep 30; done" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 8 5 "cd $subdir/aba/sno; i=0; until oc adm upgrade --to-latest=true --allow-not-recommended; do let i=\$i+1; [ \$i -gt 3 ] && exit 1; sleep 20; done" 
 # Consider using "--allow-upgrade-with-warnings" in the above trigger 
 test-cmd -m "Sleeping 60s" sleep 60
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc adm upgrade --include-not-recommended" 
