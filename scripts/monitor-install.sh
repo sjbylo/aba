@@ -27,7 +27,7 @@ if [ ! -f .install-complete ]; then
 
 	echo "Waiting for Agent to come alive at $agent_url ..."
 	for ((i=1; i<=max_retries; i++)); do
-		code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "$agent_url")
+		code=$(curl --connect-timeout 10 -s -o /dev/null -w "%{http_code}" --max-time 3 "$agent_url")
 		[ "$ABA_DEBUG" ] && echo return code=$code
 		if [[ $code =~ ^4..$ ]]; then
 			break
@@ -36,9 +36,9 @@ if [ ! -f .install-complete ]; then
 		sleep "$delay"
 		let delay=$delay+2
 	done
-fi
 
-sleep 8
+	sleep 8
+fi
 
 echo_yellow "Running: openshift-install agent wait-for install-complete --dir $ASSETS_DIR"
 
