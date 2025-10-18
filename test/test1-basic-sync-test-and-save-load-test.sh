@@ -280,6 +280,9 @@ sed -i "s#^reg_pw=[^ \t]*#reg_pw= #g" ./mirror/mirror.conf	    	# test random pa
 mylog "Setting reg_path=my/path"
 sed -i "s#^reg_path=[^ \t]*#reg_path=my/path #g" ./mirror/mirror.conf	    	# test path
 
+mylog "Setting reg_user=myuser"
+sed -i "s#^reg_user=[^ \t]*#reg_user=myuser #g" ./mirror/mirror.conf	    	# test username
+
 mylog "Setting reg_ssh_user=$reg_ssh_user for remote installation" 
 sed -i "s#^\#reg_ssh_user=[^ \t]*#reg_ssh_user=$reg_ssh_user #g" ./mirror/mirror.conf	     	# If remote, set user
 

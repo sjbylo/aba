@@ -51,7 +51,7 @@ sudo diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/root
 
 podman logout --all 
 echo -n "Checking registry access is working using 'podman login': "
-podman login -u init -p $reg_pw $reg_url 
+podman login -u $reg_user -p $reg_pw $reg_url 
 
 reg_creds="$reg_user:$reg_pw"
 enc_password=$(echo -n "$reg_creds" | base64 -w0)
