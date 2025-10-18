@@ -194,7 +194,7 @@ do
 	echo "\
     - name: $op_name
       channels:
-      - name: $op_default_channel"
+      - name: \"$op_default_channel\""
 done > imageset-config-$catalog_name-catalog-v${ocp_ver_major}.yaml
 
 echo_white "Generated mirror/imageset-config-$catalog_name-catalog-v${ocp_ver_major}.yaml file for easy reference when editing your image set config file."
