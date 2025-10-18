@@ -1,10 +1,10 @@
-######################################################################################################################
+######################################################################################################
 # Main cluster configuration. Review and adjust all values as needed.
 
 cluster_name={{ cluster_name }}			# Cluster name (used with base_domain for full domain)
 base_domain={{ domain }}			# Forms the cluster domain, e.g. sno.example.com
 
-api_vip={{ api_vip }}				# VIP for the OpenShift API endpoint
+api_vip={{ api_vip }}			# VIP for the OpenShift API endpoint
 ingress_vip={{ ingress_vip }}			# VIP for app ingress (*.apps)
 					# - Ignored for Single Node OpenShift (SNO)
 					# DNS requirements:
@@ -55,7 +55,7 @@ ssh_key_file=~/.ssh/id_rsa		# Path to SSH key (recommended)
 					# - Public key (~/.ssh/id_rsa.pub) copied to all nodes
 					# - Private key (~/.ssh/id_rsa) used for SSH node access
 
-#####################################################################################################################
+######################################################################################################
 # The values below apply only if using vCenter or ESXi for VM-based clusters.
 
 mac_prefix={{ mac_prefix }}		# MAC prefix for VMs; replaced by random hex if 'x'
