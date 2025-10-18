@@ -796,10 +796,16 @@ replace-value-conf() {
 	[ "$DEBUG_ABA" ] && echo "Replacing config value [$2] with [$3] in file: $1" >&2
 
 	# Check if the value is already in the file along with the expected chars after the value, e.g. space/tab/# or EOL
-	if grep -q -E "$2=$3[[:space:]]*(#.*)?$" $1; then
+	if grep -q -E "^$2=$3[[:space:]]*(#.*)?$" $1; then
 		[ "$3" ] && echo_green "Value ${2}=${3} already exists in file $1" >&2 || echo_green "Value ${2} is already undefined in file $1" >&2
 	else
-		sed -i "s|^[# \t]*${2}=[^ \t#]*\(.*\)|${2}=${3}\1|g" $1
+		# Is the value is commented out with a "#" remove the "#"...
+		if grep -q "^[ \t]*#[ \t]*${2}=" $1; then
+			sed -E -i 's|^[ \t]*#[ \t]*('${2}'=.*)|\1|g' $1  # Remove the "#" before the value
+		fi
+		# Add in the new value
+		#sed -i "s|^[# \t]*${2}=[^ \t#]*\(.*\)|${2}=${3}\1|g" $1
+		sed -i "s|^${2}=[^ \t]*\(.*\)|${2}=${3}\1|g" $1
 		[ "$3" ] && echo_green "Added value ${2}=${3} to file $1" >&2 || echo_green "Undefining value ${2} in file $1" >&2 
 	fi
 }
