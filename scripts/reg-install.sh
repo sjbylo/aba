@@ -215,7 +215,7 @@ if [ "$reg_ssh_key" ]; then
 
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
   	#	-k $reg_ssh_key --initPassword $reg_pw $reg_root_opts"
-	cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts"
+	cmd="./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts"
 
 	echo_cyan "Installing mirror registry with command:"
 	echo_cyan "$cmd --initPassword <hidden>"
@@ -268,11 +268,12 @@ else
 	# We will leave this only as a warning, not an error since sometimes there is a NAT in use which is difficult to check
 	if ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
 		echo
-		echo_red "Warning: The mirror registry is configured to be installed on this localhost '$(hostname)'" >&2
-		echo_red "         but '$reg_host' resolves to $fqdn_ip, which *does not* reach this localhost via ssh!" >&2
-		echo_red "         If '$reg_host' is meant to point to a remote host, set 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
-		echo_red "         If '$reg_host' should point to this *localhost*, update the DNS record to resolve to an IP address that correctly reaches localhost '$(hostname)'." >&2
-		echo_red "         Correct the problem in 'aba/mirror/mirror.conf' and try again." >&2
+		echo_red "Warning: The mirror registry is configured in 'aba/mirror/mirror.conf' to be installed *locally*, but'" >&2
+		echo_red "         '$reg_host' resolves to $fqdn_ip, which *does not* reach this localhost via ssh!" >&2
+		echo_red "         You have two options:" >&2
+		echo_red "         1. If '$reg_host' is intended to point to a remote host, set 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
+		echo_red "         2. If '$reg_host' should refer to this *localhost*, update its DNS record to resolve to an IP address that correctly reaches this localhost '$(hostname)'." >&2
+		echo_red "         Correct the problem, either in 'aba/mirror/mirror.conf' or in the DNS, and try again." >&2
 
 		echo
 		sleep 2
@@ -323,7 +324,7 @@ ask "Install Quay mirror registry appliance to '$(hostname)' (localhost), access
 	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opts"
-	cmd="./mirror-registry install -v --quayHostname $reg_host $reg_root_opts"
+	cmd="./mirror-registry install -v --targetUsername $reg_user --quayHostname $reg_host $reg_root_opts"
 
 	echo_cyan "Installing mirror registry with command:"
 	echo_cyan "$cmd --initPassword <hidden>"
