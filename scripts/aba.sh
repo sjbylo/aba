@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251018002541
+ABA_VERSION=20251018162435
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -227,30 +227,50 @@ do
 		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_host "$2"
 		shift 2
 	elif [ "$1" = "--reg-ssh-key" -o "$1" = "-k" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		# The ssh key used to access the linux registry host
+		# If no value, remove from mirror.conf
+		#[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1  # FIXME
+		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_key= || { reg_ssh_key=$2; shift; }
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_key "$2"
-		shift 2
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_key "$reg_ssh_key"
+		shift
 	elif [ "$1" = "--reg-ssh-user" -o "$1" = "-U" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		# The ssh username used to access the linux registry host
+		# If no value, remove from mirror.conf
+		#[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1  # FIXME
+		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_user_val= || { reg_ssh_user_val=$2; shift; }
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_user "$2"
-		shift 2
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_user "$reg_ssh_user_val"
+		shift
 	elif [ "$1" = "--data-dir" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
 		replace-value-conf $ABA_PATH/mirror/mirror.conf data_dir "$2"
 		shift 2
-	# FIXME: Delete below. --reg-path depricated in favor of --data-dir
-	#elif [ "$1" = "--reg-path" ]; then
-	#	[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
-	#	# force will skip over asking to edit the conf file
-	#	make -sC $ABA_PATH/mirror mirror.conf force=yes
-	#	replace-value-conf $ABA_PATH/mirror/mirror.conf reg_path "$2"
-	#	shift 2
+	elif [ "$1" = "--reg-user" ]; then
+		# The username used to access the mirror registry 
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		# force will skip over asking to edit the conf file
+		make -sC $ABA_PATH/mirror mirror.conf force=yes
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_user "$2"
+		shift 2
+	elif [ "$1" = "--reg-password" ]; then
+		# The password used to access the mirror registry 
+		# Add a password in ='password'
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		# force will skip over asking to edit the conf file
+		make -sC $ABA_PATH/mirror mirror.conf force=yes
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_pw "'$2'"
+		shift 2
+	elif [ "$1" = "--reg-path" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		# force will skip over asking to edit the conf file
+		make -sC $ABA_PATH/mirror mirror.conf force=yes
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_path "$2"
+		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
