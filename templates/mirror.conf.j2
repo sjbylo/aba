@@ -1,33 +1,34 @@
 # Mirror registry configuration
 #
-# Examine all values carefully and adjust them to match your *internal/private* (air-gapped) environment!
-# Set the values to either a) your existing registry, or b) where you intend to install the Quay mirror registry. 
+# Review all values carefully and update them for your internal or air-gapped environment.
+# Set the values according to your existing registry OR the target host where
+# 'Mirror Registry for Red Hat OpenShift' (Quay) will be installed.
 
-reg_host=registry.{{ domain }}		# FQDN (domain) of registry. No IP addr allowed. Can be for this host or a remote host.
-					# Ensure a *DNS A record exists* that points to the IP address of that host.
-					# For a remote host, be sure ssh is working from this host to the remote host 
-					# and set 'reg_ssh_key' and 'reg_ssh_user' (below) appropriately.
+reg_host=registry.{{ domain }}		# FQDN of the registry host (no IP address). Can be local or remote.
+					# Ensure a DNS A record resolves to an IP address that allows connections to this host.
+					# If remote, confirm SSH access works from this host
+					# and set 'reg_ssh_key' and 'reg_ssh_user' below accordingly.
 
-reg_port=8443				# The port used by any *existing* mirror registry. 
-					# Note that Quay mirror registry appliance always uses 8443. 
+reg_port=8443				# Port of the existing or target mirror registry.
+					# Quay registry appliance always uses 8443.
 
-reg_path=/ocp4/openshift4		# This is the path where the OCP images will be stored,
+reg_path=/ocp4/openshift4		# Path where mirrored images are stored,
 					# e.g. https://registry.example.com:8443/ocp4/openshift4/...
 
-reg_user=init				# Set your existing registry's username. Note that the Quay appliance username is fixed: 'init'.
+reg_user=init				# Username for the registry. 
 
-reg_pw='p4ssw0rd'			# Registry password. Leave blank if a random password should be created e.g. reg_pw=
-					# The password must be at least 8 characters and contain no white-space.
+reg_pw='p4ssw0rd'			# Registry password. Leave empty to auto-generate one (e.g. reg_pw=).
+					# Must be at least 8 characters with no whitespace.
 
-data_dir=				# Optional: Absolute Path to large data disk for storing images and temporary files. 
-					# Quay is installed as $data_dir/quay-install & the oc-mirror cache as $data_dir/.oc-mirror. 
-					# Default is the local (or remote) home directory. Note that '~' can be used after the '='.
+data_dir=				# Optional: Absolute path to storage for images and temporary files.
+					# Quay installs to $data_dir/quay-install; oc-mirror cache to $data_dir/.oc-mirror.
+					# Defaults to the user’s home directory. '~' is supported after '='.
 
-# Important: The below 2 values are only needed if you want aba to install Quay on a remote host.
+# The following values are only required for installing Quay on a remote host.
 
-#reg_ssh_key=~/.ssh/id_rsa		# Optional: Ssh key file to use for *remote* install of Quay.
-					# IMPORTANT: If undefined (the default) Quay will be installed on **localhost**.
-					# The key must allow password-less access to the remote host (defined by reg_host above).
+#reg_ssh_key=~/.ssh/id_rsa		# Optional: SSH private key for remote Quay installation.
+					# If unset (default), Quay is installed locally.
+					# The key must allow passwordless SSH access to reg_host.
 
-#reg_ssh_user=				# Optional: Username to use for *remote* install of Quay. Default is current user.
+#reg_ssh_user=				# Optional: SSH username for remote Quay installation. Defaults to current user.
 
