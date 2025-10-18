@@ -324,7 +324,7 @@ ask "Install Quay mirror registry appliance to '$(hostname)' (localhost), access
 	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
 	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opts"
-	cmd="./mirror-registry install -v --targetUsername $reg_user --quayHostname $reg_host $reg_root_opts"
+	cmd="./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host $reg_root_opts"
 
 	echo_cyan "Installing mirror registry with command:"
 	echo_cyan "$cmd --initPassword <hidden>"
