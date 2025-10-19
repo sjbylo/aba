@@ -140,7 +140,7 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 ######################
 # This will install mirror and sync images
 mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key ~/.ssh/id_rsa and then ..."
-test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba --dir mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba -d mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
@@ -177,7 +177,7 @@ do
 	test-cmd -m "Adding 10.0.2.8 to ntp servers" "aba --dns 10.0.1.8 10.0.2.8"
 	test-cmd -m "Creating cluster.conf for '$cname' cluster" "aba $cname --step cluster.conf"
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # Make sure all mac addr are the same, not random
-        test-cmd -m "Creating install-config.yaml for $cname cluster" "aba --dir $cname install-config.yaml"
+        test-cmd -m "Creating install-config.yaml for $cname cluster" "aba --dir $cname/mirror install-config.yaml"
         test-cmd -m "Creating agent-config.yaml for $cname cluster" "aba --dir $cname agent-config.yaml"
 
 	# There are only run on the very first run to generate the valis files
@@ -268,26 +268,28 @@ reg_ssh_key=${reg_ssh_user}_rsa
 #sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=\~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
-mylog "Setting data_dir=~/my-quay-mirror-test1"
-sed -i "s#^data_dir=[^ \t]*#data_dir=\~/my-quay-mirror-test1 #g" ./mirror/mirror.conf	     	# test other storage location
+test-cmd -m "Setting data_dir=~/my-quay-mirror-test1 in mirror/mirror.conf" aba -d mirror --data-dir \~/my-quay-mirror-test1
+#sed -i "s#^data_dir=[^ \t]*#data_dir=\~/my-quay-mirror-test1 #g" ./mirror/mirror.conf	     	# test other storage location
+
 #mylog "Setting reg_root=~/my-quay-mirror-test1"
 #sed -i "s#^reg_root=[^ \t]*#reg_root=\~/my-quay-mirror-test1 #g" ./mirror/mirror.conf	     	# test other storage location
 
-mylog "Setting reg_pw=  (empty)"
-sed -i "s#^reg_pw=[^ \t]*#reg_pw= #g" ./mirror/mirror.conf	    	# test random password 
+test-cmd -m "Setting reg_pw=  (empty)" aba -d mirror --reg-password 
+#sed -i "s#^reg_pw=[^ \t]*#reg_pw= #g" ./mirror/mirror.conf	    	# test random password 
+
 ### sed -i "s#tls_verify=true#tls_verify=            #g" ./mirror/mirror.conf  	# test tlsverify = false # sno install fails 
 
-mylog "Setting reg_path=my/path"
-sed -i "s#^reg_path=[^ \t]*#reg_path=my/path #g" ./mirror/mirror.conf	    	# test path
+test-cmd -m "Setting reg_path=my/path" aba -d mirror --reg-path my/path 
+#sed -i "s#^reg_path=[^ \t]*#reg_path=my/path #g" ./mirror/mirror.conf	    	# test path
 
-mylog "Setting reg_user=myuser"
-sed -i "s#^reg_user=[^ \t]*#reg_user=myuser #g" ./mirror/mirror.conf	    	# test username
+test-cmd -m "Setting reg_user=myuser" aba -d mirror --reg-user myuser 
+#sed -i "s#^reg_user=[^ \t]*#reg_user=myuser #g" ./mirror/mirror.conf	    	# test username
 
-mylog "Setting reg_ssh_user=$reg_ssh_user for remote installation" 
-sed -i "s#^\#reg_ssh_user=[^ \t]*#reg_ssh_user=$reg_ssh_user #g" ./mirror/mirror.conf	     	# If remote, set user
+test-cmd -m "Setting reg_ssh_user=$reg_ssh_user for remote installation" aba -d mirror --reg-ssh-user $reg_ssh_user
+#sed -i "s#^\#reg_ssh_user=[^ \t]*#reg_ssh_user=$reg_ssh_user #g" ./mirror/mirror.conf	     	# If remote, set user
 
-mylog "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" 
-sed -E -i "s|^^#{,1}reg_ssh_key=[^ \t]*|reg_ssh_key=\~/.ssh/$reg_ssh_key |g" ./mirror/mirror.conf	     	# Remote or localhost
+test-cmd -m "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" oc -d mirror --reg-ssh-key "~/.ssh/$reg_ssh_key"
+#sed -E -i "s|^^#{,1}reg_ssh_key=[^ \t]*|reg_ssh_key=\~/.ssh/$reg_ssh_key |g" ./mirror/mirror.conf	     	# Remote or localhost
 
 test-cmd -m "Checking values in $PWD/mirror/mirror.conf" cat mirror/mirror.conf | cut -d\# -f1| sed '/^[ \t]*$/d'
 
@@ -313,16 +315,21 @@ aba --dir sno clean # This should clean up the cluster and make should start fro
 rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should start from scratch next time
 
 mylog "Testing with smaller CIDR 10.0.1.200/30 with start ip 201"
+
 test-cmd -m "Configuring SNO cluster with" aba sno --step cluster.conf
-test-cmd -m "Setting machine_network=10.0.1.200/30" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g' sno/cluster.conf"
+#test-cmd -m "Setting machine_network=10.0.1.200/30" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g' sno/cluster.conf"
+test-cmd -m "Setting machine_network=10.0.1.200/30" aba -d sno --machine-network "10.0.1.200/30"
+
 ####### test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
 test-cmd -m "Creating iso" aba sno --step iso --starting-ip 10.0.1.201
 
 mylog "Testing with larger CIDR 10.0.0.0/20 with start ip 10.0.1.201"
-test-cmd -m "Setting machine_network=10.0.0.0/20" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g' sno/cluster.conf"
-test-cmd -m "Setting in aba.conf machine_network=10.0.0.0/20" aba --machine-network 10.0.0.0/20
+#test-cmd -m "Setting machine_network=10.0.0.0/20" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g' sno/cluster.conf"
+test-cmd -m "Setting in aba.conf machine_network=10.0.0.0/20" aba -d sno --machine-network 10.0.0.0/20
 
-test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
+#test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
+test-cmd -m "Setting starting_ip=10.0.1.201" aba -d sno -i 10.0.1.201
+
 test-cmd -m "Installing sno cluster" aba sno
 test-cmd -m "Checking cluster operators" aba --dir sno cmd
 
@@ -332,7 +339,7 @@ test-cmd -m "Checking cluster operators" aba --dir sno cmd
 
 #######################
 #  Delete the reg. first!
-test-cmd -m "Delete the registry so it will be re-created again during 'aba save load' next" aba --dir mirror uninstall 
+test-cmd -m "Delete the registry so it will be re-created again during 'aba -d mirror save load' next" aba --dir mirror uninstall 
 #  This will save the images, install (the reg.) then load the images
 test-cmd -r 15 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
 
@@ -350,7 +357,9 @@ test-cmd -i -m "If cluster up, stopping cluster" "yes|aba --dir sno shutdown --w
 mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' file to simulate 'bare metal' and iso creation"
 
 # FIXME
-sed -i "s/^platform=.*/platform=bm/g" aba.conf
+#sed -i "s/^platform=.*/platform=bm/g" aba.conf
+test-cmd -m "Setting platform=bm in aba.conf" aba --platform bm
+
 ####> vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
 ####test-cmd -m "Creating standard iso file with 'aba standard --step iso'" aba standard --step iso # Since we're simulating bare-metal, only create iso

@@ -116,7 +116,6 @@ ocp_version_older=$ocp_version_major.$ocp_version_older_point
 mylog ocp_version_older is $ocp_version_older
 
 test-cmd -m "Setting version to install in aba.conf" aba -v $ocp_version_older
-###sed -i "s/^ocp_version=[^ \t]*/ocp_version=$ocp_version_older /g" aba.conf  # add the older version
 test-cmd -m "Show ocp_version in $PWD/aba.conf" "grep -o '^ocp_version=[^ ]*' aba.conf"
 # for upgrade
 
@@ -133,14 +132,10 @@ test-cmd -m "Checking vmware.conf" grep vm/abatesting vmware.conf
 # Do not ask to delete things
 test-cmd -m "Setting ask=false" aba --noask
 
-#mylog "Setting ntp_servers=$ntp_ip" 
-#[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=$ntp_ip,ntp.example.com    #\2/g" aba.conf
-test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in $PWD/aba.conf" aba --ntp $ntp_ip ntp.example.com
+test-cmd -m "Setting ntp_servers=$ntp_ip,ntp.example.com in $PWD/aba.conf" aba --ntp $ntp_ip ntp.example.com
 
 echo kiali-ossm > templates/operator-set-abatest 
 test-cmd -m "Setting op_sets=abatest in aba.conf" aba --op-sets abatest
-#sed -i "s/^op_sets=.*/op_sets=abatest /g" aba.conf
-echo kiali-ossm > templates/operator-set-abatest 
 # kiali is installed in later tests below
 
 # Needed for $ocp_version below
@@ -160,11 +155,13 @@ aba -d mirror mirror.conf
 ###scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 
 mylog "Test the internal bastion ($int_bastion_hostname) as mirror"
-#test-cmd -m "Setting reg_host=$int_bastion_hostname" aba -d mirror -H $int_bastion_hostname # THis will INSTALL mirror!
-sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
+make -sC mirror mirror.conf force=yes
+test-cmd -m "Setting reg_host=$int_bastion_hostname" aba -d mirror -H $int_bastion_hostname # THis will INSTALL mirror!??? # FIXME?
+#sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
 
 # This is also a test that overriding vakues works ok, e.g. this is an override in the mirror.connf file, overriding from aba.conf file
-test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_sets=.*/op_sets=abatest /g' ./mirror/mirror.conf"
+#test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" "sed -i 's/^.*op_sets=.*/op_sets=abatest /g' ./mirror/mirror.conf"
+test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" aba --op-sets abatest 
 # kiali is installed in later tests below
 
 # This is needed for below VM reset (init_bastion)!
@@ -292,7 +289,7 @@ test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirr
 test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba/mirror load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/sno day2"
@@ -439,7 +436,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file ex
 ## REMOVED test-cmd -m "Create incremental tar and ssh to internal bastion" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -"
 ## REMOVED test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba -d mirror load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar

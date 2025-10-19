@@ -137,7 +137,7 @@ if [ ! "$1" ]; then
 
 	#####
 
-	#uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("aba save") when Operators need to be saved!
+	#uname -n | grep -qi ^fedora$ && sudo mount -o remount,size=6G /tmp   # Needed by oc-mirror ("aba -d mirror save") when Operators need to be saved!
 	# Try to fix "out of space" error when generating the op. index
 	cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
 
@@ -166,7 +166,7 @@ mylog
 source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
-test-cmd -r 15 1 -m "Saving images to local disk on `hostname`" aba save --retry
+test-cmd -r 15 1 -m "Saving images to local disk on `hostname`" aba -d mirror save --retry
 
 test-cmd -m "Checking existance of file mirror/save/mirror_*000000.tar" "ls -lh mirror/save/mirror_*\.tar"
 

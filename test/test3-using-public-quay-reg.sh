@@ -87,13 +87,9 @@ cp $vf -v vmware.conf
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 test-cmd -m "Checking vmware.conf" grep vm/abatesting vmware.conf
 
-#mylog "Setting 'ask='"
-#sed -i 's/^ask=[^ \t]\{1,\}\([ \t]\{1,\}\)/ask=\1 /g' aba.conf
 test-cmd -m "Set ask to false" aba --noask
 
-#mylog "Setting ntp_servers=$ntp_ip" 
-#[ "$ntp_ip" ] && sed -i "s/^ntp_servers=\([^#]*\)#\(.*\)$/ntp_servers=ntp.example.com  #\2/g" aba.conf
-test-cmd -m "Setting ntp_servers=$ntp_ip ntp.example.com in aba.conf" aba --ntp $ntp_ip ntp.example.com
+test-cmd -m "Setting ntp_servers=$ntp_ip,ntp.example.com in aba.conf" aba --ntp $ntp_ip ntp.example.com
 
 source <(normalize-aba-conf)
 echo Check aba.conf:
@@ -107,7 +103,6 @@ source <(normalize-vmware-conf)
 
 test-cmd -m "Removing sno dir" rm -rf sno
 test-cmd -m "Testing direct internet config" aba sno --step cluster.conf -I direct
-###test-cmd -m "Set int_connection=direct" "sed -i 's/.*int_connection=.*/int_connection=direct/g' sno/cluster.conf"
 test-cmd -m "Creating agentconf" aba -d sno agentconf
 test-cmd -m "Verifying direct internet config - 'registry.redhat.io' exists" 		"grep registry.redhat.io	sno/install-config.yaml"
 test-cmd -m "Verifying direct internet config - 'cloud.openshift.com' exists" 		"grep cloud.openshift.com	sno/install-config.yaml"
@@ -121,7 +116,6 @@ test-cmd -m "Creating iso for 'int_connection=direct' SNO cluster" aba -d sno is
 
 test-cmd -m "Removing sno dir" rm -rf sno
 test-cmd -m "Creating sno/cluster.conf." aba sno --step cluster.conf -I proxy
-####test-cmd -m "Adding int_connection=proxy to sno/cluster.conf" "sed -i 's/^#int_connection=.*/int_connection=proxy/g' sno/cluster.conf"
 
 test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." "aba -d sno"  # Not, this is NOT the same as "aba sno" command
 # aba sno will overwrite the cluster.conf file, but the other will not.
