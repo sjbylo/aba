@@ -40,7 +40,7 @@ fi
 echo_white "What this 'day2' script does:"
 echo_white "- Add the internal mirror registry's Root CA to the cluster trust store."
 echo_white "- Configure OperatorHub to integrate with the internal mirror registry."
-echo_white "- Apply any/all idms/itms resource files under working-dir/cluster-resources that were created by oc-mirror (aba sync/load)."
+echo_white "- Apply any/all idms/itms resource files under working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync/load)."
 echo_white "- For fully disconnected environments, disable online public catalog sources."
 echo_white "- Install any CatalogSources found under working-dir/cluster-resources."
 echo_white "- Apply any release image signatures found under working-dir/cluster-resources."

@@ -32,7 +32,7 @@ reg_root=$data_dir/quay-install
 # FIXME: [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
 if [ ! -d save ]; then
-	echo_red "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'aba save' first on an external (Internet connected) bastion/laptop" >&2
+	echo_red "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'aba -d mirror save' first on an external (Internet connected) bastion/laptop" >&2
 
 	exit 1
 fi
@@ -68,7 +68,7 @@ do
 	if [ "$oc_mirror_version" = "v1" ]; then
 		# Set up script to help for manual re-sync
 		# --continue-on-error : do not use this option. In testing the registry became unusable! 
-		# Note: If 'aba save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
+		# Note: If 'aba -d mirror save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
 		cmd="oc-mirror --v1 $tls_verify_opts --from=. docker://$reg_host:$reg_port$reg_path"
 		echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh
 	else
@@ -77,7 +77,7 @@ do
 	fi
 
 	echo_cyan -n "Attempt ($try/$try_tot)."
-	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba load --retry <count>'" || echo
+	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror load --retry <count>'" || echo
 	echo_cyan "Running: $(cat load-mirror.sh)"
 	echo
 

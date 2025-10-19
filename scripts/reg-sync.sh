@@ -88,7 +88,7 @@ do
 	fi
 
 	echo_cyan -n "Attempt ($try/$try_tot)."
-	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba sync --retry <count>'" || echo
+	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror sync --retry <count>'" || echo
 	echo "Running: $(cat sync-mirror.sh)"
 	echo
 
