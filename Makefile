@@ -75,6 +75,7 @@ tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Defa
 tarrepo:  ## Archive the full repo *excluding* the aba/mirror/mirror_*.tar files. Works in the same way as 'aba tar'.
 	@$(SCRIPTS)/backup.sh --repo $(out)
 
+#FIXME: Needed?
 .PHONY: inc
 inc:  ## (Deprecated) Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'aba tar'.
 	$(SCRIPTS)/backup.sh --inc $(out)
@@ -82,6 +83,10 @@ inc:  ## (Deprecated) Create an incremental archive of the repo. The incremental
 .PHONY: load
 load: ## Load the imaget set archive files into your mirror registry (as defined in aba/mirror/mirror.conf) 
 	@make -sC mirror load
+
+.PHONY: verify
+verify: ## Verify access to your mirror registry (as defined in aba/mirror/mirror.conf) 
+	@make -sC mirror verify
 
 .PHONY: sno
 sno: aba.conf  ## (deprecated) Install a Single Node OpenShift cluster.  Use 'aba sno --step iso' to create the iso.
@@ -99,6 +104,7 @@ standard: aba.conf  ## (deprecated) Install a standard 3+3-node OpenShift cluste
 cluster:  aba.conf  ## Initialize install dir and install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
 	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
 
+#FIXME: Remove?
 .PHONY: ask
 ask: ## Automatically accept the default answer to all prompts. Set 'ask' in aba.conf to 'true'.
 	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
@@ -106,6 +112,7 @@ ask: ## Automatically accept the default answer to all prompts. Set 'ask' in aba
 .PHONY: setask
 setask: ask
 
+#FIXME: Remove?
 .PHONY: noask
 noask:  ## Always prompt.  Set 'ask' in aba.conf to 'false'
 	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
