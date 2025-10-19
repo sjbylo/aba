@@ -244,7 +244,7 @@ Now, continue with either [Partially Disconnected Scenario](#partially-disconnec
 
 <!--
 ```
-aba mirror
+aba -d mirror install
 ```
 - configures and connects to your existing container registry OR installs a fresh Mirror Registry for Red Hat OpenShift.
 
@@ -296,13 +296,13 @@ Copy images from the Red Hat registry to your _internal mirror registry_:
 aba -d mirror sync
 ```
 This command:
-  - triggers `aba mirror` (to configure or install the mirror registry).
+  - triggers `aba -d mirror install` (to configure or install the mirror registry).
     - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `aba/mirror/regcreds/` first! See the [Existing Registry Prerequisites](#existing-registry-prerequisites) section for more).
     - or, installs _Mirror Registry for Red Hat OpenShift_ (Quay) on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `aba/mirror/regcreds` directory for later use.
   - pulls images from the Internet and stores them in the registry.
 
 ```
-aba download
+aba -d cli download
 ```
   - *Optionally* download the CLI binaries into `aba/cli`. This is only needed if you plan to disconnect from the Internet before installing OpenShift.
 
@@ -595,10 +595,10 @@ aba         # Run aba and follow the instructions
 
 Note: You will find the large image set tar file under `aba/mirror/save`.
 
-You can now install the _Mirror Registry for Red Hat OpenShift_ (Quay) to localhost and then load it with images using the following command (run: aba load --help or see below for more details):
+You can now install the _Mirror Registry for Red Hat OpenShift_ (Quay) to localhost and then load it with images using the following command (run: aba -d mirror load --help or see below for more details):
 
 ```
-aba mirror -H registry.example.com load --retry 3
+aba -d mirror mirror -H registry.example.com load --retry 3
 ```
 
 To install OpenShift run the following command and follow the instructions:
