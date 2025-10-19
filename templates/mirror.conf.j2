@@ -18,7 +18,7 @@ reg_path=/ocp4/openshift4		# Path where mirrored images are stored,
 reg_user=init				# Username for the registry. 
 
 reg_pw='p4ssw0rd'			# Registry password. Leave empty to auto-generate one (e.g. reg_pw=).
-					# Must be at least 8 characters with no whitespace.
+					# Must be at least 8 characters with no whitespace and not include: "'\`$
 
 data_dir=				# Optional: Absolute path to storage for images and temporary files.
 					# Quay installs to $data_dir/quay-install; oc-mirror cache to $data_dir/.oc-mirror.

@@ -26,7 +26,7 @@ Usage: Create a install 'bundle archive'
    version, operators ...) to 'aba.conf'.  See below for <<other options>>.
 
 Usage: Set up and load mirror registry
-   aba mirror                            # Connect to existing, or create a, mirror registry. 
+   aba --dir mirror <command>            # Connect to existing, or create a, mirror registry. 
    <<options>>:
      -H, --mirror-hostname <hostname>    # The hostname of the target mirror registry
      -u, --reg-user <username>           # The username used to access the registry (default it 'init')
@@ -35,15 +35,16 @@ Usage: Set up and load mirror registry
          --data-dir /path/to/dir         # Install Quay files/images under this directory
          --reg-path <path>               # The path to use to store images in the mirror reg
 
-   aba sync                              # Copy images from the Internet into the mirror registry
+   aba -d mirror install                 # Install mirror registry
+   aba -d mirror sync                    # Copy images from the Internet into the mirror registry
    <<options>>:
      -r, --retry <count>                 # Retry <count> times on oc-mirror error
 
-   aba save                              # Copy images from the Internet to disk
+   aba -d mirror save                    # Copy images from the Internet to disk
    <<options>>:
      -r, --retry <count>                 # Retry <count> times on oc-mirror error
 
-   aba load                              # Copy images from disk to the mirror registry
+   aba -d mirror load                    # Copy images from disk to the mirror registry
    <<options>>:
      -r, --retry <count>                 # Retry <count> times on oc-mirror error
 

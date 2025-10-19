@@ -1,7 +1,7 @@
 Install 'Mirror Registry for Red Hat OpenShift' (Quay) or connect to existing mirror registry.
 
 Usage:
-  aba mirror [options]
+  aba --dir mirror install [options]
 
 Options:
   -y                                   # Automatically accept the default answer to all prompts
