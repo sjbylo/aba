@@ -213,14 +213,17 @@ if [ "$reg_ssh_key" ]; then
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
-	#cmd="./mirror-registry install -v --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host \
-  	#	-k $reg_ssh_key --initPassword $reg_pw $reg_root_opts"
 	cmd="./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts"
 
 	echo_cyan "Installing mirror registry with command:"
 	echo_cyan "$cmd --initPassword <hidden>"
 
-	eval $cmd --initPassword $reg_pw   # eval needed for "~"
+	#echo $cmd --initPassword "\"$reg_pw\""
+	eval echo $cmd --initPassword "'$reg_pw'"
+	set -x
+	eval $cmd --initPassword "'$reg_pw'"
+	set +x
+	#eval $cmd --initPassword $reg_pw   # eval needed for "~"
 
 	if [ -d regcreds ]; then
 		rm -rf regcreds.bk
@@ -236,24 +239,19 @@ if [ "$reg_ssh_key" ]; then
 
 	# Check if the cert needs to be updated
 	trust_root_ca regcreds/rootCA.pem
-	#$SUDO diff regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-		#$SUDO cp regcreds/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
-			#$SUDO update-ca-trust extract
 
 	[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
+
+	# Configure the pull secret for this mirror registry 
+	echo "Generating regcreds/pull-secret-mirror.json file"
+	export enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)
+	# Inputs: enc_password, reg_host and reg_port 
+	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
 
 	podman logout --all >/dev/null 
 	echo -n "Checking registry access is working using 'podman login' ... "
 	echo "Running: podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url"
 	podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url 
-
-	# Configure the pull secret for this mirror registry 
-	echo "Generating regcreds/pull-secret-mirror.json file"
-
-	export enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)
-
-	# Inputs: enc_password, reg_host and reg_port 
-	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
 else
 	# First, ensure the reg host points to this localhost and not a remote host
 	# Sanity check to see if the correct host was defined
@@ -323,13 +321,15 @@ ask "Install Quay mirror registry appliance to '$(hostname)' (localhost), access
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
-	#cmd="./mirror-registry install -v --quayHostname $reg_host --initPassword $reg_pw $reg_root_opts"
 	cmd="./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host $reg_root_opts"
 
 	echo_cyan "Installing mirror registry with command:"
 	echo_cyan "$cmd --initPassword <hidden>"
 
-	eval $cmd --initPassword $reg_pw   # eval needed for "~"
+	#escaped_pw=$(printf '%s' "$reg_pw" | sed 's/[&/\]/\\&/g')
+	#echo $cmd --initPassword "\"$reg_pw\""
+	$cmd --initPassword "'$reg_pw'" 
+	#eval $cmd --initPassword $reg_pw   # eval needed for "~"
 
 	if [ -d regcreds ]; then
 		rm -rf regcreds.bk

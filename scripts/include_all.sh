@@ -799,13 +799,16 @@ replace-value-conf() {
 	if grep -q -E "^$2=$3[[:space:]]*(#.*)?$" $1; then
 		[ "$3" ] && echo_green "Value ${2}=${3} already exists in file $1" >&2 || echo_green "Value ${2} is already undefined in file $1" >&2
 	else
+		# FIXME: Is this needed? 
 		# Is the value is commented out with a "#" remove the "#"...
-		if grep -q "^[ \t]*#[ \t]*${2}=" $1; then
-			sed -E -i 's|^[ \t]*#[ \t]*('${2}'=.*)|\1|g' $1  # Remove the "#" before the value
-		fi
-		# Add in the new value
+		#if grep -q "^[ \t]*#[ \t]*${2}=" $1; then
+		#	sed -E -i 's|^[ \t]*#[ \t]*('${2}'=.*)|\1|g' $1  # Remove the "#" before the value
+		#fi
+		# FIXME: Is this needed? 
+		# Add in the new value, removing any white space or "#" before the arg=val
 		#sed -i "s|^[# \t]*${2}=[^ \t#]*\(.*\)|${2}=${3}\1|g" $1
-		sed -i "s|^${2}=[^ \t]*\(.*\)|${2}=${3}\1|g" $1
+		sed -i "s|^[# \t]*${2}=[^ \t]*\(.*\)|${2}=${3}\1|g" $1
+		#sed -i "s|^${2}=[^ \t]*\(.*\)|${2}=${3}\1|g" $1
 		[ "$3" ] && echo_green "Added value ${2}=${3} to file $1" >&2 || echo_green "Undefining value ${2} in file $1" >&2 
 	fi
 }
@@ -950,7 +953,7 @@ get_ntp_servers() {
 
 trust_root_ca() {
 	if [ -s $1 ]; then
-		if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null; then
+		if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
 			echo_white "$1 already in system trust"
 		else
 			$SUDO cp $1 /etc/pki/ca-trust/source/anchors/ 

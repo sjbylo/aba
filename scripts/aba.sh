@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251018162435
+ABA_VERSION=20251019220859
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -260,11 +260,12 @@ do
 	elif [ "$1" = "--reg-password" ]; then
 		# The password used to access the mirror registry 
 		# Add a password in ='password'
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		#[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		[[ "$2" =~ ^- || -z "$2" ]] && reg_pw_value= || { reg_pw_value="$2"; shift; }
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_pw "'$2'"
-		shift 2
+		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_pw "'$reg_pw_value'"
+		shift
 	elif [ "$1" = "--reg-path" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
@@ -822,7 +823,7 @@ if [ ! -f .bundle ]; then
 	sleep 0.3
 
 	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
-	# FIXME: Any better way to do this?! .. or just keep this check in 'aba sync' and 'aba save' (i.e. before we d/l the images
+	# FIXME: Any better way to do this?! .. or just keep this check in 'aba -d mirror sync' and 'aba -d mirror save' (i.e. before we d/l the images
 	(
 		install_rpms make || exit 1
 		make -s -C mirror checkversion 
@@ -850,7 +851,8 @@ if [ ! -f .bundle ]; then
 			fi
 		fi
 
-		sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
+		##sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
+		replace-value-conf aba.conf editor "$new_editor" 
 		export editor=$new_editor
 		echo_cyan "'editor' set to '$new_editor' in aba.conf"
 
@@ -941,11 +943,11 @@ if [ ! -f .bundle ]; then
 		echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 		echo
 		echo "Run:"
-		echo "  aba mirror                        # to configure and/or install Quay."
-		echo "  aba sync --retry <count>          # to synchronize all container images - from the Internet - into your registry."
+		echo "  aba -d mirror install              # to configure and/or install Quay."
+		echo "  aba -d mirror sync --retry <count> # to synchronize all container images - from the Internet - into your registry."
 		echo
 		echo "Or run:"
-		echo "  aba mirror sync --retry <count>   # to complete both actions and ensure any image synchronization issues are retried."
+		echo "  aba -d mirror sync --retry <count> # to complete both actions and ensure any image synchronization issues are retried."
 		echo
 
 		echo "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
@@ -975,7 +977,7 @@ else
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
 		echo
-		echo_magenta "IMPORTANT: The image set tar files (created in the previous step with 'aba bundle' or 'aba save') MUST BE" >&2
+		echo_magenta "IMPORTANT: The image set tar files (created in the previous step with 'aba bundle' or 'aba -d mirror save') MUST BE" >&2
 		echo_magenta "           copied or moved to the 'aba/mirror/save' directory before following the instructions below!" >&2
 		echo_magenta "           For example, run the command: cp /path/to/portable/media/mirror_*tar aba/mirror/save" >&2
 	fi
@@ -986,7 +988,7 @@ else
 	echo_magenta "IMPORTANT: Check the values in aba.conf and ensure they are all complete and match your disconnected environment."
 
 	echo_white "Current values in aba.conf:"
-	to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d")
+	to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d")  # In disco env, no need to show pull-secret.
 	output_table 3 "$to_output"
 
 	echo
@@ -995,15 +997,15 @@ else
 	echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 	echo
 	echo "To install the registry on the local machine, accessible via registry.example.com, run:"
-	echo "  aba mirror load -H registry.example.com --retry"
+	echo "  aba -d mirror load -H registry.example.com --retry"
 	echo
 	echo "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
-	echo "  aba mirror load -H registry.example.com -k ~/.ssh/id_rsa -U user --retry 8"
+	echo "  aba -d mirror load -H registry.example.com -k ~/.ssh/id_rsa -U user --retry 8"
 	echo
 	echo "If unsure, run:"
-	echo "  aba mirror                         # to configure and/or install Quay."
+	echo "  aba -d mirror install                 # to configure and/or install Quay."
 	echo
-	echo "See 'aba load -h' for more."
+	echo "See 'aba -d mirror load -h' for more."
 fi
 
 

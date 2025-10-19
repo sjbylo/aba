@@ -70,7 +70,7 @@ do
 	fi
 
 	echo_cyan -n "Attempt ($try/$try_tot)."
-	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba save --retry <count>'" || echo
+	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror save --retry <count>'" || echo
 	echo_cyan "Running: $(cat save-mirror.sh)"
 	echo
 
