@@ -177,7 +177,7 @@ do
 	test-cmd -m "Adding 10.0.2.8 to ntp servers" "aba --dns 10.0.1.8 10.0.2.8"
 	test-cmd -m "Creating cluster.conf for '$cname' cluster" "aba $cname --step cluster.conf"
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # Make sure all mac addr are the same, not random
-        test-cmd -m "Creating install-config.yaml for $cname cluster" "aba --dir $cname/mirror install-config.yaml"
+        test-cmd -m "Creating install-config.yaml for $cname cluster" "aba --dir $cname install-config.yaml"
         test-cmd -m "Creating agent-config.yaml for $cname cluster" "aba --dir $cname agent-config.yaml"
 
 	# There are only run on the very first run to generate the valis files
@@ -288,7 +288,7 @@ test-cmd -m "Setting reg_user=myuser" aba -d mirror --reg-user myuser
 test-cmd -m "Setting reg_ssh_user=$reg_ssh_user for remote installation" aba -d mirror --reg-ssh-user $reg_ssh_user
 #sed -i "s#^\#reg_ssh_user=[^ \t]*#reg_ssh_user=$reg_ssh_user #g" ./mirror/mirror.conf	     	# If remote, set user
 
-test-cmd -m "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" oc -d mirror --reg-ssh-key "~/.ssh/$reg_ssh_key"
+test-cmd -m "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" aba -d mirror --reg-ssh-key "~/.ssh/$reg_ssh_key"
 #sed -E -i "s|^^#{,1}reg_ssh_key=[^ \t]*|reg_ssh_key=\~/.ssh/$reg_ssh_key |g" ./mirror/mirror.conf	     	# Remote or localhost
 
 test-cmd -m "Checking values in $PWD/mirror/mirror.conf" cat mirror/mirror.conf | cut -d\# -f1| sed '/^[ \t]*$/d'
@@ -314,21 +314,22 @@ test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_
 aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should start from scratch next time
 
-mylog "Testing with smaller CIDR 10.0.1.200/30 with start ip 201"
-
-test-cmd -m "Configuring SNO cluster with" aba sno --step cluster.conf
+##mylog "Testing with smaller CIDR 10.0.1.200/30 with start ip 201"
+test-cmd -m "Creating SNO iso with small CIDR 10.0.1.200/30" aba sno --machine-network "10.0.1.200/30" --step iso
 #test-cmd -m "Setting machine_network=10.0.1.200/30" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g' sno/cluster.conf"
-test-cmd -m "Setting machine_network=10.0.1.200/30" aba -d sno --machine-network "10.0.1.200/30"
+###test-cmd -m "Setting machine_network=10.0.1.200/30" aba -d sno --machine-network "10.0.1.200/30"
+
+test-cmd -m "Deleting sno/ dir" rm -rf sno
 
 ####### test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
-test-cmd -m "Creating iso" aba sno --step iso --starting-ip 10.0.1.201
+test-cmd -m "Creating iso: CIDR 10.0.0.0/20 with start ip 10.0.1.201" aba sno --step iso --starting-ip 10.0.1.201 --machine-network 10.0.0.0/20 
 
-mylog "Testing with larger CIDR 10.0.0.0/20 with start ip 10.0.1.201"
+#mylog "Testing with larger CIDR 10.0.0.0/20 with start ip 10.0.1.201"
 #test-cmd -m "Setting machine_network=10.0.0.0/20" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g' sno/cluster.conf"
-test-cmd -m "Setting in aba.conf machine_network=10.0.0.0/20" aba -d sno --machine-network 10.0.0.0/20
+###test-cmd -m "Setting in aba.conf machine_network=10.0.0.0/20" aba -d sno --machine-network 10.0.0.0/20  -i 10.0.1.201
 
 #test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
-test-cmd -m "Setting starting_ip=10.0.1.201" aba -d sno -i 10.0.1.201
+###test-cmd -m "Setting starting_ip=10.0.1.201" aba -d sno -i 10.0.1.201
 
 test-cmd -m "Installing sno cluster" aba sno
 test-cmd -m "Checking cluster operators" aba --dir sno cmd
