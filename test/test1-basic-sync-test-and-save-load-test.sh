@@ -265,10 +265,12 @@ mylog "Configure mirror to install on internal bastion (remote host) in custom d
 reg_ssh_user=testy
 reg_ssh_key=${reg_ssh_user}_rsa
 
+test-cmd -m "Checking values in $PWD/mirror/mirror.conf" cat mirror/mirror.conf | cut -d\# -f1| sed '/^[ \t]*$/d'
+
 #sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
 #sed -i "s#.*reg_ssh_key=.*#reg_ssh_key=\~/.ssh/id_rsa #g" ./mirror/mirror.conf	     	# Remote or localhost
 
-test-cmd -m "Setting data_dir=~/my-quay-mirror-test1 in mirror/mirror.conf" aba -d mirror --data-dir \~/my-quay-mirror-test1
+test-cmd -m "Setting data_dir=~/my-quay-mirror-test1 in mirror/mirror.conf" aba -d mirror --data-dir "\~/my-quay-mirror-test1"  # For $reg_ssh_user
 #sed -i "s#^data_dir=[^ \t]*#data_dir=\~/my-quay-mirror-test1 #g" ./mirror/mirror.conf	     	# test other storage location
 
 #mylog "Setting reg_root=~/my-quay-mirror-test1"
@@ -288,7 +290,7 @@ test-cmd -m "Setting reg_user=myuser" aba -d mirror --reg-user myuser
 test-cmd -m "Setting reg_ssh_user=$reg_ssh_user for remote installation" aba -d mirror --reg-ssh-user $reg_ssh_user
 #sed -i "s#^\#reg_ssh_user=[^ \t]*#reg_ssh_user=$reg_ssh_user #g" ./mirror/mirror.conf	     	# If remote, set user
 
-test-cmd -m "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" aba -d mirror --reg-ssh-key "~/.ssh/$reg_ssh_key"
+test-cmd -m "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" aba -d mirror --reg-ssh-key "\~/.ssh/$reg_ssh_key"
 #sed -E -i "s|^^#{,1}reg_ssh_key=[^ \t]*|reg_ssh_key=\~/.ssh/$reg_ssh_key |g" ./mirror/mirror.conf	     	# Remote or localhost
 
 test-cmd -m "Checking values in $PWD/mirror/mirror.conf" cat mirror/mirror.conf | cut -d\# -f1| sed '/^[ \t]*$/d'
