@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251019220859
+ABA_VERSION=20251020090654
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -15,6 +15,8 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 # Check we have sudo or root access 
 [ "$SUDO" ] && [ "$(sudo id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
 
+WORK_DIR=$PWD # Remember so can change config file here 
+
 # Change dir if asked
 if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
@@ -24,6 +26,8 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ "$DEBUG_ABA" ] && echo "$0: change dir to: \"$2\"" >&2
 	cd "$2"
 	shift 2
+
+	WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
 fi
 
 # Check the repo location
@@ -125,9 +129,10 @@ do
 		interactive_mode=1
 		interactive_mode_none=
 		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
-		replace-value-conf $ABA_PATH/aba.conf ask true
+		replace-value-conf -n ask -v true -f $ABA_PATH/aba.conf
 		shift
 	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then  #FIXME: checking --dir is also above!
+		# FIXME: Simplify this!  Put all static files into well-known location?
 		# Check id --dir already specified
 		if [ ! "$WORK_DIR" ]; then
 			[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
@@ -143,12 +148,12 @@ do
 			shift 2
 		else  # FIXME: this uses make -C ... do we want to do that still?
 			# We only act on the first --dir <dir> option and ignore all others
-			#if [ "$2" ] && echo "$2" | grep -q "^-"; then
+			# If there is no arg...
 			if [[ "$2" =~ ^- || -z "$2" ]]; then
 				# If there's an option next or $1 is the last arg, pass over
 				shift   # shift over the '--dir' only
 			else
-				# Check if it's a dir
+				# Check if arg is a dir
 				[ "$2" -a -e "$2" -a -d "$2" ] && shift  # shift only if it's really a dir
 			fi
 		fi
@@ -187,7 +192,7 @@ do
 				exit 1
 				;;
 		esac
-		replace-value-conf $ABA_PATH/aba.conf ocp_channel $chan
+		replace-value-conf -n ocp_channel -v $chan -f $ABA_PATH/aba.conf
 		shift 2
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		opt=$1
@@ -212,7 +217,7 @@ do
 
 		# As far as possible, always ensure there is a valid value in aba.conf
 		[ ! "$ver" ] && echo_red "Wrong value [$2] after option $opt" >&2 && exit 1
-		replace-value-conf $ABA_PATH/aba.conf ocp_version $ver
+		replace-value-conf -n ocp_version -v $ver -f $ABA_PATH/aba.conf
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
@@ -224,7 +229,7 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_host "$2"
+		replace-value-conf -n reg_host -v "$2" -f $ABA_PATH/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-ssh-key" -o "$1" = "-k" ]; then
 		# The ssh key used to access the linux registry host
@@ -233,7 +238,7 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_key= || { reg_ssh_key=$2; shift; }
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_key "$reg_ssh_key"
+		replace-value-conf -n reg_ssh_key -v "$reg_ssh_key" -f $ABA_PATH/mirror/mirror.conf
 		shift
 	elif [ "$1" = "--reg-ssh-user" -o "$1" = "-U" ]; then
 		# The ssh username used to access the linux registry host
@@ -242,20 +247,20 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_user_val= || { reg_ssh_user_val=$2; shift; }
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_ssh_user "$reg_ssh_user_val"
+		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $ABA_PATH/mirror/mirror.conf
 		shift
 	elif [ "$1" = "--data-dir" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf data_dir "$2"
+		replace-value-conf -n data_dir -v "$2" -f $ABA_PATH/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-user" ]; then
 		# The username used to access the mirror registry 
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_user "$2"
+		replace-value-conf -n reg_user -v "$2" -f $ABA_PATH/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-password" ]; then
 		# The password used to access the mirror registry 
@@ -264,20 +269,20 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_pw_value= || { reg_pw_value="$2"; shift; }
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_pw "'$reg_pw_value'"
+		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $ABA_PATH/mirror/mirror.conf
 		shift
 	elif [ "$1" = "--reg-path" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf $ABA_PATH/mirror/mirror.conf reg_path "$2"
+		replace-value-conf -n reg_path -v "$2" -f $ABA_PATH/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
 		[ ! "$domain" ] && echo_red "Error: Domain format incorrect [$2]" >&2 && exit 1
-		replace-value-conf $ABA_PATH/aba.conf domain "$domain"
+		replace-value-conf -n domain -v "$domain" -f $ABA_PATH/aba.conf
 		shift 2
 	elif [ "$1" = "--dns" -o "$1" = "-N" ]; then
 		# If arg missing remove from aba.conf
@@ -292,7 +297,7 @@ do
 			fi
 			shift
 		done
-		replace-value-conf $ABA_PATH/aba.conf dns_servers "$dns_ips"
+		replace-value-conf -n dns_servers -v "$dns_ips" -f $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--ntp" -o "$1" = "-T" ]; then
 		# If arg missing remove from aba.conf
@@ -304,7 +309,7 @@ do
 			[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
 			shift	
 		done
-		replace-value-conf $ABA_PATH/aba.conf ntp_servers "$ntp_vals"
+		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--default-route" -o "$1" = "-R" ]; then
 		# If arg missing remove from aba.conf
@@ -316,7 +321,7 @@ do
 	#	if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
 	#		def_route_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
 	#	fi
-		replace-value-conf $ABA_PATH/aba.conf next_hop_address "$def_route_ip"
+		replace-value-conf -n next_hop_address -v "$def_route_ip" -f $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-XXXXXX" ]; then # FIXME: opt?
 		# If arg ip addr then replace value in cluster.conf
@@ -341,7 +346,7 @@ do
 
 		# If conf file is available, edit the value
 		if [ -f cluster.conf ]; then
-			replace-value-conf cluster.conf api_vip "$api_vip"
+			replace-value-conf -n api_vip -v "$api_vip" -f cluster.conf
 		else
 			BUILD_COMMAND="$BUILD_COMMAND api_vip=$api_vip"
 		fi
@@ -370,7 +375,7 @@ do
 		fi
 		# If conf file is available, edit the value
 		if [ -f cluster.conf ]; then
-			replace-value-conf cluster.conf ingress_vip "$ingress_vip"
+			replace-value-conf -n ingress_vip -v "$ingress_vip" -f cluster.conf
 			##echo done $*
 		else
 			BUILD_COMMAND="$BUILD_COMMAND ingress_vip=$ingress_vip"
@@ -390,13 +395,13 @@ do
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
-		replace-value-conf $ABA_PATH/aba.conf platform "$2"
+		replace-value-conf -n platform -v "$2" -f $ABA_PATH/aba.conf
 		shift 2
 	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
 		# If no arg after --op-sets
 		if [[ "$2" =~ ^- || -z "$2" ]]; then
 			# Remove value
-			replace-value-conf $ABA_PATH/aba.conf op_sets 
+			replace-value-conf -n op_sets -v -f $ABA_PATH/aba.conf
 			shift
 		else
 			shift
@@ -415,34 +420,34 @@ do
 				fi
 				shift
 			done
-			replace-value-conf $ABA_PATH/aba.conf op_sets $op_set_list
+			replace-value-conf -n op_sets -v $op_set_list -f $ABA_PATH/aba.conf
 		fi
 	elif [ "$1" = "--ops" -o "$1" = "-O" ]; then
 		if [[ "$2" =~ ^- || -z "$2" ]]; then
 			# Remove value
-			replace-value-conf $ABA_PATH/aba.conf ops 
+			replace-value-conf -n ops -v  -f $ABA_PATH/aba.conf
 			shift
 		else
 			shift
 			while [[ -n "$1" && "$1" != -* ]]; do ops_list="$ops_list $1"; shift; done
 			ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
-			replace-value-conf $ABA_PATH/aba.conf ops $ops_list
+			replace-value-conf -n ops -v $ops_list -f $ABA_PATH/aba.conf
 		fi
 	elif [ "$1" = "--incl-platform" ]; then  # FIXME: Only have "--excl-platform" option and add true or false (remove: --incl-platform ??)
-		replace-value-conf $ABA_PATH/aba.conf excl_platform "false"
+		replace-value-conf -n excl_platform -v "false" -f $ABA_PATH/aba.conf
 		shift
 	elif [ "$1" = "--excl-platform" ]; then
-		replace-value-conf $ABA_PATH/aba.conf excl_platform "true"
+		replace-value-conf -n excl_platform -v "true" -f $ABA_PATH/aba.conf
 		shift
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		editor="$2"
-		replace-value-conf $ABA_PATH/aba.conf editor $editor
+		replace-value-conf -n editor -v $editor -f $ABA_PATH/aba.conf
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
-			replace-value-conf $ABA_PATH/aba.conf machine_network "$2"
+			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
 		else
 			echo_red "Error: Invalid CIDR [$2]" >&2
 			exit 1
@@ -450,7 +455,7 @@ do
 		shift 2
 	elif [ "$1" = "--pull-secret" -o "$1" = "-S" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
-		replace-value-conf $ABA_PATH/aba.conf pull_secret_file "$2"
+		replace-value-conf -n pull_secret_file -v "$2" -f $ABA_PATH/aba.conf
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
@@ -461,19 +466,19 @@ do
 		shift 
 	elif [ "$1" = "-Y" ]; then  # One off, accept the default answer to all prompts for this invocation
 		export ASK_OVERRIDE=1  
-		replace-value-conf $ABA_PATH/aba.conf ask false  # And make permanent change
+		replace-value-conf -n ask -v false -f $ABA_PATH/aba.conf  # And make permanent change
 		shift 
 	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
-		replace-value-conf $ABA_PATH/aba.conf ask true
+		replace-value-conf -n ask -v true -f $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then  # FIXME: make -y work only for a single command execution (not write into file)
-		replace-value-conf $ABA_PATH/aba.conf ask false 
+		replace-value-conf -n ask -v false -f $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then  # FIXME opt.
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
-				replace-value-conf cluster.conf master_cpu $2
+				replace-value-conf -n master_cpu -v $2 -f cluster.conf
 			else
 				BUILD_COMMAND="$BUILD_COMMAND master_cpu_count=$2"
 			fi
@@ -485,7 +490,7 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
-				replace-value-conf cluster.conf master_mem $2
+				replace-value-conf -n master_mem -v $2 -f cluster.conf
 			else
 				BUILD_COMMAND="$BUILD_COMMAND master_mem=$2"
 			fi
@@ -497,7 +502,7 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
-				replace-value-conf cluster.conf worker_cpu $2
+				replace-value-conf -n worker_cpu -v $2 -f cluster.conf
 			else
 				BUILD_COMMAND="$BUILD_COMMAND worker_cpu_count=$2"
 			fi
@@ -509,7 +514,7 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
-				replace-value-conf cluster.conf worker_mem $2
+				replace-value-conf -n worker_mem -v $2 -f cluster.conf
 			else
 				BUILD_COMMAND="$BUILD_COMMAND worker_mem=$2"
 			fi
@@ -528,7 +533,7 @@ do
 	elif [ "$1" = "--data-disk" -o "$1" = "-dd" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
-				replace-value-conf cluster.conf data_disk $2
+				replace-value-conf -n data_disk -v $2 -f cluster.conf
 			else
 				BUILD_COMMAND="$BUILD_COMMAND data_disk=$2"
 			fi
@@ -558,7 +563,7 @@ do
 		fi
 		# If conf file is available, edit the value
 		if [ -f cluster.conf ]; then
-			replace-value-conf cluster.conf int_connection "$int_connection"
+			replace-value-conf -n int_connection -v "$int_connection" -f cluster.conf
 			##echo done $*
 		else
 			BUILD_COMMAND="$BUILD_COMMAND int_connection=$int_connection"
@@ -734,7 +739,7 @@ if [ ! -f .bundle ]; then
 		#[ "$ans" = "e" ] && ocp_channel=eus
 		[ "$ans" = "c" ] && ocp_channel=candidate
 
-		replace-value-conf aba.conf ocp_channel $ocp_channel
+		replace-value-conf -n ocp_channel -v $ocp_channel -f aba.conf
 		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
 
 		chan=$ocp_channel # Used below
@@ -814,7 +819,7 @@ if [ ! -f .bundle ]; then
 
 		# Update the conf file
 		#sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver /g" aba.conf
-		replace-value-conf aba.conf ocp_version $target_ver
+		replace-value-conf -n ocp_version -v $target_ver -f aba.conf
 		echo_cyan "'ocp_version' set to '$target_ver' in aba.conf"
 
 		sleep 0.3
@@ -852,7 +857,7 @@ if [ ! -f .bundle ]; then
 		fi
 
 		##sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
-		replace-value-conf aba.conf editor "$new_editor" 
+		replace-value-conf -n editor -v "$new_editor" -f aba.conf
 		export editor=$new_editor
 		echo_cyan "'editor' set to '$new_editor' in aba.conf"
 

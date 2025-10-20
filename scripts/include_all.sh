@@ -787,30 +787,70 @@ fetch_latest_z_version() {
 
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {
-	# $1 file
-	# $2 is name of value to change
-	# $3 new value. If missing, remove the value
-	[ ! "$1" ] && echo "Error: arg1 file missing!" >&2 && exit 1
-	[ ! -s "$1" ] && echo "Error: No such file: $PWD/$1" >&2 && exit 1
-	[ ! "$2" ] && echo "Error: missing value to add to file $1!" >&2 && exit 1
-	[ "$DEBUG_ABA" ] && echo "Replacing config value [$2] with [$3] in file: $1" >&2
+	# -n <string> : name of value to change
+	# -v <string> : new value. If missing, remove the value
+	# -f <files>
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			-n)
+				# If arg missing?
+				[[ -z "$2" || "$2" =~ ^- ]] && echo_red "Missing arg after [$1]" >&2 && exit 1
+				local name="$2"
+				shift 2
+				;;
+			-v)
+				if [[ -z "$2" || "$2" =~ ^- ]]; then
+					local value=
+				else
+					local value="$2"
+					shift
+				fi
+				shift
+				;;
+			-f)
+				shift
+				local files="$@"
+				break
+				;;
+			*)
+				local files="$files $2"
+				shift
+				;;
+		esac
+	done
 
-	# Check if the value is already in the file along with the expected chars after the value, e.g. space/tab/# or EOL
-	if grep -q -E "^$2=$3[[:space:]]*(#.*)?$" $1; then
-		[ "$3" ] && echo_green "Value ${2}=${3} already exists in file $1" >&2 || echo_green "Value ${2} is already undefined in file $1" >&2
-	else
-		# FIXME: Is this needed? 
-		# Is the value is commented out with a "#" remove the "#"...
-		#if grep -q "^[ \t]*#[ \t]*${2}=" $1; then
-		#	sed -E -i 's|^[ \t]*#[ \t]*('${2}'=.*)|\1|g' $1  # Remove the "#" before the value
-		#fi
-		# FIXME: Is this needed? 
-		# Add in the new value, removing any white space or "#" before the arg=val
-		#sed -i "s|^[# \t]*${2}=[^ \t#]*\(.*\)|${2}=${3}\1|g" $1
-		sed -i "s|^[# \t]*${2}=[^ \t]*\(.*\)|${2}=${3}\1|g" $1
-		#sed -i "s|^${2}=[^ \t]*\(.*\)|${2}=${3}\1|g" $1
-		[ "$3" ] && echo_green "Added value ${2}=${3} to file $1" >&2 || echo_green "Undefining value ${2} in file $1" >&2 
-	fi
+	# Step through the files by priority...
+	for f in $files
+	do
+		#[ ! "$f" ] && echo "Error: arg1 file missing!" >&2 && exit 1
+		#[ ! -s "$f" ] && echo "Error: No such file: $f" >&2 && exit 1
+		#[ ! "$name" ] && echo "Error: missing value to add to file $f!" >&2 && exit 1
+
+		[ ! -s "$f" ] && continue # Try nexy file
+
+		[ "$DEBUG_ABA" ] && echo "Replacing config value [$name] with [$value] in file: $f" >&2
+
+		# Check if the value is already in the file along with the expected chars after the value, e.g. space/tab/# or EOL
+		if grep -q -E "^$name=$value[[:space:]]*(#.*)?$" $f; then
+			[ "$value" ] && echo_green "Value ${name}=${value} already exists in file $f" >&2 || echo_green "Value ${name} is already undefined in file $f" >&2
+			return 0
+		else
+			# FIXME: Is this needed? 
+			# Is the value is commented out with a "#" remove the "#"...
+			#if grep -q "^[ \t]*#[ \t]*${name}=" $f; then
+			#	sed -E -i 's|^[ \t]*#[ \t]*('${name}'=.*)|\1|g' $f  # Remove the "#" before the value
+			#fi
+			# FIXME: Is this needed? 
+			# Add in the new value, removing any white space or "#" before the arg=val
+			#sed -i "s|^[# \t]*${name}=[^ \t#]*\(.*\)|${name}=${value}\1|g" $f
+			sed -i "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
+			#sed -i "s|^${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
+			[ "$value" ] && echo_green "Added value ${name}=${value} to file $f" >&2 || echo_green "Undefining value ${name} in file $f" >&2 
+			return 0
+		fi
+	done
+
+	return 1 # Files do not exist!
 }
 
 output_table() {
