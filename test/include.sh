@@ -174,15 +174,14 @@ test-cmd() {
 
 		if [ "$ans" = "n" -o "$ans" = "N" -o "$ans" = "s" -o "$ans" = "S" ]; then
 			#echo Skipping this command ... | tee -a 
-			log-test "Skipping command ..."
+			log-test "Skipping command: $cmd ..."
 
 			return 0  # If return non-zero then this shell is lost!
 		elif [ "$ans" = "Y" -o "$ans" = "y" -o ! "$ans" ]; then
 			#echo Trying same command again ...
-			log-test "Trying command again ..."
+			log-test "Trying command again: $cmd ..."
 		else
 			cmd="$ans"
-			#echo "Running new command: $cmd"
 			log-test "Running new command: $cmd"
 		fi
 	done
