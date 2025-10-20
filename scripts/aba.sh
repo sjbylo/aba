@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251020090654
+ABA_VERSION=20251020101041
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -282,7 +282,16 @@ do
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
 		[ ! "$domain" ] && echo_red "Error: Domain format incorrect [$2]" >&2 && exit 1
-		replace-value-conf -n domain -v "$domain" -f $ABA_PATH/aba.conf
+		replace-value-conf -n domain -v "$domain" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
+		shift 2
+	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
+			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
+		else
+			echo_red "Error: Invalid CIDR [$2]" >&2
+			exit 1
+		fi
 		shift 2
 	elif [ "$1" = "--dns" -o "$1" = "-N" ]; then
 		# If arg missing remove from aba.conf
@@ -297,7 +306,7 @@ do
 			fi
 			shift
 		done
-		replace-value-conf -n dns_servers -v "$dns_ips" -f $ABA_PATH/aba.conf
+		replace-value-conf -n dns_servers -v "$dns_ips" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--ntp" -o "$1" = "-T" ]; then
 		# If arg missing remove from aba.conf
@@ -309,7 +318,7 @@ do
 			[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
 			shift	
 		done
-		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $ABA_PATH/aba.conf
+		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--default-route" -o "$1" = "-R" ]; then
 		# If arg missing remove from aba.conf
@@ -321,7 +330,7 @@ do
 	#	if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
 	#		def_route_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
 	#	fi
-		replace-value-conf -n next_hop_address -v "$def_route_ip" -f $ABA_PATH/aba.conf
+		replace-value-conf -n next_hop_address -v "$def_route_ip" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
 		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-XXXXXX" ]; then # FIXME: opt?
 		# If arg ip addr then replace value in cluster.conf
@@ -443,15 +452,6 @@ do
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		editor="$2"
 		replace-value-conf -n editor -v $editor -f $ABA_PATH/aba.conf
-		shift 2
-	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
-		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
-			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
-		else
-			echo_red "Error: Invalid CIDR [$2]" >&2
-			exit 1
-		fi
 		shift 2
 	elif [ "$1" = "--pull-secret" -o "$1" = "-S" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
