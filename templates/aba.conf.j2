@@ -1,3 +1,4 @@
+#######################################################################################
 # Aba global configuration file
 
 ocp_channel=		# OpenShift release channel ('stable', 'fast', 'candidate', or 'eus').
@@ -9,14 +10,17 @@ pull_secret_file=~/.pull-secret.json	# File path for your Red Hat pull secret, u
 editor=vi			# Text editor to use (e.g. nano, vi). Set to 'none' for manual config editing.
 ask=true			# Ask for confirmation before major actions (install, delete, etc.).
 
-# Set the following only if known:
-
+#######################################################################################
+# Set the following only if known
 op_sets=			# Optional: Comma-separated operator sets (e.g. op_sets=odf,ocpv,acm,mesh3).
 				# Operator sets are defined under 'templates/operator-set-*'. Add or edit as needed.
 				# Valid values: ocp,acm,ocpv,odf,appdev,mesh2,mesh3,odfdr,quay,sec,ai
 				# 'all' includes every operator in redhat-operator-index (ensure sufficient disk space!).
 
 ops=				# Optional: Comma-separated individual operators (e.g. ops=web-terminal,devworkspace-operator).
+
+#######################################################################################
+# Set the following only if known. Upon cluster creation, values are propagated to its cluster.conf file.
 
 domain={{ domain }}		# Base domain for your OpenShift cluster.
 machine_network={{ machine_network }}	# Network segment (CIDR format) where OpenShift will be installed.
@@ -25,6 +29,7 @@ next_hop_address={{ next_hop_address }}	# Default gateway IP for your private ne
 ntp_servers={{ ntp_servers }}		# Optional: NTP servers or hostnames (comma-separated). Needed if server clocks aren't synced.
 				# Note: Above 5 values can be overridden later in 'cluster.conf'.
 
+#######################################################################################
 # ADVANCED SETTINGS — CHANGE ONLY IF REQUIRED
 
 excl_platform=false		# Exclude platform images. Leave 'false' in most cases.
