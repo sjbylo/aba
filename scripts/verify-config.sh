@@ -54,7 +54,7 @@ if [ ! "$SNO" ]; then
 		elif echo "$actual_ip_of_api" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			# Add into cluster.conf
 			###sed -E -i "s/^^#{,1}api_vip=[^ \t]*/api_vip=$actual_ip_of_api /g" cluster.conf
-			replace-value-conf cluster.conf api_vip $actual_ip_of_api
+			replace-value-conf -n api_vip -v $actual_ip_of_api cluster.conf
 			echo_red "Warning: inserting actual IP address ($actual_ip_of_api) into cluster.conf" >&2
 			echo_red "         Please verify this is correct! If not, edit cluster.conf file and try again!" >&2
 			sleep 1
@@ -73,7 +73,7 @@ if [ ! "$SNO" ]; then
 			echo_red "Error: Missing DNS record $cl_ingress_domain" >&2 && exit 1
 		elif echo "$actual_ip_of_ingress" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			# Add into cluster.conf
-			replace-value-conf cluster.conf ingress_vip $actual_ip_of_ingress
+			replace-value-conf -n ingress_vip -v $actual_ip_of_ingress cluster.conf
 			echo_red "Warning: inserting actual IP address ($actual_ip_of_ingress) into cluster.conf" >&2
 			echo_red "         Please verify this is correct! If not, edit cluster.conf file and try again!" >&2
 			sleep 1
