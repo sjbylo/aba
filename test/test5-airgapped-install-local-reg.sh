@@ -4,7 +4,7 @@
 
 export INFO_ABA=1
 export ABA_TESTING=1  # No usage reporting
-[ ! "$TEST_CHANNEL" ] && export TEST_CHANNEL=latest
+[ ! "$TEST_CHANNEL" ] && export TEST_CHANNEL=stable
 hash -r  # Forget all command locations in $PATH
 
 # Required: 2 bastions (internal and external), for internal (no direct Internet) only yum works via a proxy/NAT. For external, the proxy is fully configured. 
