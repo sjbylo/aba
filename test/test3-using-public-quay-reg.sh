@@ -5,7 +5,7 @@
 
 export INFO_ABA=1
 export ABA_TESTING=1  # No usage reporting
-[ ! "$TEST_CHANNEL" ] && export TEST_CHANNEL=latest
+[ ! "$TEST_CHANNEL" ] && export TEST_CHANNEL=stable
 hash -r  # Forget all command locations in $PATH
 
 ### TEST for clean start with or without the rpms.  

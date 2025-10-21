@@ -4,7 +4,7 @@
 cd `dirname $0`
 
 # FIXME: needed?
-##sudo dnf install hostname -y   # Hack due to tests for missing packages
+sudo dnf install hostname -y   # Hack due to tests for missing packages
 
 curl --retry 3 -ILsk -o /dev/null https://localhost:8443/health/instance && echo "Mirror registry already installed on `hostname`" && exit 0
 

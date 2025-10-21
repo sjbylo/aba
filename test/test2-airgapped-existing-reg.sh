@@ -9,7 +9,7 @@
 
 export INFO_ABA=1
 export ABA_TESTING=1  # No usage reporting
-[ ! "$TEST_CHANNEL" ] && export TEST_CHANNEL=latest
+[ ! "$TEST_CHANNEL" ] && export TEST_CHANNEL=stable
 hash -r  # Forget all command locations in $PATH
 
 ### TEST for clean start with or without the rpms.  
@@ -146,6 +146,9 @@ if [ ! "$1" ]; then
 
 	##mylog "Install 'existing' test mirror registry on internal bastion: $int_bastion_hostname"
 	test-cmd -m "Install 'existing' test mirror registry on internal bastion: $int_bastion_hostname" test/reg-test-install-remote.sh $int_bastion_hostname
+	test-cmd -m "Uninstall 'existing' test mirror registry on internal bastion: $int_bastion_hostname" test/reg-test-uninstall-remote.sh $int_bastion_hostname
+	test-cmd -m "Install 'existing' test mirror registry on internal bastion: $int_bastion_hostname" test/reg-test-install-remote.sh $int_bastion_hostname
+	#FIXME
 
 	################################
 
