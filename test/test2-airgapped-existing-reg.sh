@@ -506,6 +506,9 @@ test-cmd -m "Pausing 5s ..." sleep 5
 # Keep it # test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting sno cluster" "aba --dir $subdir/aba/sno delete" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "If cluster up, stopping cluster" "cd $subdir/aba/;. <(aba -d sno shell) && . <(aba --dir sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
 
+
+test-cmd -m "Uninstall 'existing' test mirror registry on internal bastion: $int_bastion_hostname" test/reg-test-uninstall-remote.sh $int_bastion_hostname
+
 ######################
 
 ###trap - SIGINT
