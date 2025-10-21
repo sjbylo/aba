@@ -148,9 +148,7 @@ test-cmd -m "Init test: download mirror-registry-amd64.tar.gz" "aba --dir test m
 #################################
 # Copy and edit mirror.conf 
 
-#### NEEDED??? rpm -q --quiet python3 || rpm -q --quiet python36 || sudo dnf install python3 -y 
 # Simulate creation and edit of mirror.conf file
-# FIXME: Why not use 'aba mirror.conf'?
 aba -d mirror mirror.conf
 ###scripts/j2 templates/mirror.conf.j2 > mirror/mirror.conf
 

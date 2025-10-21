@@ -197,7 +197,7 @@ if [ "$reg_ssh_key" ]; then
 
 		echo_white "Using registry root dir: $reg_root and options: $reg_root_opts"
 	else
-		echo_white "Using registry root dir: $reg_root"
+		echo_white "Using registry root dir: $reg_root" #FIXME: Never called!
 	fi
 
 	echo "Installing mirror registry on the remote host [$reg_host] with user $reg_ssh_user into dir $reg_root ..."
@@ -220,9 +220,7 @@ if [ "$reg_ssh_key" ]; then
 
 	#echo $cmd --initPassword "\"$reg_pw\""
 	eval echo $cmd --initPassword "'$reg_pw'"
-	set -x
 	eval $cmd --initPassword "'$reg_pw'"
-	set +x
 	#eval $cmd --initPassword $reg_pw   # eval needed for "~"
 
 	if [ -d regcreds ]; then
@@ -326,10 +324,7 @@ ask "Install Quay mirror registry appliance to '$(hostname)' (localhost), access
 	echo_cyan "Installing mirror registry with command:"
 	echo_cyan "$cmd --initPassword <hidden>"
 
-	#escaped_pw=$(printf '%s' "$reg_pw" | sed 's/[&/\]/\\&/g')
-	#echo $cmd --initPassword "\"$reg_pw\""
-	$cmd --initPassword "'$reg_pw'" 
-	#eval $cmd --initPassword $reg_pw   # eval needed for "~"
+	eval $cmd --initPassword $reg_pw   # eval needed for "~"
 
 	if [ -d regcreds ]; then
 		rm -rf regcreds.bk
