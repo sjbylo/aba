@@ -187,7 +187,7 @@ if [ "$latest_working_dir" ]; then
 
 			until oc -n "$ns" get catalogsource "$cs_name" >/dev/null; do sleep 1; done
 
-			for _ in {1..60}; do
+			for _ in {1..80}; do
 				state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
 
 				if [ "$state" = "READY" ]; then
@@ -199,6 +199,10 @@ if [ "$latest_working_dir" ]; then
 
 				sleep 5
 			done
+
+			echo_red "Error: Not all catalog sources became 'ready'.  Ensure the cluster is stable and try again." >&2
+
+			exit 1
 		) &
 	done
 
