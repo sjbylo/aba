@@ -826,7 +826,7 @@ replace-value-conf() {
 		#[ ! -s "$f" ] && echo "Error: No such file: $f" >&2 && exit 1
 		#[ ! "$name" ] && echo "Error: missing value to add to file $f!" >&2 && exit 1
 
-		[ ! -s "$f" ] && continue # Try nexy file
+		[ ! -s "$f" ] && continue # Try next file
 
 		[ "$DEBUG_ABA" ] && echo "Replacing config value [$name] with [$value] in file: $f" >&2
 
