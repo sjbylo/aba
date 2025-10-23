@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251020101041
+ABA_VERSION=20251023211328
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -868,9 +868,10 @@ if [ ! -f .bundle ]; then
 	# Allow edit of aba.conf
 
 	if [ ! -f .aba.conf.seen ]; then
-		touch .aba.conf.seen
-
-		edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, pull secret, default base domain & net address, dns & ntp etc (if known)" || true #|| exit 1
+		if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, pull secret, default base domain & net address, dns & ntp etc (if known)"; then
+			# If edited/seen, no need to ask again.
+			touch .aba.conf.seen
+		fi
 	fi
 
 	# make & jq are needed below and in the next steps 
