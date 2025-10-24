@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251023235634
+ABA_VERSION=20251024111358
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -1006,7 +1006,7 @@ else
 	echo "  aba -d mirror load -H registry.example.com --retry"
 	echo
 	echo "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
-	echo "  aba -d mirror load -H registry.example.com -k ~/.ssh/id_rsa -U user --retry 8"
+	echo "  aba -d mirror load -H registry.example.com -k '~/.ssh/id_rsa' -U user --retry 8"
 	echo
 	echo "If unsure, run:"
 	echo "  aba -d mirror install                 # to configure and/or install Quay."
