@@ -703,6 +703,15 @@ fetch_latest_version() {
     echo "$ver"
 }
 
+_install_oc_mirror() {
+    if ! which oc-mirror >/dev/null 2>&1; then
+        make -s -C "$1/cli" oc-mirror >&2 || {
+            echo_white "Error: failed to build oc-mirror" >&2
+            return 1
+        }
+    fi
+}
+
 
 # ------------------------------------------------------------------------------
 # Fetch the previous OpenShift version (e.g. 4.19.10 → 4.18.x)
@@ -727,14 +736,7 @@ fetch_previous_version() {
     fi
     prev_minor=$((minor - 1))
 
-    # Ensure oc-mirror is available
-    if ! command -v oc-mirror >/dev/null 2>&1; then
-        #echo "Installing oc-mirror..." >&2
-        make -s -C "$ABA_PATH/cli" oc-mirror >&2 || {
-            echo_white "Error: failed to build oc-mirror" >&2
-            return 1
-        }
-    fi
+    _install_oc_mirror $ABA_PATH >/dev/null 2>&1
 
     # Query the previous channel via oc-mirror
     prev_ver=$(oc-mirror list releases --channel="${chan}-${major}.${prev_minor}" 2>/dev/null | tail -n1)
