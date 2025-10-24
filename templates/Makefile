@@ -196,15 +196,20 @@ kill:  .init vmware.conf                     agent-config.yaml ## Kill or power 
 delete: .init vmware.conf                     agent-config.yaml ## Delete all VMs. This will delete the cluster!
 	$(SCRIPTS)/vmw-delete.sh $(debug) || exit 0
 
-.install-complete: .autorefresh
+.install-complete: .autorefresh .agent-up
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 
+.PHONY: agent
+agent: .agent-up
+.agent-up:
+	$(SCRIPTS)/wait-agent-up.sh $(debug)
+	@touch .agent-up
 
 .PHONY: mon
 # install and mon are the same
-install: mon  ## Install the cluster using the cluster.conf file (same as mon).
-mon:  ## Monitor for 'install complete' the agent-based installation of OpenShift.
+install: mon   ## Install the cluster using the cluster.conf file (same as mon).
+mon: agent  ## Monitor for 'install complete' the agent-based installation of OpenShift.
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 
@@ -212,7 +217,6 @@ mon:  ## Monitor for 'install complete' the agent-based installation of OpenShif
 # monitor for bootstrap complete 
 bootstrap:  ## Monitor for 'bootstrap complete' of the agent-based bootstrap installation of OpenShift.
 	$(SCRIPTS)/monitor-bootstrap.sh $(debug)
-	#@touch .install-complete
 
 .PHONY: info
 info:  ## Show cluster access credentials 
