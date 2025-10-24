@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251024224651
+ABA_VERSION=20251024235200
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -756,7 +756,7 @@ if [ ! -f .bundle ]; then
 		##############################################################################################################################
 		# Fetch release.txt
 
-		echo_white -n "Fetching available versions ..."
+		echo_white -n "Fetching available versions (please wait!) ..."
 
 		if ! release_text=$(curl -f --connect-timeout 30 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
 			[ "$TERM" ] && tput el1 && tput cr
@@ -770,10 +770,13 @@ if [ ! -f .bundle ]; then
 		default_ver=$channel_ver
 
 		# Extract the previous stable point version, e.g. 4.13.23
-		major_ver=$(echo $channel_ver | grep ^[0-9] | cut -d\. -f1)
-		channel_ver_point=`expr $(echo $channel_ver | grep ^[0-9] | cut -d\. -f2) - 1`
-		[ "$channel_ver_point" ] && \
-			channel_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${channel_ver_point} 2>/dev/null | tail -1)  # better way to fetch newest previous version!
+		#major_ver=$(echo $channel_ver | grep ^[0-9] | cut -d\. -f1)
+		#channel_ver_point=`expr $(echo $channel_ver | grep ^[0-9] | cut -d\. -f2) - 1`
+		#if [ "$channel_ver_point" ]; then
+		#channel_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${channel_ver_point} 2>/dev/null | tail -1)  # better way to fetch newest previous version!
+		#fi
+
+		channel_ver_prev=$(fetch_previous_version "$chan" "$arch_sys")
 
 		# Determine any already installed tool versions
 		which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
@@ -928,6 +931,7 @@ if [ ! -f .bundle ]; then
 		echo "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
 		echo "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more manageable files."
 		echo "                                                          # Unpack the files on the internal bastion with: cat ocp_* | tar xvf - "
+		echo "     aba bundle --help                                    # See for help."
 		echo
 
 		exit 0
@@ -955,6 +959,7 @@ if [ ! -f .bundle ]; then
 		echo "Or run:"
 		echo "  aba -d mirror sync --retry <count> # to complete both actions and ensure any image synchronization issues are retried."
 		echo
+		echo "  aba mirror --help                  # See for help."
 
 		echo "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
 		echo
@@ -968,7 +973,7 @@ if [ ! -f .bundle ]; then
 	echo_white "Configure the installation to use a proxy or NAT (optional)."
 	echo
 	echo_white "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]"
-	echo_white "See aba cluster -help for more"
+	echo_white "See aba cluster --help for more"
 	echo 
 
 else
