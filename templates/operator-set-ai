@@ -10,7 +10,6 @@ gpu-operator-certified
 kiali-ossm
 jaeger-product
 servicemeshoperator
-elasticsearch-operator
 
 # Required for OSUS
 cincinnati-operator
