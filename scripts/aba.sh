@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251024111358
+ABA_VERSION=20251024224651
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -1003,15 +1003,18 @@ else
 	echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 	echo
 	echo "To install the registry on the local machine, accessible via registry.example.com, run:"
-	echo "  aba -d mirror load -H registry.example.com --retry"
+	echo "  aba -d mirror load -H registry.example.com --retry 8"
 	echo
 	echo "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
-	echo "  aba -d mirror load -H registry.example.com -k '~/.ssh/id_rsa' -U user --retry 8"
+	echo "  aba -d mirror load -H registry.example.com -k '~/.ssh/id_rsa' -U user --retry"
 	echo
 	echo "If unsure, run:"
 	echo "  aba -d mirror install                 # to configure and/or install Quay."
 	echo
-	echo "See 'aba -d mirror load -h' for more."
+	echo "Once the mirror registry is installed/configured, verify authentication with:"
+	echo "  aba -d mirror verify"
+	echo
+	echo "For more, run: aba load --help"
 fi
 
 
