@@ -121,7 +121,8 @@ if [ "$dest" != "-" ]; then
 		echo
 		echo_cyan "Writing 'split' bundle file to $dest ... (to create a full install bundle, write the bundle directly to external media)."
 		echo
-		echo_white "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
+		#echo_white "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
+		echo_white "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo_white "Also transfer the image set archive file(s), for example, with:"
 		echo_white " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
@@ -141,7 +142,8 @@ if [ "$dest" != "-" ]; then
 		echo
 		echo_cyan "Writing 'all-in-one' install bundle file to $dest ..."
 		echo
-		echo_white "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
+		#echo_white "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
+		echo_white "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
 		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
 		echo_white "After transfering the install bundle file to your internal bastion"
