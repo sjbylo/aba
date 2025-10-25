@@ -69,7 +69,8 @@ uncomment_line() {
 
 # Change these two paths where there's a lot of space!
 #WORK_DIR=/opt/bundle-maker
-WORK_DIR=$PWD
+WORK_DIR=$PWD/work
+TEMPLATES_DIR=$PWD/templates
 CLOUD_DIR=/nas/redhat/aba-openshift-install-bundles
 
 BUNDLE_NAME=$VER-$NAME
@@ -87,8 +88,9 @@ fi
 
 echo Working on bundle: $BUNDLE_NAME ... | notify.sh
 
-rm -rf $WORK_DIR/* $WORK_BUNDLE_DIR   # Do not delete /.templates dir!!
-rm -rf $WORK_DIR/test-install
+#rm -rf $WORK_DIR/* $WORK_BUNDLE_DIR
+rm -rf $WORK_DIR/*
+##rm -rf $WORK_DIR/test-install
 mkdir -p $WORK_DIR $WORK_BUNDLE_DIR $WORK_BUNDLE_DIR_BUILD
 
 LOGFILE="$WORK_BUNDLE_DIR_BUILD/bundle-build.log"
@@ -289,8 +291,8 @@ echo "Cluster installation test: ok" >> $WORK_TEST_LOG
 	fi
 
 	echo Running specific tests for bundle type:
-	if [ -x $WORK_DIR/.templates/${NAME}-test.sh ]; then
-		cp -p $WORK_DIR/.templates/${NAME}-test.sh $WORK_BUNDLE_DIR_BUILD
+	if [ -x $TEMPLATES_DIR/${NAME}-test.sh ]; then
+		cp -p $TEMPLATES_DIR/${NAME}-test.sh $WORK_BUNDLE_DIR_BUILD
 		# After 30 mins, stop and fail this script
 		timeout 1800 $WORK_BUNDLE_DIR_BUILD/${NAME}-test.sh 3>> $WORK_TEST_LOG
 	fi
@@ -316,7 +318,7 @@ ls -ld $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME   $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME-*
 
 echo_step Create the install bundle dir and copy the files ...
 
-# Create bundle in cloud drive, e.g. /mnt/redhat/aba-openshift-install-bundles/4.18.19-ocpv
+# Create bundle in cloud drive, e.g. /nas/redhat/aba-openshift-install-bundles/4.18.19-ocpv
 mkdir -p $CLOUD_DIR_BUNDLE
 
 # Mark it as incomplete
@@ -334,7 +336,7 @@ op_list=$(for i in $*; do cat $WORK_DIR/test-install/aba/templates/operator-set-
 [ ! "$op_list" ] && op_list="  - No Operators!"
 
 # Create readme file
-sed -e "s/<VERSION>/$VER/g" -e "s/<CLIS>/$s/g" -e "s/<DATETIME>/$d/g" < $WORK_DIR/.templates/README.txt > $CLOUD_DIR_BUNDLE/README.txt
+sed -e "s/<VERSION>/$VER/g" -e "s/<CLIS>/$s/g" -e "s/<DATETIME>/$d/g" < $TEMPLATES_DIR/README.txt > $CLOUD_DIR_BUNDLE/README.txt
 
 ## Add in the test results for this bundle
 #echo >> $CLOUD_DIR_BUNDLE/README.txt
@@ -364,8 +366,8 @@ cp -v $WORK_BUNDLE_DIR/ocp_* 		$CLOUD_DIR_BUNDLE
 rm -fv $WORK_BUNDLE_DIR/ocp_* 
 
 cp -v $WORK_BUNDLE_DIR/CHECKSUM.txt		$CLOUD_DIR_BUNDLE
-cp -v $WORK_DIR/.templates/VERIFY.sh 	$CLOUD_DIR_BUNDLE
-cp -v $WORK_DIR/.templates/UNPACK.sh 	$CLOUD_DIR_BUNDLE
+cp -v $TEMPLATES_DIR/VERIFY.sh 	$CLOUD_DIR_BUNDLE
+cp -v $TEMPLATES_DIR/UNPACK.sh 	$CLOUD_DIR_BUNDLE
 
 # Keep a record of how the bundle was created, in case there were any skipped errors!
 echo
