@@ -1,0 +1,430 @@
+#!/bin/bash -e
+# Create an install bundle and test it's working by installing SNO
+
+TEST_HOST=registry4.example.com  # Adjust this as needed
+
+# ===========================
+# Color Echo Functions
+# ===========================
+
+_color_echo() {
+	set +x
+	local color="$1"; shift
+	local text
+
+	# Collect input from args or stdin
+	if [ $# -gt 0 ]; then
+	n_opt=
+	if [ "$1" = "-n" ]; then
+		n_opt="-n"
+		shift
+	fi
+		text="$*"
+	else
+		text="$(cat)"
+	fi
+
+	# Apply color only if stdout is a terminal and terminal supports >= 8 colors
+	if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ ! "$PLAIN_OUTPUT" ]; then
+		tput setaf "$color"
+		echo -e $n_opt "$text"
+		tput sgr0
+	else
+		echo -e $n_opt "$text"
+	fi
+	set -x
+}
+
+# Standard 8 colors
+echo_black()   { _color_echo 0 "$@"; }
+echo_red()     { _color_echo 1 "$@"; }
+echo_green()   { _color_echo 2 "$@"; }
+echo_yellow()  { _color_echo 3 "$@"; }
+echo_blue()    { _color_echo 4 "$@"; }
+echo_magenta() { _color_echo 5 "$@"; }
+echo_cyan()    { _color_echo 6 "$@"; }
+echo_white()   { _color_echo 7 "$@"; }
+
+echo_step() {
+	echo
+        echo_green "##################"
+        echo_green $@
+        echo_green "##################"
+}
+
+export ABA_TESTING=1   # No stats recorded
+
+. ~steve/.proxy-set.sh  # Go online!
+
+[ $# -lt 2 ] && exit 1
+VER=$1; shift
+NAME=$1; shift
+
+uncomment_line() {
+	local search="$1"
+	local file="$2"
+	# Match: optional spaces, then '#', optional spaces, then the search term
+	sed -i "s|^[[:space:]]*#\(.*${search}.*\)|\1|" "$file"
+}
+
+# Change these two paths where there's a lot of space!
+#WORK_DIR=/opt/bundle-maker
+WORK_DIR=$PWD
+CLOUD_DIR=/nas/redhat/aba-openshift-install-bundles
+
+BUNDLE_NAME=$VER-$NAME
+WORK_BUNDLE_DIR=$WORK_DIR/$BUNDLE_NAME
+WORK_BUNDLE_DIR_BUILD=$WORK_DIR/$BUNDLE_NAME/build
+CLOUD_DIR_BUNDLE=$CLOUD_DIR/$BUNDLE_NAME
+
+# Check this here, so we keep any files around for troubleshooting
+BUNDLE_UPLOADING=INSTALL-BUNDLE-UPLOADING.txt
+if [ -d $CLOUD_DIR_BUNDLE -a ! -f $CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING ]; then
+	echo Install bundle dir already exists: $CLOUD_DIR_BUNDLE >&2
+
+	exit 0
+fi
+
+echo Working on bundle: $BUNDLE_NAME ... | notify.sh
+
+rm -rf $WORK_DIR/* $WORK_BUNDLE_DIR   # Do not delete /.templates dir!!
+rm -rf $WORK_DIR/test-install
+mkdir -p $WORK_DIR $WORK_BUNDLE_DIR $WORK_BUNDLE_DIR_BUILD
+
+LOGFILE="$WORK_BUNDLE_DIR_BUILD/bundle-build.log"
+# Send stdout and stderr through tee
+exec > >(tee -a "$LOGFILE") 2>&1
+
+cd $WORK_DIR
+
+# If the finsl destination dir (e.g. cloud sync dir) doies not exist, quit.
+[ ! -d $CLOUD_DIR ] && echo "Dir $CLOUD_DIR not available!  Set up a directory that syncs with a cloud drive, e.g. gdrive" && exit 1
+
+# If the install bundle already exists AND is complete (i.e. not uploading), do nothing and exit
+echo_step "Processing: $CLOUD_DIR_BUNDLE"
+sleep 1
+
+# If the dir exists, then it must be incomplete ... remove it. Assume this script is only run once every 24 hours
+# i.e. don't want to delete a bundle that is still being created!
+rm -rf $CLOUD_DIR_BUNDLE
+
+# Install aba
+echo_step Install Aba to $PWD/aba ...
+
+rm -rf aba
+
+# Install aba from the Internet
+set +x
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+cd aba
+####./install  # Done above
+set -x
+
+# Remove any quay 
+if podman ps | grep registry; then
+	(
+		# Uninstall Quay
+		./install  # install aba
+		aba -A
+		cd mirror
+		aba uninstall  || true
+		./mirror-registry uninstall --autoApprove -v || true
+		sudo rm -rf ~/quay-install
+		./mirror-registry uninstall --autoApprove -v || true
+		podman rmi `podman images -q` --force
+	)
+fi
+sudo rm -rf ~/quay-install
+
+
+# Create bundle? 
+echo Create the bundle in $WORK_BUNDLE_DIR ...
+####rm -rfv $WORK_BUNDLE_DIR/*
+mkdir -p $WORK_BUNDLE_DIR_BUILD
+
+# Need operator sets ?
+OP=
+[ "$*" ] && OP="--op-sets $*"
+
+aba --pull-secret '~/.pull-secret.json' --platform bm --channel stable --version $VER $OP --base-domain example.com
+
+sleep 2
+ls -l ~/bin/oc-mirror 
+sleep 5
+set -x
+sleep 10 # wait for "download-operator"
+ps -ef | grep download-operator
+sleep 60 # Give some time ... # Hack: must wait for oc-mirror to d/l in the background b4 running "aba catalog" again! Otherwise the download happens in parallel causing trouble
+while ps -ef | grep -v grep | grep download-operator
+do
+	echo -n .
+	sleep 10
+done
+ls -l ~/bin/oc-mirror 
+##timeout 120 bash -c 'until [ -f ~/bin/oc-mirror ]; do sleep 1; done'; echo ~/bin/oc-mirror installed
+ps -ef | grep download 
+
+echo_step Create image set config file ...
+
+aba -d mirror isconf
+
+uncomment_line additionalImages:			mirror/save/imageset-config-save.yaml
+uncomment_line registry.redhat.io/openshift4/ose-cli	mirror/save/imageset-config-save.yaml
+uncomment_line registry.redhat.io/rhel9/support-tools	mirror/save/imageset-config-save.yaml
+uncomment_line quay.io/openshifttest/hello-openshift	mirror/save/imageset-config-save.yaml
+uncomment_line registry.redhat.io/ubi9/ubi		mirror/save/imageset-config-save.yaml
+#[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:10	mirror/save/imageset-config-save.yaml
+[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/save/imageset-config-save.yaml
+[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/save/imageset-config-save.yaml
+
+echo_step Show image set config file ...
+
+cat mirror/save/imageset-config-save.yaml
+
+#  additionalImages:
+#  - name: registry.redhat.io/openshift4/ose-cli
+#  - name: registry.redhat.io/rhel9/support-tools:latest
+#  - name: quay.io/openshifttest/hello-openshift:1.2.0
+#  - name: registry.redhat.io/ubi9/ubi:latest
+# Useful images for testing OpenShift Virtualization
+#  - name: quay.io/containerdisks/centos-stream:10
+#  - name: quay.io/containerdisks/centos-stream:9
+#  - name: quay.io/containerdisks/fedora:latest
+
+echo_step Save images to disk ...
+
+aba -d mirror save -r 8
+
+echo_step Create the install bundle files ...
+
+aba tar --out - | split -b 10G - $WORK_BUNDLE_DIR/ocp_${VER}_${NAME}_
+
+echo_green Calculating the checksums in the background ...
+
+(
+	cd $WORK_BUNDLE_DIR && cksum ocp_* > CHECKSUM.txt
+) &
+
+
+echo_step Removing unneeded aba repo at $WORK_DIR/aba
+
+rm -rf $WORK_DIR/aba # Remove the unneeded repo to save space
+
+echo_step Going offline to test the install bundle ...
+. ~steve/.proxy-unset.sh   # Go offline!
+
+
+#####################################################
+# Test the install bundle works for SNO
+
+mkdir -p $WORK_DIR/test-install
+cd $WORK_DIR/test-install
+
+rm -rf aba
+
+## Output the files:
+ls -l $WORK_BUNDLE_DIR/ocp_* || true
+
+# Unpack the install bundle 
+echo_step Unpack the install bundle ...
+
+cat $WORK_BUNDLE_DIR/ocp_* | tar xvf -
+
+cd aba
+
+# Switch to vmw for testing
+echo_step Switch to platform = vmw ...
+sed -i "s/platform=bm/platform=vmw/g" aba.conf
+
+./install
+aba
+aba -A
+
+echo_step Install Quay and load the images ...
+
+aba load --retry 7 -H $TEST_HOST
+
+echo_step Create the cluster ...
+
+aba cluster --name sno2 --type sno --starting-ip 10.0.1.202 --mmem 20 --mcpu 10
+
+echo_step Test this cluster type: $NAME ...
+
+WORK_TEST_LOG=$WORK_BUNDLE_DIR_BUILD/tests-completed.txt
+echo "## Test results for install bundle: $BUNDLE_NAME" > $WORK_TEST_LOG
+echo >> $WORK_TEST_LOG
+echo "Quay installed: ok" >> $WORK_TEST_LOG
+echo "All images loaded (disk2mirror) into Quay: ok" >> $WORK_TEST_LOG
+echo "Cluster installation test: ok" >> $WORK_TEST_LOG
+
+(
+	set -x
+	cd sno2
+
+	# Verify at least one op. is available (base has none) and integrate OSUS
+	if [ "$NAME" != "base" ]; then
+		echo Pausing 100s ...
+		sleep 100
+
+		echo Integrating OperatorHub ...
+		aba day2  # Connect OperatorHub to reg.
+
+		. <(aba login)   # Access cluster
+		. <(aba shell)   # Access cluster
+
+		echo List of packagemanifests:
+		oc get packagemanifests
+
+		until oc get packagemanifests | grep cincinnati-operator; do echo -n .; sleep 10; done # cincinnati-operator should always be available for non-base bundles
+		echo "OperatorHub integration test: ok" >> $WORK_TEST_LOG
+
+		sleep 60  # Otherwise get "missing cincinnati-operator" error
+
+		aba day2-osus
+		echo "OpenShift Update Service (OSUS) integration test: ok" >> $WORK_TEST_LOG
+	else
+		echo "OperatorHub integration test: n/a" >> $WORK_TEST_LOG
+		echo "OpenShift Update Service (OSUS) integration test: n/a" >> $WORK_TEST_LOG
+	fi
+
+	echo Running specific tests for bundle type:
+	if [ -x $WORK_DIR/.templates/${NAME}-test.sh ]; then
+		cp -p $WORK_DIR/.templates/${NAME}-test.sh $WORK_BUNDLE_DIR_BUILD
+		# After 30 mins, stop and fail this script
+		timeout 1800 $WORK_BUNDLE_DIR_BUILD/${NAME}-test.sh 3>> $WORK_TEST_LOG
+	fi
+
+	aba kill  # Poweroff VMs
+) 
+# Cluster was installed ok!
+
+echo "All tests: passed" >> $WORK_TEST_LOG
+
+echo_step Cluster installed ok, all tests passed. Building install bundle.
+
+echo_step Determine older bundles ... to delete later
+
+# Before we create the bundle dir, fetch list of old dirs to delete.  Used at the end of the script!
+MAJOR_VER=$(echo $VER | cut -d\. -f1,2)
+# Delete any bundles with the exact same name OR e.g. 4.19.10-ocp-* # To replace a bundle rename it to e.g. 4.19.10-ocpv-to-be-removed
+todel=$(ls -d $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME   $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME-* 2>/dev/null || true)
+ls -l  $CLOUD_DIR
+ls -ld $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME   $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME-* 2>/dev/null || true
+
+[ ! "$todel" ] && echo_green No older install bundles to delete || echo_red Install bundles to delete: $todel
+
+echo_step Create the install bundle dir and copy the files ...
+
+# Create bundle in cloud drive, e.g. /mnt/redhat/aba-openshift-install-bundles/4.18.19-ocpv
+mkdir -p $CLOUD_DIR_BUNDLE
+
+# Mark it as incomplete
+echo "This archive is incomplete or it's still uploading.  Please wait for it to complete!" > $CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING
+sleep 60  # Give the dir and file time to sync into cloud
+
+# Generate and adjust the README with the bundle version and the list of install files etc
+# Fetch list of available cli files
+s=$(cd cli && echo $(ls -r *.gz) | sed "s/ /\\\n  - /g")
+
+d=$(date -u)
+
+# Fetch list of available operators
+op_list=$(for i in $*; do cat $WORK_DIR/test-install/aba/templates/operator-set-$i; done | cut -d'#' -f1 | sed "/^[ \t]*$/d" | sort | uniq | sed "s/^/  - /g")
+[ ! "$op_list" ] && op_list="  - No Operators!"
+
+# Create readme file
+sed -e "s/<VERSION>/$VER/g" -e "s/<CLIS>/$s/g" -e "s/<DATETIME>/$d/g" < $WORK_DIR/.templates/README.txt > $CLOUD_DIR_BUNDLE/README.txt
+
+## Add in the test results for this bundle
+#echo >> $CLOUD_DIR_BUNDLE/README.txt
+
+# Append to readme file
+( 
+	echo
+	cat $WORK_TEST_LOG
+	echo
+	echo "## List of Operators included in this install bundle:" 
+	echo
+	echo "$op_list" 
+	echo 
+	echo "## The oc-mirror Image Set Config file used for this install bundle:"
+	echo
+	cat $WORK_DIR/test-install/aba/mirror/save/imageset-config-save.yaml 
+) >> $CLOUD_DIR_BUNDLE/README.txt
+
+# Copy in the image set config file used (for good measure)
+cp $WORK_DIR/test-install/aba/mirror/save/imageset-config-save.yaml $WORK_BUNDLE_DIR_BUILD
+
+## Output the files to copy:
+ls -l $WORK_BUNDLE_DIR/ocp_* || true
+
+# Copy the files into the cloud sync dir
+cp -v $WORK_BUNDLE_DIR/ocp_* 		$CLOUD_DIR_BUNDLE
+rm -fv $WORK_BUNDLE_DIR/ocp_* 
+
+cp -v $WORK_BUNDLE_DIR/CHECKSUM.txt		$CLOUD_DIR_BUNDLE
+cp -v $WORK_DIR/.templates/VERIFY.sh 	$CLOUD_DIR_BUNDLE
+cp -v $WORK_DIR/.templates/UNPACK.sh 	$CLOUD_DIR_BUNDLE
+
+# Keep a record of how the bundle was created, in case there were any skipped errors!
+echo
+echo "BUNDLE COMPLETE!"
+echo
+echo Copy build artifact dir from $WORK_BUNDLE_DIR_BUILD to $CLOUD_DIR_BUNDLE
+ls -la $WORK_BUNDLE_DIR_BUILD
+cp -rpv $WORK_BUNDLE_DIR_BUILD 		$CLOUD_DIR_BUNDLE
+
+# Remove the warning file
+rm -f $CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING
+
+echo_step "Show content of new bundle in cloud dir $CLOUD_DIR_BUNDLE:"
+
+ls -al $CLOUD_DIR_BUNDLE
+ls -al $CLOUD_DIR_BUNDLE/build
+
+echo_step "Delete older bundles? ..."
+
+if [ "$todel" ]; then
+	echo Deleting the following old bundles: $todel:
+	ls -d $todel
+	echo "rm -rf $todel"
+	rm -rf $todel
+else
+	echo "No older install bundles to delete!"
+fi
+
+#sudo sync
+#sleep 20 # Ensure log written to disk.
+
+# Tidy up ...
+echo_step Tidy up ...
+
+echo_step Remove Quay ...
+
+# Uninstall Quay
+cd $WORK_DIR/test-install/aba
+./install  # install aba
+aba -A
+cd mirror
+aba uninstall 
+cd
+sudo rm -rf ~/quay-install
+
+. ~steve/.proxy-set.sh  # Go online!
+
+notify.sh "New bundle created for $BUNDLE_NAME"
+
+# Reset
+echo_step Reset ...
+
+rm -rf $WORK_DIR/aba
+rm -rf $WORK_BUNDLE_DIR
+rm -rf $WORK_DIR/test-install
+
+echo Done $0
+
+echo_step Done $0
+
+exit 0
+
