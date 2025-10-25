@@ -92,23 +92,6 @@ color_demo() {
     echo_bright_white   "bright white"
 }
 
-#####################
-
-#echo_black()	{ [ "$TERM" ] && tput setaf 0; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-#echo_red()	{ [ "$TERM" ] && tput setaf 1; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-#echo_green()	{ [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-#echo_yellow()	{ [ "$TERM" ] && tput setaf 3; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-#echo_blue()	{ [ "$TERM" ] && tput setaf 4; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-#echo_magenta()	{ [ "$TERM" ] && tput setaf 5; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-#echo_cyan()	{ [ "$TERM" ] && tput setaf 6; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-#echo_white()	{ [ "$TERM" ] && tput setaf 7; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
-
-#cat_cyan()	{ [ "$TERM" ] && tput setaf 6; cat; [ "$TERM" ] && tput sgr0; }
-#cat_red()	{ [ "$TERM" ] && tput setaf 1; cat; [ "$TERM" ] && tput sgr0; }
-
-#cat_cyan()	{ echo_cyan; }
-#cat_red()	{ echo_red; }
-
 ####################
 
 if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
@@ -117,18 +100,6 @@ if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
 fi
 
 umask 077
-
-#if [ ! "$tmp_dir" ]; then
-#	export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
-#	mkdir -p $tmp_dir 
-#	cleanup() {
-#		[ "$DEBUG_ABA" ] && echo "$0: Cleaning up temporary directory [$tmp_dir] ..." >&2
-#		rm -rf "$tmp_dir"
-#	}
-#	
-#	# Set up the trap to call cleanup on script exit or termination
-#	trap cleanup EXIT
-#fi
 
 # Function to display an error message and the last executed command
 show_error() {
@@ -466,18 +437,6 @@ ask() {
 
 	# return "non-default" response 
 	return 1
-
-#	if [ "$def_response" == "y" ]; then
-#		[ ! "$yn" -o "$yn" == "y" -o "$yn" == "Y" ] && return 0
-#	else
-#		# Return default response
-#		[ ! "$yn" ] && return 0
-#		[ "$yn" == "n" -o "$yn" == "N" ] && return 0 
-#		[ "$yn" != "y" -a "$yn" != "Y" ] && return 0
-#	fi
-#
-#	# return "non-default" response 
-#	return 1
 }
 
 edit_file() {
@@ -584,84 +543,6 @@ files_on_same_device() {
 	# Compare the device numbers
 	[ "$DEV1" == "$DEV2" ] && return 0 || return 1
 }
-
-## Reply with the latest version
-#fetch_latest_version() {
-#	# $1 must be one of 'stable', 'fast' or 'candidate'
-#	##[ "$1" ] && chan=$1
-#	local chan=${1:-stable}  # stable, fast or candidate
-#	local arch_sys=${2:-x86_64}  # amd64, arm64 or x86_64
-#	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
-#	local ver rel_txt
-#
-#	[ "$chan" = "eus" ] && chan=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
-#
-#	rel_txt=$(curl -f --connect-timeout 30 --retry 3 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt) || return 1
-#
-#	# Get the latest OCP version number, e.g. 4.14.6
-#	ver=$(echo "$rel_txt" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
-#	[ "$ver" ] && echo $ver || return 1
-#}
-#
-## Reply with the (newest) previous version, e.g. 4.19.10 -> 4.18.20
-#fetch_previous_version() {
-#	# $1 must be one of 'stable', 'fast' or 'candidate'
-#	#local chan=stable
-#	#[ "$1" ] && chan=$1
-#	local chan=${1:-stable}      # stable, fast, candidate
-#	local arch_sys=${2:-x86_64}  # amd64, arm64 or x86_64
-#	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
-#	local ver major_ver point_ver prev_ver
-#	##local rel_txt
-#
-#	[ "$chan" = "eus" ] && chan=stable   # .../ocp/eus/release.txt does not exist. FIXME: Use oc-mirror for this instead of curl?
-#
-#	ver=$(fetch_latest_version $chan $arch_sys) || return 1
-#
-#	# FIXME Delete?
-#	#rel_txt=$(curl -f --connect-timeout 30 --retry 3 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$chan/release.txt) || return 1
-#	# Get the previous OCP version number, e.g. 4.14.6
-#	#ver=$(echo "$rel_txt" | grep -E -o "Version: +$REGEX_VERSION" | awk '{print $2}')
-#
-#	# Extract the previous stable point version, e.g. 4.13.23
-#	major_ver=$(echo $ver | grep ^[0-9] | cut -d\. -f1)
-#	point_ver=`expr $(echo $ver | grep ^[0-9] | cut -d\. -f2) - 1`
-#
-#	# We need oc-mirror!
-#	! which oc-mirror 2>/dev/null >&2 && echo Installing oc-mirror ... >&2 && make -s -C $ABA_PATH/cli oc-mirror >&2
-#
-#	prev_ver=$(oc-mirror list releases --channel=${chan}-${major_ver}.${point_ver} 2>/dev/null | tail -1)  # This is better way to fetch the newest previous version!
-#
-#	[ "$prev_ver" ] && echo $prev_ver || return 1
-#
-#}
-#
-## https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.19/release.txt
-#fetch_latest_z_version() {
-#	local chan=${1:-stable}      # stable, fast, candidate
-#	local point_ver=$2		# Given 4.19 -> reply the latest z version: 4.19.30
-#	local arch_sys=${3:-x86_64}  # amd64, arm64 or x86_64
-#	local rel_txt ver
-#
-#	[ ! "$point_ver" ] && point_ver=$(fetch_latest_version $chan $arch_sys)
-#	point_ver=$(echo $point_ver | cut -d\. -f 1-2)
-#	[ ! "$point_ver" ] && return 1
-#
-#	# FIXME Delete
-#	#if rel_txt=$(curl -f --connect-timeout 20 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/${chan}-$point_ver/release.txt 2>/dev/null); then
-#	#	point_ver=$(echo "$rel_txt" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
-#	#else
-#	#	point_ver=invalid
-#	#fi
-#	#echo $point_ver
-#
-#	rel_txt=$(curl -f --connect-timeout 20 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/${chan}-$point_ver/release.txt 2>/dev/null)
-#
-#	[ "$rel_txt" ] && ver=$(echo "$rel_txt" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
-#
-#	[ "$ver" ] && echo $ver || return 1
-#}
-
 
 # Helper: download and return release.txt content
 _fetch_release_txt() {
