@@ -83,6 +83,7 @@ file_list=$(find		\
 	! -path "aba/mirror/sync/oc-mirror-workspace*"  	\
 	! -path "aba/mirror/save/oc-mirror-workspace*"		\
 	! -path "aba/test/output.log" 				\
+	! -path "aba/bundles*"	 				\
 								\
 	\( -type f -o -type l \)				\
 								\
