@@ -2,6 +2,8 @@
 # Create an install bundle and test it's working by installing SNO
 
 TEST_HOST=mirror.example.com  # Adjust this as needed
+BASE_DOM=example.com
+PS_FILE='~/.pull-secret.json'
 # Change these two paths where there's a lot of space!
 WORK_DIR=$PWD/work
 TEMPLATES_DIR=$PWD/templates
@@ -85,11 +87,11 @@ if [ -d $CLOUD_DIR_BUNDLE -a ! -f $CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING ]; then
 	exit 0
 fi
 
-echo Working on bundle: $BUNDLE_NAME ... | notify.sh
+which notify.sh 2>/dev/null && NOTIFY=1
+[ "$NOTIFY" ] && echo Working on bundle: $BUNDLE_NAME ... | notify.sh
 
-#rm -rf $WORK_DIR/* $WORK_BUNDLE_DIR
+# Init ...
 rm -rf $WORK_DIR/*
-##rm -rf $WORK_DIR/test-install
 mkdir -p $WORK_DIR $WORK_BUNDLE_DIR $WORK_BUNDLE_DIR_BUILD
 
 LOGFILE="$WORK_BUNDLE_DIR_BUILD/bundle-build.log"
@@ -148,7 +150,7 @@ mkdir -p $WORK_BUNDLE_DIR_BUILD
 OP=
 [ "$*" ] && OP="--op-sets $*"
 
-aba --pull-secret '~/.pull-secret.json' --platform bm --channel stable --version $VER $OP --base-domain example.com
+aba --pull-secret $PS_FILE --platform bm --channel stable --version $VER $OP --base-domain $BASE_DOM
 
 sleep 2
 ls -l ~/bin/oc-mirror 
@@ -414,7 +416,7 @@ sudo rm -rf ~/quay-install
 
 . ~steve/.proxy-set.sh  # Go online!
 
-notify.sh "New bundle created for $BUNDLE_NAME"
+[ "$NOTIFY" ] && notify.sh "New bundle created for $BUNDLE_NAME"
 
 # Reset
 echo_step Reset ...
