@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+cd $(dirname $0)
+
 vers_track="20 19 18"
 
 which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
