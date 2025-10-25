@@ -2,10 +2,6 @@ rhods-operator
 authorino-operator
 serverless-operator
 
-# Others
-nfd
-gpu-operator-certified
-
 # Mesh v2 operators are also needed
 kiali-ossm
 jaeger-product

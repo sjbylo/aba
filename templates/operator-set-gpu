@@ -1,0 +1,6 @@
+# GPU
+nfd
+gpu-operator-certified
+
+# Required for OSUS
+cincinnati-operator
