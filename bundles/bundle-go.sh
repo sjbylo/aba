@@ -56,7 +56,7 @@ do
 	echo
 	echo Running: bundle-create-test.sh $ver base
 	sleep 1
-	if bundle-create-test.sh $ver base; then   # Create base bundle
+	if ./bundle-create-test.sh $ver base; then   # Create base bundle
 		for i in ${!arr_op_set[@]}
 		do
 			op_sets=${arr_op_set[$i]}
@@ -66,7 +66,7 @@ do
 			echo
 			echo Running: bundle-create-test.sh $ver $name $op_sets
 			sleep 1
-			if ! bundle-create-test.sh $ver $name $op_sets; then
+			if ! ./bundle-create-test.sh $ver $name $op_sets; then
 				echo "##################################################"
 				echo "Failed: bundle $ver-$name ($op_sets) at $(date)" >&2
 				echo "##################################################"
