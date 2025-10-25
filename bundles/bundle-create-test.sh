@@ -1,7 +1,12 @@
 #!/bin/bash -e
 # Create an install bundle and test it's working by installing SNO
 
-TEST_HOST=registry4.example.com  # Adjust this as needed
+TEST_HOST=mirror.example.com  # Adjust this as needed
+# Change these two paths where there's a lot of space!
+WORK_DIR=$PWD/work
+TEMPLATES_DIR=$PWD/templates
+CLOUD_DIR=/nas/redhat/aba-openshift-install-bundles
+
 
 # ===========================
 # Color Echo Functions
@@ -66,12 +71,6 @@ uncomment_line() {
 	# Match: optional spaces, then '#', optional spaces, then the search term
 	sed -i "s|^[[:space:]]*#\(.*${search}.*\)|\1|" "$file"
 }
-
-# Change these two paths where there's a lot of space!
-#WORK_DIR=/opt/bundle-maker
-WORK_DIR=$PWD/work
-TEMPLATES_DIR=$PWD/templates
-CLOUD_DIR=/nas/redhat/aba-openshift-install-bundles
 
 BUNDLE_NAME=$VER-$NAME
 WORK_BUNDLE_DIR=$WORK_DIR/$BUNDLE_NAME
