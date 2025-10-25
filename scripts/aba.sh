@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251024235200
+ABA_VERSION=20251025114504
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -731,13 +731,34 @@ if [ ! -f .bundle ]; then
 
 		[ "$TERM" ] && tput el1 && tput cr
 
-		echo_cyan -n "Which OpenShift update channel do you want to use? (f)ast, (s)table, or (c)andidate) [s]: "
-		read ans
-		[ ! "$ans" ] && ocp_channel=stable
-		[ "$ans" = "f" ] && ocp_channel=fast
-		[ "$ans" = "s" ] && ocp_channel=stable
-		#[ "$ans" = "e" ] && ocp_channel=eus
-		[ "$ans" = "c" ] && ocp_channel=candidate
+		while true; do
+			echo_cyan -n "Which OpenShift update channel do you want to use? (f)ast, (s)table, or (c)andidate [s]: "
+			read -r ans
+			case "$ans" in
+				""|"s"|"S")
+				        ocp_channel="stable"
+					break
+				;;
+				"f"|"F")
+					cp_channel="fast"
+					break
+				;;
+				"c"|"C")
+					ocp_channel="candidate"
+					break
+				;;
+				*)
+					echo_red "Invalid choice. Please enter f, s, or c."
+				;;
+			esac
+		done
+
+		#echo_cyan -n "Which OpenShift update channel do you want to use? (f)ast, (s)table, or (c)andidate) [s]: "
+		#read ans
+		#[ ! "$ans" ] && ocp_channel=stable
+		#[ "$ans" = "f" ] && ocp_channel=fast
+		#[ "$ans" = "s" ] && ocp_channel=stable
+		#[ "$ans" = "c" ] && ocp_channel=candidate
 
 		replace-value-conf -n ocp_channel -v $ocp_channel -f aba.conf
 		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
