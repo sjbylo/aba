@@ -193,14 +193,14 @@ if [ "$latest_working_dir" ]; then
 				if [ "$state" = "READY" ]; then
 					echo "CatalogSource $cs_name is ready!"
 
-					break
+					exit 0  # exit the process
 				fi
 				[ "$state" ] && echo "Waiting for CatalogSource $cs_name... (current state: $state)"
 
 				sleep 5
 			done
 
-			echo_red "Error: Not all catalog sources became 'ready'.  Ensure the cluster is stable and try again." >&2
+			echo_red "Error: catalog source $cs_name failed to become 'ready'.  Ensure the cluster is stable and try again." >&2
 
 			exit 1
 		) &

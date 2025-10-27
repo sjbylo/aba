@@ -673,6 +673,11 @@ replace-value-conf() {
 	# -n <string> : name of value to change
 	# -v <string> : new value. If missing, remove the value
 	# -f <files>
+
+	[ "$DEBUG_ABA" ] && echo Calling: $0 $* >&2
+
+	local quiet=
+
 	while [ $# -gt 0 ]; do
 		case "$1" in
 			-n)
@@ -695,6 +700,10 @@ replace-value-conf() {
 				local files="$@"
 				break
 				;;
+			-q)
+				local quiet=1
+				shift
+				;;
 			*)
 				local files="$files $2"
 				shift
@@ -705,30 +714,24 @@ replace-value-conf() {
 	# Step through the files by priority...
 	for f in $files
 	do
-		#[ ! "$f" ] && echo "Error: arg1 file missing!" >&2 && exit 1
-		#[ ! -s "$f" ] && echo "Error: No such file: $f" >&2 && exit 1
-		#[ ! "$name" ] && echo "Error: missing value to add to file $f!" >&2 && exit 1
-
 		[ ! -s "$f" ] && continue # Try next file
 
 		[ "$DEBUG_ABA" ] && echo "Replacing config value [$name] with [$value] in file: $f" >&2
 
 		# Check if the value is already in the file along with the expected chars after the value, e.g. space/tab/# or EOL
 		if grep -q -E "^$name=$value[[:space:]]*(#.*)?$" $f; then
-			[ "$value" ] && echo_green "Value ${name}=${value} already exists in file $f" >&2 || echo_green "Value ${name} is already undefined in file $f" >&2
+			if [ ! "$quiet" ]; then
+				[ "$value" ] && echo_green "Value ${name}=${value} already exists in file $f" >&2 || echo_green "Value ${name} is already undefined in file $f" >&2
+			fi
+
 			return 0
 		else
-			# FIXME: Is this needed? 
-			# Is the value is commented out with a "#" remove the "#"...
-			#if grep -q "^[ \t]*#[ \t]*${name}=" $f; then
-			#	sed -E -i 's|^[ \t]*#[ \t]*('${name}'=.*)|\1|g' $f  # Remove the "#" before the value
-			#fi
-			# FIXME: Is this needed? 
-			# Add in the new value, removing any white space or "#" before the arg=val
-			#sed -i "s|^[# \t]*${name}=[^ \t#]*\(.*\)|${name}=${value}\1|g" $f
 			sed -i "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
-			#sed -i "s|^${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
-			[ "$value" ] && echo_green "Added value ${name}=${value} to file $f" >&2 || echo_green "Undefining value ${name} in file $f" >&2 
+
+			if [ ! "$quiet" ]; then
+				[ "$value" ] && echo_green "Added value ${name}=${value} to file $f" >&2 || echo_green "Undefining value ${name} in file $f" >&2 
+			fi
+
 			return 0
 		fi
 	done
