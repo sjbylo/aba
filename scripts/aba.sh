@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251027140559
+ABA_VERSION=20251027140717
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -753,14 +753,7 @@ if [ ! -f .bundle ]; then
 			esac
 		done
 
-		#echo_cyan -n "Which OpenShift update channel do you want to use? (f)ast, (s)table, or (c)andidate) [s]: "
-		#read ans
-		#[ ! "$ans" ] && ocp_channel=stable
-		#[ "$ans" = "f" ] && ocp_channel=fast
-		#[ "$ans" = "s" ] && ocp_channel=stable
-		#[ "$ans" = "c" ] && ocp_channel=candidate
-
-		replace-value-conf -n ocp_channel -v $ocp_channel -f aba.conf
+		replace-value-conf -q -n ocp_channel -v $ocp_channel -f aba.conf
 		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
 
 		chan=$ocp_channel # Used below
