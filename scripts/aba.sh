@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251027140304
+ABA_VERSION=20251027140559
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -217,7 +217,7 @@ do
 
 		# As far as possible, always ensure there is a valid value in aba.conf
 		[ ! "$ver" ] && echo_red "Wrong value [$2] after option $opt" >&2 && exit 1
-		replace-value-conf -q -n ocp_version -v $ver -f $ABA_PATH/aba.conf
+		replace-value-conf -n ocp_version -v $ver -f $ABA_PATH/aba.conf
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
@@ -843,7 +843,7 @@ if [ ! -f .bundle ]; then
 
 		# Update the conf file
 		#sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver /g" aba.conf
-		replace-value-conf -n ocp_version -v $target_ver -f aba.conf
+		replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
 		echo_cyan "'ocp_version' set to '$target_ver' in aba.conf"
 
 		sleep 0.3
