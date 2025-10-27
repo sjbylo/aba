@@ -83,7 +83,7 @@ ifneq ($(filter reset oc-mirror govc,$(MAKECMDGOALS)),)
 else
   ifeq ($(ocp_version),)
     # ocp_version is missing!
-    $(error "Value 'ocp_version' not set in aba.conf!  Please set 'ocp_version' and try again or run 'aba' for interactive mode. Read the README.md file on how to get started!")
+    $(error "Value 'ocp_version' not set in aba.conf! Run aba in the root of Aba's repository or read the README.md file on how to get started.")
   endif
 endif
 

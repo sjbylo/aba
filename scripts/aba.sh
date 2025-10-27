@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251027141505
+ABA_VERSION=20251027220006
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -90,13 +90,18 @@ if [ ! -f $ABA_PATH/aba.conf ]; then
 	export next_hop_address=$(get_next_hop)
 	export ntp_servers=$(get_ntp_servers)
 
-	scripts/j2 templates/aba.conf.j2 > aba.conf
+	scripts/j2 templates/aba.conf.j2 > $ABA_PATH/aba.conf
+else
+	# If the bundle has empty network valus in aba.conf, add defaults - as now is the best time (on internal network).
+	# For pre-created bundles, aba.conf will exist but these values will be missing... so attempt to fill them in. 
+	source <(normalize-aba-conf)
+	# Determine resonable defaults for ...
+	[ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f aba.conf
+	[ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f aba.conf
+	[ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f aba.conf
+	[ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f aba.conf
+	[ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f aba.conf
 fi
-
-### Set some defaults 
-##ops_list=
-##op_set_list=
-###chan=stable  # value fetched from aba.conf now
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
 source <(normalize-aba-conf)
@@ -717,7 +722,8 @@ if [ ! -f .bundle ]; then
 	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # btw .../ocp/eus/release.txt does not exist!
 
 	if [ "$ocp_channel" ]; then
-		echo_cyan "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
+		#echo_cyan "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
+		echo_cyan "OpenShift update channel is set to '$ocp_channel' in aba.conf."
 	else
 
 		echo_white -n "Checking Internet connectivity ..."
@@ -765,7 +771,8 @@ if [ ! -f .bundle ]; then
 	# Determine OCP version 
 
 	if [ "$ocp_version" ]; then
-		echo_cyan "OpenShift version is defined in aba.conf as '$ocp_version'."
+		#echo_cyan "OpenShift version is defined in aba.conf as '$ocp_version'."
+		echo_cyan "OpenShift version is set to '$ocp_version' in aba.conf."
 	else
 		##############################################################################################################################
 		# Fetch release.txt
@@ -1007,15 +1014,15 @@ else
 		echo_magenta "           For example, run the command: cp /path/to/portable/media/mirror_*tar aba/mirror/save" >&2
 	fi
 
-	# If the bundle has empty network valus in aba.conf, add defaults - as now is the best time (on internel network).
-	source <(normalize-aba-conf)
-	# Determine resonable defaults for ...
-	[ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f aba.conf
-	[ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f aba.conf
-	[ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f aba.conf
-	[ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f aba.conf
-	[ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f aba.conf
-	source <(normalize-aba-conf)
+	# ADDED ABOVE # If the bundle has empty network valus in aba.conf, add defaults - as now is the best time (on internel network).
+	# ADDED ABOVE source <(normalize-aba-conf)
+	# ADDED ABOVE # Determine resonable defaults for ...
+	# ADDED ABOVE [ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f aba.conf
+	# ADDED ABOVE [ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f aba.conf
+	# ADDED ABOVE [ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f aba.conf
+	# ADDED ABOVE [ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f aba.conf
+	# ADDED ABOVE [ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f aba.conf
+	# ADDED ABOVE source <(normalize-aba-conf)
 
 	echo 
 	echo_yellow Instructions
