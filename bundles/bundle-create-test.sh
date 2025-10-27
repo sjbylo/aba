@@ -124,6 +124,16 @@ cd aba
 ####./install  # Done above
 set -x
 
+# Remove quay 
+if [ -d $WORK_DIR/test-install/aba ]; then
+	(
+		cd $WORK_DIR/test-install/aba
+		./install  # install aba
+		aba -d mirror uninstall -y
+		sudo rm -rf ~/quay-install
+	)
+fi
+
 # Remove any quay 
 if podman ps | grep registry; then
 	(
@@ -143,7 +153,6 @@ sudo rm -rf ~/quay-install
 
 # Create bundle? 
 echo Create the bundle in $WORK_BUNDLE_DIR ...
-####rm -rfv $WORK_BUNDLE_DIR/*
 mkdir -p $WORK_BUNDLE_DIR_BUILD
 
 # Need operator sets ?
@@ -199,9 +208,26 @@ echo_step Save images to disk ...
 
 aba -d mirror save -r 8
 
+rm -rf ~/.oc-mirror/.cache  # We need some storage back!
+
 echo_step Create the install bundle files ...
 
+# (1) Fix up aba.conf - remove network velues so they can be auto-added once unpacked in disco env.
+echo pwd=$PWD
+source scripts/include_all.sh; trap - ERR
+set -e
+cp aba.conf ~/aba.conf.bk
+replace-value-conf -n domain 		-v -f aba.conf
+replace-value-conf -n machine_network	-v -f aba.conf
+replace-value-conf -n dns_servers	-v -f aba.conf
+replace-value-conf -n next_hop_address	-v -f aba.conf
+replace-value-conf -n ntp_servers	-v -f aba.conf
+
+# Create the bundle
 aba tar --out - | split -b 10G - $WORK_BUNDLE_DIR/ocp_${VER}_${NAME}_
+
+# (2) Fix up aba.conf so we can test the bundle
+cp ~/aba.conf.bk aba.conf
 
 echo_green Calculating the checksums in the background ...
 
@@ -248,24 +274,25 @@ echo_step Install Quay and load the images ...
 
 aba load --retry 7 -H $TEST_HOST
 
-echo_step Create the cluster ...
-
-aba cluster --name sno2 --type sno --starting-ip 10.0.1.202 --mmem 20 --mcpu 10
-
-echo_step Test this cluster type: $NAME ...
-
 WORK_TEST_LOG=$WORK_BUNDLE_DIR_BUILD/tests-completed.txt
 echo "## Test results for install bundle: $BUNDLE_NAME" > $WORK_TEST_LOG
 echo >> $WORK_TEST_LOG
 echo "Quay installed: ok" >> $WORK_TEST_LOG
 echo "All images loaded (disk2mirror) into Quay: ok" >> $WORK_TEST_LOG
+
+echo_step Create the cluster ...
+aba cluster --name sno4 --type sno --starting-ip 10.0.1.202 --mmem 20 --mcpu 10
+
+echo_step Test this cluster type: $NAME ...
+
 echo "Cluster installation test: ok" >> $WORK_TEST_LOG
 
+# Test integrations ...
 (
 	set -x
-	cd sno2
+	cd sno4
 
-	# Verify at least one op. is available (base has none) and integrate OSUS
+	# Verify at least one operator is available (base has none) and integrate OSUS
 	if [ "$NAME" != "base" ]; then
 		echo Pausing 100s ...
 		sleep 100
@@ -300,17 +327,18 @@ echo "Cluster installation test: ok" >> $WORK_TEST_LOG
 
 	aba kill  # Poweroff VMs
 ) 
-# Cluster was installed ok!
 
 echo "All tests: passed" >> $WORK_TEST_LOG
 
+
+#########################################################################
 echo_step Cluster installed ok, all tests passed. Building install bundle.
 
 echo_step Determine older bundles ... to delete later
 
-# Before we create the bundle dir, fetch list of old dirs to delete.  Used at the end of the script!
+# Before we create the bundle dir, fetch list of old dirs to delete.  Will be deleted at the end of the script!
 MAJOR_VER=$(echo $VER | cut -d\. -f1,2)
-# Delete any bundles with the exact same name OR e.g. 4.19.10-ocp-* # To replace a bundle rename it to e.g. 4.19.10-ocpv-to-be-removed
+# Delete any bundles with the exact same name OR e.g. 4.19.10-ocp-* # To replace a bundle rename it to e.g. 4.19.10-ocpv-to-be-removed, and it will be replaced
 todel=$(ls -d $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME   $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME-* 2>/dev/null || true)
 ls -l  $CLOUD_DIR
 ls -ld $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME   $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME-* 2>/dev/null || true
@@ -339,10 +367,7 @@ op_list=$(for i in $*; do cat $WORK_DIR/test-install/aba/templates/operator-set-
 # Create readme file
 sed -e "s/<VERSION>/$VER/g" -e "s/<CLIS>/$s/g" -e "s/<DATETIME>/$d/g" < $TEMPLATES_DIR/README.txt > $CLOUD_DIR_BUNDLE/README.txt
 
-## Add in the test results for this bundle
-#echo >> $CLOUD_DIR_BUNDLE/README.txt
-
-# Append to readme file
+# Append to README file
 ( 
 	echo
 	cat $WORK_TEST_LOG
@@ -391,14 +416,11 @@ echo_step "Delete older bundles? ..."
 if [ "$todel" ]; then
 	echo Deleting the following old bundles: $todel:
 	ls -d $todel
-	echo "rm -rf $todel"
-	rm -rf $todel
+	echo "rm -vrf $todel"
+	rm -vrf $todel
 else
 	echo "No older install bundles to delete!"
 fi
-
-#sudo sync
-#sleep 20 # Ensure log written to disk.
 
 # Tidy up ...
 echo_step Tidy up ...
