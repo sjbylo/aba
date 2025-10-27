@@ -8,7 +8,7 @@ source <(normalize-aba-conf)
 verify-aba-conf # || exit 1
 
 if [ ! "$ocp_version" ]; then
-	echo_red "Error:  ocp_version not set in aba/aba.conf file. Please run aba for interactive mode or see the aba/README.md file!"
+	echo_red "Error: 'ocp_version' not set in aba/aba.conf.  Run aba in the root of Aba's repository or see the aba/README.md on how to get started."
 
 	exit 1
 fi

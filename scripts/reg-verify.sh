@@ -38,9 +38,10 @@ if [ -s regcreds/pull-secret-mirror.json ]; then
 		echo_red "Warning: mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' cert file found." >&2
 		echo
 
-		# FIXME: Remove "tls_verify"
+		# FIXME: Remove "tls_verify" var
 		if [ "$tls_verify" ]; then
-			echo_red "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again." >&2
+			#echo_red "Error: 'tls_verify' is set to '$tls_verify' in mirror.conf and no 'rootCA.pem' file exists. Copy your registry's root CA file into 'regcreds/' and try again." >&2
+			echo_red "Error: CA file missing: 'rootCA.pem'.  Copy your registry's root CA file into 'regcreds/rootCA.pem' and try again." >&2
 			echo
 
 			exit 1

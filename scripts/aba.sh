@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251025185059
+ABA_VERSION=20251027220006
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -90,13 +90,18 @@ if [ ! -f $ABA_PATH/aba.conf ]; then
 	export next_hop_address=$(get_next_hop)
 	export ntp_servers=$(get_ntp_servers)
 
-	scripts/j2 templates/aba.conf.j2 > aba.conf
+	scripts/j2 templates/aba.conf.j2 > $ABA_PATH/aba.conf
+else
+	# If the bundle has empty network valus in aba.conf, add defaults - as now is the best time (on internal network).
+	# For pre-created bundles, aba.conf will exist but these values will be missing... so attempt to fill them in. 
+	source <(normalize-aba-conf)
+	# Determine resonable defaults for ...
+	[ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f aba.conf
+	[ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f aba.conf
+	[ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f aba.conf
+	[ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f aba.conf
+	[ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f aba.conf
 fi
-
-### Set some defaults 
-##ops_list=
-##op_set_list=
-###chan=stable  # value fetched from aba.conf now
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
 source <(normalize-aba-conf)
@@ -192,7 +197,7 @@ do
 				exit 1
 				;;
 		esac
-		replace-value-conf -n ocp_channel -v $chan -f $ABA_PATH/aba.conf
+		replace-value-conf -q -n ocp_channel -v $chan -f $ABA_PATH/aba.conf 
 		shift 2
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		opt=$1
@@ -717,7 +722,8 @@ if [ ! -f .bundle ]; then
 	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # btw .../ocp/eus/release.txt does not exist!
 
 	if [ "$ocp_channel" ]; then
-		echo_cyan "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
+		#echo_cyan "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
+		echo_cyan "OpenShift update channel is set to '$ocp_channel' in aba.conf."
 	else
 
 		echo_white -n "Checking Internet connectivity ..."
@@ -740,7 +746,7 @@ if [ ! -f .bundle ]; then
 					break
 				;;
 				"f"|"F")
-					cp_channel="fast"
+					ocp_channel="fast"
 					break
 				;;
 				"c"|"C")
@@ -753,14 +759,7 @@ if [ ! -f .bundle ]; then
 			esac
 		done
 
-		#echo_cyan -n "Which OpenShift update channel do you want to use? (f)ast, (s)table, or (c)andidate) [s]: "
-		#read ans
-		#[ ! "$ans" ] && ocp_channel=stable
-		#[ "$ans" = "f" ] && ocp_channel=fast
-		#[ "$ans" = "s" ] && ocp_channel=stable
-		#[ "$ans" = "c" ] && ocp_channel=candidate
-
-		replace-value-conf -n ocp_channel -v $ocp_channel -f aba.conf
+		replace-value-conf -q -n ocp_channel -v $ocp_channel -f aba.conf
 		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
 
 		chan=$ocp_channel # Used below
@@ -772,7 +771,8 @@ if [ ! -f .bundle ]; then
 	# Determine OCP version 
 
 	if [ "$ocp_version" ]; then
-		echo_cyan "OpenShift version is defined in aba.conf as '$ocp_version'."
+		#echo_cyan "OpenShift version is defined in aba.conf as '$ocp_version'."
+		echo_cyan "OpenShift version is set to '$ocp_version' in aba.conf."
 	else
 		##############################################################################################################################
 		# Fetch release.txt
@@ -781,7 +781,7 @@ if [ ! -f .bundle ]; then
 
 		if ! release_text=$(curl -f --connect-timeout 30 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
 			[ "$TERM" ] && tput el1 && tput cr
-			echo_red "Failed to access https://mirror.openshift.com" >&2
+			echo_red "Failed to access https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt" >&2
 
 			exit 1
 		fi
@@ -843,7 +843,7 @@ if [ ! -f .bundle ]; then
 
 		# Update the conf file
 		#sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver /g" aba.conf
-		replace-value-conf -n ocp_version -v $target_ver -f aba.conf
+		replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
 		echo_cyan "'ocp_version' set to '$target_ver' in aba.conf"
 
 		sleep 0.3
@@ -1013,6 +1013,16 @@ else
 		echo_magenta "           copied or moved to the 'aba/mirror/save' directory before following the instructions below!" >&2
 		echo_magenta "           For example, run the command: cp /path/to/portable/media/mirror_*tar aba/mirror/save" >&2
 	fi
+
+	# ADDED ABOVE # If the bundle has empty network valus in aba.conf, add defaults - as now is the best time (on internel network).
+	# ADDED ABOVE source <(normalize-aba-conf)
+	# ADDED ABOVE # Determine resonable defaults for ...
+	# ADDED ABOVE [ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f aba.conf
+	# ADDED ABOVE [ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f aba.conf
+	# ADDED ABOVE [ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f aba.conf
+	# ADDED ABOVE [ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f aba.conf
+	# ADDED ABOVE [ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f aba.conf
+	# ADDED ABOVE source <(normalize-aba-conf)
 
 	echo 
 	echo_yellow Instructions
