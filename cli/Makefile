@@ -134,6 +134,7 @@ download: .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download $(gen_oc
 oc: ~/bin/oc  ## Install oc into ~/bin
 ~/bin/oc: .init $(full_oc_tar_file)
 	@(file $(full_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(full_oc_tar_file) to ~/bin/oc ... && tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl) || (file $(gen_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(gen_oc_tar_file) to ~/bin/oc ... && tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl) || echo ERROR: Invalid files: $(full_oc_tar_file) or $(gen_oc_tar_file)
+	~/bin/oc --help >/dev/null 2>&1
 
 octars: $(gen_oc_tar_file) .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download
 $(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
@@ -162,6 +163,7 @@ openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/b
 	@file openshift-install-$(os)-$(ocp_version).tar.gz | grep -q "gzip compressed data" || { echo ERROR: Invalid file: openshift-install-$(os)-$(ocp_version).tar.gz; exit 1;}
 	@echo Extracting  openshift-install-$(os)-$(ocp_version).tar.gz to ~/bin/openshift-install
 	tar -C ~/bin -xmzf openshift-install-$(os)-$(ocp_version).tar.gz openshift-install
+	openshift-install --help >/dev/null 2>&1
 
 .$(ocp_version)-openshift-install-$(os)-installed: openshift-install-$(os)-$(ocp_version).tar.gz
 	@rm -f .??*-openshift-install-$(os)-installed
@@ -179,6 +181,7 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 	@echo $(os_ver) | grep -q "^9\." && echo Extracting oc-mirror.rhel9.tar.gz to ~/bin/oc-mirror || echo Extracting oc-mirror.tar.gz to ~/bin/oc-mirror
 	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
+	~/bin/oc-mirror --help >/dev/null 2>&1
 
 # Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
 
@@ -201,6 +204,7 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 ~/bin/govc: .init govc_Linux_$(govc_arch).tar.gz
 	@echo Extracting govc_Linux_$(govc_arch).tar.gz to ~/bin/govc
 	tar -C ~/bin -xmzf govc_Linux_$(govc_arch).tar.gz govc
+	~/bin/govc --help >/dev/null 2>&1
 
 govc_Linux_$(govc_arch).tar.gz:   ## Download govc tarball
 	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz
@@ -213,6 +217,7 @@ butane: ~/bin/butane ## Install butane to ~/bin/butane
 	@echo Copying butane-binary to ~/bin/butane
 	cp butane-binary ~/bin/butane
 	chmod +x ~/bin/butane
+	~/bin/butane --help >/dev/null 2>&1
 
 butane-binary: ## Download butane binary 
 	echo Downloading https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch)

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251026225818
+ABA_VERSION=20251027140304
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -192,7 +192,7 @@ do
 				exit 1
 				;;
 		esac
-		replace-value-conf -n ocp_channel -v $chan -f $ABA_PATH/aba.conf
+		replace-value-conf -q -n ocp_channel -v $chan -f $ABA_PATH/aba.conf 
 		shift 2
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		opt=$1
@@ -217,7 +217,7 @@ do
 
 		# As far as possible, always ensure there is a valid value in aba.conf
 		[ ! "$ver" ] && echo_red "Wrong value [$2] after option $opt" >&2 && exit 1
-		replace-value-conf -n ocp_version -v $ver -f $ABA_PATH/aba.conf
+		replace-value-conf -q -n ocp_version -v $ver -f $ABA_PATH/aba.conf
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
@@ -781,7 +781,7 @@ if [ ! -f .bundle ]; then
 
 		if ! release_text=$(curl -f --connect-timeout 30 --retry 3 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
 			[ "$TERM" ] && tput el1 && tput cr
-			echo_red "Failed to access https://mirror.openshift.com" >&2
+			echo_red "Failed to access https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt" >&2
 
 			exit 1
 		fi
@@ -1013,6 +1013,16 @@ else
 		echo_magenta "           copied or moved to the 'aba/mirror/save' directory before following the instructions below!" >&2
 		echo_magenta "           For example, run the command: cp /path/to/portable/media/mirror_*tar aba/mirror/save" >&2
 	fi
+
+	# If the bundle has empty network valus in aba.conf, add defaults - as now is the best time (on internel network).
+	source <(normalize-aba-conf)
+	# Determine resonable defaults for ...
+	[ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f aba.conf
+	[ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f aba.conf
+	[ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f aba.conf
+	[ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f aba.conf
+	[ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f aba.conf
+	source <(normalize-aba-conf)
 
 	echo 
 	echo_yellow Instructions
