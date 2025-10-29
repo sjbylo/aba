@@ -237,7 +237,9 @@ cat aba.conf
 read -t 60 || true
 
 # Create the bundle
-aba tar --out - | split -b 10G - $WORK_BUNDLE_DIR/ocp_${VER}_${NAME}_
+#aba tar --out - | split -b 10G - $WORK_BUNDLE_DIR/ocp_${VER}_${NAME}_
+# Is use aba, then aba immediatelly fills in the values again!
+make tar out=- | split -b 10G - $WORK_BUNDLE_DIR/ocp_${VER}_${NAME}_
 
 # (2) Fix up aba.conf so we can test the bundle
 cp ~/aba.conf.bk aba.conf
