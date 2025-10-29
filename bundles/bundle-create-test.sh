@@ -159,6 +159,9 @@ mkdir -p $WORK_BUNDLE_DIR_BUILD
 OP=
 [ "$*" ] && OP="--op-sets $*"
 
+echo Waiting 60s ...
+read -t 60 || true
+
 aba --pull-secret $PS_FILE --platform bm --channel stable --version $VER $OP --base-domain $BASE_DOM
 
 sleep 2
@@ -192,8 +195,6 @@ uncomment_line registry.redhat.io/ubi9/ubi		mirror/save/imageset-config-save.yam
 
 echo_step Show image set config file ...
 
-cat mirror/save/imageset-config-save.yaml
-
 #  additionalImages:
 #  - name: registry.redhat.io/openshift4/ose-cli
 #  - name: registry.redhat.io/rhel9/support-tools:latest
@@ -203,6 +204,12 @@ cat mirror/save/imageset-config-save.yaml
 #  - name: quay.io/containerdisks/centos-stream:10
 #  - name: quay.io/containerdisks/centos-stream:9
 #  - name: quay.io/containerdisks/fedora:latest
+
+cat mirror/save/imageset-config-save.yaml
+
+echo sleeping 60s ...
+read -t 60  || true
+
 
 echo_step Save images to disk ...
 
@@ -215,6 +222,8 @@ echo_step Create the install bundle files ...
 # (1) Fix up aba.conf - remove network velues so they can be auto-added once unpacked in disco env.
 echo pwd=$PWD
 source scripts/include_all.sh; trap - ERR
+echo
+cat aba.conf
 set -e
 cp aba.conf ~/aba.conf.bk
 replace-value-conf -n domain 		-v -f aba.conf
@@ -222,6 +231,10 @@ replace-value-conf -n machine_network	-v -f aba.conf
 replace-value-conf -n dns_servers	-v -f aba.conf
 replace-value-conf -n next_hop_address	-v -f aba.conf
 replace-value-conf -n ntp_servers	-v -f aba.conf
+
+echo
+cat aba.conf
+read -t 60 || true
 
 # Create the bundle
 aba tar --out - | split -b 10G - $WORK_BUNDLE_DIR/ocp_${VER}_${NAME}_
@@ -281,7 +294,7 @@ echo "Quay installed: ok" >> $WORK_TEST_LOG
 echo "All images loaded (disk2mirror) into Quay: ok" >> $WORK_TEST_LOG
 
 echo_step Create the cluster ...
-aba cluster --name sno4 --type sno --starting-ip 10.0.1.202 --mmem 20 --mcpu 10
+aba cluster --name sno4 --type sno --starting-ip 10.0.1.204 --mmem 20 --mcpu 10
 
 echo_step Test this cluster type: $NAME ...
 
