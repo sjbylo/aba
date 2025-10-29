@@ -1,4 +1,3 @@
-#######################################################################################
 # Aba global configuration file
 
 ocp_channel=		# OpenShift release channel ('stable', 'fast', 'candidate', or 'eus').
@@ -10,8 +9,8 @@ pull_secret_file=~/.pull-secret.json	# File path for your Red Hat pull secret, u
 editor=vi			# Text editor to use (e.g. nano, vi). Set to 'none' for manual config editing.
 ask=true			# Ask for confirmation before major actions (install, delete, etc.).
 
-#######################################################################################
 # Set the following only if known
+
 op_sets=			# Optional: Comma-separated operator sets (e.g. op_sets=odf,ocpv,acm,mesh3).
 				# Operator sets are defined under 'templates/operator-set-*'. Add or edit as needed.
 				# Valid values: ocp,acm,ocpv,odf,appdev,mesh2,mesh3,odfdr,quay,sec,ai
@@ -19,7 +18,6 @@ op_sets=			# Optional: Comma-separated operator sets (e.g. op_sets=odf,ocpv,acm,
 
 ops=				# Optional: Comma-separated individual operators (e.g. ops=web-terminal,devworkspace-operator).
 
-#######################################################################################
 # Set the following only if known. Upon cluster creation, values are propagated to its cluster.conf file.
 
 domain={{ domain }}		# Base domain for your OpenShift cluster.
