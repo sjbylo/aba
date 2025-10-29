@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251027220006
+ABA_VERSION=20251029161451
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -738,7 +738,7 @@ if [ ! -f .bundle ]; then
 		[ "$TERM" ] && tput el1 && tput cr
 
 		while true; do
-			echo_cyan -n "Which OpenShift update channel do you want to use? (f)ast, (s)table, or (c)andidate [s]: "
+			echo_cyan -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [s]: "
 			read -r ans
 			case "$ans" in
 				""|"s"|"S")
