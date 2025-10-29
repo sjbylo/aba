@@ -38,6 +38,7 @@ mirror/mirror.conf.bk
 mirror/.redhat-operator-index*
 mirror/mirror-registry-amd64.tar.gz
 mirror/sqlite3.tar
+mirror/.??*
 sno*
 */cluster.conf
 *.ssh.conf
@@ -61,4 +62,6 @@ cli/.*installed
 aba.conf.bk
 templates/operator-set-abatest
 .aba.conf.seen
+mirror/docker-reg-image.tgz
+
 

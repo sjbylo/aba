@@ -6,22 +6,34 @@
 # Verifies docker, podman, curl, skopeo, oc-mirror
 # -----------------------------------------------------------------------------
 
-DOCKER=podman 
+source scripts/include_all.sh
+[ "$1" ] && set -x
 
-cd $(dirname $0)
+source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
+verify-aba-conf || exit 1
+verify-mirror-conf || exit 1
+
+DOCKER=podman 
+####cd $(dirname $0)
 
 set -e
-
 set -euo pipefail
+
+REGISTRY_DOMAIN="${1:-registry.example.com}"
+[ "$reg_host" ] && REGISTRY_DOMAIN=$reg_host   # Overrride if set
+[ "$reg_port" ] && EXTERNAL_PORT=$reg_port
+[ "$reg_user" ] && REGISTRY_USER=$reg_user
+[ "$reg_pw" ] && REGISTRY_PASS=$reg_pw
 
 # --- Configurable defaults ---
 REGISTRY_NAME="registry"
 INTERNAL_PORT=5000
-EXTERNAL_PORT="${2:-8443}"
-REGISTRY_DATA_DIR="./data"
-REGISTRY_CERTS_DIR="./certs"
-REGISTRY_AUTH_DIR="./auth"
-REGISTRY_DOMAIN="${1:-registry.example.com}"
+EXTERNAL_PORT="${EXTERNAL_PORT:-8443}"
+REGISTRY_DATA_DIR="$data_dir/docker-reg/data"
+REGISTRY_CERTS_DIR=".docker-certs"
+REGISTRY_AUTH_DIR=".docker-auth"
+
 REGISTRY_USER="${REGISTRY_USER:-init}"
 REGISTRY_PASS="${REGISTRY_PASS:-p4ssw0rd}"
 
@@ -38,6 +50,14 @@ pass_check() {
     echo_green "✅ $1"
 }
 
+if $DOCKER ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
+    echo_yellow "Stopping and removing old registry container..."
+    $DOCKER rm -f "$REGISTRY_NAME" || true
+fi
+
+exit 0
+
+#
 # --- Step 1: Create directories ---
 mkdir -p "$REGISTRY_DATA_DIR" "$REGISTRY_CERTS_DIR" "$REGISTRY_AUTH_DIR"
 
@@ -109,12 +129,10 @@ echo_yellow "Adding CA to system trust (requires sudo)..."
 # No need: only for docker
 ###sudo cp "$REGISTRY_CERTS_DIR/ca.crt" /etc/pki/ca-trust/source/anchors/
 
-mkdir -p ../../mirror/regcreds
-cp "$REGISTRY_CERTS_DIR/ca.crt" ../../mirror/regcreds/rootCA.pem
-if which aba >/dev/null; then
-	echo -n -e "$REGISTRY_USER\n$REGISTRY_PASS\n" | aba -d ../../mirror password
-	aba -d ../../mirror verify
-fi
+mkdir -p regcreds
+cp "$REGISTRY_CERTS_DIR/ca.crt" regcreds/rootCA.pem
+echo -n -e "$REGISTRY_USER\n$REGISTRY_PASS\n" | aba password
+aba verify
 
 # --- Step 8: Verification ---
 echo_yellow "Running post-deployment verification..."
@@ -131,7 +149,8 @@ else
     exit 1
 fi
 
-sudo cp "$REGISTRY_CERTS_DIR/ca.crt"  /etc/docker/certs.d/$REGISTRY_URL_SERVICE/ca.crt
+# Not needed
+####sudo cp "$REGISTRY_CERTS_DIR/ca.crt"  /etc/docker/certs.d/$REGISTRY_URL_SERVICE/ca.crt
 
 # 2. docker login
 if echo "$REGISTRY_PASS" | $DOCKER login "$REGISTRY_URL" --username "$REGISTRY_USER" --password-stdin >/dev/null 2>&1; then
@@ -170,20 +189,20 @@ fi
 #    echo_yellow "oc-mirror not installed, skipping test"
 #fi
 
-if $DOCKER pull hello-world >/dev/null; then
-	echo_yellow "Running pull/push verification..."
-
-	echo_green	$DOCKER pull hello-world
-			$DOCKER pull hello-world
-
-	echo_green	$DOCKER tag  hello-world "$REGISTRY_URL_SERVICE"/hello-world
-			$DOCKER tag  hello-world "$REGISTRY_URL_SERVICE"/hello-world
-
-	echo_green	$DOCKER push "$REGISTRY_URL_SERVICE"/hello-world
-			$DOCKER push "$REGISTRY_URL_SERVICE"/hello-world
-
-	pass_check "$DOCKER pull/push succeeded"
-fi
+#if $DOCKER pull hello-world >/dev/null; then
+#	echo_yellow "Running pull/push verification..."
+#
+#	echo_green	$DOCKER pull hello-world
+#			$DOCKER pull hello-world
+#
+#	echo_green	$DOCKER tag  hello-world "$REGISTRY_URL_SERVICE"/hello-world
+#			$DOCKER tag  hello-world "$REGISTRY_URL_SERVICE"/hello-world
+#
+#	echo_green	$DOCKER push "$REGISTRY_URL_SERVICE"/hello-world
+#			$DOCKER push "$REGISTRY_URL_SERVICE"/hello-world
+#
+#	pass_check "$DOCKER pull/push succeeded"
+#fi
 
 
 # --- Step 9: Completion message ---
