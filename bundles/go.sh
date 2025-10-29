@@ -1,5 +1,33 @@
 #!/bin/bash -e
 
+# -----------------------------------------------------------------------------
+# Locking mechanism using `ln` for atomicity
+# -----------------------------------------------------------------------------
+
+LOCK_DIR="$HOME"
+BASE_NAME=$(basename "$0")
+BASE_FILE="$LOCK_DIR/.$BASE_NAME"
+LOCK_FILE="$LOCK_DIR/.$BASE_NAME.lock"
+
+# Release lock
+release_lock() {
+    [ -f "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
+}
+
+# Acquire lock
+acquire_lock() {
+	touch $BASE_FILE
+    if ln "$BASE_FILE" "$LOCK_FILE" 2>/dev/null; then
+        trap 'release_lock' EXIT INT TERM HUP
+        return 0
+    else
+        echo "❌ Another instance of $(basename "$0") is already running."
+        exit 1
+    fi
+}
+
+acquire_lock
+
 cd $(dirname $0)
 
 vers_track="20 19 18"
@@ -8,13 +36,14 @@ which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
 
 . ~/.proxy-set.sh
 
-#ps -ef | grep -v grep | grep $(basename $0) | wc -l | grep ^2$
-echo Checking if $0 is already running ...
-ps -ef | grep -v grep | grep "/bin/bash -.* .*$(basename $0)" 
-echo List of matching processes ...
-ps -ef | grep -v grep | grep "/bin/bash -.* .*$(basename $0)"  | wc -l 
-echo Matching processes count ...
-ps -ef | grep -v grep | grep "/bin/bash -.* $0" | wc -l | grep ^2$ && echo "$0 already running ..." && exit 0
+##ps -ef | grep -v grep | grep $(basename $0) | wc -l | grep ^2$
+#echo Checking if $0 is already running ...
+#ps -ef | grep -v grep | grep "/bin/bash -.* .*$(basename $0)" 
+#echo List of matching processes ...
+#ps -ef | grep -v grep | grep "/bin/bash -.* .*$(basename $0)"  | wc -l 
+#echo Matching processes count ...
+#ps -ef | grep -v grep | grep "/bin/bash -.* $0" | wc -l
+#ps -ef | grep -v grep | grep "/bin/bash -.* $0" | wc -l | grep ^2$ && echo "$0 already running ..." && exit 0
 
 echo Starting $0 at $(date)
 
