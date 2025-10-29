@@ -87,7 +87,8 @@ sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror              instal
 # Note that for a connected laptop or bastion there is no need to install all the required packages (i.e. only 'rpmsext') 
 # mirror-registry-amd64.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
-save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror mirror-registry-amd64.tar.gz save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
+#save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror mirror-registry-amd64.tar.gz save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
+save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror download-registries          save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
 	###
 	### Save images from the Internet to local disk (mirror-to-disk)
 	###
@@ -118,11 +119,31 @@ rpmsclean:
 mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry binary 
 	tar xmvzf mirror-registry-amd64.tar.gz
 
+.PHONY: download-registries
+download-registries: mirror-registry-amd64.tar.gz docker-reg-image.tgz
+
 mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball
 	echo "Downloading https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz ..."
 	curl $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
 	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
-	@#$(SCRIPTS)/download-mirror-registry.sh  # FIXME: delete script
+
+# Store the docker registry image so it can be used in air-gapped env.
+REG_IMAGE = docker.io/library/registry:latest
+REG_FILE  = docker-reg-image.tgz
+###.PHONY: docker-reg-image.tgz
+docker-reg-image.tgz:  ## Download the docker registry image as an alternative to Quay registry
+	echo "Downloading docker registry to $(REG_FILE) ..."
+	@podman pull $(REG_IMAGE)
+	@podman save $(REG_IMAGE) | gzip > $(REG_FILE)
+	@podman rmi $(REG_IMAGE)
+
+.PHONY: install-docker-registry
+install-docker-registry: docker-reg-image.tgz
+	@podman load -i $(REG_FILE)
+	@$(SCRIPTS)/reg-docker-install.sh
+
+uninstall-docker-registry: 
+	@$(SCRIPTS)/reg-docker-uninstall.sh
 
 # mirror.conf depends on aba.conf for the 'domain aalue
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
