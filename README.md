@@ -188,7 +188,7 @@ The `Install Bundle` is a single archive that contains everything you need for a
 
 You can download the latest Install Bundles from: https://red.ht/disco-easy  
 
-Note that if these bundles don’t suit your needs, [let us know](https://github.com/sjbylo/aba/issues/new) your requirements — including the use case and which images or operators are needed.  
+Note that if these bundles don’t suit your needs, [let us know](https://github.com/sjbylo/aba/issues/new) your requirements — including the use case and which images or operators are needed.  Alternatively, if you have access, join the [Slack Channel](https://red.ht/slack-forum-aba). 
 
 You can also create your own bundle.  See [Creating a Custom Install Bundle](#creating-a-custom-install-bundle) for more. 
 
@@ -1153,6 +1153,10 @@ To uninstall the Docker Registry, run:
 ```
 aba -d mirror uninstall-docker-registry        # Remove the Docker Registry pod.
 ```
+
+**Q: Is there a discussion forum?**
+
+If you have access, join the [Slack Channel](https://red.ht/slack-forum-aba). 
 
 
 [Back to top](#who-should-use-aba)
