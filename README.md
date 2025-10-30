@@ -48,7 +48,7 @@ Use Aba to quickly set up OpenShift in a disconnected environment while letting 
 Aba helps you with the following and more:
 
 1. Helps install your first OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
-1. Installs the `Mirror Registry for Red Hat OpenShift` (Quay) for you or makes use of your existing container registry.
+1. Installs the `Mirror Registry for Red Hat OpenShift` (Quay or Docker Registry) for you or makes use of your existing container registry.
 1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
 1. Triggers the generation of the agent-based boot ISO.
 1. Configures NTP during installation to prevent time synchronization issues caused by nodes with incorrect date and time settings
@@ -367,6 +367,7 @@ Now load the images from disk into the _mirror registry_:
 aba -d mirror load
 ```
 - will (if required) install _Mirror Registry for Red Hat OpenShift_ (Quay) from the install bundle and then load the images into the mirror registry.
+- Note: if you are having difficulties pushing images into Quay, see the below FAQ on how to replace it with the Docker Registry. 
 
 Now continue with [Installing OpenShift](#installing-openshift) below.
 
@@ -923,6 +924,8 @@ We need help!  Here are some ideas for new features and enhancements.
 - Using oc-mirror v2, fetch all operator dependencies automatically.
 
 - Configure ACM (if installed) to be ready to install clusters from the mirror registry (HostInv).
+
+- ~~Added ability to use the Docker Registry instead of Quay (see the below FAQ)~~
 
 - ~~Auto-refresh the Operator Catalogs (indexes) after they become stale (e.g. after 1 day).~~
 
