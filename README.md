@@ -1134,6 +1134,22 @@ echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 
 **Partially, yes!** Aba can be used to set up the registry and generate the `install-config.yaml` file which can be used to install OpenShift for UPI.  With some juggling, the day2 operations (OperatorHub, OSUS, Shutdown, Startup and NTP) can be used for UPI too. 
 
+**Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?**  
+
+**Use Docker Registry instead!** To replace Quay with the Docker Registry, run:
+
+```
+aba -d mirror uninstall                        # Uninstall Quay if it was already installed.
+aba -d mirror install-docker-registry          # Install Docker Registry and integrate with aba. Should also work in diconnected env.
+aba -d mirror verify                           # If verification is successful, use aba as usual (e.g. aba load/save).
+```
+
+To uninstall the Docker Registry, run:
+
+```
+aba -d mirror uninstall-docker-registry        # Remove the Docker Registry pod.
+```
+
 
 [Back to top](#who-should-use-aba)
 
