@@ -114,7 +114,8 @@ $DOCKER run -d \
     -e REGISTRY_AUTH=htpasswd \
     -e REGISTRY_AUTH_HTPASSWD_REALM="Registry Realm" \
     -e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
-    registry:2
+    docker.io/library/registry:latest
+#    registry:2
 
 # --- Step 7: Add CA to system trust ---
 echo_yellow "Adding CA to system trust (requires sudo)..."
