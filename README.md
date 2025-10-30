@@ -1143,6 +1143,7 @@ echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 
 ```
 aba -d mirror uninstall                        # Uninstall Quay if it was already installed.
+                                               # Assuming aba/mirror/mirror.conf is set up correctly ... 
 aba -d mirror install-docker-registry          # Install Docker Registry and integrate with aba. Should also work in diconnected env.
 aba -d mirror verify                           # If verification is successful, use aba as usual (e.g. aba load/save).
 ```
