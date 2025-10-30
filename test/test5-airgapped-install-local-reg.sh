@@ -154,7 +154,7 @@ aba -d mirror mirror.conf
 
 mylog "Test the internal bastion ($int_bastion_hostname) as mirror"
 make -sC mirror mirror.conf force=yes
-#test-cmd -m "Setting reg_host=$int_bastion_hostname" aba -d mirror -H $int_bastion_hostname # THis will INSTALL mirror!??? # FIXME?
+#test-cmd -m "Setting reg_host=$int_bastion_hostname" aba -d mirror -H $int_bastion_hostname # This will INSTALL mirror!??? which we don't want yet! # FIXME?
 sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
 
 # This is also a test that overriding vakues works ok, e.g. this is an override in the mirror.connf file, overriding from aba.conf file
@@ -203,7 +203,14 @@ mylog Runtest: START - airgap
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m  "Install aba script" "cd $subdir/aba; ./install" 
 ####test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Activating shortcuts.conf" "cd $subdir/aba; cp -f .shortcuts.conf shortcuts.conf"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cluster images into mirror on internal bastion (this will install quay)" "aba -d $subdir/aba load --retry" 
+# This has been changed.  Now, briefly install Quay, but then replace it with Docker!
+#test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cluster images into mirror on internal bastion (this will install quay)" "aba -d $subdir/aba load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Install quay" "aba -d $subdir/aba/mirror install" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Uninstall quay" "aba -d $subdir/aba/mirror uninstall" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Install Docker reg." "aba -d $subdir/aba/mirror install-docker-registry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Verify Docker reg." "aba -d $subdir/aba/mirror verify" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Load images to Docker reg." "aba -d $subdir/aba/mirror load --retry" 
+
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 # TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set archive file to make space: '$subdir/aba/mirror/save/mirror_*.tar'" "rm -v $subdir/aba/mirror/save/mirror_*.tar" 
