@@ -48,7 +48,7 @@ Use Aba to quickly set up OpenShift in a disconnected environment while letting 
 Aba helps you with the following and more:
 
 1. Helps install your first OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
-1. Installs the `Mirror Registry for Red Hat OpenShift` (Quay or Docker Registry) for you or makes use of your existing container registry.
+1. Installs the `Mirror Registry for Red Hat OpenShift` (Quay) or Docker Registry for you or makes use of your existing container registry.
 1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
 1. Triggers the generation of the agent-based boot ISO.
 1. Configures NTP during installation to prevent time synchronization issues caused by nodes with incorrect date and time settings
