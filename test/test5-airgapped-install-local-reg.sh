@@ -812,7 +812,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "If cluster up, shutting clus
 ##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete the registry" "aba --dir $subdir/aba/mirror uninstall"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete the registry (docker)" "aba --dir $subdir/aba/mirror uninstall-docker-registry"  # We now test this guy!
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e docker -e CONTAINER | wc -l | grep ^0$"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e docker.*registry -e CONTAINER | wc -l | grep ^0$"
 
 mylog "===> Completed test $0"
 
