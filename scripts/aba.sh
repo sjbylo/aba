@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251031222248
+ABA_VERSION=20251031230251
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -34,13 +34,13 @@ WORK_DIR=$PWD # Remember so can change config file here
 # Need to be sure location of the top of the repo in order to find the important files
 # FIXME: Place the files (scripts and templates etc) into a well known location, e.g. /opt/aba/...
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
-	ABA_PATH=.
+	ABA_ROOT=$PWD
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
-	ABA_PATH=..
+	ABA_ROOT=$(realpath "..")
 elif [ -s ../../Makefile ] && grep -q "Top level Makefile" ../../Makefile; then
-	ABA_PATH=../..
+	ABA_ROOT=$(realpath "../..")
 elif [ -s ../../../Makefile ] && grep -q "Top level Makefile" ../../../Makefile; then
-	ABA_PATH=../../..
+	ABA_ROOT=$(realpath "../../..")
 else
 	# Give an error to change to the top level dir. Text must be coded here.
 	(
@@ -67,7 +67,7 @@ fi
 
 ## install will check if aba needs to be updated, if so it will return 2 ... so we re-execute it!
 if [ ! "$ABA_DO_NOT_UPDATE" ]; then
-	$ABA_PATH/install -q   # Only aba iself should use the flag -q
+	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
 	if [ $? -eq 2 ]; then
 		export ABA_DO_NOT_UPDATE=1
 		$0 "$@"  # This means aba was updated and needs to be called again
@@ -75,13 +75,13 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	fi
 fi
 
-source $ABA_PATH/scripts/include_all.sh
+source $ABA_ROOT/scripts/include_all.sh
 
 # This will be the actual 'make' command that will eventually be run
 BUILD_COMMAND=
 
 # Init aba.conf
-if [ ! -f $ABA_PATH/aba.conf ]; then
+if [ ! -f $ABA_ROOT/aba.conf ]; then
 
 	# Determine resonable defaults for ...
 	export domain=$(get_domain)
@@ -90,7 +90,7 @@ if [ ! -f $ABA_PATH/aba.conf ]; then
 	export next_hop_address=$(get_next_hop)
 	export ntp_servers=$(get_ntp_servers)
 
-	scripts/j2 templates/aba.conf.j2 > $ABA_PATH/aba.conf
+	scripts/j2 templates/aba.conf.j2 > $ABA_ROOT/aba.conf
 else
 	# If the bundle has empty network valus in aba.conf, add defaults - as now is the best time (on internal network).
 	# For pre-created bundles, aba.conf will exist but these values will be missing... so attempt to fill them in. 
@@ -117,16 +117,16 @@ do
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		if [ ! "$cur_target" ]; then
-			cat $ABA_PATH/others/help-aba.txt
+			cat $ABA_ROOT/others/help-aba.txt
 		elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" ]; then
-			cat $ABA_PATH/others/help-mirror.txt
+			cat $ABA_ROOT/others/help-mirror.txt
 		elif [ "$cur_target" = "cluster" ]; then
-			cat $ABA_PATH/others/help-cluster.txt
+			cat $ABA_ROOT/others/help-cluster.txt
 		elif [ "$cur_target" = "bundle" ]; then
-			cat $ABA_PATH/others/help-bundle.txt
+			cat $ABA_ROOT/others/help-bundle.txt
 		else
 			# If some other target, then show the main help
-			cat $ABA_PATH/others/help-aba.txt
+			cat $ABA_ROOT/others/help-aba.txt
 		fi
 
 		exit 0
@@ -134,19 +134,19 @@ do
 		interactive_mode=1
 		interactive_mode_none=
 		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
-		replace-value-conf -n ask -v true -f $ABA_PATH/aba.conf
+		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
 		shift
 	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then  #FIXME: checking --dir is also above!
 		# FIXME: Simplify this!  Put all static files into well-known location?
 		# Check if --dir already specified
 		#if [ ! "$WORK_DIR" ]; then
-			[ ! "$ABA_PATH/$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
-			[ ! -e "$ABA_PATH/$2" ] && echo "Error: directory [$2] does not exist!" >&2 && exit 1
-			[ ! -d "$ABA_PATH/$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
+			[ ! "$ABA_ROOT/$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
+			[ ! -e "$ABA_ROOT/$2" ] && echo "Error: directory [$2] does not exist!" >&2 && exit 1
+			[ ! -d "$ABA_ROOT/$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
 			# Note that make will take *one* -C option only, so we only use one also
 		###	BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
-			WORK_DIR="$ABA_PATH/$2"  # dir should always be relative from the repo's root dir
+			WORK_DIR="$ABA_ROOT/$2"  # dir should always be relative from the repo's root dir
 			[ "$DEBUG_ABA" ] && echo "$0: changing to \"$WORK_DIR\"" >&2
 			cd "$WORK_DIR" 
 			shift 2
@@ -196,7 +196,7 @@ do
 				exit 1
 				;;
 		esac
-		replace-value-conf -q -n ocp_channel -v $chan -f $ABA_PATH/aba.conf 
+		replace-value-conf -q -n ocp_channel -v $chan -f $ABA_ROOT/aba.conf 
 		shift 2
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		opt=$1
@@ -221,19 +221,19 @@ do
 
 		# As far as possible, always ensure there is a valid value in aba.conf
 		[ ! "$ver" ] && echo_red "Wrong value [$2] after option $opt" >&2 && exit 1
-		replace-value-conf -n ocp_version -v $ver -f $ABA_PATH/aba.conf
+		replace-value-conf -n ocp_version -v $ver -f $ABA_ROOT/aba.conf
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
 
-		( make -s -C $ABA_PATH catalog bg=true & ) & 
+		( make -s -C $ABA_ROOT catalog bg=true & ) & 
 
 		shift 2
 	elif [ "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf -n reg_host -v "$2" -f $ABA_PATH/mirror/mirror.conf
+		make -sC $ABA_ROOT/mirror mirror.conf force=yes
+		replace-value-conf -n reg_host -v "$2" -f $ABA_ROOT/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-ssh-key" -o "$1" = "-k" ]; then
 		# The ssh key used to access the linux registry host
@@ -241,8 +241,8 @@ do
 		#[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1  # FIXME
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_key= || { reg_ssh_key=$2; shift; }
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf -n reg_ssh_key -v "$reg_ssh_key" -f $ABA_PATH/mirror/mirror.conf
+		make -sC $ABA_ROOT/mirror mirror.conf force=yes
+		replace-value-conf -n reg_ssh_key -v "$reg_ssh_key" -f $ABA_ROOT/mirror/mirror.conf
 		shift
 	elif [ "$1" = "--reg-ssh-user" -o "$1" = "-U" ]; then
 		# The ssh username used to access the linux registry host
@@ -250,21 +250,21 @@ do
 		#[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1  # FIXME
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_user_val= || { reg_ssh_user_val=$2; shift; }
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $ABA_PATH/mirror/mirror.conf
+		make -sC $ABA_ROOT/mirror mirror.conf force=yes
+		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $ABA_ROOT/mirror/mirror.conf
 		shift
 	elif [ "$1" = "--data-dir" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf -n data_dir -v "$2" -f $ABA_PATH/mirror/mirror.conf
+		make -sC $ABA_ROOT/mirror mirror.conf force=yes
+		replace-value-conf -n data_dir -v "$2" -f $ABA_ROOT/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-user" ]; then
 		# The username used to access the mirror registry 
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf -n reg_user -v "$2" -f $ABA_PATH/mirror/mirror.conf
+		make -sC $ABA_ROOT/mirror mirror.conf force=yes
+		replace-value-conf -n reg_user -v "$2" -f $ABA_ROOT/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-password" ]; then
 		# The password used to access the mirror registry 
@@ -272,26 +272,26 @@ do
 		#[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_pw_value= || { reg_pw_value="$2"; shift; }
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $ABA_PATH/mirror/mirror.conf
+		make -sC $ABA_ROOT/mirror mirror.conf force=yes
+		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $ABA_ROOT/mirror/mirror.conf
 		shift
 	elif [ "$1" = "--reg-path" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_PATH/mirror mirror.conf force=yes
-		replace-value-conf -n reg_path -v "$2" -f $ABA_PATH/mirror/mirror.conf
+		make -sC $ABA_ROOT/mirror mirror.conf force=yes
+		replace-value-conf -n reg_path -v "$2" -f $ABA_ROOT/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
 		[ ! "$domain" ] && echo_red "Error: Domain format incorrect [$2]" >&2 && exit 1
-		replace-value-conf -n domain -v "$domain" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
+		replace-value-conf -n domain -v "$domain" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
-			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
+			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		else
 			echo_red "Error: Invalid CIDR [$2]" >&2
 			exit 1
@@ -310,7 +310,7 @@ do
 			fi
 			shift
 		done
-		replace-value-conf -n dns_servers -v "$dns_ips" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
+		replace-value-conf -n dns_servers -v "$dns_ips" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--ntp" -o "$1" = "-T" ]; then
 		# If arg missing remove from aba.conf
@@ -322,7 +322,7 @@ do
 			[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
 			shift	
 		done
-		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
+		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--default-route" -o "$1" = "-R" ]; then
 		# If arg missing remove from aba.conf
@@ -334,7 +334,7 @@ do
 	#	if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
 	#		def_route_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
 	#	fi
-		replace-value-conf -n next_hop_address -v "$def_route_ip" -f $WORK_DIR/cluster.conf $ABA_PATH/aba.conf
+		replace-value-conf -n next_hop_address -v "$def_route_ip" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-XXXXXX" ]; then # FIXME: opt?
 		# If arg ip addr then replace value in cluster.conf
@@ -408,20 +408,20 @@ do
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
-		replace-value-conf -n platform -v "$2" -f $ABA_PATH/aba.conf
+		replace-value-conf -n platform -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
 		# If no arg after --op-sets
 		if [[ "$2" =~ ^- || -z "$2" ]]; then
 			# Remove value
-			replace-value-conf -n op_sets -v -f $ABA_PATH/aba.conf
+			replace-value-conf -n op_sets -v -f $ABA_ROOT/aba.conf
 			shift
 		else
 			shift
 			# Step through non-opt params, check the set exists and add to the list ...
 			#while [ "$1" ] && ! echo "$1" | grep -q -e "^-"
 			while [[ -n "$1" && "$1" != -* ]]; do
-				if [ -s "$ABA_PATH/templates/operator-set-$1" -o "$1" = "all" ]; then
+				if [ -s "$ABA_ROOT/templates/operator-set-$1" -o "$1" = "all" ]; then
 					[ "$op_set_list" ] && op_set_list="$op_set_list,$1" || op_set_list=$1
 				else
 					echo_red "No such operator set: $1" >&2
@@ -433,33 +433,33 @@ do
 				fi
 				shift
 			done
-			replace-value-conf -n op_sets -v $op_set_list -f $ABA_PATH/aba.conf
+			replace-value-conf -n op_sets -v $op_set_list -f $ABA_ROOT/aba.conf
 		fi
 	elif [ "$1" = "--ops" -o "$1" = "-O" ]; then
 		if [[ "$2" =~ ^- || -z "$2" ]]; then
 			# Remove value
-			replace-value-conf -n ops -v  -f $ABA_PATH/aba.conf
+			replace-value-conf -n ops -v  -f $ABA_ROOT/aba.conf
 			shift
 		else
 			shift
 			while [[ -n "$1" && "$1" != -* ]]; do ops_list="$ops_list $1"; shift; done
 			ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
-			replace-value-conf -n ops -v $ops_list -f $ABA_PATH/aba.conf
+			replace-value-conf -n ops -v $ops_list -f $ABA_ROOT/aba.conf
 		fi
 	elif [ "$1" = "--incl-platform" ]; then  # FIXME: Only have "--excl-platform" option and add true or false (remove: --incl-platform ??)
-		replace-value-conf -n excl_platform -v "false" -f $ABA_PATH/aba.conf
+		replace-value-conf -n excl_platform -v "false" -f $ABA_ROOT/aba.conf
 		shift
 	elif [ "$1" = "--excl-platform" ]; then
-		replace-value-conf -n excl_platform -v "true" -f $ABA_PATH/aba.conf
+		replace-value-conf -n excl_platform -v "true" -f $ABA_ROOT/aba.conf
 		shift
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		editor="$2"
-		replace-value-conf -n editor -v $editor -f $ABA_PATH/aba.conf
+		replace-value-conf -n editor -v $editor -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--pull-secret" -o "$1" = "-S" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
-		replace-value-conf -n pull_secret_file -v "$2" -f $ABA_PATH/aba.conf
+		replace-value-conf -n pull_secret_file -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
@@ -470,13 +470,13 @@ do
 		shift 
 	elif [ "$1" = "-Y" ]; then  # One off, accept the default answer to all prompts for this invocation
 		export ASK_OVERRIDE=1  
-		replace-value-conf -n ask -v false -f $ABA_PATH/aba.conf  # And make permanent change
+		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf  # And make permanent change
 		shift 
 	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
-		replace-value-conf -n ask -v true -f $ABA_PATH/aba.conf
+		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then  # FIXME: make -y work only for a single command execution (not write into file)
-		replace-value-conf -n ask -v false -f $ABA_PATH/aba.conf
+		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then  # FIXME opt.
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
@@ -672,11 +672,11 @@ done
 # Sanitize $BUILD_COMMAND
 BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
 
-[ "$DEBUG_ABA" ] &&  echo "$0: ABA_PATH=[$ABA_PATH]" >&2
+[ "$DEBUG_ABA" ] &&  echo "$0: ABA_ROOT=[$ABA_ROOT]" >&2
 [ "$DEBUG_ABA" ] &&  echo "$0: BUILD_COMMAND=[$BUILD_COMMAND]" >&2
 
 # We want interactive mode if aba is running at the top of the repo and without any args
-[ ! "$BUILD_COMMAND" -a "$ABA_PATH" = "." ] && interactive_mode=1
+[ ! "$BUILD_COMMAND" -a "$ABA_ROOT" = "." ] && interactive_mode=1
 
 #if [ ! "$interactive_mode" -a -z "$interactive_mode_none" ]; then
 if [ ! "$interactive_mode" ]; then
@@ -697,7 +697,7 @@ fi
 [ "$interactive_mode_none" ]                          && exit 
 
 # Change to the top level repo directory
-cd $ABA_PATH
+cd $ABA_ROOT
 
 
 # ###########################################
