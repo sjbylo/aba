@@ -254,7 +254,7 @@ else
 	# First, ensure the reg host points to this localhost and not a remote host
 	# Sanity check to see if the correct host was defined
 	# Resolve FQDN
-	[ "$INFO_ABA" ] && echo_cyan "You have configured the mirror to be on this localhost (since 'reg_ssh_key' is undefined in 'aba.conf')."
+	[ "$INFO_ABA" ] && echo_cyan "You have configured the mirror to be on this localhost (since 'reg_ssh_key' is undefined in 'aba/mirror/mirror.conf')."
 	[ "$INFO_ABA" ] && echo_cyan "Verifying FQDN '$reg_host' (IP: fqdn_ip) points to this localhost ..."
 
 	# Get local IP addresses
@@ -277,6 +277,8 @@ else
 		##exit 1  # We will leave this only as a warning, not an error since sometimes there is a NAT in use which is difficult to check
 	fi
 
+	[ "$INFO_ABA" ] && echo_cyan "FQDN '$reg_host': ok"  # Completing the 'Verifying...' message above
+
 #	if ! ssh -F .ssh.conf $reg_host touch $flag_file >/dev/null 2>&1; then
 #		# This is to be expected and can be ignored
 #		:
@@ -292,7 +294,7 @@ else
 #		fi
 #	fi
 
-ask "Install Quay mirror registry appliance to '$(hostname)' (localhost), accessable via $reg_hostport" || exit 1
+	ask "Install Quay mirror registry appliance to '$(hostname)' (localhost), accessable via $reg_hostport" || exit 1
 	echo "Installing Quay registry on localhost ..."
 
 	# mirror-registry installer does not open the port for us
