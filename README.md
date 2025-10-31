@@ -815,19 +815,20 @@ In a partially disconnected environment, the following can be done:
   - Tested on Mac M1 (`arm64`) with successful results.
   - You can run Aba in a container, for example:
     ```
-    docker run -it --rm --name centos9 quay.io/centos/centos:stream9
+    podman run -it --rm --name centos9 quay.io/centos/centos:stream9
     # Now install aba:
     bash-5.1# bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
     bash-5.1# cd aba
     bash-5.1# aba
     ```
   - In the arm64 container, Aba can:
-    - Connect to an existing remote registry (installation of a new registry - to a remote host - from inside the container was not working when we tested it. The Quay `aba/mirror-registry` installer only seems to run on x86). 
+    - Connecting to an existing remote registry works.
+      - installation of a registry to a remote host from inside the container is not working.  The Quay `mirror-registry` installer does not have a build for arm64. Error: 'rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2'. 
     - Access public registries over the Internet (directly or through a proxy).
     - Generate an `arm64` ISO image suitable for OpenShift installation on `arm64` systems.
 
   - Tested Use Case:
-    - An ISO, generated from within the container, was successfully used to install OpenShift on an M1 Mac using VMware Fusion.
+    - An ISO, generated from within the arm64 container, was successfully used to install OpenShift on an M1 Mac using VMware Fusion.
 
 
 
@@ -1153,6 +1154,7 @@ To uninstall the Docker Registry, run:
 ```
 aba -d mirror uninstall-docker-registry        # Remove the Docker Registry pod.
 ```
+- Note: Like all tools that Aba uses, the Quay mirror registry is supported by Red Hat but the Docker Registry is not.
 
 **Q: Is there a discussion forum?**
 
