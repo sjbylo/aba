@@ -43,7 +43,7 @@ endif
 # DEBUG # $(info TARGET_DEPENDENCIES = $(TARGET_DEPENDENCIES))
 
 # The default target will build a cluster from scratch (for 'vmw' platform but not for bare-metal!) 
-all: $(TARGET_DEPENDENCIES)
+install: $(TARGET_DEPENDENCIES)
 
 # Check cluster has been installed already and abort if it has
 .PHONY: check

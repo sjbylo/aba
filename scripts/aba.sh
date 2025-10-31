@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251031095855
+ABA_VERSION=20251031222248
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -17,18 +17,18 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 WORK_DIR=$PWD # Remember so can change config file here 
 
-# Change dir if asked
-if [ "$1" = "--dir" -o "$1" = "-d" ]; then
-	[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
-	[ ! -e "$2" ] && echo "Error: directory [$2] does not exist!" >&2 && exit 1
-	[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
-
-	[ "$DEBUG_ABA" ] && echo "$0: change dir to: \"$2\"" >&2
-	cd "$2"
-	shift 2
-
-	WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
-fi
+## Change dir if asked
+#if [ "$1" = "--dir" -o "$1" = "-d" ]; then
+	#[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
+	#[ ! -e "$2" ] && echo "Error: directory [$2] does not exist!" >&2 && exit 1
+	#[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
+#
+	#[ "$DEBUG_ABA" ] && echo "$0: change dir to: \"$2\"" >&2
+	#cd "$2"
+	#shift 2
+#
+	#WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
+#fi
 
 # Check the repo location
 # Need to be sure location of the top of the repo in order to find the important files
@@ -138,30 +138,29 @@ do
 		shift
 	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then  #FIXME: checking --dir is also above!
 		# FIXME: Simplify this!  Put all static files into well-known location?
-		# Check id --dir already specified
-		if [ ! "$WORK_DIR" ]; then
-			[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
-			[ ! -e "$2" ] && echo "Error: directory [$2] does not exist!" >&2 && exit 1
-			[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
+		# Check if --dir already specified
+		#if [ ! "$WORK_DIR" ]; then
+			[ ! "$ABA_PATH/$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
+			[ ! -e "$ABA_PATH/$2" ] && echo "Error: directory [$2] does not exist!" >&2 && exit 1
+			[ ! -d "$ABA_PATH/$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
 
 			# Note that make will take *one* -C option only, so we only use one also
-			BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
-			WORK_DIR="$2"
-			[ "$DEBUG_ABA" ] && echo "$0: -C \"$WORK_DIR\"" >&2
-			#cd "$WORK_DIR"  # Do not cd
-			#ABA_PATH=.
+		###	BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
+			WORK_DIR="$ABA_PATH/$2"  # dir should always be relative from the repo's root dir
+			[ "$DEBUG_ABA" ] && echo "$0: changing to \"$WORK_DIR\"" >&2
+			cd "$WORK_DIR" 
 			shift 2
-		else  # FIXME: this uses make -C ... do we want to do that still?
-			# We only act on the first --dir <dir> option and ignore all others
-			# If there is no arg...
-			if [[ "$2" =~ ^- || -z "$2" ]]; then
-				# If there's an option next or $1 is the last arg, pass over
-				shift   # shift over the '--dir' only
-			else
-				# Check if arg is a dir
-				[ "$2" -a -e "$2" -a -d "$2" ] && shift  # shift only if it's really a dir
-			fi
-		fi
+		#else  # FIXME: this uses make -C ... do we want to do that still?
+		#	# We only act on the first --dir <dir> option and ignore all others
+		#	# If there is no arg...
+		#	if [[ "$2" =~ ^- || -z "$2" ]]; then
+		#		# If there's an option next or $1 is the last arg, pass over
+		#		shift   # shift over the '--dir' only
+		#	else
+		#		# Check if arg is a dir
+		#		[ "$2" -a -e "$2" -a -d "$2" ] && shift  # shift only if it's really a dir
+		#	fi
+		#fi
 	elif [ "$1" = "--info" ]; then
 		export INFO_ABA=1
 		shift 
@@ -684,7 +683,10 @@ if [ ! "$interactive_mode" ]; then
 	[ "$DEBUG_ABA" ] && echo "DEBUG: $0: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
 
 	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
-	[ "$DEBUG_ABA" ] && eval make $BUILD_COMMAND || eval make -s $BUILD_COMMAND
+	# Only run make if there's a target
+	if [ "$BUILD_COMMAND" ]; then
+		[ "$DEBUG_ABA" ] && eval make $BUILD_COMMAND || eval make -s $BUILD_COMMAND
+	fi
 
 	exit 
 fi
