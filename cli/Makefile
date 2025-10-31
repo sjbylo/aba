@@ -74,7 +74,7 @@ endif
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
 
-all: oc openshift-install oc-mirror govc butane
+install: oc openshift-install oc-mirror govc butane
 
 # For "reset" and "oc-mirror" and "govc" targets we DO NOT need to check for the target ocp version
 # If 'reset' found in $MAKECMDGOALS, i.e. no reset target provided

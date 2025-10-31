@@ -9,13 +9,13 @@ Main commands:
   aba [-d mirror] install               # Install Quay (or connect to existing) mirror registry
   aba [-d mirror] sync                  # Copy images from the Internet into the mirror registry (m2m)
   aba [-d mirror] save|load             # Copy images from the Internet to disk (m2d) and/or load to mirror (d2m)
-  aba bundle                            # Create a bundle archive file for use in disconnected environment (m2d)
+  aba bundle                            # Create a bundle archive file. See 'aba bundle --help'.
   aba cluster                           # Install OpenShift cluster. See 'aba cluster --help'.
 
 Other commands:
   aba clean                             # Clean up all generated files
   aba [-d cli] download                 # Download all required CLI installation files only
-  aba [-d cli]                          # Download and install all the CLI binaries into ~/bin
+  aba [-d cli] install                  # Download and install all the CLI binaries into ~/bin
   aba help                              # See help for all steps/targets
 
 Options:

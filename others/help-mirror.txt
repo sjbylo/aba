@@ -4,14 +4,14 @@ Usage:
   aba --dir mirror install [options]
 
 Options:
-  -y                                   # Automatically accept the default answer to all prompts
+  -d, --dir <path/to/dir>              # Run aba in the specified directory, or cd there and run without -d.
+  -y                                   # Automatically accept the default answer to all prompts.
   -H, --mirror-hostname string         # The hostname of the mirror registry.
-  -u, --reg-user string                # The username used to access the registry (default is 'init').
   -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key, used to install Quay to a *remote host*.
   -U, --reg-ssh-user <string>          # Username to use to access the remote host via ssh.
+  -u, --reg-user string                # The username used to access the registry (default is 'init').
       --data-dir </path/to/dir>        # Install Quay images/cache to this dir instead of ~/quay-install.
       --reg-path <string>              # The path to store images inside the mirror registry.
-  -d, --dir <path/to/dir>              # Run aba in the specified directory, or cd there and run without -d.
 
 Related commands:
   aba sync                             # Copy images from the Internet into the mirror registry (mirror2mirror).
@@ -23,7 +23,7 @@ Related commands:
   aba load                             # Copy images from disk to the mirror registry (disk2mirror).
     -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
 
-  aba verify                           # Verify mirror registry connection credentials are working
+  aba [-d mirror ] verify              # Verify mirror registry connection credentials are working.
 
 Examples of fully disconnected mode (air-gapped):
 
