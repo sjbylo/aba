@@ -31,7 +31,7 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 	echo_cyan "Generating initial image set configuration: sync/imageset-config-sync.yaml to sync images to the mirror registry ..."
-	[ ! "$excl_platform" ] && echo_cyan "OpenShift platform release images for'v$ocp_version', channel '$ocp_channel' and arch '$arch_short' ..."
+	[ ! "$excl_platform" ] && echo_cyan "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$arch_short' ..."
 
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && echo_red "Error: ocp_channel or ocp_version incorrectly defined in aba.conf" >&2 && exit 1
 
