@@ -171,7 +171,7 @@ openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/b
 
 openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install tarball
 	@echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
-	curl -f --retry 3 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
+	curl -f --retry 8 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
 	file openshift-install-$(os)-$(ocp_version).tar.gz | grep -q "gzip compressed data" || exit 1 # in case of 5xx errors!
 
 
@@ -188,13 +188,13 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 oc_mirror_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.tar.gz
 oc-mirror.tar.gz: ## Download oc-mirror tarball
 	echo Downloading $(oc_mirror_url)
-	curl -f --retry 3 $(CURL_PROGRESS) -OL $(oc_mirror_url)
+	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url)
 	file oc-mirror.tar.gz | grep -q "gzip compressed data" || exit 1 # in case of 5xx errors!
 
 oc_mirror_url_rhel9 = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.rhel9.tar.gz
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 	echo Downloading $(oc_mirror_url_rhel9)
-	curl -f --retry 3 $(CURL_PROGRESS) -OL $(oc_mirror_url_rhel9)
+	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url_rhel9)
 	file oc-mirror.rhel9.tar.gz | grep -q "gzip compressed data" || exit 1 # in case of 5xx errors!
 
 
@@ -208,7 +208,7 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 
 govc_Linux_$(govc_arch).tar.gz:   ## Download govc tarball
 	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz
-	curl --retry 3 -f $(CURL_PROGRESS) -L -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz"
+	curl --retry 8 -f $(CURL_PROGRESS) -L -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz"
 	file govc_Linux_$(govc_arch).tar.gz | grep -q "gzip compressed data" || exit 1 # in case of 5xx errors!
 
 # Use either amd64 or aarch64 
@@ -221,7 +221,7 @@ butane: ~/bin/butane ## Install butane to ~/bin/butane
 
 butane-binary: ## Download butane binary 
 	echo Downloading https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch)
-	curl -f --retry 3 $(CURL_PROGRESS) -f -L -o butane-binary --connect-timeout 30 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch)
+	curl -f --retry 8 $(CURL_PROGRESS) -f -L -o butane-binary --connect-timeout 30 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch)
 	file butane-binary | grep -q "executable" || exit 1 # in case of 5xx errors!
 
 

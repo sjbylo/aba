@@ -18,7 +18,7 @@ server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{prin
 
 echo Checking cluster ...
 # Or use: timeout 3 bash -c "</dev/tcp/host/6443"
-if ! curl --connect-timeout 10 --retry 2 -skI $server_url >/dev/null; then
+if ! curl --connect-timeout 10 --retry 8 -skI $server_url >/dev/null; then
 	echo_red "Cluster not reachable at $server_url" >&2
 
 	exit 1

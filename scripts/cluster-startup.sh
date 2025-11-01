@@ -19,12 +19,12 @@ if [ ! -s vmware.conf ]; then
 	echo_yellow "Please power on all bare-metal servers for cluster '$cluster_name'." >&2
 
 	# Quick check to see if servers are up?
-	if ! try_cmd -q 1 0 2 curl --connect-timeout 10 --retry 1 -skIL $server_url; then
+	if ! try_cmd -q 1 0 2 curl --connect-timeout 10 --retry 8 -skIL $server_url; then
 		# If not, then wait check for longer ...
 		echo_white "Waiting for cluster API endpoint to become alive at $server_url ..."
 
 		# Usage: try_cmd [-q] <pause> <interval> <total>
-		if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 1 -skIL $server_url; then
+		if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 8 -skIL $server_url; then
 			echo_white "Giving up waiting for the cluster endpoint to become available.  Once the servers start up, please try again!" >&2
 			exit 1
 		fi
@@ -35,11 +35,11 @@ else
 fi
 
 # Have quick check if endpoint is available (cluster may already be running)
-if ! try_cmd -q 1 0 1 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
+if ! try_cmd -q 1 0 1 curl --connect-timeout 10 --retry 8 -skIL $server_url; then
 	echo Waiting for cluster API endpoint to become alive at $server_url ...
 
 	# Now wait for longer...
-	if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 3 -skIL $server_url; then
+	if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 8 -skIL $server_url; then
 		#echo DEBUG2: ret=$?
 		echo "Giving up waiting for the cluster endpoint to become available!"
 
@@ -140,7 +140,7 @@ if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
 
 	#check_and_approve_csrs
 
-	if ! try_cmd -q 5 0 60 "curl --retry 2 -skL $console | grep 'Red Hat OpenShift'"; then
+	if ! try_cmd -q 5 0 60 "curl --retry 8 -skL $console | grep 'Red Hat OpenShift'"; then
 		echo "Giving up waiting for the console!"
 		#exit 0
 	else

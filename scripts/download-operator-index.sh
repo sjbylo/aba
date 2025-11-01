@@ -85,7 +85,7 @@ if [[ -s $index_file && -f $done_file ]]; then
 fi
 
 # Check connectivity to registry (Keep this here so it does not slow the script down for the ".done" case)
-if ! curl --connect-timeout 15 --retry 3 -IL http://registry.redhat.io/v2 >/dev/null 2>&1; then
+if ! curl --connect-timeout 15 --retry 8 -IL http://registry.redhat.io/v2 >/dev/null 2>&1; then
 	echo_red "Error: cannot access the registry: https://registry.redhat.io/.  Aborting." >&2
 
 	exit 1

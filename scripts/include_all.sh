@@ -549,7 +549,7 @@ _fetch_release_txt() {
     local chan="$1" arch_sys="$2" url
     url="https://mirror.openshift.com/pub/openshift-v4/${arch_sys}/clients/ocp/${chan}/release.txt"
 
-    curl -fsSL --connect-timeout 30 --retry 3 "$url" 2>/dev/null || {
+    curl -fsSL --connect-timeout 30 --retry 8 "$url" 2>/dev/null || {
         echo "Error: failed to fetch release info from $url" >&2
         return 1
     }
@@ -652,7 +652,7 @@ fetch_latest_z_version() {
     [[ "$chan" == "eus" ]] && chan="stable"
 
     url="https://mirror.openshift.com/pub/openshift-v4/${arch_sys}/clients/ocp/${chan}-${base_ver}/release.txt"
-    rel_txt=$(curl -fsSL --connect-timeout 20 --retry 3 "$url" 2>/dev/null)
+    rel_txt=$(curl -fsSL --connect-timeout 20 --retry 8 "$url" 2>/dev/null)
 
     if [[ -z "$rel_txt" ]]; then
         echo_white "Error: failed to fetch release info for ${chan}-${base_ver}" >&2
@@ -787,7 +787,7 @@ process_args() {
 # Track anonymous events run by any aba using name "$1" (optional)
 aba-track() {
 	# Note this tracker has only one counter: 'installed'
-	[ ! "$ABA_TESTING" ] && ( curl --retry 3 --fail -s https://abacus.jasoncameron.dev/hit/bylo.de-aba/installed >/dev/null 2>&1 & disown ) & disown
+	[ ! "$ABA_TESTING" ] && ( curl --retry 8 --fail -s https://abacus.jasoncameron.dev/hit/bylo.de-aba/installed >/dev/null 2>&1 & disown ) & disown
 }
 
 # =========================================================
