@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251101134423
+ABA_VERSION=20251101151706
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -141,30 +141,38 @@ do
 		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
 		shift
 	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then  #FIXME: checking --dir is also above!
-		# FIXME: Simplify this!  Put all static files into well-known location?
-		# Check if --dir already specified
-		#if [ ! "$WORK_DIR" ]; then
-			[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
-			[ ! -e "$ABA_ROOT/$2" ] && echo "Error: directory $ABA_ROOT/$2 does not exist!" >&2 && exit 1
-			[ ! -d "$ABA_ROOT/$2" ] && echo "Error: cannot change to $ABA_ROOT/$2: not a directory!" >&2 && exit 1
+		# If there are commands/targets to execute in the CWD, do it...
+		BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
+		if [ "$BUILD_COMMAND" ]; then
+			if [ "$DEBUG_ABA" ]; then
+				echo_cyan "DEBUG: In folder $PWD: Running make $BUILD_COMMAND" >&2
+				read -t 3 || true
+				eval make $BUILD_COMMAND
+			else
+				# Eval used here as some variable may need evaluation from bash
+				eval make -s $BUILD_COMMAND
+			fi
 
-			# Note that make will take *one* -C option only, so we only use one also
-		###	BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
-			WORK_DIR="$ABA_ROOT/$2"  # dir should always be relative from the repo's root dir
-			[ "$DEBUG_ABA" ] && echo "$0: changing to \"$WORK_DIR\"" >&2
-			cd "$WORK_DIR" 
-			shift 2
-		#else  # FIXME: this uses make -C ... do we want to do that still?
-		#	# We only act on the first --dir <dir> option and ignore all others
-		#	# If there is no arg...
-		#	if [[ "$2" =~ ^- || -z "$2" ]]; then
-		#		# If there's an option next or $1 is the last arg, pass over
-		#		shift   # shift over the '--dir' only
-		#	else
-		#		# Check if arg is a dir
-		#		[ "$2" -a -e "$2" -a -d "$2" ] && shift  # shift only if it's really a dir
-		#	fi
-		#fi
+			# Remove already executed targets 
+			BUILD_COMMAND=
+		fi
+
+		# If no directory path provided, assume it's ".", i.e. $ABA_ROOT/.
+		# If dir path arg privided, then shift
+		provided_dir="$2"
+		[[ "$2" =~ ^- || -z "$2" ]] && provided_dir=. || shift
+
+		# FIXME: Simplify this!  Put all static files into well-known location?
+		#[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
+		[ ! -e "$ABA_ROOT/$provided_dir" ] && echo "Error: directory $ABA_ROOT/$provided_dir does not exist!" >&2 && exit 1
+		[ ! -d "$ABA_ROOT/$provided_dir" ] && echo "Error: cannot change to $ABA_ROOT/$provided_dir: not a directory!" >&2 && exit 1
+
+		WORK_DIR="$ABA_ROOT/$provided_dir"  # dir should always be relative from Aba repo's root dir
+
+		[ "$DEBUG_ABA" ] && echo "$0: changing to \"$WORK_DIR\"" >&2
+
+		cd "$WORK_DIR" 
+		shift
 	elif [ "$1" = "--info" ]; then
 		export INFO_ABA=1
 		shift 
