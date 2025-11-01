@@ -43,7 +43,10 @@ endif
 # DEBUG # $(info TARGET_DEPENDENCIES = $(TARGET_DEPENDENCIES))
 
 # The default target will build a cluster from scratch (for 'vmw' platform but not for bare-metal!) 
-install: $(TARGET_DEPENDENCIES)
+all: $(TARGET_DEPENDENCIES)
+
+.PHONY: install
+install: all
 
 # Check cluster has been installed already and abort if it has
 .PHONY: check
@@ -70,7 +73,7 @@ init: .init
 	@ln -fs ../aba.conf
 	@make -sC ../cli
 	@touch .init
-	@echo Initialized `pwd` successfully
+	@echo Initialized cluster directory `pwd` successfully
 
 mirror.conf: .init ## Set up the aba/mirror/mirror.conf file.
 	@ln -fs mirror/mirror.conf

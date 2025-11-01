@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251031234257
+ABA_VERSION=20251101134423
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -18,17 +18,18 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 WORK_DIR=$PWD # Remember so can change config file here 
 
 ## Change dir if asked
-#if [ "$1" = "--dir" -o "$1" = "-d" ]; then
-	#[ ! "$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
-	#[ ! -e "$2" ] && echo "Error: directory [$2] does not exist!" >&2 && exit 1
-	#[ ! -d "$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
-#
-	#[ "$DEBUG_ABA" ] && echo "$0: change dir to: \"$2\"" >&2
-	#cd "$2"
-	#shift 2
-#
-	#WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
-#fi
+# Keep these lines, ready for the below lines of code #FIXME: Use well-known loaction for static files, e.g. /opt/aba
+if [ "$1" = "--dir" -o "$1" = "-d" ]; then
+	[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
+	[ ! -e "$2" ] && echo "Error: directory $2 does not exist!" >&2 && exit 1
+	[ ! -d "$2" ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
+
+	[ "$DEBUG_ABA" ] && echo "$0: change dir to: \"$2\"" >&2
+	cd "$2"
+	shift 2
+
+	WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
+fi
 
 # Check the repo location
 # Need to be sure location of the top of the repo in order to find the important files
@@ -64,6 +65,9 @@ else
 
 	exit 1
 fi
+
+# Do not do this.  CWD must be the user proivided dir
+##cd $ABA_ROOT
 
 ## install will check if aba needs to be updated, if so it will return 2 ... so we re-execute it!
 if [ ! "$ABA_DO_NOT_UPDATE" ]; then
@@ -140,9 +144,9 @@ do
 		# FIXME: Simplify this!  Put all static files into well-known location?
 		# Check if --dir already specified
 		#if [ ! "$WORK_DIR" ]; then
-			[ ! "$ABA_ROOT/$2" ] && echo "Error: directory missing after: [$1]" >&2 && exit 1
-			[ ! -e "$ABA_ROOT/$2" ] && echo "Error: directory [$2] does not exist!" >&2 && exit 1
-			[ ! -d "$ABA_ROOT/$2" ] && echo "Error: cannot change to [$2]: not a directory!" >&2 && exit 1
+			[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
+			[ ! -e "$ABA_ROOT/$2" ] && echo "Error: directory $ABA_ROOT/$2 does not exist!" >&2 && exit 1
+			[ ! -d "$ABA_ROOT/$2" ] && echo "Error: cannot change to $ABA_ROOT/$2: not a directory!" >&2 && exit 1
 
 			# Note that make will take *one* -C option only, so we only use one also
 		###	BUILD_COMMAND="$BUILD_COMMAND -C '$2'"
@@ -196,7 +200,7 @@ do
 				exit 1
 				;;
 		esac
-		replace-value-conf -q -n ocp_channel -v $chan -f $ABA_ROOT/aba.conf 
+		replace-value-conf -n ocp_channel -v $chan -f $ABA_ROOT/aba.conf 
 		shift 2
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		opt=$1
@@ -220,7 +224,11 @@ do
 		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
 
 		# As far as possible, always ensure there is a valid value in aba.conf
-		[ ! "$ver" ] && echo_red "Wrong value [$2] after option $opt" >&2 && exit 1
+		[ ! "$ver" ] && echo_red "Failed to look up the latest version for [$2] after option $opt" >&2 && exit 1
+
+		# ver should now be x.y.z format
+		! echo $ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+$" && echo_red "Error: incorrect version format: [$ver] from arg [$2] after option $opt" >&2 && exit 1
+
 		replace-value-conf -n ocp_version -v $ver -f $ABA_ROOT/aba.conf
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
@@ -913,9 +921,6 @@ if [ ! -f .bundle ]; then
 		if jq empty $pull_secret_file; then
 			[ "$INFO_ABA" ] && echo_cyan "Pull secret found at '$pull_secret_file'."
 
-			# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-			#### FIXME ( make -s -C mirror catalog bg=true & ) & 
-
 			sleep 0.3
 		else
 			echo
@@ -1015,16 +1020,6 @@ else
 		echo_magenta "           copied or moved to the 'aba/mirror/save' directory before following the instructions below!" >&2
 		echo_magenta "           For example, run the command: cp /path/to/portable/media/mirror_*tar aba/mirror/save" >&2
 	fi
-
-	# ADDED ABOVE # If the bundle has empty network valus in aba.conf, add defaults - as now is the best time (on internel network).
-	# ADDED ABOVE source <(normalize-aba-conf)
-	# ADDED ABOVE # Determine resonable defaults for ...
-	# ADDED ABOVE [ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f aba.conf
-	# ADDED ABOVE [ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f aba.conf
-	# ADDED ABOVE [ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f aba.conf
-	# ADDED ABOVE [ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f aba.conf
-	# ADDED ABOVE [ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f aba.conf
-	# ADDED ABOVE source <(normalize-aba-conf)
 
 	echo 
 	echo_yellow Instructions

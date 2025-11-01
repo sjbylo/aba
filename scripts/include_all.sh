@@ -622,6 +622,9 @@ fetch_previous_version() {
     # Query the previous channel via oc-mirror
     prev_ver=$(oc-mirror list releases --channel="${chan}-${major}.${prev_minor}" 2>/dev/null | tail -n1)
 
+    # Try again?
+    [ ! "$prev_ver" ] && sleep 8 && prev_ver=$(oc-mirror list releases --channel="${chan}-${major}.${prev_minor}" 2>/dev/null | tail -n1)
+
     if [[ -z "$prev_ver" ]]; then
         echo_white "Error: no previous version found for ${chan}-${major}.${prev_minor}" >&2
         return 1
