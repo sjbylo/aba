@@ -113,11 +113,11 @@ make -s ~/bin/butane
 if ! which butane >/dev/null 2>&1; then
 	# No rpm available for RHEL8
 	if ! $SUDO dnf install butane -y; then
-		if curl --connect-timeout 10 --retry 3 -s https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane; then
+		if curl --connect-timeout 10 --retry 8 -s https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane; then
 			$SUDO mv butane /usr/local/bin
 		else
 			echo "Please install 'butane' command and try again!"
-			echo "E.g. run: 'curl --connect-timeout 10 --retry 3 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane'"
+			echo "E.g. run: 'curl --connect-timeout 10 --retry 8 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane'"
 
 			exit 1
 		fi

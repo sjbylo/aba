@@ -33,7 +33,7 @@ fi
 
 # Check internet connection...
 ##echo_cyan -n "Checking access to https://api.openshift.com/: "
-if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
+if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
 	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry." >&2
 
 	exit 1
@@ -43,7 +43,7 @@ export reg_url=https://$reg_host:$reg_port
 
 # Can the registry mirror already be reached?
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
-reg_code=$(curl --connect-timeout 10 --retry 3 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
+reg_code=$(curl --connect-timeout 10 --retry 8 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
 # This is needed since sometimes an existing registry may already be available
 scripts/create-containers-auth.sh

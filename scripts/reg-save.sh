@@ -16,7 +16,7 @@ verify-aba-conf || exit 1
 
 # Check internet connection...
 ##echo_cyan -n "Checking access to https://api.openshift.com/: "
-if ! curl -skIL --connect-timeout 10 --retry 3 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
+if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
 	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk." >&2
 
 	exit 1
