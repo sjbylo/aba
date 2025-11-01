@@ -568,14 +568,14 @@ aba bundle \
 
 - This will generate several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.
 - The OpenShift version can be automatically set to the most recent 'previous' point version (using '--version p') or to the 'latest' (using --version l).
-- If needed, --op-sets refers to predefined sets of operators, as defined in the files `aba/templates/operator-set-*`.
+- If needed, --op-sets refers to predefined sets of operators, as defined in the files `aba/templates/operator-set-*`. Create your own if needed.
 - If needed, add individual operators after "--ops".
-- If known, values --domain, --machine-network, --dns and --ntp should be set (otherwise, these values must be set in aba.conf on the _internal bastion_ after unpacking the bundle).
+- *If known*, set values --domain, --machine-network, --dns and --ntp (otherwise, these must be set in `aba.conf` after unpacking the bundle in the air-gapped env.).
 - Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
-- Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_*`.  It is important to verify the files after copying them into the air-gapped environment!
+- Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_* | tee CHECKSUM.txt`.  It is important to verify the files after copying them into the air-gapped environment!
 - Warning: --force will overwrite any existing image set files under aba/mirror/save!
-
+- See `aba bundle --help` for more.
 
 Copy the files to your RHEL 8 or 9 bastion within the disconnected environment.
 
