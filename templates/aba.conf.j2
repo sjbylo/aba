@@ -9,7 +9,7 @@ pull_secret_file=~/.pull-secret.json	# File path for your Red Hat pull secret, u
 editor=vi			# Text editor to use (e.g. nano, vi). Set to 'none' for manual config editing.
 ask=true			# Ask for confirmation before major actions (install, delete, etc.).
 
-# Set the following only if known
+# Set the following values only if they are known.
 
 op_sets=			# Optional: Comma-separated operator sets (e.g. op_sets=odf,ocpv,acm,mesh3).
 				# Operator sets are defined under 'templates/operator-set-*'. Add or edit as needed.
@@ -18,7 +18,8 @@ op_sets=			# Optional: Comma-separated operator sets (e.g. op_sets=odf,ocpv,acm,
 
 ops=				# Optional: Comma-separated individual operators (e.g. ops=web-terminal,devworkspace-operator).
 
-# Set the following only if known. Upon cluster creation, values are propagated to its cluster.conf file.
+# Set the following values only if known.
+# When a cluster is later created, these values can be overridden in the cluster’s cluster.conf file.
 
 domain={{ domain }}		# Base domain for your OpenShift cluster.
 machine_network={{ machine_network }}	# Network segment (CIDR format) where OpenShift will be installed.
