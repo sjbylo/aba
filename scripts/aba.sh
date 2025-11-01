@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251101172348
+ABA_VERSION=20251101182911
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -110,8 +110,10 @@ fi
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
 source <(normalize-aba-conf)
 
-interactive_mode=
-[ "$*" ] && interactive_mode_none=1
+interactive_mode=1
+#interactive_mode_none=1
+#[ "$*" ] && interactive_mode_none=1 && interactive_mode=
+[ "$*" ] && interactive_mode=
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
 
@@ -136,7 +138,7 @@ do
 		exit 0
 	elif [ "$1" = "--interactive" ]; then
 		interactive_mode=1
-		interactive_mode_none=
+		#interactive_mode_none=
 		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
 		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
 		shift
@@ -694,9 +696,11 @@ BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $
 # We want interactive mode if aba is running at the top of the repo and without any args
 [ ! "$BUILD_COMMAND" -a "$ABA_ROOT" = "." ] && interactive_mode=1
 
-#if [ ! "$interactive_mode" -a -z "$interactive_mode_none" ]; then
 if [ ! "$interactive_mode" ]; then
-	[ "$DEBUG_ABA" ] && echo "DEBUG: $0: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
+	if [ "$DEBUG_ABA" ]; then
+		echo_magenta "DEBUG: $0: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
+		read -t 10 || true
+	fi
 
 	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
 	# Only run make if there's a target
@@ -710,7 +714,7 @@ fi
 ##################################################################
 # We don't want interactive mode if there were args in the command
 #[ "$interactive_mode_none" ] && echo Exiting ... >&2 && exit 
-[ "$interactive_mode_none" ]                          && exit 
+##[ "$interactive_mode_none" ]                          && exit 
 
 # Change to the top level repo directory
 cd $ABA_ROOT
@@ -962,12 +966,12 @@ if [ ! -f .bundle ]; then
 		echo
 		echo_yellow Instructions for a fully disconnected installation
 		echo
-		echo "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the install bundle"
-		echo "                                                          # (size ~20-30GB for a base installation)."
-		echo "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
-		echo "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more manageable files."
-		echo "                                                          # Unpack the files on the internal bastion with: cat ocp_* | tar xvf - "
-		echo "     aba bundle --help                                    # See for help."
+		echo_white "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the install bundle"
+		echo_white "                                                          # (size ~20-30GB for a base installation)."
+		echo_white "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
+		echo_white "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more manageable files."
+		echo_white "                                                          # Unpack the files on the internal bastion with: cat ocp_* | tar xvf - "
+		echo_white "     aba bundle --help                                    # See for help."
 		echo
 
 		exit 0
@@ -982,33 +986,37 @@ if [ ! -f .bundle ]; then
 	if ask "Install OpenShift from a mirror registry that is synchonized directly from the Internet"; then
 
 		echo 
-		echo_yellow Instructions for synchronizing images directly to a mirror registry
+		echo_yellow Instructions for synchronizing images directly from the Internet to a mirror registry
 		echo 
-		echo "Action required: Set up the mirror registry and sync it with the necessary container images."
+		echo_white "Set up the mirror registry and sync it with the necessary container images."
 		echo
-		echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
+		echo_white "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 		echo
-		echo "Run:"
-		echo "  aba -d mirror install              # to configure and/or install Quay."
-		echo "  aba -d mirror sync --retry <count> # to synchronize all container images - from the Internet - into your registry."
+		echo_white "Run:"
+		echo_white "  aba -d mirror install              # to configure an existing registry or install Quay."
+		echo_white "  aba -d mirror sync --retry <count> # to synchronize all container images - from the Internet - into your registry."
 		echo
-		echo "Or run:"
-		echo "  aba -d mirror sync --retry <count> # to complete both actions and ensure any image synchronization issues are retried."
+		echo_white "Or run:"
+		echo_white "  aba -d mirror sync --retry <count> # to complete both actions and ensure any image synchronization issues are retried."
 		echo
-		echo "  aba mirror --help                  # See for help."
+		echo_white "  aba mirror --help                  # See for help."
 
-		echo "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
+		echo_white "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
 		echo
 
 		exit 0
 	fi
 
 	echo 
-	echo_yellow Instructions for installing from the Internet
+	echo "Fully Connected"
+	echo_white "Optionally, configure a proxy or use direct Internet access through NAT or a transparent proxy."
 	echo
-	echo_white "Configure the installation to use a proxy or NAT (optional)."
+	echo_yellow Instructions for installing directly from the Internet
 	echo
-	echo_white "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]"
+	echo_white "Example:"
+	echo_white "aba cluster --name mycluster --type sno --starting-ip 10.0.1.203 --int-connection proxy"
+
+	##echo_white "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]"
 	echo_white "See aba cluster --help for more"
 	echo 
 
