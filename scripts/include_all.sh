@@ -617,7 +617,7 @@ fetch_previous_version() {
     fi
     prev_minor=$((minor - 1))
 
-    _install_oc_mirror $ABA_PATH >/dev/null 2>&1
+    _install_oc_mirror $ABA_ROOT >/dev/null 2>&1
 
     # Query the previous channel via oc-mirror
     prev_ver=$(oc-mirror list releases --channel="${chan}-${major}.${prev_minor}" 2>/dev/null | tail -n1)
