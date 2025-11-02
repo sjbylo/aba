@@ -7,10 +7,10 @@ source scripts/include_all.sh
 
 umask 077
 
-source <(normalize-aba-conf)
+#source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
-verify-aba-conf || exit 1
+#verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
 if [ ! "$reg_host" -o ! "$reg_port" ]; then
