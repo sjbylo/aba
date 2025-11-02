@@ -43,7 +43,7 @@ source scripts/include_all.sh no-trap  # Need for below normalize fn() calls
 source test/include.sh
 trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 
-[ ! "$target_full" ] && default_target="--step iso"   # Default is to generate 'iso' only   # Default is to only create iso
+[ ! "$target_full" ] && default_target="iso"   # Default is to generate 'iso' only   # Default is to only create iso
 mylog default_target=$default_target
 
 mylog ============================================================
@@ -102,7 +102,7 @@ aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
 
 test-cmd -m "Removing sno dir" rm -rf sno
-test-cmd -m "Testing direct internet config" aba sno --step cluster.conf -I direct
+test-cmd -m "Testing direct internet config" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf -I direct
 test-cmd -m "Creating agentconf" aba -d sno agentconf
 test-cmd -m "Verifying direct internet config - 'registry.redhat.io' exists" 		"grep registry.redhat.io	sno/install-config.yaml"
 test-cmd -m "Verifying direct internet config - 'cloud.openshift.com' exists" 		"grep cloud.openshift.com	sno/install-config.yaml"
@@ -115,10 +115,10 @@ test-cmd -m "Verifying direct internet config - 'mirrors:' does not exist" 		"! 
 test-cmd -m "Creating iso for 'int_connection=direct' SNO cluster" aba -d sno iso
 
 test-cmd -m "Removing sno dir" rm -rf sno
-test-cmd -m "Creating sno/cluster.conf." aba sno --step cluster.conf -I proxy
+test-cmd -m "Creating sno/cluster.conf." aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf -I proxy
 
-test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." "aba -d sno"  # Not, this is NOT the same as "aba sno" command
-# aba sno will overwrite the cluster.conf file, but the other will not.
+test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." "aba -d sno install"  # Note, this is NOT the same as "aba cluster -n sno -t sno --starting-ip 10.0.1.201" command
+# aba cluster -n sno -t sno --starting-ip 10.0.1.201 will overwrite the cluster.conf file, but the other will not.
 
 test-cmd -m "Checking cluster operators" "aba --dir sno cmd"
 

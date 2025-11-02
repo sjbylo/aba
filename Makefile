@@ -38,17 +38,17 @@ cli:  ## Download and install the CLI binaries into ~/bin
 download:  ## Download all required CLI install files without installing. 
 	@make -sC cli download
 
-.PHONY: install
-mirror: install
-install: ## Set up the registry as per the settings in aba/mirror/mirror.conf. Place credential file(s) into aba/mirror/regcreds/ for existing registry.  See README.md.
-	@make -sC mirror install
+#.PHONY: install
+#mirror: install
+#install: ## Set up the registry as per the settings in aba/mirror/mirror.conf. Place credential file(s) into aba/mirror/regcreds/ for existing registry.  See README.md.
+#	@make -sC mirror install
 
-uninstall: ## Uninstall any previously installed mirror registry  
-	@make -sC mirror uninstall
+#uninstall: ## Uninstall any previously installed mirror registry  
+#	@make -sC mirror uninstall
 
-.PHONY: sync
-sync: ## Sync images from the Internet directly to an internal registry as defined in aba/mirror/mirror.conf
-	@make -sC mirror sync
+#.PHONY: sync
+#sync: ## Sync images from the Internet directly to an internal registry as defined in aba/mirror/mirror.conf
+#	@make -sC mirror sync
 
 .PHONY: catalog
 # -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
@@ -62,9 +62,9 @@ catalog: ## Render all the latest Operators into a helper file which can be used
 bundle:  ## Create an install bundle to be tranferred into the air-gapped env. Example: aba bundle --out /path/to/archive/bundle or -
 	@$(SCRIPTS)/make-bundle.sh $(out) $(force)
 
-.PHONY: save
-save: ## Save images from the Internet to the image set archive file: aba/mirror/save/mirror_000001.tar
-	@make -sC mirror save 
+#.PHONY: save
+#save: ## Save images from the Internet to the image set archive file: aba/mirror/save/mirror_000001.tar
+#	@make -sC mirror save 
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use --out - to send tar output to stdout. Used by aba bundle.
@@ -80,25 +80,25 @@ tarrepo:  ## Archive the full repo *excluding* the aba/mirror/mirror_*.tar files
 inc:  ## (Deprecated) Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'aba tar'.
 	$(SCRIPTS)/backup.sh --inc $(out)
 
-.PHONY: load
-load: ## Load the imaget set archive files into your mirror registry (as defined in aba/mirror/mirror.conf) 
-	@make -sC mirror load
+#.PHONY: load
+#load: ## Load the imaget set archive files into your mirror registry (as defined in aba/mirror/mirror.conf) 
+#	@make -sC mirror load
 
-.PHONY: verify
-verify: ## Verify access to your mirror registry (as defined in aba/mirror/mirror.conf) 
-	@make -sC mirror verify
+#.PHONY: verify
+#verify: ## Verify access to your mirror registry (as defined in aba/mirror/mirror.conf) 
+#	@make -sC mirror verify
 
-.PHONY: sno
-sno: aba.conf  ## (deprecated) Install a Single Node OpenShift cluster.  Use 'aba sno --step iso' to create the iso.
-	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
+#.PHONY: sno
+#sno: aba.conf  ## (deprecated) Install a Single Node OpenShift cluster.  Use 'aba sno --step iso' to create the iso.
+#	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
 
-.PHONY: compact
-compact: aba.conf  ## (deprecated) Install a standard 3-node OpenShift cluster.  Use 'aba compact --step iso' to create the iso.
-	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
+#.PHONY: compact
+#compact: aba.conf  ## (deprecated) Install a standard 3-node OpenShift cluster.  Use 'aba compact --step iso' to create the iso.
+#	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
 
-.PHONY: standard
-standard: aba.conf  ## (deprecated) Install a standard 3+3-node OpenShift cluster.  Use 'aba standard --step iso' to create the iso.
-	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
+#.PHONY: standard
+#standard: aba.conf  ## (deprecated) Install a standard 3+3-node OpenShift cluster.  Use 'aba standard --step iso' to create the iso.
+#	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
 
 .PHONY: cluster
 cluster:  aba.conf  ## Initialize install dir and install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]

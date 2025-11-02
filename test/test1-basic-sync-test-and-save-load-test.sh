@@ -44,7 +44,7 @@ source scripts/include_all.sh no-trap  # Need for below normalize fn() calls
 source test/include.sh
 trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 
-[ ! "$target_full" ] && default_target="--step iso"   # Default is to generate 'iso' only   # Default is to only create iso
+[ ! "$target_full" ] && default_target="iso"   # Default is to generate 'iso' only   # Default is to only create iso
 mylog default_target=$default_target
 
 mylog ============================================================
@@ -235,7 +235,7 @@ done
 
 ######################
 rm -rf sno
-test-cmd -m "Installing SNO cluster with 'aba sno $default_target'" aba sno $default_target
+test-cmd -m "Installing SNO cluster with 'aba cluster -n sno -t sno --step $default_target'" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target
 test-cmd -i -m "Deleting sno cluster (if it was created)" aba --dir sno delete 
 
 #######################
@@ -250,7 +250,7 @@ test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_
 test-cmd -m "Checking sno dir" ls -ld sno
 test-cmd -m "Deleting existing sno dir" rm -rf sno
 
-test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
+test-cmd -m "Installing sno cluster with 'aba cluster -n sno -t sno --step $default_target'" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target
 test-cmd -m "Delete cluster (if needed)" aba --dir sno delete 
 test-cmd -m "Delete the registry" aba --dir mirror uninstall 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
@@ -317,14 +317,14 @@ aba --dir sno clean # This should clean up the cluster and make should start fro
 rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should start from scratch next time
 
 ##mylog "Testing with smaller CIDR 10.0.1.200/30 with start ip 201"
-test-cmd -m "Creating SNO iso with small CIDR 10.0.1.200/30" aba sno --machine-network "10.0.1.200/30" --step iso
+test-cmd -m "Creating SNO iso with small CIDR 10.0.1.200/30" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --machine-network "10.0.1.200/30" --step iso
 #test-cmd -m "Setting machine_network=10.0.1.200/30" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.1.200/30 #g' sno/cluster.conf"
 ###test-cmd -m "Setting machine_network=10.0.1.200/30" aba -d sno --machine-network "10.0.1.200/30"
 
 test-cmd -m "Deleting sno/ dir" rm -rf sno
 
 ####### test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
-test-cmd -m "Creating iso: CIDR 10.0.0.0/20 with start ip 10.0.1.201" aba sno --step iso --starting-ip 10.0.1.201 --machine-network 10.0.0.0/20 
+test-cmd -m "Creating iso: CIDR 10.0.0.0/20 with start ip 10.0.1.201" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step iso --machine-network 10.0.0.0/20 
 
 #mylog "Testing with larger CIDR 10.0.0.0/20 with start ip 10.0.1.201"
 #test-cmd -m "Setting machine_network=10.0.0.0/20" "sed -i 's#^machine_network=[^ \t]*#machine_network=10.0.0.0/20 #g' sno/cluster.conf"
@@ -333,7 +333,7 @@ test-cmd -m "Creating iso: CIDR 10.0.0.0/20 with start ip 10.0.1.201" aba sno --
 #test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
 ###test-cmd -m "Setting starting_ip=10.0.1.201" aba -d sno -i 10.0.1.201
 
-test-cmd -m "Installing sno cluster" aba sno
+test-cmd -m "Installing sno cluster" aba cluster -n sno -t sno --starting-ip 10.0.1.201
 test-cmd -m "Checking cluster operators" aba --dir sno cmd
 
 #####################################################################################################################
@@ -350,7 +350,7 @@ test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep 
 test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 
 aba --dir sno clean # This should clean up the cluster and 'make' should start from scratch next time. Instead of running "rm -rf sno"
-test-cmd -m "Installing sno cluster with 'aba sno $default_target'" aba sno $default_target
+test-cmd -m "Installing sno cluster with 'aba cluster -n sno -t sno --step $default_target'" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target
 
 ### Let it be ## test-cmd -m "Deleting cluster" aba --dir sno delete.  -i ignore the return value, i.e. if cluster not running/accessible 
 #test-cmd -i -m "If cluster up, stopping cluster" ". <(aba -sC sno shell) && . <(aba -sC sno login) && yes|aba --dir sno shutdown --wait"
@@ -365,8 +365,8 @@ test-cmd -m "Setting platform=bm in aba.conf" aba --platform bm
 
 ####> vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
-####test-cmd -m "Creating standard iso file with 'aba standard --step iso'" aba standard --step iso # Since we're simulating bare-metal, only create iso
-test-cmd -m "Bare-metal simulation: Creating agent config files" aba standard   	# Since we're simulating bare-metal, *make will stop* after creating agent configs 
+####test-cmd -m "Creating standard iso file with 'aba cluster -n standard -t standard --step iso'" aba cluster -n standard -t standard --step iso # Since we're simulating bare-metal, only create iso
+test-cmd -m "Bare-metal simulation: Creating agent config files" aba cluster -n standard -t standard   	# Since we're simulating bare-metal, *make will stop* after creating agent configs 
 test-cmd -m "Bare-metal simulation: Creating iso file" aba --dir standard iso        	# Since we're simulating bare-metal, only create iso
 
 #test-cmd -m "Delete the registry" aba --dir mirror uninstall 

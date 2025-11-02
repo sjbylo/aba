@@ -80,11 +80,11 @@ if files_on_same_device mirror $bundle_dest_path; then
 	echo
 	sleep 2
 	#make download save tarrepo out="$bundle_dest_path" retry=7 || exit 1	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
-	aba download save tarrepo --out "$bundle_dest_path" --retry 7 || exit 1	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
+	aba -d cli download -d mirror save -d tarrepo --out "$bundle_dest_path" --retry 7 || exit 1	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
 else
 	echo_cyan "Creating 'all-in-one' install bundle (assuming destination file is on portable media or a different file-system) ..."
 	#make download save tar out="$bundle_dest_path" retry=7 || exit 1    	# Try save 8 times, then create all-in-one archive, including all files. 
-	aba download save tar     --out "$bundle_dest_path" --retry 7 || exit 1    	# Try save 8 times, then create all-in-one archive, including all files. 
+	aba -d cli download -d mirror save -d tar     --out "$bundle_dest_path" --retry 7 || exit 1    	# Try save 8 times, then create all-in-one archive, including all files. 
 fi
 
 exit 0

@@ -286,8 +286,8 @@ aba -A
 echo_step Install Quay and load the images ...
 
 #rm -rf ~/.oc-mirror  # We need some storage back! # FIXME: The cache gets filled again!
-#aba load --retry 7 -H $TEST_HOST -k \~/.ssh/id_rsa
-aba load --retry 7 -H $TEST_HOST
+#aba -d mirror load --retry 7 -H $TEST_HOST -k \~/.ssh/id_rsa
+aba -d mirror load --retry 7 -H $TEST_HOST
 
 WORK_TEST_LOG=$WORK_BUNDLE_DIR_BUILD/tests-completed.txt
 echo "## Test results for install bundle: $BUNDLE_NAME" > $WORK_TEST_LOG
