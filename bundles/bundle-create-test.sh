@@ -118,8 +118,8 @@ rm -rf aba
 
 # Install aba from the Internet
 set +x
-#bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 cd aba
 ####./install  # Done above
 set -x
@@ -136,17 +136,14 @@ fi
 
 # Remove any quay 
 if podman ps | grep registry; then
-	(
-		# Uninstall Quay
-		./install  # install aba
-		aba -A
-		cd mirror
-		aba uninstall  || true
-		./mirror-registry uninstall --autoApprove -v || true
-		sudo rm -rf ~/quay-install
-		./mirror-registry uninstall --autoApprove -v || true
-		podman rmi `podman images -q` --force
-	)
+	# Uninstall Quay
+	./install  # install aba
+	aba -A
+	#aba uninstall  || true
+	./mirror-registry uninstall --autoApprove -v || true
+	sudo rm -rf ~/quay-install
+	./mirror-registry uninstall --autoApprove -v || true
+	podman rmi `podman images -q` --force
 fi
 sudo rm -rf ~/quay-install
 
@@ -207,15 +204,16 @@ echo_step Show image set config file ...
 
 cat mirror/save/imageset-config-save.yaml
 
-echo sleeping 60s ...
-read -t 60  || true
+echo Pausing 6s ...
+read -t 6  || true
 
 
 echo_step Save images to disk ...
 
+rm -rf ~/.oc-mirror  # We don't want to include all the older images?!?!
 aba -d mirror save -r 8
 
-rm -rf ~/.oc-mirror/.cache  # We need some storage back!
+rm -rf ~/.oc-mirror  # We need some storage back!
 
 echo_step Create the install bundle files ...
 
@@ -287,6 +285,8 @@ aba -A
 
 echo_step Install Quay and load the images ...
 
+#rm -rf ~/.oc-mirror  # We need some storage back! # FIXME: The cache gets filled again!
+#aba load --retry 7 -H $TEST_HOST -k \~/.ssh/id_rsa
 aba load --retry 7 -H $TEST_HOST
 
 WORK_TEST_LOG=$WORK_BUNDLE_DIR_BUILD/tests-completed.txt
@@ -446,9 +446,7 @@ echo_step Remove Quay ...
 cd $WORK_DIR/test-install/aba
 ./install  # install aba
 aba -A
-cd mirror
-aba uninstall 
-cd
+aba -d mirror uninstall -y
 sudo rm -rf ~/quay-install
 
 . ~steve/.proxy-set.sh  # Go online!

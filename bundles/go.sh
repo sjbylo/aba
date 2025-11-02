@@ -30,7 +30,7 @@ acquire_lock
 
 cd $(dirname $0)
 
-vers_track="20 19 18"
+vers_track="20 19"
 
 which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
 
@@ -51,7 +51,7 @@ echo Starting $0 at $(date)
 arr_op_set=();			arr_name=()
 arr_op_set+=("ocp");		arr_name+=(ocp)
 arr_op_set+=("ocp odf ocpv");	arr_name+=(ocpv)
-arr_op_set+=("ai"); 		arr_name+=(ai)
+#arr_op_set+=("ai"); 		arr_name+=(ai)
 #arr_op_set+=("ocp ai"); 	arr_name+=(ai)
 #arr_op_set+=("ocp gpu ai"); 	arr_name+=(aiall)
 arr_op_set+=("ocp mesh3");	arr_name+=(mesh3)
