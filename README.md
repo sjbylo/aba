@@ -546,7 +546,7 @@ Set the version of OpenShift you want to install:
 v=4.17.16
 ```
 
-Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any pre-existing files that may exist under aba/mirror/save. 
+Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any existing files under aba/mirror/save.
 
 Create the install bundle with a single command, for example:
 
