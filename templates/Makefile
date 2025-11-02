@@ -40,13 +40,8 @@ else  # If platform is 'vmw', all steps can be automated
 	TARGET_DEPENDENCIES = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .install-complete
 endif
 
-# DEBUG # $(info TARGET_DEPENDENCIES = $(TARGET_DEPENDENCIES))
-
-# The default target will build a cluster from scratch (for 'vmw' platform but not for bare-metal!) 
-all: $(TARGET_DEPENDENCIES)
-
 .PHONY: install
-install: all
+install: $(TARGET_DEPENDENCIES)
 
 # Check cluster has been installed already and abort if it has
 .PHONY: check
@@ -203,15 +198,13 @@ delete: .init vmware.conf                     agent-config.yaml ## Delete all VM
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 
-.PHONY: agent
+#.PHONY: agent
 agent: .agent-up
 .agent-up:
 	$(SCRIPTS)/wait-agent-up.sh $(debug)
 	@touch .agent-up
 
 .PHONY: mon
-# install and mon are the same
-install: mon   ## Install the cluster using the cluster.conf file (same as mon).
 mon: agent  ## Monitor for 'install complete' the agent-based installation of OpenShift.
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
