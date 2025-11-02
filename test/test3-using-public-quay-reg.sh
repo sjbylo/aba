@@ -60,7 +60,7 @@ ntp_ip=10.0.1.8 # If available
 ##which make || sudo dnf install make -y
 
 test-cmd -m "Installing aba" ./install 
-test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
+#test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
 
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3

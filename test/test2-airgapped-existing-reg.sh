@@ -79,7 +79,7 @@ if [ ! "$1" ]; then
 	[ "$(which aba)" ] && sudo rm -f $(which aba)
 	[ "$(which aba)" ] && sudo rm -f $(which aba)
 	test-cmd -m "Installing aba" ./install
-	test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
+	#test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
 	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 	test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 	#test-cmd "make -C mirror clean"
@@ -207,7 +207,7 @@ test-cmd                                             -m "Delete loaded image set
 test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
-test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $TEST_USER@$int_bastion_hostname:$subdir/aba/shortcuts.conf
+#test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $TEST_USER@$int_bastion_hostname:$subdir/aba/shortcuts.conf
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba cluster -n compact -t compact --step $default_target" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)" "aba --dir $subdir/aba/compact delete" 
 

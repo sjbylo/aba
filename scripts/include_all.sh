@@ -8,6 +8,8 @@
 #set -euo pipefail
 #set -o pipefail
 
+BASE_NAME=$(basename "$0")
+
 # Check is sudo exists 
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo

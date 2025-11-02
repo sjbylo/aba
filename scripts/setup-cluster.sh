@@ -1,18 +1,18 @@
 #!/bin/bash -e
-# Create the cluster build dir
+# Create the cluster dir
 
 source scripts/include_all.sh
 
 source <(normalize-aba-conf)   # Fetch the domain name
-
 verify-aba-conf || exit 1
 
+# Set defaults
 name=standard
 type=standard
 
 . <(process_args $*)
 
-[ ! "$name" ] && echo_red "Error: cluster name misssing!" >&2
+[ ! "$name" ] && echo_red "Error: cluster name misssing!" >&2 && exit 1
 
 if [ ! -d "$name" ]; then
 	mkdir $name
@@ -24,8 +24,8 @@ else
 	       	if grep -q "Cluster Makefile" $name/Makefile; then
 			cd $name 
 			#rm -f $name/cluster.conf  # Refresh/overwrite the config if creating the cluster dir
-			#make -C $name -s clean init
-			#make -C $name -s       init
+			#make -s clean init  # We clean here since 'aba cluster' is meant to cerate a fresh/new cluster dir and not re-use it.
+			make -s       init  # Allow the dir to be "re-used",. i.e. don't touch any already created artifacts (cluster.con, agent*yaml, iso etc) 
 		else
 			echo_red "Error: Directory $name invalid cluster dir." >&2 && exit 1
 		fi
@@ -37,9 +37,14 @@ else
 fi
 
 echo_cyan "Creating '$name/cluster.conf' file for cluster type '$type'."
-[ "$DEBUG_ABA" ] && echo_white scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip
 
-scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip
+create_cluster_cmd="scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip"
+
+[ "$DEBUG_ABA" ] && echo_white $create_cluster_cmd
+
+$create_cluster_cmd
+
+#scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip
 
 [ "$step" ] && target="$step"
 
@@ -56,6 +61,10 @@ if [ "$ask" ]; then
 	exit 0
 fi
 
-[ "$DEBUG_ABA" ] && echo "Cluster dir target: $target" >&2
-[ "$target" ] && make -s $target
+if [ "$target" ]; then
+	echo "$BASE_NAME: Running: make -s $target" >&2
+	[ "$target" ] && make -s $target
+fi
+
+exit 0
 

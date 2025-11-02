@@ -54,7 +54,7 @@ rm -f ~/.aba.previous.backup
 which make || sudo dnf install make -y
 
 test-cmd -m "Installing aba" ./install 
-test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
+#test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
 
 test-cmd -m "Cleaning up - aba reset --force" aba reset -f
 
@@ -222,7 +222,7 @@ mylog "Running 'aba cluster -n sno -t sno --starting-ip 10.0.1.201' on internal 
 ### INSTALL SNO ###
 
 #FIXME: eliminiate shortcuts.conf ... it was a bad idea! Use lags/options instead!
-test-cmd -m "Copy over shortcuts.conf, needed to create 'cluster.conf' file (next command)" scp .shortcuts.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/shortcuts.conf
+#test-cmd -m "Copy over shortcuts.conf, needed to create 'cluster.conf' file (next command)" scp .shortcuts.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/shortcuts.conf
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno/iso" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"

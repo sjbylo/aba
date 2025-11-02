@@ -67,7 +67,7 @@ sudo rm -f /usr/local/sbin/aba
 test-cmd -m "Install aba (1)" '../aba/install 2>&1 | grep " installed to "'
 test-cmd -m "Install aba (2)" '../aba/install 2>&1 | grep "already up-to-date"'
 
-test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
+#test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
 
 # Test update of aba script
 mylog Testing update of aba script
