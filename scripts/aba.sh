@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251102093018
+ABA_VERSION=20251102120317
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -211,6 +211,7 @@ do
 				;;
 		esac
 		replace-value-conf -n ocp_channel -v $chan -f $ABA_ROOT/aba.conf 
+		ocp_channel=$chan
 		shift 2
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		opt=$1
@@ -228,7 +229,7 @@ do
 		esac
 
 		# Expand ver to latest, if it's just a point version (x.y)
-		echo $ver | grep -q -E "^[0-9]+\.[0-9]+$" && ver=$(fetch_latest_z_version "$chan" "$ver" "$arch_sys")
+		echo $ver | grep -q -E "^[0-9]+\.[0-9]+$" && ver=$(fetch_latest_z_version "$ocp_channel" "$ver" "$arch_sys")
 
 		# Extract only the full major.minor.patch version if present
 		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
@@ -244,9 +245,10 @@ do
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
 
-		( make -s -C $ABA_ROOT/mirror catalog bg=true & ) & 
+		( make -s -C $ABA_ROOT catalog bg=true & ) & 
 
 		shift 2
+		ocp_version=$ver
 	elif [ "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		# force will skip over asking to edit the conf file
@@ -784,7 +786,7 @@ if [ ! -f .bundle ]; then
 		replace-value-conf -q -n ocp_channel -v $ocp_channel -f aba.conf
 		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
 
-		chan=$ocp_channel # Used below
+		#### chan=$ocp_channel # Used below
 	fi
 
 	sleep 0.3
@@ -801,6 +803,8 @@ if [ ! -f .bundle ]; then
 
 		echo_white -n "Fetching available versions (please wait!) ..."
 
+		[ "$ABA_DEBUG" ] && echo_white "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt" >&2
+
 		if ! release_text=$(curl -f --connect-timeout 30 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
 			[ "$TERM" ] && tput el1 && tput cr
 			echo_red "Failed to access https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt" >&2
@@ -812,14 +816,9 @@ if [ ! -f .bundle ]; then
 		channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 		default_ver=$channel_ver
 
-		# Extract the previous stable point version, e.g. 4.13.23
-		#major_ver=$(echo $channel_ver | grep ^[0-9] | cut -d\. -f1)
-		#channel_ver_point=`expr $(echo $channel_ver | grep ^[0-9] | cut -d\. -f2) - 1`
-		#if [ "$channel_ver_point" ]; then
-		#channel_ver_prev=$(oc-mirror list releases --channel=${chan}-${major_ver}.${channel_ver_point} 2>/dev/null | tail -1)  # better way to fetch newest previous version!
-		#fi
+		[ "$ABA_DEBUG" ] && echo_white "Looking up previous version at using fetch_previous_version $ocp_channel $arch_sys" >&2
 
-		channel_ver_prev=$(fetch_previous_version "$chan" "$arch_sys")
+		channel_ver_prev=$(fetch_previous_version "$ocp_channel" "$arch_sys")
 
 		# Determine any already installed tool versions
 		which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
@@ -860,7 +859,7 @@ if [ ! -f .bundle ]; then
 			[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev  # previous latest
 
 			# If user enters just a point version, x.y, fetch the latest .z value for that point version of OCP
-			echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version "$chan" "$target_ver" "$arch_sys")
+			echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver" "$arch_sys")
 		done
 
 		# Update the conf file
@@ -924,7 +923,7 @@ if [ ! -f .bundle ]; then
 	scripts/install-rpms.sh external 
 
 	# Now we have the required ocp version, we can fetch the operator indexes (in the background to save time).
-	( make -s -C mirror catalog bg=true & ) & 
+	( make -s catalog bg=true & ) & 
 
 	##############################################################################################################################
 	# Determine pull secret
