@@ -780,7 +780,8 @@ process_args() {
 	echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: invalid params [$*], not key=value pairs"; exit 1; }
 	# eval all key value args
 	#[ "$*" ] && . <(echo $* | tr " " "\n")  # Get $name, $type etc from here
-	echo $* | tr " " "\n"  # Get $name, $type etc from here
+	#echo $* | tr " " "\n"  # Get $name, $type etc from here
+	echo $* | tr " " "\n" | sed 's/^/export /'
 	shift $#
 }
 
@@ -894,5 +895,17 @@ trust_root_ca() {
 	fi
 
 	return 0
+}
+
+is_valid_dns_label() {
+	local name="$1"
+
+	if [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]; then
+		[ "$ABA_INFO" ] && echo_white "Valid DNS label" >&2
+		return 0
+	else
+		echo_red "Invalid DNS label: $name" >&2
+		return 1
+	fi
 }
 
