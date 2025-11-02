@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251101182911
+ABA_VERSION=20251102093018
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -244,7 +244,7 @@ do
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
 
-		( make -s -C $ABA_ROOT catalog bg=true & ) & 
+		( make -s -C $ABA_ROOT/mirror catalog bg=true & ) & 
 
 		shift 2
 	elif [ "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
@@ -924,7 +924,7 @@ if [ ! -f .bundle ]; then
 	scripts/install-rpms.sh external 
 
 	# Now we have the required ocp version, we can fetch the operator indexes (in the background to save time).
-	( make -s catalog bg=true & ) & 
+	( make -s -C mirror catalog bg=true & ) & 
 
 	##############################################################################################################################
 	# Determine pull secret

@@ -47,7 +47,7 @@ source scripts/include_all.sh no-trap # Need for below normalize fn() calls
 source test/include.sh
 trap - ERR # We don't want this trap during testing.  Needed for below normalize fn() calls
 
-[ ! "$target_full" ] && default_target="--step iso"   # Default is to generate 'iso' only on some tests
+[ ! "$target_full" ] && default_target="iso"   # Default is to generate 'iso' only on some tests
 mylog default_target=$default_target
 
 mylog
@@ -186,7 +186,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host 
 [ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 # This user's action is expected to fail since there are no login credentials for the "existing reg."
-test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba load --retry"
+test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
 
 # But, now regcreds/ is created...
 mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $TEST_USER@$int_bastion_hostname"
@@ -201,14 +201,14 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror 
 ######################
 
 # Now, this works
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba load --retry"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load --retry"
 
 test-cmd                                             -m "Delete loaded image set 1 file" "rm -v mirror/save/mirror_*.tar"
 test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
 test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $TEST_USER@$int_bastion_hostname:$subdir/aba/shortcuts.conf
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba compact $default_target" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba cluster -n compact -t compact --step $default_target" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)" "aba --dir $subdir/aba/compact delete" 
 
 #############
@@ -334,7 +334,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bondin
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, ports=ens160,ens192,ens224" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/standard/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8/g' $subdir/aba/sno/cluster.conf"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster with 'aba --dir $subdir/aba sno $default_target'" "aba --dir $subdir/aba sno $default_target" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster with 'aba --dir $subdir/aba cluster -n sno -t sno --step $default_target'" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target" 
 
 
 ######################
@@ -399,7 +399,7 @@ else
 
 	# Run 'aba --dir mirror clean' here since we (might be) are re-installing another cluster *with the same mac addresses*! So, install might fail.
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Cleaning sno dir" "aba --dir $subdir/aba/sno clean"  # This does not remove the cluster.conf file, so cluster can be re-installed 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Installing sno cluster" "aba --dir $subdir/aba sno --mmem 24 --mcpu 12"  
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Installing sno cluster" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --mmem 24 --mcpu 12"  
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Check 'Running'" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get co"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Checking cluster operators" aba --dir $subdir/aba/sno cmd
 fi
