@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251103160506
+ABA_VERSION=20251103193004
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -683,7 +683,7 @@ do
 		fi
 	elif [ "$1" = "create" ]; then # Ignore this arg
 		shift
-	elif [ "$1" = "clu" ]; then  #FIXME: THIS IS EXPERIMENTAL ONLY! Change to 'cluster' once tested.
+	elif [ "$1" = "clux" ]; then  #FIXME: THIS IS EXPERIMENTAL ONLY! Change to 'cluster' once tested.
 		[ ! "$1" ] && echo_red "Missing options after '$1'" >&2 && exit 1
 		shift
 		while [ "$*" ] 
@@ -749,17 +749,35 @@ do
 					int_connection=""
 				fi
 				shift
-			else
-				echo_red "$(basename $0): Error: no such option after 'clu': $1" >&2
-				exit 1
+			elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
+				[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+				if echo "$2" | grep -q -E '^[0-9]+$'; then
+					master_mem=$2
+				else
+					echo_red "$(basename $0): Error: no such option after 'clux': $1" >&2
+					exit 1
+				fi
+				shift 2
+			elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
+				[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+				if echo "$2" | grep -q -E '^[0-9]+$'; then
+					master_cpu_count=$2
+				else
+					echo_red "$(basename $0): Error: no such option after 'clux': $1" >&2
+					exit 1
+				fi
+				shift 2
 			fi
 		done
+
+		## Process "clux" command args ##
+
 		if [ "$name" ]; then
 			# Create cluster dir and cluster.conf
 			[ "$DEBUG_ABA" ] && echo scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
 			scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
 		else
-			echo_red "Error: Must provide at least --name after 'clu'" >&2
+			echo_red "Error: Must provide at least --name after 'clux'" >&2
 			exit 1
 		fi
 	else
