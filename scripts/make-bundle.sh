@@ -66,7 +66,8 @@ if [ "$bundle_dest_path" = "-" ]; then
 	echo "Downloading binary data." >&2
 
 	#make -s download save retry=7 2>&1 | cat -v >>.bundle.log
-	make -s download save retry=7 >&2 || exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
+	make -s -C cli download              >&2 || exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
+	make -s -C mirror       save retry=7 >&2 || exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
 
 	echo_cyan "Writing 'all-in-one' install bundle (tar format) to stdout ..." >&2
 	make -s tar out=-   # Be sure the output of this command is ONLY tar output!
