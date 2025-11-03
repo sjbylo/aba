@@ -175,7 +175,17 @@ do
         rm -rf $cname
 
 	test-cmd -m "Adding 10.0.2.8 to ntp servers" "aba --dns 10.0.1.8 10.0.2.8"
-	test-cmd -m "Creating cluster.conf for '$cname' cluster" "aba $cname --step cluster.conf"
+	#test-cmd -m "Creating cluster.conf for '$cname' cluster" "aba $cname --step cluster.conf"
+
+	[ "$cname" = "sno" ] && starting_ip=10.0.1.201
+	[ "$cname" = "compact" ] && starting_ip=10.0.1.71
+	[ "$cname" = "standard" ] && starting_ip=10.0.1.81
+#../test/sno/agent-config.yaml.example:rendezvousIP: 10.0.1.201
+	#test/compact/agent-config.yaml.example:rendezvousIP: 10.0.1.71
+#../test/standard/agent-config.yaml.example:rendezvousIP: 10.0.1.81
+
+
+	test-cmd -m "Creating cluster.conf for '$cname' cluster" "aba cluster -n $cname -t $cname -i $starting_ip --step cluster.conf"
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # Make sure all mac addr are the same, not random
         test-cmd -m "Creating install-config.yaml for $cname cluster" "aba --dir $cname install-config.yaml"
         test-cmd -m "Creating agent-config.yaml for $cname cluster" "aba --dir $cname agent-config.yaml"
@@ -333,7 +343,7 @@ test-cmd -m "Creating iso: CIDR 10.0.0.0/20 with start ip 10.0.1.201" aba cluste
 #test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
 ###test-cmd -m "Setting starting_ip=10.0.1.201" aba -d sno -i 10.0.1.201
 
-test-cmd -m "Installing sno cluster" aba cluster -n sno -t sno --starting-ip 10.0.1.201
+test-cmd -m "Installing sno cluster" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step install
 test-cmd -m "Checking cluster operators" aba --dir sno cmd
 
 #####################################################################################################################
@@ -366,8 +376,14 @@ test-cmd -m "Setting platform=bm in aba.conf" aba --platform bm
 ####> vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
 ####test-cmd -m "Creating standard iso file with 'aba cluster -n standard -t standard --step iso'" aba cluster -n standard -t standard --step iso # Since we're simulating bare-metal, only create iso
-test-cmd -m "Bare-metal simulation: Creating agent config files" aba cluster -n standard -t standard   	# Since we're simulating bare-metal, *make will stop* after creating agent configs 
-test-cmd -m "Bare-metal simulation: Creating iso file" aba --dir standard iso        	# Since we're simulating bare-metal, only create iso
+
+# We're simulating bare-metal, *make will stop* after creating agent configs 
+test-cmd -m "Bare-metal simulation: Creating agent config files" aba cluster -n standard -t standard -i 10.0.1.81 -s install
+test-cmd -m "Verify cluster config file exists"		ls -l standard/cluster.conf
+test-cmd -m "Verify agent config file"			ls -l standard/install-config.yaml standard/agent-config.yaml
+test-cmd -m "Verify ISO file does NOT YET exist"	! ls -l standard/iso-agent-based/agent.*.iso
+test-cmd -m "Bare-metal simulation: Creating iso file"	aba --dir standard install #iso        	# Since we're simulating bare-metal, stop after creating iso
+test-cmd -m "Verify ISO file now exists"		ls -l standard/iso-agent-based/agent.*.iso
 
 #test-cmd -m "Delete the registry" aba --dir mirror uninstall 
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"

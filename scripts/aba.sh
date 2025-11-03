@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251102201935
+ABA_VERSION=20251103160506
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -546,14 +546,29 @@ do
 			echo_red "Argument invalid [$2] after option $1" >&2
 		fi
 		shift 2
+#	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
+#		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+#		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+#			BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'"  # FIXME: This is confusing and prone to error
+#		else
+#			echo_red "Argument invalid [$2] after option $1" >&2
+#		fi
+#		shift 2
+#
+#
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-			BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'"  # FIXME: This is confusing and prone to error
+			if [ -f cluster.conf ]; then
+				replace-value-conf -n starting_ip -v $2 -f cluster.conf
+			else
+				BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'" # FIXME: Still needed?
+			fi
 		else
 			echo_red "Argument invalid [$2] after option $1" >&2
 		fi
 		shift 2
+
 	elif [ "$1" = "--data-disk" -o "$1" = "-dd" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
@@ -668,7 +683,7 @@ do
 		fi
 	elif [ "$1" = "create" ]; then # Ignore this arg
 		shift
-	elif [ "$1" = "clu" ]; then  #FIXME: Change to 'cluster'
+	elif [ "$1" = "clu" ]; then  #FIXME: THIS IS EXPERIMENTAL ONLY! Change to 'cluster' once tested.
 		[ ! "$1" ] && echo_red "Missing options after '$1'" >&2 && exit 1
 		shift
 		while [ "$*" ] 

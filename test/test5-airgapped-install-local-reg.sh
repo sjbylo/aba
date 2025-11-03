@@ -222,7 +222,7 @@ mylog "Running 'aba cluster -n sno -t sno --starting-ip 10.0.1.201' on internal 
 ### INSTALL SNO ###
 
 #FIXME: eliminiate shortcuts.conf ... it was a bad idea! Use lags/options instead!
-#test-cmd -m "Copy over shortcuts.conf, needed to create 'cluster.conf' file (next command)" scp -v .shortcuts.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/shortcuts.conf
+#test-cmd -m "Copy over shortcuts.conf, needed to create 'cluster.conf' file (next command)" scp .shortcuts.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/shortcuts.conf
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno/iso" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"
@@ -289,9 +289,9 @@ mylog Copy tar+ssh archives to internal bastion
 aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
 #### FIXME: test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
 test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
-test-cmd -m "Copy over image set archive 2 file" "scp -v mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -m "Copy over image set archive 2 file" "scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
-test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp -v mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba/mirror load --retry" 
@@ -330,9 +330,9 @@ mylog Copy repo only to internal bastion
 aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
 
 test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
-test-cmd -m "Copy extra image set tar file to internal bastion" scp -v mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Copy extra image set tar file to internal bastion" scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
-test-cmd -m "Copy over image set conf file" "scp -v mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -m "Copy over image set conf file" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 
 #test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_*.tar"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $(ls -tr $subdir/aba/mirror/save/mirror_*.tar | tail -1)"
@@ -432,9 +432,9 @@ test-cmd -r 3 3 -m "Saving mesh operators to local disk" "aba --dir mirror save 
 
 ### ADDED
 test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
-test-cmd -m "Copy over image set archive file" "scp -v mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -m "Copy over image set archive file" "scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
-test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp -v mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
 ### ADDED
 ## REMOVED #mylog Create incremental tar and ssh to internal bastion
@@ -526,7 +526,7 @@ mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry-amd64.tar.gz  # No need to copy this over!
 
 #test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion_hostname:$subdir" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf - "
-test-cmd -m "Copy mirror archive and ISC file to $reg_ssh_user@$int_bastion_hostname:$subdir" "scp -v mirror/save/mirror*tar mirror/save/imageset*yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -m "Copy mirror archive and ISC file to $reg_ssh_user@$int_bastion_hostname:$subdir" "scp mirror/save/mirror*tar mirror/save/imageset*yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 

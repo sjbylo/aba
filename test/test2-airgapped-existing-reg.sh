@@ -183,7 +183,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host 
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Activating shortcuts.conf on remote host" "cd $subdir/aba; cp -f .shortcuts.conf shortcuts.conf"
 
 # FIXME: Is this needed since we use "full tar" copy above?
-[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp -v mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 # This user's action is expected to fail since there are no login credentials for the "existing reg."
 test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
@@ -207,7 +207,7 @@ test-cmd                                             -m "Delete loaded image set
 test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
-#test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp -v .shortcuts.conf $TEST_USER@$int_bastion_hostname:$subdir/aba/shortcuts.conf
+#test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $TEST_USER@$int_bastion_hostname:$subdir/aba/shortcuts.conf
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba cluster -n compact -t compact --step $default_target" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)" "aba --dir $subdir/aba/compact delete" 
 
@@ -232,7 +232,7 @@ mylog "Starting tests to check out agent config files for various cluster config
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete $ctype dir: $subdir/aba/standard" rm -rf $subdir/aba/$ctype
 
-test-cmd -m "Copy test script" scp -v test/misc/test_ssh_ntp.sh $TEST_USER@$int_bastion_hostname:
+test-cmd -m "Copy test script" scp test/misc/test_ssh_ntp.sh $TEST_USER@$int_bastion_hostname:
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "echo until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do echo -n .\; sleep 10\; done > test_ssh.sh"
 
 # Init
@@ -372,10 +372,10 @@ test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh
 #test-cmd -m "Delete any old tar file (if any)" rm -fv ~/tmp/file.tar
 #test-cmd -m "Create the tar file.  Should only contain (more-or-less) the 'image set' archive file" aba --dir mirror inc out=~/tmp/file.tar
 #test-cmd -m "Check size of tar file" "ls -l ~/tmp/file.tar"
-#test-cmd -m "Copy tar file over to $int_bastion_hostname" scp -v ~/tmp/file.tar $TEST_USER@$int_bastion_hostname:
+#test-cmd -m "Copy tar file over to $int_bastion_hostname" scp ~/tmp/file.tar $TEST_USER@$int_bastion_hostname:
 #test-cmd -m "Remove local tar file" rm -v ~/tmp/file.tar  # Remove file on client side
 
-test-cmd -m "Copy over mirror archive and image set config file" scp -v mirror/save/mirror_*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save/
+test-cmd -m "Copy over mirror archive and image set config file" scp mirror/save/mirror_*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save/
 
 #mylog "The following untar command should unpack the file aba/mirror/save/mirror_*.tar only"
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
@@ -385,7 +385,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp -v mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load --retry"
 
@@ -461,13 +461,13 @@ test-cmd -r 15 1 -m "Saving advanced-cluster-management images to local disk" "a
 
 test-cmd -m "Listing image set files created" "ls -lh mirror/save/mirror_*.tar"
 mylog "Use 'scp' to copy mirror/save/mirror_*.tar file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
-test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp -v mirror/save/mirror_*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/save/mirror_*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*\.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp -v mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load --retry"
 
@@ -481,7 +481,7 @@ test-cmd -m "Pausing 30s" sleep 30
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
 
 # Needed for acm-subs.yaml
-test-cmd -m "Copy over test dir for the acm-*.yaml files" scp -v -rp test $TEST_USER@$int_bastion_hostname:$subdir/aba
+test-cmd -m "Copy over test dir for the acm-*.yaml files" scp -rp test $TEST_USER@$int_bastion_hostname:$subdir/aba
 
 # Need to fetch the actual channel name from the operator catalog that's in use
 acm_channel=$(cat mirror/.index/redhat-operator-index-v$ocp_ver_major | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
