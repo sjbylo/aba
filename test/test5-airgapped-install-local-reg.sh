@@ -640,7 +640,10 @@ build_and_test_cluster() {
 
 
 	# This will run "make refresh" in $subdir/aba/$cluster_name which will do all and trigger an install
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name .autorefresh"
+	[ "$cluster_name" = "sno" ] && starting_ip=10.0.1.201
+	[ "$cluster_name" = "compact" ] && starting_ip=10.0.1.71
+	[ "$cluster_name" = "standard" ] && starting_ip=10.0.1.81
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing '$cluster_name' cluster" "aba --dir $subdir/aba/$cluster_name -i $starting_ip .autorefresh"
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Monitor bootstrap for cluster '$cluster_name'" "aba --dir $subdir/aba/$cluster_name bootstrap"
 
