@@ -224,10 +224,10 @@ mylog "Running 'aba cluster -n sno -t sno --starting-ip 10.0.1.201' on internal 
 #FIXME: eliminiate shortcuts.conf ... it was a bad idea! Use lags/options instead!
 #test-cmd -m "Copy over shortcuts.conf, needed to create 'cluster.conf' file (next command)" scp .shortcuts.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/shortcuts.conf
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno/iso" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno cluster.conf" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno/iso" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 -s install" 
 
 test-cmd -m "Sleep 30" sleep 30
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
@@ -441,7 +441,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file ex
 ## REMOVED test-cmd -m "Create incremental tar and ssh to internal bastion" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -"
 ## REMOVED test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba -d mirror load --retry" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load --retry" # Run from mirror dir
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
