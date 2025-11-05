@@ -1180,6 +1180,7 @@ Next:
 1. Create the <cluster>/cluster.conf file again (example uses 'sno'):
    1. rm -rf sno; cluster -n sno -t sno -i 10.0.1.202 -s cluster.conf    # >>> change to YOUR cluster's starting IP address
 1. aba -d sno day2    # Add back the OperatorHub conifguration.
+2. Wait 2-3 minutes and check if the OperatorHub is working in the OpenShift Console. 
 
 This SHOULD set up OperatorHub again.
 
