@@ -546,7 +546,7 @@ Set the version of OpenShift you want to install:
 v=4.17.16
 ```
 
-Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any pre-existing files that may exist under aba/mirror/save. 
+Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any existing files under aba/mirror/save.
 
 Create the install bundle with a single command, for example:
 
@@ -1159,6 +1159,30 @@ aba -d mirror uninstall-docker-registry        # Remove the Docker Registry pod.
 **Q: Is there a discussion forum?**
 
 If you have access, join the [Slack Channel](https://red.ht/slack-forum-aba). 
+
+
+**Q: I accidentally uninstalled my mirror registry, how can I recover?**
+
+You cluster cannot pull images any more since the mirror registry is no longer available. Your cluster may startup ok. but over time pods may start to fail. 
+
+Ensure you can still access the running cluster, either by login/password or kubeconfig file.
+
+Next:
+
+1. In the usual way, re-install Quay and push the same set & same version of images into it. 
+1. Verify you have the aba/mirror/ dir and aba/aba.conf is all set up ok (same infos to match the existing cluster, as best you can)
+1. Ensure this command shows success: oc -d mirror verify
+1. Start the OpenShift cluster
+1. Check “oc whoami” is working
+1. Delete old configuration, run:
+   1. oc delete cm registry-config -n openshift-config
+   1. oc delete catalogsource  redhat-operators -n openshift-marketplace
+1. Create the <cluster>/cluster.conf file again (example uses 'sno'):
+   1. rm -rf sno; cluster -n sno -t sno -i 10.0.1.202 -s cluster.conf    # >>> change to YOUR cluster's starting IP address
+1. aba -d sno day2    # Add back the OperatorHub conifguration.
+2. Wait 2-3 minutes and check if the OperatorHub is working in the OpenShift Console. 
+
+This SHOULD set up OperatorHub again.
 
 
 [Back to top](#who-should-use-aba)

@@ -8,6 +8,8 @@
 #set -euo pipefail
 #set -o pipefail
 
+BASE_NAME=$(basename "$0")
+
 # Check is sudo exists 
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
@@ -312,7 +314,11 @@ verify-cluster-conf() {
 	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
 	echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
 
-	echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: starting_ip is invalid in cluster.conf. Try using --starting-ip option." >&2; ret=1; }
+	if [ "$starting_ip" = "ADD-IP-ADDR-HERE" ]; then
+		echo_red "Warning: Starting IP address needs to be set in $PWD/cluster.conf.  Try using --starting-ip option." >&2
+	else
+		echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: starting_ip is invalid in cluster.conf. Try using --starting-ip option." >&2; ret=1; }
+	fi
 
 	echo $hostPrefix | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: hostPrefix is invalid in cluster.conf" >&2; ret=1; }
 
@@ -708,7 +714,7 @@ replace-value-conf() {
 				shift
 				;;
 			*)
-				local files="$files $2"
+				local files="$files $1"
 				shift
 				;;
 		esac
@@ -780,7 +786,8 @@ process_args() {
 	echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: invalid params [$*], not key=value pairs"; exit 1; }
 	# eval all key value args
 	#[ "$*" ] && . <(echo $* | tr " " "\n")  # Get $name, $type etc from here
-	echo $* | tr " " "\n"  # Get $name, $type etc from here
+	#echo $* | tr " " "\n"  # Get $name, $type etc from here
+	echo $* | tr " " "\n" | sed 's/^/export /'
 	shift $#
 }
 
@@ -894,5 +901,17 @@ trust_root_ca() {
 	fi
 
 	return 0
+}
+
+is_valid_dns_label() {
+	local name="$1"
+
+	if [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]; then
+		[ "$ABA_INFO" ] && echo_white "Valid DNS label" >&2
+		return 0
+	else
+		echo_red "Invalid DNS label: $name" >&2
+		return 1
+	fi
 }
 

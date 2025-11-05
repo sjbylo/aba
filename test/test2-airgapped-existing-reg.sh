@@ -79,7 +79,7 @@ if [ ! "$1" ]; then
 	[ "$(which aba)" ] && sudo rm -f $(which aba)
 	[ "$(which aba)" ] && sudo rm -f $(which aba)
 	test-cmd -m "Installing aba" ./install
-	test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
+	#test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
 	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 	test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 	#test-cmd "make -C mirror clean"
@@ -207,8 +207,11 @@ test-cmd                                             -m "Delete loaded image set
 test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/save/mirror_*.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
-test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $TEST_USER@$int_bastion_hostname:$subdir/aba/shortcuts.conf
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba cluster -n compact -t compact --step $default_target" 
+#test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $TEST_USER@$int_bastion_hostname:$subdir/aba/shortcuts.conf
+#	[ "$cname" = "sno" ] && starting_ip=10.0.1.201
+#	[ "$cname" = "compact" ] && starting_ip=10.0.1.71
+#	[ "$cname" = "standard" ] && starting_ip=10.0.1.81
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba clux -n compact -i 10.0.1.71 -t compact --step $default_target" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)" "aba --dir $subdir/aba/compact delete" 
 
 #############
@@ -236,7 +239,7 @@ test-cmd -m "Copy test script" scp test/misc/test_ssh_ntp.sh $TEST_USER@$int_bas
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "echo until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do echo -n .\; sleep 10\; done > test_ssh.sh"
 
 # Init
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster --name $ctype --type $ctype --step cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba clux -i 10.0.1.201 --name $ctype --type $ctype --step cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i 's#^machine_network=.*#machine_network=10.0.0.0/22 #g' $subdir/aba/$ctype/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting starting_ip" "sed -i 's/^starting_ip=.*/starting_ip=$start_ip /g' $subdir/aba/$ctype/cluster.conf"
 
@@ -324,7 +327,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Cleaning up $subdir/aba/sno" "r
 
 #### TESTING ACM + MCH 
 # Adjust size of SNO cluster for ACM install 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster --name sno --type sno --step cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba clux -i 10.0.1.201 --name sno --type sno --step cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check cluster.conf exists" "test -s $subdir/aba/sno/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/master_mem=40/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
@@ -334,7 +337,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bondin
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, ports=ens160,ens192,ens224" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/standard/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8/g' $subdir/aba/sno/cluster.conf"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster with 'aba --dir $subdir/aba cluster -n sno -t sno --step $default_target'" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster with 'aba --dir $subdir/aba clux -i 10.0.1.201 -n sno -t sno --step $default_target'" "aba --dir $subdir/aba clux -n sno -t sno --starting-ip 10.0.1.201 --step $default_target" 
 
 
 ######################
@@ -366,16 +369,20 @@ test-cmd -r 15 1 -m "Saving 'vote-app' image to local disk" "aba --dir mirror sa
 
 test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh mirror/save/mirror_*\.tar"
 
-mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_*.tar' file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
-test-cmd -m "Create tmp dir" mkdir -p ~/tmp
-test-cmd -m "Delete any old tar file (if any)" rm -fv ~/tmp/file.tar
-test-cmd -m "Create the tar file.  Should only contain (more-or-less) the 'image set' archive file" aba --dir mirror inc out=~/tmp/file.tar
-test-cmd -m "Check size of tar file" "ls -l ~/tmp/file.tar"
-test-cmd -m "Copy tar file over to $int_bastion_hostname" scp ~/tmp/file.tar $TEST_USER@$int_bastion_hostname:
-test-cmd -m "Remove local tar file" rm -v ~/tmp/file.tar  # Remove file on client side
-mylog "The following untar command should unpack the file aba/mirror/save/mirror_*.tar only"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Removing tar file" "rm -v file.tar"
+#mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_*.tar' file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
+
+#test-cmd -m "Create tmp dir" mkdir -p ~/tmp
+#test-cmd -m "Delete any old tar file (if any)" rm -fv ~/tmp/file.tar
+#test-cmd -m "Create the tar file.  Should only contain (more-or-less) the 'image set' archive file" aba --dir mirror inc out=~/tmp/file.tar
+#test-cmd -m "Check size of tar file" "ls -l ~/tmp/file.tar"
+#test-cmd -m "Copy tar file over to $int_bastion_hostname" scp ~/tmp/file.tar $TEST_USER@$int_bastion_hostname:
+#test-cmd -m "Remove local tar file" rm -v ~/tmp/file.tar  # Remove file on client side
+
+test-cmd -m "Copy over mirror archive and image set config file" scp mirror/save/mirror_*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save/
+
+#mylog "The following untar command should unpack the file aba/mirror/save/mirror_*.tar only"
+#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
+#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Removing tar file" "rm -v file.tar"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
 
@@ -399,7 +406,7 @@ else
 
 	# Run 'aba --dir mirror clean' here since we (might be) are re-installing another cluster *with the same mac addresses*! So, install might fail.
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Cleaning sno dir" "aba --dir $subdir/aba/sno clean"  # This does not remove the cluster.conf file, so cluster can be re-installed 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Installing sno cluster" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --mmem 24 --mcpu 12"  
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Installing sno cluster" "aba --dir $subdir/aba clux -n sno -t sno --starting-ip 10.0.1.201 --mmem 24 --mcpu 12 -s install"   
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Check 'Running'" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get co"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Checking cluster operators" aba --dir $subdir/aba/sno cmd
 fi
