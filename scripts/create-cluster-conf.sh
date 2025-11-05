@@ -16,10 +16,11 @@ fi
 # jinja2 module is needed
 scripts/install-rpms.sh internal
 
-[ -s cluster.conf ] && exit 0
+if [ -s cluster.conf ]; then
+	echo_debug "DEBUG: cluster.conf already exists"
 
-##declare -A shortcuts  # Need to declare just in case the shortcuts.conf file is not available
-##[ -s ../shortcuts.conf ] && source ../shortcuts.conf  # Values can be set in this file for testing 
+	exit 0
+fi
 
 name=standard
 type=standard
@@ -60,6 +61,7 @@ elif [ "$type" = "compact" ]; then
 fi
 
 # This takes quite a few exported vars as input
+echo_debug Creating cluster.conf file
 scripts/j2 templates/cluster.conf.j2 > cluster.conf 
 
 # For sno, ensure these values are commented out as they are not needed!

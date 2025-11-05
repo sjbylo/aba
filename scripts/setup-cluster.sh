@@ -38,13 +38,24 @@ fi
 
 echo_cyan "Creating '$name/cluster.conf' file for cluster type '$type'."
 
-create_cluster_cmd="scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip"
+create_cluster_opts="\
+	name=$name \
+	type=$type \
+	domain=$domain \
+	starting_ip=$starting_ip \
+	ports=$ports \
+	ingress_vip=$ingress_vip \
+	master_cpu_count=$master_cpu_count \
+	master_mem=$master_mem \
+	worker_cpu_count=$worker_cpu_count \
+	worker_mem=$worker_mem \
+	data_disk=$data_disk \
+	api_vip=$api_vip \
+	ingress_vip=$ingress_vip \
+	int_connection=$int_connection"
 
-[ "$DEBUG_ABA" ] && echo_white $create_cluster_cmd
-
-$create_cluster_cmd
-
-#scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip
+echo_debug Create cluster conf: scripts/create-cluster-conf.sh $(echo $create_cluster_opts | tr -d "\t" | tr -s " ")
+scripts/create-cluster-conf.sh $create_cluster_opts
 
 [ "$step" ] && target="$step"
 
@@ -63,8 +74,9 @@ fi
 
 # Let's be explicit, only run make if there is a given target, e.g. 'install' or 'iso' etc
 if [ "$target" ]; then
-	echo "$BASE_NAME: Running: make -s $target" >&2
-	[ "$target" ] && make -s $target
+	echo_debug "Running: make -s $target from $PWD"
+	#[ "$target" ] && make -s $target
+	make -s $target
 fi
 
 exit 0

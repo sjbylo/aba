@@ -58,10 +58,10 @@ catalog: ## Render all the latest Operators into a helper file which can be used
 	@make -C mirror catalog bg=$(bg)
 
 # These are the targets needed to create the 'bundle' archive
-.PHONY: bundle
+#.PHONY: bundle
 # Note: '@' used to ensure tar format is not corrupted when using out=-
-bundle:  ## Create an install bundle to be tranferred into the air-gapped env. Example: aba bundle --out /path/to/archive/bundle or -
-	@$(SCRIPTS)/make-bundle.sh $(out) $(force)
+#bundle:  ## Create an install bundle to be tranferred into the air-gapped env. Example: aba bundle --out /path/to/archive/bundle or -
+#	@$(SCRIPTS)/make-bundle.sh $(out) $(force)
 
 #.PHONY: save
 #save: ## Save images from the Internet to the image set archive file: aba/mirror/save/mirror_000001.tar
@@ -77,9 +77,9 @@ tarrepo:  ## Archive the full repo *excluding* the aba/mirror/mirror_*.tar files
 	@$(SCRIPTS)/backup.sh --repo $(out)
 
 #FIXME: Needed?
-.PHONY: inc
-inc:  ## (Deprecated) Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'aba tar'.
-	$(SCRIPTS)/backup.sh --inc $(out)
+#.PHONY: inc
+#inc:  ## (Deprecated) Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'aba tar'.
+#	$(SCRIPTS)/backup.sh --inc $(out)
 
 #.PHONY: load
 #load: ## Load the imaget set archive files into your mirror registry (as defined in aba/mirror/mirror.conf) 
@@ -101,25 +101,25 @@ inc:  ## (Deprecated) Create an incremental archive of the repo. The incremental
 #standard: aba.conf  ## (deprecated) Install a standard 3+3-node OpenShift cluster.  Use 'aba standard --step iso' to create the iso.
 #	$(SCRIPTS)/setup-cluster.sh name=$@ type=$@ target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
 
-.PHONY: cluster
-cluster:  aba.conf  ## Initialize install dir and install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
-	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
+#.PHONY: cluster
+#cluster:  aba.conf  ## Initialize install dir and install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
+#	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
 
 #FIXME: Remove?
-.PHONY: ask
-ask: ## Automatically accept the default answer to all prompts. Set 'ask' in aba.conf to 'true'.
-	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
-	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=true/g" aba.conf && echo value ask has been set to true in aba.conf.
-.PHONY: setask
-setask: ask
+#.PHONY: ask
+#ask: ## Automatically accept the default answer to all prompts. Set 'ask' in aba.conf to 'true'.
+#	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
+#	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=true/g" aba.conf && echo value ask has been set to true in aba.conf.
+#.PHONY: setask
+#setask: ask
 
-#FIXME: Remove?
-.PHONY: noask
-noask:  ## Always prompt.  Set 'ask' in aba.conf to 'false'
-	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
-	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf && echo value ask has been set to false in aba.conf.
-.PHONY: setnoask
-setnoask: noask
+##FIXME: Remove?
+#.PHONY: noask
+#noask:  ## Always prompt.  Set 'ask' in aba.conf to 'false'
+#	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
+#	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf && echo value ask has been set to false in aba.conf.
+#.PHONY: setnoask
+#setnoask: noask
 
 .PHONY: clean
 clean: ## Clean up all temporary files.

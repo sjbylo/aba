@@ -3,6 +3,9 @@
 
 source scripts/include_all.sh
 
+force=
+bundle_dest_path=""
+
 [ "$1" ] && bundle_dest_path=$1 && shift
 [ "$1" ] && force=true && shift
 [ "$1" ] && set -x
@@ -11,10 +14,9 @@ source scripts/include_all.sh
 install_rpms $(cat templates/rpms-external.txt) || exit 1
 
 source <(normalize-aba-conf)
-
 verify-aba-conf || exit 1
 
-[ ! "$bundle_dest_path" ] && echo_red "Error: missing install bundle filename! Example: /mnt/usb-media/my-bundle" >&2 && exit 1
+[ ! "$bundle_dest_path" ] && echo_error "missing install bundle filename! Example: /mnt/usb-media/my-bundle"
 
 if [ "$bundle_dest_path" = "-" ]; then
 	echo_cyan "An install bundle will be generated and written to standard output using the following parameters:" >&2
@@ -66,8 +68,8 @@ if [ "$bundle_dest_path" = "-" ]; then
 	echo "Downloading binary data." >&2
 
 	#make -s download save retry=7 2>&1 | cat -v >>.bundle.log
-	make -s -C cli download              >&2 || exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
-	make -s -C mirror       save retry=7 >&2 || exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
+	make -s -C cli download         >&2 || exit 1  # Add exit 1 here since if there is issue (e.g. op. index failed to d/l) should stop.
+	make -s -C mirror save retry=7	>&2 || exit 1
 
 	echo_cyan "Writing 'all-in-one' install bundle (tar format) to stdout ..." >&2
 	make -s tar out=-   # Be sure the output of this command is ONLY tar output!
@@ -81,11 +83,16 @@ if files_on_same_device mirror $bundle_dest_path; then
 	echo
 	sleep 2
 	#make download save tarrepo out="$bundle_dest_path" retry=7 || exit 1	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
-	aba -d cli download -d mirror save -d tarrepo --out "$bundle_dest_path" --retry 7 || exit 1	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
+	#aba -d cli download -d mirror save tarrepo --out "$bundle_dest_path" --retry 7 || exit 1	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
+	make -C cli download			|| exit 1
+	make -C mirror save retry=7 		|| exit 1	# Try save 8 times, then create archive of the repo ONLY, excluding large imageset files.
+	make tarrepo out="$bundle_dest_path"	|| exit 1
 else
 	echo_cyan "Creating 'all-in-one' install bundle (assuming destination file is on portable media or a different file-system) ..."
 	#make download save tar out="$bundle_dest_path" retry=7 || exit 1    	# Try save 8 times, then create all-in-one archive, including all files. 
-	aba -d cli download -d mirror save -d tar     --out "$bundle_dest_path" --retry 7 || exit 1    	# Try save 8 times, then create all-in-one archive, including all files. 
+	make -C cli download			|| exit 1
+	make -C mirror save retry=7		|| exit 1    	# Try save 8 times, then create all-in-one archive, including all files. 
+	make tar     out="$bundle_dest_path"	|| exit 1 
 fi
 
 exit 0

@@ -8,7 +8,8 @@
 #set -euo pipefail
 #set -o pipefail
 
-BASE_NAME=$(basename "$0")
+BASE_NAME="$(basename -- "$0")"  # Need the --
+
 
 # Check is sudo exists 
 SUDO=
@@ -93,6 +94,27 @@ color_demo() {
     echo_white       "white"
     echo_bright_white   "bright white"
 }
+
+echo_debug() {
+	[ "$DEBUG_ABA" ] && echo_bright_magenta "[DEBUG] $BASE_NAME: $*" >&2
+	return 0
+}
+
+echo_info() {
+	[ "$INFO_ABA" ] && echo_magenta "[INFO] $BASE_NAME: $*" >&2
+	return 0
+}
+
+echo_error() {
+	echo_red "$BASE_NAME: Error: $*" >&2
+	exit 1
+}
+
+echo_warn() {
+	echo_red "$BASE_NAME: Warn: $*" >&2
+	return 0
+}
+
 
 ####################
 

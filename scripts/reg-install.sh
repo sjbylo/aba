@@ -118,6 +118,7 @@ fqdn_ip=$(dig +short $reg_host | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}') || true
 if [ ! "$fqdn_ip" ]; then
 	echo
 	echo_red "Error: '$reg_host' does not resolve properly (IP address expected!)." >&2
+	echo_red "       Command used to check: dig +short $reg_host" >&2
 	echo_red "       Correct the problem and try again!" >&2
 	echo
 

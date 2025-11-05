@@ -6,6 +6,8 @@
 
 source scripts/include_all.sh
 
+echo_debug "Params: $*"
+
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
 inc= 				# Full backup by default (not incremental) 
 repo_only=			# Also include the save/mirror_*.tar files (for some use-cases it's more efficient to keep them separate) 
