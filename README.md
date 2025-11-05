@@ -1175,10 +1175,10 @@ Next:
 1. Start the OpenShift cluster
 1. Check “oc whoami” is working
 1. Delete old configuration, run:
-  1. oc delete cm registry-config -n openshift-config
-  1. oc delete catalogsource  redhat-operators -n openshift-marketplace
+   1. oc delete cm registry-config -n openshift-config
+   1. oc delete catalogsource  redhat-operators -n openshift-marketplace
 1. Create the <cluster>/cluster.conf file again (example uses 'sno'):
-  1. rm -rf sno; cluster -n sno -t sno -i 10.0.1.202 -s cluster.conf    # >>> change to YOUR cluster's starting IP address
+   1. rm -rf sno; cluster -n sno -t sno -i 10.0.1.202 -s cluster.conf    # >>> change to YOUR cluster's starting IP address
 1. aba -d sno day2    # Add back the OperatorHub conifguration.
 
 This SHOULD set up OperatorHub again.
