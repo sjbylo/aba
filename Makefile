@@ -1,5 +1,6 @@
 # Top level Makefile  # DO NOT remove this line!
 
+# Make! Be silent, unless in debug mode
 ifndef DEBUG_ABA
 .SILENT:
 endif

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251102120409
+ABA_VERSION=20251104161341
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -546,14 +546,29 @@ do
 			echo_red "Argument invalid [$2] after option $1" >&2
 		fi
 		shift 2
+#	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
+#		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+#		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+#			BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'"  # FIXME: This is confusing and prone to error
+#		else
+#			echo_red "Argument invalid [$2] after option $1" >&2
+#		fi
+#		shift 2
+#
+#
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-			BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'"  # FIXME: This is confusing and prone to error
+			if [ -f cluster.conf ]; then
+				replace-value-conf -n starting_ip -v $2 -f cluster.conf
+			else
+				BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'" # FIXME: Still needed?
+			fi
 		else
 			echo_red "Argument invalid [$2] after option $1" >&2
 		fi
 		shift 2
+
 	elif [ "$1" = "--data-disk" -o "$1" = "-dd" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
@@ -665,6 +680,105 @@ do
 			# Assume it's a kube command by default
 			BUILD_COMMAND="$BUILD_COMMAND cmd cmd='$cmd'"
 			[ "$DEBUG_ABA" ] && echo $0: BUILD_COMMAND=$BUILD_COMMAND >&2
+		fi
+	elif [ "$1" = "create" ]; then # Ignore this arg
+		shift
+	elif [ "$1" = "clux" ]; then  #FIXME: THIS IS EXPERIMENTAL ONLY! Change to 'cluster' once tested.
+		[ ! "$1" ] && echo_red "Missing options after '$1'" >&2 && exit 1
+		shift
+		while [ "$*" ] 
+		do
+			if [ "$1" = "--name" -o "$1" = "-n" ]; then
+				[[ -z "$2" || "$2" =~ ^- ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+
+				name="$2"
+				is_valid_dns_label $name
+				shift 2
+			elif [[ "$1" == "--type" || "$1" == "-t" ]]; then
+				[[ -z "$2" || "$2" =~ ^- ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+
+				case "$2" in
+					sno|compact|standard)
+						type=$2
+					;;
+					*)
+						echo_red "Error: Invalid type '$2'. Expected one of: sno, compact, standard." >&2
+						exit 1
+					;;
+				esac
+				shift 2
+			elif [[ "$1" == "--starting-ip" || "$1" == "-i" ]]; then
+				[[ -z "$2" || "$2" =~ ^- ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+				starting_ip="$2"
+				shift 2
+			elif [[ "$1" == "--step" || "$1" == "-s" ]]; then
+				[[ -z "$2" || "$2" =~ ^- ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+				step="$2"
+				shift 2
+			elif [[ "$1" == "--ports" || "$1" == "-p" ]]; then
+				shift
+				ports_vals=
+				# While there is a valid arg (not an opt)...
+				while [[ ! (-z "$1" || "$1" =~ ^-) ]]
+				do
+					[ "$ports_vals" ] && ports_vals="$ports_vals,$1" || ports_vals="$1"
+					[ "$DEBUG_ABA" ] && echo ports_vals=$ports_vals
+					shift	
+				done
+			elif [[ "$1" == "--int-connection" || "$1" == "-I" ]]; then
+				# Optional argument: connection method (proxy|direct)
+				int_connection=
+
+				# Check if next arg exists and is not another option (starting with '-')
+				if [[ -n "$2" && "$2" != -* ]]; then
+					case "$2" in
+						proxy|p)
+							int_connection="proxy"
+							;;
+						direct|d)
+							int_connection="direct"
+							;;
+						*)
+							echo_red "Error: Invalid argument [$2] after option '$1'. Expected one of: proxy, direct." >&2
+							exit 1
+							;;
+					esac
+					shift
+				else
+					# No argument provided — clear existing value in cluster.conf
+					int_connection=""
+				fi
+				shift
+			elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
+				[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+				if echo "$2" | grep -q -E '^[0-9]+$'; then
+					master_mem=$2
+				else
+					echo_red "$(basename $0): Error: no such option after 'clux': $1" >&2
+					exit 1
+				fi
+				shift 2
+			elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
+				[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
+				if echo "$2" | grep -q -E '^[0-9]+$'; then
+					master_cpu_count=$2
+				else
+					echo_red "$(basename $0): Error: no such option after 'clux': $1" >&2
+					exit 1
+				fi
+				shift 2
+			fi
+		done
+
+		## Process "clux" command args ##
+
+		if [ "$name" ]; then
+			# Create cluster dir and cluster.conf
+			[ "$DEBUG_ABA" ] && echo scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
+			scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
+		else
+			echo_red "Error: Must provide at least --name after 'clux'" >&2
+			exit 1
 		fi
 	else
 		if echo "$1" | grep -q "^-"; then
@@ -803,7 +917,7 @@ if [ ! -f .bundle ]; then
 
 		echo_white -n "Fetching available versions (please wait!) ..."
 
-		[ "$ABA_DEBUG" ] && echo_white "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt" >&2
+		[ "$DEBUG_ABA" ] && echo_white "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt" >&2
 
 		if ! release_text=$(curl -f --connect-timeout 30 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
 			[ "$TERM" ] && tput el1 && tput cr
@@ -816,7 +930,7 @@ if [ ! -f .bundle ]; then
 		channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 		default_ver=$channel_ver
 
-		[ "$ABA_DEBUG" ] && echo_white "Looking up previous version at using fetch_previous_version $ocp_channel $arch_sys" >&2
+		[ "$DEBUG_ABA" ] && echo_white "Looking up previous version at using fetch_previous_version $ocp_channel $arch_sys" >&2
 
 		channel_ver_prev=$(fetch_previous_version "$ocp_channel" "$arch_sys")
 
@@ -863,7 +977,6 @@ if [ ! -f .bundle ]; then
 		done
 
 		# Update the conf file
-		#sed -i "s/ocp_version=[^ \t]*/ocp_version=$target_ver /g" aba.conf
 		replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
 		echo_cyan "'ocp_version' set to '$target_ver' in aba.conf"
 
