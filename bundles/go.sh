@@ -51,9 +51,9 @@ echo Starting $0 at $(date)
 arr_op_set=();			arr_name=()
 arr_op_set+=("ocp");		arr_name+=(ocp)
 arr_op_set+=("ocp odf ocpv");	arr_name+=(ocpv)
-#arr_op_set+=("ai"); 		arr_name+=(ai)
-#arr_op_set+=("ocp ai"); 	arr_name+=(ai)
-#arr_op_set+=("ocp gpu ai"); 	arr_name+=(aiall)
+###arr_op_set+=("ai"); 		arr_name+=(ai)
+###arr_op_set+=("ocp ai"); 	arr_name+=(ai)
+###arr_op_set+=("ocp gpu ai"); 	arr_name+=(aiall)
 arr_op_set+=("ocp mesh3");	arr_name+=(mesh3)
 arr_op_set+=("ocp sec");	arr_name+=(sec)
 
@@ -70,9 +70,9 @@ versions=()
 for v in $vers_track
 do
 	ver=
-	echo Checking for version stable-4.$v ...
-	ver=$(curl -f --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/stable-4.$v/release.txt | grep ^Name: | awk '{print $NF}')
-	[ ! "$ver" ] && echo "Cannot find release for $v at https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/stable-4.$v/release.txt" >&2 && continue
+	echo Checking for version fast-4.$v ...
+	ver=$(curl -f --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/fast-4.$v/release.txt | grep ^Name: | awk '{print $NF}')
+	[ ! "$ver" ] && echo "Cannot find release for $v at https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/fast-4.$v/release.txt" >&2 && continue
 	versions+=("$ver")
 done
 
@@ -105,14 +105,15 @@ do
 				echo "##################################################"
 				[ "$NOTIFY" ] && echo -e "Install bundle $ver-$name ($op_sets)\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2
 				echo Quitting $0 at $(date)
-				#exit 1
+
+				exit 1  # Exit if we want to check what failed
 			fi
 		done
 	else
 		[ "$NOTIFY" ] && echo -e "Install bundle $ver-base\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2 
 		echo Bundle create failed $0 at $(date)
 
-		#exit 1   # If the base does not work, then give up for the rest of the bundle types
+		exit 1 #Exit if we want to check what failed   # If the base does not work, then give up for the rest of the bundle types
 	fi
 done
 
