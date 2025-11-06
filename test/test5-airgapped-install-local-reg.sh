@@ -357,13 +357,13 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 
 #### DONE ABOVE NOW !!! test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing $cluster_type cluster, ready to deploy test app" "aba --dir $subdir/aba $cluster_type"
 
-myLog "Deploying test vote-app from: $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app"
+mylog "Deploying test vote-app from: $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
 test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
 
-myLog "Deploying test vote-app from: quay.io/sjbylo/flask-vote-app:latest using ImageDigestMirrorSet"
+mylog "Deploying test vote-app from: quay.io/sjbylo/flask-vote-app:latest using ImageDigestMirrorSet"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
 test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
 
@@ -474,7 +474,8 @@ done
 
 if [ "$oc_mirror_version" = "v2" ]; then
 	# Create fresh file for v2
-	test-cmd -m "Restore the image set config file for the cluster release images" "head -11 mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml"
+	# head -12, the header including the "shortestPath"
+	test-cmd -m "Restore the image set config file for the cluster release images" "head -12 mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml"
 #tee -a mirror/save/imageset-config-save.yaml <<END
 #kind: ImageSetConfiguration
 #apiVersion: mirror.openshift.io/$gvk
