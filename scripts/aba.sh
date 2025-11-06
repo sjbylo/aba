@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251104161341
+ABA_VERSION=20251106154525
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -98,17 +98,17 @@ if [ ! -f $ABA_ROOT/aba.conf ]; then
 else
 	# If the bundle has empty network valus in aba.conf, add defaults - as now is the best time (on internal network).
 	# For pre-created bundles, aba.conf will exist but these values will be missing... so attempt to fill them in. 
-	source <(normalize-aba-conf)
+	source <(cd $ABA_ROOT && normalize-aba-conf)
 	# Determine resonable defaults for ...
-	[ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f aba.conf
-	[ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f aba.conf
-	[ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f aba.conf
-	[ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f aba.conf
-	[ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f aba.conf
+	[ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f $ABA_ROOT/aba.conf
+	[ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f $ABA_ROOT/aba.conf
+	[ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f $ABA_ROOT/aba.conf
+	[ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f $ABA_ROOT/aba.conf
+	[ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f $ABA_ROOT/aba.conf
 fi
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
-source <(normalize-aba-conf)
+source <(cd $ABA_ROOT && normalize-aba-conf)
 
 interactive_mode=1
 #interactive_mode_none=1
