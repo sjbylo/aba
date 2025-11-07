@@ -15,7 +15,6 @@ CLOUD_DIR=/nas/redhat/aba-openshift-install-bundles
 # ===========================
 
 _color_echo() {
-	set +x
 	local color="$1"; shift
 	local text
 
@@ -39,27 +38,30 @@ _color_echo() {
 	else
 		echo -e $n_opt "$text"
 	fi
-	set -x
 }
 
 # Standard 8 colors
-echo_black()   { _color_echo 0 "$@"; }
-echo_red()     { _color_echo 1 "$@"; }
-echo_green()   { _color_echo 2 "$@"; }
-echo_yellow()  { _color_echo 3 "$@"; }
-echo_blue()    { _color_echo 4 "$@"; }
-echo_magenta() { _color_echo 5 "$@"; }
-echo_cyan()    { _color_echo 6 "$@"; }
-echo_white()   { _color_echo 7 "$@"; }
+echo_black()   { set +x; _color_echo 0 "$@"; set -x; }
+echo_red()     { set +x; _color_echo 1 "$@"; set -x; }
+echo_green()   { set +x; _color_echo 2 "$@"; set -x; }
+echo_yellow()  { set +x; _color_echo 3 "$@"; set -x; }
+echo_blue()    { set +x; _color_echo 4 "$@"; set -x; }
+echo_magenta() { set +x; _color_echo 5 "$@"; set -x; }
+echo_cyan()    { set +x; _color_echo 6 "$@"; set -x; }
+echo_white()   { set +x; _color_echo 7 "$@"; set -x; }
 
 echo_step() {
+	set +x
 	echo
         echo_green "##################"
         echo_green $@
         echo_green "##################"
+	set -x
 }
 
 export ABA_TESTING=1   # No stats recorded
+
+set -x
 
 . ~steve/.proxy-set.sh  # Go online!
 
@@ -90,6 +92,33 @@ fi
 which notify.sh 2>/dev/null && NOTIFY=1
 [ "$NOTIFY" ] && echo Working on bundle: $BUNDLE_NAME ... | notify.sh
 
+######################
+
+# Remove quay 
+if [ -d $WORK_DIR/test-install/aba ]; then
+	(
+		cd $WORK_DIR/test-install/aba
+		./install  # install aba
+		aba -d mirror uninstall -y
+		sudo rm -rf ~/quay-install
+	)
+fi
+
+# Remove any quay 
+if podman ps | grep registry; then
+	# Uninstall Quay
+	./install  # install aba
+	aba -A
+	#aba uninstall  || true
+	./mirror-registry uninstall --autoApprove -v || true
+	sudo rm -rf ~/quay-install
+	./mirror-registry uninstall --autoApprove -v || true
+	podman rmi `podman images -q` ##--force
+fi
+sudo rm -rf ~/quay-install
+
+######################
+
 # Init ...
 rm -rf $WORK_DIR/*
 mkdir -p $WORK_DIR $WORK_BUNDLE_DIR $WORK_BUNDLE_DIR_BUILD
@@ -118,35 +147,11 @@ rm -rf aba
 
 # Install aba from the Internet
 set +x
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 cd aba
 ####./install  # Done above
 set -x
-
-# Remove quay 
-if [ -d $WORK_DIR/test-install/aba ]; then
-	(
-		cd $WORK_DIR/test-install/aba
-		./install  # install aba
-		aba -d mirror uninstall -y
-		sudo rm -rf ~/quay-install
-	)
-fi
-
-# Remove any quay 
-if podman ps | grep registry; then
-	# Uninstall Quay
-	./install  # install aba
-	aba -A
-	#aba uninstall  || true
-	./mirror-registry uninstall --autoApprove -v || true
-	sudo rm -rf ~/quay-install
-	./mirror-registry uninstall --autoApprove -v || true
-	podman rmi `podman images -q` --force
-fi
-sudo rm -rf ~/quay-install
-
 
 # Create bundle? 
 echo Create the bundle in $WORK_BUNDLE_DIR ...
@@ -213,7 +218,7 @@ echo_step Save images to disk ...
 rm -rf ~/.oc-mirror  # We don't want to include all the older images?!?!
 aba -d mirror save -r 8
 
-rm -rf ~/.oc-mirror  # We need some storage back!
+###rm -rf ~/.oc-mirror  # We need some storage back!
 
 echo_step Create the install bundle files ...
 
@@ -256,6 +261,8 @@ rm -rf $WORK_DIR/aba # Remove the unneeded repo to save space
 echo_step Going offline to test the install bundle ...
 . ~steve/.proxy-unset.sh   # Go offline!
 
+# Should we delete here since we want to simulate a fresh/empty internal bastion?
+###rm -rf ~/.oc-mirror  # We need some storage back!
 
 #####################################################
 # Test the install bundle works for SNO
@@ -273,6 +280,9 @@ echo_step Unpack the install bundle ...
 
 cat $WORK_BUNDLE_DIR/ocp_* | tar xvf -
 
+# Uninstall old version of aba
+if which aba; then sudo rm -fv $(which aba); fi
+
 cd aba
 
 # Switch to vmw for testing
@@ -285,6 +295,16 @@ aba -A
 
 echo_step Install Quay and load the images ...
 
+echo_step Show podman ps output
+podman ps
+
+echo pwd=$PWD
+
+ls -lta mirror 
+
+echo -n "Pausing: "
+read -t 60 yn || true
+
 #rm -rf ~/.oc-mirror  # We need some storage back! # FIXME: The cache gets filled again!
 #aba -d mirror load --retry 7 -H $TEST_HOST -k \~/.ssh/id_rsa
 aba -d mirror load --retry 7 -H $TEST_HOST
@@ -296,7 +316,7 @@ echo "Quay installed: ok" >> $WORK_TEST_LOG
 echo "All images loaded (disk2mirror) into Quay: ok" >> $WORK_TEST_LOG
 
 echo_step Create the cluster ...
-aba cluster --name sno4 --type sno --starting-ip 10.0.1.204 --mmem 20 --mcpu 10
+aba cluster --name sno4 --type sno --starting-ip 10.0.1.204 --mmem 20 --mcpu 10 --step install
 
 echo_step Test this cluster type: $NAME ...
 

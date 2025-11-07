@@ -50,11 +50,11 @@ echo Starting $0 at $(date)
 # Define the operator sets and subsets 
 arr_op_set=();			arr_name=()
 arr_op_set+=("ocp");		arr_name+=(ocp)
+arr_op_set+=("ocp mesh3");	arr_name+=(mesh3)
 arr_op_set+=("ocp odf ocpv");	arr_name+=(ocpv)
 ###arr_op_set+=("ai"); 		arr_name+=(ai)
 ###arr_op_set+=("ocp ai"); 	arr_name+=(ai)
 ###arr_op_set+=("ocp gpu ai"); 	arr_name+=(aiall)
-arr_op_set+=("ocp mesh3");	arr_name+=(mesh3)
 arr_op_set+=("ocp sec");	arr_name+=(sec)
 
 export OC_MIRROR_CACHE=$HOME  # Set this so that multiple oc-mirror invocations can use the cache and we save time & bandwidth.
@@ -100,9 +100,10 @@ do
 			echo Running: bundle-create-test.sh $ver $name $op_sets
 			sleep 1
 			if ! ./bundle-create-test.sh $ver $name $op_sets; then
-				echo "##################################################"
+				echo "##################################################" >&2
 				echo "Failed: bundle $ver-$name ($op_sets) at $(date)" >&2
-				echo "##################################################"
+				echo "##################################################" >&2
+				echo Showing last log lines:  >&2
 				[ "$NOTIFY" ] && echo -e "Install bundle $ver-$name ($op_sets)\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2
 				echo Quitting $0 at $(date)
 
@@ -110,7 +111,11 @@ do
 			fi
 		done
 	else
-		[ "$NOTIFY" ] && echo -e "Install bundle $ver-base\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2 
+		echo "##################################################" >&2
+		echo "Failed: bundle ${ver}-base at $(date)" >&2
+		echo "##################################################" >&2
+		echo Showing last log lines:  >&2
+		[ "$NOTIFY" ] && echo -e "Install bundle ${ver}-base\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2 
 		echo Bundle create failed $0 at $(date)
 
 		exit 1 #Exit if we want to check what failed   # If the base does not work, then give up for the rest of the bundle types
