@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251106163239
+ABA_VERSION=20251107181625
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -31,17 +31,23 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
 fi
 
+interactive_mode=1
+
 # Check the repo location
 # Need to be sure location of the top of the repo in order to find the important files
 # FIXME: Place the files (scripts and templates etc) into a well known location, e.g. /opt/aba/...
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
 	ABA_ROOT=$PWD
+	###interactive_mode=1
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
 	ABA_ROOT=$(realpath "..")
+	interactive_mode=
 elif [ -s ../../Makefile ] && grep -q "Top level Makefile" ../../Makefile; then
 	ABA_ROOT=$(realpath "../..")
+	interactive_mode=
 elif [ -s ../../../Makefile ] && grep -q "Top level Makefile" ../../../Makefile; then
 	ABA_ROOT=$(realpath "../../..")
+	interactive_mode=
 else
 	# Give an error to change to the top level dir. Text must be coded here.
 	(
@@ -110,9 +116,6 @@ fi
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
 source <(cd $ABA_ROOT && normalize-aba-conf)
 
-interactive_mode=1
-#interactive_mode_none=1
-#[ "$*" ] && interactive_mode_none=1 && interactive_mode=
 [ "$*" ] && interactive_mode=
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
@@ -138,7 +141,6 @@ do
 		exit 0
 	elif [ "$1" = "--interactive" ]; then
 		interactive_mode=1
-		#interactive_mode_none=
 		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
 		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
 		shift
@@ -813,28 +815,26 @@ BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $
 [ ! "$BUILD_COMMAND" -a "$ABA_ROOT" = "." ] && interactive_mode=1
 
 if [ ! "$interactive_mode" ]; then
-	if [ "$DEBUG_ABA" ]; then
-		echo_magenta "DEBUG: $0: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
-		read -t 10 || true
-	fi
-
-	# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
 	# Only run make if there's a target
 	if [ "$BUILD_COMMAND" ]; then
-		[ "$DEBUG_ABA" ] && eval make $BUILD_COMMAND || eval make -s $BUILD_COMMAND
+		if [ "$DEBUG_ABA" ]; then
+			echo_magenta "DEBUG: $0: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
+			read -t 10 || true
+
+			# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
+			eval make $BUILD_COMMAND
+		else
+			# eval needed since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
+			# Run make in silent mode
+			eval make -s $BUILD_COMMAND
+		fi
 	fi
 
 	exit 
 fi
 
-##################################################################
-# We don't want interactive mode if there were args in the command
-#[ "$interactive_mode_none" ] && echo Exiting ... >&2 && exit 
-##[ "$interactive_mode_none" ]                          && exit 
-
 # Change to the top level repo directory
 cd $ABA_ROOT
-
 
 # ###########################################
 # From now on it's all considered INTERACTIVE
@@ -842,7 +842,7 @@ cd $ABA_ROOT
 # If in interactive mode then ensure all prompts are active!
 ### replace-value-conf aba.conf ask true   # Do not make this permanent!
 source <(normalize-aba-conf)
-export ask=1
+export ask=1  # In interactive mode let's use the safe option!
 
 #verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_version or channel defined
 
