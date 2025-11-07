@@ -1,8 +1,10 @@
 #!/bin/bash -e
 # Create an install bundle and test it's working by installing SNO
 
-TEST_HOST=mirror.example.com  # Adjust this as needed
-BASE_DOM=example.com
+#TEST_HOST=mirror.example.com  # Adjust this as needed
+#BASE_DOM=example.com
+BASE_DOM=$(hostname -d)
+TEST_HOST=$(hostname -s).$BASE_DOM  # Adjust this as needed
 PS_FILE='~/.pull-secret.json'
 # Change these two paths where there's a lot of space!
 WORK_DIR=$PWD/work
