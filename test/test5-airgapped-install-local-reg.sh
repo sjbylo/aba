@@ -193,7 +193,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Verifying existance of file
 test-cmd -m  "Delete this file that's already been copied to internal bastion: 'mirror/save/mirror_*.tar'" "rm -v mirror/save/mirror_*.tar" 
 
 # FIXME: aba should do this?
-ssh $reg_ssh_user@$int_bastion_hostname "rpm -q make || sudo yum install make -y"
+####ssh $reg_ssh_user@$int_bastion_hostname "rpm -q make || sudo yum install make -y"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 5 3 -m "Checking regcreds/ does not exist on $int_bastion_hostname" "test ! -d $subdir/aba/mirror/regcreds" 
 
@@ -211,18 +211,13 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Install Docker reg."
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Verify Docker reg." "aba -d $subdir/aba/mirror verify" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Load images to Docker reg." "aba -d $subdir/aba/mirror load --retry" 
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/bk.cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 # TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set archive file to make space: '$subdir/aba/mirror/save/mirror_*.tar'" "rm -v $subdir/aba/mirror/save/mirror_*.tar" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Tidying up internal bastion" "rm -rf $subdir/aba/sno" 
 
-mylog "Running 'aba cluster -n sno -t sno --starting-ip 10.0.1.201' on internal bastion"
-
 ### INSTALL SNO ###
-
-#FIXME: eliminiate shortcuts.conf ... it was a bad idea! Use lags/options instead!
-#test-cmd -m "Copy over shortcuts.conf, needed to create 'cluster.conf' file (next command)" scp .shortcuts.conf $reg_ssh_user@$int_bastion_hostname:$subdir/aba/shortcuts.conf
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno cluster.conf" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"
@@ -230,6 +225,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node memory to 24 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 -s install" 
 
 test-cmd -m "Sleep 30" sleep 30
+
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
@@ -263,7 +259,7 @@ mylog Runtest: vote-app
 # For v1, we always append to the isc file (not sure what is the best practice).
 [ "$oc_mirror_version" = "v1" ] && gvk=v1alpha2 || gvk=v2alpha1
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
-[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
 if [ "$oc_mirror_version" = "v2" ]; then
 # Create fresh file for v2
 tee mirror/save/imageset-config-save.yaml <<END
@@ -285,17 +281,24 @@ END
 test-cmd -r 3 1 -m "Saving ubi images to local disk on `hostname`" "aba --dir mirror save --retry"
 
 mylog Copy tar+ssh archives to internal bastion
-## aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir - xvf -
-aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
-#### FIXME: test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file does not exist yet" "test ! -f $subdir/aba/mirror/save/mirror_seq2_000000.tar"
-test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
+
+#### DO NOT USE #### aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
+
+test-cmd -m "Listing content of save/ dir" "ls -lh mirror/save/"
+test-cmd -m "Checking for image set archive files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
+test-cmd -m "Checking for image set config files that need to be copied also" "ls -lh mirror/save/imageset*yaml"
+
+
+
 test-cmd -m "Copy over image set archive 2 file" "scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Verify image set archive 2 file" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
+
 test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set conf file exists" "ls -lh $subdir/aba/mirror/save/imageset-config-save.yaml"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading UBI images into mirror" "cd $subdir; aba -d aba/mirror load --retry" 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/bk.cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/sno day2"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests'"
@@ -305,7 +308,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
-[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
 if [ "$oc_mirror_version" = "v2" ]; then
 # Create fresh file for v2
 tee mirror/save/imageset-config-save.yaml <<END
@@ -326,19 +329,24 @@ END
 
 test-cmd -r 3 3 -m "Saving vote-app image to local disk" "aba --dir mirror save --retry" 
 
-mylog Copy repo only to internal bastion
-aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
+# FIXME: Is this causing the problem? ... overwriting working dir? 
+### DO NOT DO THIS ### mylog Copy repo only to internal bastion
+### DO NOT DO THIS ### aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
 
+test-cmd -m "Listing mirror/save/" "ls -lh mirror/save/"
 test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
-test-cmd -m "Copy extra image set tar file to internal bastion" scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save
-test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
+test-cmd -m "Listing image set conf file that need to be copied also" "ls -lh mirror/save/imageset-config-save.yaml"
+
+test-cmd -m "Copy extra image set tar file to internal bastion"		scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Delete the image set tar file that was saved and copied"	rm -v mirror/save/mirror_*.tar
+
 test-cmd -m "Copy over image set conf file" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 
-#test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_*.tar"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $(ls -tr $subdir/aba/mirror/save/mirror_*.tar | tail -1)"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "test -f $subdir/aba/mirror/save/mirror_000001.tar"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading vote-app image into mirror" "aba -d $subdir/aba/mirror load --retry" 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/bk.cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/sno day2"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests'"
@@ -349,13 +357,13 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 
 #### DONE ABOVE NOW !!! test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing $cluster_type cluster, ready to deploy test app" "aba --dir $subdir/aba $cluster_type"
 
-myLog "Deploying test vote-app from: $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app"
+mylog "Deploying test vote-app from: $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
 test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type --cmd 'oc rollout status deployment vote-app -n demo'"
 
-myLog "Deploying test vote-app from: quay.io/sjbylo/flask-vote-app:latest"
+mylog "Deploying test vote-app from: quay.io/sjbylo/flask-vote-app:latest using ImageDigestMirrorSet"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc delete project demo || true'" 
 test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type --cmd 'oc new-project demo'" 
 
@@ -381,11 +389,10 @@ test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" 
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-mylog 
 mylog "Append svc mesh (note: kiali op. installed already) operators to imageset conf using v$ocp_ver_major ($ocp_version)"
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
-[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
 if [ "$oc_mirror_version" = "v2" ]; then
 tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
@@ -413,7 +420,6 @@ END
 
 test-cmd -m "Checking for file mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml" "test -s mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml"
 test-cmd -m "Checking for servicemeshoperator3 in mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 servicemeshoperator3$"
-### Added from op-set 'abatest' test-cmd -m "Checking for kiali-ossm in mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 kiali-ossm$"
 
 # This header is needed for both v1 and v2
 tee -a mirror/save/imageset-config-save.yaml <<END
@@ -425,24 +431,23 @@ END
 # Append the correct values for each operator
 mylog Append sm and kiali operators to imageset conf
 grep -A2 -e "name: servicemeshoperator3$"  mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
-### Added from op-set 'abatest' grep -A2 -e "name: kiali-ossm$"	          mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
 ########
 test-cmd -r 3 3 -m "Saving mesh operators to local disk" "aba --dir mirror save --retry"
 
-### ADDED
+test-cmd -m "Show content of dir/" "ls -lh mirror/save/"
 test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
 test-cmd -m "Copy over image set archive file" "scp mirror/save/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp mirror/save/imageset-config-save.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
-### ADDED
+
 ## REMOVED #mylog Create incremental tar and ssh to internal bastion
 ## REMOVED test-cmd -m "Create incremental tar and ssh to internal bastion" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -"
 ## REMOVED test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load --retry" # Run from mirror dir
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading images to mirror" "cd $subdir/aba/mirror; aba load --retry" # Run from mirror dir this time
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/bk.cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
@@ -464,15 +469,15 @@ do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/$cluster_type --cmd 'oc get packagemanifests' | grep -i $op"
 done
 
-## REMOVE jaeger # ##mylog "Checking for jaeger-product in mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml"
-## REMOVE jaeger # test-cmd -m "Checking jaeger-product operator exists in the catalog file" "cat mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | grep jaeger-product$"
-
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
-[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
+[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
 
 if [ "$oc_mirror_version" = "v2" ]; then
 	# Create fresh file for v2
-	test-cmd -m "Restore the image set config file for the cluster release images" "head -11 mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml"
+	# head -13, the header including the "shortestPath" and "graph: true" lines
+	#test-cmd -m "Restore the image set config file for the cluster release images" "head -13 mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml"
+	# Safer to use sed: output the lines between A,B
+	test-cmd -m "Restore the image set config file for the cluster release images" "sed -n '/File generated by aba/,/graph: true/p' mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml"
 #tee -a mirror/save/imageset-config-save.yaml <<END
 #kind: ImageSetConfiguration
 #apiVersion: mirror.openshift.io/$gvk
@@ -485,19 +490,12 @@ END
 fi
 # For oc-miror v2
 
-## REMOVE jaeger # mylog Appending jaeger operator to imageset conf
-## REMOVE jaeger # grep -A2 -e "name: jaeger-product$"		mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
-
 ## upgrade tests
 mylog Appending cincinnati operator to imageset conf
 grep -A2 -e "name: cincinnati-operator$"	mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
 
 ####### upgrade cluster?  Change channel from stable (as set above) to "fast"
-# DONE ABOVE NOW ocp_version_desired=$ocp_version
-# DONE ABOVE NOW ocp_version_major=$(echo $ocp_version | cut -d\. -f1-2)
-# DONE ABOVE NOW ocp_version_point=$(echo $ocp_version | cut -d\. -f3)
-# DONE ABOVE NOW let ocp_version_point=$ocp_version_point+1   # Assuming there is 1 higher version in the fast channel
-# DONE ABOVE NOW ocp_version_desired=$ocp_version_major.$ocp_version_point
+
 test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml 
 mylog "Update channel, shortestPath and maxVersion in the mirror/save/imageset-config-save.yaml"
 sed -i "s/^    - name: stable-$ocp_version_major/    - name: fast-$ocp_version_major/g" mirror/save/imageset-config-save.yaml   # Switch to fast channel
@@ -506,11 +504,9 @@ sed -i "s/^#      shortestPath: true.*/      shortestPath: true/g" mirror/save/i
 test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml 
 ####### upgrade cluster?
 
-## REMOVE jaeger # test-cmd -r 3 3 -m "Saving jaeger and cincinnati operator images to local disk" "aba --dir mirror save --retry"
 test-cmd -r 3 3 -m "Saving cincinnati operator images to local disk" "aba --dir mirror save --retry"
 
 mylog Downloading the mesh demo into test/mesh, for use by deploy script
-
 (
 	pwd && \
 	rm -rf test/mesh && mkdir test/mesh && cd test/mesh && \
@@ -525,18 +521,20 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 mylog Copy tar+ssh archives to internal bastion
 rm -f test/mirror-registry-amd64.tar.gz  # No need to copy this over!
 
-#test-cmd -r 2 2 -m "Running incremental tar copy to $reg_ssh_user@$int_bastion_hostname:$subdir" "aba --dir mirror inc --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf - "
+test-cmd -m "Listing mirror/save/" "ls -lh mirror/save/"
+test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/save/mirror_*.tar"
+test-cmd -m "Listing image set conf file that need to be copied also" "ls -lh mirror/save/imageset-config-save.yaml"
+
 test-cmd -m "Copy mirror archive and ISC file to $reg_ssh_user@$int_bastion_hostname:$subdir" "scp mirror/save/mirror*tar mirror/save/imageset*yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Verify image set archive 2 file" "ls -lh $subdir/aba/mirror/save/mirror_*.tar"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set conf file exists" "ls -lh $subdir/aba/mirror/save/imageset-config-save.yaml"
 
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 
-## REMOVE jaeger # test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading jaeger and cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba -d mirror load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated files" cp -rp $subdir/aba/mirror/save/working-dir/cluster-resources $subdir/bk.cluster-resources.$(date "+%Y-%m-%d-%H:%M:%S")
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
-
-#test-cmd -m "Pausing for 90s to let OCP settle" sleep 90    # For some reason, the cluster was still not fully ready in tests!
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator status" aba --dir $subdir/aba/$cluster_type --cmd
 
@@ -544,7 +542,6 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "s
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
-#test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|                                              awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
@@ -556,6 +553,7 @@ test-cmd -m "Sleep 2m" sleep 2m
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type --cmd 'oc get packagemanifests'"
 
 #### Do upgrade
+
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Waiting for 'cincinnati-operator' to become available ..." "i=0; until oc get packagemanifests | grep ^cincinnati-operator; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Run 'day2-osus' to install the update service" "aba --dir $subdir/aba/sno day2-osus"  # Install Update Service
 test-cmd -m "Sleeping 90s" sleep 90
@@ -567,8 +565,9 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show available version[0]" "
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show available versions" "oc get clusterversion version -o jsonpath='{.status.availableUpdates[*].version}'; echo"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
-#test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|                                              awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 8 5 "cd $subdir/aba/sno; i=0; until oc adm upgrade --to-latest=true --allow-not-recommended; do let i=\$i+1; [ \$i -gt 3 ] && exit 1; sleep 20; done" 
@@ -576,17 +575,15 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and 
 test-cmd -m "Sleeping 60s" sleep 60
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc adm upgrade --include-not-recommended" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show desired cluster version" "oc get clusterversion version -o jsonpath='{.status.desired.version}'; echo"
-#test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "{ oc get clusterversion version -o jsonpath='{.status.desired.version}'; oc get clusterversion version -o jsonpath='{.status.conditionalUpdates[].release.version}'; } | grep $ocp_version_desired" # This may detect a non-recommended version
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep $ocp_version_desired" # This may detect a non-recommended version
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check update  $ocp_version_desired" "oc adm upgrade | grep \"^info: An upgrade is in progress. Working towards $ocp_version_desired:\""
-#### Do upgrade
 
-# Wait for https://docs.openshift.com/container-platform/4.11/openshift_images/image-configuration.html#images-configuration-cas_image-configuration 
-#test-cmd -m "Pausing for 60s to let OCP settle" sleep 60  # And wait for https://access.redhat.com/solutions/5514331 to take effect 
+#### Do upgrade done
 
 # Needed for acm-subs.yaml
 test-cmd -m "Copy over test dir for the deploy-mesh.sh file" scp -rp test $TEST_USER@$int_bastion_hostname:$subdir/aba
 # FIXME: 
+
 ###  THIS STOPPED WORKING ### test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
 
 # Restart cluster test 
