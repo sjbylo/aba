@@ -53,7 +53,11 @@ cp install-config.yaml agent-config.yaml $ASSETS_DIR
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
 echo_yellow "Running: $openshift_install_mirror agent create image --dir $ASSETS_DIR "
-$openshift_install_mirror agent create image --dir $ASSETS_DIR $opts
+if ! $openshift_install_mirror agent create image --dir $ASSETS_DIR $opts; then
+	rm -f $ASSETS_DIR/agent.*.iso
+
+	exit 1
+fi
 
 # FIXME: to implement PXE 
 #$openshift_install_mirror agent create pxe-files --dir $ASSETS_DIR
