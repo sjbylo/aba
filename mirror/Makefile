@@ -132,7 +132,7 @@ REG_IMAGE = docker.io/library/registry:latest
 REG_FILE  = docker-reg-image.tgz
 ###.PHONY: docker-reg-image.tgz
 docker-reg-image.tgz:  ## Download the docker registry image as an alternative to Quay registry
-	echo "Downloading docker registry to $(REG_FILE) ..."
+	echo "Downloading fallback registry to $(REG_FILE) ..."
 	@podman pull $(REG_IMAGE)
 	@podman save $(REG_IMAGE) | gzip > $(REG_FILE)
 	@podman rmi $(REG_IMAGE)
