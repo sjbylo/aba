@@ -47,10 +47,6 @@ download:  ## Download all required CLI install files without installing.
 #uninstall: ## Uninstall any previously installed mirror registry  
 #	@make -sC mirror uninstall
 
-#.PHONY: sync
-#sync: ## Sync images from the Internet directly to an internal registry as defined in aba/mirror/mirror.conf
-#	@make -sC mirror sync
-
 .PHONY: catalog
 # -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
 catalog: ## Render all the latest Operators into a helper file which can be used in an imageset config file. 
@@ -62,10 +58,6 @@ catalog: ## Render all the latest Operators into a helper file which can be used
 # Note: '@' used to ensure tar format is not corrupted when using out=-
 bundle:  ## Create an install bundle to be tranferred into the air-gapped env. Example: aba bundle --out /path/to/archive/bundle or -
 	@$(SCRIPTS)/make-bundle.sh $(out) $(force)
-
-#.PHONY: save
-#save: ## Save images from the Internet to the image set archive file: aba/mirror/save/mirror_000001.tar
-#	@make -sC mirror save 
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use --out - to send tar output to stdout. Used by aba bundle.
@@ -81,13 +73,21 @@ tarrepo:  ## Archive the full repo *excluding* the aba/mirror/mirror_*.tar files
 inc:  ## (Deprecated) Create an incremental archive of the repo. The incremental files to include are based on the timestamp of the file ~/.aba.previous.backup. Works in the same way as 'aba tar'.
 	$(SCRIPTS)/backup.sh --inc $(out)
 
-#.PHONY: load
-#load: ## Load the imaget set archive files into your mirror registry (as defined in aba/mirror/mirror.conf) 
-#	@make -sC mirror load
+.PHONY: save
+save:
+	@echo "Run: aba -d mirror save"
 
-#.PHONY: verify
-#verify: ## Verify access to your mirror registry (as defined in aba/mirror/mirror.conf) 
-#	@make -sC mirror verify
+.PHONY: load
+load:
+	@echo "Run: aba -d mirror load"
+
+.PHONY: sync
+sync:
+	@echo "Run: aba -d mirror sync"
+
+.PHONY: verify
+verify:
+	@echo "Run: aba -d mirror verify"
 
 #.PHONY: sno
 #sno: aba.conf  ## (deprecated) Install a Single Node OpenShift cluster.  Use 'aba sno --step iso' to create the iso.
