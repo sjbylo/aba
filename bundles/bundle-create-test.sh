@@ -11,6 +11,8 @@ WORK_DIR=$PWD/work
 TEMPLATES_DIR=$PWD/templates
 CLOUD_DIR=/nas/redhat/aba-openshift-install-bundles
 
+mkdir -p ~/tmp
+rpm -q podman || sudo dnf install podman -y
 
 # ===========================
 # Color Echo Functions
@@ -163,8 +165,8 @@ mkdir -p $WORK_BUNDLE_DIR_BUILD
 OP=
 [ "$*" ] && OP="--op-sets $*"
 
-echo Waiting 60s ...
-read -t 60 || true
+#echo Waiting 60s ...
+#read -t 60 || true
 
 aba --pull-secret $PS_FILE --platform bm --channel fast --version $VER $OP --base-domain $BASE_DOM
 
