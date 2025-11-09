@@ -103,7 +103,8 @@ if [ -d $WORK_DIR/test-install/aba ]; then
 	(
 		cd $WORK_DIR/test-install/aba
 		./install  # install aba
-		aba -d mirror uninstall -y
+		#aba -d mirror uninstall -y
+		aba -d mirror uninstall-docker-registry -y
 		sudo rm -rf ~/quay-install
 	)
 fi
@@ -151,8 +152,8 @@ rm -rf aba
 
 # Install aba from the Internet
 set +x
-#bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 cd aba
 ####./install  # Done above
 set -x
@@ -311,6 +312,7 @@ read -t 60 yn || true
 
 #rm -rf ~/.oc-mirror  # We need some storage back! # FIXME: The cache gets filled again!
 #aba -d mirror load --retry 7 -H $TEST_HOST -k \~/.ssh/id_rsa
+aba -d mirror -H $TEST_HOST install-docker-registry   # Use this instead of Quay due to quay issues
 aba -d mirror load --retry 7 -H $TEST_HOST
 
 WORK_TEST_LOG=$WORK_BUNDLE_DIR_BUILD/tests-completed.txt
@@ -470,7 +472,8 @@ echo_step Remove Quay ...
 cd $WORK_DIR/test-install/aba
 ./install  # install aba
 aba -A
-aba -d mirror uninstall -y
+#aba -d mirror uninstall -y
+aba -d mirror uninstall-docker-registry -y
 sudo rm -rf ~/quay-install
 
 . ~steve/.proxy-set.sh  # Go online!

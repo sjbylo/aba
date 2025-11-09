@@ -18,7 +18,7 @@ DOCKER=podman
 ####cd $(dirname $0)
 
 set -e
-set -euo pipefail
+#set -euo pipefail
 
 REGISTRY_DOMAIN="${1:-registry.example.com}"
 [ "$reg_host" ] && REGISTRY_DOMAIN=$reg_host   # Overrride if set

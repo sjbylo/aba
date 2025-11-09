@@ -32,7 +32,7 @@ acquire_lock
 
 cd $(dirname $0)
 
-vers_track="20 19"
+vers_track="19 20"
 
 which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
 
@@ -53,9 +53,9 @@ echo Starting $0 at $(date)
 arr_op_set=();			arr_name=()
 arr_op_set+=("ocp");		arr_name+=(ocp)
 arr_op_set+=("ocp mesh3");	arr_name+=(mesh3)
-arr_op_set+=("ocp odf ocpv");	arr_name+=(ocpv)
+#arr_op_set+=("ocp odf ocpv");	arr_name+=(ocpv)
 ###arr_op_set+=("ai"); 		arr_name+=(ai)
-###arr_op_set+=("ocp ai"); 	arr_name+=(ai)
+arr_op_set+=("ocp ai"); 	arr_name+=(ai)
 ###arr_op_set+=("ocp gpu ai"); 	arr_name+=(aiall)
 arr_op_set+=("ocp sec");	arr_name+=(sec)
 
@@ -109,7 +109,7 @@ do
 				[ "$NOTIFY" ] && echo -e "Install bundle $ver-$name ($op_sets)\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2
 				echo Quitting $0 at $(date)
 
-				exit 1  # Exit if we want to check what failed
+				#exit 1  # Exit if we want to check what failed
 			fi
 		done
 	else
