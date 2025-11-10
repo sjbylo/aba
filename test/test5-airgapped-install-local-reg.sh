@@ -241,6 +241,7 @@ test-cmd -m "Sleep 2m" sleep 2m
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests'"
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
+test-cmd sleep 10
 for op in web-terminal yaks vault-secrets-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests' | grep -i $op"
@@ -457,6 +458,7 @@ test-cmd -m "Sleep 2m" sleep 2m
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type --cmd 'oc get packagemanifests'"
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
+test-cmd sleep 10
 for op in servicemeshoperator3 #web-terminal yaks vault-secrets-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/sno --cmd 'oc get packagemanifests' | grep -i $op"
@@ -464,6 +466,7 @@ done
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
 #for op in web-terminal yaks vault-secrets-operator flux
+test-cmd sleep 10
 for op in              yaks vault-secrets-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/$cluster_type --cmd 'oc get packagemanifests' | grep -i $op"
