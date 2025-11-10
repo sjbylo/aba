@@ -200,6 +200,18 @@ uncomment_line registry.redhat.io/ubi9/ubi		mirror/save/imageset-config-save.yam
 [ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/save/imageset-config-save.yaml
 [ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/save/imageset-config-save.yaml
 
+# START - Exception since issue with v2.10 #########
+# Replace release-v2.10 with release-v2.9 - in the 2 lines - after mtv-operator found:
+# What we need:
+#    - name: mtv-operator
+#      defaultChannel: release-v2.8
+#      channels:
+#      - name: "release-v2.8"
+[ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/{n;N; s/release-v2.10/release-v2.8/g}' mirror/save/imageset-config-save.yaml
+# Append or insert line after "mtv-operator" line
+[ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/a\      defaultChannel: release-v2.8' mirror/save/imageset-config-save.yaml
+# END - Exception since issue with v2.10 ##########
+
 echo_step Show image set config file ...
 
 #  additionalImages:
