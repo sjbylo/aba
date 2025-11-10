@@ -8,7 +8,7 @@
 #set -euo pipefail
 #set -o pipefail
 
-BASE_NAME=$(basename "$0")
+BASE_NAME=$(basename "${BASH_SOURCE[0]}")  # Needed in case this file is sourced from int. bash shell
 
 # Check is sudo exists 
 SUDO=
