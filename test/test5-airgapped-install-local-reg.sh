@@ -226,7 +226,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno" "aba --dir 
 
 test-cmd -m "Sleep 30" sleep 30
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 8 1.6 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking cluster operators" aba --dir $subdir/aba/$cluster_type cmd

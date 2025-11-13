@@ -65,7 +65,7 @@ test-cmd() {
 
 	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
 	local tot_cnt=5		# Try to run the command max tot_cnt times. If it fails, try one more time by def.
-	local backoff=10	# Default to wait after failed command is a few sec.
+	local backoff=1.5	# Default to wait after failed command is a few sec.
 	local host=localhost	# def. host to run on
 	local mark=L		# Mark in the log output, L (local) or R (remote)
 
@@ -77,7 +77,7 @@ test-cmd() {
 
 		[ "$1" = "-h" ] && local host="$2" && shift 2	     # Remote host to run command on
 
-		[ "$1" = "-r" ] && local tot_cnt="$2" && local backoff=$3 && shift 3  # Retry <count> & <backoff>
+		[ "$1" = "-r" ] && local tot_cnt="$2" && local backoff=$3 && shift 3  # Retry <count> & <backoff> (can be decimal) 
 
 		[ "$1" = "-m" ] && local msg="$2" && shift 2 	     # Message, description of the test
 	done
@@ -151,7 +151,9 @@ test-cmd() {
 			sleep $sleep_time
 			#trap cleanup_tests SIGINT
 			#sleep_time=`expr $sleep_time + $backoff \* 5`
-			sleep_time=`expr $sleep_time + $backoff`
+			#sleep_time=`expr $sleep_time + $backoff`
+			sleep_time=$(awk -v s="$sleep_time" -v b="$backoff" 'BEGIN {print s * b}')
+			[ $sleep_time -gt 40 ] && sleep_time=40
 
 			log-test -t "Attempting command again ($i/$tot_cnt): \"$cmd\""
 		done
