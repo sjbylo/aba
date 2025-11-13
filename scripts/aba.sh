@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251113121111
+ABA_VERSION=20251113163658
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -819,7 +819,8 @@ if [ ! "$interactive_mode" ]; then
 	if [ "$BUILD_COMMAND" ]; then
 		if [ "$DEBUG_ABA" ]; then
 			echo_magenta "DEBUG: $0: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
-			read -t 10 || true
+			echo_magenta -n "DEBUG: Pausing 5s ... "
+			read -t 5 || echo
 
 			# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
 			eval make $BUILD_COMMAND
