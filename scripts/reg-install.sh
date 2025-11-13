@@ -50,17 +50,17 @@ fi
 
 probe_cmd='curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/health/instance'
 [ "$DEBUG_ABA" ] && echo_white $probe_cmd
-reg_code=$(eval $probe_cmd)
+reg_code=$(eval $probe_cmd || true)
 
-[ "$DEBUG_ABA" ] && echo_white 'curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/health/instance'
-reg_code=$(curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
+#[ "$DEBUG_ABA" ] && echo_white 'curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/health/instance'
+#reg_code=$(curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
 if [ "$reg_code" = "200" ]; then
 	echo
-	echo_red "Warning: Existing Quay registry found at $reg_url/health/instance." >&2
-	echo_red "         To use this registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again." >&2
+	echo_red "Warning: Existing Quay registry found at $reg_url/health/instance" >&2
+	echo_red "         To use this registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." >&2
 	echo_red "         The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." >&2
-	echo_red "         The pull secret file can also be created and verified using 'aba password'" >&2
+	echo_red "         The pull secret file can also be created and verified using 'aba -d mirror password'" >&2
 	echo_red "         See the README.md for further information." >&2
 	echo 
 
@@ -69,15 +69,19 @@ fi
 
 # Check for any endpoint ...
 [ "$INFO_ABA" ] && echo_white Probing $reg_url/
-[ "$DEBUG_ABA" ] && echo_white 'curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/'
-reg_code=$(curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/ || true)
+#[ "$DEBUG_ABA" ] && echo_white 'curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/'
+#reg_code=$(curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/ || true)
+
+probe_cmd='curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/'
+[ "$DEBUG_ABA" ] && echo_white $probe_cmd
+reg_code=$(eval $probe_cmd || true)
 
 if [ "$reg_code" = "200" ]; then
 	echo
-	echo_red "Warning: Endpoint found at $reg_url/." >&2
+	echo_red "Warning: Endpoint found at $reg_url/" >&2
 	echo_red "         If this is your existing registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." >&2
 	echo_red "         The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." >&2
-	echo_red "         The pull secret file can also be created and verified using 'aba password'" >&2
+	echo_red "         The pull secret file can also be created and verified using 'aba -d mirror password'" >&2
 	echo_red "         See the README.md for further information." >&2
 	echo 
 
