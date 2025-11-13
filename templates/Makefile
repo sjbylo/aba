@@ -32,12 +32,12 @@ ifneq ($(platform),vmw)   # if platform is not 'vmw', i.e. bare-metal is assumed
 			# .bm-nextstep exists
    			# Do all steps, including mon
 			#TARGET_DEPENDENCIES = check ../aba.conf install-config.yaml agent-config.yaml             iso              mon
-			TARGET_DEPENDENCIES = check ../aba.conf                                                   iso              mon
+			TARGET_DEPENDENCIES = check ../aba.conf                                                   iso    agent     mon
 		endif
 	endif
 else  # If platform is 'vmw', all steps can be automated 
 	# Create the agent based config files and the matching VMs
-	TARGET_DEPENDENCIES = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .install-complete
+	TARGET_DEPENDENCIES = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .auto-agent-up .install-complete
 endif
 
 .PHONY: install
@@ -194,15 +194,20 @@ kill:  .init vmware.conf                     agent-config.yaml ## Kill or power 
 delete: .init vmware.conf                     agent-config.yaml ## Delete all VMs. This will delete the cluster!
 	$(SCRIPTS)/vmw-delete.sh $(debug) || exit 0
 
-.install-complete: .autorefresh .agent-up
+.install-complete: .autorefresh .auto-agent-up
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 
-#.PHONY: agent
-agent: .agent-up
-.agent-up:
+.auto-agent-up: .autorefresh
 	$(SCRIPTS)/wait-agent-up.sh $(debug)
-	@touch .agent-up
+	@touch .auto-agent-up
+
+.PHONY: agent
+agent:
+#agent: .auto-agent-up
+#.auto-agent-up:
+	$(SCRIPTS)/wait-agent-up.sh $(debug)
+	@touch .auto-agent-up
 
 .PHONY: mon
 mon: agent  ## Monitor for 'install complete' the agent-based installation of OpenShift.
