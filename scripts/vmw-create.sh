@@ -1,207 +1,160 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
 # Create the VMs for the cluster
+
+#set -euo pipefail
 
 source scripts/include_all.sh
 
 START_VM=
 NO_MAC=
-[ "$1" = "--start" ] && START_VM=1 && shift
-[ "$1" = "--nomac" ] && NO_MAC=1 && shift
+if [ "$1" = "--start" ]; then
+	START_VM=1; shift
+fi
+if [ "$1" = "--nomac" ]; then
+	NO_MAC=1; shift
+fi
 
-[ "$1" ] && set -x
-
+# Load configuration
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
 	echo_red "vmware.conf file not defined. Run 'aba vmw' to create it if needed" >&2
-
-	exit 0
+	exit 1
 fi
 
-if [ ! "$CLUSTER_NAME" ]; then
+if [ -z "${CLUSTER_NAME:-}" ]; then
 	scripts/cluster-config-check.sh
-	eval `scripts/cluster-config.sh || exit 1`
+	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
+# Read MAC address arrays
 CP_MAC_ADDRS_ARRAY=($CP_MAC_ADDRS)
-#CP_MAC_ADDR_ARRAY2=($CP_MAC_ADDR_2ND)
 WKR_MAC_ADDRS_ARRAY=($WKR_MAC_ADDRS)
-#WKR_MAC_ADDR_ARRAY2=($WKR_MAC_ADDR_2ND)
 
 echo
 echo_magenta "Provisioning VMs to build the cluster ..."
 echo
 
-# FIXME: Check if folder $VC_FOLDER already exists or not.  Should we create it but never delete it.
-# Only the cluster folder shouod be created and deleted by aba
-#cluster_folder=$VC_FOLDER  # FIXME - this should be folder/cluster-name
-#if [ "$VC_FOLDER" != "/ha-datacenter/vm" ]; then
+cluster_folder="$VC_FOLDER"
 # If we are accessing vCenter (and not ESXi directly) 
-if [ "$VC" ]; then
-	cluster_folder=$VC_FOLDER/$CLUSTER_NAME
-	scripts/vmw-create-folder.sh $cluster_folder  # This will create a folder hirerachy, if needed
-else
-	cluster_folder=$VC_FOLDER
+if [ -n "${VC:-}" ]; then
+	cluster_folder="$VC_FOLDER/$CLUSTER_NAME"
+	scripts/vmw-create-folder.sh "$cluster_folder"  # This will create a folder hirerachy, if needed
 fi
 
-if [ ! "$NO_MAC" ]; then
-	scripts/check-macs.sh || exit 
+# Check for mac collisions? 
+if [ -z "${NO_MAC:-}" ]; then
+	scripts/check-macs.sh || exit 1
 fi
 
-# Read in the cpu and mem values 
-source <(normalize-cluster-conf) 
-source <(normalize-aba-conf) 
+source <(normalize-cluster-conf)
+source <(normalize-aba-conf)
 
 verify-cluster-conf || exit 1
 verify-aba-conf || exit 1
 
-[ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
+[ -z "${ISO_DATASTORE:-}" ] && ISO_DATASTORE=$GOVC_DATASTORE
 
-#if [ "$VC" ]; then
-	###echo Create folder: $cluster_folder
-	###scripts/vmw-create-folder.sh $cluster_folder  # This will create a folder hirerachy, if needed
-	####govc folder.create $cluster_folder 
-#fi
-
-# Check and warn about CPU count for SNO
-[ $CP_REPLICAS -eq 1 -a $WORKER_REPLICAS -eq 0 -a $master_cpu_count -lt 8 ] && \
-	echo_magenta "Note: The minimum requirement for SNO in production is 8 vCPU and 16 GB RAM." 
-
-# Enable hardware virt on the workers only (or also masters for 'scheduling enabled')
+# Nested & other flags
 master_nested_hv=false
-[ $WORKER_REPLICAS -eq 0 ] && master_nested_hv=true && echo Setting hardware virtualization on master nodes ...
-echo Setting hardware virtualization on worker nodes ...
+if [ "$WORKER_REPLICAS" -eq 0 ]; then
+	master_nested_hv=true
+	echo "Setting hardware virtualization on master nodes ..."
+fi
+
+echo "Setting hardware virtualization on worker nodes ..."
 worker_nested_hv=true
 
 num_ports_per_node=$PORTS_PER_NODE
-max_ports_per_node=$(($num_ports_per_node - 1))
+max_ports_per_node=$(( num_ports_per_node - 1 ))
 
-i=0
-for name in $CP_NAMES ; do
-	vm_name=${CLUSTER_NAME}-$name
+# Common VM creation function
+create_node() {
+	local role=$1         # "control" or "worker"
+	local names=$2        # list of VM name suffixes
+	local mac_array_name=$3
+	local cpu_count=$4
+	local mem_gb=$5
+	local nested_hv=$6
 
-	n=$(( $i * $num_ports_per_node ))
-	mac=${CP_MAC_ADDRS_ARRAY[$n]}
+	local -n mac_array=$mac_array_name  # nameref for easier array access
+	local i=0
 
-	echo_cyan -n "Create VM: "
-	echo "$vm_name: [${master_cpu_count}C/${master_mem}G] [$GOVC_DATASTORE] [$mac] [$GOVC_NETWORK] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
-	govc vm.create \
-		-annotation="Created on '$(date)' as control node for OCP cluster $cluster_name.$base_domain version v$ocp_version from $(hostname):$PWD" \
-		-version vmx-15 \
-		-g rhel8_64Guest \
-		-firmware=efi \
-		-c=$master_cpu_count \
-		-m=`expr $master_mem \* 1024` \
-		-net.adapter vmxnet3 \
-		-net.address="$mac" \
-		-disk-datastore=$GOVC_DATASTORE \
-		-iso-datastore=$ISO_DATASTORE \
-		-iso="images/agent-${CLUSTER_NAME}.iso" \
-		-folder="$cluster_folder" \
-		-on=false \
-		 $vm_name
+	for name in ${names}; do
+		local vm_name="${CLUSTER_NAME}-${name}"
+		local idx=$(( i * num_ports_per_node ))
+		local mac=${mac_array[$idx]}
 
-	# Add the rest of the NICs?
-	for cnt in $(seq 1 $max_ports_per_node)
-	do
-		#n=`expr \( $i \* $num_ports_per_node \) + $cnt || true`
-		n=$(( ($i * $num_ports_per_node) + $cnt))
-		mac=${CP_MAC_ADDRS_ARRAY[$n]}
-		echo "Adding network interface [$(( $cnt + 1 ))/$num_ports_per_node] with mac address: $mac"
-		govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address $mac
-	done
+		echo_cyan -n "Create VM: "
+		echo "$vm_name: [${cpu_count}C/${mem_gb}G] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 
-	govc device.boot -secure -vm $vm_name
+		govc vm.create \
+			-annotation="Created on $(date) as ${role} node for OCP cluster ${CLUSTER_NAME}.${base_domain} version v${ocp_version} from $(hostname):$PWD" \
+			-version vmx-15 \
+			-g rhel8_64Guest \
+			-firmware=efi \
+			-c=$cpu_count \
+			-m=$(( mem_gb * 1024 )) \
+			-net.adapter vmxnet3 \
+			-net.address="$mac" \
+			-disk-datastore=$GOVC_DATASTORE \
+			-iso-datastore=$ISO_DATASTORE \
+			-iso="images/agent-${CLUSTER_NAME}.iso" \
+			-folder="$cluster_folder" \
+			-on=false \
+			$vm_name
 
-	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true -nested-hv-enabled=$master_nested_hv
+		for cnt in $(seq 1 $max_ports_per_node); do
+			local sub_idx=$(( idx + cnt ))
+			local sub_mac=${mac_array[$sub_idx]}
+			echo "Adding network interface [$((cnt + 1))/$num_ports_per_node] with mac address: $sub_mac"
+			govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address "$sub_mac"
+		done
 
-	echo "Attaching thin OS disk on [$GOVC_DATASTORE]"
-	govc vm.disk.create \
-		-vm $vm_name \
-		-name $vm_name/$vm_name \
-		-size 120GB \
-		-thick=false \
-		-ds=$GOVC_DATASTORE
+		govc device.boot -secure -vm $vm_name
+		govc vm.change -vm $vm_name \
+			-e disk.enableUUID=TRUE \
+			-cpu-hot-add-enabled=true \
+			-memory-hot-add-enabled=true \
+			-nested-hv-enabled=$nested_hv
 
-	if [ "$data_disk" ]; then
-		echo "Attaching a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
+		echo "Attaching thin OS disk on [$GOVC_DATASTORE]"
 		govc vm.disk.create \
 			-vm $vm_name \
-			-name $vm_name/${vm_name}_data \
-			-size ${data_disk}GB \
+			-name $vm_name/$vm_name \
+			-size 120GB \
 			-thick=false \
 			-ds=$GOVC_DATASTORE
-	fi
 
-	[ "$START_VM" ] && govc vm.power -on $vm_name
+		if [ -n "${data_disk:-}" ]; then
+			echo "Attaching a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
+			govc vm.disk.create \
+				-vm $vm_name \
+				-name $vm_name/${vm_name}_data \
+				-size ${data_disk}GB \
+				-thick=false \
+				-ds=$GOVC_DATASTORE
+		fi
 
-	let i=$i+1
-done
+		if [ -n "${START_VM:-}" ]; then
+			govc vm.power -on $vm_name
+		fi
 
-# Create the Vms for the workers
-
-i=0
-for name in $WORKER_NAMES ; do
-	vm_name=${CLUSTER_NAME}-$name
-
-	n=$(( $i * $num_ports_per_node ))
-	mac=${WKR_MAC_ADDRS_ARRAY[$n]}
-
-	echo_cyan -n "Create VM: "
-	echo "$vm_name: [${worker_cpu_count}C/${worker_mem}G] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
-	govc vm.create \
-		-annotation="Created on '$(date)' as worker node for OCP cluster $cluster_name.$base_domain version v$ocp_version from $(hostname):$PWD" \
-		-version vmx-15 \
-		-g rhel8_64Guest \
-		-firmware=efi \
-		-c=$worker_cpu_count \
-		-m=`expr $worker_mem \* 1024` \
-		-disk-datastore=$GOVC_DATASTORE \
-		-net.adapter vmxnet3 \
-		-net.address="$mac" \
-		-iso-datastore=$ISO_DATASTORE \
-		-iso="images/agent-${CLUSTER_NAME}.iso" \
-		-folder="$cluster_folder" \
-		-on=false \
-		 $vm_name
-
-	# Add the rest of the NICs?
-	for cnt in $(seq 1 $max_ports_per_node)
-	do
-		n=$(( ($i * $num_ports_per_node) + $cnt))
-		mac=${WKR_MAC_ADDRS_ARRAY[$n]}
-		echo "Adding network interface [$(( $cnt + 1 ))/$num_ports_per_node] with mac address: $mac"
-		govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address $mac
+		(( i++ ))
 	done
+}
 
-	govc device.boot -secure -vm $vm_name
+# Invoke for masters:
+create_node "control" "$CP_NAMES" CP_MAC_ADDRS_ARRAY "$master_cpu_count" "$master_mem" "$master_nested_hv"
 
-	govc vm.change -vm $vm_name -e disk.enableUUID=TRUE -cpu-hot-add-enabled=true -memory-hot-add-enabled=true -nested-hv-enabled=$worker_nested_hv
-
-	echo "Attaching thin OS disk on [$GOVC_DATASTORE]"
-	govc vm.disk.create \
-		-vm $vm_name \
-		-name $vm_name/$vm_name \
-		-size 120GB \
-		-thick=false \
-		-ds=$GOVC_DATASTORE
-
-	if [ "$data_disk" ]; then
-		echo "Attaching a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
-		govc vm.disk.create \
-			-vm $vm_name \
-			-name $vm_name/${vm_name}_data \
-			-size ${data_disk}GB \
-			-thick=false \
-			-ds=$GOVC_DATASTORE
-	fi
-
-	[ "$START_VM" ] && govc vm.power -on $vm_name
-
-	let i=$i+1
-done
+# Invoke for workers:
+create_node "worker" "$WORKER_NAMES" WKR_MAC_ADDRS_ARRAY "$worker_cpu_count" "$worker_mem" "$worker_nested_hv"
 
 echo
-[ "$START_VM" ] && echo_green "Starting installation at $(date "+%b %e %H:%M")" || echo_green Now run: aba mon
+if [ -n "${START_VM:-}" ]; then
+	echo_green "Starting installation at $(date '+%b %e %H:%M')"
+else
+	echo_green "Now run: aba start mon"
+fi
 
 exit 0
