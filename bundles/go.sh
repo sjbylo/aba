@@ -47,8 +47,8 @@ arr_op_set+=("ocp");		arr_name+=(ocp)
 arr_op_set+=("ocp mesh3");	arr_name+=(mesh3)
 arr_op_set+=("ocp odf ocpv");	arr_name+=(ocpv)
 arr_op_set+=("ocp sec");	arr_name+=(sec)
-arr_op_set+=("ocp ai"); 	arr_name+=(ai)
-arr_op_set+=("ocp gpu ai"); 	arr_name+=(aigpu)
+#arr_op_set+=("ocp ai"); 	arr_name+=(ai)
+arr_op_set+=("ocp gpu ai"); 	arr_name+=(ai)
 
 export OC_MIRROR_CACHE=$HOME  # Set this so that multiple oc-mirror invocations can use the cache and we save time & bandwidth.
 # Can also delete $OC_MIRROR_CACHE/.oc-mirror dir
