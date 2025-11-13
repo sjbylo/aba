@@ -106,6 +106,7 @@ if [ -d $WORK_DIR/test-install/aba ]; then
 		#aba -d mirror uninstall -y
 		aba -d mirror uninstall-docker-registry -y
 		sudo rm -rf ~/quay-install
+		sudo rm -rf ~/docker-reg
 	)
 fi
 
@@ -117,10 +118,12 @@ if podman ps | grep registry; then
 	#aba uninstall  || true
 	./mirror-registry uninstall --autoApprove -v || true
 	sudo rm -rf ~/quay-install
+	sudo rm -rf ~/docker-reg
 	./mirror-registry uninstall --autoApprove -v || true
 	podman rmi `podman images -q` ##--force
 fi
 sudo rm -rf ~/quay-install
+sudo rm -rf ~/docker-reg
 
 ######################
 
@@ -487,6 +490,7 @@ aba -A
 #aba -d mirror uninstall -y
 aba -d mirror uninstall-docker-registry -y
 sudo rm -rf ~/quay-install
+sudo rm -rf ~/docker-reg
 
 . ~steve/.proxy-set.sh  # Go online!
 
