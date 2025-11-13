@@ -34,7 +34,7 @@ fi
 fqdn_ip=$(dig +short $reg_host | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}') || true
 if [ ! "$fqdn_ip" ]; then
 	echo
-	echo_red "Error: '$reg_host' does not resolve properly. Resolved to [$fqdn_ip] but an IP address is expected!" >&2
+	echo_red "Error: '$reg_host' does not resolve properly. An IP address is expected!" >&2
 	echo_red "       Command used: dig $reg_host +short" >&2
 	echo_red "       Correct the problem and try again!" >&2
 	echo
@@ -47,7 +47,13 @@ fi
 # Check for Quay...
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
 [ "$INFO_ABA" ] && echo_white Probing $reg_url/health/instance
-reg_code=$(curl --retry 8 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
+
+probe_cmd='curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/health/instance'
+[ "$DEBUG_ABA" ] && echo_white $probe_cmd
+reg_code=$(eval $probe_cmd)
+
+[ "$DEBUG_ABA" ] && echo_white 'curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/health/instance'
+reg_code=$(curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
 
 if [ "$reg_code" = "200" ]; then
 	echo
@@ -63,7 +69,8 @@ fi
 
 # Check for any endpoint ...
 [ "$INFO_ABA" ] && echo_white Probing $reg_url/
-reg_code=$(curl --retry 8 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/ || true)
+[ "$DEBUG_ABA" ] && echo_white 'curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/'
+reg_code=$(curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/ || true)
 
 if [ "$reg_code" = "200" ]; then
 	echo
@@ -123,11 +130,13 @@ if [ "$reg_ssh_key" ]; then
 	# If the flag file exists on localhost, then the FQDN points to this host (mirror.conf wrong!) 
 	if [ -f $flag_file ]; then
 		echo
-		echo_red "Error: The mirror registry is configured to be on a *remote* host but '$reg_host'" >&2
-		echo_red "       resolves to $fqdn_ip, which reaches this localhost ($(hostname)) instead!" >&2
-		echo_red "       If '$reg_host' should point to this localhost ($(hostname)), undefine 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
-		echo_red "       If '$reg_host' is meant be point to a remote host, update the DNS record ($reg_host) to resolve to an IP that can reach the *remote* host via ssh." >&2
-		echo_red "       Correct the problem in 'aba/mirror/mirror.conf' and try again." >&2
+		echo_red "Error: The mirror registry is configured to be installed on a *remote* host." >&2
+		echo_red "       But $reg_host ($fqdn_ip) reaches this localhost ($(hostname -s)) instead!" >&2
+		echo_red "       You have two options:" >&2
+		echo_red "       1. If Quay should be installed on localhost ($(hostname -s)), undefine 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
+		echo_red "       2. If '$reg_host' should refer to a remote host, update the DNS record ($reg_host) to" >&2
+		echo_red "       resolve to an IP that can be used to reach the *remote* host via ssh." >&2
+		echo_red "       Correct the problem, either in 'aba/mirror/mirror.conf' or in the DNS, and try again." >&2
 		echo
 
 		rm -f $flag_file
@@ -231,7 +240,7 @@ else
 	# Sanity check to see if the correct host was defined
 	# Resolve FQDN
 	echo_cyan "You have configured the Quay mirror to be installed on this localhost (since 'reg_ssh_key' *is not defined* in 'aba/mirror/mirror.conf')."
-	[ "$INFO_ABA" ] && echo_cyan "Verifying FQDN '$reg_host' (IP: fqdn_ip) allows access to this localhost ..."
+	[ "$INFO_ABA" ] && echo_cyan "Verifying FQDN '$reg_host' (IP: $fqdn_ip) allows access to this localhost ..."
 
 	# Get local IP addresses
 	local_ips=$(hostname -I)
@@ -248,6 +257,25 @@ else
 		##exit 1  # We will leave this only as a warning, not an error since sometimes there is a NAT/LB (ip is external) in use which is difficult to check
 	fi
 
+	# On the off-chance that ssh does work out-of-the-box to this host using the default key, let's check it's NOT a remote host!
+	# It's expected that this may fail since there may not be any default ssh key configured. But, if it is and sh reaches a remote host, then we
+	# can catch that early here show a warning. 
+	if h=$(ssh -F .ssh.conf                  $reg_host touch $flag_file; hostname) >/dev/null 2>&1; then
+		if [ ! -f $flag_file ]; then
+			echo_red "Warning: The mirror registry is configured in 'aba/mirror/mirror.conf' to be installed *locally* (reg_ssh_key *is not* defined)." >&2
+			echo_red "         But $reg_host resolves to $fqdn_ip, which reaches a remote host [$h] via ssh!" >&2
+			echo_red "         You have two options:" >&2
+			echo_red "         1. If '$reg_host' should refer to this *localhost*, update its DNS record to resolve to an IP address that correctly reaches this localhost '$(hostname -s)'." >&2
+			echo_red "         2. If the above behavior is correct and you intend to install Quay on a remote host, set 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
+			echo_red "         Correct the problem, either in 'aba/mirror/mirror.conf' or in the DNS, and try again." >&2
+			echo
+
+			sleep 3
+		else
+			rm -f $flag_file
+			[ "$INFO_ABA" ] && echo_cyan "Ssh access to localhost via '$reg_host' is working."  # Completing the 'Verifying...' message above
+		fi
+	fi
 	# ssh to localhost is required by the Quay installer to install on localhost
 	# Check ssh to localhost, but show only a warning since this is hard to verify.
 	temp_aba_key=~/.ssh/aba_check_ssh
@@ -268,37 +296,19 @@ else
 
 	if [ -s $temp_aba_key ]; then
 		#if ! ssh -F .ssh.conf $reg_host touch $flag_file >/dev/null 2>&1; then
+		# Try to ssh to *localhost* since the installer will do the same.
 		if ! ssh -F .ssh.conf -i $temp_aba_key $reg_host touch $flag_file >/dev/null     ; then
 			# This must work for the Quay installer
 			echo_red "Error: For a local installation of Quay, ssh must allow access to this host via the FQDN $reg_host. The Quay installer requires this." >&2
 			echo_red "       Failed command: ssh -i $temp_aba_key $reg_host" >&2
 
 			exit 1
-	#	else
-	#		# THIS WILL NEVER HAPPEN SINCE THE TEST KEY CREATED ABOVE IS ONLY SET ON LOCALHOST!
-	#		if [ ! -f $flag_file ]; then
-	#			echo_red "Warning: The mirror registry is configured in 'aba/mirror/mirror.conf' to be installed *locally*, but:" >&2
-	#			echo_red "         '$reg_host' resolves to $fqdn_ip, which *does not* reach this localhost via ssh!" >&2
-	#			echo_red "         You have two options:" >&2
-	#			echo_red "         1. If '$reg_host' refers to this *localhost*, update its DNS record to resolve to an IP address that correctly reaches this localhost '$(hostname)'." >&2
-	#			echo_red "         2. If '$reg_host' is intended to point to a remote host, set 'reg_ssh_key' in 'aba/mirror/mirror.conf'." >&2
-	#			echo_red "         Correct the problem, either in 'aba/mirror/mirror.conf' or in the DNS, and try again." >&2
-	#			echo
-
-	#			#echo_red "Error: Check if ssh can reach localhost via the FQDN $reg_host. Correct the problem in mirror/mirror.conf (define reg_ssh_key?) and try again." >&2
-	#			#echo_red "       if you mean to install Quay on a remote host, correct the problem in mirror/mirror.conf (e.g. define reg_ssh_key?) and try again." >&2
-	#			#echo
-
-	#			sleep 3
-	#		else
-	#			rm -f $flag_file
-	#			[ "$INFO_ABA" ] && echo_cyan "Ssh access to localhost via '$reg_host' is working."  # Completing the 'Verifying...' message above
-	#		fi
 		fi
 	fi
 
 
-	ask "Install Quay mirror registry appliance to '$(hostname)' (localhost), accessable via $reg_hostport" || exit 1
+
+	ask "Install Quay mirror registry appliance to localhost ($(hostname -s)), accessable via $reg_hostport" || exit 1
 	echo "Installing Quay registry on localhost ..."
 
 	# mirror-registry installer does not open the port for us
