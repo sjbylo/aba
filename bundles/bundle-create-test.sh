@@ -330,6 +330,13 @@ read -t 60 yn || true
 aba -d mirror -H $TEST_HOST install-docker-registry   # Use this instead of Quay due to quay issues
 aba -d mirror load --retry 7 -H $TEST_HOST
 
+# Be sure all CLI files can install and are executable
+make -C cli 
+for cmd in butane govc kubectl oc oc-mirror openshift-install
+do
+	~/bin/$cmd --help >/dev/null 2>&1 || { echo ~/bin/$cmd cannot execute!; exit 1; }
+done
+
 WORK_TEST_LOG=$WORK_BUNDLE_DIR_BUILD/tests-completed.txt
 echo "## Test results for install bundle: $BUNDLE_NAME" > $WORK_TEST_LOG
 echo >> $WORK_TEST_LOG
