@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251113172833
+ABA_VERSION=20251114140214
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -31,6 +31,7 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
 fi
 
+export INFO_ABA=1
 interactive_mode=1
 
 # Check the repo location
@@ -177,6 +178,9 @@ do
 
 		cd "$WORK_DIR" 
 		shift
+	elif [ "$1" = "--quiet" -o "$1" = "-q" ]; then
+		export INFO_ABA=
+		shift 
 	elif [ "$1" = "--info" ]; then
 		export INFO_ABA=1
 		shift 
