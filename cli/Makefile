@@ -102,7 +102,7 @@ help: ## Help
 	@echo "aba/aba.conf missing! Run 'aba' for interactive mode or read the README.md file on how to get started!"
 	@exit 1
 
-# The preference to download the oc tar files is for rhel9, then rhel8 and then the generic tar file.
+# The preference to download the oc CLI tar files is: rhel9, then rhel8 and then the generic tar file.
 
 # See:
 # https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.9/ 
@@ -113,17 +113,18 @@ help: ## Help
 #openshift-client-linux-arm64-rhel8-4.18.9.tar.gz
 #openshift-client-linux-arm64-rhel9-4.18.9.tar.gz
 
-full_oc_tar_file  := openshift-client-$(os)-$(arch_short)-$(rhel_ver)-$(ocp_version).tar.gz
-full_oc_url       := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
+full_oc_tar_file	:= openshift-client-$(os)-$(arch_short)-$(rhel_ver)-$(ocp_version).tar.gz
+full_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
 
-gen_oc_tar_file   := openshift-client-$(os)-$(ocp_version).tar.gz
-gen_url           := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
+# Generic oc binary 
+gen_oc_tar_file		:= openshift-client-$(os)-$(ocp_version).tar.gz
+gen_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
 
-rhel9_oc_tar_file := openshift-client-$(os)-$(arch_short)-rhel9-$(ocp_version).tar.gz
-rhel9_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
+rhel9_oc_tar_file	:= openshift-client-$(os)-$(arch_short)-rhel9-$(ocp_version).tar.gz
+rhel9_oc_url      	:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
 
-rhel8_oc_tar_file := openshift-client-$(os)-$(arch_short)-rhel8-$(ocp_version).tar.gz
-rhel8_oc_url      := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
+rhel8_oc_tar_file	:= openshift-client-$(os)-$(arch_short)-rhel8-$(ocp_version).tar.gz
+rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
 
 # Only download *all* the tar files to use in the disconnected env
 download: .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_$(govc_arch).tar.gz butane-binary
@@ -136,36 +137,50 @@ oc: ~/bin/oc  ## Install oc into ~/bin
 #	@(file $(full_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(full_oc_tar_file) to ~/bin/oc ... && tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl) || (file $(gen_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(gen_oc_tar_file) to ~/bin/oc ... 
 	file $(full_oc_tar_file) | grep -q "gzip compressed data"
 	@echo Extracting $(full_oc_tar_file) to ~/bin/oc ... 
-	tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl || { echo Extracting $(gen_oc_tar_file) to ~/bin/oc ...; tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl; } || { echo ERROR: Invalid files: $(full_oc_tar_file) or $(gen_oc_tar_file); exit 1; }
+	tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl || { echo Extracting $(gen_oc_tar_file) instead to ~/bin/oc ...; tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl; } || { echo ERROR: Invalid files: $(full_oc_tar_file) or $(gen_oc_tar_file); exit 1; }
 	~/bin/oc --help >/dev/null 2>&1
 
+# Download just the oc tar files
 octars: $(gen_oc_tar_file) .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download
-$(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
-	@curl -sfkLI $(gen_url) >/dev/null 
-	echo Downloading $(gen_url) ... 
-	curl -f $(CURL_PROGRESS) -O -L $(gen_url) || { echo $(gen_oc_tar_file) not available; > $(gen_oc_tar_file); }
-	[ -s $(gen_oc_tar_file) ] && { tar tvzf $(gen_oc_tar_file) >/dev/null || exit 1 && echo "File $(gen_oc_tar_file) valid!"; }  # Be sure it's valid
 
+# Download
 $(full_oc_tar_file):  ## Downlaod oc tarball for this hosts rhel version, otherwise download the fallback tarball.
-#	@curl -sfkLI $(full_oc_url) >/dev/null && echo Downloading $(full_oc_url) ... && curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || (echo "Downloading fallback file $(gen_url) ..."; curl $(CURL_PROGRESS) -O -L $(gen_url))
+#	@curl -sfkLI $(full_oc_url) >/dev/null && echo Downloading $(full_oc_url) ... && curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || (echo "Downloading fallback file $(gen_oc_url) ..."; curl $(CURL_PROGRESS) -O -L $(gen_oc_url))
 	@curl -sfkLI $(full_oc_url) >/dev/null
 	echo Downloading $(full_oc_url) ... 
-	curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || { echo "Downloading fallback file $(gen_url) ..."; curl -f $(CURL_PROGRESS) -O -L $(gen_url); }
+	#curl -f $(CURL_PROGRESS) -O -L $(full_oc_url)x || { echo "Downloading fallback file $(gen_oc_url) ..."; curl -f $(CURL_PROGRESS) -O -L $(gen_oc_url); }
+	curl -f $(CURL_PROGRESS) -O -L $(full_oc_url)x || make -s $(gen_oc_tar_file)
+	tar tzvf $(full_oc_tar_file) >/dev/null || exit 1
+	echo "File $(full_oc_tar_file) is valid!"  # Be sure it's valid
 	touch $(full_oc_tar_file)
+
+# Download
+$(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
+	@curl -sfkLI $(gen_oc_url) >/dev/null 
+	echo Downloading $(gen_oc_url) ... 
+	curl -f $(CURL_PROGRESS) -O -L $(gen_oc_url) || { echo $(gen_oc_tar_file) failed download; > $(gen_oc_tar_file); }
+#	[ -s $(gen_oc_tar_file) ] && { tar tvzf $(gen_oc_tar_file) >/dev/null || exit 1 && echo "File $(gen_oc_tar_file) is valid!"; }  # Be sure it's valid
+	[ -s $(gen_oc_tar_file) ]
+	tar tvzf $(gen_oc_tar_file) >/dev/null || exit 1  # Validate tar file!
+	echo "File $(gen_oc_tar_file) is valid!"  # Be sure it's valid
 
 # Ensure all possible tarballs are downloaded
 .$(rhel9_oc_tar_file)-download:  ## Downlaod oc tarball for rhel9, if available
 	curl -sfkLI $(rhel9_oc_url) >/dev/null # Check connection only
 	echo Downloading $(rhel9_oc_url) ...
-	curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || { echo $(rhel9_oc_tar_file) not available; > $(rhel9_oc_tar_file); }
+	curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || { echo $(rhel9_oc_tar_file) failed download; > $(rhel9_oc_tar_file); }
+	tar tvzf $(rhel9_oc_tar_file) >/dev/null || exit 1  # Validate tar file!
+	echo "File $(rhel9_oc_tar_file) is valid!"  # Be sure it's valid
 	touch .$(rhel9_oc_tar_file)-download
 
 # Ensure all possible tarballs are downloaded
 .$(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
-#	@curl -sfkLI $(rhel8_oc_url) >/dev/null && echo Downloading $(rhel8_oc_url) ... && curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || (echo $(rhel8_oc_tar_file) not available; > $(rhel8_oc_tar_file))
+#	@curl -sfkLI $(rhel8_oc_url) >/dev/null && echo Downloading $(rhel8_oc_url) ... && curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || (echo $(rhel8_oc_tar_file) failed download; > $(rhel8_oc_tar_file))
 	curl -sfkLI $(rhel8_oc_url) >/dev/null # Check connection only
 	echo Downloading $(rhel8_oc_url) ...
-	curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || { echo $(rhel8_oc_tar_file) not available; > $(rhel8_oc_tar_file); }
+	curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || { echo $(rhel8_oc_tar_file) failed download; > $(rhel8_oc_tar_file); }
+	tar tvzf $(rhel8_oc_tar_file) >/dev/null || exit 1  # Validate tar file!
+	echo "File $(rhel8_oc_tar_file) is valid!"  # Be sure it's valid
 	touch .$(rhel8_oc_tar_file)-download 
 
 
@@ -188,7 +203,7 @@ openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install ta
 	curl -f --retry 8 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
 	file openshift-install-$(os)-$(ocp_version).tar.gz | grep -q "gzip compressed data" || exit 1 # in case of 5xx errors!
 	tar tvf openshift-install-$(os)-$(ocp_version).tar.gz >/dev/null|| exit 1 # in case of 5xx errors!  # Be sure it's valid
-	echo "File openshift-install-$(os)-$(ocp_version).tar.gz valid!"
+	echo "File openshift-install-$(os)-$(ocp_version).tar.gz is valid!"
 
 
 ########################################
@@ -207,7 +222,7 @@ oc-mirror.tar.gz: ## Download oc-mirror tarball
 	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url)
 	file oc-mirror.tar.gz | grep -q "gzip compressed data" || exit 1 # in case of 5xx errors!
 	tar tvf oc-mirror.tar.gz >/dev/null|| exit 1 # in case of 5xx errors!  # Be sure it's valid
-	echo "File oc-mirror.tar.gz valid!"
+	echo "File oc-mirror.tar.gz is valid!"
 
 oc_mirror_url_rhel9 = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.rhel9.tar.gz
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
@@ -215,7 +230,7 @@ oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url_rhel9)
 	file oc-mirror.rhel9.tar.gz | grep -q "gzip compressed data" || exit 1 # in case of 5xx errors!
 	tar tvf oc-mirror.rhel9.tar.gz >/dev/null|| exit 1 # in case of 5xx errors!  # Be sure it's valid
-	echo "File oc-mirror.rhel9.tar.gz valid!"
+	echo "File oc-mirror.rhel9.tar.gz is valid!"
 
 
 ########################################
@@ -231,7 +246,7 @@ govc_Linux_$(govc_arch).tar.gz:   ## Download govc tarball
 	curl --retry 8 -f $(CURL_PROGRESS) -L -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz"
 	file govc_Linux_$(govc_arch).tar.gz | grep -q "gzip compressed data" || exit 1 # in case of 5xx errors!
 	tar tvf govc_Linux_$(govc_arch).tar.gz >/dev/null|| exit 1 # in case of 5xx errors!  # Be sure it's valid
-	echo "File govc_Linux_$(govc_arch).tar.gz valid!"
+	echo "File govc_Linux_$(govc_arch).tar.gz is valid!"
 
 # Use either amd64 or aarch64 
 butane: ~/bin/butane ## Install butane to ~/bin/butane
@@ -247,7 +262,7 @@ butane-binary: ## Download butane binary
 	chmod +x butane-binary
 	file butane-binary | grep -q "executable" || exit 1 # in case of 5xx errors!
 	./butane-binary --help >/dev/null 2>&1  # Be sure it's valid
-	echo "File butane-binary valid!"
+	echo "File butane-binary is valid!"
 
 
 ########################################
