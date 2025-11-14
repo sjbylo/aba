@@ -26,35 +26,43 @@ if [ "$public_pull_secret_file_needed" -a ! -s "$pull_secret_file" ]; then
 	exit 1
 fi
 
+[ "$DEBUG_ABA" ] && echo_white "Ensuring dirs exist: ~/.docker ~/.containers $XDG_RUNTIME_DIR/containers"
 mkdir -p ~/.docker ~/.containers
+[[ "$XDG_RUNTIME_DIR" == /* ]] && mkdir -p $XDG_RUNTIME_DIR/containers
 
 # If the Red Hat creds are available merge them 
 if [ -s regcreds/pull-secret-mirror.json -a -s $pull_secret_file ]; then
 	# Merge the two files
 	jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json $pull_secret_file > ./regcreds/pull-secret-full.json
 
-	## echo_cyan "Configuring ~/.docker/config.json with the pull secrets regcreds/pull-secret-mirror.json and regcreds/pull-secret-full.json ..."
-
 	# Copy into place 
+	[ "$DEBUG_ABA" ] && echo_white "Copying regcreds/pull-secret-full.json to ~/.docker/config.json and ~/.containers/auth.json"
 	cp ./regcreds/pull-secret-full.json ~/.docker/config.json
 	cp ./regcreds/pull-secret-full.json ~/.containers/auth.json
-	[ "$XDG_RUNTIME_DIR" ] && cp ./regcreds/pull-secret-full.json $XDG_RUNTIME_DIR/containers/auth.json 2>/dev/null || true
+	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
+		[ "$DEBUG_ABA" ] && echo_white "Copying regcreds/pull-secret-full.json to $XDG_RUNTIME_DIR/containers/auth.json" 
+		cp ./regcreds/pull-secret-full.json $XDG_RUNTIME_DIR/containers/auth.json || true
+	fi
 
 # If the mirror creds are available add them also
 elif [ -s regcreds/pull-secret-mirror.json ]; then
-	## echo_cyan "Configuring ~/.docker/config.json with the private mirror pull secret: regcreds/pull-secret-mirror.json ..."
-
+	[ "$DEBUG_ABA" ] && echo_white "Copying regcreds/pull-secret-mirror.json to ~/.docker/config.json and ~/.containers/auth.json"
 	cp ./regcreds/pull-secret-mirror.json ~/.docker/config.json
 	cp ./regcreds/pull-secret-mirror.json ~/.containers/auth.json
-	[ "$XDG_RUNTIME_DIR" ] && cp ./regcreds/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json 2>/dev/null || true
+	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
+		[ "$DEBUG_ABA" ] && echo_white "Copying regcreds/pull-secret-mirror.json to $XDG_RUNTIME_DIR/containers/auth.json" 
+	       cp ./regcreds/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json || true
+	fi
 
 # Only use the Red Hat pull secret file
 elif [ -s $pull_secret_file ]; then
-	## echo_cyan "Configuring ~/.docker/config.json with Red Hat pull secret $pull_secret_file ..."
-
+	[ "$DEBUG_ABA" ] && echo_white "Copying $pull_secret_file to ~/.docker/config.json and ~/.containers/auth.json"
 	cp $pull_secret_file ~/.docker/config.json
 	cp $pull_secret_file ~/.containers/auth.json  
-	[ "$XDG_RUNTIME_DIR" ] && cp $pull_secret_file $XDG_RUNTIME_DIR/containers/auth.json 2>/dev/null || true
+	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
+		[ "$DEBUG_ABA" ] && echo_white "Copying $pull_secret_file to $XDG_RUNTIME_DIR/containers/auth.json" 
+		cp $pull_secret_file $XDG_RUNTIME_DIR/containers/auth.json || true
+	fi
 
 else
 	echo 
