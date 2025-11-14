@@ -1208,6 +1208,18 @@ Next:
 This SHOULD set up OperatorHub again.
 
 
+**Q: I see the error `load pubkey "/home/joe/.ssh/quay_installer": Invalid key length` when installing Quay/loading images, what can I do?**
+
+The key file created by the Quay installer is too weak for your system policy.  
+Delete the key files and re-create them with:
+
+```
+rm -f $HOME/.ssh/quay_installer*
+ssh-keygen -t ed25519 -f $HOME/.ssh/quay_installer -N ''           # Generate the key pair
+cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys    # Append public key so ssh works
+```
+
+
 [Back to top](#who-should-use-aba)
 
 # License
