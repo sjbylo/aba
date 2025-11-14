@@ -39,8 +39,9 @@ Options:
   -o, --out <file|->                    # Output Install Bundle to destination, e.g. file or stdout (-). See 'aba bundle -h`
   -f, --force                           # Only used for 'aba reset --force'
   -V, --vmware                          # Apply this VMware config file (for govc)
-  -D, --debug                           # Increase more output
-      --info                            # Increase output
+  -D, --debug                           # Increase output
+  -q, --quiet                           # Less output
+      --info                            # Increase output (default)
 
 Usage:
   aba <command> [options]
