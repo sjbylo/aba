@@ -148,8 +148,8 @@ $(full_oc_tar_file):  ## Downlaod oc tarball for this hosts rhel version, otherw
 #	@curl -sfkLI $(full_oc_url) >/dev/null && echo Downloading $(full_oc_url) ... && curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || (echo "Downloading fallback file $(gen_oc_url) ..."; curl $(CURL_PROGRESS) -O -L $(gen_oc_url))
 	@curl -sfkLI $(full_oc_url) >/dev/null
 	echo Downloading $(full_oc_url) ... 
-	#curl -f $(CURL_PROGRESS) -O -L $(full_oc_url)x || { echo "Downloading fallback file $(gen_oc_url) ..."; curl -f $(CURL_PROGRESS) -O -L $(gen_oc_url); }
-	curl -f $(CURL_PROGRESS) -O -L $(full_oc_url)x || make -s $(gen_oc_tar_file)
+	#curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || { echo "Downloading fallback file $(gen_oc_url) ..."; curl -f $(CURL_PROGRESS) -O -L $(gen_oc_url); }
+	curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || make -s $(gen_oc_tar_file)
 	tar tzvf $(full_oc_tar_file) >/dev/null || exit 1
 	echo "File $(full_oc_tar_file) is valid!"  # Be sure it's valid
 	touch $(full_oc_tar_file)
