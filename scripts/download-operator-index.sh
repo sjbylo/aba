@@ -4,6 +4,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 # Only d/l the opertor index in the background to save time!
 if [ "$1" = "true" -o "$1" = "1" ]; then
 	shift
@@ -96,7 +98,7 @@ fi
 
 # See if the index is currently downloading (using 'ln' to get a lock)
 if ! ln $index_file $lock_file >/dev/null 2>&1; then
-	[ "$DEBUG_ABA" ] && echo "Lock file $lock_file already exists ..." >&2
+	aba_debug "Lock file $lock_file already exists ..." >&2
 	# Passed here only if the lock file already exists (i.e. index already downloading) 
 
 	# Check if still downloading...
@@ -108,7 +110,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 
 	# No need to wait if operator vars are not defined in aba.conf!
 	if [ ! "$op_sets" -a ! "$ops" ]; then
-		[ "$DEBUG_ABA" ] && echo "No operators defined ... exiting"
+		aba_debug "No operators defined ... exiting"
 
 		exit 0
 	fi
@@ -117,20 +119,20 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 
 	# If the bg process is no longer running, then reset and try to download again
 	if [ -f $pid_file ]; then
-		[ "$DEBUG_ABA" ] && echo "PID file $pid_file found ..." >&2
+		aba_debug "PID file $pid_file found ..." >&2
 		bg_pid=$(cat $pid_file)
 		#if ! pgrep -u $(whoami) -f download-operator-index.sh | grep -q "^$bg_pid$"; then
 		if ! ps -p $bg_pid >/dev/null; then
-			[ "$DEBUG_ABA" ] && echo "Background process with pid [$bg_pid] not running." >&2
+			aba_debug "Background process with pid [$bg_pid] not running." >&2
 			rm -f $lock_file $pid_file
-			[ "$DEBUG_ABA" ] && echo "Re-running script $0" >&2
+			aba_debug "Re-running script $0" >&2
 			sleep 0.5
 			exec $0 --bg $catalog_name
 		fi
 
 		# OK, oc-mirror bg process is still running
 	else
-		[ "$DEBUG_ABA" ] && echo "Expected pid file $pid_file not found!" >&2
+		aba_debug "Expected pid file $pid_file not found!" >&2
 	fi
 
 	handle_interupt() { echo_red "Stopped waiting for download to complete" >&2; exit 0; }

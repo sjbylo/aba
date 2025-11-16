@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
 
 umask 077

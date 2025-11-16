@@ -156,6 +156,7 @@ install: .installed
 .installed: .init .rpmsext mirror.conf mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 	@rm -f .uninstalled 
 	$(SCRIPTS)/reg-install.sh $(debug) 
+	$(SCRIPTS)/reg-verify.sh $(debug) 
 	@touch .installed
 
 .PHONY: installclean
@@ -169,7 +170,7 @@ pw:
 
 .PHONY: verify
 verify: .init ## Using the credential files in 'aba/mirror/regcreds' dir and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
-	$(SCRIPTS)/reg-verify.sh $(debug)
+	@$(SCRIPTS)/reg-verify.sh $(debug)
 	@rm -f .uninstalled 
 	@touch .installed
 

@@ -154,7 +154,7 @@ echo
 if [ -n "${START_VM:-}" ]; then
 	echo_green "Starting installation at $(date '+%b %e %H:%M')"
 else
-	echo_green "Now run: aba start mon"
+	echo_green "To start the VMs and monitor the installation, run: aba start mon"
 fi
 
 exit 0
