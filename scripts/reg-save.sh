@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 # Script called with args "debug" and/or "retry"
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"

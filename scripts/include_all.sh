@@ -94,10 +94,95 @@ color_demo() {
     echo_bright_white   "bright white"
 }
 
+#echo_error() {
+#	echo_red "Error: $@" >&2
+#	exit 1
+#}
+
+aba_echo() {
+	echo_white "[ABA] $@"
+}
+
+aba_echo_ok() {
+	echo_green "[ABA] $@"
+}
+
+echo_warn() {
+	echo_red "Warning: $@" >&2
+}
+
+aba_debug() {
+    local newline=1
+
+    [ ! "$DEBUG_ABA" ] && return 0
+
+    # Erase to col1 and return
+    [ "$TERM" ] && tput el1 && tput cr
+
+    # Detect and consume "-n" if it's the first argument
+    if [[ "$1" == "-n" ]]; then
+        newline=0
+        shift
+    fi
+
+    local timestamp
+    timestamp="$(date +%H:%M:%S)"
+
+    if (( newline )); then
+        echo_magenta    "[ABA_DEBUG] ${timestamp}: $*" >&2
+    else
+        echo_magenta -n "[ABA_DEBUG] ${timestamp}: $*" >&2
+    fi
+}
+
+echo_info() {
+	echo_cyan "$@" >&2
+}
+
+aba_error() {
+	local main_msg="$1"
+	shift
+
+	echo
+
+	# Main error message in red to stderr
+	echo_red "Error: $main_msg" >&2
+
+	# Indented follow-up lines, also red, to stderr
+	for line in "$@"; do
+		echo_red "       $line" >&2
+	done
+	echo
+
+	sleep 1
+
+        exit 1
+}
+
+aba_warning() {
+	local main_msg="$1"
+	shift
+
+	echo
+
+	# Main error message in red to stderr
+	echo_red "Error: $main_msg" >&2
+
+	# Indented follow-up lines, also red, to stderr
+	for line in "$@"; do
+		echo_red "       $line" >&2
+	done
+
+	echo
+
+	sleep 1
+}
+
+
 ####################
 
 if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
-	[ "$DEBUG_ABA" ] && echo "$0: Adding $HOME/bin to \$PATH for user $(whoami)" >&2
+	aba_debug "$0: Adding $HOME/bin to \$PATH for user $(whoami)" >&2
 	PATH="$HOME/bin:$PATH"
 fi
 
@@ -231,7 +316,7 @@ normalize-mirror-conf()
 			sed	-e "s/^/export /g"
 
 		# Append always
-		echo export tls_verify=true
+		#echo export tls_verify=true
 	)
 }
 
@@ -430,7 +515,7 @@ ask() {
 	[ "$1" == "-n" ] && def_response=n && yn_opts="(y/N)" && shift
 	[ "$1" == "-y" ] && def_response=y && yn_opts="(Y/n)" && shift
 	timer=
-	[ "$1" == "-t" ] && timer="-t $1" && shift && shift 
+	[ "$1" == "-t" ] && timer="-t $2" && shift 2
 
 	echo_yellow -n "$@? $yn_opts: "
 	read $timer yn
@@ -683,7 +768,7 @@ replace-value-conf() {
 	# -v <string> : new value. If missing, remove the value
 	# -f <files>
 
-	[ "$DEBUG_ABA" ] && echo Calling: $0 $* >&2
+	aba_debug "Calling: replace-value-conf() $*"
 
 	local quiet=
 
@@ -725,7 +810,7 @@ replace-value-conf() {
 	do
 		[ ! -s "$f" ] && continue # Try next file
 
-		[ "$DEBUG_ABA" ] && echo "Replacing config value [$name] with [$value] in file: $f" >&2
+		aba_debug "Replacing config value [$name] with [$value] in file: $f" >&2
 
 		# Check if the value is already in the file along with the expected chars after the value, e.g. space/tab/# or EOL
 		if grep -q -E "^$name=$value[[:space:]]*(#.*)?$" $f; then

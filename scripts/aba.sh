@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251114182450
+ABA_VERSION=20251117000940
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -24,7 +24,8 @@ if [ "$1" = "--dir" -o "$1" = "-d" ]; then
 	[ ! -e "$2" ] && echo "Error: directory $2 does not exist!" >&2 && exit 1
 	[ ! -d "$2" ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
 
-	[ "$DEBUG_ABA" ] && echo "$0: change dir to: \"$2\"" >&2
+	[ "$DEBUG_ABA" ] && echo "change dir to: '$2'" # Have not sourced the include file yet!
+
 	cd "$2"
 	shift 2
 
@@ -38,7 +39,8 @@ interactive_mode=1
 # Need to be sure location of the top of the repo in order to find the important files
 # FIXME: Place the files (scripts and templates etc) into a well known location, e.g. /opt/aba/...
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
-	ABA_ROOT=$PWD
+	#ABA_ROOT=$PWD
+	ABA_ROOT='.'
 	###interactive_mode=1
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
 	ABA_ROOT=$(realpath "..")
@@ -88,11 +90,15 @@ fi
 
 source $ABA_ROOT/scripts/include_all.sh
 
+aba_debug "ABA_ROOT=[$ABA_ROOT]"
+
 # This will be the actual 'make' command that will eventually be run
 BUILD_COMMAND=
 
 # Init aba.conf
 if [ ! -f $ABA_ROOT/aba.conf ]; then
+
+	aba_debug Adding network values to $ABA_ROOT/aba.conf
 
 	# Determine resonable defaults for ...
 	export domain=$(get_domain)
@@ -101,29 +107,37 @@ if [ ! -f $ABA_ROOT/aba.conf ]; then
 	export next_hop_address=$(get_next_hop)
 	export ntp_servers=$(get_ntp_servers)
 
+	aba_debug domain:		$domain
+	aba_debug machine_network:	$machine_network
+	aba_debug dns_servers:		$dns_servers
+	aba_debug next_hop_address:	$next_hop_address
+	aba_debug ntp_servers:		$ntp_servers
+
 	scripts/j2 templates/aba.conf.j2 > $ABA_ROOT/aba.conf
 else
 	# If the bundle has empty network valus in aba.conf, add defaults - as now is the best time (on internal network).
 	# For pre-created bundles, aba.conf will exist but these values will be missing... so attempt to fill them in. 
 	source <(cd $ABA_ROOT && normalize-aba-conf)
 	# Determine resonable defaults for ...
-	[ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f $ABA_ROOT/aba.conf
-	[ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f $ABA_ROOT/aba.conf
-	[ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f $ABA_ROOT/aba.conf
-	[ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f $ABA_ROOT/aba.conf
-	[ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f $ABA_ROOT/aba.conf
+	[ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f $ABA_ROOT/aba.conf && aba_debug domain=$domain
+	[ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f $ABA_ROOT/aba.conf && aba_debug machine_network=$machine_network
+	[ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f $ABA_ROOT/aba.conf && aba_debug dns_servers=$dns_servers
+	[ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f $ABA_ROOT/aba.conf && aba_debug next_hop_address=$next_hop_address
+	[ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f $ABA_ROOT/aba.conf && aba_debug ntp_servers=$ntp_servers
 fi
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
 source <(cd $ABA_ROOT && normalize-aba-conf)
 
+# Interactive mode is used when no args are suplied
 [ "$*" ] && interactive_mode=
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
 
 while [ "$*" ] 
 do
-	[ "$DEBUG_ABA" ] && echo "$0: \$* = " $* >&2
+	aba_debug "Args: [$@]"
+	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		if [ ! "$cur_target" ]; then
@@ -145,12 +159,12 @@ do
 		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
 		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
 		shift
-	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then  #FIXME: checking --dir is also above!
+	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
 		# If there are commands/targets to execute in the CWD, do it...
 		BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
 		if [ "$BUILD_COMMAND" ]; then
 			if [ "$DEBUG_ABA" ]; then
-				echo_cyan "DEBUG: In folder $PWD: Running make $BUILD_COMMAND" >&2
+				aba_debug "In folder $PWD: Running make $BUILD_COMMAND" 
 				read -t 3 || true
 				eval make $BUILD_COMMAND
 			else
@@ -174,7 +188,7 @@ do
 
 		WORK_DIR="$ABA_ROOT/$provided_dir"  # dir should always be relative from Aba repo's root dir
 
-		[ "$DEBUG_ABA" ] && echo "$0: changing to \"$WORK_DIR\"" >&2
+		aba_debug "changing to \"$WORK_DIR\"" 
 
 		cd "$WORK_DIR" 
 		shift
@@ -249,7 +263,7 @@ do
 		replace-value-conf -n ocp_version -v $ver -f $ABA_ROOT/aba.conf
 
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-		[ "$DEBUG_ABA" ] && echo $0: Downloading operator index for version $ver >&2
+		aba_debug Downloading operator index for version $ver 
 
 		( make -s -C $ABA_ROOT catalog bg=true & ) & 
 
@@ -649,12 +663,12 @@ do
 		# If there's another arg and it's a number then accept it
 		if [ "$2" ] && echo "$2" | grep -qE "^[0-9]+$"; then
 			BUILD_COMMAND="$BUILD_COMMAND retry='$2'"
-			[ "$DEBUG_ABA" ] && echo $0: Adding retry=$2 to BUILD_COMMAND >&2
+			aba_debug "Adding retry=$2 to BUILD_COMMAND"
 			shift 2
 		# In all other cases, use '3' 
 		else
 			BUILD_COMMAND="$BUILD_COMMAND retry=2"  # FIXME: Also confusing, similar to --name
-			[ "$DEBUG_ABA" ] && echo $0: Setting $1 to 3 >&2
+			aba_debug Setting $1 to 3 
 			shift
 		fi
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
@@ -678,17 +692,17 @@ do
 
 		if [[ "$BUILD_COMMAND" =~ "ssh" ]]; then
 			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
-			[ "$DEBUG_ABA" ] && echo $0: BUILD_COMMAND=$BUILD_COMMAND >&2
+			aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
 		elif [[ "$BUILD_COMMAND" =~ "cmd" ]]; then
 			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
-			[ "$DEBUG_ABA" ] && echo $0: BUILD_COMMAND=$BUILD_COMMAND >&2
+			aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
 		else
 			# Assume it's a kube command by default
 			BUILD_COMMAND="$BUILD_COMMAND cmd cmd='$cmd'"
-			[ "$DEBUG_ABA" ] && echo $0: BUILD_COMMAND=$BUILD_COMMAND >&2
+			aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
 		fi
-	elif [ "$1" = "create" ]; then # Ignore this arg
-		shift
+	#elif [ "$1" = "create" ]; then # Ignore this arg
+	#	shift
 	elif [ "$1" = "clux" ]; then  #FIXME: THIS IS EXPERIMENTAL ONLY! Change to 'cluster' once tested.
 		[ ! "$1" ] && echo_red "Missing options after '$1'" >&2 && exit 1
 		shift
@@ -728,7 +742,7 @@ do
 				while [[ ! (-z "$1" || "$1" =~ ^-) ]]
 				do
 					[ "$ports_vals" ] && ports_vals="$ports_vals,$1" || ports_vals="$1"
-					[ "$DEBUG_ABA" ] && echo ports_vals=$ports_vals
+					aba_debug ports_vals=$ports_vals
 					shift	
 				done
 			elif [[ "$1" == "--int-connection" || "$1" == "-I" ]]; then
@@ -780,7 +794,7 @@ do
 
 		if [ "$name" ]; then
 			# Create cluster dir and cluster.conf
-			[ "$DEBUG_ABA" ] && echo scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
+			aba_debug scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
 			scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
 		else
 			echo_red "Error: Must provide at least --name after 'clux'" >&2
@@ -799,21 +813,19 @@ do
 				# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
 			cur_target=$1
 			BUILD_COMMAND="$BUILD_COMMAND $1"
-			[ "$DEBUG_ABA" ] && echo $0: Command added: BUILD_COMMAND=$BUILD_COMMAND >&2
+			aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND 
 		fi
 		shift 
 	fi
-
-	[ "$DEBUG_ABA" ] && echo "$0: BUILD_COMMAND=$BUILD_COMMAND" >&2
 done
 
-[ "$DEBUG_ABA" ] && echo DEBUG: $0: interactive_mode=[$interactive_mode] >&2
+aba_debug DEBUG: $0: interactive_mode=[$interactive_mode] 
 
 # Sanitize $BUILD_COMMAND
 BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
 
-[ "$DEBUG_ABA" ] &&  echo "$0: ABA_ROOT=[$ABA_ROOT]" >&2
-[ "$DEBUG_ABA" ] &&  echo "$0: BUILD_COMMAND=[$BUILD_COMMAND]" >&2
+aba_debug "ABA_ROOT=[$ABA_ROOT]" 
+aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 
 
 # We want interactive mode if aba is running at the top of the repo and without any args
 [ ! "$BUILD_COMMAND" -a "$ABA_ROOT" = "." ] && interactive_mode=1
@@ -822,8 +834,8 @@ if [ ! "$interactive_mode" ]; then
 	# Only run make if there's a target
 	if [ "$BUILD_COMMAND" ]; then
 		if [ "$DEBUG_ABA" ]; then
-			echo_magenta "DEBUG: $0: Running: \"make $BUILD_COMMAND\" from dir $PWD" >&2
-			echo_magenta -n "DEBUG: Pausing 5s ... "
+			aba_debug "Running: \"make $BUILD_COMMAND\" from directory: $PWD" 
+			aba_debug -n "Pausing 5s ... [Return to continue]:"
 			read -t 5 || echo
 
 			# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
@@ -831,15 +843,19 @@ if [ ! "$interactive_mode" ]; then
 		else
 			# eval needed since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
 			# Run make in silent mode
+			aba_debug "Running: \"make -s $BUILD_COMMAND\" from directory: $PWD" 
 			eval make -s $BUILD_COMMAND
 		fi
 	fi
 
+	aba_debug "Exiting aba"
 	exit 
 fi
 
 # Change to the top level repo directory
 cd $ABA_ROOT
+
+aba_debug "Running aba interactive mode ..."
 
 # ###########################################
 # From now on it's all considered INTERACTIVE
@@ -922,7 +938,7 @@ if [ ! -f .bundle ]; then
 
 		echo_white -n "Fetching available versions (please wait!) ..."
 
-		[ "$DEBUG_ABA" ] && echo_white "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt" >&2
+		aba_debug "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt"
 
 		if ! release_text=$(curl -f --connect-timeout 30 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
 			[ "$TERM" ] && tput el1 && tput cr
@@ -935,7 +951,7 @@ if [ ! -f .bundle ]; then
 		channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 		default_ver=$channel_ver
 
-		[ "$DEBUG_ABA" ] && echo_white "Looking up previous version at using fetch_previous_version $ocp_channel $arch_sys" >&2
+		aba_debug "Looking up previous version using fetch_previous_version() $ocp_channel $arch_sys"
 
 		channel_ver_prev=$(fetch_previous_version "$ocp_channel" "$arch_sys")
 
@@ -1019,7 +1035,6 @@ if [ ! -f .bundle ]; then
 			fi
 		fi
 
-		##sed -E -i -e 's/^editor=[^ \t]+/editor=/g' -e "s/^editor=([[:space:]]+)/editor=$new_editor\1/g" aba.conf
 		replace-value-conf -n editor -v "$new_editor" -f aba.conf
 		export editor=$new_editor
 		echo_cyan "'editor' set to '$new_editor' in aba.conf"

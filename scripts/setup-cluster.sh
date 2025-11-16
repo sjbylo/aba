@@ -40,7 +40,7 @@ echo_cyan "Creating '$name/cluster.conf' file for cluster type '$type'."
 
 create_cluster_cmd="scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip"
 
-[ "$DEBUG_ABA" ] && echo_white $create_cluster_cmd
+aba_debug $create_cluster_cmd
 
 $create_cluster_cmd
 

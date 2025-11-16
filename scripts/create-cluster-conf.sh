@@ -26,7 +26,7 @@ type=standard
 
 . <(process_args $*)
 
-[ "$DEBUG_ABA" ] && echo_cyan "$0: Creating cluster directory for [$name] of type [$type]" >&2
+aba_debug "Creating cluster directory for [$name] of type [$type]"
 
 # If not already set, set reasonable defaults
 # Note: VMware mac address range for VMs is 00:50:56:00:00:00 to 00:50:56:3F:FF:FF 

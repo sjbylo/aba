@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
 [ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Attempting $try_tot times to load the images into the registry."    # If the retry value exists and it's a number
@@ -28,8 +30,6 @@ fi
 
 [ ! "$data_dir" ] && data_dir=\~
 reg_root=$data_dir/quay-install
-
-# FIXME: [ ! "$tls_verify" ] && tls_verify_opts="--dest-skip-tls"
 
 if [ ! -d save ]; then
 	echo_red "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'aba -d mirror save' first on an external (Internet connected) bastion/laptop" >&2
@@ -65,16 +65,8 @@ failed=1
 while [ $try -le $try_tot ]
 do
 	# Set up the command in a script which can be run manually if needed.
-	if [ "$oc_mirror_version" = "v1" ]; then
-		# Set up script to help for manual re-sync
-		# --continue-on-error : do not use this option. In testing the registry became unusable! 
-		# Note: If 'aba -d mirror save/load/sync' fail with transient errors, the command must be re-run until it succeeds!
-		cmd="oc-mirror --v1 $tls_verify_opts --from=. docker://$reg_host:$reg_port$reg_path"
-		echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh
-	else
-		cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-		echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
-	fi
+	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+	echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 
 	echo_cyan -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror load --retry <count>'" || echo

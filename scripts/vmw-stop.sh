@@ -1,7 +1,7 @@
 #!/bin/bash 
 # Stop the VMs gracefully with vmware system shutdown
 
-[ "$DEBUG_ABA" ] && echo "Running: $0 $*" >&2
+aba_debug "Running: $0 $*" >&2
 
 source scripts/include_all.sh
 
