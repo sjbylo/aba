@@ -281,7 +281,7 @@ END
 
 test-cmd -r 3 1 -m "Saving ubi images to local disk on `hostname`" "aba --dir mirror save --retry"
 
-mylog Copy tar+ssh archives to internal bastion
+mylog Scp archives to internal bastion
 
 #### DO NOT USE #### aba --dir mirror tarrepo --out - | ssh $reg_ssh_user@$int_bastion_hostname -- tar -C $subdir -xvf -
 
@@ -521,7 +521,7 @@ mylog Downloading the mesh demo into test/mesh, for use by deploy script
 	sed -i "s/source: .*/source: redhat-operators/g" operators/* 
 ) 
 
-mylog Copy tar+ssh archives to internal bastion
+mylog Scp IS archive and ISC files to internal bastion
 rm -f test/mirror-registry-amd64.tar.gz  # No need to copy this over!
 
 test-cmd -m "Listing mirror/save/" "ls -lh mirror/save/"
