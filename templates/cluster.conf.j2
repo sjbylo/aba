@@ -42,6 +42,10 @@ ports={{ ports }}				# Space-separated interface names for machine network
 					# Multiple (bonded): ports="ens1f0 ens2f0 ens3f0 ens4f0"
 vlan={{ vlan }}					# Optional VLAN tag (works with or without bonding)
 
+ssh_key_file=~/.ssh/id_rsa		# Path to SSH key (recommended)
+					# - Public key (~/.ssh/id_rsa.pub) copied to all nodes
+					# - Private key (~/.ssh/id_rsa) used for SSH node access
+
 int_connection={{ int_connection }}				# Internet connection mode:
 					#   proxy  - use cluster-wide proxy (from env vars)
 					#   direct - use NAT / direct Internet
@@ -50,10 +54,6 @@ int_connection={{ int_connection }}				# Internet connection mode:
 #http_proxy=http://10.0.1.8:3128	# Optional proxy overrides (if env vars not set)
 #https_proxy=http://10.0.1.8:3128
 #no_proxy=.example.com,.lan
-
-ssh_key_file=~/.ssh/id_rsa		# Path to SSH key (recommended)
-					# - Public key (~/.ssh/id_rsa.pub) copied to all nodes
-					# - Private key (~/.ssh/id_rsa) used for SSH node access
 
 ######################################################################################################
 # The values below apply only if using vCenter or ESXi for VM-based clusters.
