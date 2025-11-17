@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251117000940
+ABA_VERSION=20251117084924
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -17,20 +17,27 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 WORK_DIR=$PWD # Remember so can change config file here 
 
-## Change dir if asked
-# Keep these lines, ready for the below lines of code #FIXME: Use well-known loaction for static files, e.g. /opt/aba
-if [ "$1" = "--dir" -o "$1" = "-d" ]; then
-	[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
-	[ ! -e "$2" ] && echo "Error: directory $2 does not exist!" >&2 && exit 1
-	[ ! -d "$2" ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
+# Need to catch these option, esp. if they are at the start
+while [ "$1" = "-D" -o "$1" = "--debug" -o "$1" = "--dir" -o "$1" = "-d" ] 
+do
+	## Change dir if asked
+	# Keep these lines, ready for the below lines of code #FIXME: Use well-known loaction for static files, e.g. /opt/aba
+	if [ "$1" = "--dir" -o "$1" = "-d" ]; then
+		[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
+		[ ! -e "$2" ] && echo "Error: directory $2 does not exist!" >&2 && exit 1
+		[ ! -d "$2" ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
 
-	[ "$DEBUG_ABA" ] && echo "change dir to: '$2'" # Have not sourced the include file yet!
+		[ "$DEBUG_ABA" ] && echo "change dir to: '$2'" # Have not sourced the include file yet!
 
-	cd "$2"
-	shift 2
+		cd "$2"
+		shift 2
 
-	WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
-fi
+		WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
+	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
+		DEBUG_ABA=1
+		shift
+	fi
+done
 
 export INFO_ABA=1
 interactive_mode=1
@@ -89,6 +96,7 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 fi
 
 source $ABA_ROOT/scripts/include_all.sh
+aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
 
 aba_debug "ABA_ROOT=[$ABA_ROOT]"
 
@@ -130,7 +138,7 @@ fi
 source <(cd $ABA_ROOT && normalize-aba-conf)
 
 # Interactive mode is used when no args are suplied
-[ "$*" ] && interactive_mode=
+[ "$*" ] && interactive_mode= && have_args=1
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
 
@@ -819,13 +827,16 @@ do
 	fi
 done
 
-aba_debug DEBUG: $0: interactive_mode=[$interactive_mode] 
+aba_debug "interactive_mode=[$interactive_mode]"
 
 # Sanitize $BUILD_COMMAND
 BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
 
 aba_debug "ABA_ROOT=[$ABA_ROOT]" 
 aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 
+
+# Do not execute interactive mode is args are provided. 
+[ "$have_args" ] && exit 0
 
 # We want interactive mode if aba is running at the top of the repo and without any args
 [ ! "$BUILD_COMMAND" -a "$ABA_ROOT" = "." ] && interactive_mode=1
