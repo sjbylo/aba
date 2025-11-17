@@ -128,7 +128,7 @@ if [ ! "$1" ]; then
 	mylog "Setting reg_host=$int_bastion_hostname"
 	sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf
 
-	aba --dir cli ~/bin/govc
+	test-cmd aba --dir cli ~/bin/govc
 
 	#################################
 	source <(normalize-vmware-conf)  # Needed for govc below

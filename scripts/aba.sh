@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251117084924
+ABA_VERSION=20251117090354
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -835,8 +835,9 @@ BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $
 aba_debug "ABA_ROOT=[$ABA_ROOT]" 
 aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 
 
-# Do not execute interactive mode is args are provided. 
-[ "$have_args" ] && exit 0
+# Do not execute interactive mode if args are provided and no make command to run.
+# FIXME: Would it be better to run interactive mode before the 2nd while loop at the top?!
+[ "$have_args" -a ! "$BUILD_COMMAND" ] && exit 0
 
 # We want interactive mode if aba is running at the top of the repo and without any args
 [ ! "$BUILD_COMMAND" -a "$ABA_ROOT" = "." ] && interactive_mode=1
