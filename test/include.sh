@@ -152,7 +152,7 @@ test-cmd() {
 			#trap cleanup_tests SIGINT
 			#sleep_time=`expr $sleep_time + $backoff \* 5`
 			#sleep_time=`expr $sleep_time + $backoff`
-			sleep_time=$(awk -v s="$sleep_time" -v b="$backoff" 'BEGIN {print s * b}')
+			sleep_time=$(awk -v s="$sleep_time" -v b="$backoff" 'BEGIN {print int(s * b)}')
 			[ $sleep_time -gt 40 ] && sleep_time=40
 
 			log-test -t "Attempting command again ($i/$tot_cnt): \"$cmd\""
