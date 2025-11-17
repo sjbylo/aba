@@ -1,6 +1,8 @@
 #!/bin/bash -ex
 # Simple top level script to run all tests
 
+echo $PWD | grep -q /testing/ && echo "Error: Exec tests from testing dir: $PWD" && exit 1
+
 all_tests="\
 test2 \
 test5 \
