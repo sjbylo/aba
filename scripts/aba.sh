@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251117090354
+ABA_VERSION=20251117113223
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -859,9 +859,9 @@ if [ ! "$interactive_mode" ]; then
 			eval make -s $BUILD_COMMAND
 		fi
 	fi
-
-	aba_debug "Exiting aba"
-	exit 
+	ret=$?
+	aba_debug "Exiting aba with code $ret"
+	exit $ret # Important that we exit here with exit code from the above make command
 fi
 
 # Change to the top level repo directory
