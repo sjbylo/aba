@@ -9,6 +9,8 @@ cd $dir
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 if [ ! -f aba.conf ]; then
 	cp templates/aba.conf .
 fi
@@ -26,14 +28,10 @@ export PATH=$PWD/bin:$PATH
 
 export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
 
-echo -n "Looking up OpenShift release versions ..."
+aba_info -n "Looking up OpenShift release versions ..."
 
 if ! curl --connect-timeout 10 --retry 8 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt > $tmp_dir/.release.txt; then
-	[ "$TERM" ] && tput setaf 1
-	echo
-	echo "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
-	[ "$TERM" ] && tput sgr0
-	exit 1
+	aba_abort "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
 fi
 
 ## Get the latest stable OCP version number, e.g. 4.14.6
@@ -55,8 +53,6 @@ which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version |
 [ "$TERM" ] && tput el1
 [ "$TERM" ] && tput cr
 sleep 0.5
-
-#echo    "Which version of OpenShift do you want to install?"
 
 target_ver=
 #while true

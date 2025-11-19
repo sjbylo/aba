@@ -2,6 +2,9 @@
 # This will run the 'wait-for' command and output next steps after ocp installation
 
 source scripts/include_all.sh
+
+aba_debug "Starting: $0 $*"
+
 trap - ERR  # We don't want to catch on error. error handling added below. 
 
 [ "$1" ] && set -x 

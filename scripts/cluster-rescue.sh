@@ -3,6 +3,9 @@
 # Prep execution on one node
 if [ ! "$1" = "--exec" ]; then
 	source scripts/include_all.sh 
+
+	aba_debug "Starting: $0 $*"
+
 	source <(normalize-cluster-conf) 
 
 	verify-cluster-conf || exit 1

@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 [ "$1" ] && set -x 
 
 source <(normalize-aba-conf)
@@ -127,7 +129,8 @@ num_ports=${#arr[@]}
 #echo arr_ports=${arr_ports[@]}
 #num_ports=$(echo "$arr_ports" | wc -l)
 #echo num_ports=${#arr_ports[@]}
-[ "$INFO_ABA" ] && echo_white "Ports=${arr_ports[@]} and num_ports=$num_ports"
+
+aba_info "Ports: ${arr_ports[@]} and num_ports=$num_ports"
 
 # Generate the mac addresses or get them from 'macs.conf'
 # Goal is to allow user to BYO mac addresses for bare-metal use-case. So, we generate the addresses in advance into an array "arr_". scripts/j2 will create a python list.

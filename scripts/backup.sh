@@ -6,6 +6,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
 inc= 				# Full backup by default (not incremental) 
 repo_only=			# Also include the save/mirror_*.tar files (for some use-cases it's more efficient to keep them separate) 
@@ -22,9 +24,8 @@ done
 if [ "$dest" != "-" ]; then
 	[ -d $dest ] && dest=$dest/aba-backup-$(whoami).tar	# The dest needs to be a file
 	echo "$dest" | grep -q \.tar$ || dest="$dest.tar"	# append .tar if needed
-
 	# If the destination file already exists...
-	[ -s $dest ] && echo_red "Warning: File $dest already exists. Aborting!" >&2 && exit 1 
+	[ -s $dest ] && aba_abort "File $dest already exists. Aborting!" 
 fi
 
 # Assume this script is run via 'make ...' from aba's top level dir
@@ -104,23 +105,31 @@ file_list=$(find		\
 # Clean up file_list
 file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " white space (is empty)
 
-# For incremental backup, there may be no new files
-[ ! "$file_list" ] && echo_magenta "No new files to backup!" >&2 && exit 0
+[ ! "$file_list" ] && echo_info "No new files to backup!" && exit 0
+# Example: For incremental backup, there may be no new files 
 
 # Output reminder message
 if [ "$repo_only" ]; then
-	echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE INSTALL BUNDLE ('SPLIT BUNDLE')." >&2
-	echo_magenta "           The image set archive file(s) are located at aba/mirror/save/mirror_*.tar." >&2
-	echo_magenta "           You will need to copy them to your internal bastion, along with the install bundle file ($dest), and combine them." >&2
-	echo_magenta "           READ THE BELOW INSTRUCTIONS CAREFULLY!" >&2
-	echo_magenta "           To avoid this write the full install bundle to *external media* or to a *separate drive*." >&2
+	#echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE INSTALL BUNDLE (*SPLIT BUNDLE*)." >&2
+	#echo_magenta "           The image set archive file(s) are located at $PWD/aba/mirror/save/mirror_*.tar." >&2
+	#echo_magenta "           You will need to copy them to your internal bastion, along with the install bundle file ($dest), and combine them." >&2
+	#echo_magenta "           READ THE BELOW INSTRUCTIONS CAREFULLY!" >&2
+	#echo_magenta "           To avoid this in future write the full install bundle to *external media* or to a *separate drive*." >&2
+
+	echo_magenta "IMPORTANT: No image-set files are being added to this install bundle (*split bundle*)." >&2
+	echo_magenta "           The image-set archive(s) are located at: $PWD/aba/mirror/save/mirror_*.tar" >&2
+	echo_magenta "           You must copy these archive files to your internal bastion together with the install bundle ($dest)," >&2
+	echo_magenta "           and then combine them there." >&2
+	echo_magenta "           PLEASE READ THE INSTRUCTIONS BELOW CAREFULLY." >&2
+	echo_magenta "           To avoid split bundles in the future, write the full bundle to *external media* or a *separate filesystem*." >&2
+
 fi
 
 # If destination is NOT stdout (i.e. if in interactive mode)
 if [ "$dest" != "-" ]; then
 	if [ "$repo_only" ]; then
 		echo
-		echo_cyan "Writing 'split' bundle file to $dest ... (to create a full install bundle, write the bundle directly to external media)."
+		echo_cyan "Writing *split* bundle file to $dest ... (to create a full install bundle instead, write the bundle directly to external media)."
 		echo
 		#echo_white "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
 		echo_white "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
@@ -141,7 +150,7 @@ if [ "$dest" != "-" ]; then
 		echo
 	else
 		echo
-		echo_cyan "Writing 'all-in-one' install bundle file to $dest ..."
+		echo_cyan "Writing *all-in-one* install bundle file to $dest ..."
 		echo
 		#echo_white "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
 		echo_white "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
@@ -169,29 +178,28 @@ fi
 out_file_list=$(echo $file_list | cut -c-90)
 
 echo_cyan "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
-echo >&2
+echo "Please wait!" >&2
+#echo >&2
 set +e   # Needed so we can capture the return code from tar and not just exit (bash -e) 
 tar cf $dest $file_list
 ret=$?
+rm -f aba/.bundle  # We don't want this repo to be labeled as 'bundle', only the tar archive should be
 if [ $ret -ne 0 ]; then
 	echo
 	echo_red "Error: The tar command failed with return code $ret!" >&2
 	echo_red "       The archive is very likely incomplete!  Fix the problem and try again!" >&2
 	echo 
-	rm -f aba/.bundle
 
 	exit $ret
 fi
 
 set -e
 
-rm -f aba/.bundle  # We don't want this repo to be labeled as 'bundle', only the tar archive should be
-
 # If "not repo backup only" (so, if 'inc' or 'tar'), then always update timestamp file so that future inc backups will not backup everything.
 # If using 'repo only, then you always want the whole repo to be backed up (so no need to use the timestamp file).
 # NOTE: ONLY INC BACKUPS USE THIS FILE!!! See above. 
-# Upon success, make a note of the time
-[ "$INFO_ABA" ] && echo_white "Touching file ~/.aba.previous.backup" >&2
+# Upon success, make a note of the time FIXME: Remove the 'inc' feature
 touch ~/.aba.previous.backup
 
 [ "$dest" != "-" ] && echo_green "Install bundle written successfully to $dest!" >&2 || echo_green "Install bundle streamed successfully to stdout!" >&2
+

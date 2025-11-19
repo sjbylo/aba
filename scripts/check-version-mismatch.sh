@@ -5,6 +5,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 if [ ! -s sync/imageset-config-sync.yaml -a ! -s save/imageset-config-save.yaml ]; then
 	# Nothing to check
 	exit 0

@@ -39,7 +39,7 @@ aba_debug "Verifying resolution of mirror hostname: $reg_host"
 # You MUST have a proper DNS entry for OCP to install!
 fqdn_ip=$(dig +short $reg_host | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}') || true
 if [ ! "$fqdn_ip" ]; then
-	aba_error \
+	aba_abort \
 		"'$reg_host' does not resolve properly. An IP address is expected!" \
 		"Command used: dig $reg_host +short" \
 		"Correct the problem and try again!"
@@ -56,7 +56,7 @@ aba_debug Probe command: $probe_cmd
 reg_code=$(eval $probe_cmd || true)
 
 if [ "$reg_code" = "200" ]; then
-	aba_error \
+	aba_abort \
 		"Existing Quay registry found at $reg_url/health/instance" \
 		"To use this registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." \
 		"The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." \
@@ -72,7 +72,7 @@ aba_debug Probe command: $probe_cmd
 reg_code=$(eval $probe_cmd || true)
 
 if [ "$reg_code" = "200" ]; then
-	aba_error \
+	aba_abort \
 		"Warning: Endpoint found at $reg_url/" \
 		"If this is your existing registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." \
 		"The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." \
@@ -86,7 +86,7 @@ reg_root=$data_dir/quay-install
 #if [ "$reg_root" ]; then
 	# Check if not absolute path
 	if [[ "$reg_root" != /* && "$reg_root" != ~* ]]; then
-		aba_error \
+		aba_abort \
 			"reg_root value must be an 'absolute path', i.e. starting with a '/' or a '~' char! Fix this in mirror/mirror.conf and try again!" 
 	fi
 #fi
@@ -116,7 +116,7 @@ if [ "$reg_ssh_key" ]; then
 
 	# try to create a random file on the host and check the file does not exist on this localhost 
 	if ! ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host touch $flag_file; then
-		aba_error \
+		aba_abort \
 			"Can't ssh to '$reg_ssh_user@$reg_host' using key '$reg_ssh_key'" \
 			"Configure password-less ssh to the remote host '$reg_ssh_user@$reg_host' and try again." \
 			"Test with command: ssh -i $reg_ssh_key $reg_ssh_user@$reg_host" 
@@ -126,7 +126,7 @@ if [ "$reg_ssh_key" ]; then
 	if [ -f $flag_file ]; then
 		rm -f $flag_file
 
-		aba_error \
+		aba_abort \
 			"The mirror registry is configured to be installed on a *remote* host." \
 			"But $reg_host ($fqdn_ip) reaches this localhost ($(hostname -s)) instead!" \
 			"You have two options:" \
@@ -138,11 +138,11 @@ if [ "$reg_ssh_key" ]; then
 
 	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host rm -f $flag_file
 
-	aba_echo "Ssh access to remote host ($reg_ssh_user@$reg_host using key $reg_ssh_key) is working ..."
+	aba_info "Ssh access to remote host ($reg_ssh_user@$reg_host using key $reg_ssh_key) is working ..."
 
 	ask "Install Quay mirror registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessable via $reg_hostport" || exit 1
 
-	aba_echo "Installing Quay registry to remote host at $reg_ssh_user@$reg_host ..."
+	aba_info "Installing Quay registry to remote host at $reg_ssh_user@$reg_host ..."
 
 	echo_cyan "Running checks on remote host: $reg_host.  See $PWD/.remote_host_check.out file for output."
 
@@ -153,10 +153,10 @@ if [ "$reg_ssh_key" ]; then
 	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host "set -x; rpm -q jq 	|| sudo dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
 	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host "set -x; podman images" >> .remote_host_check.out 2>&1 || err=1
 
-	[ "$err" ] && aba_error "Install 'podman' and 'jq' on the remote host '$reg_host' and try again."
+	[ "$err" ] && aba_abort "Install 'podman' and 'jq' on the remote host '$reg_host' and try again."
 
 	# Note that the mirror-registry installer does not open the port for us
-	aba_echo Allowing firewall access to the registry at $reg_host/$reg_port ...
+	aba_info Allowing firewall access to the registry at $reg_host/$reg_port ...
 	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "sudo firewall-cmd --state && \
 		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
 			sudo firewall-cmd --reload"
@@ -172,7 +172,7 @@ if [ "$reg_ssh_key" ]; then
 	#	echo_white "Using registry root dir: $reg_root" #FIXME: Never called!
 	#fi
 
-	aba_echo "Installing mirror registry on the remote host [$reg_host] with user $reg_ssh_user into dir $reg_root ..."
+	aba_info "Installing mirror registry on the remote host [$reg_host] with user $reg_ssh_user into dir $reg_root ..."
 
 	if [ ! "$reg_pw" ]; then
 		# Generate random password 
@@ -202,7 +202,7 @@ if [ "$reg_ssh_key" ]; then
 	mkdir regcreds
 
 	# Fetch root CA from remote host 
-	aba_echo "Fetching root CA from remote host: $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem"
+	aba_info "Fetching root CA from remote host: $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem"
 	scp -i $reg_ssh_key -F $ssh_conf_file -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
 
 	[ ! "$reg_user" ] && reg_user=init
@@ -214,7 +214,7 @@ if [ "$reg_ssh_key" ]; then
 	#[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 	# Configure the pull secret for this mirror registry 
-	aba_echo "Generating regcreds/pull-secret-mirror.json file"
+	aba_info "Generating regcreds/pull-secret-mirror.json file"
 	export enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)
 	# Inputs: enc_password, reg_host and reg_port 
 	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
@@ -292,7 +292,7 @@ else
 		# Try to ssh to *localhost* since the installer will do the same.
 		if ! ssh -F $ssh_conf_file -i $temp_aba_key $reg_host touch $flag_file >/dev/null     ; then
 			# This must work for the Quay installer
-			aba_error \
+			aba_abort \
 				"For a local installation of Quay, ssh must allow access to this host via the FQDN $reg_host. The Quay installer requires this." \
 				"Failed command: ssh -i $temp_aba_key $reg_host" 
 		fi

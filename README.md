@@ -1,5 +1,7 @@
 # Aba makes it easier to install OpenShift in a disconnected (air-gapped) environment. <!-- omit in toc -->
 
+>> **There was a bug in the `aba bundle` command causing: `Error: directory ... aba/tar does not exist!`!  It has been fixed!**
+
 Easily install an OpenShift cluster - "Cluster Zero" - into a fully or partially disconnected environment, either onto bare-metal or VMware (vSphere/ESXi).
 Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP.
 
@@ -196,6 +198,7 @@ You can download the latest Install Bundles from: https://red.ht/disco-easy
 Note that if these bundles don’t suit your needs, [let us know](https://github.com/sjbylo/aba/issues/new) your requirements — including the use case and which images or operators are needed.  Alternatively, if you have access, join the [Slack Channel](https://red.ht/slack-forum-aba). 
 
 You can also create your own bundle.  See [Creating a Custom Install Bundle](#creating-a-custom-install-bundle) for more. 
+<!-- this is a perma-link from the bundle maker README_FIRST.md file --> 
 
 [Back to top](#who-should-use-aba)
 
@@ -562,13 +565,9 @@ cd aba
 
 Connect a large USB media stick (or other device) to your VM and write the `install bundle` to it:
 
-Set the version of OpenShift you want to install:
-
-```
-v=4.17.16
-```
-
 Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any existing files under aba/mirror/save.
+
+>> **There was a bug in the `aba bundle` command causing: `Error: directory ... aba/tar does not exist!`!  It has been fixed!**
 
 Create the install bundle with a single command, for example:
 
@@ -576,7 +575,7 @@ Create the install bundle with a single command, for example:
 aba bundle \
     --pull-secret "~/.pull-secret.json" \
     --channel stable \
-    --version $v \
+    --version latest \
     --op-sets ocp odf ocpv \
     --ops web-terminal devworkspace-operator \
     --base-domain example.com \
@@ -585,7 +584,7 @@ aba bundle \
     --ntp 10.0.1.8 ntp.example.com \
     --platform bm \
     --force \
-    --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_${v}_
+    --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_
 ```
 
 - This will generate several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.

@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 source <(normalize-aba-conf)
 
 verify-aba-conf # || exit 1

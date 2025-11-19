@@ -99,16 +99,33 @@ color_demo() {
 #	exit 1
 #}
 
-aba_echo() {
-	echo_white "[ABA] $@"
+aba_info() {
+	[ ! "$ABA_INFO" ] && return 0
+
+	if [ "$1" = "-n" ]; then
+		shift
+		echo_white -n "[ABA] $@"
+	else
+		echo_white "[ABA] $@"
+	fi
 }
 
-aba_echo_ok() {
-	echo_green "[ABA] $@"
+aba_info_ok() {
+	if [ "$1" = "-n" ]; then
+		shift
+		echo_green -n "[ABA] $@"
+	else
+		echo_green "[ABA] $@"
+	fi
 }
 
 echo_warn() {
-	echo_red "Warning: $@" >&2
+	if [ "$1" = "-n" ]; then
+		shift
+		echo_red -n "Warning: $@" >&2
+	else
+		echo_red "Warning: $@" >&2
+	fi
 }
 
 aba_debug() {
@@ -135,15 +152,11 @@ aba_debug() {
     fi
 }
 
-echo_info() {
-	echo_cyan "$@" >&2
-}
-
-aba_error() {
+aba_abort() {
 	local main_msg="$1"
 	shift
 
-	echo
+	echo >&2
 
 	# Main error message in red to stderr
 	echo_red "Error: $main_msg" >&2
@@ -152,10 +165,11 @@ aba_error() {
 	for line in "$@"; do
 		echo_red "       $line" >&2
 	done
-	echo
+	echo >&2
 
 	sleep 1
 
+	# FIXME: Have a way to exit a diff. value
         exit 1
 }
 
@@ -163,17 +177,17 @@ aba_warning() {
 	local main_msg="$1"
 	shift
 
-	echo
+#	echo >&2
 
 	# Main error message in red to stderr
-	echo_red "Error: $main_msg" >&2
+	echo_red "Warning: $main_msg" >&2
 
 	# Indented follow-up lines, also red, to stderr
 	for line in "$@"; do
-		echo_red "       $line" >&2
+		echo_red "         $line" >&2
 	done
 
-	echo
+#	echo >&2
 
 	sleep 1
 }

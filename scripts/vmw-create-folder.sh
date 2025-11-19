@@ -28,10 +28,9 @@ do
 		for f in $folder_list
 		do
 			[ "$f" == "/" ] && echo "Invalid folder name: '$msg_folder'" && exit 1
-			#govc folder.create $f >/dev/null 2>&1
 			govc folder.create $f
 		done
-		[ $? -eq 0 ] && echo "Folder $f created!" || echo "Cannot create: '$f'"
+		[ $? -eq 0 ] && aba_info "Folder $f created!" || aba_info "Cannot create: '$f'"
 		break
 	fi
 done
