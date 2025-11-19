@@ -105,7 +105,7 @@ file_list=$(find		\
 # Clean up file_list
 file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " white space (is empty)
 
-[ ! "$file_list" ] && echo_info "No new files to backup!" && exit 0
+[ ! "$file_list" ] && aba_info "No new files to backup!" && exit 0
 # Example: For incremental backup, there may be no new files 
 
 # Output reminder message
@@ -170,14 +170,14 @@ if [ "$dest" != "-" ]; then
 fi
 
 if [ "$inc" ]; then
-	echo_cyan "Writing 'incremental' tar archive of repo to $dest" >&2  # Must use stderr otherwise the tar archive becomes corrupt
+	aba_info "Writing 'incremental' tar archive of repo to $dest" >&2  # Must use stderr otherwise the tar archive becomes corrupt
 else
-	echo_cyan "Writing tar file to $dest" >&2
+	aba_info "Writing tar file to $dest" >&2
 fi
 
 out_file_list=$(echo $file_list | cut -c-90)
 
-echo_cyan "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
+aba_info "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
 echo "Please wait!" >&2
 #echo >&2
 set +e   # Needed so we can capture the return code from tar and not just exit (bash -e) 
@@ -201,5 +201,5 @@ set -e
 # Upon success, make a note of the time FIXME: Remove the 'inc' feature
 touch ~/.aba.previous.backup
 
-[ "$dest" != "-" ] && echo_green "Install bundle written successfully to $dest!" >&2 || echo_green "Install bundle streamed successfully to stdout!" >&2
+[ "$dest" != "-" ] && aba_info_ok "Install bundle written successfully to $dest!" >&2 || aba_info_ok "Install bundle streamed successfully to stdout!" >&2
 
