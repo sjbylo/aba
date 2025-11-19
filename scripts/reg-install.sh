@@ -49,7 +49,7 @@ fi
 
 # Check for Quay...
 [ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
-[ "$INFO_ABA" ] && echo_white Probing $reg_url/health/instance
+aba_info Probing $reg_url/health/instance
 
 probe_cmd='curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/health/instance'
 aba_debug Probe command: $probe_cmd
@@ -65,7 +65,7 @@ if [ "$reg_code" = "200" ]; then
 fi
 
 # Check for any endpoint ...
-[ "$INFO_ABA" ] && echo_white Probing $reg_url/
+aba_info Probing $reg_url/
 
 probe_cmd='curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/'
 aba_debug Probe command: $probe_cmd
@@ -111,8 +111,8 @@ if [ "$reg_ssh_key" ]; then
 	aba_debug "Starting to install Quay to remote host"
 
 	# First, ensure the reg host points to a remote host and not this localhost
-	echo_cyan "You have configured the Quay mirror to be installed on a remote host (since 'reg_ssh_key' *is defined* in 'mirror/mirror.conf')."
-	[ "$INFO_ABA" ] && echo_cyan "Verifying FQDN '$reg_host' points to a remote host ..."
+	aba_info "You have configured the Quay mirror to be installed on a remote host (since 'reg_ssh_key' *is defined* in 'mirror/mirror.conf')."
+	aba_info "Verifying FQDN '$reg_host' points to a remote host ..."
 
 	# try to create a random file on the host and check the file does not exist on this localhost 
 	if ! ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host touch $flag_file; then
@@ -144,7 +144,7 @@ if [ "$reg_ssh_key" ]; then
 
 	aba_info "Installing Quay registry to remote host at $reg_ssh_user@$reg_host ..."
 
-	echo_cyan "Running checks on remote host: $reg_host.  See $PWD/.remote_host_check.out file for output."
+	aba_info "Running checks on remote host: $reg_host.  See $PWD/.remote_host_check.out file for output."
 
 	> .remote_host_check.out
 	err=
@@ -184,12 +184,12 @@ if [ "$reg_ssh_key" ]; then
 
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
-	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
+	aba_info "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
 	cmd="./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts"
 
-	echo_cyan "Installing mirror registry with command:"
-	echo_cyan "$cmd --initPassword <hidden>"
+	aba_info "Installing mirror registry with command:"
+	aba_info "$cmd --initPassword <hidden>"
 
 	eval echo $cmd --initPassword "'$reg_pw'"
 	eval $cmd --initPassword "'$reg_pw'"
@@ -231,8 +231,8 @@ else
 	# First, ensure the reg host points to this localhost and not a remote host
 	# Sanity check to see if the correct host was defined
 	# Resolve FQDN
-	echo_cyan "You have configured the Quay mirror to be installed on this localhost (since 'reg_ssh_key' *is not defined* in 'aba/mirror/mirror.conf')."
-	[ "$INFO_ABA" ] && echo_cyan "Verifying FQDN '$reg_host' (IP: $fqdn_ip) allows access to this localhost ..."
+	aba_info "You have configured the Quay mirror to be installed on this localhost (since 'reg_ssh_key' *is not defined* in 'aba/mirror/mirror.conf')."
+	aba_info "Verifying FQDN '$reg_host' (IP: $fqdn_ip) allows access to this localhost ..."
 
 	# Get local IP addresses
 	local_ips=$(hostname -I)
@@ -265,7 +265,7 @@ else
 			sleep 2
 		else
 			rm -f $flag_file
-			[ "$INFO_ABA" ] && echo_cyan "Ssh access to localhost via '$reg_host' is working."  # Completing the 'Verifying...' message above
+			aba_info "Ssh access to localhost via '$reg_host' is working."  # Completing the 'Verifying...' message above
 		fi
 	fi
 	# ssh to localhost is required by the Quay installer to install on localhost
@@ -278,7 +278,7 @@ else
 
 			sleep 2
 		else
-			[ "$INFO_ABA" ] && echo_cyan "Creating test ssh key: $temp_aba_key" 
+			aba_info "Creating test ssh key: $temp_aba_key" 
 			# Create key for testing ssh
 			ssh-keygen -t rsa -f $temp_aba_key -N '' >/dev/null 
 			chmod 600 $temp_aba_key $temp_aba_pub_key
@@ -325,12 +325,12 @@ else
 	uninstall_cmd="eval ./mirror-registry uninstall --autoApprove $reg_root_opts -v"
 	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
-	[ "$INFO_ABA" ] && echo_cyan "Created Quay uninstall script at $PWD/reg-uninstall.sh"
+	aba_info "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
 	cmd="./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host $reg_root_opts"
 
-	echo_cyan "Installing mirror registry with command:"
-	echo_cyan "$cmd --initPassword <hidden>"
+	aba_info "Installing mirror registry with command:"
+	aba_info "$cmd --initPassword <hidden>"
 
 	eval $cmd --initPassword $reg_pw   # eval needed for "~"
 
@@ -366,4 +366,4 @@ else
 fi
 
 echo
-echo_green "Registry installated/configured successfully!"
+aba_info_ok "Registry installated/configured successfully!"

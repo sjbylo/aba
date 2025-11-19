@@ -48,7 +48,7 @@ for name in $hosts; do
 done
 
 if [ "$wait" ]; then
-	echo_cyan "Waiting for nodes to power down ..."
+	aba_info "Waiting for nodes to power down ..."
 
 	hosts_off=
 	while [ ! "$hosts_off" ];

@@ -48,7 +48,7 @@ if [ ! -s vmware.conf ]; then
 
 		exit 1
 	else
-		echo_cyan "Saving working version of 'vmware.conf' to '~/.vmware.conf'."
+		aba_info "Saving working version of 'vmware.conf' to '~/.vmware.conf'."
 		[ -s vmware.conf ] && cp vmware.conf ~/.vmware.conf
 	fi
 fi

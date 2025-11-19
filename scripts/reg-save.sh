@@ -8,7 +8,7 @@ aba_debug "Starting: $0 $*"
 # Script called with args "debug" and/or "retry"
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" ] && [ $1 -gt 0 ] && r=1 && try_tot=`expr $1 + 1` && echo "Attempting $try_tot times to save the images to disk."    # If the retry value exists and it's a number
+[ "$1" ] && [ $1 -gt 0 ] && r=1 && try_tot=`expr $1 + 1` && aba_info "Attempting $try_tot times to save the images to disk."    # If the retry value exists and it's a number
 
 umask 077
 
@@ -17,7 +17,7 @@ source <(normalize-aba-conf)
 verify-aba-conf || exit 1
 
 # Check internet connection...
-##echo_cyan -n "Checking access to https://api.openshift.com/: "
+##aba_info -n "Checking access to https://api.openshift.com/: "
 if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
 	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk." >&2
 
@@ -27,11 +27,9 @@ fi
 # Ensure the RH pull secret files are located in the right places
 scripts/create-containers-auth.sh
 
-echo 
-echo_cyan "Now saving (mirror2disk) images from external network to mirror/save/ directory."
-echo
-echo_cyan "Warning: Ensure there is enough disk space under $PWD/save.  "
-echo_cyan "This can take 5 to 20 minutes to complete or even longer if Operator images are being saved!"
+aba_info "Now saving (mirror2disk) images from external network to mirror/save/ directory."
+aba_info "Warning: Ensure there is enough disk space under $PWD/save.  "
+aba_info "This can take 5 to 20 minutes to complete or even longer if Operator images are being saved!"
 echo 
 
 [ ! "$data_dir" ] && data_dir=\~
@@ -72,9 +70,9 @@ do
 		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 	fi
 
-	echo_cyan -n "Attempt ($try/$try_tot)."
-	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror save --retry <count>'" || echo
-	echo_cyan "Running: $(cat save-mirror.sh)"
+	aba_info -n "Attempt ($try/$try_tot)."
+	[ $try_tot -le 1 ] && aba_info " Set number of retries with 'aba -d mirror save --retry <count>'" || echo
+	aba_info "Running: $(cat save-mirror.sh)"
 	echo
 
 	# v1/v2 switch. For v2 need to do extra error checks!
@@ -116,22 +114,23 @@ done
 
 if [ "$failed" ]; then
 	let try=$try-1
-	echo_red -n "Image saving aborted ..." >&2
-	[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
-	echo_red "Warning: Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." >&2
-	echo_red "         View https://status.redhat.com/ for any current issues or planned maintenance." >&2
+	aba_warning -n "Image saving aborted ..." >&2
+	[ $try_tot -gt 1 ] && aba_info " (after $try/$try_tot attempts!)" || echo
+	aba_warning \
+		"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." \
+		"View https://status.redhat.com/ for any current issues or planned maintenance." 
 	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
 
 	exit 1
 fi
 
 echo
-echo_green -n "Images saved successfully!"
-[ $try_tot -gt 1 -a $try -gt 1 ] && echo_white " (after $try attempts!)" || echo   # Show if more than 1 attempt
+aba_info_ok -n "Images saved successfully!"
+[ $try_tot -gt 1 -a $try -gt 1 ] && aba_info " (after $try attempts!)" || echo   # Show if more than 1 attempt
 echo 
 
-echo_green "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which you transfer to your disconnected environment."
-echo_green "In your disconnected environment, unpack the install bundle and run 'cd aba; ./install; aba' for further instructions."
+aba_info_ok "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which you transfer to your disconnected environment."
+aba_info_ok "In your disconnected environment, unpack the install bundle and run 'cd aba; ./install; aba' for further instructions."
 echo
 
 exit 0

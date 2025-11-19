@@ -49,14 +49,14 @@ if [ $ret -ne 0 ]; then
 	fi
 else
 	echo 
-	echo_green "The cluster has been successfully installed!"
-	echo_green "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
-	echo_green "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
+	aba_info_ok "The cluster has been successfully installed!"
+	aba_info_ok "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
+	aba_info_ok "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
 	[ -f regcreds/pull-secret-mirror.json ] && \
-		echo_green "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
-		echo_green "Run 'aba day2-osus' to configure the OpenShift Update Service."
-	echo_green "Run 'aba day2-ntp' to configure NTP on this cluster."
-	echo_green "Run 'aba info' to view this information again."
-	echo_green "Run 'aba help' and 'aba -h' for more options."
+		aba_info_ok "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
+		aba_info_ok "Run 'aba day2-osus' to configure the OpenShift Update Service."
+	aba_info_ok "Run 'aba day2-ntp' to configure NTP on this cluster."
+	aba_info_ok "Run 'aba info' to view this information again."
+	aba_info_ok "Run 'aba help' and 'aba -h' for more options."
 fi
 

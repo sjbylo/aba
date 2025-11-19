@@ -39,13 +39,13 @@ echo
 eval "$config || exit 1"
 
 if [ -d $ASSETS_DIR ]; then
-	echo_cyan "Backing up previous $ASSETS_DIR' dir to '$ASSETS_DIR.backup':"
+	aba_info "Backing up previous $ASSETS_DIR' dir to '$ASSETS_DIR.backup':"
 
 	rm -rf $ASSETS_DIR.backup
 	cp -rp $ASSETS_DIR $ASSETS_DIR.backup
 fi
 
-echo_cyan Generating the ISO boot image for cluster: $CLUSTER_NAME.$BASE_DOMAIN ...
+aba_info Generating the ISO boot image for cluster: $CLUSTER_NAME.$BASE_DOMAIN ...
 
 rm -rf $ASSETS_DIR 
 mkdir -p $ASSETS_DIR
@@ -64,7 +64,7 @@ fi
 # FIXME: to implement PXE 
 #$openshift_install_mirror agent create pxe-files --dir $ASSETS_DIR
 
-echo_cyan "Making backup of '$ASSETS_DIR/auth' to '$ASSETS_DIR/auth.backup'"
+aba_info "Making backup of '$ASSETS_DIR/auth' to '$ASSETS_DIR/auth.backup'"
 cp -rp $ASSETS_DIR/auth $ASSETS_DIR/auth.backup
 
 # Add NTP config to ignition, if needed
@@ -72,5 +72,5 @@ cp -rp $ASSETS_DIR/auth $ASSETS_DIR/auth.backup
 scripts/add_ntp_ignition_to_iso.sh
 
 echo 
-echo_green "The agent based ISO has been created in the '$ASSETS_DIR' directory"
+aba_info_ok "The agent based ISO has been created in the '$ASSETS_DIR' directory"
 echo

@@ -74,8 +74,8 @@ if [ ! -x $openshift_install_mirror ]; then
 	# Now use the one in CWD # [ -s openshift-install ] && mv openshift-install ~/bin
 	rm -f .idms.yaml
 else
-	[ "$ABA_INFO" ] && echo_white "openshift-install already extracted from mirror registry"
+	aba_info "openshift-install already extracted from mirror registry"
 fi
 
-echo_green "Release image for version $release_ver is available at $reg_host:$reg_port$reg_path/openshift/release-images$release_sha"
+aba_info_ok "Release image for version $release_ver is available at $reg_host:$reg_port$reg_path/openshift/release-images$release_sha"
 

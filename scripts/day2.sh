@@ -48,7 +48,7 @@ echo_white "- Apply any release image signatures found under working-dir/cluster
 echo
 
 
-echo_green For disconnected environments, disabling online public catalog sources
+aba_info_ok For disconnected environments, disabling online public catalog sources
 
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
 if [ ! "$int_connection" ]; then
@@ -99,7 +99,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 	fi
 	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
 else	
-	echo_cyan "Registry trust bundle already added (cm registry-config -n openshift-config). Assuming workaround has already been applied or not necessary."
+	aba_info "Registry trust bundle already added (cm registry-config -n openshift-config). Assuming workaround has already been applied or not necessary."
 fi
 
 ####################################

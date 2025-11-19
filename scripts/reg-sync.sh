@@ -34,7 +34,7 @@ else
 fi
 
 # Check internet connection...
-##echo_cyan -n "Checking access to https://api.openshift.com/: "
+##aba_info -n "Checking access to https://api.openshift.com/: "
 if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
 	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry." >&2
 
@@ -89,7 +89,7 @@ do
 		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	fi
 
-	echo_cyan -n "Attempt ($try/$try_tot)."
+	aba_info -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror sync --retry <count>'" || echo
 	echo "Running: $(cat sync-mirror.sh)"
 	echo
@@ -144,15 +144,15 @@ if [ "$failed" ]; then
 fi
 
 echo
-echo_green -n "Images synchronized successfully!"
+aba_info_ok -n "Images synchronized successfully!"
 [ $try_tot -gt 1 -a $try -gt 1 ] && echo_white " (after $try attempts!)" || echo   # Show if more than 1 attempt
 
 echo 
-echo_green "OpenShift can now be installed. cd to aba's top-level directory and use the command:"
-echo_green "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
-echo_green "Use 'aba cluster --help' for more information about installing clusters."
+aba_info_ok "OpenShift can now be installed. cd to aba's top-level directory and use the command:"
+aba_info_ok "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
+aba_info_ok "Use 'aba cluster --help' for more information about installing clusters."
 
 echo
-echo_green "If you have already installed a cluster, (re-)run the command 'aba -d clustername day2' to configure/refresh OperatorHub/Catalogs, Signatures etc."
+aba_info_ok "If you have already installed a cluster, (re-)run the command 'aba -d clustername day2' to configure/refresh OperatorHub/Catalogs, Signatures etc."
 
 exit 0

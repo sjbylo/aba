@@ -100,7 +100,7 @@ color_demo() {
 #}
 
 aba_info() {
-	[ ! "$ABA_INFO" ] && return 0
+	[ ! "$INFO_ABA" ] && return 0
 
 	if [ "$1" = "-n" ]; then
 		shift
@@ -159,11 +159,11 @@ aba_abort() {
 	echo >&2
 
 	# Main error message in red to stderr
-	echo_red "Error: $main_msg" >&2
+	echo_red "[ABA] Error: $main_msg" >&2
 
 	# Indented follow-up lines, also red, to stderr
 	for line in "$@"; do
-		echo_red "       $line" >&2
+		echo_red "[ABA]        $line" >&2
 	done
 	echo >&2
 
@@ -180,11 +180,11 @@ aba_warning() {
 #	echo >&2
 
 	# Main error message in red to stderr
-	echo_red "Warning: $main_msg" >&2
+	echo_red "[ABA] Warning: $main_msg" >&2
 
 	# Indented follow-up lines, also red, to stderr
 	for line in "$@"; do
-		echo_red "         $line" >&2
+		echo_red "[ABA]          $line" >&2
 	done
 
 #	echo >&2
@@ -578,7 +578,7 @@ try_cmd() {
 
 	local count=1
 
-	[ ! "$quiet" ] && echo_cyan "Attempt $count/$total of command: \"$*\""
+	[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
 
 	#echo DEBUG: eval "$*" "$out"
 	#while ! eval $* $out
@@ -598,7 +598,7 @@ try_cmd() {
 		let pause=$pause+$backoff
 		let count=$count+1
 
-		[ ! "$quiet" ] && echo_cyan "Attempt $count/$total of command: \"$*\""
+		[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
 		#echo DEBUG: eval "$*" "$out"
 		echo cmd $* >>.cmd.out 
 	done
@@ -829,7 +829,7 @@ replace-value-conf() {
 		# Check if the value is already in the file along with the expected chars after the value, e.g. space/tab/# or EOL
 		if grep -q -E "^$name=$value[[:space:]]*(#.*)?$" $f; then
 			if [ ! "$quiet" ]; then
-				[ "$value" ] && echo_green "Value ${name}=${value} already exists in file $f" >&2 || echo_green "Value ${name} is already undefined in file $f" >&2
+				[ "$value" ] && aba_info_ok "Value ${name}=${value} already exists in file $f" >&2 || aba_info_ok "Value ${name} is already undefined in file $f" >&2
 			fi
 
 			return 0
@@ -837,7 +837,7 @@ replace-value-conf() {
 			sed -i "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
 
 			if [ ! "$quiet" ]; then
-				[ "$value" ] && echo_green "Added value ${name}=${value} to file $f" >&2 || echo_green "Undefining value ${name} in file $f" >&2 
+				[ "$value" ] && aba_info_ok "Added value ${name}=${value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
 			fi
 
 			return 0

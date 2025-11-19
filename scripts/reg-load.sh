@@ -68,9 +68,9 @@ do
 	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 	echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 
-	echo_cyan -n "Attempt ($try/$try_tot)."
+	aba_info -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror load --retry <count>'" || echo
-	echo_cyan "Running: $(cat load-mirror.sh)"
+	aba_info "Running: $(cat load-mirror.sh)"
 	echo
 
 	# v1/v2 switch. For v2 need to do extra check!
@@ -121,15 +121,15 @@ if [ "$failed" ]; then
 fi
 
 echo
-echo_green -n "Images loaded successfully!"
+aba_info_ok -n "Images loaded successfully!"
 [ $try_tot -gt 1 -a $try -gt 1 ] && echo_white " (after $try attempts!)" || echo   # Show if more than 1 attempt
 
 echo 
-echo_green "OpenShift can now be installed. cd to aba's top-level directory and use the command:"
-echo_green "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
-echo_green "Use 'aba cluster --help' for more information about installing clusters."
+aba_info_ok "OpenShift can now be installed. cd to aba's top-level directory and use the command:"
+aba_info_ok "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
+aba_info_ok "Use 'aba cluster --help' for more information about installing clusters."
 
 echo
-echo_green "If you have already installed a cluster, (re-)run the command 'aba -d clustername day2' to configure/refresh OperatorHub/Catalogs, Signatures etc."
+aba_info_ok "If you have already installed a cluster, (re-)run the command 'aba -d clustername day2' to configure/refresh OperatorHub/Catalogs, Signatures etc."
 
 exit 0
