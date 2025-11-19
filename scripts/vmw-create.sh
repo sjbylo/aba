@@ -85,7 +85,7 @@ create_node() {
 		local idx=$(( i * num_ports_per_node ))
 		local mac=${mac_array[$idx]}
 
-		echo_cyan -n "Create VM: "
+		aba_info -n "Create VM: "
 		echo "$vm_name: [${cpu_count}C/${mem_gb}G] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 
 		govc vm.create \
@@ -152,9 +152,9 @@ create_node "worker" "$WORKER_NAMES" WKR_MAC_ADDRS_ARRAY "$worker_cpu_count" "$w
 
 echo
 if [ -n "${START_VM:-}" ]; then
-	echo_green "Starting installation at $(date '+%b %e %H:%M')"
+	aba_info_ok "Starting installation at $(date '+%b %e %H:%M')"
 else
-	echo_green "To start the VMs and monitor the installation, run: aba start mon"
+	aba_info_ok "To start the VMs and monitor the installation, run: aba start mon"
 fi
 
 exit 0

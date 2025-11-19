@@ -166,7 +166,7 @@ rm -f $done_file  # Just to be sure
 ## NOT A GOOD IDEA [ -t 0 ] && handle_interupt() { echo_red "Putting download into background" >&2; rm -f $lock_file; ( $0 $* > .fetch-index.log 2>&1 & ) & exit 0; }
 ### FIX ME [ -t 0 ] && handle_interupt() { echo_red "Stopping download" >&2; rm -f $lock_file;  exit 0; }
 
-echo_cyan "Downloading Operator $catalog_name index v$ocp_ver_major to $index_file, please wait a few minutes ..."
+aba_info "Downloading Operator $catalog_name index v$ocp_ver_major to $index_file, please wait a few minutes ..."
 
 # Cannot be run concurrently!  This is now done from the aba/Makefile:catalog
 ###make -sC ../cli ~/bin/oc-mirror 
@@ -205,5 +205,5 @@ echo_white "Generated mirror/imageset-config-$catalog_name-catalog-v${ocp_ver_ma
 ##rm -f $lock_file $pid_file
 
 # Adding this to log file since it will run in the background
-echo_green "Downloaded $catalog_name index for v$ocp_ver_major successfully"
+aba_info_ok "Downloaded $catalog_name index for v$ocp_ver_major successfully"
 

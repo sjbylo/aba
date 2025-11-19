@@ -1,6 +1,6 @@
 # Aba makes it easier to install OpenShift in a disconnected (air-gapped) environment. <!-- omit in toc -->
 
->> **A bug has been fixed in the `aba bundle` command causing the error: `directory ... aba/tar does not exist!`!**
+>> **A bug has been fixed in the `aba bundle` command causing the error: `directory ... aba/tar does not exist!`**
 
 Easily install an OpenShift cluster - "Cluster Zero" - into a fully or partially disconnected environment, either onto bare-metal or VMware (vSphere/ESXi).
 Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP.
@@ -567,7 +567,7 @@ Connect a large USB media stick (or other device) to your VM and write the `inst
 
 Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any existing files under aba/mirror/save.
 
->> **A bug has been fixed in the `aba bundle` command causing the error: `directory ... aba/tar does not exist!`!**
+>> **A bug has been fixed in the `aba bundle` command causing the error: `directory ... aba/tar does not exist!`**
 
 Create the install bundle with a single command, for example:
 

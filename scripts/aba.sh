@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251119152504
+ABA_VERSION=20251119213653
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -895,8 +895,8 @@ if [ ! -f .bundle ]; then
 	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # btw .../ocp/eus/release.txt does not exist!
 
 	if [ "$ocp_channel" ]; then
-		#echo_cyan "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
-		echo_cyan "OpenShift update channel is set to '$ocp_channel' in aba.conf."
+		#aba_info "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
+		aba_info "OpenShift update channel is set to '$ocp_channel' in aba.conf."
 	else
 
 		echo_white -n "Checking Internet connectivity ..."
@@ -914,6 +914,7 @@ if [ ! -f .bundle ]; then
 		while true; do
 			echo_cyan -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [s]: "
 			read -r ans
+
 			case "$ans" in
 				""|"s"|"S")
 				        ocp_channel="stable"
@@ -934,7 +935,7 @@ if [ ! -f .bundle ]; then
 		done
 
 		replace-value-conf -q -n ocp_channel -v $ocp_channel -f aba.conf
-		echo_cyan "'ocp_channel' set to '$ocp_channel' in aba.conf"
+		aba_info "'ocp_channel' set to '$ocp_channel' in aba.conf"
 
 		#### chan=$ocp_channel # Used below
 	fi
@@ -945,8 +946,8 @@ if [ ! -f .bundle ]; then
 	# Determine OCP version 
 
 	if [ "$ocp_version" ]; then
-		#echo_cyan "OpenShift version is defined in aba.conf as '$ocp_version'."
-		echo_cyan "OpenShift version is set to '$ocp_version' in aba.conf."
+		#aba_info "OpenShift version is defined in aba.conf as '$ocp_version'."
+		aba_info "OpenShift version is set to '$ocp_version' in aba.conf."
 	else
 		##############################################################################################################################
 		# Fetch release.txt
@@ -1001,7 +1002,6 @@ if [ ! -f .bundle ]; then
 			[ "$channel_ver_prev" ] && or_p="or $channel_ver_prev (p)revious "
 
 			echo_cyan -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
-
 			read target_ver
 
 			[ ! "$target_ver" ] && target_ver=$default_ver          # use default
@@ -1014,7 +1014,7 @@ if [ ! -f .bundle ]; then
 
 		# Update the conf file
 		replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
-		echo_cyan "'ocp_version' set to '$target_ver' in aba.conf"
+		aba_info "'ocp_version' set to '$target_ver' in aba.conf"
 
 		sleep 0.3
 	fi
@@ -1052,7 +1052,7 @@ if [ ! -f .bundle ]; then
 
 		replace-value-conf -n editor -v "$new_editor" -f aba.conf
 		export editor=$new_editor
-		echo_cyan "'editor' set to '$new_editor' in aba.conf"
+		aba_info "'editor' set to '$new_editor' in aba.conf"
 
 		sleep 0.3
 	fi
@@ -1078,7 +1078,7 @@ if [ ! -f .bundle ]; then
 
 	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 		if jq empty $pull_secret_file; then
-			[ "$INFO_ABA" ] && echo_cyan "Pull secret found at '$pull_secret_file'."
+			aba_info "Pull secret found at '$pull_secret_file'."
 
 			sleep 0.3
 		else

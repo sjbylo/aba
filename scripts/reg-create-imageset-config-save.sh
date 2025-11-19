@@ -28,18 +28,18 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 	avail=$(df -m save | awk '{print $4}' | tail -1)
 	# If this is a fresh config, then check ... if less than 20 GB, stop
 	if [ $avail -lt 20500 ]; then
-		echo_red "Error: Not enough disk space available under $PWD/save (only $avail MB). At least 20GB is required for the base OpenShift platform alone." >&2
+		aba_abort "Not enough disk space available under $PWD/save (only $avail MB). At least 20GB is required for the base OpenShift platform alone." 
 
 		exit 1
 	fi
 
-	[ ! "$ocp_channel" -o ! "$ocp_version" ] && echo_red "Error: ocp_channel or ocp_version incorrectly defined in aba.conf" >&2 && exit 1
+	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "Error: ocp_channel or ocp_version incorrectly defined in aba.conf"
 
 	export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-	echo_cyan "Generating initial image set configuration: save/imageset-config-save.yaml to save images to local disk ..."
-	[ ! "$excl_platform" ] && echo_cyan "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$arch_short' ..."
+	aba_info "Generating initial image set configuration: save/imageset-config-save.yaml to save images to local disk ..."
+	[ ! "$excl_platform" ] && aba_info "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$arch_short' ..."
 
 	scripts/j2 ./templates/imageset-config-save-$oc_mirror_version.yaml.j2 > save/imageset-config-save.yaml 
 	scripts/add-operators-to-imageset.sh >> save/imageset-config-save.yaml 
@@ -49,15 +49,15 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 
 	touch save/.created
 
-	echo_green "Image set config file created: mirror/save/imageset-config-save.yaml"
-	echo_white "Reminder: Edit this file to add more content, e.g. Operators, and then run 'aba -d mirror save' again to update the images."
+	aba_info_ok "Image set config file created: mirror/save/imageset-config-save.yaml"
+	aba_info    "Reminder: Edit this file to add more content, e.g. Operators, and then run 'aba -d mirror save' again to update the images."
 else
 	# Check disk space under save/. 
 	avail=$(df -m save | awk '{print $4}' | tail -1)
 	# If this is NOT a fresh config, then check ... if less than 50 GB, give a warning only
 	if [ $avail -lt 51250 ]; then
-		echo_red "Warning: Less than 50GB of space available under $PWD/save (only $avail MB). Operator images require between ~40 to ~400GB of disk space!" >&2
+		aba_warning "Less than 50GB of space available under $PWD/save (only $avail MB). Operator images require between ~40 to ~400GB of disk space!" >&2
 	fi
 
-	echo_cyan "Using existing image set config file (save/imageset-config-save.yaml)"
+	aba_info "Using existing image set config file (save/imageset-config-save.yaml)"
 fi

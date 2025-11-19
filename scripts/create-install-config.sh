@@ -38,7 +38,7 @@ export image_content_sources=
 
 # Change the default of bare-metal host prefix
 if [ "$platform" = "bm" -a $hostPrefix -eq 23 ]; then
-	echo_cyan "Adjusting the default host prefix from 23 to 22 for bare-metal servers."
+	aba_info "Adjusting the default host prefix from 23 to 22 for bare-metal servers."
 	export hostPrefix=22
 fi
 
@@ -69,7 +69,7 @@ elif [ "$int_connection" = "proxy" ]; then
 			exit 1
 		fi
 
-		[ "$INFO_ABA" ] && echo_green "Configuring 'cluster wide proxy' using the following proxy settings:"
+		aba_info_ok "Configuring 'cluster wide proxy' using the following proxy settings:"
 		[ "$INFO_ABA" ] && echo_white "  http_proxy=$http_proxy"
 		[ "$INFO_ABA" ] && echo_white "  https_proxy=$https_proxy"
 		[ "$INFO_ABA" ] && echo_white "  no_proxy=$no_proxy"
@@ -185,6 +185,6 @@ fi
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
-echo_green "$PWD/install-config.yaml generated successfully!"
+aba_info_ok "$PWD/install-config.yaml generated successfully!"
 echo
 

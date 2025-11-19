@@ -204,11 +204,11 @@ export arr_macs=$(echo "$mac_list" | tr "\n" " " | tr -s "[:space:]")  # scripts
 
 # Set up the dns server(s)
 export arr_dns_servers=$(echo $dns_servers | tr "," " " | tr -s "[:space:]")  # scripts/j2 converts env vars starting with "arr_" into a python list which jinja2 can work with.
-[ "$INFO_ABA" ] && echo_cyan "Adding DNS server(s): $arr_dns_servers"
+aba_info "Adding DNS server(s): $arr_dns_servers"
 
 # Set up the ntp server(s)
 export arr_ntp_servers=$(echo $ntp_servers | tr "," " " | tr -s "[:space:]")  # scripts/j2 converts env vars starting with "arr_" into a python list which jinja2 can work with.
-[ "$INFO_ABA" ] && echo_cyan "Adding NTP server(s): $arr_ntp_servers"
+aba_info "Adding NTP server(s): $arr_ntp_servers"
 
 # Use j2cli to render the templates
 if [ "$INFO_ABA" ]; then
@@ -245,6 +245,6 @@ fi
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
 scripts/j2 templates/$template_file > agent-config.yaml
 
-echo_green "$PWD/agent-config.yaml generated successfully!"
+echo_info_ok "$PWD/agent-config.yaml generated successfully!"
 echo
 

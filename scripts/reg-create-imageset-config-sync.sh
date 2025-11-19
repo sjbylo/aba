@@ -32,10 +32,10 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 	export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-	echo_cyan "Generating initial image set configuration: sync/imageset-config-sync.yaml to sync images to the mirror registry ..."
-	[ ! "$excl_platform" ] && echo_cyan "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$arch_short' ..."
+	aba_info "Generating initial image set configuration: sync/imageset-config-sync.yaml to sync images to the mirror registry ..."
+	[ ! "$excl_platform" ] && aba_info "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$arch_short' ..."
 
-	[ ! "$ocp_channel" -o ! "$ocp_version" ] && echo_red "Error: ocp_channel or ocp_version incorrectly defined in aba.conf" >&2 && exit 1
+	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "Error: ocp_channel or ocp_version incorrectly defined in aba.conf" 
 
 	scripts/j2 ./templates/imageset-config-sync-$oc_mirror_version.yaml.j2 > sync/imageset-config-sync.yaml 
 	scripts/add-operators-to-imageset.sh >> sync/imageset-config-sync.yaml
@@ -44,10 +44,10 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 
 	touch sync/.created
 
-	echo_green "Image set config file created: mirror/sync/imageset-config-sync.yaml"
-	echo_white "Reminder: Edit this file to add more content, e.g. Operators, and then run 'aba -d mirror sync' again."
+	aba_info_ok "Image set config file created: mirror/sync/imageset-config-sync.yaml"
+	aba_info    "Reminder: Edit this file to add more content, e.g. Operators, and then run 'aba -d mirror sync' again."
 else
-	echo_cyan "Using existing image set config file (save/imageset-config-sync.yaml)"
+	aba_info "Using existing image set config file (save/imageset-config-sync.yaml)"
 fi
 
 # This is needed since sometimes an existing registry may already be available

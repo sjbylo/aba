@@ -55,10 +55,6 @@ add_op() {
 	fi
 }
 
-if [ ! "$op_sets" ]; then
-	aba_info "Value: op_sets not defined in aba.conf or mirror.conf. Not adding operators to the image set config file." >&2
-fi
-
 if [ "$ops" -o "$op_sets" ]; then
 	catalog_file_errors=
 	for catalog in redhat-operator certified-operator redhat-marketplace community-operator
@@ -83,11 +79,10 @@ if [ "$ops" -o "$op_sets" ]; then
 		#exit 1 
 	fi
 else
-	aba_info "Values: ops or op_sets not defined in aba.conf or mirror.conf. Not adding operators to the image set config file." >&2
+	aba_info "No operators to add to the image set config file since values ops or op_sets not defined in aba.conf or mirror.conf." >&2
 
 	exit 0
 fi
-
 
 aba_info "Adding operators to the image set config file ..."  >&2
 
@@ -120,10 +115,10 @@ do
 	# read in op list from template
 	if [ -s templates/operator-set-$set ]; then
 		#echo "# $set operators"
-		[ "$INFO_ABA" ] && echo_cyan -n "$set: " >&2
+		aba_info -n "$set: " >&2
 		for op in $(cat templates/operator-set-$set | sed -e 's/#.*//' -e '/^\s*$/d' -e 's/^\s*//g' -e 's/\s*$//g')
 		do
-			[ "$INFO_ABA" ] && echo_cyan -n "$op " >&2
+			aba_info -n "$op " >&2
 
 			# Check if this operator exists in each of the three catalogs
 			#echo op=$op
@@ -154,11 +149,11 @@ if [ "$ops" ]; then
 	declare -A op_set
 	set=misc
 
-	[ "$INFO_ABA" ] && echo_cyan -n "Op: " >&2
+	aba_info -n "Operators: " >&2
 
 	for op in $(echo $ops | tr "," " ")
 	do
-		[ "$INFO_ABA" ] && echo_cyan -n "$op " >&2
+		aba_info -n "$op " >&2
 
 		# Check if this operator exists in each of the three catalogs
 		if grep -q "^$op " .index/redhat-operator-index-v$ocp_ver_major; then
@@ -176,7 +171,7 @@ if [ "$ops" ]; then
 		fi
 	done
 else
-	aba_info "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image set config file."
+	aba_info "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image set config file." >&2
 fi
 
 # Only output if there are operators! 

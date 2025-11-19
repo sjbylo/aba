@@ -125,7 +125,7 @@ else
 	[ "$INFO_ABA" ] && echo_white "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
 fi
 
-echo_green "Cluster configuration is valid."
+aba_info_ok "Cluster configuration is valid."
 
 exit 0
 
