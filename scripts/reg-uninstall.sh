@@ -48,7 +48,7 @@ reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" 
 if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registry; then
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
 		cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
-		aba_echo "Running command: $cmd"
+		aba_info "Running command: $cmd"
 		$cmd || exit 1
 
 		#[ "$reg_root" ] && ssh $reg_ssh_user@$reg_host rm -rf $reg_root || ssh $reg_ssh_user@$reg_host rm -rf ~/quay-install
@@ -58,7 +58,7 @@ if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registr
 elif podman ps | grep -q registry; then
 	if ask "Registry detected on localhost.  Uninstall this mirror registry"; then
 		cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
-		aba_echo "Running command: $cmd"
+		aba_info "Running command: $cmd"
 		$cmd || exit 1
 		#[ "$reg_root" ] && eval rm -rf $reg_root || rm -rf ~/quay-install
 	else
@@ -70,5 +70,5 @@ else
 	exit 0
 fi
 
-aba_echo_ok "Registry uninstall successful"
+aba_info_ok "Registry uninstall successful"
 

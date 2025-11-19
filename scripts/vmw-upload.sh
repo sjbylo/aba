@@ -3,7 +3,7 @@
 
 source scripts/include_all.sh
 
-###scripts/install-govc.sh
+aba_debug "Running: $0 $*" >&2
 
 [ "$1" ] && set -x
 

@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Running: $0 $*" >&2
+
 . <(process_args $*)
 # eval all key value args
 . <(echo $* | tr " " "\n")

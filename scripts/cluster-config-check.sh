@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 export MANIFEST_SRC_DIR=.
 
 ICONF=$MANIFEST_SRC_DIR/install-config.yaml  

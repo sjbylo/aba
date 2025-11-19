@@ -5,6 +5,8 @@ PREFIX=/opt/aba
 
 source $PREFIX/scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 cp $PREFIX/templates/aba.conf .
 mkdir -p mirror #FIXME: this might change
 

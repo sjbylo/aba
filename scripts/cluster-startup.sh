@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 [ "$1" ] && set -x
 
 [ ! -d iso-agent-based ] && echo_white "Cluster not installed!  Try running 'aba clean; aba' to install this cluster!" >&2 && exit 1

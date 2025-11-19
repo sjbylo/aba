@@ -2,6 +2,9 @@
 # This will wait for the Agent port to become alive on the rendezvous node0...
 
 source scripts/include_all.sh
+
+aba_debug "Running: $0 $*" >&2
+
 trap - ERR  # We don't want to catch on error. error handling added below. 
 
 [ "$1" ] && set -x 

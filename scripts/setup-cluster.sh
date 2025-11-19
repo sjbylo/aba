@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 source <(normalize-aba-conf)   # Fetch the domain name
 verify-aba-conf || exit 1
 
@@ -12,7 +14,7 @@ type=standard
 
 . <(process_args $*)
 
-[ ! "$name" ] && echo_red "Error: cluster name misssing!" >&2 && exit 1
+[ ! "$name" ] && aba_abort "Error: cluster name misssing!" 
 
 if [ ! -d "$name" ]; then
 	mkdir $name
@@ -27,7 +29,7 @@ else
 			#make -s clean init  # We clean here since 'aba cluster' is meant to cerate a fresh/new cluster dir and not re-use it.
 			make -s       init  # Allow the dir to be "re-used",. i.e. don't touch any already created artifacts (cluster.con, agent*yaml, iso etc) 
 		else
-			echo_red "Error: Directory $name invalid cluster dir." >&2 && exit 1
+			aba_abort "Error: Directory $name invalid cluster dir."
 		fi
 	else
 		cd $name
@@ -36,15 +38,13 @@ else
 	fi
 fi
 
-echo_cyan "Creating '$name/cluster.conf' file for cluster type '$type'."
+aba_info "Creating '$name/cluster.conf' file for cluster type '$type'."
 
 create_cluster_cmd="scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip"
 
-aba_debug $create_cluster_cmd
+aba_debug Running: $create_cluster_cmd
 
 $create_cluster_cmd
-
-#scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip
 
 [ "$step" ] && target="$step"
 
@@ -54,8 +54,8 @@ msg="Install the cluster with 'aba -d $name install OR cd $name; aba install'"
 # adding "exit 0" here to give best practise instuctions to cd into the cluster dir!
 if [ "$ask" ]; then
 	echo
-	echo_cyan "The cluster directory has been created: $name"
-	echo_cyan "$msg"
+	aba_info "The cluster directory has been created: $name"
+	aba_info "$msg"
 	echo
 
 	exit 0
@@ -63,8 +63,8 @@ fi
 
 # Let's be explicit, only run make if there is a given target, e.g. 'install' or 'iso' etc
 if [ "$target" ]; then
-	echo "$BASE_NAME: Running: make -s $target" >&2
-	[ "$target" ] && make -s $target
+	aba_info "Running: make -s $target" >&2
+	make -s $target
 fi
 
 exit 0

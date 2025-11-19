@@ -9,7 +9,8 @@
 # Note: https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html-single/registry/index#images-configuration-cas_configuring-registry-operator 
 
 source scripts/include_all.sh
-#set +o pipefail
+
+aba_debug "Starting: $0 $*"
 
 [ "$1" ] && set -x
 

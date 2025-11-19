@@ -9,12 +9,11 @@ source scripts/include_all.sh
 [ "$1" ] && set -x
 
 source <(normalize-aba-conf)
-
 verify-aba-conf || exit 1
 
-[ ! "$ntp_servers" ] && echo_white "Not configuring NTP in early bootstrap node because 'ntp_servers' not defined in aba.conf or cluster.conf." && exit 0
+[ ! "$ntp_servers" ] && aba_info "Not configuring NTP in early bootstrap node because 'ntp_servers' not defined in aba.conf or cluster.conf." && exit 0
 
-[ "$INFO_ABA" ] && echo_cyan "Adding NTP server to early bootstrap ignition: $ntp_servers" 
+[ "$INFO_ABA" ] && aba_info "Adding NTP server to early bootstrap ignition: $ntp_servers" 
 
 #arch=$(uname -m)
 iso_dir=iso-agent-based
@@ -30,7 +29,8 @@ rtcsync
 logdir /var/log/chrony
 EOF
 
-#export CHRONY_CONF_BASE64=$(echo "$config" | base64 -w 0)
+aba_debug "Created ntp conf file: $iso_dir/chrony.conf"
+
 export CHRONY_CONF_BASE64=$(cat $iso_dir/chrony.conf | base64 -w 0)
 
 jq '.storage.files += [{
@@ -45,6 +45,8 @@ jq '.storage.files += [{
   },
   "mode": 420
 }]' $iso_dir/tmp.ign > $iso_dir/custom_ign.ign
+
+aba_debug "Created ignition file: $iso_dir/custom_ign.ign"
 
 coreos-installer iso ignition embed -fi $iso_dir/custom_ign.ign $iso_dir/agent.$arch_sys.iso
 

@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
 	eval `scripts/cluster-config.sh || exit 1`
@@ -28,7 +30,7 @@ do
 	# checking mac address: $mac ...
 	#if grep -q " $mac " $tmp_dir/.all_arp_entries; then
 	if echo "$all_arp_entries" | grep -q " $mac "; then
-		echo "Warning: Mac address $mac might already be in use (found in system ARP cache)."
+		aba_warning "Mac address $mac might already be in use (found in system ARP cache)."
 		IN_ARP_CACHE=1
 		#echo $mac >> $tmp_dir/.list_of_matching_arp_entries
 		# If the list is empty, add the mac address, else append the mac addr.
@@ -76,11 +78,10 @@ if [ "$list_of_matching_arp_entries" ]; then
 			fi
 		done
 		if [ "$MAC_IN_USE" ]; then
-			echo_red "Error: One or more mac addresses are *currently* in use:$P" >&2 
-			echo_red "       Consider Changing 'mac_prefix' in cluster.conf and try again." >&2 
-			echo_red "       If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" >&2 
-
-			exit 1
+			aba_abort \
+				"One or more mac addresses are *currently* in use:$P" \
+				"Consider Changing 'mac_prefix' in cluster.conf and try again." \
+				"If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
 		fi
 	fi
 fi

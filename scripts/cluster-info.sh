@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+aba_debug "Starting: $0 $*"
+
 [ "$1" ] && set -x
 
 [ ! -d iso-agent-based/auth ] && echo_red "Cluster not ready!" && exit 1
