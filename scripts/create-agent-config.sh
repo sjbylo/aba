@@ -245,6 +245,6 @@ fi
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
 scripts/j2 templates/$template_file > agent-config.yaml
 
-echo_info_ok "$PWD/agent-config.yaml generated successfully!"
+aba_info_ok "$PWD/agent-config.yaml generated successfully!"
 echo
 

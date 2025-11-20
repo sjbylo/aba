@@ -121,7 +121,7 @@ done >> $logfile 2>&1
 wait
 
 echo 
-echo_info_ok "All servers in the cluster will complete shutdown and power off shortly!" | tee -a $logfile
+aba_info_ok "All servers in the cluster will complete shutdown and power off shortly!" | tee -a $logfile
 
 # Only wait if installed on VMs
 if [ "$wait" -a -s vmware.conf ]; then

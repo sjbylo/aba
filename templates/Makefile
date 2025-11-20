@@ -8,7 +8,8 @@ arch   := $(strip $(shell uname -m))
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
-debug    ?= 		# Set debug=1 for some commands will: set -x
+#debug    ?= 		# Set debug=1 for some commands will: set -x
+debug   := $(strip $(shell echo $DEBUG_ABA))
 
 -include ../aba.conf
 platform := $(strip $(shell echo $(platform)))
