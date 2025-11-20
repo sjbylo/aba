@@ -178,15 +178,31 @@ source <(cd mirror && normalize-mirror-conf)
 
 reg_ssh_user=$TEST_USER
 
-mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
+#mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 ### CREATE BUNDLE & COPY TO BASTION ###
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
+test-cmd mkdir -p ~/tmp
+# Test split install bundle 
+test-cmd rm -fv ~/tmp/delete-me*tar
+
 test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and save to disk" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks vault-secrets-operator flux --base-domain example.com -o ~/tmp/delete-me -y"
 
-test-cmd -m "Verify tar file" tar tvf ~/tmp/delete-me*tar 
-test-cmd -m "Delete tar file" rm -fv ~/tmp/delete-me*tar 
+test-cmd -m "Show tar file" 	ls -l ~/tmp/delete-me*tar 
+test-cmd -m "Show tar file GB" 	ls -lh ~/tmp/delete-me*tar 
+test-cmd -m "Verify tar file"	tar tvf ~/tmp/delete-me*tar 
+test-cmd -m "Delete tar file"	rm -fv ~/tmp/delete-me*tar 
+
+# Test full install bundle 
+test-cmd rm -fv /tmp/delete-me*tar
+
+test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and save to disk" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets --ops --base-domain example.com -o /tmp/delete-me -y"
+
+test-cmd -m "Show tar file" 	ls -l /tmp/delete-me*tar 
+test-cmd -m "Show tar file GB" 	ls -lh /tmp/delete-me*tar 
+test-cmd -m "Verify tar file"	tar tvf /tmp/delete-me*tar 
+test-cmd -m "Verify tar file"	tar tvf /tmp/delete-me*tar | grep mirror/save/mirror_000001.tar
+test-cmd -m "Delete tar file"	rm -fv /tmp/delete-me*tar 
 
 mylog "===> Completed test $0"
 
