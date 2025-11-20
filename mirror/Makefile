@@ -232,7 +232,7 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
 clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
-	@[ -f .installed ] && echo "Important: to uninstall the registry, run 'aba uninstall'!" || true
+	@[ -f .installed ] && echo "Important: to uninstall the registry, run 'aba -d mirror uninstall'!" || true
 	rm -rf *.tar mirror-registry 
 	rm -f templates scripts
 	rm -f aba.conf  # remove link only
@@ -250,7 +250,7 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 # Backup regcreds/ and anything that should not be lost
 .PHONY: reset
 reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
-	@[ -f .installed ] && echo "Important: to uninstall the registry, you must run 'aba uninstall' first!" || true
+	@[ -f .installed ] && echo "Important: to uninstall the registry, you must run 'aba -d mirror uninstall' first!" || true
 	make clean
 	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && echo aba/mirror/regcreds backed up to regcreds.bk || true
 	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo aba/mirror/mirror.conf backed up to mirror.conf.bk || true

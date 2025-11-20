@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251120113115
+ABA_VERSION=20251120160334
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -476,10 +476,10 @@ do
 				if [ -s "$ABA_ROOT/templates/operator-set-$1" -o "$1" = "all" ]; then
 					[ "$op_set_list" ] && op_set_list="$op_set_list,$1" || op_set_list=$1
 				else
-					echo_red "No such operator set: $1" >&2
-					echo_white -n "Available operator sets are: " >&2
+					aba_warning "No such operator set: $1" >&2
+					aba_info -n "Available operator sets are: " >&2
 					ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
-					echo_white "(as defined in files: aba/templates/operator-sets-*)" >&2
+					aba_info "(as defined in files: aba/templates/operator-sets-*)" >&2
 
 					exit 1
 				fi
@@ -901,7 +901,7 @@ if [ ! -f .bundle ]; then
 		aba_info "OpenShift update channel is set to '$ocp_channel' in aba.conf."
 	else
 
-		echo_white -n "Checking Internet connectivity ..."
+		aba_info -n "Checking Internet connectivity ..."
 		if ! release_text=$(curl -f --connect-timeout 20 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt); then
 			[ "$TERM" ] && tput el1 && tput cr
 			aba_abort \
@@ -914,7 +914,7 @@ if [ ! -f .bundle ]; then
 		[ "$TERM" ] && tput el1 && tput cr
 
 		while true; do
-			echo_cyan -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [s]: "
+			aba_info -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [s]: "
 			read -r ans
 
 			case "$ans" in
@@ -954,7 +954,7 @@ if [ ! -f .bundle ]; then
 		##############################################################################################################################
 		# Fetch release.txt
 
-		echo_white -n "Fetching available versions (please wait!) ..."
+		aba_info -n "Fetching available versions (please wait!) ..."
 
 		aba_debug "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt"
 
@@ -1003,7 +1003,7 @@ if [ ! -f .bundle ]; then
 			[ "$channel_ver" ] && or_s="or $channel_ver (l)atest "
 			[ "$channel_ver_prev" ] && or_p="or $channel_ver_prev (p)revious "
 
-			echo_cyan -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
+			aba_info -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
 			read target_ver
 
 			[ ! "$target_ver" ] && target_ver=$default_ver          # use default
@@ -1089,9 +1089,9 @@ if [ ! -f .bundle ]; then
 	else
 		echo
 		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
-		echo_white "To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!" >&2
-		echo_white "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
-		echo_white "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'." >&2
+		aba_info "To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!" >&2
+		aba_info "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
+		aba_info "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'." >&2
 		echo
 
 		exit 1
@@ -1102,21 +1102,19 @@ if [ ! -f .bundle ]; then
 
 	echo
 	echo       "Fully Disconnected (air-gapped)"
-	echo_white "If you plan to install OpenShift in a fully disconnected (air-gapped) environment, Aba can download all required components—including"
-	echo_white "the Quay mirror registry install file, container images, and CLI install files—and package them into an install bundle that you can"
-	echo_white "transfer into your disconnected environment."
-	#echo_white "If you intend to install OpenShift into a fully disconnected (i.e. air-gapped) environment, Aba can download all required software"
-	#echo_white "(Quay mirror registry install file, container images and CLI install files) and create a 'install bundle' for you to transfer into your disconnected environment."
+	aba_info "If you plan to install OpenShift in a fully disconnected (air-gapped) environment, Aba can download all required components—including"
+	aba_info "the Quay mirror registry install file, container images, and CLI install files—and package them into an install bundle that you can"
+	aba_info "transfer into your disconnected environment."
 	if ask "Install OpenShift into a fully disconnected network environment"; then
 		echo
 		echo_yellow Instructions for a fully disconnected installation
 		echo
-		echo_white "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the install bundle"
-		echo_white "                                                          # (size ~20-30GB for a base installation)."
-		echo_white "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
-		echo_white "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more manageable files."
-		echo_white "                                                          # Unpack the files on the internal bastion with: cat ocp_* | tar xvf - "
-		echo_white "     aba bundle --help                                    # See for help."
+		aba_info "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the install bundle"
+		aba_info "                                                          # (size ~20-30GB for a base installation)."
+		aba_info "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
+		aba_info "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more manageable files."
+		aba_info "                                                          # Unpack the files on the internal bastion with: cat ocp_* | tar xvf - "
+		aba_info "     aba bundle --help                                    # See for help."
 		echo
 
 		exit 0
@@ -1127,26 +1125,26 @@ if [ ! -f .bundle ]; then
 
 	echo
 	echo "Partially Disconnected"
-	echo_white "A mirror registry can be synchronized directly from the Internet, allowing OpenShift to be installed from the mirrored content."
+	aba_info "A mirror registry can be synchronized directly from the Internet, allowing OpenShift to be installed from the mirrored content."
 	if ask "Install OpenShift from a mirror registry that is synchonized directly from the Internet"; then
 
 		echo 
 		echo_yellow Instructions for synchronizing images directly from the Internet to a mirror registry
 		echo 
-		echo_white "Set up the mirror registry and sync it with the necessary container images."
+		aba_info "Set up the mirror registry and sync it with the necessary container images."
 		echo
-		echo_white "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
+		aba_info "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 		echo
-		echo_white "Run:"
-		echo_white "  aba -d mirror install              # to configure an existing registry or install Quay."
-		echo_white "  aba -d mirror sync --retry <count> # to synchronize all container images - from the Internet - into your registry."
+		aba_info "Run:"
+		aba_info "  aba -d mirror install              # to configure an existing registry or install Quay."
+		aba_info "  aba -d mirror sync --retry <count> # to synchronize all container images - from the Internet - into your registry."
 		echo
-		echo_white "Or run:"
-		echo_white "  aba -d mirror sync --retry <count> # to complete both actions and ensure any image synchronization issues are retried."
+		aba_info "Or run:"
+		aba_info "  aba -d mirror sync --retry <count> # to complete both actions and ensure any image synchronization issues are retried."
 		echo
-		echo_white "  aba mirror --help                  # See for help."
+		aba_info "  aba mirror --help                  # See for help."
 
-		echo_white "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
+		aba_info "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
 		echo
 
 		exit 0
@@ -1154,15 +1152,14 @@ if [ ! -f .bundle ]; then
 
 	echo 
 	echo "Fully Connected"
-	echo_white "Optionally, configure a proxy or use direct Internet access through NAT or a transparent proxy."
+	aba_info "Optionally, configure a proxy or use direct Internet access through NAT or a transparent proxy."
 	echo
 	echo_yellow Instructions for installing directly from the Internet
 	echo
-	echo_white "Example:"
-	echo_white "aba cluster --name mycluster --type sno --starting-ip 10.0.1.203 --int-connection proxy"
+	aba_info "Example:"
+	aba_info "aba cluster --name mycluster --type sno --starting-ip 10.0.1.203 --int-connection proxy"
 
-	##echo_white "Run: aba cluster --name myclustername [--type <sno|compact|standard>] [--step <command>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]"
-	echo_white "See aba cluster --help for more"
+	aba_info "See aba cluster --help for more"
 	echo 
 
 else
@@ -1171,44 +1168,44 @@ else
 	# make & jq are needed below and in the next steps. Best to install all at once.
 	scripts/install-rpms.sh internal
 
-	echo
+	aba_info
 	echo_yellow "Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version' in your disconnected environment!"
 	
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
-		echo
+		aba_info
 		echo_magenta "IMPORTANT: The image set tar files (created in the previous step with 'aba bundle' or 'aba -d mirror save') MUST BE" >&2
 		echo_magenta "           copied or moved to the 'aba/mirror/save' directory before following the instructions below!" >&2
 		echo_magenta "           For example, run the command: cp /path/to/portable/media/mirror_*tar aba/mirror/save" >&2
 	fi
 
-	echo 
+	aba_info 
 	echo_yellow Instructions
-	echo 
+	aba_info 
 	echo_magenta "IMPORTANT: Check the values in aba.conf and ensure they are all complete and match your disconnected environment."
 
-	echo_white "Current values in aba.conf:"
+	aba_info "Current values in aba.conf:"
 	to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d")  # In disco env, no need to show pull-secret.
 	output_table 3 "$to_output"
 
-	echo
-	echo "Set up the mirror registry and load it with the necessary container images from disk."
-	echo
-	echo "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
-	echo
-	echo "To install the registry on the local machine, accessible via registry.example.com, run:"
-	echo "  aba -d mirror load -H registry.example.com --retry 8"
-	echo
-	echo "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
-	echo "  aba -d mirror load -H registry.example.com -k '~/.ssh/id_rsa' -U user --retry"
-	echo
-	echo "If unsure, run:"
-	echo "  aba -d mirror install                 # to configure and/or install Quay."
-	echo
-	echo "Once the mirror registry is installed/configured, verify authentication with:"
-	echo "  aba -d mirror verify"
-	echo
-	echo "For more, run: aba load --help"
+	aba_info
+	aba_info "Set up the mirror registry and load it with the necessary container images from disk."
+	aba_info
+	aba_info "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
+	aba_info
+	aba_info "To install the registry on the local machine, accessible via registry.example.com, run:"
+	aba_info "  aba -d mirror load -H registry.example.com --retry 8"
+	aba_info
+	aba_info "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
+	aba_info "  aba -d mirror load -H registry.example.com -k '~/.ssh/id_rsa' -U user --retry"
+	aba_info
+	aba_info "If unsure, run:"
+	aba_info "  aba -d mirror install                 # to configure and/or install Quay."
+	aba_info
+	aba_info "Once the mirror registry is installed/configured, verify authentication with:"
+	aba_info "  aba -d mirror verify"
+	aba_info
+	aba_info "For more, run: aba load --help"
 fi
 
 

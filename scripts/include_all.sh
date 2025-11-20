@@ -727,7 +727,7 @@ fetch_latest_version() {
     ver=$(_extract_version <<<"$rel_txt")
 
     if [[ -z "$ver" ]]; then
-        echo_white "Error: could not extract version from $chan release data" >&2
+        echo_red "Error: could not extract version from $chan release data" >&2
         return 1
     fi
 
@@ -737,7 +737,7 @@ fetch_latest_version() {
 _install_oc_mirror() {
     if ! which oc-mirror >/dev/null 2>&1; then
         make -s -C "$1/cli" oc-mirror >&2 || {
-            echo_white "Error: failed to build oc-mirror" >&2
+            echo_red "Error: failed to build oc-mirror" >&2
             return 1
         }
     fi
@@ -762,7 +762,7 @@ fetch_previous_version() {
 
     # Handle edge cases: avoid negative or missing minor version
     if (( minor <= 0 )); then
-        echo_white "Error: cannot compute previous version from $ver" >&2
+        echo_red "Error: cannot compute previous version from $ver" >&2
         return 1
     fi
     prev_minor=$((minor - 1))
@@ -776,7 +776,7 @@ fetch_previous_version() {
     [ ! "$prev_ver" ] && sleep 8 && prev_ver=$(oc-mirror list releases --channel="${chan}-${major}.${prev_minor}" 2>/dev/null | tail -n1)
 
     if [[ -z "$prev_ver" ]]; then
-        echo_white "Error: no previous version found for ${chan}-${major}.${prev_minor}" >&2
+        echo_red "Error: no previous version found for ${chan}-${major}.${prev_minor}" >&2
         return 1
     fi
 
@@ -805,14 +805,14 @@ fetch_latest_z_version() {
     rel_txt=$(curl -fsSL --connect-timeout 20 --retry 8 "$url" 2>/dev/null)
 
     if [[ -z "$rel_txt" ]]; then
-        echo_white "Error: failed to fetch release info for ${chan}-${base_ver}" >&2
+        echo_red "Error: failed to fetch release info for ${chan}-${base_ver}" >&2
         return 1
     fi
 
     ver=$(_extract_version <<<"$rel_txt")
 
     if [[ -z "$ver" ]]; then
-        echo_white "Error: could not extract z-stream version for ${chan}-${base_ver}" >&2
+        echo_red "Error: could not extract z-stream version for ${chan}-${base_ver}" >&2
         return 1
     fi
 
@@ -1034,14 +1034,14 @@ get_ntp_servers() {
 trust_root_ca() {
 	if [ -s $1 ]; then
 		if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
-			echo_white "$1 already in system trust"
+			aba_info "$1 already in system trust"
 		else
 			$SUDO cp $1 /etc/pki/ca-trust/source/anchors/ 
 			$SUDO update-ca-trust extract
-			echo_white "Cert 'regcreds/rootCA.pem' updated in system trust"
+			aba_info "Cert 'regcreds/rootCA.pem' updated in system trust"
 		fi
 	else
-		echo_white "No $1 cert file found" 
+		aba_info "No $1 cert file found" 
 	fi
 
 	return 0
@@ -1051,7 +1051,7 @@ is_valid_dns_label() {
 	local name="$1"
 
 	if [[ "$name" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]; then
-		[ "$ABA_INFO" ] && echo_white "Valid DNS label" >&2
+		[ "$ABA_INFO" ] && aba_info "Valid DNS label" >&2
 		return 0
 	else
 		echo_red "Invalid DNS label: $name" >&2
