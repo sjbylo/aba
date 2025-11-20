@@ -37,7 +37,7 @@ echo >&2
 
 # User requires to clean out any existing files under mirror/save
 if [ "$force" ]; then
-	if [ -d mirror/save -a "$(ls mirror/save)" ]; then
+	if [ -d mirror/save -a "$(ls mirror/save 2>/dev/null)" ]; then
 		aba_warning "Deleteing all files under aba/mirror/save! (--force set)" >&2
 		#echo >&2
 		#rm -rf mirror/save/*

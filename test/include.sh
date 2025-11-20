@@ -64,6 +64,7 @@ test-cmd() {
 	local reset_xtrace=; set -o | grep -q ^xtrace.*on && set +x && local reset_xtrace=1
 
 	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
+	local must_fail=    	# The command MUST fail (must be non-zero) for the test to pass!
 	local tot_cnt=5		# Try to run the command max tot_cnt times. If it fails, try one more time by def.
 	local backoff=1.5	# Default to wait after failed command is a few sec.
 	local host=localhost	# def. host to run on
@@ -73,7 +74,9 @@ test-cmd() {
 
 	while echo $1 | grep -q ^-
 	do
-		[ "$1" = "-i" ] && local ignore_result=1 && shift    # Ignore the return value
+		[ "$1" = "-i" ] && local ignore_result=1 && shift    # Ignore the return value. No matter the result, return 0
+
+		[ "$1" = "-f" ] && local must_fail=1 && shift  	     # If command failes, return 0, otherwise return $ret
 
 		[ "$1" = "-h" ] && local host="$2" && shift 2	     # Remote host to run command on
 
@@ -125,6 +128,9 @@ test-cmd() {
 			[ $ret -eq 130 ] && break  # on Ctrl-C *during command execution*
 
 			[ $ret -eq 0 -a $i -gt 1 ] && notify.sh "Command ok: $cmd (`date`)" && echo "Command ok: $cmd (`date`)" || true  # Only success after failure
+
+			[ "$must_fail"     -a $ret -ne 0 ] && return 0  # Return success, if the command failed!
+			[ "$must_fail"     -a $ret -eq 0 ] && return 1  # Return failure, if the command succeeded!
 
 			[ "$ignore_result" -a $ret -ne 0 ] && echo "Returning failed result [$ret]" && return $ret  # We want to return the actual result (-i)
 

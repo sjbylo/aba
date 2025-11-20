@@ -165,6 +165,17 @@ mylog ============================================================
 mylog "Test to integrate with existing reg. on $int_bastion_hostname and then sync and save/load images."
 mylog
 
+### Do a test to check reg prob (which MUST fail aba -f)
+test-cmd -m "Show aba.conf" normalize-aba-conf
+test-cmd -m "Show mirror/mirror.conf" "cd mirror; normalize-mirror-conf"
+# All the following should FAIL
+test-cmd -f -m "Installing mirror with unknown hostname fails" "aba -d mirror -k ~/.ssh/id_rsa -H unknown.example.com install"
+test-cmd -f -m "Installing mirror to remote host fails the probe" "aba -d mirror -k ~/.ssh/id_rsa -H $int_bastion_hostname install"
+local_hostname=$(hostname --long)
+test-cmd -f -m "Installing mirror to 'remote' host fails" "aba -d mirror -k ~/.ssh/id_rsa -H $local_hostname install"
+### Do a test to check reg prob
+
+
 # Fetch the config
 source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"

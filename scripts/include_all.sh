@@ -661,7 +661,7 @@ is_version_greater() {
      [[ "$sorted_versions" != "$version1|$version2|" ]]
 }
 
-output_error() { echo_red "$@" >&2; }
+#output_error() { echo_red "$@" >&2; }
 
 longest_line() {
     # Calculate the longest line from stdin
