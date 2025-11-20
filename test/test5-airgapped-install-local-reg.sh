@@ -143,8 +143,8 @@ source <(normalize-aba-conf)
 mylog "Checking value of: ocp_version=$ocp_version"
 
 # Be sure this file exists
-test-cmd -i -r 1 30 -m "Init test: download mirror-registry-amd64.tar.gz" "aba --dir test mirror-registry-amd64.tar.gz"
-! tar tvf test/mirror-registry-amd64.tar.gz && [ -s ~/mirror-registry-amd64.tar.gz ] && cp -v ~/mirror-registry-amd64.tar.gz test
+test-cmd -r 1 30 -m "Init test: download mirror-registry-amd64.tar.gz" "aba --dir test mirror-registry-amd64.tar.gz"
+##! tar tvf test/mirror-registry-amd64.tar.gz && [ -s ~/mirror-registry-amd64.tar.gz ] && cp -v ~/mirror-registry-amd64.tar.gz test
 
 #################################
 # Copy and edit mirror.conf 

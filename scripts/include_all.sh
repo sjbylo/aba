@@ -25,32 +25,77 @@ export arch_short=amd64
 # ===========================
 
 _color_echo() {
-	local color="$1"; shift
-	local text
+    local color="$1"; shift
+    local n_opt=
+    local text
 
-	# Collect input from args or stdin
-	if [ $# -gt 0 ]; then
-		n_opt=
-		if [ "$1" = "-n" ]; then
-			n_opt="-n"
-			shift
-		fi
-		text="$*"
-	else
-		text="$(cat)"
-	fi
+    # Handle -n option if present
+    if [ "$1" = "-n" ]; then
+        n_opt="-n"
+        shift
+    fi
 
-	# Apply color only if stdout is a terminal and terminal supports >= 8 colors
-	if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ ! "$PLAIN_OUTPUT" ]; then
-		tput setaf "$color"
-		echo -e $n_opt "$text"
-		tput sgr0
-	else
-		echo -e $n_opt "$text"
-	fi
-
-	return 0
+    # Determine input source: arguments or stdin
+    if [ $# -gt 0 ]; then
+        text="$*"
+        # Process each line (in case args contain newlines)
+        while IFS= read -r line; do
+            _print_colored "$color" "$n_opt" "$line"
+        done <<< "$text"
+    else
+        # Read from stdin line by line
+        while IFS= read -r line; do
+            _print_colored "$color" "$n_opt" "$line"
+        done
+    fi
 }
+
+# Helper function to handle color and terminal checks
+_print_colored() {
+    local color="$1"; shift
+    local n_opt="$1"; shift
+    local line="$*"
+
+    #echo color=$color
+    #echo n_opt=$n_opt
+    #echo line=$line
+
+    if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "$PLAIN_OUTPUT" ]; then
+        tput setaf "$color"
+        echo -e $n_opt "$line"
+        tput sgr0
+    else
+        echo -e $n_opt "$line"
+    fi
+}
+
+#_color_echo() {
+#	local color="$1"; shift
+#	local text
+#
+#	# Collect input from args or stdin
+#	if [ $# -gt 0 ]; then
+#		n_opt=
+#		if [ "$1" = "-n" ]; then
+#			n_opt="-n"
+#			shift
+#		fi
+#		text="$*"
+#	else
+#		text="$(cat)"
+#	fi
+#
+#	# Apply color only if stdout is a terminal and terminal supports >= 8 colors
+#	if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ ! "$PLAIN_OUTPUT" ]; then
+#		tput setaf "$color"
+#		echo -e $n_opt "$text"
+#		tput sgr0
+#	else
+#		echo -e $n_opt "$text"
+#	fi
+#
+#	return 0
+#}
 
 # Standard 8 colors
 echo_black()   { _color_echo 0 "$@"; }

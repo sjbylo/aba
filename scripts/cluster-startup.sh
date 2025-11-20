@@ -123,7 +123,7 @@ if ! all_nodes_ready; then
 fi
 ##$OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
 
-echo_info_ok "All nodes are in 'Ready' state."
+aba_info_ok "All nodes are in 'Ready' state."
 
 echo
 $OC get nodes
@@ -136,7 +136,7 @@ echo
 
 console=$($OC whoami --show-console)/
 if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
-	echo_info_ok "The cluster will complete startup and become fully available shortly!"
+	aba_info_ok "The cluster will complete startup and become fully available shortly!"
 	echo
 	echo "Waiting for the console to become available at $console"
 
@@ -146,10 +146,10 @@ if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
 		echo "Giving up waiting for the console!"
 		#exit 0
 	else
-		echo_info_ok "Cluster console is accessible at $console"
+		aba_info_ok "Cluster console is accessible at $console"
 	fi
 else
-	echo_info_ok "Cluster console is accessible at $console"
+	aba_info_ok "Cluster console is accessible at $console"
 fi
 
 if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
@@ -161,7 +161,7 @@ if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v
 	fi
 fi
 
-echo_info_ok "All cluster operators are fully available!"
+aba_info_ok "All cluster operators are fully available!"
 
 myexit 0
 
