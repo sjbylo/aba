@@ -38,7 +38,7 @@ aba_debug "Verifying resolution of mirror hostname: $reg_host"
 fqdn_ip=$(dig +short $reg_host | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}') || true
 if [ ! "$fqdn_ip" ]; then
 	aba_abort \
-		"'$reg_host' does not resolve properly. An IP address is expected!" \
+		"Hostname: $reg_host does not resolve properly. An IP address is expected!" \
 		"Command used: dig $reg_host +short" \
 		"Correct the problem and try again!"
 fi
@@ -71,7 +71,7 @@ reg_code=$(eval $probe_cmd || true)
 
 if [ "$reg_code" = "200" ]; then
 	aba_abort \
-		"Warning: Endpoint found at $reg_url/" \
+		"Endpoint found at $reg_url/" \
 		"If this is your existing registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." \
 		"The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." \
 		"The pull secret file can also be created and verified using 'aba -d mirror password'" \
@@ -239,7 +239,7 @@ else
 	# We will leave this only as a warning, not an error since sometimes there is a NAT in use which is difficult to check
 	if ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
 		aba_warning \
-			"Warning: $reg_host resolves to $fqdn_ip which is not configured or found on any local network interfaces." \
+			"$reg_host resolves to $fqdn_ip which is not configured or found on any local network interfaces." \
 			"Ignore this warning if this behavior is expected, for example, when $fqdn_ip refers to an external IP address." 
 
 		sleep 1

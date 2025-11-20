@@ -28,10 +28,8 @@ log_file=/tmp/.upload.$$.log
 govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.$arch_sys.iso images/agent-${CLUSTER_NAME}.iso | tee $log_file || true
 if ! grep -qi "Uploading.*OK" $log_file; then
 	# Since govc does not return non-zero on error we need to parse the output for non-success! 
-	output_error "Warning: ISO file may be attached to a running VM and cannot be overwritten.  Stop the VM first with 'aba stop' and try again."
 	rm -f $log_file
-
-	exit 1
+	aba_abort "ISO file may be attached to a running VM and cannot be overwritten.  Stop the VM first with 'aba stop' and try again."
 fi
 
 rm -f $log_file
