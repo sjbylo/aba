@@ -7,7 +7,7 @@ aba_debug "Starting: $0 $*"
 
 trap - ERR  # We don't want to catch on error. error handling added below. 
 
-[ "$1" ] && set -x 
+ 
 
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh

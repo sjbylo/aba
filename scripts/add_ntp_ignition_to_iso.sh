@@ -6,7 +6,7 @@
 
 source scripts/include_all.sh
 
-[ "$1" ] && set -x
+
 
 source <(normalize-aba-conf)
 verify-aba-conf || exit 1

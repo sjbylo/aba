@@ -4,7 +4,7 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-[ "$1" ] && set -x
+
 
 umask 077
 

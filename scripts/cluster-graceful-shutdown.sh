@@ -6,7 +6,7 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
 [ "$1" = "wait=1" ] && wait=1 && shift
-[ "$1" ] && set -x
+
 
 [ ! -s iso-agent-based/auth/kubeconfig ] && echo "Cannot find iso-agent-based/auth/kubeconfig file!" && exit 1
 
