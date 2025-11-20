@@ -4,6 +4,7 @@
 echo $PWD | grep -q /testing/ && echo "Error: Exec tests from testing dir: $PWD" && exit 1
 
 all_tests="\
+test4 \
 test2 \
 test5 \
 test1 \
