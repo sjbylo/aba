@@ -7,7 +7,7 @@ aba_debug "Starting: $0 $*"
 
 public_pull_secret_file_needed=1  # Only needed for 'save' and 'sync'
 [ "$1" = "--load" ] && public_pull_secret_file_needed= && shift
-[ "$1" ] && set -x
+
 
 umask 077
 

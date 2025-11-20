@@ -24,9 +24,6 @@ do
 	if [ "$1" = "--bg" ]; then
 		shift  # Now we know this script is running as a daemon 
 		bg=1
-	elif [ "$1" = "--debug" ]; then
-		shift
-		set -x
 	else
 		catalog_name="$1"
 		shift

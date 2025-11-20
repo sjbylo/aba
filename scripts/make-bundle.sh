@@ -7,7 +7,7 @@ aba_debug "Starting: $0 $*"
 
 [ "$1" ] && bundle_dest_file=$1 && shift
 [ "$1" ] && force=true && shift
-[ "$1" ] && set -x
+
 
 # This will have been completed behand, but just in case!
 install_rpms $(cat templates/rpms-external.txt) || exit 1

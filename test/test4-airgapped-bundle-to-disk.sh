@@ -77,7 +77,7 @@ export subdir=subdir
 mylog ============================================================
 mylog Starting test $(basename $0)
 mylog ============================================================
-mylog "Test to install a local reg. on $int_bastion_hostname and save + copy + load images.  Install sno ocp and a test app and svc mesh."
+mylog "Test to create an install bundle and save to disk."
 
 rm -f aba.conf  # Set it up next
 vf=~steve/.vmware.conf
@@ -170,7 +170,7 @@ test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" aba --op-sets abat
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
 
-init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
+### NOTR NEEDED FOR THIS TEST ### init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 
 #################################
 

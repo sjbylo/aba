@@ -8,7 +8,7 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
 [ "$1" = "-f" ] && force=$2 && shift 2
-[ "$1" ] && set -x
+
 
 source <(normalize-aba-conf)
 

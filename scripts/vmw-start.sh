@@ -9,8 +9,6 @@ aba_debug "Running: $0 $*" >&2
 # eval all key value args
 . <(echo $* | tr " " "\n")
 
-[ "$debug" ] && set -x
-
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else

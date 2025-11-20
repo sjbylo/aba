@@ -3,7 +3,7 @@
 
 source scripts/include_all.sh
 
-[ "$1" ] && set -x
+
 
 umask 077
 
