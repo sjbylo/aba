@@ -5,8 +5,6 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-
-
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
@@ -62,35 +60,34 @@ if [ "$ops" -o "$op_sets" ]; then
 		# Check for the index file
 		if [ ! -s .index/$catalog-index-v$ocp_ver_major ]; then
 			catalog_file_errors=1
-			aba_warning "Missing operator catalog file: $PWD/.index/$catalog-index-v$ocp_ver_major"
+			aba_warning "Missing operator catalog file: $PWD/.index/$catalog-index-v$ocp_ver_major" >&2
 		fi
 	done
 
     	if [ "$catalog_file_errors" ]; then
 		aba_abort \
-			"Cannot add required operators to the image set config file!" \
+			"Cannot add required operators to the image-set config file!" \
 			"Your options are:" \
 			"- Refresh any existing catalog files by running: 'cd $PWD/mirror; rm -f .index/redhat-operator-index-v${ocp_ver_major}*' and try again." \
 			"- run 'cd mirror; aba catalog' to try to download the catalog file again." \
 			"- Check that the following command is working:" \
 			"    oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major" \
 			"- Check access to registry is working: 'curl -IL http://registry.redhat.io/v2'" 
-		# We want to ensure the user gets what they expect, i.e. operators downloaded!
-		#exit 1 
+		# We want to ensure the user gets what they expect, i.e. operators downloaded! So we abort.
 	fi
 else
-	aba_info "No operators to add to the image set config file since values ops or op_sets not defined in aba.conf or mirror.conf." >&2
+	aba_info "No operators to add to the image-set config file since values ops or op_sets not defined in aba.conf or mirror.conf." >&2
 
 	exit 0
 fi
 
-aba_info "Adding operators to the image set config file ..."  >&2
+aba_info "Adding operators to the image-set config file ..."  >&2
 
 
 # FIXME: What about the other catalogs? certified, marketplace and community?
 # 'all' is a special operator set which allows all operators to be downloaded!  The below "operators->catalog" entry will enable all op.
 if echo $op_sets | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
-	aba_info_ok "Adding all redhat-operator operators to your image set config file!" >&2
+	aba_info_ok "Adding all redhat-operator operators to your image-set config file!" >&2
 	cat <<-END
 	  operators:
 	  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
@@ -149,11 +146,11 @@ if [ "$ops" ]; then
 	declare -A op_set
 	set=misc
 
-	aba_info -n "Operators: " >&2
+	echo_white -n "Operators: " >&2 # Keep as echo_white
 
 	for op in $(echo $ops | tr "," " ")
 	do
-		aba_info -n "$op " >&2
+		echo_white -n "$op " >&2 # Keep as echo_white
 
 		# Check if this operator exists in each of the three catalogs
 		if grep -q "^$op " .index/redhat-operator-index-v$ocp_ver_major; then
@@ -171,7 +168,7 @@ if [ "$ops" ]; then
 		fi
 	done
 else
-	aba_info "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image set config file." >&2
+	aba_info "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image-set config file." >&2
 fi
 
 # Only output if there are operators! 

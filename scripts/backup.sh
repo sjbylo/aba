@@ -131,40 +131,40 @@ if [ "$dest" != "-" ]; then
 		echo
 		echo_cyan "Writing *split* bundle file to $dest ... (to create a full install bundle instead, write the bundle directly to external media)."
 		echo
-		#echo_white "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
-		echo_white "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
-		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
-		echo_white "Also transfer the image set archive file(s), for example, with:"
-		echo_white " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
+		#aba_info "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
+		aba_info "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
+		aba_info " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
+		aba_info "Also transfer the image set archive file(s), for example, with:"
+		aba_info " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "After transfering the install bundle file and the image set archive file(s) to your internal bastion"
-		echo_white "extract them into your home directory and"
-		echo_white "then move the image set archive file(s) into the aba/mirror/save/ directory & continue by installing & running 'aba', for example, with the commands:"
-		echo_white "  tar xvf $(basename $dest)"
-		echo_white "  mv mirror_*.tar aba/mirror/save"
-		echo_white "  cd aba"
-		echo_white "  ./install"
-		echo_white "  aba"
+		aba_info "After transfering the install bundle file and the image set archive file(s) to your internal bastion"
+		aba_info "extract them into your home directory and"
+		aba_info "then move the image set archive file(s) into the aba/mirror/save/ directory & continue by installing & running 'aba', for example, with the commands:"
+		aba_info "  tar xvf $(basename $dest)"
+		aba_info "  mv mirror_*.tar aba/mirror/save"
+		aba_info "  cd aba"
+		aba_info "  ./install"
+		aba_info "  aba"
 		echo
-		echo_white "Run 'aba -h' for all options."
+		aba_info "Run 'aba -h' for all options."
 		echo
 	else
 		echo
 		echo_cyan "Writing *all-in-one* install bundle file to $dest ..."
 		echo
-		#echo_white "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
-		echo_white "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
-		echo_white " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
+		#aba_info "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
+		aba_info "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
+		aba_info " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		echo_white "After transfering the install bundle file to your internal bastion"
-		echo_white "extract it into your home directory and"
-		echo_white "then continue by installing & running 'aba', for example, with the commands:"
-		echo_white "  tar xvf $(basename $dest)"
-		echo_white "  cd aba"
-		echo_white "  ./install"
-		echo_white "  aba"
+		aba_info "After transfering the install bundle file to your internal bastion"
+		aba_info "extract it into your home directory and"
+		aba_info "then continue by installing & running 'aba', for example, with the commands:"
+		aba_info "  tar xvf $(basename $dest)"
+		aba_info "  cd aba"
+		aba_info "  ./install"
+		aba_info "  aba"
 		echo
-		echo_white "Run 'aba -h' for all options."
+		aba_info "Run 'aba -h' for all options."
 		echo
 	fi
 fi
@@ -178,17 +178,20 @@ fi
 out_file_list=$(echo $file_list | cut -c-90)
 
 aba_info "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
-echo "Please wait!" >&2
-#echo >&2
+aba_info "Please wait!" >&2
+
 set +e   # Needed so we can capture the return code from tar and not just exit (bash -e) 
 tar cf $dest $file_list
 ret=$?
 rm -f aba/.bundle  # We don't want this repo to be labeled as 'bundle', only the tar archive should be
 if [ $ret -ne 0 ]; then
-	echo
+	echo >&2
 	echo_red "Error: The tar command failed with return code $ret!" >&2
 	echo_red "       The archive is very likely incomplete!  Fix the problem and try again!" >&2
-	echo 
+	echo  >&2
+	#aba_abort \
+	#	"The tar command failed with return code $ret!" \
+	#	"The archive is very likely incomplete!  Fix the problem and try again!" 
 
 	exit $ret
 fi

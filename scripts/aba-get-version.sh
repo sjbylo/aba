@@ -1,8 +1,6 @@
 #!/bin/bash 
 # Fetch and set ocp versions
 
-#uname -o | grep -q "^Darwin$" && echo "Please run 'aba' on RHEL or Fedora. Most tested is RHEL 9." && exit 1
-
 arch_sys=$(uname -m)
 dir=$(dirname $0)
 cd $dir

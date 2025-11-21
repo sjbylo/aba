@@ -45,6 +45,10 @@ fi
 
 reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
 
+# Override ask here!
+export ASK_OVERRIDE=
+export ask=1
+
 if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registry; then
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
 		cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
@@ -65,7 +69,7 @@ elif podman ps | grep -q registry; then
 		exit 1
 	fi
 else
-	aba_warning "No mirror registry to uninstall" 
+	aba_info "No mirror registry to uninstall" 
 
 	exit 0
 fi

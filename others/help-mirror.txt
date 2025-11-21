@@ -1,4 +1,4 @@
-Install 'Mirror Registry for Red Hat OpenShift' (Quay) or connect to existing mirror registry.
+Install 'Mirror Registry for Red Hat OpenShift' (Quay) or connect to an existing mirror registry.
 
 Usage:
   aba --dir mirror install [options]
@@ -14,16 +14,16 @@ Options:
       --reg-path <string>              # The path to store images inside the mirror registry.
 
 Related commands:
-  aba sync                             # Copy images from the Internet into the mirror registry (mirror2mirror).
+  aba [-d mirror] sync                 # Copy images from the Internet into the mirror registry (mirror2mirror).
     -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
 
-  aba save                             # Copy images from the Internet to disk (mirror2disk).
+  aba [-d mirror] save                 # Copy images from the Internet to disk (mirror2disk).
     -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
 
-  aba load                             # Copy images from disk to the mirror registry (disk2mirror).
+  aba [-d mirror] load                 # Copy images from disk to the mirror registry (disk2mirror).
     -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
 
-  aba [-d mirror ] verify              # Verify mirror registry connection credentials are working.
+  aba [-d mirror] verify               # Verify mirror registry connection credentials are working.
 
 Examples of fully disconnected mode (air-gapped):
 
@@ -39,11 +39,11 @@ Examples of fully disconnected mode (air-gapped):
   Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
     aba [-d mirror] load -H registry.example.com  --retry 8
 
-  Verify connection to mirror registry. First, set up pull secret and CA cert files in aba/mirror/regcreds dir.
+  Verify connection to mirror registry. First, install Quay or manually set up pull secret & CA cert files in aba/mirror/regcreds dir.
     aba [-d mirror] verify
 
   Install OpenShift:
     See: aba cluster --help
 
-Note that the command 'mirror' can be substituted with one of 'save', 'load' or 'sync', in which case the 'mirror' command will also be called if needed. 
-The options above [-k, -U etc] can be used also for 'save', 'load' and/or 'sync'.
+The 'install' command can be substituted with save, load, or sync. When these commands are used, 'install' will be triggered automatically if required.
+The options above [-k, -U, -H etc] can be used also for 'save', 'load' and/or 'sync' and will be passed to the 'install' command, if needed. 

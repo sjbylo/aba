@@ -159,16 +159,12 @@ if [ "$reg_ssh_key" ]; then
 		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
 			sudo firewall-cmd --reload"
 
-	#if [ "$reg_root" ]; then
-		# Fetch the actual absolute dir path for $reg_root.  "~" on remote host may be diff. to this localhost. Ansible installer does not eval "~"
-		reg_root=$(ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host echo $reg_root)
+	# Fetch the actual absolute dir path for $reg_root.  "~" on remote host may be diff. to this localhost. Ansible installer does not eval "~"
+	reg_root=$(ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host echo $reg_root)
 
-		reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
+	reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
 
-		echo_white "Using registry root dir: $reg_root and options: $reg_root_opts"
-	#else
-	#	echo_white "Using registry root dir: $reg_root" #FIXME: Never called!
-	#fi
+	aba_info "Using registry root dir: $reg_root and options: $reg_root_opts"
 
 	aba_info "Installing mirror registry on the remote host [$reg_host] with user $reg_ssh_user into dir $reg_root ..."
 
@@ -299,10 +295,10 @@ else
 
 
 	ask "Install Quay mirror registry appliance to localhost ($(hostname -s)), accessable via $reg_hostport" || exit 1
-	echo "Installing Quay registry on localhost ..."
+	aba_info "Installing Quay registry on localhost ..."
 
 	# mirror-registry installer does not open the port for us
-	echo Allowing firewall access to this host at $reg_host/$reg_port ...
+	aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
 	$SUDO firewall-cmd --state && \
 		$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
 			$SUDO firewall-cmd --reload
@@ -314,9 +310,9 @@ else
 
 	if [ "$reg_root" ]; then
 		reg_root_opts="--quayRoot $reg_root --quayStorage $reg_root/quay-storage --sqliteStorage $reg_root/sqlite-storage"
-		echo_white "Using registry root dir: $reg_root and options: $reg_root_opts"
+		aba_info "Using registry root dir: $reg_root and options: $reg_root_opts"
 	else
-		echo_white "Using registry root dir: $reg_root"
+		aba_info "Using registry root dir: $reg_root"
 	fi
 
 	# Generate the script to be used to delete this registry
@@ -356,7 +352,7 @@ else
 	### use verify ### #podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url 
 	### use verify ### podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url 
 
-	echo "Generating regcreds/pull-secret-mirror.json file"
+	aba_info "Generating regcreds/pull-secret-mirror.json file"
 	export enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)
 
 	# Inputs: enc_password, reg_host and reg_port 

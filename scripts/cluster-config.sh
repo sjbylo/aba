@@ -63,9 +63,9 @@ ACONF=$MANIFEST_SRC_DIR/agent-config.yaml
 
 # If the files don't exist, nothing to do but exit!
 if [ ! -s $ICONF -o ! -s $ACONF ]; then
-	echo "One of the files $ICONF and/or $ACONF does not exist." >&2
-	echo "Cannot parse cluster configuration. Are you running this in your 'cluster' directory?"  >&2
-	exit 1
+	aba_abort \
+		"One of the files $ICONF and/or $ACONF does not exist." \
+		"Cannot parse cluster configuration. Are you running this in your 'cluster' directory?"
 fi
 
 ICONF_TMP=$(cat $ICONF | yaml2json)
@@ -145,20 +145,20 @@ export ASSETS_DIR=iso-agent-based
 echo export ASSETS_DIR=$ASSETS_DIR
 
 # basic checks
-[ ! "$CLUSTER_NAME" ] && echo "Cluster name .metadata.name missing in $ICONF" >&2 && err=1
-[ ! "$BASE_DOMAIN" ] && echo "Base domain .baseDomain missing in $ICONF" >&2 && err=1
-[ ! "$RENDEZVOUSIP" ] && echo "Rendezvous ip .rendezvousIP missing in $ACONF" >&2  && err=1
-[ ! "$CP_REPLICAS" ] && echo "Control Plane replica count .controlPlane.replicas missing in $ICONF" >&2  && err=1
-[ ! "$CP_NAMES" ] && echo "Control Plane names .hosts[].role.master.hostname missing in $ACONF" >&2  && err=1
-[ ! "$CP_MAC_ADDRS" ] && echo "Control Plane mac addresses .hosts[].role.master.interfaces[0].macAddress missing in $ACONF" >&2  && err=1
-[ ! "$CP_IP_ADDRESSES" ] && echo "Control Plane ip addresses .hosts[].role.master.networkConfig.interfaces[0].ipv4.address[0].ip missing in $ACONF" >&2  && err=1
-[ ! "$WORKER_REPLICAS" ] && echo "Worker replica count .compute[0].replicas missing in $ICONF" >&2  && err=1
+[ ! "$CLUSTER_NAME" ] && echo_red "Cluster name .metadata.name missing in $ICONF" >&2 && err=1
+[ ! "$BASE_DOMAIN" ] && echo_red "Base domain .baseDomain missing in $ICONF" >&2 && err=1
+[ ! "$RENDEZVOUSIP" ] && echo_red "Rendezvous ip .rendezvousIP missing in $ACONF" >&2  && err=1
+[ ! "$CP_REPLICAS" ] && echo_red "Control Plane replica count .controlPlane.replicas missing in $ICONF" >&2  && err=1
+[ ! "$CP_NAMES" ] && echo_red "Control Plane names .hosts[].role.master.hostname missing in $ACONF" >&2  && err=1
+[ ! "$CP_MAC_ADDRS" ] && echo_red "Control Plane mac addresses .hosts[].role.master.interfaces[0].macAddress missing in $ACONF" >&2  && err=1
+[ ! "$CP_IP_ADDRESSES" ] && echo_red "Control Plane ip addresses .hosts[].role.master.networkConfig.interfaces[0].ipv4.address[0].ip missing in $ACONF" >&2  && err=1
+[ ! "$WORKER_REPLICAS" ] && echo_red "Worker replica count .compute[0].replicas missing in $ICONF" >&2  && err=1
 
 if [ $WORKER_REPLICAS -ne 0 ]; then
 	# basic checks
-	[ ! "$WORKER_NAMES" ] && echo ".hosts[].role.worker.hostname missing in $ACONF" >&2 && err=1
-	[ ! "$WKR_MAC_ADDRS" ] && echo ".hosts[].role.worker.interfaces[].macAddress missing in $ACONF" >&2 && err=1
-	[ ! "$WKR_IP_ADDR" ] && echo ".hosts[].role.worker.networkConfig.interfaces[0].ipv4.address[0].ip missing in $ACONF" >&2 && err=1
+	[ ! "$WORKER_NAMES" ] && echo_red ".hosts[].role.worker.hostname missing in $ACONF" >&2 && err=1
+	[ ! "$WKR_MAC_ADDRS" ] && echo_red ".hosts[].role.worker.interfaces[].macAddress missing in $ACONF" >&2 && err=1
+	[ ! "$WKR_IP_ADDR" ] && echo_red ".hosts[].role.worker.networkConfig.interfaces[0].ipv4.address[0].ip missing in $ACONF" >&2 && err=1
 fi
 
 if [ "$err" ]; then

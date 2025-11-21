@@ -56,10 +56,6 @@ _print_colored() {
     local n_opt="$1"; shift
     local line="$*"
 
-    #echo color=$color
-    #echo n_opt=$n_opt
-    #echo line=$line
-
     if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "$PLAIN_OUTPUT" ]; then
         tput setaf "$color"
         echo -e $n_opt "$line"
@@ -68,34 +64,6 @@ _print_colored() {
         echo -e $n_opt "$line"
     fi
 }
-
-#_color_echo() {
-#	local color="$1"; shift
-#	local text
-#
-#	# Collect input from args or stdin
-#	if [ $# -gt 0 ]; then
-#		n_opt=
-#		if [ "$1" = "-n" ]; then
-#			n_opt="-n"
-#			shift
-#		fi
-#		text="$*"
-#	else
-#		text="$(cat)"
-#	fi
-#
-#	# Apply color only if stdout is a terminal and terminal supports >= 8 colors
-#	if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ ! "$PLAIN_OUTPUT" ]; then
-#		tput setaf "$color"
-#		echo -e $n_opt "$text"
-#		tput sgr0
-#	else
-#		echo -e $n_opt "$text"
-#	fi
-#
-#	return 0
-#}
 
 # Standard 8 colors
 echo_black()   { _color_echo 0 "$@"; }
@@ -138,11 +106,6 @@ color_demo() {
     echo_white       "white"
     echo_bright_white   "bright white"
 }
-
-#echo_error() {
-#	echo_red "Error: $@" >&2
-#	exit 1
-#}
 
 aba_info() {
 	[ ! "$INFO_ABA" ] && return 0
@@ -251,7 +214,7 @@ umask 077
 show_error() {
 	local exit_code=$?
 	echo 
-	echo_red "Script error: " >&2
+	echo_red "Script error at $(date) in directory $PWD: " >&2
 	echo_red "Error occurred in command: '$BASH_COMMAND'" >&2
 	echo_red "Error code: $exit_code" >&2
 
@@ -555,9 +518,10 @@ install_rpms() {
 	if [ "$rpms_to_install" ]; then
 		echo "Installing required rpms:$rpms_to_install (logging to .dnf-install.log). Please wait!" >&2  # send to stderr so this can be seen during "aba bundle -o -"
 		if ! $SUDO dnf install $rpms_to_install -y >> .dnf-install.log 2>&1; then
-			echo_red "Warning: an error occurred during rpm installation. See the logs at .dnf-install.log." >&2
-			echo_red "If dnf cannot be used to install rpm packages, please install the following packages manually and try again!" >&2
-			echo_magenta $rpms_to_install
+			aba_warning \
+				"an error occurred during rpm installation. See the logs at .dnf-install.log." \
+				"If dnf cannot be used to install rpm packages, please install the following packages manually and try again!" 
+			aba_info $rpms_to_install
 
 			return 1
 		fi
@@ -565,7 +529,7 @@ install_rpms() {
 }
 
 ask() {
-	source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
+	#source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
 	[ ! "$ask" ] && return 0  # reply "default reply"
 
 	# Default reply is 'yes' (or 'no') and return 0
@@ -576,7 +540,7 @@ ask() {
 	timer=
 	[ "$1" == "-t" ] && timer="-t $2" && shift 2
 
-	echo_yellow -n "$@? $yn_opts: "
+	echo_yellow -n "[ABA] $@? $yn_opts: "
 	read $timer yn
 
 	# Return default response, 0
@@ -605,7 +569,6 @@ edit_file() {
 			$editor $conf_file
 		fi
 	else
-		#echo_yellow "$msg? (auto answered, ask=$ask)"
 		echo_yellow "'$conf_file' has been created for you (skipping edit since ask=false in aba.conf)."
 	fi
 
@@ -660,8 +623,6 @@ is_version_greater() {
     # Check if version1 is the last one in the sorted list
      [[ "$sorted_versions" != "$version1|$version2|" ]]
 }
-
-#output_error() { echo_red "$@" >&2; }
 
 longest_line() {
     # Calculate the longest line from stdin
@@ -835,7 +796,7 @@ replace-value-conf() {
 		case "$1" in
 			-n)
 				# If arg missing?
-				[[ -z "$2" || "$2" =~ ^- ]] && echo_red "Missing arg after [$1]" >&2 && exit 1
+				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Missing arg after [$1]"
 				local name="$2"
 				shift 2
 				;;
@@ -927,7 +888,7 @@ output_table() {
 process_args() {
 	[ ! "$*" ] && return 0
 
-	echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { echo_red "Error: invalid params [$*], not key=value pairs"; exit 1; }
+	echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { aba_abort "invalid params [$*], not key=value pairs"; }
 	# eval all key value args
 	#[ "$*" ] && . <(echo $* | tr " " "\n")  # Get $name, $type etc from here
 	#echo $* | tr " " "\n"  # Get $name, $type etc from here

@@ -34,7 +34,7 @@ source <(normalize-aba-conf)
 
 verify-aba-conf || exit 1
 
-[ ! "$ocp_version" ] && echo_red "Error, ocp_version incorrectly defined in aba.conf!" >&2 && exit 1
+[ ! "$ocp_version" ] && aba_abort "Error, ocp_version incorrectly defined in aba.conf!"
 
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
@@ -58,7 +58,7 @@ pid_file=.index/.$catalog_name-index-v$ocp_ver_major.pid
 done_file=.index/.$catalog_name-index-v$ocp_ver_major.done
 
 # Clean up on INT
-handle_interupt() { echo_red "Aborting catalog download." >&2; [ ! -f $done_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0;}
+handle_interupt() { echo_red "Aborting catalog download." >&2; [ ! -f $done_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0; }
 trap 'handle_interupt' INT TERM
 
 # Check if this script is running in the background, if it is then output to a log file
@@ -71,11 +71,11 @@ if [ "$bg" ]; then
 fi
 
 if [[ -s $index_file && -f $done_file ]]; then
-	echo_white "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file"
+	aba_info "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file"
 
 	# Check age of file is older than one day
 	if [ "$(find $index_file -type f -mtime +0)" ]; then
-		echo_white "Operator $catalog_name index needs to be refreshed as it's older than one day."
+		aba_info "Operator $catalog_name index needs to be refreshed as it's older than one day."
 
 		rm -f $lock_file
 	else
@@ -85,9 +85,7 @@ fi
 
 # Check connectivity to registry (Keep this here so it does not slow the script down for the ".done" case)
 if ! curl --connect-timeout 15 --retry 8 -IL http://registry.redhat.io/v2 >/dev/null 2>&1; then
-	echo_red "Error: cannot access the registry: https://registry.redhat.io/.  Aborting." >&2
-
-	exit 1
+	aba_abort "cannot access the registry: https://registry.redhat.io/.  Aborting." 
 fi
 
 # See if the index is already downloaded
@@ -100,7 +98,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 
 	# Check if still downloading...
 	if [[ -s $index_file && -f $done_file ]]; then
-		echo_white "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file"
+		aba_info "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file"
 
 		exit 0
 	fi
@@ -141,7 +139,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 		exit 1
 	fi
 
-	echo_white "Operator $catalog_name index v$ocp_ver_major download to file mirror/$index_file has completed"
+	aba_info_ok "Operator $catalog_name index v$ocp_ver_major download to file mirror/$index_file has completed"
 
 	exit 0
 fi
@@ -173,10 +171,8 @@ echo Running: oc-mirror list operators --catalog registry.redhat.io/redhat/$cata
 oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major > $index_file
 ret=$?
 if [ $ret -ne 0 ]; then
-	echo_red "Error: oc-mirror returned $ret whilst downloading operator $catalog_name index from registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major." >&2
 	rm -f $lock_file $pid_file
-
-	exit 1
+	aba_abort "oc-mirror returned $ret whilst downloading operator $catalog_name index from registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major." 
 fi
 
 touch $done_file   # This marks successful completion of download!
@@ -185,7 +181,7 @@ rm -f $pid_file
 
 # If the catalog is downloaded ok, we leave the lock file so there's no risk of it being overwritten. 
 
-echo_white "Downloaded $index_file operator list successfully"
+aba_info_ok "Downloaded $index_file operator list successfully"
 
 # Generate a handy yaml file with operators which can be manually copied into image set config if needed.
 tail -n +3 $index_file | awk '{print $1,$NF}' | while read op_name op_default_channel
@@ -196,7 +192,7 @@ do
       - name: \"$op_default_channel\""
 done > imageset-config-$catalog_name-catalog-v${ocp_ver_major}.yaml
 
-echo_white "Generated mirror/imageset-config-$catalog_name-catalog-v${ocp_ver_major}.yaml file for easy reference when editing your image set config file."
+aba_info "Generated mirror/imageset-config-$catalog_name-catalog-v${ocp_ver_major}.yaml file for easy reference when editing your image set config file."
 
 # Keep the lock file since we assume the catalog was downloaded ok
 ##rm -f $lock_file $pid_file

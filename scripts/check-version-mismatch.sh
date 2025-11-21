@@ -52,8 +52,6 @@ do
 		om_ocp_max_ver=$(cat $f | yaml2json | jq -r .mirror.platform.channels[0].maxVersion)
 		om_ocp_channel=$(cat $f | yaml2json | jq -r .mirror.platform.channels[0].name)
 
-		##if [ "$om_ocp_min_ver" != "$aba_ocp_ver" -o "$om_ocp_max_ver" != "$aba_ocp_ver" -o "$om_ocp_channel" != "$aba_ocp_channel" ]; then
-		####### echo is_version_greater "$om_ocp_min_ver" "$aba_ocp_ver" \|\| is_version_greater $aba_ocp_ver "$om_ocp_max_ver" \|\| \[ "$om_ocp_channel" \!\= "$aba_ocp_channel" \]
 		if is_version_greater "$om_ocp_min_ver" "$aba_ocp_ver" || is_version_greater $aba_ocp_ver "$om_ocp_max_ver" || [ "$om_ocp_channel" != "$aba_ocp_channel" ]; then
 			echo 
 			echo_red "Warning: The version of 'openshift-install' ($aba_ocp_ver) no longer matches the version defined in 'mirror/$f'." >&2

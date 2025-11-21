@@ -13,7 +13,7 @@ source <(normalize-cluster-conf)
 verify-aba-conf || exit 1
 verify-cluster-conf || exit 1
 
-[ ! "$ntp_servers" ] && echo_red "Define 'ntp_servers' value in 'aba.conf' to configure NTP" >&2 && exit 0
+[ ! "$ntp_servers" ] && aba_abort "Define 'ntp_servers' value in 'aba.conf' to configure NTP" 
 
 ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
 
@@ -116,10 +116,9 @@ if ! which butane >/dev/null 2>&1; then
 		if curl --connect-timeout 10 --retry 8 -s https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane; then
 			$SUDO mv butane /usr/local/bin
 		else
-			echo "Please install 'butane' command and try again!"
-			echo "E.g. run: 'curl --connect-timeout 10 --retry 8 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane'"
-
-			exit 1
+			aba_abort \
+				"Please install 'butane' command and try again!" \
+				"E.g. run: 'curl --connect-timeout 10 --retry 8 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane'"
 		fi
 	fi
 fi
@@ -127,14 +126,15 @@ fi
 butane .99-master-chrony-conf-override.bu -o 99-master-chrony-conf-override.yaml
 butane .99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
-echo "Accessing the cluster ..."
+aba_info "Accessing the cluster ..."
 
 [ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
-oc whoami || { echo_red "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"; exit 1; }
+
+oc whoami || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 oc apply -f 99-master-chrony-conf-override.yaml
 oc apply -f 99-worker-chrony-conf-override.yaml
 
 echo
-echo "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
+aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
 echo
