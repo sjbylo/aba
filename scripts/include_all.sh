@@ -529,7 +529,9 @@ install_rpms() {
 }
 
 ask() {
-	#source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
+	aba_debug Env ask=$ask
+	source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
+	aba_debug aba.conf ask=$ask
 	[ ! "$ask" ] && return 0  # reply "default reply"
 
 	# Default reply is 'yes' (or 'no') and return 0

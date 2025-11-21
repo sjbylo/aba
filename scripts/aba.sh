@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251121141444
+ABA_VERSION=20251121155332
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -526,6 +526,7 @@ do
 		shift 2
 	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # One off, accept the default answer to all prompts for this invocation
 		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
+		export ask=1
 		shift 
 	elif [ "$1" = "-Y" ]; then  # One off, accept the default answer to all prompts for this invocation
 		export ASK_OVERRIDE=1  
@@ -860,6 +861,7 @@ if [ ! "$interactive_mode" ]; then
 	# Only run make if there's a target
 	if [ "$BUILD_COMMAND" ]; then
 		if [ "$DEBUG_ABA" ]; then
+			aba_debug ask=$ask
 			aba_debug "Running: \"make $BUILD_COMMAND\" from directory: $PWD" 
 			aba_debug -n "Pausing 5s ... [Return to continue]:"
 			read -t 5 || echo
@@ -869,6 +871,7 @@ if [ ! "$interactive_mode" ]; then
 		else
 			# eval needed since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
 			# Run make in silent mode
+			aba_debug ask=$ask
 			aba_debug "Running: \"make -s $BUILD_COMMAND\" from directory: $PWD" 
 			eval make -s $BUILD_COMMAND
 		fi
