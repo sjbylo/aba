@@ -15,14 +15,14 @@ if [ ! "$CLUSTER_NAME" ]; then
 fi
 
 echo
-echo =================================================================================
+echo "[ABA] ================================================================================="
 
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
-echo_yellow "Running: openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR"
+echo_yellow "[ABA] Running: openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR"
 openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR $opts
 ret=$?
-[ "$ABA_DEBUG" ] && echo openshift-install returned: $ret >&2
+aba_debug openshift-install returned: $ret 
 
 # All exit codes of openshift-install from source file: cmd/openshift-install/create.go
 # Declare an associative array with exit codes as keys
@@ -39,8 +39,8 @@ if [ $ret -ne 0 ]; then
 	# ret = 8 means openshift-install was interrupted (e.g. Ctrl-c), for that we don't want to show any errors. 
 	if [ $ret -ne 8 ]; then
 		echo 
-		echo_red "Something went wrong with the bootstrap.  Fix the problem and try again!" >&2
-		[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "Reason: 'Unknown ($ret)'"
+		echo_red "[ABA] Something went wrong with the bootstrap.  Fix the problem and try again!" >&2
+		[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
 
 		exit $ret
 	fi

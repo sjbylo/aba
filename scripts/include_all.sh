@@ -266,8 +266,8 @@ verify-aba-conf() {
 	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
 	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
 
-	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf" >&2; ret=1; }
-	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf" >&2; ret=1; }
+	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf" >&2; echo_red "See: aba --help" >&2; ret=1; }
+	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf" >&2; echo_red "See: aba --help" >&2; ret=1; }
 	echo $platform    | grep -q -E "bm|vmw" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
@@ -590,8 +590,6 @@ try_cmd() {
 
 	[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
 
-	#echo DEBUG: eval "$*" "$out"
-	#while ! eval $* $out
 	echo  >>.cmd.out 
 	echo cmd $* >>.cmd.out 
 	while ! eval $* >>.cmd.out 2>&1
@@ -602,14 +600,13 @@ try_cmd() {
 			return 1
 		fi
 
-		[ ! "$quiet" ] && echo Pausing $pause seconds ...
+		[ ! "$quiet" ] && aba_info Pausing $pause seconds ...
 		sleep $pause
 
 		let pause=$pause+$backoff
 		let count=$count+1
 
 		[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
-		#echo DEBUG: eval "$*" "$out"
 		echo cmd $* >>.cmd.out 
 	done
 }
@@ -890,7 +887,7 @@ output_table() {
 process_args() {
 	[ ! "$*" ] && return 0
 
-	echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || { aba_abort "invalid params [$*], not key=value pairs"; }
+	echo "$*" | grep -Eq '^([a-zA-Z_]\w*=?[^ ]*)( [a-zA-Z_]\w*=?[^ ]*)*$' || aba_abort "invalid params [$*], not key=value pairs"
 	# eval all key value args
 	#[ "$*" ] && . <(echo $* | tr " " "\n")  # Get $name, $type etc from here
 	#echo $* | tr " " "\n"  # Get $name, $type etc from here

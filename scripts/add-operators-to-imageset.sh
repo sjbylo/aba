@@ -1,5 +1,5 @@
 #!/bin/bash
-# Convenience script to download the latest operator catalog and add what's required into the imageset file. 
+# Script to output the operators for an image-set config file
 
 source scripts/include_all.sh
 
@@ -84,7 +84,6 @@ fi
 aba_info "Adding operators to the image-set config file ..."  >&2
 
 
-# FIXME: What about the other catalogs? certified, marketplace and community?
 # 'all' is a special operator set which allows all operators to be downloaded!  The below "operators->catalog" entry will enable all op.
 if echo $op_sets | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
 	aba_info_ok "Adding all redhat-operator operators to your image-set config file!" >&2
@@ -135,7 +134,9 @@ do
 			fi
 		done
 	else
-		aba_warning "Missing operator set file: 'templates/operator-set-$set'.  Please adjust your operator settings (in aba.conf) or create the missing file."
+		aba_warning \
+			"Missing operator set file: 'templates/operator-set-$set'." \
+			"Please adjust your operator settings (in aba.conf) or create the missing file."
 	fi
 done
 
@@ -146,7 +147,7 @@ if [ "$ops" ]; then
 	declare -A op_set
 	set=misc
 
-	echo_white -n "Operators: " >&2 # Keep as echo_white
+	echo_white "Operators: " >&2 # Keep as echo_white
 
 	for op in $(echo $ops | tr "," " ")
 	do
@@ -168,10 +169,15 @@ if [ "$ops" ]; then
 		fi
 	done
 else
+	echo >&2
 	aba_info "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image-set config file." >&2
 fi
 
+
 # Only output if there are operators! 
+# Stderr is for app output
+echo >&2
+# Stdout is for the image-set config output
 echo "  operators:"
 
 for catalog in redhat_operator certified_operator redhat_marketplace community_operator
@@ -180,6 +186,7 @@ do
 	c_name=$(echo $catalog | sed "s/_/-/g")
 
 	if [ "$list" ]; then
+		# Print operator "heading"
 		cat <<-END
 		  - catalog: registry.redhat.io/redhat/$c_name-index:v$ocp_ver_major
 		    packages:
@@ -195,6 +202,6 @@ done
 
 echo >&2
 aba_info_ok "Number of operators added: ${#op_names_arr[@]}" >&2
-aba_info_ok "Operators added: ${op_names_arr[@]}" >&2
+aba_info_ok "List: ${op_names_arr[@]}" >&2
 
 exit 0

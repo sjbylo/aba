@@ -48,8 +48,8 @@ $create_cluster_cmd
 
 [ "$step" ] && target="$step"
 
-msg="Install the cluster with 'aba -d $name install OR cd $name; aba install'"
-[ "$target" ] && msg="Proceed with command: $target by runing: aba -d $name $target  OR  cd $name; aba $target"
+msg="Install the cluster with: aba -d $name install  OR  cd $name; aba install"
+[ "$target" ] && msg="Proceed with by running: aba -d $name $target  OR  cd $name; aba $target"
 
 # adding "exit 0" here to give best practise instuctions to cd into the cluster dir!
 if [ "$ask" ]; then

@@ -17,7 +17,7 @@ fi
 [ -s iso-agent-based/rendezvousIP ] && cat iso-agent-based/rendezvousIP | grep -E -q "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$" || exit 0
 
 echo
-echo =================================================================================
+aba_info =================================================================================
 
 # Wait for the Agent port to become alive on the rendezvous node0...
 if [ ! -f .install-complete ]; then
@@ -27,10 +27,12 @@ if [ ! -f .install-complete ]; then
 	max_retries=10
 	delay=8
 
-	echo "Waiting for Agent to come alive at $agent_url ..."
+	aba_info "Waiting for Agent to come alive at $agent_url ..."
 	for ((i=1; i<=max_retries; i++)); do
 		code=$(curl --connect-timeout 10 -s -o /dev/null -w "%{http_code}" --max-time 3 "$agent_url")
-		[ "$ABA_DEBUG" ] && echo return code=$code
+
+		aba_debug return code=$code
+
 		if [[ $code =~ ^4..$ ]]; then
 			break
 		fi

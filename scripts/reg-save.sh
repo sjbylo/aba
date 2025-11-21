@@ -19,9 +19,7 @@ verify-aba-conf || exit 1
 # Check internet connection...
 ##aba_info -n "Checking access to https://api.openshift.com/: "
 if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
-	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk." >&2
-
-	exit 1
+	aba_abort "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk." 
 fi
 
 # Ensure the RH pull secret files are located in the right places
@@ -109,7 +107,7 @@ do
 	fi
 
 	let try=$try+1
-	[ $try -le $try_tot ] && echo_red -n "Image saving failed ($ret) ... Trying again. " >&2
+	[ $try -le $try_tot ] && echo_red -n "[ABA] Image saving failed ($ret) ... Trying again. " >&2
 done
 
 if [ "$failed" ]; then

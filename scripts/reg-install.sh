@@ -176,7 +176,7 @@ if [ "$reg_ssh_key" ]; then
 	# Generate the script to be used to delete this registry
 	uninstall_cmd="eval ./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts --autoApprove -v"
 
-	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
+	echo "reg_delete() { echo [ABA] Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	aba_info "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
@@ -317,7 +317,7 @@ else
 
 	# Generate the script to be used to delete this registry
 	uninstall_cmd="eval ./mirror-registry uninstall --autoApprove $reg_root_opts -v"
-	echo "reg_delete() { echo Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
+	echo "reg_delete() { echo [ABA] Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	aba_info "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 

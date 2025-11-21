@@ -7,7 +7,7 @@ aba_debug "Starting: $0 $*"
 
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Attempting $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
+[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && aba_info "Attempting $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
 
 umask 077
 
@@ -51,11 +51,11 @@ reg_root=$data_dir/quay-install
 ###[ ! "$reg_root" ] && reg_root=$HOME/quay-install  # Needed for below TMPDIR
 
 echo
-echo "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
+aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 
 # Check if aba installed Quay or it's an existing reg.
 if [ -s ./reg-uninstall.sh ]; then
-	echo "Warning: Ensure there is enough disk space under $reg_root.  This can take 5 to 20 minutes to complete or even longer if Operator images are being copied!"
+	aba_warning "Ensure there is enough disk space under $reg_root.  This can take 5 to 20 minutes to complete or even longer if Operator images are being copied!"
 fi
 echo
 
@@ -86,7 +86,8 @@ do
 
 	aba_info -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror sync --retry <count>'" || echo
-	echo "Running: $(cat sync-mirror.sh)"
+	aba_info "Running:"
+	aba_info "$(cat sync-mirror.sh)"
 	echo
 
 	###./sync-mirror.sh && failed= && break
@@ -124,7 +125,7 @@ do
 	fi
 
 	let try=$try+1
-	[ $try -le $try_tot ] && echo_red -n "Image synchronization failed ($ret) ... Trying again. "
+	[ $try -le $try_tot ] && echo_red -n "[ABA] Image synchronization failed ($ret) ... Trying again. "
 done
 
 if [ "$failed" ]; then

@@ -10,6 +10,8 @@ SCRIPTS   = scripts
 name     ?= standard
 type     ?= standard
 
+debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
+
 .PHONY: aba
 aba:  ## Run aba in interactive mode, to set up 'aba.conf'
 	aba --interactive
@@ -31,7 +33,7 @@ init: aba .init
 .PHONY: vmw
 vmw:
 	@make -sC cli govc
-	$(SCRIPTS)/install-vmware.conf.sh
+	@$(SCRIPTS)/install-vmware.conf.sh $(debug)
 
 cli:  ## Download and install the CLI binaries into ~/bin
 	@make -sC cli
