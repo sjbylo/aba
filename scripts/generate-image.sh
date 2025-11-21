@@ -54,7 +54,7 @@ cp install-config.yaml agent-config.yaml $ASSETS_DIR
 
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
-echo_yellow "Running: $openshift_install_mirror agent create image --dir $ASSETS_DIR "
+echo_yellow "[ABA] Running: $openshift_install_mirror agent create image --dir $ASSETS_DIR "
 if ! $openshift_install_mirror agent create image --dir $ASSETS_DIR $opts; then
 	rm -f $ASSETS_DIR/agent.*.iso
 

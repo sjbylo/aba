@@ -107,7 +107,9 @@ if [ "$use_mirror" ]; then
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	else
-		aba_warning "No pull secret files found in directory: aba/mirror/regcreds." >&2 
+		aba_warning \
+			"No pull secret files found in directory: aba/mirror/regcreds." \
+			"A mirror registry has not been installed or configured!  See aba mirror --help."
 		show_mirror_missing_err=1
 	fi
 
@@ -134,7 +136,8 @@ if [ "$use_mirror" ]; then
 	if [ "$show_mirror_missing_err" ]; then
 		aba_warning \
 			"No internet connection (proxy or direct) has been defined in cluster.conf." \
-			"If this is *unexpected*, either set up a mirror registry or define internet connectivity. Refer to the README.md for detailed instructions." 
+			"If this is *unexpected*, either install/set up a mirror registry or define internet connectivity in $PWD/cluster.conf." \
+			"Refer to the README.md for more." 
 
 		sleep 2
 	fi
