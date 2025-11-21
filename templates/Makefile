@@ -8,8 +8,8 @@ arch   := $(strip $(shell uname -m))
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
-#debug    ?= 		# Set debug=1 for some commands will: set -x
-debug   := $(strip $(shell echo $DEBUG_ABA))
+
+debug := $(strip $(shell printf "%s" "$$DEBUG_ABA"))
 
 -include ../aba.conf
 platform := $(strip $(shell echo $(platform)))
@@ -158,7 +158,7 @@ refresh: vmw agentconf  ## Delete & create the VMs. This will automatically star
 
 # This target is the same as 'refresh' but should only run once depending on .init .autoupload & vmware.conf
 .autorefresh: .init .autoupload vmware.conf
-	$(SCRIPTS)/vmw-refresh.sh
+	$(SCRIPTS)/vmw-refresh.sh $(debug)
 	@touch .autorefresh
 
 .PHONY: create
@@ -168,7 +168,8 @@ create: vmw agentconf      ## Create the VMs based on the 'agent-based' config f
 ###ls: vmware.conf  ## List VMs and their power state.
 .PHONY: ls
 ls: vmw                           agent-config.yaml ## List all VMs and their power state.
-	$(SCRIPTS)/vmw-ls.sh || echo "No vm(s)."
+	echo debug=$(debug)
+	$(SCRIPTS)/vmw-ls.sh $(debug) || echo "No vm(s)."
 
 .PHONY: rescue
 rescue: ## If a cluster does not start due to login/CSR issues, rescue the cluster using ssh, if available. 
@@ -195,7 +196,7 @@ kill:  .init vmware.conf                     agent-config.yaml ## Kill or power 
 delete: .init vmware.conf                     agent-config.yaml ## Delete all VMs. This will delete the cluster!
 	$(SCRIPTS)/vmw-delete.sh $(debug) || exit 0
 
-.install-complete: .autorefresh .auto-agent-up
+.install-complete: .autorefresh .auto-agent-up mon
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 
@@ -204,14 +205,12 @@ delete: .init vmware.conf                     agent-config.yaml ## Delete all VM
 	@touch .auto-agent-up
 
 .PHONY: agent
-agent:
-#agent: .auto-agent-up
-#.auto-agent-up:
+agent: 
 	$(SCRIPTS)/wait-agent-up.sh $(debug)
 	@touch .auto-agent-up
 
 .PHONY: mon
-mon: agent  ## Monitor for 'install complete' the agent-based installation of OpenShift.
+mon:  ## Monitor for 'install complete' the agent-based installation of OpenShift.
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 

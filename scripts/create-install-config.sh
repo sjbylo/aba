@@ -3,14 +3,13 @@
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
-
+[ "$1" ] && export DEBUG_ABA=1
+aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
 
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
-#[ -s vmware.conf ] && source <(normalize-vmware-conf)  # Some values needed for install-config.yaml
 source <(normalize-vmware-conf)  # Some values needed for install-config.yaml
 
 verify-aba-conf || exit 1
@@ -34,6 +33,8 @@ export pull_secret=
 export ssh_key_pub=
 export additional_trust_bundle=
 export image_content_sources=
+
+aba_debug rendezvous_ip: $starting_ip
 
 # Change the default of bare-metal host prefix
 if [ "$platform" = "bm" -a $hostPrefix -eq 23 ]; then
@@ -179,6 +180,7 @@ fi
 #fi
 
 # Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret, use_proxy, arch ...
+aba_debug Creating install-config.yaml ...
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 

@@ -117,7 +117,8 @@ if ! all_nodes_ready; then
 fi
 ##$OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
 
-aba_info_ok "All nodes are in 'Ready' state."
+echo
+aba_info_ok "All nodes are ready!"
 
 echo
 $OC get nodes
