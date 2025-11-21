@@ -18,8 +18,8 @@ fi
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
-	echo_red "vmware.conf file not defined. Run 'aba vmw' to create it if needed" >&2
-	exit 1
+	aba_info "vmware.conf file not defined. Run 'aba vmw' to create it if needed"
+	exit 0
 fi
 
 if [ -z "${CLUSTER_NAME:-}" ]; then
@@ -32,7 +32,7 @@ CP_MAC_ADDRS_ARRAY=($CP_MAC_ADDRS)
 WKR_MAC_ADDRS_ARRAY=($WKR_MAC_ADDRS)
 
 echo
-echo_magenta "Provisioning VMs to build the cluster ..."
+echo_magenta "[ABA] Provisioning VMs to build the cluster ..."
 echo
 
 cluster_folder="$VC_FOLDER"
@@ -59,10 +59,10 @@ verify-aba-conf || exit 1
 master_nested_hv=false
 if [ "$WORKER_REPLICAS" -eq 0 ]; then
 	master_nested_hv=true
-	echo "Setting hardware virtualization on master nodes ..."
+	aba_info "Setting hardware virtualization on master nodes ..."
 fi
 
-echo "Setting hardware virtualization on worker nodes ..."
+aba_info "Setting hardware virtualization on worker nodes ..."
 worker_nested_hv=true
 
 num_ports_per_node=$PORTS_PER_NODE
@@ -86,7 +86,7 @@ create_node() {
 		local mac=${mac_array[$idx]}
 
 		aba_info -n "Create VM: "
-		echo "$vm_name: [${cpu_count}C/${mem_gb}G] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
+		aba_info "$vm_name: [${cpu_count}C/${mem_gb}G] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 
 		govc vm.create \
 			-annotation="Created on $(date) as ${role} node for OCP cluster ${CLUSTER_NAME}.${base_domain} version v${ocp_version} from $(hostname):$PWD" \
@@ -107,7 +107,7 @@ create_node() {
 		for cnt in $(seq 1 $max_ports_per_node); do
 			local sub_idx=$(( idx + cnt ))
 			local sub_mac=${mac_array[$sub_idx]}
-			echo "Adding network interface [$((cnt + 1))/$num_ports_per_node] with mac address: $sub_mac"
+			aba_info "Adding network interface [$((cnt + 1))/$num_ports_per_node] with mac address: $sub_mac"
 			govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address "$sub_mac"
 		done
 
@@ -118,7 +118,7 @@ create_node() {
 			-memory-hot-add-enabled=true \
 			-nested-hv-enabled=$nested_hv
 
-		echo "Attaching thin OS disk on [$GOVC_DATASTORE]"
+		aba_info "Attaching thin OS disk on [$GOVC_DATASTORE]"
 		govc vm.disk.create \
 			-vm $vm_name \
 			-name $vm_name/$vm_name \
@@ -127,7 +127,7 @@ create_node() {
 			-ds=$GOVC_DATASTORE
 
 		if [ -n "${data_disk:-}" ]; then
-			echo "Attaching a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
+			aba_info "Attaching a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
 			govc vm.disk.create \
 				-vm $vm_name \
 				-name $vm_name/${vm_name}_data \

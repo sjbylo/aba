@@ -133,10 +133,8 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 	handle_interupt() { echo_red "Stopped waiting for download to complete" >&2; exit 0; }
 	echo_magenta "Waiting for operator $catalog_name index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
 	if ! try_cmd -q 5 0 120 test -f $done_file; then
-	       	echo "Giving up waiting for $catalog_name index download! Please check: mirror/$log_file"  # keep checking completion for max 600s (5 x 120s)
 		rm -f $lock_file  # Remove just the lock file
-
-		exit 1
+	       	aba_abort "Giving up waiting for $catalog_name index download! Please check: mirror/$log_file"  # keep checking completion for max 600s (5 x 120s)
 	fi
 
 	aba_info_ok "Operator $catalog_name index v$ocp_ver_major download to file mirror/$index_file has completed"
@@ -167,7 +165,7 @@ aba_info "Downloading Operator $catalog_name index v$ocp_ver_major to $index_fil
 ###make -sC ../cli ~/bin/oc-mirror 
 
 # Fetch latest operator catalog and default channels
-echo Running: oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major >&2
+aba_info "Running: oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major" >&2
 oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major > $index_file
 ret=$?
 if [ $ret -ne 0 ]; then

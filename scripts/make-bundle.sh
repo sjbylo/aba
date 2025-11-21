@@ -32,7 +32,7 @@ fi
 
 echo >&2
 normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" >&2
-echo Bundle output file = $bundle_dest_file >&2
+aba_info "Bundle output file = $bundle_dest_file" >&2
 echo >&2
 
 # User requires to clean out any existing files under mirror/save
@@ -79,7 +79,7 @@ fi
 # so we can do something like: aba bundle ... --out - | ssh host tar xvf - 
 if [ "$bundle_dest_file" = "-" ]; then
 	#echo "Downloading binary data.  See logfile '.bundle.log' for details." >&2
-	echo "Downloading binary data." >&2
+	aba_info "Downloading binary data." >&2
 
 	#make -s download save retry=7 2>&1 | cat -v >>.bundle.log
 	make -s -C cli download        >&2 	|| exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
@@ -105,10 +105,10 @@ make -C cli download	# Downlaod required CLIs install files.
 
 if files_on_same_device mirror $bundle_dest_file; then
 	echo
-	echo_magenta "A *split* install bundle will be created (the bundle will not contain the image-set archive file)."
-	echo_magenta "This is because the bundle file and the image-set archive are on the same filesystem."
-	echo_magenta "TO GENERATE A *FULL* INSTALL BUNDLE, WRITE IT DIRECTLY TO EXTERNAL MEDIA OR TO A SEPARATE FILESYSTEM."
-	ask "Continue anyway" || exit 1
+	echo_magenta "[ABA] A *split* install bundle will be created (the bundle will not contain the image-set archive file)."
+	echo_magenta "[ABA] This is because the bundle file and the image-set archive are on the same filesystem."
+	echo_magenta "[ABA] TO GENERATE A *FULL* INSTALL BUNDLE, WRITE IT DIRECTLY TO EXTERNAL MEDIA OR TO A SEPARATE FILESYSTEM."
+	ask "[ABA] Continue anyway" || exit 1
 	echo
 
 	aba_info "Pulling images ..."

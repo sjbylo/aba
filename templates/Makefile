@@ -9,7 +9,7 @@ arch   := $(strip $(shell uname -m))
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
 
-debug := $(strip $(shell printf "%s" "$$DEBUG_ABA"))
+debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
 
 -include ../aba.conf
 platform := $(strip $(shell echo $(platform)))
@@ -79,7 +79,6 @@ mirror.conf: .init ## Set up the aba/mirror/mirror.conf file.
 vmware.conf: .init ## Use VMware vCenter or ESXi to create cluster.
 	@make -sC ../cli govc
 	@make -sC .. vmw
-	@#test -f ../vmware.conf &&                          ln -fs ../vmware.conf || true
 	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo vmware.conf initialized || true
 
 cluster.conf: .init mirror.conf  ## Initialize the OpenShift cluster.conf file.
@@ -146,7 +145,7 @@ shutdown: ## Trigger the cluster to gracefully shut itself down by draining all 
 
 .PHONY: startup
 startup:             ## Start all VMs and allow all pods to start (uncorden).  Start up your bare-metal servers and run this target.
-	$(SCRIPTS)/cluster-startup.sh 
+	$(SCRIPTS)/cluster-startup.sh $(debug)
 
 
 # The following targets are meant for interactive use only
@@ -168,7 +167,6 @@ create: vmw agentconf      ## Create the VMs based on the 'agent-based' config f
 ###ls: vmware.conf  ## List VMs and their power state.
 .PHONY: ls
 ls: vmw                           agent-config.yaml ## List all VMs and their power state.
-	echo debug=$(debug)
 	$(SCRIPTS)/vmw-ls.sh $(debug) || echo "No vm(s)."
 
 .PHONY: rescue
@@ -261,8 +259,8 @@ remove-cdrom: vmware.conf  ## Remove the cdrom devise from all VMs.
 
 .PHONY: vmw
 vmw: vmware.conf ## Configure vCenter/ESXi API credentials in vmware.conf file.
-	#@[ ! -s ../vmware.conf ] && rm -f ../vmware.conf || true #FIXME 
-	#@make -sC .. vmw
+#@[ ! -s ../vmware.conf ] && rm -f ../vmware.conf || true #FIXME 
+#@make -sC .. vmw
 
 .PHONY: noask
 noask:  ## Set 'ask' in aba.conf to 'false'.  Aba will assume all defaults and not prompt you for anything (allows for fully automated installations on vmw).

@@ -10,8 +10,7 @@ source scripts/include_all.sh
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER variable
 else
-	echo "vmware.conf file not defined. Run 'aba vmw' to create it if needed"
-
+	aba_info "vmware.conf file not defined. Run 'aba vmw' to create it if needed"
 	exit 0
 fi
 
@@ -43,12 +42,12 @@ fi
 ask "Delete the above virtual machine(s)" || exit 1
 
 for name in $CP_NAMES $WORKER_NAMES; do
-	echo Destroy VM ${CLUSTER_NAME}-$name
+	aba_info Destroy VM ${CLUSTER_NAME}-$name
 	govc vm.destroy ${CLUSTER_NAME}-$name || true
 done
 
 if [ "$VC" ]; then
-	echo Deleting cluster folder $cluster_folder
+	aba_info Deleting cluster folder $cluster_folder
 	govc object.destroy $cluster_folder || true
 fi
 

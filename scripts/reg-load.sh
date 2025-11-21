@@ -7,7 +7,7 @@ aba_debug "Starting: $0 $*"
 
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "Attempting $try_tot times to load the images into the registry."    # If the retry value exists and it's a number
+[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "[ABA] Attempting $try_tot times to load the images into the registry."    # If the retry value exists and it's a number
 
 umask 077
 
@@ -25,7 +25,7 @@ scripts/create-containers-auth.sh --load   # --load option indicates that the pu
 if [ -s regcreds/rootCA.pem ]; then
 	trust_root_ca regcreds/rootCA.pem # FIXME: Is this required here since the rootCA.pem is installed after reg install?
 else
-	echo "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 
+	aba_warning "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 
 fi
 
 [ ! "$data_dir" ] && data_dir=\~
@@ -36,12 +36,12 @@ if [ ! -d save ]; then
 fi
 
 echo 
-echo "Now loading (disk2mirror) the images from mirror/save/ directory to registry $reg_host:$reg_port$reg_path."
+aba_warning "Now loading (disk2mirror) the images from mirror/save/ directory to registry $reg_host:$reg_port$reg_path."
 echo
 
 # Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
 if [ -s ./reg-uninstall.sh ]; then
-	echo "Warning: Ensure there is enough disk space under $reg_root.  This can take 5 to 20 minutes to complete or even longer if Operator images are being loaded!"
+	aba_warning "Ensure there is enough disk space under $reg_root.  This can take 5 to 20 minutes to complete or even longer if Operator images are being loaded!"
 fi
 echo
 
@@ -105,7 +105,7 @@ do
 	fi
 
 	let try=$try+1
-	[ $try -le $try_tot ] && echo_red -n "Image loading failed ($ret) ... Trying again. " >&2
+	[ $try -le $try_tot ] && echo_red -n "[ABA] Image loading failed ($ret) ... Trying again. " >&2
 done
 
 if [ "$failed" ]; then
