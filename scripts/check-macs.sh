@@ -32,10 +32,8 @@ do
 	if echo "$all_arp_entries" | grep -q " $mac "; then
 		aba_warning "Mac address $mac might already be in use (found in system ARP cache)."
 		IN_ARP_CACHE=1
-		#echo $mac >> $tmp_dir/.list_of_matching_arp_entries
 		# If the list is empty, add the mac address, else append the mac addr.
 		[ "$list_of_matching_arp_entries" ] && list_of_matching_arp_entries="${$list_of_matching_arp_entries}"$'\n'"$mac" || list_of_matching_arp_entries=$mac
-		# my_list="${my_list}"$'\n'"dragonfruit"
 	fi
 done
 
@@ -47,11 +45,9 @@ if [ "$list_of_matching_arp_entries" ]; then
 	#for mac in `cat $tmp_dir/.list_of_matching_arp_entries`
 	for mac in $list_of_matching_arp_entries
 	do
-		#grep $mac $tmp_dir/.mac_list_filtered
 		echo "$mac_list_filtered" | grep $mac
 	done
 
-	#ips=$(cat $tmp_dir/.mac_list_filtered | cut -d\( -f2 | cut -d\) -f1)
 	ips=$(echo "$mac_list_filtered" | cut -d\( -f2 | cut -d\) -f1)
 
 	if [ "$ips" ]; then
@@ -71,7 +67,6 @@ if [ "$list_of_matching_arp_entries" ]; then
 		for mac in $CP_MAC_ADDRS $WKR_MAC_ADDRS
 		do
 			# checking $mac ...
-			#if grep -q " $mac " $tmp_dir/.all_arp_entries; then
 			if echo "$all_arp_entries" | grep -q " $mac "; then
 				P="$P $mac"
 				MAC_IN_USE=1
@@ -87,9 +82,10 @@ if [ "$list_of_matching_arp_entries" ]; then
 fi
 
 if [ "$IN_ARP_CACHE" ]; then
-	echo "Warning: Mac address conflics may cause the OCP installation to fail!" 
-	echo "         Consider changing 'mac_prefix' in cluster.conf and try again."
-	echo "         After clearing the ARP cache & pinging IPs, no more mac address conflics detected!"
+	aba_warning \
+		"Mac address conflics may cause the OpenShift installation to fail!" \
+		"Consider changing 'mac_prefix' in cluster.conf and try again." \
+		"After clearing the ARP cache & pinging IPs, no more mac address conflics detected!"
 fi
 
 echo

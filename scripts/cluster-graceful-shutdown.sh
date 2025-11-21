@@ -8,7 +8,7 @@ aba_debug "Starting: $0 $*"
 [ "$1" = "wait=1" ] && wait=1 && shift
 
 
-[ ! -s iso-agent-based/auth/kubeconfig ] && echo "Cannot find iso-agent-based/auth/kubeconfig file!" && exit 1
+[ ! -s iso-agent-based/auth/kubeconfig ] && aba_abort "Cannot find iso-agent-based/auth/kubeconfig file!"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
@@ -18,7 +18,7 @@ verify-cluster-conf || exit 1
 
 server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)
 
-echo Checking cluster ...
+aba_info Checking cluster ...
 # Or use: timeout 3 bash -c "</dev/tcp/host/6443"
 if ! curl --connect-timeout 10 --retry 8 -skI $server_url >/dev/null; then
 	echo_red "Cluster not reachable at $server_url" >&2
@@ -41,13 +41,13 @@ fi
 
 cluster_id=$($OC whoami --show-server | awk -F[/:] '{print $4}') || exit 1
 
-echo Cluster $cluster_id nodes:
+aba_info Cluster $cluster_id nodes:
 echo
 $OC get nodes
 echo
 
 logfile=.shutdown.log
-echo Start of shutdown $(date) > $logfile
+aba_info Start of shutdown $(date) > $logfile
 
 # Preparing debug pods for gracefull shutdown (ensure all nodes are 'Ready') ...
 for node in $($OC --request-timeout=30s get nodes -o jsonpath='{.items[*].metadata.name}')
@@ -69,10 +69,9 @@ if $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet
 	seconds_diff=$((cluster_exp_date_seconds - current_date_seconds))
 	days_diff=$((seconds_diff / 86400))
 
-	echo "Certificate expiration date of cluster: $cluster_id: $cluster_exp_date"
+	aba_info "Certificate expiration date of cluster: $cluster_id: $cluster_exp_date"
 	echo_yellow "The cluster certificate will expire in $days_diff days."
-	#echo "Make sure the cluster is started beforehand to allow the CA certificate to renew automatically."
-	echo "Start the cluster beforehand to ensure the cluster's CA certificate renews automatically."
+	aba_info "Start the cluster beforehand to ensure the cluster's CA certificate renews automatically."
 
 else
 	echo_red "Unable to discover cluster's certificate expiration date." >&2
@@ -86,25 +85,22 @@ read yn
 # wait for all debug pods to have completed successfully.
 wait
 
-echo "Cluster ready for gracefull shutdown!  Sending all output to $logfile ..." | tee -a $logfile
-
-#echo "Sending all output to $logfile ..." | tee -a $logfile
+aba_info "Cluster ready for gracefull shutdown!  Sending all output to $logfile ..." | tee -a $logfile
 
 # If not SNO ...
 if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
-	echo "Making all nodes unschedulable (corden) ..." | tee -a $logfile
+	aba_info "Making all nodes unschedulable (corden) ..." | tee -a $logfile
 	for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}')
 	do
-		#echo Corden ${node}
 		$OC adm cordon ${node} 2>> $logfile &
 	done | tee -a $logfile
 	wait
 
-	echo "Draining all pods from all worker nodes ..." | tee -a $logfile
+	aba_info "Draining all pods from all worker nodes ..." | tee -a $logfile
 	sleep 1
 	for node in $($OC get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); 
 	do
-		echo Drain ${node}
+		aba_info Drain ${node}
 		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=60s --force &
 		# See: https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html-single/backup_and_restore/index#graceful-shutdown_graceful-shutdown-cluster
 	done >> $logfile 2>&1
@@ -112,7 +108,7 @@ if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
 	wait
 fi
 
-echo Shutting down all nodes ... | tee -a $logfile
+aba_info Shutting down all nodes ... | tee -a $logfile
 for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}');
 do
 	$OC --request-timeout=30s debug node/${node} -- chroot /host shutdown -h 1 &

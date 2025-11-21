@@ -22,29 +22,28 @@ source <(normalize-mirror-conf)
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
-echo "Accessing the cluster ..."
+aba_info "Accessing the cluster ..."
 
 if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
 	[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
 	if ! oc whoami; then
-		echo_red "Unable to access the cluster using KUBECONFIG=$KUBECONFIG" >&2
+		aba_warning "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 		. <(aba login)
 
 		if ! oc whoami --request-timeout='20s' >/dev/null; then
-			echo_red "Unable to log into the cluster" >&2
-			exit 1
+			aba_abort "Unable to log into the cluster" 
 		fi
 	fi
 fi
 
-echo_white "What this 'day2' script does:"
-echo_white "- Add the internal mirror registry's Root CA to the cluster trust store."
-echo_white "- Configure OperatorHub to integrate with the internal mirror registry."
-echo_white "- Apply any/all idms/itms resource files under working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync/load)."
-echo_white "- For fully disconnected environments, disable online public catalog sources."
-echo_white "- Install any CatalogSources found under working-dir/cluster-resources."
-echo_white "- Apply any release image signatures found under working-dir/cluster-resources."
+aba_info "What this 'day2' script does:"
+aba_info "- Add the internal mirror registry's Root CA to the cluster trust store."
+aba_info "- Configure OperatorHub to integrate with the internal mirror registry."
+aba_info "- Apply any/all idms/itms resource files under working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync/load)."
+aba_info "- For fully disconnected environments, disable online public catalog sources."
+aba_info "- Install any CatalogSources found under working-dir/cluster-resources."
+aba_info "- Apply any release image signatures found under working-dir/cluster-resources."
 echo
 
 
@@ -52,40 +51,40 @@ aba_info_ok For disconnected environments, disabling online public catalog sourc
 
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
 if [ ! "$int_connection" ]; then
-	echo "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'"
+	aba_info "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'"
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
-       		echo "Patched OperatorHub, disabled Red Hat default catalog sources"
+       		aba_info "Patched OperatorHub, disabled Red Hat default catalog sources"
 else
-	echo "Assuming internet connection (e.g. proxy) in use, not disabling default catalog sources"
+	aba_info "Assuming internet connection (e.g. proxy) in use, not disabling default catalog sources"
 fi
 
 
-echo_white "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
-echo_white "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image'."
-echo_white "Adding registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331 for more."
+aba_info "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
+aba_info "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image'."
+aba_info "Adding registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331 for more."
 echo
 cm_existing=$(oc get cm registry-config -n openshift-config || true)
 # If installed from mirror reg. and trust CA missing (cm/registry-config) does not exist...
 if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
-	echo "Adding the trust CA of the registry ($reg_host) ..."
-	echo "To fix https://access.redhat.com/solutions/5514331 and solve 'image pull errors in disconnected environment'."
+	aba_info "Adding the trust CA of the registry ($reg_host) ..."
+	aba_info "To fix https://access.redhat.com/solutions/5514331 and solve 'image pull errors in disconnected environment'."
 	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
-	echo "Using root CA file at regcreds/rootCA.pem"
+	aba_info "Using root CA file at regcreds/rootCA.pem"
 
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
-	echo "Running: oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
+	aba_info "Running: oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
 	try_cmd 5 5 15 "oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
 
 	# Sometimes see the error 'error: the server doesn't have a resource type "imagestream"' ... so , need to check and wait...
-	echo "Ensuring 'imagestream' resource is available!" 
+	aba_info "Ensuring 'imagestream' resource is available!" 
 	try_cmd 5 5 20 oc get imagestream 
 
 	# The above workaround describes re-creating the is/oauth-proxy 
 	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
 		try_cmd 5 5 15 oc delete imagestream -n openshift oauth-proxy
 
-		echo Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 2 to 3 minutes.
+		echo_red Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 2 to 3 minutes.
 
 		sleep 30
 
@@ -95,7 +94,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 			sleep 10
 		done
 	else
-		echo "'unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
+		aba_info "'unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
 	fi
 	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
 else	
@@ -121,10 +120,10 @@ if [ "$latest_working_dir" ]; then
 	for f in $(ls $latest_working_dir/cluster-resources/{idms,itms}*yaml 2>/dev/null || true) 
 	do
 		if [ -s $f ]; then
-			echo oc apply -f $f
+			aba_info oc apply -f $f
 			oc apply -f $f
 		else
-			echo_red "Warning: no such file: $f" >&2
+			aba_warning "no such file: $f"
 		fi
 	done
 
@@ -133,7 +132,7 @@ if [ "$latest_working_dir" ]; then
 	##f=$(ls -t1 $latest_working_dir/cluster-resources/cs-redhat-operator-index*yaml | head -1)
 	cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
 
-	[ ! "$cs_file_list" ] && echo_red "Warning: No CatalogSource files in $latest_working_dir/cluster-resources to process" >&2
+	[ ! "$cs_file_list" ] && aba_warning "No CatalogSource files in $latest_working_dir/cluster-resources to process"
 
 	for f in $cs_file_list
 	do
@@ -156,28 +155,19 @@ if [ "$latest_working_dir" ]; then
     			community-operator)	cs_name="community-operators" ;;
 		esac
 
-		# FIXME: delete
-		#cs_name=$(echo $f | sed "s/.*cs-\(.*\)-index.*/\1/g")
-		#cs_name=$(echo $cs_name | \
-			#sed \
-				#-e "s/^redhat-operator$/redhat-operators/g" \
-				#-e "s/^certified-operator$/certified-operators/g" \
-				#-e "s/^community-operator$/community-operators/g" \
-			#)
-
 		if [ ! "$cs_name" ]; then
 			echo_red "Error: Cannot parse CatalogSource name: [$f]" >&2
 
 			continue
 		fi
 
-		echo Applying CatalogSource: $cs_name
+		aba_info Applying CatalogSource: $cs_name
 	       	cat $f | sed "s/name: cs-.*-index.*/name: $cs_name/g" | oc apply -f - # 2>/dev/null
 
-		echo "Patching CatalogSource display name for $cs_name: $cs_name ($reg_host)"
+		aba_info "Patching CatalogSource display name for $cs_name: $cs_name ($reg_host)"
 		oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"displayName": "'$cs_name' ('$reg_host')"}}'
 
-		echo "Patching CatalogSource poll interval for $cs_name to 2m"
+		aba_info "Patching CatalogSource poll interval for $cs_name to 2m"
 		oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
 
 		wait_for_cs=true
@@ -192,18 +182,16 @@ if [ "$latest_working_dir" ]; then
 				state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
 
 				if [ "$state" = "READY" ]; then
-					echo "CatalogSource $cs_name is ready!"
+					aba_info "CatalogSource $cs_name is ready!"
 
 					exit 0  # exit the process
 				fi
-				[ "$state" ] && echo "Waiting for CatalogSource $cs_name... (current state: $state)"
+				[ "$state" ] && aba_info "Waiting for CatalogSource $cs_name... (current state: $state)"
 
 				sleep 5
 			done
 
-			echo_red "Error: catalog source $cs_name failed to become 'ready'.  Ensure the cluster is stable and try again." >&2
-
-			exit 1
+			aba_abort "catalog source $cs_name failed to become 'ready'.  Ensure the cluster is stable and try again."
 		) &
 	done
 
@@ -212,14 +200,14 @@ if [ "$latest_working_dir" ]; then
 
 	sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
 	if [ -s $sig_file ]; then
-		echo "Applying signatures from: $sig_file ..."
+		aba_info "Applying signatures from: $sig_file ..."
 		oc apply -f $sig_file
 	else
-		echo_white "No Signature files found in $latest_working_dir/cluster-resources" >&2
+		aba_info "No Signature files found in $latest_working_dir/cluster-resources" >&2
 	fi
 else
 	# FIXME: Only show warning IF the mirror has been used for this cluster
-	echo_red "Warning: missing directory $PWD/mirror/save/working-dir and/or $PWD/mirror/sync/working-dir" >&2
+	aba_warning "missing directory $PWD/mirror/save/working-dir and/or $PWD/mirror/sync/working-dir"
 fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 

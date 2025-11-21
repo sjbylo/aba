@@ -17,15 +17,12 @@ verify-aba-conf || exit 1
 
 if [ "$public_pull_secret_file_needed" -a ! -s "$pull_secret_file" ]; then
 	if [ ! "$pull_secret_file" ]; then
-		echo_red "Error: pull_secret_file not defined in aba.conf"
-
-		exit 1
+		aba_abort "Error: pull_secret_file not defined in aba.conf"
 	fi
 
-	echo_red   "Error: Your pull secret file '$pull_secret_file' does not exist!" >&2
-	echo_white "       Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
-
-	exit 1
+	aba_abort \
+		"Error: Your pull secret file '$pull_secret_file' does not exist!" \
+		"Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)"
 fi
 
 aba_debug "Ensuring dirs exist: ~/.docker ~/.containers $XDG_RUNTIME_DIR/containers"
@@ -68,8 +65,6 @@ elif [ -s $pull_secret_file ]; then
 
 else
 	echo 
-	echo_red "Aborting! Pull secret file(s) missing: '$pull_secret_file', 'regcreds/pull-secret-mirror.json' and/or 'regcreds/pull-secret-full.json'" >&2 
-
-	exit 1
+	aba_abort "Aborting! Pull secret file(s) missing: '$pull_secret_file', 'regcreds/pull-secret-mirror.json' and/or 'regcreds/pull-secret-full.json'" >&2 
 fi
 

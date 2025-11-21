@@ -41,11 +41,6 @@ REGISTRY_AUTH_DIR=".docker-auth"
 REGISTRY_USER="${REGISTRY_USER:-init}"
 REGISTRY_PASS="${REGISTRY_PASS:-p4ssw0rd}"
 
-# --- Helper functions ---
-#echo_green() { echo -e "\033[1;32m$*\033[0m"; }
-echo_yellow() { echo -e "\033[1;33m$*\033[0m"; }
-echo_red() { echo -e "\033[1;31m$*\033[0m"; }
-
 fail_checkp() {
     echo_red "❌ $1"
 }
@@ -122,8 +117,7 @@ $DOCKER run -d \
 #    registry:2
 
 # --- Step 7: Add CA to system trust ---
-echo_yellow "Adding CA to system trust (requires sudo)..."
-
+#echo_yellow "Adding CA to system trust (requires sudo)..."
 # No need: only for docker
 ###sudo cp "$REGISTRY_CERTS_DIR/ca.crt" /etc/pki/ca-trust/source/anchors/
 

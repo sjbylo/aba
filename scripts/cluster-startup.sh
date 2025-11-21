@@ -5,9 +5,7 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-
-
-[ ! -d iso-agent-based ] && echo_white "Cluster not installed!  Try running 'aba clean; aba' to install this cluster!" >&2 && exit 1
+[ ! -d iso-agent-based ] && aba_abort "Cluster not installed!  Try running 'aba clean; aba' to install this cluster!"
 
 unset KUBECONFIG
 cp iso-agent-based/auth.backup/kubeconfig iso-agent-based/auth/kubeconfig
@@ -21,29 +19,27 @@ if [ ! -s vmware.conf ]; then
 	echo_yellow "Please power on all bare-metal servers for cluster '$cluster_name'." >&2
 
 	# Quick check to see if servers are up?
-	if ! try_cmd -q 1 0 2 curl --connect-timeout 10 --retry 8 -skIL $server_url; then
+	if ! try_cmd -q 1 0 2 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
 		# If not, then wait check for longer ...
-		echo_white "Waiting for cluster API endpoint to become alive at $server_url ..."
+		aba_info "Waiting for cluster API endpoint to become alive at $server_url ..."
 
 		# Usage: try_cmd [-q] <pause> <interval> <total>
-		if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 8 -skIL $server_url; then
-			echo_white "Giving up waiting for the cluster endpoint to become available.  Once the servers start up, please try again!" >&2
-			exit 1
+		if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
+			aba_abort "Giving up waiting for the cluster endpoint to become available.  Once the servers start up, please try again!"
 		fi
 	fi
 else
-	echo Starting cluster $cluster_name ...
+	aba_info Starting cluster $cluster_name ...
 	make -s start
 fi
 
 # Have quick check if endpoint is available (cluster may already be running)
-if ! try_cmd -q 1 0 1 curl --connect-timeout 10 --retry 8 -skIL $server_url; then
-	echo Waiting for cluster API endpoint to become alive at $server_url ...
+if ! try_cmd -q 1 0 1 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
+	aba_info Waiting for cluster API endpoint to become alive at $server_url ...
 
 	# Now wait for longer...
-	if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 8 -skIL $server_url; then
-		#echo DEBUG2: ret=$?
-		echo "Giving up waiting for the cluster endpoint to become available!"
+	if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
+		aba_info "Giving up waiting for the cluster endpoint to become available!"
 
 		exit 1
 	fi
@@ -57,15 +53,13 @@ if ! try_cmd -q 1 0 2 $OC get nodes ; then
 fi
 
 echo
-echo "Cluster endpoint accessible at $server_url"
+aba_info "Cluster endpoint accessible at $server_url"
 
 echo
-echo Cluster $cluster_name nodes:
+aba_info Cluster $cluster_name nodes:
 echo
 if ! $OC get nodes; then
-	echo "Failed to access the cluster!" >&2
-
-	exit 1
+	aba_abort "Failed to access the cluster!"
 fi
 echo
 
@@ -73,7 +67,7 @@ uncorden_all_nodes() { for node in $($OC get nodes -o jsonpath='{.items[*].metad
 
 sleep 5 	# Sometimes need to wait to avoid uncordon errors!
 
-echo "Making all nodes schedulable (uncordon):"
+aba_info "Making all nodes schedulable (uncordon):"
 until uncorden_all_nodes
 do
 	sleep 5
@@ -97,7 +91,7 @@ check_and_approve_csrs() {
 		# Check any pending CSRs
 		CSRS=$($OC get csr -A --no-headers 2>/dev/null | grep -i pending | awk '{print $1}')
 		if [ "$CSRS" ]; then
-			echo "$OC adm certificate approve $CSRS"
+			aba_info "$OC adm certificate approve $CSRS"
 			$OC adm certificate approve $CSRS
 		fi
 
@@ -117,7 +111,7 @@ trap myexit EXIT
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
-	echo_white "Waiting for all nodes to be 'Ready' ..."
+	aba_info "Waiting for all nodes to be 'Ready' ..."
 
 	sleep 8
 fi
@@ -129,22 +123,20 @@ echo
 $OC get nodes
 
 echo
-echo_white "Note the certificate expiration date of this cluster ($cluster_name):"
-d=$($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
-echo_yellow $d
+aba_info "Note the certificate expiration date of this cluster ($cluster_name):"
+echo_yellow $($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
 echo
 
 console=$($OC whoami --show-console)/
 if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
 	aba_info_ok "The cluster will complete startup and become fully available shortly!"
 	echo
-	echo "Waiting for the console to become available at $console"
+	aba_info "Waiting for the console to become available at $console"
 
 	#check_and_approve_csrs
 
-	if ! try_cmd -q 5 0 60 "curl --retry 8 -skL $console | grep 'Red Hat OpenShift'"; then
-		echo "Giving up waiting for the console!"
-		#exit 0
+	if ! try_cmd -q 5 0 60 "curl --retry 2 -skL $console | grep 'Red Hat OpenShift'"; then
+		aba_info "Giving up waiting for the console!"
 	else
 		aba_info_ok "Cluster console is accessible at $console"
 	fi
@@ -153,10 +145,10 @@ else
 fi
 
 if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
-	echo "Waiting for all cluster operators ..."
+	aba_info "Waiting for all cluster operators ..."
 
 	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
-		echo "Giving up waiting for the operators!"
+		aba_info "Giving up waiting for the operators!"
 		myexit 0
 	fi
 fi

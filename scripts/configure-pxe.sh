@@ -13,8 +13,7 @@ umask 077
 #source <(normalize-mirror-conf)
 
 if [ ! -d iso-agent-based/boot-artifacts ]; then
-	echo "Directory 'iso-agent-based/boot-artifacts' does not exist!"
-	exit 1
+	aba_abort "Directory 'iso-agent-based/boot-artifacts' does not exist!"
 fi
 
 $SUDO dnf install httpd -y
@@ -31,7 +30,7 @@ $SUDO chown -R apache /var/www/html
 $SUDO chcon -R -t httpd_sys_content_t /var/www/html
 
 echo 
-echo "PXE boot artifacts have been made available at:"
-echo "http://<this host ip>/agent.$arch_sys-vmlinuz"
+aba_info "PXE boot artifacts have been made available at:"
+aba_info "http://<this host ip>/agent.$arch_sys-vmlinuz"
 echo
 

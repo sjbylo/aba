@@ -16,9 +16,7 @@ source <(normalize-mirror-conf)
 verify-mirror-conf || exit 1
 
 if [ ! "$reg_host" -o ! "$reg_port" ]; then
-	echo_red "Error: No registry is configured in 'mirror.conf'.  Run: 'aba -d mirror mirror.conf' and edit the mirror.conf file." >&2
-
-	exit 1
+	aba_abort "No registry is configured in 'mirror.conf'.  Run: 'aba -d mirror mirror.conf' and edit the mirror.conf file."
 fi
 
 reg_url=https://$reg_host:$reg_port
@@ -27,10 +25,12 @@ reg_url=https://$reg_host:$reg_port
 #if [ -s regcreds/rootCA.pem -a -s regcreds/pull-secret-mirror.json ]; then
 if [ ! -s regcreds/pull-secret-mirror.json ]; then
 	aba_abort \
-		"No mirror registry credential file found in 'regcreds/pull-secret-mirror.json'" \
-		"you want to use your existing registry, copy its pull secret file and root CA file into 'mirror/regcreds/' and try again." \
-		"files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively." \
-		"the README.md for further instructions."
+		"No mirror registry credential file found in: $PWD/regcreds/pull-secret-mirror.json" \
+		"You have two options:" \
+		"- To install Quay, see: aba mirror --help" \
+		"- To use an existing mirror registry, copy its pull secret and root CA files into: $PWD/mirror/regcreds/ and try again." \
+		"  The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively." \
+		"See the README.md for more."
 fi
 
 # Ensure pull secrets in place. Only needed if the registry was installed *from a different host*, ie. ~/.containers/auth.json does not exist.
@@ -44,7 +44,7 @@ if [ -s regcreds/rootCA.pem ]; then
 else
 	aba_abort \
 		"Mirror registry pull secret file 'pull-secret-mirror.json' found in 'regcreds/' but no 'rootCA.pem' cert file found." \
-		"CA file missing: 'rootCA.pem'.  Copy your registry's root CA file into 'regcreds/rootCA.pem' and try again."
+		"CA file missing: rootCA.pem.  Copy your registry's root CA file into 'regcreds/rootCA.pem' and try again."
 fi
 
 # Test registry access with podman 

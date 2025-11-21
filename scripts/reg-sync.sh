@@ -21,24 +21,19 @@ verify-mirror-conf || exit 1
 pull_secret_mirror_file=pull-secret-mirror.json
 
 if [ -s $pull_secret_mirror_file ]; then
-	echo Using $pull_secret_mirror_file ...
+	aba_info Using $pull_secret_mirror_file ...
 elif [ -s $pull_secret_file ]; then
 	:
 else
-	echo
-	echo_red "Error: The pull secret file '$pull_secret_file' does not exist!" >&2
-	echo_white "       Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
-	echo
-
-	exit 1
+	aba_abort \
+		"The pull secret file '$pull_secret_file' does not exist!" \
+		"Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)"
 fi
 
 # Check internet connection...
 ##aba_info -n "Checking access to https://api.openshift.com/: "
 if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
-	echo_red "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry." >&2
-
-	exit 1
+	aba_abort "Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry." 
 fi
 
 export reg_url=https://$reg_host:$reg_port
@@ -134,10 +129,11 @@ done
 
 if [ "$failed" ]; then
 	let try=$try-1
-	echo_red -n "Image synchronization aborted ..."
+	aba_warning -n "Image synchronization aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
-	echo_red "Warning: Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." >&2
-	echo_red "         View https://status.redhat.com/ for any current issues or planned maintenance." >&2
+	aba_warning \
+		"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." \
+		"View https://status.redhat.com/ for any current issues or planned maintenance." 
 	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
 
 	exit 1

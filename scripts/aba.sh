@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251120160334
+ABA_VERSION=20251121141444
 # Sanity check
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
@@ -27,7 +27,7 @@ do
 		[ ! -e "$2" ] && echo "Error: directory $2 does not exist!" >&2 && exit 1
 		[ ! -d "$2" ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
 
-		[ "$DEBUG_ABA" ] && echo "change dir to: '$2'" # Have not sourced the include file yet!
+		[ "$DEBUG_ABA" ] && echo "Changing dir to: $2" # Have not sourced the include file yet!
 
 		cd "$2"
 		shift 2
@@ -170,39 +170,46 @@ do
 		interactive_mode=1
 		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
 		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
+		export ask=1
 		shift
 	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
 		# If there are commands/targets to execute in the CWD, do it...
 		BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
-		if [ "$BUILD_COMMAND" ]; then
-			if [ "$DEBUG_ABA" ]; then
-				aba_debug "In folder $PWD: Running make $BUILD_COMMAND" 
-				read -t 3 || true
-				eval make $BUILD_COMMAND
-			else
-				# Eval used here as some variable may need evaluation from bash
-				eval make -s $BUILD_COMMAND
-			fi
+		[ "$BUILD_COMMAND" ] && aba_abort "Option $1 not allowed after a command: [$BUILD_COMMAND]"
 
-			# Remove already executed targets 
-			BUILD_COMMAND=
-		fi
+		# FIXME: change this
+		#if [ "$BUILD_COMMAND" ]; then
+		#	if [ "$DEBUG_ABA" ]; then
+		#		aba_debug "In folder $PWD: Running make $BUILD_COMMAND" 
+		#		read -t 3 || true
+		#		eval make $BUILD_COMMAND
+		#	else
+		#		# Eval used here as some variable may need evaluation from bash
+		#		eval make -s $BUILD_COMMAND
+		#	fi
+		#
+		#	# Remove already executed targets 
+		#	BUILD_COMMAND=
+		#fi
 
 		# If no directory path provided, assume it's ".", i.e. $ABA_ROOT/.
 		# If dir path arg privided, then shift
-		provided_dir="$2"
-		[[ "$2" =~ ^- || -z "$2" ]] && provided_dir=. || shift
+		[[ "$2" =~ ^- || -z "$2" ]] && provided_dir=. || shift  # If no arg provided, use CWD
+		[[ ! "$1" ]] && provided_dir=.  # FIXME: this is the same
+
+		provided_dir=$(eval echo $1)  # Resolve any ~
+
+		[[ "$provided_dir" != /* ]] && provided_dir="$ABA_ROOT/$provided_dir"  # If not an absolute path ...
 
 		# FIXME: Simplify this!  Put all static files into well-known location?
 		#[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
-		[ ! -e "$ABA_ROOT/$provided_dir" ] && aba_abort "directory $ABA_ROOT/$provided_dir does not exist!"
-		[ ! -d "$ABA_ROOT/$provided_dir" ] && aba_abort "cannot change to $ABA_ROOT/$provided_dir: not a directory!"
+		[ ! -e "$provided_dir" ] && aba_abort "directory: $provided_dir does not exist!"
+		[ ! -d "$provided_dir" ] && aba_abort "cannot change to $provided_dir: not a directory!"
 
-		WORK_DIR="$ABA_ROOT/$provided_dir"  # dir should always be relative from Aba repo's root dir
-
-		aba_debug "changing to \"$WORK_DIR\"" 
-
-		cd "$WORK_DIR" 
+		# FIXME:
+		#WORK_DIR="$ABA_ROOT/$provided_dir"  # dir should always be relative from Aba repo's root dir
+		#aba_debug "changing to \"$WORK_DIR\"" 
+		#cd "$WORK_DIR" 
 		shift
 	elif [ "$1" = "--quiet" -o "$1" = "-q" ]; then
 		export INFO_ABA=
@@ -523,12 +530,15 @@ do
 	elif [ "$1" = "-Y" ]; then  # One off, accept the default answer to all prompts for this invocation
 		export ASK_OVERRIDE=1  
 		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf  # And make permanent change
+		export ask=
 		shift 
 	elif [ "$1" = "--ask" -o "$1" = "-a" ]; then
 		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
+		export ask=1
 		shift 
 	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then  # FIXME: make -y work only for a single command execution (not write into file)
 		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
+		export ask=
 		shift 
 	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then  # FIXME opt.
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
@@ -715,103 +725,103 @@ do
 		fi
 	#elif [ "$1" = "create" ]; then # Ignore this arg
 	#	shift
-	elif [ "$1" = "clux" ]; then  #FIXME: THIS IS EXPERIMENTAL ONLY! Change to 'cluster' once tested.
-		[ ! "$1" ] && aba_abort "Missing options after '$1'" >&2 && exit 1
-		shift
-		while [ "$*" ] 
-		do
-			if [ "$1" = "--name" -o "$1" = "-n" ]; then
-				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
-
-				name="$2"
-				is_valid_dns_label $name
-				shift 2
-			elif [[ "$1" == "--type" || "$1" == "-t" ]]; then
-				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
-
-				case "$2" in
-					sno|compact|standard)
-						type=$2
-					;;
-					*)
-						aba_abort "Error: Invalid type '$2'. Expected one of: sno, compact, standard." >&2
-						exit 1
-					;;
-				esac
-				shift 2
-			elif [[ "$1" == "--starting-ip" || "$1" == "-i" ]]; then
-				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
-				starting_ip="$2"
-				shift 2
-			elif [[ "$1" == "--step" || "$1" == "-s" ]]; then
-				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
-				step="$2"
-				shift 2
-			elif [[ "$1" == "--ports" || "$1" == "-p" ]]; then
-				shift
-				ports_vals=
-				# While there is a valid arg (not an opt)...
-				while [[ ! (-z "$1" || "$1" =~ ^-) ]]
-				do
-					[ "$ports_vals" ] && ports_vals="$ports_vals,$1" || ports_vals="$1"
-					aba_debug ports_vals=$ports_vals
-					shift	
-				done
-			elif [[ "$1" == "--int-connection" || "$1" == "-I" ]]; then
-				# Optional argument: connection method (proxy|direct)
-				int_connection=
-
-				# Check if next arg exists and is not another option (starting with '-')
-				if [[ -n "$2" && "$2" != -* ]]; then
-					case "$2" in
-						proxy|p)
-							int_connection="proxy"
-							;;
-						direct|d)
-							int_connection="direct"
-							;;
-						*)
-							aba_abort "Error: Invalid argument [$2] after option '$1'. Expected one of: proxy, direct." >&2
-							exit 1
-							;;
-					esac
-					shift
-				else
-					# No argument provided — clear existing value in cluster.conf
-					int_connection=""
-				fi
-				shift
-			elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
-				[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
-				if echo "$2" | grep -q -E '^[0-9]+$'; then
-					master_mem=$2
-				else
-					aba_abort "$(basename $0): Error: no such option after 'clux': $1" >&2
-					exit 1
-				fi
-				shift 2
-			elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
-				[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
-				if echo "$2" | grep -q -E '^[0-9]+$'; then
-					master_cpu_count=$2
-				else
-					aba_abort "$(basename $0): Error: no such option after 'clux': $1" >&2
-					exit 1
-				fi
-				shift 2
-			fi
-		done
-
-		## Process "clux" command args ##
-
-		if [ "$name" ]; then
-			# Create cluster dir and cluster.conf
-			aba_debug scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
-			scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
-		else
-			aba_abort "Error: Must provide at least --name after 'clux'" >&2
-			exit 1
-		fi
+#	elif [ "$1" = "clux" ]; then  #FIXME: THIS IS EXPERIMENTAL ONLY! Change to 'cluster' once tested.
+#		[ ! "$1" ] && aba_abort "Missing options after '$1'" >&2 && exit 1
+#		shift
+#		while [ "$*" ] 
+#		do
+#			if [ "$1" = "--name" -o "$1" = "-n" ]; then
+#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
+#
+#				name="$2"
+#				is_valid_dns_label $name
+#				shift 2
+#			elif [[ "$1" == "--type" || "$1" == "-t" ]]; then
+#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
+#
+#				case "$2" in
+#					sno|compact|standard)
+#						type=$2
+#					;;
+#					*)
+#						aba_abort "Error: Invalid type '$2'. Expected one of: sno, compact, standard." >&2
+#						exit 1
+#					;;
+#				esac
+#				shift 2
+#			elif [[ "$1" == "--starting-ip" || "$1" == "-i" ]]; then
+#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
+#				starting_ip="$2"
+#				shift 2
+#			elif [[ "$1" == "--step" || "$1" == "-s" ]]; then
+#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
+#				step="$2"
+#				shift 2
+#			elif [[ "$1" == "--ports" || "$1" == "-p" ]]; then
+#				shift
+#				ports_vals=
+#				# While there is a valid arg (not an opt)...
+#				while [[ ! (-z "$1" || "$1" =~ ^-) ]]
+#				do
+#					[ "$ports_vals" ] && ports_vals="$ports_vals,$1" || ports_vals="$1"
+#					aba_debug ports_vals=$ports_vals
+#					shift	
+#				done
+#			elif [[ "$1" == "--int-connection" || "$1" == "-I" ]]; then
+#				# Optional argument: connection method (proxy|direct)
+#				int_connection=
+#
+#				# Check if next arg exists and is not another option (starting with '-')
+#				if [[ -n "$2" && "$2" != -* ]]; then
+#					case "$2" in
+#						proxy|p)
+#							int_connection="proxy"
+#							;;
+#						direct|d)
+#							int_connection="direct"
+#							;;
+#						*)
+#							aba_abort "Error: Invalid argument [$2] after option '$1'. Expected one of: proxy, direct." >&2
+#							exit 1
+#							;;
+#					esac
+#					shift
+#				else
+#					# No argument provided — clear existing value in cluster.conf
+#					int_connection=""
+#				fi
+#				shift
+#			elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
+#				[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
+#				if echo "$2" | grep -q -E '^[0-9]+$'; then
+#					master_mem=$2
+#				else
+#					aba_abort "$(basename $0): Error: no such option after 'clux': $1" >&2
+#					exit 1
+#				fi
+#				shift 2
+#			elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
+#				[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" >&2 && exit 1
+#				if echo "$2" | grep -q -E '^[0-9]+$'; then
+#					master_cpu_count=$2
+#				else
+#					aba_abort "$(basename $0): Error: no such option after 'clux': $1" >&2
+#					exit 1
+#				fi
+#				shift 2
+#			fi
+#		done
+#
+#		## Process "clux" command args ##
+#
+#		if [ "$name" ]; then
+#			# Create cluster dir and cluster.conf
+#			aba_debug scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
+#			scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
+#		else
+#			aba_abort "Error: Must provide at least --name after 'clux'" >&2
+#			exit 1
+#		fi
 	else
 		if echo "$1" | grep -q "^-"; then
 			aba_abort "$(basename $0): Error: no such option $1" >&2
@@ -864,7 +874,7 @@ if [ ! "$interactive_mode" ]; then
 		fi
 	fi
 	ret=$?
-	aba_debug "Exiting aba with code $ret"
+	aba_debug "Exiting $0 with code $ret"
 	exit $ret # Important that we exit here with exit code from the above make command
 fi
 

@@ -32,9 +32,7 @@ fi
 reg_root=$data_dir/quay-install
 
 if [ ! -d save ]; then
-	echo_red "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'aba -d mirror save' first on an external (Internet connected) bastion/laptop" >&2
-
-	exit 1
+	aba_abort "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'aba -d mirror save' first on an external (Internet connected) bastion/laptop" 
 fi
 
 echo 
@@ -95,7 +93,7 @@ do
 			if [ -s "$error_file" ]; then
 				mkdir -p save/saved_errors
 				cp $error_file save/saved_errors
-				echo_red "Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
+				aba_warning "An error was detected and the log file was saved in save/saved_errors/$(basename $error_file)"
 			fi
 		#fi
 
@@ -112,9 +110,9 @@ done
 
 if [ "$failed" ]; then
 	let try=$try-1
-	echo_red -n "Image loading aborted ..."
+	aba_warning -n "Image loading aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
-	echo_red "Warning: Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." >&2
+	aba_warning "Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." 
 	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
 
 	exit 1

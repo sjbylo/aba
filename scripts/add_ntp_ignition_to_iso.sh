@@ -13,7 +13,7 @@ verify-aba-conf || exit 1
 
 [ ! "$ntp_servers" ] && aba_info "Not configuring NTP in early bootstrap node because 'ntp_servers' not defined in aba.conf or cluster.conf." && exit 0
 
-[ "$INFO_ABA" ] && aba_info "Adding NTP server to early bootstrap ignition: $ntp_servers" 
+aba_info "Adding NTP server to early bootstrap ignition: $ntp_servers" 
 
 #arch=$(uname -m)
 iso_dir=iso-agent-based

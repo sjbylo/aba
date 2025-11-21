@@ -30,14 +30,14 @@ export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secr
 
 if oc get nodes | grep -q SchedulingDisabled; then
 	add_pause=1
-	echo "Setting nodes scheduling enabled"
+	aba_info "Setting nodes scheduling enabled"
 	for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do oc adm uncordon ${node} & done
 	wait
 else
-	echo "No nodes set to 'SchedulingDisabled'.  Nothing to do!"
+	aba_info "No nodes set to 'SchedulingDisabled'.  Nothing to do!"
 fi
 
-echo "Checking if any CSRs to approve ..."
+aba_info "Checking if any CSRs to approve ..."
 if [ "$(oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}')" ]; then
 	add_pause=1
 	until [ ! "$(oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}')" ]
@@ -48,22 +48,22 @@ if [ "$(oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata
 		sleep 30 # This is the time we wait to see if there are any more CSRs to approve
 	done
 else
-	echo "No CSRs exist. Nothing to do!" 
+	aba_info "No CSRs exist. Nothing to do!" 
 fi
 
-echo "Rescue complete."
+aba_info_ok "Rescue complete."
 
 # Only pause if changes were made
 [ "$add_pause" ] && sleep 20
 
 echo
-echo Nodes:
+aba_info Nodes:
 oc get nodes
 echo
-echo CSRs:
+aba_info CSRs:
 oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}'
 echo
-echo Cluster Operators:
+aba_info Cluster Operators:
 oc get co
 
 exit 0

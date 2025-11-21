@@ -170,11 +170,12 @@ test-cmd -m "Show aba.conf" normalize-aba-conf
 test-cmd -m "Show mirror/mirror.conf" "cd mirror; normalize-mirror-conf"
 # All the following should FAIL
 test-cmd -f -m "Installing mirror with unknown hostname fails" "aba -d mirror -k ~/.ssh/id_rsa -H unknown.example.com install"
-test-cmd -f -m "Installing mirror to remote host fails the probe" "aba -d mirror -k ~/.ssh/id_rsa -H $int_bastion_hostname install"
+test-cmd -f -m "Installing mirror to remote host fails due to mirror already exists" "aba -d mirror -k ~/.ssh/id_rsa -H $int_bastion_hostname install"
 local_hostname=$(hostname --long)
-test-cmd -f -m "Installing mirror to 'remote' host fails" "aba -d mirror -k ~/.ssh/id_rsa -H $local_hostname install"
+test-cmd -f -m "Installing mirror to 'remote' host fails since it's actually the local host!" "aba -d mirror -k ~/.ssh/id_rsa -H $local_hostname install"
 ### Do a test to check reg prob
 
+test-cmd -m "Reset the mirror config to localhost and remove the key" aba -d mirror -H registry.example.com -k
 
 # Fetch the config
 source <(cd mirror; normalize-mirror-conf)
@@ -222,7 +223,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact"
 #	[ "$cname" = "sno" ] && starting_ip=10.0.1.201
 #	[ "$cname" = "compact" ] && starting_ip=10.0.1.71
 #	[ "$cname" = "standard" ] && starting_ip=10.0.1.81
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba clux -n compact -i 10.0.1.71 -t compact --step $default_target" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba cluster -n compact -i 10.0.1.71 -t compact --step $default_target" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)" "aba --dir $subdir/aba/compact delete" 
 
 #############
@@ -250,7 +251,7 @@ test-cmd -m "Copy test script" scp test/misc/test_ssh_ntp.sh $TEST_USER@$int_bas
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "echo until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do sleep 10\; done > test_ssh.sh"
 
 # Init
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba clux -i 10.0.1.201 --name $ctype --type $ctype --step cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster -i 10.0.1.201 --name $ctype --type $ctype --step cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i 's#^machine_network=.*#machine_network=10.0.0.0/22 #g' $subdir/aba/$ctype/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting starting_ip" "sed -i 's/^starting_ip=.*/starting_ip=$start_ip /g' $subdir/aba/$ctype/cluster.conf"
 
@@ -338,7 +339,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Cleaning up $subdir/aba/sno" "r
 
 #### TESTING ACM + MCH 
 # Adjust size of SNO cluster for ACM install 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba clux -i 10.0.1.201 --name sno --type sno --step cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster -i 10.0.1.201 --name sno --type sno --step cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check cluster.conf exists" "test -s $subdir/aba/sno/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/master_mem=40/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
@@ -348,7 +349,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bondin
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, ports=ens160,ens192,ens224" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/standard/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8/g' $subdir/aba/sno/cluster.conf"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster with 'aba --dir $subdir/aba clux -i 10.0.1.201 -n sno -t sno --step $default_target'" "aba --dir $subdir/aba clux -n sno -t sno --starting-ip 10.0.1.201 --step $default_target" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster with 'aba --dir $subdir/aba cluster -i 10.0.1.201 -n sno -t sno --step $default_target'" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target" 
 
 
 ######################
@@ -417,7 +418,7 @@ else
 
 	# Run 'aba --dir mirror clean' here since we (might be) are re-installing another cluster *with the same mac addresses*! So, install might fail.
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Cleaning sno dir" "aba --dir $subdir/aba/sno clean"  # This does not remove the cluster.conf file, so cluster can be re-installed 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Installing sno cluster" "aba --dir $subdir/aba clux -n sno -t sno --starting-ip 10.0.1.201 --mmem 24 --mcpu 12 -s install"   
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Installing sno cluster" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --mmem 24 --mcpu 12 -s install"   
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Check 'Running'" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get co"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Checking cluster operators" aba --dir $subdir/aba/sno cmd
 fi
