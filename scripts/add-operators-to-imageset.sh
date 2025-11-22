@@ -68,7 +68,7 @@ if [ "$ops" -o "$op_sets" ]; then
 		aba_abort \
 			"Cannot add required operators to the image-set config file!" \
 			"Your options are:" \
-			"- Refresh any existing catalog files by running: 'cd $PWD/mirror; rm -f .index/redhat-operator-index-v${ocp_ver_major}*' and try again." \
+			"- Refresh any existing catalog files by running: 'cd $PWD; rm -f .index/redhat-operator-index-v${ocp_ver_major}*' and try again." \
 			"- run 'cd mirror; aba catalog' to try to download the catalog file again." \
 			"- Check that the following command is working:" \
 			"    oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major" \

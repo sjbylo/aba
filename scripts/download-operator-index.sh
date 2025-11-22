@@ -93,6 +93,7 @@ fi
 
 # See if the index is currently downloading (using 'ln' to get a lock)
 if ! ln $index_file $lock_file >/dev/null 2>&1; then
+	touch $index_file
 	aba_debug "Lock file $lock_file already exists ..." >&2
 	# Passed here only if the lock file already exists (i.e. index already downloading) 
 
@@ -142,6 +143,10 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 	exit 0
 fi
 
+########################################
+# PAST THIS POINT?  You own the download
+########################################
+
 # Check size of /tmp (tmpfs) on Fedora to see if it needs to be increased (oc-mirror uses up a lot of /tmp space)
 #if [ ! "$bg" ] && grep -qi '^ID=fedora' /etc/os-release; then
 # FIXME; This is not a good place to do this as it could be called > 1
@@ -177,6 +182,7 @@ touch $done_file   # This marks successful completion of download!
 rm -f $lock_file 
 rm -f $pid_file
 
+# FIXME:???
 # If the catalog is downloaded ok, we leave the lock file so there's no risk of it being overwritten. 
 
 aba_info_ok "Downloaded $index_file operator list successfully"

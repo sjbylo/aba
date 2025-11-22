@@ -36,10 +36,11 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 	export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
-	aba_info "Generating initial image set configuration: save/imageset-config-save.yaml to save images to local disk ..."
+	aba_info "Generating image set configuration: save/imageset-config-save.yaml to save images to local disk ..."
 	[ ! "$excl_platform" ] && aba_info "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$arch_short' ..."
 
 	scripts/j2 ./templates/imageset-config-save-$oc_mirror_version.yaml.j2 > save/imageset-config-save.yaml 
+	touch save/.created  # In case next line fails!
 	scripts/add-operators-to-imageset.sh >> save/imageset-config-save.yaml 
 
 	# Uncomment the platform section

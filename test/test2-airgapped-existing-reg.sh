@@ -99,7 +99,7 @@ if [ ! "$1" ]; then
 	#test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ## --vmw $vf
 
 	mylog Set up vmware.conf
-	cp $vf -v vmware.conf 
+	test-cmd cp $vf -v vmware.conf 
 	sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 	test-cmd -m "Checking vmware.conf" grep vm/abatesting vmware.conf
 

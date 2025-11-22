@@ -32,7 +32,8 @@ fi
 
 echo >&2
 normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" >&2
-aba_info "Bundle output file = $bundle_dest_file" >&2
+#aba_info "Bundle output file = $bundle_dest_file" >&2
+echo "Bundle output file = $bundle_dest_file" >&2
 echo >&2
 
 # User requires to clean out any existing files under mirror/save
