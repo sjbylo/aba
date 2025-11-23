@@ -41,11 +41,12 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 
 	scripts/j2 ./templates/imageset-config-save-$oc_mirror_version.yaml.j2 > save/imageset-config-save.yaml 
 	touch save/.created  # In case next line fails!
+
 	scripts/add-operators-to-imageset.sh >> save/imageset-config-save.yaml 
+	touch save/.created  # In case next line fails!
 
 	# Uncomment the platform section
 	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" save/imageset-config-save.yaml
-
 	touch save/.created
 
 	aba_info_ok "Image set config file created: mirror/save/imageset-config-save.yaml"

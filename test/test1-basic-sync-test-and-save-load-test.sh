@@ -53,6 +53,8 @@ mylog ============================================================
 mylog "Test to install remote reg. on $int_bastion_hostname and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
+rm -rf ~/.cache/agent/image_cache/
+
 aba --dir ~/aba reset --force
 
 ntp_ip=10.0.1.8 # If available

@@ -142,7 +142,7 @@ aba_debug() {
     [ ! "$DEBUG_ABA" ] && return 0
 
     # Erase to col1 and return
-    [ "$TERM" ] && tput el1 && tput cr
+    [ "$TERM" ] && { tput el1 && tput cr; } >&2
 
     # Detect and consume "-n" if it's the first argument
     if [[ "$1" == "-n" ]]; then
@@ -697,7 +697,8 @@ fetch_latest_version() {
 _install_oc_mirror() {
     if ! which oc-mirror >/dev/null 2>&1; then
         make -s -C "$1/cli" oc-mirror >&2 || {
-            echo_red "Error: failed to build oc-mirror" >&2
+            echo_red "Error: failed to install oc-mirror" >&2
+
             return 1
         }
     fi
