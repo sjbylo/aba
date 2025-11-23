@@ -71,7 +71,7 @@ if [ "$bg" ]; then
 fi
 
 if [[ -s $index_file && -f $done_file ]]; then
-	aba_info "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file"
+	aba_info "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file" >&2
 
 	# Check age of file is older than one day
 	if [ "$(find $index_file -type f -mtime +0)" ]; then

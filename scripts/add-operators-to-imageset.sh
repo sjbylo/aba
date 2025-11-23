@@ -53,7 +53,12 @@ add_op() {
 	fi
 }
 
+# If operators are given, ensure the catalogs are available!
 if [ "$ops" -o "$op_sets" ]; then
+	#aba_debug Final change to fetch all operator catalog indexes ... running: make catalog from $PWD
+	make catalog bg=1  # Trigger download in background. Returns immediatelly. 
+	make catalog 2>/dev/null	   # Wait for all catlogs to download
+
 	catalog_file_errors=
 	for catalog in redhat-operator certified-operator redhat-marketplace community-operator
 	do
@@ -147,11 +152,11 @@ if [ "$ops" ]; then
 	declare -A op_set
 	set=misc
 
-	echo_white "Operators: " >&2 # Keep as echo_white
+	echo "Operators: " >&2 # Keep as echo
 
 	for op in $(echo $ops | tr "," " ")
 	do
-		echo_white -n "$op " >&2 # Keep as echo_white
+		echo -n "$op " >&2 # Keep as echo
 
 		# Check if this operator exists in each of the three catalogs
 		if grep -q "^$op " .index/redhat-operator-index-v$ocp_ver_major; then
@@ -201,7 +206,7 @@ do
 done
 
 echo >&2
-aba_info_ok "Number of operators added: ${#op_names_arr[@]}" >&2
-aba_info_ok "List: ${op_names_arr[@]}" >&2
+aba_info_ok "Number of operators added: ${#op_names_arr[@]}:" >&2
+aba_info_ok "${op_names_arr[@]}" >&2
 
 exit 0

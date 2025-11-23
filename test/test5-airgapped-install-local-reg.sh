@@ -79,6 +79,8 @@ mylog Starting test $(basename $0)
 mylog ============================================================
 mylog "Test to install a local reg. on $int_bastion_hostname and save + copy + load images.  Install sno ocp and a test app and svc mesh."
 
+rm -rf ~/.cache/agent/image_cache/
+
 rm -f aba.conf  # Set it up next
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=p
