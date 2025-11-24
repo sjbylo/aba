@@ -36,7 +36,7 @@ if [ ! -d save ]; then
 fi
 
 echo 
-aba_warning "Now loading (disk2mirror) the images from mirror/save/ directory to registry $reg_host:$reg_port$reg_path."
+aba_info "Now loading (disk2mirror) the images from mirror/save/ directory to registry $reg_host:$reg_port$reg_path."
 echo
 
 # Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)

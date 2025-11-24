@@ -5,6 +5,12 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+# Check internet connection...
+##aba_info -n "Checking access to https://api.openshift.com/: "
+if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
+	aba_abort "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk." 
+fi
+
 # Script called with args "debug" and/or "retry"
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
@@ -15,12 +21,6 @@ umask 077
 source <(normalize-aba-conf)
 
 verify-aba-conf || exit 1
-
-# Check internet connection...
-##aba_info -n "Checking access to https://api.openshift.com/: "
-if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
-	aba_abort "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk." 
-fi
 
 # Ensure the RH pull secret files are located in the right places
 scripts/create-containers-auth.sh

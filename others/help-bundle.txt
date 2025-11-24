@@ -4,11 +4,14 @@ Usage:
   aba bundle \
     -c, --channel <channel>                   # Choose OpenShift install channel (fast, stable, candidate).
     -v, --version <version>                   # OpenShift version to install (x.y.z, x.y, latest|l or previous|p).
-    -o, --out string                          # File to write install bundle to.
+    -o, --out /path/to/file                   # File to write install bundle to.
     -S, --pull-secret ~/.pull-secret.json     # Location of your Red Hat pull secret.
-    -P, --op-sets [<list of operator sets>]   # Provide operator set names: ocp, odf, ocpv, ai etc.
-    -O, --ops [<list of operator names>]      # Provide operator names.
+    -P, --op-sets [<list of operator sets>]   # Provide names of sets of operators: ocp, odf, ocpv, ai etc.
+    -O, --ops [<list of operator names>]      # Provide individual operator names.
+    -y, --yes                                 # Automatically accept the default answer to all prompts.
     -f, --force                               # Remove any existing files under mirror/save or mirror/sync.
+        --split                               # Create *split* bundle, excluding all aba/save/mirror_*.tar file(s).
+                                              # Manual merging of image-set archive file(s) (ISA) required!
 
   The 'bundle' command creates an 'install bundle' which is used to install OpenShift in a fully disconnected
   (air-gapped) environment. The 'bundle' command also writes the provided args (channel, version, operators ...)

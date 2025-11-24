@@ -5,8 +5,12 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-[ "$1" ] && bundle_dest_file=$1 && shift
-[ "$1" ] && force=true && shift
+while [ "$*" ]
+do
+	[ "$1" = "-o" ] && bundle_dest_file=$2 && shift 2
+	[ "$1" = "force" ] && force=1 && shift
+	[ "$1" = "split" ] && split_bundle=1 && shift
+done
 
 
 # This will have been completed behand, but just in case!
@@ -104,20 +108,45 @@ ls -1 cli/*tar.gz 2>/dev/null | grep -v -e "-$ocp_version.tar.gz" -e "oc-mirror.
 aba_info "Downloading CLI installation files ..."
 make -C cli download	# Downlaod required CLIs install files.
 
-if files_on_same_device mirror $bundle_dest_file; then
-	echo
-	echo_magenta "[ABA] A *split* install bundle will be created (the bundle will not contain the image-set archive file)."
-	echo_magenta "[ABA] This is because the bundle file and the image-set archive are on the same filesystem."
-	echo_magenta "[ABA] TO GENERATE A *FULL* INSTALL BUNDLE, WRITE IT DIRECTLY TO EXTERNAL MEDIA OR TO A SEPARATE FILESYSTEM."
-	ask "[ABA] Continue anyway" || exit 1
-	echo
+# Split bundle flag give?
+if [ "$split_bundle" ]; then
+	# User wants to create a *split* bundle...
 
+	echo_magenta "[ABA] A *split* install bundle will be created (the bundle will not contain the image-set archive file)."
+	#echo_magenta "[ABA] This is because the bundle file and the image-set archive are on the same filesystem."
+	#echo_magenta "[ABA] TO GENERATE A *FULL* INSTALL BUNDLE, WRITE IT DIRECTLY TO EXTERNAL MEDIA OR TO A SEPARATE FILESYSTEM."
+
+	# Create split bundle with "aba tarrepo..."
 	aba_info "Pulling images ..."
-	make -C mirror save retry=7				# Pull reuqired release (and possibly operator) images.  Retry on failure. 
+	make -C mirror save retry=7				# Pull required release (and possibly operator) images.  Retry on failure. 
 	aba_info "Creating *split* install bundle archive ..."
 	rm -f $bundle_dest_file
-	make tarrepo out="$bundle_dest_file"			# Create archive of the repo ONLY, excluding large imageset files.
+	make tarrepo out="$bundle_dest_file"			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
 else
+	# Create a full install bundle containing the repo AND the image-set archive file(s) ...
+	if files_on_same_device mirror $bundle_dest_file; then
+		# FIXME: Do rough calculation of available vs required disk space ... and check ...
+		aba_warning \
+			"Make sure you have enough free disk space in $PWD." \
+			"The image-set archive created by oc-mirror will first be written to" \
+			"aba/mirror/save/mirror_000001.tar, and then a full copy of the repository will be written" \
+			"to the file you specified: $bundle_dest_file" \
+			"Because both files reside on the same filesystem, you may temporarily" \
+			"need roughly double (or more with the cache) the required space. " \
+			"Please ensure sufficient disk space is available." 
+
+		echo >&2
+		aba_warning -p "IMPORTANT" \
+			"If disk space is limited, consider using the '--split' flag. This option" \
+			"excludes the large image-set archive files from the final install bundle." \
+			"It is useful in restricted environments where you cannot store or move" \
+			"large archive files onto portable media—for example, when running on an" \
+			"AWS EC2 instance or a restricted laptop without access to external storage." 
+
+		ask "Continue anyway" || exit 1
+	fi
+
+	# Create full bundle ... with "aba tar..."
 	aba_info "Pulling images ..."
 	make -C mirror save retry=7		    		# Pull reuqired release (and possibly operator) images.  Retry on failure.
 	aba_info "Creating install bundle archive ..."

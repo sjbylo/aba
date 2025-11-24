@@ -79,7 +79,7 @@ mylog Starting test $(basename $0)
 mylog ============================================================
 mylog "Test to create an install bundle and save to disk."
 
-rm -rf ~/.cache/agent/image_cache/
+rm -rf ~/.cache/agent/*
 
 rm -f aba.conf  # Set it up next
 vf=~steve/.vmware.conf

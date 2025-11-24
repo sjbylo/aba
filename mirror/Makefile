@@ -196,11 +196,10 @@ index: init catalog
 .PHONY: catalog
 # Note that this runs in the background (called by aba) and output is sent to /dev/null
 catalog: init               ## Download and render all the latest Operators into a file which can be used in an imageset config file. 
-	$(SCRIPTS)/download-operator-index.sh true redhat-operator
-	$(SCRIPTS)/download-operator-index.sh true certified-operator
-	$(SCRIPTS)/download-operator-index.sh true redhat-marketplace
-	$(SCRIPTS)/download-operator-index.sh true community-operator
-	wait
+	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-operator
+	$(SCRIPTS)/download-operator-index.sh $(bg) certified-operator
+	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-marketplace
+	$(SCRIPTS)/download-operator-index.sh $(bg) community-operator
 
 #uninstall: .init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
 uninstall: .init             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
