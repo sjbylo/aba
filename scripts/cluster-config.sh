@@ -162,11 +162,7 @@ if [ $WORKER_REPLICAS -ne 0 ]; then
 fi
 
 if [ "$err" ]; then
-	echo
-	echo_red "Error: Validation of values in files 'install-config.yaml' and/or 'agent-config.yaml' failed." >&2 
-	echo
-
-	exit 1
+	aba_abort "Error: Validation of values in files 'install-config.yaml' and/or 'agent-config.yaml' failed."
 fi
 
 exit 0

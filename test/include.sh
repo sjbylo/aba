@@ -281,6 +281,11 @@ init_bastion() {
 
 	net_if=ens160 # Not used below!
 
+cat <<END | ssh $def_user@$int_bastion_hostname -- bash
+rm -vrf ~/.cache/agent/   # Just to be sure, remove old images
+rm -vrf ~/bin/*    	 # To make sure we do things from scratch!
+END
+
 	# General bastion config, e.g. date/time/timezone and also root ssh
 cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
 set -ex
@@ -290,7 +295,6 @@ whoami
 getenforce
 #setenforce 0
 #getenforce
-rm -rf ~/.cache/agent/   # Just to be sure, remove old images
 #### This is a hack for RHEL 9 where curl to registry.example.com:8443 fails on 10.0.1.2 host.
 ###echo "127.0.0.1 registry.example.com  # Hack for mirror-registry install on rhel9" >> /etc/hosts 
 # Set the subnet mask to /20

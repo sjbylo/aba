@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251123073820
+ABA_VERSION=20251124175536
 # Sanity check
 # FIXME: Can only use 'echo' here since cann't locate the include_all.sh file yet
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
@@ -176,6 +176,7 @@ do
 	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
 		# If there are commands/targets to execute in the CWD, do it...
 		BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
+		# Simplify option/arg processing
 		[ "$BUILD_COMMAND" ] && aba_abort "Option $1 not allowed after a command: [$BUILD_COMMAND]"
 
 		# FIXME: change this
@@ -222,6 +223,10 @@ do
 		export DEBUG_ABA=1
 		export INFO_ABA=1
 		shift 
+	elif [ "$1" = "--split" ]; then
+		export split_bundle=1  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
+		BUILD_COMMAND="$BUILD_COMMAND split=split"  # FIXME: Should only allow force=1 after the appropriate target
+		shift
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
 		shift
 		if [ "$1" = "-" ]; then
@@ -686,7 +691,7 @@ do
 		fi
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
 		shift
-		BUILD_COMMAND="$BUILD_COMMAND force=1"  # FIXME: Should only allow force=1 after the appropriate target
+		BUILD_COMMAND="$BUILD_COMMAND force=force"  # FIXME: Should only allow force=1 after the appropriate target
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target
@@ -886,315 +891,334 @@ cat others/message.txt
 ##############################################################################################################################
 # Determine if this is an "aba bundle" or just a clone from GitHub
 
-if [ ! -f .bundle ]; then
-	# Fresh GitHub clone of Aba repo detected!
-
-	##############################################################################################################################
-	# Determine OCP channel
-
-	[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # btw .../ocp/eus/release.txt does not exist!
-
-	if [ "$ocp_channel" ]; then
-		#aba_info "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
-		aba_info "OpenShift update channel is set to '$ocp_channel' in aba.conf."
-	else
-
-		aba_info -n "Checking Internet connectivity ..."
-		if ! release_text=$(curl -f --connect-timeout 20 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt); then
-			[ "$TERM" ] && tput el1 && tput cr
-			aba_abort \
-				"Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." \
-				"To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." 
-		fi
-
-		[ "$TERM" ] && tput el1 && tput cr
-
-		while true; do
-			aba_info -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [s]: "
-			read -r ans
-
-			case "$ans" in
-				""|"s"|"S")
-				        ocp_channel="stable"
-					break
-				;;
-				"f"|"F")
-					ocp_channel="fast"
-					break
-				;;
-				"c"|"C")
-					ocp_channel="candidate"
-					break
-				;;
-				*)
-					echo_red "Invalid choice. Please enter f, s, or c."
-				;;
-			esac
-		done
-
-		replace-value-conf -q -n ocp_channel -v $ocp_channel -f aba.conf
-		aba_info "'ocp_channel' set to '$ocp_channel' in aba.conf"
-
-		#### chan=$ocp_channel # Used below
-	fi
-
-	sleep 0.3
-
-	##############################################################################################################################
-	# Determine OCP version 
-
-	if [ "$ocp_version" ]; then
-		#aba_info "OpenShift version is defined in aba.conf as '$ocp_version'."
-		aba_info "OpenShift version is set to '$ocp_version' in aba.conf."
-	else
-		##############################################################################################################################
-		# Fetch release.txt
-
-		aba_info -n "Fetching available versions (please wait!) ..."
-
-		aba_debug "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt"
-
-		if ! release_text=$(curl -f --connect-timeout 30 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
-			[ "$TERM" ] && tput el1 && tput cr
-			aba_abort "Failed to access https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt" 
-		fi
-
-		## Get the latest stable OCP version number, e.g. 4.14.6
-		channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
-		default_ver=$channel_ver
-
-		aba_debug "Looking up previous version using fetch_previous_version() $ocp_channel $arch_sys"
-
-		channel_ver_prev=$(fetch_previous_version "$ocp_channel" "$arch_sys")
-
-		# Determine any already installed tool versions
-		which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
-
-		# If openshift-install is already installed, then offer that version also
-		[ "$cur_ver" ] && or_ret="or [current version] " && default_ver=$cur_ver
-
-		[ "$TERM" ] && tput el1 && tput cr
-
-		echo "Which version of OpenShift do you want to install?"
-
-		target_ver=
-		while true
-		do
-			# Exit loop if release version exists
-			if [ "$target_ver" ]; then
-				if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+$"; then
-					url="https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$target_ver/release.txt"
-					if curl -f --connect-timeout 60 --retry 8 -sSL -o /dev/null -w "%{http_code}\n" $url| grep -q ^200$; then
-						break
-					else
-						echo_red "Error: Failed to fetch release.txt file from $url" >&2
-					fi
-				else
-					echo_red "Invalid input. Enter a valid OpenShift version (e.g., 4.18.10 or 4.17)." >&2
-				fi
-			fi
-
-			[ "$channel_ver" ] && or_s="or $channel_ver (l)atest "
-			[ "$channel_ver_prev" ] && or_p="or $channel_ver_prev (p)revious "
-
-			aba_info -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
-			read target_ver
-
-			[ ! "$target_ver" ] && target_ver=$default_ver          # use default
-			[ "$target_ver" = "l" -a "$channel_ver" ] && target_ver=$channel_ver       # latest
-			[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev  # previous latest
-
-			# If user enters just a point version, x.y, fetch the latest .z value for that point version of OCP
-			echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver" "$arch_sys")
-		done
-
-		# Update the conf file
-		replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
-		aba_info "'ocp_version' set to '$target_ver' in aba.conf"
-
-		sleep 0.3
-	fi
-
-	sleep 0.3
-
-	# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
-	# FIXME: Any better way to do this?! .. or just keep this check in 'aba -d mirror sync' and 'aba -d mirror save' (i.e. before we d/l the images
-	(
-		install_rpms make || exit 1
-		make -s -C mirror checkversion 
-	) || exit 
-
-	##############################################################################################################################
-	source <(normalize-aba-conf)
-	verify-aba-conf || exit 1
-
-	##############################################################################################################################
-	# Determine editor
-
-	if [ ! "$editor" ]; then
-		echo
-		echo    "[ABA] Aba can use an editor to aid in the workflow."
-		echo_yellow -n "[ABA] Enter your preferred editor or set to 'none' if you prefer to edit the configuration files manually ('vi', 'nano' etc or 'none')? [vi]: "
-		read new_editor
-
-		[ ! "$new_editor" ] && new_editor=vi  # default
-
-		if [ "$new_editor" != "none" ]; then
-			if ! which $new_editor >/dev/null 2>&1; then
-				aba_abort "Editor '$new_editor' command not found! Please install your preferred editor and try again!" 
-			fi
-		fi
-
-		replace-value-conf -n editor -v "$new_editor" -f aba.conf
-		export editor=$new_editor
-		aba_info "'editor' set to '$new_editor' in aba.conf"
-
-		sleep 0.3
-	fi
-
-	##############################################################################################################################
-	# Allow edit of aba.conf
-
-	if [ ! -f .aba.conf.seen ]; then
-		if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, pull secret, default base domain & net address, dns & ntp etc (if known)"; then
-			# If edited/seen, no need to ask again.
-			touch .aba.conf.seen
-		fi
-	fi
-
-	# make & jq are needed below and in the next steps 
-	scripts/install-rpms.sh external 
-
-	# Now we have the required ocp version, we can fetch the operator indexes (in the background to save time).
-	( make -s catalog bg=true & ) & 
-
-	##############################################################################################################################
-	# Determine pull secret
-
-	if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
-		if jq empty $pull_secret_file; then
-			aba_info "Pull secret found at '$pull_secret_file'."
-
-			sleep 0.3
-		else
-			aba_abort "Error: Pull secret file sytax error: $pull_secret_file!" 
-		fi
-	else
-		echo
-		echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
-		aba_info "To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!" >&2
-		aba_info "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
-		aba_info "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'." >&2
-		echo
-
-		exit 1
-	fi
-
-	##############################################################################################################################
-	# Determine air-gapped
-
-	echo
-	echo       "[ABA] Fully Disconnected (air-gapped)"
-	aba_info "If you plan to install OpenShift in a fully disconnected (air-gapped) environment, Aba can download all required components—including"
-	aba_info "the Quay mirror registry install file, container images, and CLI install files—and package them into an install bundle that you can"
-	aba_info "transfer into your disconnected environment."
-	if ask "Install OpenShift into a fully disconnected network environment"; then
-		echo
-		echo_yellow "[ABA] Instructions for a fully disconnected installation"
-		echo
-		aba_info "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the install bundle"
-		aba_info "                                                          # (size ~20-30GB for a base installation)."
-		aba_info "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
-		aba_info "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more manageable files."
-		aba_info "                                                          # Unpack the files on the internal bastion with: cat ocp_* | tar xvf - "
-		aba_info "     aba bundle --help                                    # See for help."
-		echo
-
-		exit 0
-	fi
-	
-	##############################################################################################################################
-	# Determine online installation (e.g. via a proxy/NAT)
-
-	echo
-	echo "[ABA] Partially Disconnected"
-	aba_info "A mirror registry can be synchronized directly from the Internet, allowing OpenShift to be installed from the mirrored content."
-	if ask "Install OpenShift from a mirror registry that is synchonized directly from the Internet"; then
-
-		echo 
-		echo_yellow "[ABA] Instructions for synchronizing images directly from the Internet to a mirror registry"
-		echo 
-		aba_info "Set up the mirror registry and sync it with the necessary container images."
-		echo
-		aba_info "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
-		echo
-		aba_info "Run:"
-		aba_info "  aba -d mirror install              # to configure an existing registry or install Quay."
-		aba_info "  aba -d mirror sync --retry <count> # to synchronize all container images - from the Internet - into your registry."
-		echo
-		aba_info "Or run:"
-		aba_info "  aba -d mirror sync --retry <count> # to complete both actions and ensure any image synchronization issues are retried."
-		echo
-		aba_info "  aba mirror --help                  # See for help."
-
-		aba_info "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
-		echo
-
-		exit 0
-	fi
-
-	echo 
-	echo "[ABA] Fully Connected"
-	aba_info "Optionally, configure a proxy or use direct Internet access through NAT or a transparent proxy."
-	echo_yellow "[ABA] Instructions for installing directly from the Internet"
-	aba_info "Example:"
-	aba_info "aba cluster --name mycluster --type sno --starting-ip 10.0.1.203 --int-connection proxy --step install"
-	aba_info "See aba cluster --help for more"
-
-else
+if [ -f .bundle ]; then
 	# aba is running on the internal bastion, in 'bundle mode'.
 
 	# make & jq are needed below and in the next steps. Best to install all at once.
 	scripts/install-rpms.sh internal
 
-	aba_info
-	echo_yellow "[ABA] Aba bundle detected! This aba bundle is ready to install OpenShift version '$ocp_version' in your disconnected environment!"
-	
+	echo_yellow "Aba install bundle detected for OpenShift version '$ocp_version'."
+
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
-		aba_info
-		echo_magenta "[ABA] IMPORTANT: The image set tar files (created in the previous step with 'aba bundle' or 'aba -d mirror save') MUST BE" >&2
-		echo_magenta "[ABA]            copied or moved to the 'aba/mirror/save' directory before following the instructions below!" >&2
-		echo_magenta "[ABA]            For example, run the command: cp /path/to/portable/media/mirror_*tar aba/mirror/save" >&2
+		{
+			echo 
+			echo_red   "IMPORTANT: This install bundle has been created *without an image payload* because image-set archive files are missing)." 
+			echo_red   "           The image set tar files, created in the previous step with 'aba bundle' or 'aba -d mirror save', MUST be" 
+			echo_red   "           placed into the 'aba/mirror/save' directory before continuing." 
+			echo 
+			echo_white "Example (copy from portable media):" 
+			echo_white "  cp /path/to/portable/media/mirror_*.tar aba/mirror/save/" 
+			echo_white "Run aba again for further instructions." 
+		} >&2
+
+		exit 0
+	else
+		{
+			echo 
+			echo_yellow "This bundle is ready to install OpenShift in your disconnected environment." 
+		} >&2
 	fi
 
-	aba_info 
-	echo_yellow "[ABA] Instructions"
-	aba_info 
-	echo_magenta "[ABA] IMPORTANT: Check the values in aba.conf and ensure they are all complete and match your disconnected environment."
+	echo 
+	echo_yellow "Instructions"
+	echo
+	echo_yellow "IMPORTANT: Review the values in aba.conf and update them to ensure they are complete and correctly match your disconnected environment."
 
-	aba_info "Current values in aba.conf:"
+	echo_white "Current values in aba.conf:"
 	to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d")  # In disco env, no need to show pull-secret.
 	output_table 3 "$to_output"
 
-	aba_info
-	aba_info "Set up the mirror registry and load it with the necessary container images from disk."
-	aba_info
-	aba_info "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
-	aba_info
-	aba_info "To install the registry on the local machine, accessible via registry.example.com, run:"
-	aba_info "  aba -d mirror load -H registry.example.com --retry 8"
-	aba_info
-	aba_info "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
-	aba_info "  aba -d mirror load -H registry.example.com -k '~/.ssh/id_rsa' -U user --retry"
-	aba_info
-	aba_info "If unsure, run:"
-	aba_info "  aba -d mirror install                 # to configure and/or install Quay."
-	aba_info
-	aba_info "Once the mirror registry is installed/configured, verify authentication with:"
-	aba_info "  aba -d mirror verify"
-	aba_info
-	aba_info "For more, run: aba load --help"
+	echo
+	echo_white "Set up the mirror registry and load it with the necessary container images from disk."
+	echo_white "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
+	echo_white "Aba can also install the docker registry as an alternative. See the README.md FAQ for instructions."
+	echo
+	echo_white "To install the registry on the local machine, accessible via registry.example.com, run:"
+	echo_white "  aba -d mirror load -H registry.example.com --retry 8"
+	echo
+	echo_white "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
+	echo_white "  aba -d mirror load -H registry.example.com -k '~/.ssh/id_rsa' -U user --retry"
+	echo
+	echo_white "If unsure, run:"
+	echo_white "  aba -d mirror install                 # to configure and/or install Quay."
+	echo
+	echo_white "Once the mirror registry is installed/configured, verify authentication with:"
+	echo_white "  aba -d mirror verify"
+	echo
+	echo_white "For more, run: aba load --help"
+
+	exit 0
 fi
 
+
+# Fresh GitHub clone of Aba repo detected!
+
+##############################################################################################################################
+# Determine OCP channel
+
+[ "$ocp_channel" = "eus" ] && ocp_channel=stable  # btw .../ocp/eus/release.txt does not exist!
+
+if [ "$ocp_channel" ]; then
+	#echo_white "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
+	echo_white "OpenShift update channel is set to '$ocp_channel' in aba.conf."
+else
+
+	echo_white -n "Checking Internet connectivity ..."
+	if ! release_text=$(curl -f --connect-timeout 20 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt); then
+		[ "$TERM" ] && tput el1 && tput cr
+		aba_abort \
+			"Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." \
+			"To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." 
+	fi
+
+	#aba_debug Attempt to download oc-mirror in the background ...
+	# Start to download this asap....
+	### FIXME: need general backgound command fn() ### ( _install_oc_mirror $ABA_ROOT >/dev/null 2>&1 & ) & 
+
+	[ "$TERM" ] && tput el1 && tput cr
+
+	while true; do
+		echo_white -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [s]: "
+		read -r ans
+
+		case "$ans" in
+			""|"s"|"S")
+			        ocp_channel="stable"
+				break
+			;;
+			"f"|"F")
+				ocp_channel="fast"
+				break
+			;;
+			"c"|"C")
+				ocp_channel="candidate"
+				break
+			;;
+			*)
+				echo_red "Invalid choice. Please enter f, s, or c."
+			;;
+		esac
+	done
+
+	replace-value-conf -q -n ocp_channel -v $ocp_channel -f aba.conf
+	echo_white "'ocp_channel' set to '$ocp_channel' in aba.conf"
+
+	#### chan=$ocp_channel # Used below
+fi
+
+sleep 0.3
+
+##############################################################################################################################
+# Determine OCP version 
+
+if [ "$ocp_version" ]; then
+	#echo_white "OpenShift version is defined in aba.conf as '$ocp_version'."
+	echo_white "OpenShift version is set to '$ocp_version' in aba.conf."
+else
+	##############################################################################################################################
+	# Fetch release.txt
+
+	echo_white -n "Fetching available versions (please wait!) ..."
+
+	aba_debug "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt"
+
+	if ! release_text=$(curl -f --connect-timeout 30 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
+		[ "$TERM" ] && tput el1 && tput cr
+		aba_abort "Failed to access https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt" 
+	fi
+
+	## Get the latest stable OCP version number, e.g. 4.14.6
+	channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+	default_ver=$channel_ver
+
+	aba_debug "Looking up previous version using fetch_previous_version() $ocp_channel $arch_sys"
+
+	channel_ver_prev=$(fetch_previous_version "$ocp_channel" "$arch_sys")
+
+	# Determine any already installed tool versions
+	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
+
+	# If openshift-install is already installed, then offer that version also
+	[ "$cur_ver" ] && or_ret="or [current version] " && default_ver=$cur_ver
+
+	[ "$TERM" ] && tput el1 && tput cr
+
+	echo "Which version of OpenShift do you want to install?"
+
+	target_ver=
+	while true
+	do
+		# Exit loop if release version exists
+		if [ "$target_ver" ]; then
+			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+$"; then
+				url="https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$target_ver/release.txt"
+				if curl -f --connect-timeout 60 --retry 8 -sSL -o /dev/null -w "%{http_code}\n" $url| grep -q ^200$; then
+					break
+				else
+					echo_red "Error: Failed to fetch release.txt file from $url" >&2
+				fi
+			else
+				echo_red "Invalid input. Enter a valid OpenShift version (e.g., 4.18.10 or 4.17)." >&2
+			fi
+		fi
+
+		[ "$channel_ver" ] && or_s="or $channel_ver (l)atest "
+		[ "$channel_ver_prev" ] && or_p="or $channel_ver_prev (p)revious "
+
+		echo_white -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
+		read target_ver
+
+		[ ! "$target_ver" ] && target_ver=$default_ver          # use default
+		[ "$target_ver" = "l" -a "$channel_ver" ] && target_ver=$channel_ver       # latest
+		[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev  # previous latest
+
+		# If user enters just a point version, x.y, fetch the latest .z value for that point version of OCP
+		echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver" "$arch_sys")
+	done
+
+	# Update the conf file
+	replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
+	echo_white "'ocp_version' set to '$target_ver' in aba.conf"
+
+	sleep 0.3
+fi
+
+sleep 0.3
+
+# Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
+# FIXME: Any better way to do this?! .. or just keep this check in 'aba -d mirror sync' and 'aba -d mirror save' (i.e. before we d/l the images
+{
+	install_rpms make || exit 1
+	make -s -C mirror checkversion 
+} || exit 
+
+##############################################################################################################################
+source <(normalize-aba-conf)
+verify-aba-conf || exit 1
+
+##############################################################################################################################
+# Determine editor
+
+if [ ! "$editor" ]; then
+	echo
+	echo    "Aba can use an editor to aid in the workflow."
+	echo_yellow -n "Enter your preferred editor or set to 'none' if you prefer to edit the configuration files manually ('vi', 'nano' etc or 'none')? [vi]: "
+	read new_editor
+
+	[ ! "$new_editor" ] && new_editor=vi  # default
+
+	if [ "$new_editor" != "none" ]; then
+		if ! which $new_editor >/dev/null 2>&1; then
+			aba_abort "Editor '$new_editor' command not found! Please install your preferred editor and try again!" 
+		fi
+	fi
+
+	replace-value-conf -n editor -v "$new_editor" -f aba.conf
+	export editor=$new_editor
+	echo_white "'editor' set to '$new_editor' in aba.conf"
+
+	sleep 0.3
+fi
+
+##############################################################################################################################
+# Allow edit of aba.conf
+
+if [ ! -f .aba.conf.seen ]; then
+	if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, pull secret, default base domain & net address, dns & ntp etc (if known)"; then
+		# If edited/seen, no need to ask again.
+		touch .aba.conf.seen
+	fi
+fi
+
+# make & jq are needed below and in the next steps 
+scripts/install-rpms.sh external 
+
+# Now we have the required ocp version, we can fetch the operator indexes (in the background to save time).
+( make -s catalog bg=true & ) & 
+
+##############################################################################################################################
+# Determine pull secret
+
+if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
+	if jq empty $pull_secret_file; then
+		echo_white "Pull secret found at '$pull_secret_file'."
+
+		sleep 0.3
+	else
+		aba_abort "Error: Pull secret file sytax error: $pull_secret_file!" 
+	fi
+else
+	echo
+	echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
+	echo_white "To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!" >&2
+	echo_white "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
+	echo_white "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'." >&2
+	echo
+
+	exit 1
+fi
+
+##############################################################################################################################
+# Determine air-gapped
+
+echo
+echo       "Fully Disconnected (air-gapped)"
+echo_white "If you plan to install OpenShift in a fully disconnected (air-gapped) environment, Aba can download all required components—including"
+echo_white "the Quay mirror registry install file, container images, and CLI install files—and package them into an install bundle that you can"
+echo_white "transfer into your disconnected environment."
+if ask "Install OpenShift into a fully disconnected network environment"; then
+	echo
+	echo_yellow "Instructions for a fully disconnected installation"
+	echo
+	echo_white "Run: aba bundle --out /path/to/portable/media             # to save all images to local disk & then create the install bundle"
+	echo_white "                                                          # (size ~20-30GB for a base installation)."
+	echo_white "     aba bundle --out - | ssh user@remote -- tar xvf -    # Stream the archive to a remote host and unpack it there."
+	echo_white "     aba bundle --out - | split -b 10G - ocp_             # Stream the archive and split it into several, more manageable files."
+	echo_white "                                                          # Unpack the files on the internal bastion with: cat ocp_* | tar xvf - "
+	echo_white "     aba bundle --help                                    # See for help."
+	echo
+
+	exit 0
+fi
+
+##############################################################################################################################
+# Determine online installation (e.g. via a proxy/NAT)
+
+echo
+echo "Partially Disconnected"
+echo_white "A mirror registry can be synchronized directly from the Internet, allowing OpenShift to be installed from the mirrored content."
+if ask "Install OpenShift from a mirror registry that is synchonized directly from the Internet"; then
+
+	echo 
+	echo_yellow "Instructions for synchronizing images directly from the Internet to a mirror registry"
+	echo 
+	echo_white "Set up the mirror registry and sync it with the necessary container images."
+	echo
+	echo_white "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
+	echo
+	echo_white "Run:"
+	echo_white "  aba -d mirror install              # to configure an existing registry or install Quay."
+	echo_white "  aba -d mirror sync --retry <count> # to synchronize all container images - from the Internet - into your registry."
+	echo
+	echo_white "Or run:"
+	echo_white "  aba -d mirror sync --retry <count> # to complete both actions and ensure any image synchronization issues are retried."
+	echo
+	echo_white "  aba mirror --help                  # See for help."
+
+	echo_white "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
+	echo
+
+	exit 0
+fi
+
+echo 
+echo "Fully Connected"
+echo_white "Optionally, configure a proxy or use direct Internet access through NAT or a transparent proxy."
+echo_yellow "Instructions for installing directly from the Internet"
+echo_white "Example:"
+echo_white "aba cluster --name mycluster --type sno --starting-ip 10.0.1.203 --int-connection proxy --step install"
+echo_white "See aba cluster --help for more"
+
+exit 0
 

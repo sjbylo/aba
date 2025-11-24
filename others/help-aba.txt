@@ -35,10 +35,10 @@ Options:
   -O, --ops [<list of operators>]       # Add individual operators to your image set config (ISC) file (for oc-mirror)
   -P, --op-sets [<operator set list>]   # Add sets of operators to your ISC file, as defined by 'aba/templates/operator-set.*' files. 'all' is accepted
   -e, --editor <editor command>         # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files
-  -a, --ask                             # Prompt user when needed
-  -y, --noask                           # Do not prompt, assume default answers
+  -a, --ask                             # Prompt user when needed, permanently
+  -A, --noask                           # Do not prompt, assume default answers, permanently 
   -o, --out <file|->                    # Output Install Bundle to destination, e.g. file or stdout (-). See 'aba bundle -h`
-  -f, --force                           # Only used for 'aba reset --force'
+  -f, --force                           # Only used with 'aba reset --force' and 'aba bundle --force'
   -V, --vmware                          # Apply this VMware config file (for govc)
   -D, --debug                           # Increase output
   -q, --quiet                           # Less output

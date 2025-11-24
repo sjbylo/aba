@@ -9,6 +9,7 @@ TEMPLATES = templates
 SCRIPTS   = scripts
 name     ?= standard
 type     ?= standard
+split    ?=
 
 debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
 
@@ -59,7 +60,7 @@ catalog: ## Render all the latest Operators into a helper file which can be used
 .PHONY: bundle
 # Note: '@' used to ensure tar format is not corrupted when using out=-
 bundle:  ## Create an install bundle to be tranferred into the air-gapped env. Example: aba bundle --out /path/to/archive/bundle or -
-	@$(SCRIPTS)/make-bundle.sh $(out) $(force)
+	@$(SCRIPTS)/make-bundle.sh -o $(out) $(split) $(force)
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use --out - to send tar output to stdout. Used by aba bundle.

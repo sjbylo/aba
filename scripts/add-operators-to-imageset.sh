@@ -55,7 +55,7 @@ add_op() {
 
 # If operators are given, ensure the catalogs are available!
 if [ "$ops" -o "$op_sets" ]; then
-	#aba_debug Final change to fetch all operator catalog indexes ... running: make catalog from $PWD
+	#aba_debug Final chance to fetch all operator catalog index files ... running: make catalog from $PWD
 	make catalog bg=1  # Trigger download in background. Returns immediatelly. 
 	make catalog 2>/dev/null	   # Wait for all catlogs to download
 
@@ -109,39 +109,38 @@ community_operator=()
 # Step though all the operator sets and determine which catalog they exist in,
 # with priority order: redhat-operator, certified-operator, redhat-marketplace, community-operator
 # Operator names are selected from the catalogs in the above catalog order.
-for set in $(echo $op_sets | tr "," " ")
+for op_set_name in $(echo $op_sets | tr "," " ")
 do
-	declare -A op_set
+	declare -A op_set_array
 
 	# read in op list from template
-	if [ -s templates/operator-set-$set ]; then
-		#echo "# $set operators"
-		aba_info -n "$set: " >&2
-		for op in $(cat templates/operator-set-$set | sed -e 's/#.*//' -e '/^\s*$/d' -e 's/^\s*//g' -e 's/\s*$//g')
+	if [ -s templates/operator-set-$op_set_name ]; then
+		aba_info -n "$op_set_name: " >&2  # Keep as aba_info
+
+		for op in $(cat templates/operator-set-$op_set_name | sed -e 's/#.*//' -e '/^\s*$/d' -e 's/^\s*//g' -e 's/\s*$//g')
 		do
-			aba_info -n "$op " >&2
+			echo_white -n "$op " >&2  # Keep as echo_white
 
 			# Check if this operator exists in each of the three catalogs
-			#echo op=$op
-			#ls -l .index/redhat-operator-index-v$ocp_ver_major
 			if grep -q "^$op " .index/redhat-operator-index-v$ocp_ver_major; then
-				[ ! "${op_set[$set]}" ] && redhat_operator+=("#-$set-operators") && op_set[$set]=1 # A bit of a hack!
+				[ ! "${op_set_array[$op_set_name]}" ] && redhat_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1 # A bit of a hack!
 				redhat_operator+=("$op")
 			elif grep -q "^$op " .index/certified-operator-index-v$ocp_ver_major; then
-				[ ! "${op_set[$set]}" ] && certified_operator+=("#-$set-operators") && op_set[$set]=1
+				[ ! "${op_set_array[$op_set_name]}" ] && certified_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 				certified_operator+=("$op")
 			elif grep -q "^$op " .index/redhat-marketplace-index-v$ocp_ver_major; then
-				[ ! "${op_set[$set]}" ] && redhat_marketplace+=("#-$set-operators") && op_set[$set]=1
+				[ ! "${op_set_array[$op_set_name]}" ] && redhat_marketplace+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 				redhat_marketplace+=("$op")
 			elif grep -q "^$op " .index/community-operator-index-v$ocp_ver_major; then
-				[ ! "${op_set[$set]}" ] && community_operator+=("#-$set-operators") && op_set[$set]=1
+				[ ! "${op_set_array[$op_set_name]}" ] && community_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 				community_operator+=("$op")
 			fi
 		done
 	else
+		# Should never reach here, but just in case...
 		aba_warning \
-			"Missing operator set file: 'templates/operator-set-$set'." \
-			"Please adjust your operator settings (in aba.conf) or create the missing file."
+			"Missing operator set file: 'templates/operator-set-$op_set_name'." \
+			"Please adjust your operator settings (in aba.conf) or create the missing file: aba -d mirror catalog"
 	fi
 done
 
@@ -149,27 +148,28 @@ done
 # with priority order: redhat-operator, certified-operator, redhat-marketplace, community-operator
 # Operator names are selected from the catalogs in the above catalog order.
 if [ "$ops" ]; then
-	declare -A op_set
-	set=misc
+	declare -A op_set_array
+	op_set_name=misc
 
-	echo "Operators: " >&2 # Keep as echo
+	echo >&2
+	aba_info -n "$op_set_name: " >&2 # Keep as aba_info
 
 	for op in $(echo $ops | tr "," " ")
 	do
-		echo -n "$op " >&2 # Keep as echo
+		echo_white -n "$op " >&2 # Keep as echo_
 
 		# Check if this operator exists in each of the three catalogs
 		if grep -q "^$op " .index/redhat-operator-index-v$ocp_ver_major; then
-			[ ! "${op_set1[$set]}" ] && redhat_operator+=("#-$set-operators") && op_set1[$set]=1 # A bit of a hack!
+			[ ! "${op_set_array[$op_set_name]}" ] && redhat_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1 # A bit of a hack!
 			redhat_operator+=("$op")
 		elif grep -q "^$op " .index/certified-operator-index-v$ocp_ver_major; then
-			[ ! "${op_set2[$set]}" ] && certified_operator+=("#-$set-operators") && op_set2[$set]=1
+			[ ! "${op_set_array[$op_set_name]}" ] && certified_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 			certified_operator+=("$op")
 		elif grep -q "^$op " .index/redhat-marketplace-index-v$ocp_ver_major; then
-			[ ! "${op_set3[$set]}" ] && redhat_marketplace+=("#-$set-operators") && op_set3[$set]=1
+			[ ! "${op_set_array[$op_set_name]}" ] && redhat_marketplace+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 			redhat_marketplace+=("$op")
 		elif grep -q "^$op " .index/community-operator-index-v$ocp_ver_major; then
-			[ ! "${op_set4[$set]}" ] && community_operator+=("#-$set-operators") && op_set4[$set]=1
+			[ ! "${op_set_array[$op_set_name]}" ] && community_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 			community_operator+=("$op")
 		fi
 	done
@@ -188,24 +188,29 @@ echo "  operators:"
 for catalog in redhat_operator certified_operator redhat_marketplace community_operator
 do
 	list=$(eval echo '${'$catalog'[@]}')   # This is a bit of a hack
-	c_name=$(echo $catalog | sed "s/_/-/g")
+	catalog_name=$(echo $catalog | sed "s/_/-/g")
 
 	if [ "$list" ]; then
-		# Print operator "heading"
+		aba_debug "Print operator 'heading' for $catalog_name-index:v$ocp_ver_major"
+
 		cat <<-END
-		  - catalog: registry.redhat.io/redhat/$c_name-index:v$ocp_ver_major
+		  - catalog: registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major
 		    packages:
 		END
+
+		aba_debug Stepping through list of operators: $list 
 
 		for op in $list
 		do
 			echo $op | grep -q "^#" && echo $op | sed "s/-/ /g" && continue  # Print just the operator "heading" (a hack)
-			add_op $op $c_name
+
+			aba_debug Adding operator: $op from catalog: $catalog_name
+			add_op $op $catalog_name
 		done
 	fi
 done
 
-echo >&2
+#echo >&2
 aba_info_ok "Number of operators added: ${#op_names_arr[@]}:" >&2
 aba_info_ok "${op_names_arr[@]}" >&2
 

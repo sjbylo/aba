@@ -182,23 +182,51 @@ aba_abort() {
 }
 
 aba_warning() {
-	local main_msg="$1"
-	shift
+        local prefix="Warning"
 
-#	echo >&2
+        # Parse optional -p PREFIX
+        if [ "$1" = "-p" ]; then
+                prefix="$2"
+                shift 2
+        fi
 
-	# Main error message in red to stderr
-	echo_red "[ABA] Warning: $main_msg" >&2
+        local main_msg="$1"
+        shift
 
-	# Indented follow-up lines, also red, to stderr
-	for line in "$@"; do
-		echo_red "[ABA]          $line" >&2
-	done
+        # Calculate indent based on prefix length plus the "[ABA] " part
+        # "[ABA] " = 6 chars, ": " = 2 chars
+        #local indent_len=$((6 + ${#prefix} + 2))
+        local indent_len=$((${#prefix} + 2))
+        local indent
+        printf -v indent "%*s" "$indent_len" ""
 
-#	echo >&2
+        # Print main message
+        echo_red "[ABA] $prefix: $main_msg" >&2
 
-	sleep 1
+        # Print follow-up lines with calculated indentation
+        for line in "$@"; do
+                echo_red "[ABA] ${indent}${line}" >&2
+        done
+
+        sleep 1
 }
+
+#aba_warning() {
+#	local prefix=Warning
+#	[ "$1" = "-p" ] && prefix="$2" && shift 2
+#	local main_msg="$1"
+#	shift
+#
+#	# Main error message in red to stderr
+#	echo_red "[ABA] $prefix: $main_msg" >&2
+#
+#	# Indented follow-up lines, also red, to stderr
+#	for line in "$@"; do
+#		echo_red "[ABA]          $line" >&2
+#	done
+#
+#	sleep 1
+#}
 
 
 ####################

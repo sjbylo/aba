@@ -53,7 +53,7 @@ mylog ============================================================
 mylog "Test to install remote reg. on $int_bastion_hostname and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
-rm -rf ~/.cache/agent/image_cache/
+rm -rf ~/.cache/agent/*
 
 aba --dir ~/aba reset --force
 

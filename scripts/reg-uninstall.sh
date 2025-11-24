@@ -60,6 +60,8 @@ if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registr
 		exit 1
 	fi
 elif podman ps | grep -q registry; then
+	aba_debug Local reg. detected. Value of ask: $ask
+
 	if ask "Registry detected on localhost.  Uninstall this mirror registry"; then
 		cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 		aba_info "Running command: $cmd"

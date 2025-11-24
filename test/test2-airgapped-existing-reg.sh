@@ -165,7 +165,7 @@ mylog ============================================================
 mylog "Test to integrate with existing reg. on $int_bastion_hostname and then sync and save/load images."
 mylog
 
-rm -rf ~/.cache/agent/image_cache/
+rm -rf ~/.cache/agent/*
 
 ### Do a test to check reg prob (which MUST fail aba -f)
 test-cmd -m "Show aba.conf" normalize-aba-conf

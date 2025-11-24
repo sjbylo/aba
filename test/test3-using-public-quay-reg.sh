@@ -52,7 +52,7 @@ mylog ============================================================
 mylog "Test to install sno directly from public registry."
 mylog
 
-rm -rf ~/.cache/agent/image_cache/
+rm -rf ~/.cache/agent/*
 
 # FIXME: Don't think we need this since test-cmd will loop on error unless -i is used
 #set -ex
