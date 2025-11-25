@@ -8,9 +8,9 @@ storageConfig:
     skipTLS: false
 mirror:
   platform:
-{%- if arch_short != 'amd64' %}
+{%- if ARCH != 'amd64' %}
     architectures:
-    - {{ arch_short }}
+    - {{ ARCH }}
 {%- endif %}
     channels:
     - name: {{ ocp_channel }}-{{ ocp_ver_major }}

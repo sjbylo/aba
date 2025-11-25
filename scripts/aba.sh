@@ -1,12 +1,12 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251125224734
+ABA_VERSION=20251126000938
 # Sanity check
 # FIXME: Can only use 'echo' here since cann't locate the include_all.sh file yet
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
-arch_sys=$(uname -m)
+ARCH=$(uname -m)
 
 uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a Centos-Stream container. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
@@ -265,15 +265,15 @@ do
 		[ ! "$chan" ] && chan=$ocp_channel  # Prioritize the $chan var (from above) or fetch from aba.conf file
 		case "$ver" in
 			latest | l)
-				ver=$(fetch_latest_version "$chan" "$arch_sys")
+				ver=$(fetch_latest_version "$chan")
 			;;
 			previous | p)
-				ver=$(fetch_previous_version "$chan" "$arch_sys")
+				ver=$(fetch_previous_version "$chan")
 			;;
 		esac
 
 		# Expand ver to latest, if it's just a point version (x.y)
-		echo $ver | grep -q -E "^[0-9]+\.[0-9]+$" && ver=$(fetch_latest_z_version "$ocp_channel" "$ver" "$arch_sys")
+		echo $ver | grep -q -E "^[0-9]+\.[0-9]+$" && ver=$(fetch_latest_z_version "$ocp_channel" "$ver")
 
 		# Extract only the full major.minor.patch version if present
 		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
@@ -965,7 +965,7 @@ if [ "$ocp_channel" ]; then
 else
 
 	echo_white -n "Checking Internet connectivity ..."
-	if ! release_text=$(curl -f --connect-timeout 20 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt); then
+	if ! release_text=$(curl -f --connect-timeout 20 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/stable/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
 		aba_abort \
 			"Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." \
@@ -1021,20 +1021,20 @@ else
 
 	echo_white -n "Fetching available versions (please wait!) ..."
 
-	aba_debug "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt"
+	aba_debug "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt"
 
-	if ! release_text=$(curl -f --connect-timeout 30 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt); then
+	if ! release_text=$(curl -f --connect-timeout 30 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
-		aba_abort "Failed to access https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$ocp_channel/release.txt" 
+		aba_abort "Failed to access https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt" 
 	fi
 
 	## Get the latest stable OCP version number, e.g. 4.14.6
 	channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 	default_ver=$channel_ver
 
-	aba_debug "Looking up previous version using fetch_previous_version() $ocp_channel $arch_sys"
+	aba_debug "Looking up previous version using fetch_previous_version() $ocp_channel"
 
-	channel_ver_prev=$(fetch_previous_version "$ocp_channel" "$arch_sys")
+	channel_ver_prev=$(fetch_previous_version "$ocp_channel")
 
 	# Determine any already installed tool versions
 	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
@@ -1052,7 +1052,7 @@ else
 		# Exit loop if release version exists
 		if [ "$target_ver" ]; then
 			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+$"; then
-				url="https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$target_ver/release.txt"
+				url="https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$target_ver/release.txt"
 				if curl -f --connect-timeout 60 --retry 8 -sSL -o /dev/null -w "%{http_code}\n" $url| grep -q ^200$; then
 					break
 				else
@@ -1074,7 +1074,7 @@ else
 		[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev  # previous latest
 
 		# If user enters just a point version, x.y, fetch the latest .z value for that point version of OCP
-		echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver" "$arch_sys")
+		echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver")
 	done
 
 	# Update the conf file

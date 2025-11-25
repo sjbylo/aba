@@ -1,7 +1,7 @@
 #!/bin/bash 
 # Fetch and set ocp versions
 
-arch_sys=$(uname -m)
+ARCH=$(uname -m)
 dir=$(dirname $0)
 cd $dir
 
@@ -28,7 +28,7 @@ export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
 
 aba_info -n "Looking up OpenShift release versions ..."
 
-if ! curl --connect-timeout 10 --retry 8 -sL https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/stable/release.txt > $tmp_dir/.release.txt; then
+if ! curl --connect-timeout 10 --retry 8 -sL https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/stable/release.txt > $tmp_dir/.release.txt; then
 	aba_abort "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
 fi
 
@@ -57,7 +57,7 @@ target_ver=
 #do
 	# Exit loop if release version exists
 	if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-		if curl --connect-timeout 10 --retry 8 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/$arch_sys/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
+		if curl --connect-timeout 10 --retry 8 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
 			break
 		else
 			echo "Error: Failed to find release $target_ver"

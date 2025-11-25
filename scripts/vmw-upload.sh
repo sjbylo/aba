@@ -21,11 +21,11 @@ fi
 
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
 
-echo Uploading image $ASSETS_DIR/agent.$arch_sys.iso to [$ISO_DATASTORE] images/agent-${CLUSTER_NAME}.iso
+echo Uploading image $ASSETS_DIR/agent.$ARCH.iso to [$ISO_DATASTORE] images/agent-${CLUSTER_NAME}.iso
 
 log_file=/tmp/.upload.$$.log
-#if ! govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.$arch_sys.iso images/agent-${CLUSTER_NAME}.iso | tee /dev/stderr | grep -qi "Uploading.*OK"; then
-govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.$arch_sys.iso images/agent-${CLUSTER_NAME}.iso | tee $log_file || true
+#if ! govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.$ARCH.iso images/agent-${CLUSTER_NAME}.iso | tee /dev/stderr | grep -qi "Uploading.*OK"; then
+govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.$ARCH.iso images/agent-${CLUSTER_NAME}.iso | tee $log_file || true
 if ! grep -qi "Uploading.*OK" $log_file; then
 	# Since govc does not return non-zero on error we need to parse the output for non-success! 
 	rm -f $log_file
