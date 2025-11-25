@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20251124175536
+ABA_VERSION=20251125184037
 # Sanity check
 # FIXME: Can only use 'echo' here since cann't locate the include_all.sh file yet
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
@@ -1103,7 +1103,7 @@ verify-aba-conf || exit 1
 if [ ! "$editor" ]; then
 	echo
 	echo    "Aba can use an editor to aid in the workflow."
-	echo_yellow -n "Enter your preferred editor or set to 'none' if you prefer to edit the configuration files manually ('vi', 'nano' etc or 'none')? [vi]: "
+	echo_yellow -n "Enter your preferred editor or set to 'none' if you prefer to launch the editor yourself! ('vi', 'nano' etc or 'none')? [vi]: "
 	read new_editor
 
 	[ ! "$new_editor" ] && new_editor=vi  # default
