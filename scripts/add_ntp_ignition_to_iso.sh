@@ -17,7 +17,7 @@ aba_info "Adding NTP server to early bootstrap ignition: $ntp_servers"
 
 #arch=$(uname -m)
 iso_dir=iso-agent-based
-coreos-installer iso ignition show $iso_dir/agent.$arch_sys.iso > $iso_dir/tmp.ign
+coreos-installer iso ignition show $iso_dir/agent.$ARCH.iso > $iso_dir/tmp.ign
 
 # Do not use tr -d "[:space:]", since that also deleted newlines which are needed for read to work for the last line!
 # Want to keep a record of chrony.conf for debugging
@@ -48,5 +48,5 @@ jq '.storage.files += [{
 
 aba_debug "Created ignition file: $iso_dir/custom_ign.ign"
 
-coreos-installer iso ignition embed -fi $iso_dir/custom_ign.ign $iso_dir/agent.$arch_sys.iso
+coreos-installer iso ignition embed -fi $iso_dir/custom_ign.ign $iso_dir/agent.$ARCH.iso
 

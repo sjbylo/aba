@@ -31,6 +31,6 @@ $SUDO chcon -R -t httpd_sys_content_t /var/www/html
 
 echo 
 aba_info "PXE boot artifacts have been made available at:"
-aba_info "http://<this host ip>/agent.$arch_sys-vmlinuz"
+aba_info "http://<this host ip>/agent.$ARCH-vmlinuz"
 echo
 

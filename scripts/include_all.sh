@@ -15,10 +15,11 @@ SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
 
 # Set up the arch vars
-export arch_sys=$(uname -m)
-export arch_short=amd64
-[ "$arch_sys" = "aarch64" -o "$arch_sys" = "arm64" ] && export arch_short=arm64  # ARM
-#[ "$arch_sys" = "x86_64" ]	&& export arch_short=amd64   # Intel
+export ARCH=$(uname -m)
+export arch=amd64
+export ARCH=amd64
+[ "$ARCH" = "aarch64" -o "$ARCH" = "arm64" ] && export ARCHt=arm64  # ARM
+#[ "$ARCH" = "x86_64" ]	&& export ARCH=amd64   # Intel
 
 # ===========================
 # Color Echo Functions
@@ -693,133 +694,216 @@ files_on_same_device() {
 	[ "$DEV1" == "$DEV2" ] && return 0 || return 1
 }
 
-# Helper: download and return release.txt content
-_fetch_release_txt() {
-    local chan="$1" arch_sys="$2" url
-    url="https://mirror.openshift.com/pub/openshift-v4/${arch_sys}/clients/ocp/${chan}/release.txt"
+#######
 
-    curl -fsSL --connect-timeout 30 --retry 8 "$url" 2>/dev/null || {
-        echo "Error: failed to fetch release info from $url" >&2
-        return 1
-    }
+# Cincinnati API endpoint
+ABA_GRAPH_API="https://api.openshift.com/api/upgrades_info/v1/graph"
+
+# Architecture: default is amd64
+ARCH="${ARCH:-amd64}"
+
+# Cache settings
+ABA_CACHE_DIR="~/.aba/cache"
+ABA_CACHE_TTL="${ABA_CACHE_TTL:-600}"  # 10 minutes
+
+mkdir -p "${ABA_CACHE_DIR}"
+
+
+# Determine latest stable channel, such as: stable-4.20 
+fetch_latest_minor_version() {
+	local channel="${1:-stable}"
+	local url="https://mirror.openshift.com/pub/openshift-v4/${ARCH}/clients/ocp/${channel}/release.txt"
+	local cache_file="${ABA_CACHE_DIR}/release_${channel}_${ARCH}.txt"
+	local latest_ver
+
+	# Determine if cache needs refresh
+	cache_age=$(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) ))
+
+	if [[ ! -s "$cache_file" || cache_age -gt ABA_CACHE_TTL ]]; then
+		# Use valid cache if available
+		tmp_file="$(mktemp "${ABA_CACHE_DIR}/release_${channel}_${ARCH}.XXXXXX.txt")" || return 1
+
+		aba_debug "curl -f -sS \"$url\" > \"$tmp_file\"" 
+
+		if ! curl -f -sS "$url" > "$tmp_file"; then
+			echo "ERROR: Failed to fetch release information for channel $channel arch:$ARCH" >&2
+			rm -f "$tmp_file"
+			return 1
+		fi
+
+		# Move validated JSON to cache
+		mv "$tmp_file" "$cache_file"
+	fi
+
+	{ aba_debug "fetch_latest_minor_version(): $cache_file"; } >&2
+
+	if ! latest_ver=$(cat "$cache_file" | grep -E -o "Version: +[0-9]+\.[0-9]+\..+" | awk '{print $2}'); then
+		echo "Failed to fetch latest version using channel $channel"
+		return 1
+	fi
+
+	# Extract MAJOR.MINOR
+	#local major_minor
+	#major_minor=$(echo "$latest_ver" | cut -d. -f1,2)
+
+	#echo "${channel}-${major_minor}"
+	#echo "${major_minor}"
+	echo $(echo "$latest_ver" | cut -d. -f1,2)
 }
 
-# Helper: extract version string (x.y.z) from release.txt
-_extract_version() {
-    grep -Eo "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}'
+
+############################################
+# Internal: Fetch + cache Cincinnati graph
+# Args:
+#	$1 = channel (e.g. stable-4.20)
+# Output:
+#	JSON graph (cached)
+############################################
+_fetch_graph_cached() {
+	local channel="${1:-stable}"
+	local minor="$2"
+	local tmp_file
+
+	aba_debug "_fetch_graph_cached(): channel=$channel minor=$minor"
+	[ ! "$minor" ] && minor=$(fetch_latest_minor_version $channel)
+	aba_debug "_fetch_graph_cached(): channel=$channel minor=$minor"
+	chann_minor=$channel-$minor
+
+	local cache_file="${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.json"
+
+	# Use valid cache if available
+	if [[ -s "$cache_file" ]]; then
+		local age=$(( $(date +%s) - $(stat -c %Y "$cache_file") ))
+		if (( age < ABA_CACHE_TTL )); then
+			cat "$cache_file"
+			return 0
+		fi
+	fi
+
+	# Temporary file to avoid overwriting cache on failure
+	tmp_file="$(mktemp "${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.XXXXXX.json")" || return 1
+
+	{ aba_debug "_fetch_graph_cached(): curl -f -sS \"${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}\" > \"$tmp_file\""; } >&2
+
+	# Fetch fresh data
+	if ! curl -f -sS -H "Accept: application/json" "${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}" > "$tmp_file"; then
+		echo "ERROR: Failed to fetch Cincinnati graph for channel $chann_minor arch:$ARCH" >&2
+		rm -f "$tmp_file"
+		return 1
+	fi
+
+	# Validate JSON
+	if ! jq -c '.' "$tmp_file" >/dev/null 2>&1; then
+		echo "ERROR: Invalid JSON received from Cincinnati API for channel: $chann_minor arch:$ARCH" >&2
+		rm -f "$tmp_file"
+		return 1
+	fi
+
+	# Move validated JSON to cache
+	mv "$tmp_file" "$cache_file"
+
+	# Output cached graph
+	cat "$cache_file"
+
+	return 0
+}
+
+############################################
+# Fetch all versions in channel (sorted)
+############################################
+fetch_all_versions() {
+	local channel="${1:-stable}"
+	local minor="$2"
+
+	aba_debug "fetch_all_versions(): channel=$channel minor=$minor"
+
+	_fetch_graph_cached "$channel" "$minor" \
+		| jq -r '.nodes[].version' \
+		| sort -V
+
+	return 0
 }
 
 
-# ------------------------------------------------------------------------------
-# Fetch the latest OpenShift version from a channel (e.g. stable, fast)
-# Example: fetch_latest_version stable x86_64 → 4.15.13
-# ------------------------------------------------------------------------------
+############################################
+# Fetch latest version in channel
+############################################
 fetch_latest_version() {
-    local chan="${1:-stable}"              # stable, fast, candidate, eus
-    local arch_sys="${2:-x86_64}"          # x86_64, arm64, etc.
-    local rel_txt ver
+	local channel="${1:-stable}"
 
-    # EUS fallback — release.txt not provided for eus
-    [[ "$chan" == "eus" ]] && chan="stable"
+	aba_debug "fetch_latest_version(): channel=$channel"
+	fetch_all_versions "$channel" | tail -n1
 
-    rel_txt=$(_fetch_release_txt "$chan" "$arch_sys") || return 1
-    ver=$(_extract_version <<<"$rel_txt")
-
-    if [[ -z "$ver" ]]; then
-        echo_red "Error: could not extract version from $chan release data" >&2
-        return 1
-    fi
-
-    echo "$ver"
-}
-
-_install_oc_mirror() {
-    if ! which oc-mirror >/dev/null 2>&1; then
-        make -s -C "$1/cli" oc-mirror >&2 || {
-            echo_red "Error: failed to install oc-mirror" >&2
-
-            return 1
-        }
-    fi
+	return 0
 }
 
 
-# ------------------------------------------------------------------------------
-# Fetch the previous OpenShift version (e.g. 4.19.10 → 4.18.x)
-# Requires oc-mirror to list previous channel releases.
-# ------------------------------------------------------------------------------
-fetch_previous_version() {
-    local chan="${1:-stable}"
-    local arch_sys="${2:-x86_64}"
-    local ver major minor patch prev_minor prev_ver
-
-    [[ "$chan" == "eus" ]] && chan="stable"
-
-    ver=$(fetch_latest_version "$chan" "$arch_sys") || return 1
-
-    # Split into parts: 4.19.10 → major=4, minor=19, patch=10
-    IFS=. read -r major minor patch <<<"$ver"
-
-    # Handle edge cases: avoid negative or missing minor version
-    if (( minor <= 0 )); then
-        echo_red "Error: cannot compute previous version from $ver" >&2
-        return 1
-    fi
-    prev_minor=$((minor - 1))
-
-    _install_oc_mirror $ABA_ROOT >/dev/null 2>&1
-
-    # Query the previous channel via oc-mirror
-    prev_ver=$(oc-mirror list releases --channel="${chan}-${major}.${prev_minor}" 2>/dev/null | tail -n1)
-
-    # Try again?
-    [ ! "$prev_ver" ] && sleep 8 && prev_ver=$(oc-mirror list releases --channel="${chan}-${major}.${prev_minor}" 2>/dev/null | tail -n1)
-
-    if [[ -z "$prev_ver" ]]; then
-        echo_red "Error: no previous version found for ${chan}-${major}.${prev_minor}" >&2
-        return 1
-    fi
-
-    echo "$prev_ver"
+############################################
+# Extract version from text
+############################################
+_extract_version() {
+	echo "$1" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' || true
 }
 
 
-# ------------------------------------------------------------------------------
-# Fetch the latest z-stream version for a given x.y series
-# Example: fetch_latest_z_version stable 4.19 x86_64 → 4.19.32
-# ------------------------------------------------------------------------------
+############################################
+# Fetch latest z-stream within a minor
+# Args:
+#	$1 = channel (e.g. stable-4.20)
+#	$2 = minor prefix (4.20)
+############################################
 fetch_latest_z_version() {
-    local chan="${1:-stable}"
-    local base_ver="$2"             # e.g. 4.19
-    local arch_sys="${3:-x86_64}"
-    local rel_txt ver url
+	local channel="${1:-stable}"
+	local minor="$2"
 
-    if [[ -z "$base_ver" ]]; then
-        base_ver=$(fetch_latest_version "$chan" "$arch_sys") || return 1
-        base_ver="${base_ver%.*}"   # Trim to x.y
-    fi
+	aba_debug "fetch_latest_z_version(): channel=$channel minor=$minor"
+	[ ! "$minor" ] && minor=$(fetch_latest_minor_version $channel)
+	aba_debug "fetch_latest_z_version(): channel=$channel minor=$minor"
 
-    [[ "$chan" == "eus" ]] && chan="stable"
+	fetch_all_versions "$channel" "$minor" \
+		| tail -n1
 
-    url="https://mirror.openshift.com/pub/openshift-v4/${arch_sys}/clients/ocp/${chan}-${base_ver}/release.txt"
-    rel_txt=$(curl -fsSL --connect-timeout 20 --retry 8 "$url" 2>/dev/null)
+		#| grep "^${minor}\." \
+		#| tail -n1
 
-    if [[ -z "$rel_txt" ]]; then
-        echo_red "Error: failed to fetch release info for ${chan}-${base_ver}" >&2
-        return 1
-    fi
-
-    ver=$(_extract_version <<<"$rel_txt")
-
-    if [[ -z "$ver" ]]; then
-        echo_red "Error: could not extract z-stream version for ${chan}-${base_ver}" >&2
-        return 1
-    fi
-
-    echo "$ver"
+	return 0
 }
 
 
+############################################
+# Fetch latest version of previous minor
+# Example:
+#	If latest is 4.20.x → return latest 4.19.x
+############################################
+fetch_previous_version() {
+	local channel="${1:-stable}"
+
+	aba_debug "fetch_previous_version(): channel=$channel minor=$minor"
+	local minor="$(fetch_latest_minor_version "$channel")"
+	aba_debug "fetch_previous_version(): channel=$channel minor=$minor"
+
+	#local major minor
+	x="$(echo "$minor" | cut -d. -f1)"
+	y="$(echo "$minor" | cut -d. -f2)"
+
+	aba_debug "fetch_previous_version(): x=$x y=$y"
+
+	if (( y == 0 )); then
+		echo "ERROR: No previous minor exists." >&2
+		return 1
+	fi
+
+	local prev_minor="${x}.$((y - 1))"
+
+	aba_debug "fetch_previous_version(): prev_minor=$prev_minor "
+
+	aba_debug "fetch_latest_z_version \"$channel\" \"$prev_minor\""
+	fetch_latest_z_version "$channel" "$prev_minor"
+	
+	return 0
+}
+
+#######
 
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {
