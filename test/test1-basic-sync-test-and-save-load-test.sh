@@ -104,7 +104,7 @@ sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" ab
 ##test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba --noask
 
 mylog Set up vmware.conf
-cp $vf -v vmware.conf 
+test-cmd cp -v $vf vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
 test-cmd -m "Checking vmware.conf" grep vm/abatesting vmware.conf
 
