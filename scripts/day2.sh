@@ -40,7 +40,7 @@ fi
 aba_info "What this 'day2' script does:"
 aba_info "- Add the internal mirror registry's Root CA to the cluster trust store."
 aba_info "- Configure OperatorHub to integrate with the internal mirror registry."
-aba_info "- Apply any/all idms/itms resource files under working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync/load)."
+aba_info "- Apply any/all idms/itms resource files under aba/mirror/save/working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync/load)."
 aba_info "- For fully disconnected environments, disable online public catalog sources."
 aba_info "- Install any CatalogSources found under working-dir/cluster-resources."
 aba_info "- Apply any release image signatures found under working-dir/cluster-resources."
