@@ -28,7 +28,7 @@ aba_info "Accessing the cluster ..."
 #####################
 if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
 	if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
-		aba_abort "Error: cincinnati-operator not available in OperatorHub for this cluster.  Load the operator into your registry and run 'aba day2' again?"
+		aba_abort "cincinnati-operator not available in OperatorHub for this cluster.  Load the operator into your registry and run 'aba day2' again?"
 	fi
 fi
 

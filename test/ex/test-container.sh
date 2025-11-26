@@ -61,6 +61,10 @@ $DOCKER exec -i $cont_name bash <<'END'
 set -e
 set -x
 arch=$(uname -m)
+echo "PATH=$HOME/bin:$PATH" >> $HOME/.bashrc
+PATH=$HOME/bin:$PATH
+echo "alias ll='ls -l'" >> $HOME/.bashrc
+alias ll='ls -l'
 echo Arch = $arch
 chown root.root ~/.ssh/*
 echo TERM=$TERM

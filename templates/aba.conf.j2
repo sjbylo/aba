@@ -18,14 +18,14 @@ op_sets=			# Optional: Comma-separated operator sets (e.g. op_sets=odf,ocpv,acm,
 
 ops=				# Optional: Comma-separated individual operators (e.g. ops=web-terminal,devworkspace-operator).
 
-# Set the following values only if known.
-# When a cluster is later created, these values can be overridden in the cluster’s cluster.conf file.
+# Set the following important values for your disconnected network, if known
+# When a cluster is created, these values will be included - and can be overridden - in the cluster’s cluster.conf file.
 
 domain={{ domain }}		# Base domain for your OpenShift cluster.
 machine_network={{ machine_network }}	# Network segment (CIDR format) where OpenShift will be installed.
 dns_servers={{ dns_servers }}		# DNS server IPs (comma-separated).
 next_hop_address={{ next_hop_address }}	# Default gateway IP for your private network.
-ntp_servers={{ ntp_servers }}		# Optional: NTP servers or hostnames (comma-separated). Needed if server clocks aren't synced.
+ntp_servers={{ ntp_servers }}		# Important: NTP servers or hostnames (comma-separated). Needed if server clocks aren't synced.
 				# Note: Above 5 values can be overridden later in 'cluster.conf'.
 
 #######################################################################################

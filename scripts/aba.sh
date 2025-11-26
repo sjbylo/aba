@@ -132,11 +132,11 @@ else
 	# For pre-created bundles, aba.conf will exist but these values will be missing... so attempt to fill them in. 
 	source <(cd $ABA_ROOT && normalize-aba-conf)
 	# Determine resonable defaults for ...
-	[ ! "$domain" ]			&& replace-value-conf -q -n domain		-v $(get_domain)		-f $ABA_ROOT/aba.conf && aba_debug domain=$domain
-	[ ! "$machine_network" ]	&& replace-value-conf -q -n machine_network	-v $(get_machine_network)	-f $ABA_ROOT/aba.conf && aba_debug machine_network=$machine_network
-	[ ! "$dns_servers" ]		&& replace-value-conf -q -n dns_servers		-v $(get_dns_servers)		-f $ABA_ROOT/aba.conf && aba_debug dns_servers=$dns_servers
-	[ ! "$next_hop_address" ]	&& replace-value-conf -q -n next_hop_address	-v $(get_next_hop)		-f $ABA_ROOT/aba.conf && aba_debug next_hop_address=$next_hop_address
-	[ ! "$ntp_servers" ]		&& replace-value-conf -q -n ntp_servers		-v $(get_ntp_servers)		-f $ABA_ROOT/aba.conf && aba_debug ntp_servers=$ntp_servers
+	[ ! "$domain" ]			&& replace-value-conf -n domain			-v $(get_domain)		-f $ABA_ROOT/aba.conf && aba_debug domain=$domain
+	[ ! "$machine_network" ]	&& replace-value-conf -n machine_network	-v $(get_machine_network)	-f $ABA_ROOT/aba.conf && aba_debug machine_network=$machine_network
+	[ ! "$dns_servers" ]		&& replace-value-conf -n dns_servers		-v $(get_dns_servers)		-f $ABA_ROOT/aba.conf && aba_debug dns_servers=$dns_servers
+	[ ! "$next_hop_address" ]	&& replace-value-conf -n next_hop_address	-v $(get_next_hop)		-f $ABA_ROOT/aba.conf && aba_debug next_hop_address=$next_hop_address
+	[ ! "$ntp_servers" ]		&& replace-value-conf -n ntp_servers		-v $(get_ntp_servers)		-f $ABA_ROOT/aba.conf && aba_debug ntp_servers=$ntp_servers
 fi
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')
@@ -902,11 +902,13 @@ if [ -f .bundle ]; then
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
 		{
-			echo 
-			echo_red   "IMPORTANT: This install bundle has been created *without an image payload* because image-set archive files are missing)." 
-			echo_red   "           The image set tar files, created in the previous step with 'aba bundle' or 'aba -d mirror save', MUST be" 
-			echo_red   "           placed into the 'aba/mirror/save' directory before continuing." 
-			echo 
+			echo
+			aba_warning -p "IMPORANT" \
+				"The Image-set archive files (ISA) are missing!" \
+				"This install bundle has been created *without an image payload*." \
+				"The ISA files were left out of the install bundle during its creation using 'aba bundle' or 'aba -d mirror save'"  \
+				"The ISA files MUST BE moved or copied into the install bundle under the aba/mirror/save' directory before continuing!"
+			echo
 			echo_white "Example (copy from portable media):" 
 			echo_white "  cp /path/to/portable/media/mirror_*.tar aba/mirror/save/" 
 			echo_white "Run aba again for further instructions." 

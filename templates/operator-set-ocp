@@ -1,4 +1,3 @@
-cincinnati-operator
 kubernetes-nmstate-operator
 node-maintenance-operator
 node-healthcheck-operator
@@ -7,3 +6,5 @@ cluster-kube-descheduler-operator
 web-terminal
 devworkspace-operator		# Required by web-terminal
 cli-manager
+
+cincinnati-operator

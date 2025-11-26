@@ -1,4 +1,3 @@
-cincinnati-operator
 kubevirt-hyperconverged
 kubernetes-nmstate-operator
 lvms-operator
@@ -9,3 +8,5 @@ cluster-kube-descheduler-operator
 metallb-operator
 fence-agents-remediation
 self-node-remediation
+
+cincinnati-operator
