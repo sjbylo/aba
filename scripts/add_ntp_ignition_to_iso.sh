@@ -6,7 +6,8 @@
 
 source scripts/include_all.sh
 
-
+ARCH=$(uname -m)
+[ "$ARCH" = "amd64" ] && ARCH=x86_64
 
 source <(normalize-aba-conf)
 verify-aba-conf || exit 1

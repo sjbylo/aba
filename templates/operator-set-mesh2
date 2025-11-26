@@ -1,4 +1,5 @@
-cincinnati-operator
 kiali-ossm
 jaeger-product
 servicemeshoperator
+
+cincinnati-operator

@@ -77,7 +77,7 @@ All Aba commands and actions are idempotent. If something goes wrong, fix it and
 The diagram above illustrates two scenarios for installing OpenShift in a disconnected environment.
 
 - **Top Section**: The *Disconnected Scenario* (partial network access, e.g. via a proxy).
-- **Bottom Section**: The *Fully Disconnected (Air-Gapped) Scenario* (data transfer only through physical means, such as "sneaker net" into a fully disconnected environment).
+- **Bottom Section**: The *Fully Disconnected (Air-Gapped) Scenario* (data transfer only through physical means, such as "[sneaker net](https://en.wikipedia.org/wiki/Sneakernet)" into a fully disconnected environment).
 
 Each scenario includes two main network zones:
 
@@ -842,10 +842,10 @@ In a partially disconnected environment, the following can be done:
     bash-5.1# cd aba
     bash-5.1# aba
     ```
-  - In the arm64 container, Aba can:
-    - Connecting to an existing remote registry works.
-      - installation of a registry to a remote host from inside the container is not working.  The Quay `mirror-registry` installer does not have a build for arm64. Error: 'rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2'. 
-    - Access public registries over the Internet (directly or through a proxy).
+  - In the arm64 container:
+    - Aba can connect to an existing remote registry as long at the aba/mirror/regcreds/ directory is populated with the pull secret and the root CA credentials. 
+      - cannot install a registry to a remote host from inside the container.  The Quay `mirror-registry` installer does not have a build for arm64. Error: 'rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2'. 
+    - Can access public registries over the Internet (directly or through a proxy).
     - Generate an `arm64` ISO image suitable for OpenShift installation on `arm64` systems.
 
   - Tested Use Case:

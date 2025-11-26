@@ -1,4 +1,3 @@
-cincinnati-operator
 openshift-gitops-operator
 openshift-pipelines-operator-rh
 devspaces
@@ -7,3 +6,5 @@ rhsso-operator
 
 # Dependencies
 devworkspace-operator
+
+cincinnati-operator

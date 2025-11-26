@@ -1,4 +1,3 @@
-cincinnati-operator
 ocs-operator
 odf-operator
 mcg-operator
@@ -7,3 +6,5 @@ odr-cluster-operator
 odr-hub-operator
 local-storage-operator
 odf-multicluster-orchestrator
+
+cincinnati-operator

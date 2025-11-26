@@ -703,7 +703,7 @@ ABA_GRAPH_API="https://api.openshift.com/api/upgrades_info/v1/graph"
 ARCH="${ARCH:-amd64}"
 
 # Cache settings
-ABA_CACHE_DIR="~/.aba/cache"
+ABA_CACHE_DIR="$HOME/.aba/cache"
 ABA_CACHE_TTL="${ABA_CACHE_TTL:-600}"  # 10 minutes
 
 mkdir -p "${ABA_CACHE_DIR}"

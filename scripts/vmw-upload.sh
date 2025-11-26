@@ -3,6 +3,9 @@
 
 source scripts/include_all.sh
 
+ARCH=$(uname -m)
+[ "$ARCH" = "amd64" ] && ARCH=x86_64
+
 aba_debug "Running: $0 $*" >&2
 
 

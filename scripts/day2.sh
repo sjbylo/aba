@@ -132,7 +132,11 @@ if [ "$latest_working_dir" ]; then
 	##f=$(ls -t1 $latest_working_dir/cluster-resources/cs-redhat-operator-index*yaml | head -1)
 	cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
 
-	[ ! "$cs_file_list" ] && aba_warning "No CatalogSource files in $latest_working_dir/cluster-resources to process"
+	[ ! "$cs_file_list" ] && \
+		aba_warning -p IMPORANT \
+			"No CatalogSource files found under $latest_working_dir/cluster-resources" \
+			"This usually means that Aba has not yet pushed any operator images to your mirror registry." \
+			"If your mirror registry was populated with images separately, you will need to create and apply your own CatalogSources."
 
 	for f in $cs_file_list
 	do
@@ -178,6 +182,8 @@ if [ "$latest_working_dir" ]; then
 
 			until oc -n "$ns" get catalogsource "$cs_name" >/dev/null; do sleep 1; done
 
+			aba_info "Waiting for CatalogSource $cs_name to become 'ready' ... (Note: a state of TRANSIENT_FAILURE usually resolves itself within a few moments!)"
+
 			for _ in {1..80}; do
 				state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
 
@@ -186,7 +192,7 @@ if [ "$latest_working_dir" ]; then
 
 					exit 0  # exit the process
 				fi
-				[ "$state" ] && aba_info "Waiting for CatalogSource $cs_name... (current state: $state)"
+				[ "$state" ] && aba_info "$cs_name state: $state"
 
 				sleep 5
 			done
