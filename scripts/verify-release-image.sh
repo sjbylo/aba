@@ -23,8 +23,8 @@ release_ver=$(echo "$out" | grep "^openshift-install" | cut -d" " -f2)
 
 if [ "$ocp_version" != "$release_ver" ]; then
 	aba_abort \
-		"Warning: The OpenShift version set in 'aba.conf' does not match the version of the 'openshift-install' CLI." \
-		"Please run 'aba clean && aba install' in the cli/ directory to refresh the CLIs and try again." 
+		"The OpenShift version set in 'aba.conf' does not match the version of the 'openshift-install' CLI." \
+		"Please run 'aba -d cli clean install' to refresh the CLIs and try again." 
 fi
 
 
@@ -58,7 +58,7 @@ if [ ! -x $openshift_install_mirror ]; then
 	END
 	echo "$image_content_sources" | sed 's/^/  /' >> .idms.yaml
 
-	aba_info Extracting openshift-install from $reg_host:$reg_port$reg_path/openshift/release-images$release_sha
+	aba_info Extracting openshift-install from the release-image: $reg_host:$reg_port$reg_path/openshift/release-images$release_sha
 	# This fails for oc versions up to v4.14 since the wrong/old version of 'oc' is used (i.e. 'idms' not supported).
 	# So, I added || true to ignore errors (which is a hack!) 
 	oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port$reg_path/openshift/release-images$release_sha --insecure=true || true

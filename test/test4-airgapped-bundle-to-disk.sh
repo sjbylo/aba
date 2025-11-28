@@ -47,6 +47,7 @@ ntp_ip=10.0.1.8 # If available
 cluster_type=sno  # Choose either sno, compact or standard
 
 rm -f ~/.aba.previous.backup
+rm -f ~/.ssh/quay_installer*
 
 ######################
 # Set up test 

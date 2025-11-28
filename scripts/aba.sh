@@ -227,6 +227,23 @@ do
 		export split_bundle=1  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
 		BUILD_COMMAND="$BUILD_COMMAND split=split"  # FIXME: Should only allow force=1 after the appropriate target
 		shift
+	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
+		shift
+		echo_yellow "Available OpenShift versions:"
+		echo_white  "Latest stable:      $(fetch_latest_version stable)"
+		echo_white  "Latest fast:        $(fetch_latest_version fast)"
+		echo_white  "Latest candidate:   $(fetch_latest_version candidate)"
+		echo
+		echo_white  "Previous stable:    $(fetch_previous_version stable)"
+		echo_white  "Previous fast:      $(fetch_previous_version fast)"
+		echo_white  "Previous candidate: $(fetch_previous_version candidate)"
+
+		which openshift-install >/dev/null 2>&1 && os_inst=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
+		[ "$os_inst" ] && \
+			echo && \
+			echo_white  "openshift-install:  $os_inst"
+
+		exit 0
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
 		shift
 		if [ "$1" = "-" ]; then
@@ -708,10 +725,16 @@ do
 		echo "$1" | grep -q "^-" || cmd="$1"
 		[ "$cmd" ] && shift || cmd="get co" # Set default command here
 
-		if [[ "$BUILD_COMMAND" =~ "ssh" ]]; then
-			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
-			aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
-		elif [[ "$BUILD_COMMAND" =~ "cmd" ]]; then
+		#if [ "$cur_target" = "ssh" ]; then
+		#	scripts/ssh-rendezvous.sh "$cmd"
+		#	shift
+		#fi
+			
+		#if [[ "$BUILD_COMMAND" =~ "ssh" ]]; then
+		#	BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
+		#	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
+		#elif [[ "$BUILD_COMMAND" =~ "cmd" ]]; then
+		if [[ "$BUILD_COMMAND" =~ "cmd" ]]; then
 			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
 			aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
 		else
@@ -825,12 +848,36 @@ do
 				# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
 				# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
 			cur_target=$1
-			BUILD_COMMAND="$BUILD_COMMAND $1"
-			aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND 
+		#	if [ "$cur_target" = "ssh" ]; then
+			case $cur_target in
+				ssh|cmd)
+					# FIXME: Add more here: day2 day2-ntp day2-osus shell login etc  (all items without any deps)
+					:
+					;;
+				*)
+					BUILD_COMMAND="$BUILD_COMMAND $1"
+					aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND 
+					;;
+			esac
+			#fi
 		fi
 		shift 
 	fi
 done
+
+if [ "$cur_target" ]; then
+	aba_debug cur_target=$cur_target
+	case $cur_target in
+		ssh)
+			$ABA_ROOT/scripts/ssh-rendezvous.sh "$cmd"
+			exit 0
+		;;
+		cmd)
+			$ABA_ROOT/scripts/oc-command.sh "$cmd"
+			exit 0
+		;;
+	esac
+fi
 
 aba_debug "interactive_mode=[$interactive_mode]"
 
