@@ -26,15 +26,35 @@ fi
 
 echo Uploading image $ASSETS_DIR/agent.$ARCH.iso to [$ISO_DATASTORE] images/agent-${CLUSTER_NAME}.iso
 
-log_file=/tmp/.upload.$$.log
 #if ! govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.$ARCH.iso images/agent-${CLUSTER_NAME}.iso | tee /dev/stderr | grep -qi "Uploading.*OK"; then
-govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.$ARCH.iso images/agent-${CLUSTER_NAME}.iso | tee $log_file || true
-if ! grep -qi "Uploading.*OK" $log_file; then
-	# Since govc does not return non-zero on error we need to parse the output for non-success! 
-	rm -f $log_file
-	aba_abort "ISO file may be attached to a running VM and cannot be overwritten.  Stop the VM first with 'aba stop' and try again."
+ret=0
+if [ "$PLAIN_OUTPUT" ]; then
+	cmd="cat $ASSETS_DIR/agent.$ARCH.iso | govc datastore.upload -ds $ISO_DATASTORE - images/agent-${CLUSTER_NAME}.iso"
+	trap - ERR
+	set +e
+	eval $cmd 
+	ret=$?
+else
+	#FIXME: Is log_file needed if govc returns sensible value
+	#mkdir -p $HOME/.aba/tmp
+	#log_file=$HOME/.aba/tmp/.upload.$$.log
+	#touch $log_file
+	cmd="govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.$ARCH.iso images/agent-${CLUSTER_NAME}.iso"
+	set +e
+	trap - ERR
+	eval $cmd #| tee $log_file #|| true
+	ret=$?
+	#! grep -qi "Uploading.*OK" $log_file && ret=1
+fi
+if [ $ret -ne 0 ]; then
+	# Since govc does not return non-zero on error we need to parse the output for non-success!  #FIXME: true?
+	#rm -f $log_file
+	echo_red "ISO file failed to upload!"
+	echo_red "The ISO may be attached to a running VM and cannot be overwritten.  Stop the VM first with 'aba stop' and try again."
+	exit 1
 fi
 
-rm -f $log_file
-echo
+#rm -f $log_file
+
+exit 0
 

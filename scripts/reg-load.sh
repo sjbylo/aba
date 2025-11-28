@@ -128,8 +128,10 @@ aba_info_ok "  aba cluster --name mycluster [--type <sno|compact|standard>] [--s
 aba_info_ok "Use 'aba cluster --help' for more information about installing clusters."
 
 echo
+if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then
 aba_warning -p IMPORANT \
 	"If you have already installed a cluster, (re-)run the command 'aba -d <clustername> day2'" \
 	"to configure/refresh OperatorHub/Catalogs, Signatures etc."
+fi
 
 exit 0

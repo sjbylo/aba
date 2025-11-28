@@ -284,6 +284,7 @@ init_bastion() {
 cat <<END | ssh $def_user@$int_bastion_hostname -- bash
 rm -vrf ~/.cache/agent/   # Just to be sure, remove old images
 rm -vrf ~/bin/*    	 # To make sure we do things from scratch!
+rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
 END
 
 	# General bastion config, e.g. date/time/timezone and also root ssh
@@ -291,6 +292,7 @@ cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
 set -ex
 whoami
 #dnf update -y
+rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
 # Try to keep SELinux turned on
 getenforce
 #setenforce 0

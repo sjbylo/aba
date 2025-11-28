@@ -32,6 +32,7 @@ cd ..
 
 rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
+rm -f ~/.ssh/quay_installer*
 
 # Need this so this test script can be run standalone
 ###[ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP

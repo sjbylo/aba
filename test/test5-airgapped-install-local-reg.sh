@@ -47,6 +47,7 @@ ntp_ip=10.0.1.8 # If available
 cluster_type=sno  # Choose either sno, compact or standard
 
 rm -f ~/.aba.previous.backup
+rm -f ~/.ssh/quay_installer*
 
 ######################
 # Set up test 
@@ -537,6 +538,8 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Verify image set archive 2 f
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set conf file exists" "ls -lh $subdir/aba/mirror/save/imageset-config-save.yaml"
 
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Win back disk space for the next test command" "cd $subdir/aba/mirror; rm -rf \$HOME.cache/agent/ image-archive.tar quay.tar" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 9 -m  "Deleting remote image set archive file to save space" "cd $subdir/aba/mirror; rm -v save/mirror_000001.tar" 

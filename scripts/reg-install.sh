@@ -173,6 +173,13 @@ if [ "$reg_ssh_key" ]; then
 		reg_pw=$(openssl rand -base64 12)
 	fi
 
+	# Note: The quay installer seems to ONLY create an ssh key if it needs one for the localhost.  It uses the provided key for remote hosts.
+	# The following is not required for remote host install.
+	# This is a workaround to ensure a more secure key for Quay, otherwise smaller key sizes can be rejected by policy
+	#[ ! -s $HOME/.ssh/quay_installer ] && \
+	#	ssh-keygen -t ed25519 -f $HOME/.ssh/quay_installer -N '' >/dev/null && \
+	#	cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys
+
 	# Generate the script to be used to delete this registry
 	uninstall_cmd="eval ./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts --autoApprove -v"
 
@@ -320,6 +327,12 @@ else
 	echo "reg_delete() { echo [ABA] Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	aba_info "Created Quay uninstall script at $PWD/reg-uninstall.sh"
+
+	# This is a workaround to ensure a more secure key for Quay, otherwise smaller key sizes can be rejected by policy
+	#[ ! -s $HOME/.ssh/quay_installer ] && ssh-keygen -t rsa -b 3072 -f $HOME/.ssh/quay_installer -N '' >/dev/null 
+	[ ! -s $HOME/.ssh/quay_installer ] && \
+		ssh-keygen -t ed25519 -f $HOME/.ssh/quay_installer -N '' >/dev/null && \
+		cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys
 
 	cmd="./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host $reg_root_opts"
 

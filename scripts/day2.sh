@@ -76,7 +76,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 	aba_info "Running: oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
 	try_cmd 5 5 15 "oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
 
-	# Sometimes see the error 'error: the server doesn't have a resource type "imagestream"' ... so , need to check and wait...
+	# Sometimes see: 'error: the server doesn't have a resource type "imagestream"' ... so, need to check and wait! ...
 	aba_info "Ensuring 'imagestream' resource is available!" 
 	try_cmd 5 5 20 oc get imagestream 
 
@@ -103,8 +103,6 @@ fi
 
 ####################################
 # Only oc-mirror v2 is supported now
-
-# For oc-mirror v2
 # Note for oc-mirror v2:
 # resources/idms-oc-mirror.yaml
 # mirror/sync/working-dir/cluster-resources/itms-oc-mirror.yaml
@@ -182,7 +180,8 @@ if [ "$latest_working_dir" ]; then
 
 			until oc -n "$ns" get catalogsource "$cs_name" >/dev/null; do sleep 1; done
 
-			aba_info "Waiting for CatalogSource $cs_name to become 'ready' ... (Note: a state of TRANSIENT_FAILURE usually resolves itself within a few moments!)"
+			#aba_info "Waiting for CatalogSource $cs_name to become 'ready' ... (note that a state of 'TRANSIENT_FAILURE' usually resolves itself within a few moments!)"
+			aba_info "Waiting for CatalogSource $cs_name to become 'ready' ... "
 
 			for _ in {1..80}; do
 				state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
@@ -192,7 +191,7 @@ if [ "$latest_working_dir" ]; then
 
 					exit 0  # exit the process
 				fi
-				[ "$state" ] && aba_info "$cs_name state: $state"
+				[ "$state" ] && aba_info "$cs_name state: $state (working on it!)"
 
 				sleep 5
 			done

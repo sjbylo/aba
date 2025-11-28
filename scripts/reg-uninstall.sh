@@ -53,6 +53,7 @@ if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registr
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
 		cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
 		aba_info "Running command: $cmd"
+		[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk
 		$cmd || exit 1
 
 		#[ "$reg_root" ] && ssh $reg_ssh_user@$reg_host rm -rf $reg_root || ssh $reg_ssh_user@$reg_host rm -rf ~/quay-install
@@ -60,11 +61,12 @@ if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registr
 		exit 1
 	fi
 elif podman ps | grep -q registry; then
-	aba_debug Local reg. detected. Value of ask: $ask
+	aba_debug Local mirror registry detected. Value of ask: $ask
 
-	if ask "Registry detected on localhost.  Uninstall this mirror registry"; then
+	if ask "Mirror registry detected on localhost.  Uninstall this mirror registry"; then
 		cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 		aba_info "Running command: $cmd"
+		[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk
 		$cmd || exit 1
 		#[ "$reg_root" ] && eval rm -rf $reg_root || rm -rf ~/quay-install
 	else

@@ -194,7 +194,7 @@ kill:  .init vmware.conf                     agent-config.yaml ## Kill or power 
 delete: .init vmware.conf                     agent-config.yaml ## Delete all VMs. This will delete the cluster!
 	$(SCRIPTS)/vmw-delete.sh $(debug) || exit 0
 
-.install-complete: .autorefresh .auto-agent-up mon
+.install-complete: .autorefresh .auto-agent-up # mon
 	$(SCRIPTS)/monitor-install.sh $(debug)
 	@touch .install-complete
 
@@ -233,13 +233,13 @@ shell:  ## Gain access to the installed cluster.  Run '. <(aba -s shell)'
 getco: ## Run 'oc get co' command on the cluster.
 	oc --kubeconfig iso-agent-based/auth/kubeconfig get co
 
-.PHONY: cmd
-cmd: ## Run any oc command on the cluster. Must provide command, e.g. --cmd "oc get pods -A", default command is 'oc get co'.
-	$(SCRIPTS)/oc-command.sh $(cmd)
+#.PHONY: cmd
+#cmd: ## Run any oc command on the cluster. Must provide command, e.g. --cmd "oc get pods -A", default command is 'oc get co'.
+#	$(SCRIPTS)/oc-command.sh $(cmd)
 
-.PHONY: ssh
-ssh: ## Open ssh to the rendezvous host (node 0), useful for troubleshooting
-	$(SCRIPTS)/ssh-rendezvous.sh $(cmd)
+#.PHONY: ssh
+#ssh: ## Open ssh to the rendezvous host (node 0), useful for troubleshooting
+#	$(SCRIPTS)/ssh-rendezvous.sh $(cmd)
 
 .PHONY:
 day2:  ## Set up OperatorHub, CatalogSources, imageContentSourcePolicy resources. Run this step/target after new Operators are pushed into the mirror registry. Requires access to 'aba/mirror/.../working-dir' directory!

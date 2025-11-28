@@ -32,6 +32,7 @@ cd ..  # Change into "aba" dir
 
 rm -fr ~/.containers ~/.docker
 rm -f ~/.aba.previous.backup
+rm -f ~/.ssh/quay_installer*
 
 # Need this so this test script can be run standalone
 [ ! "$VER_OVERRIDE" ] && export VER_OVERRIDE=l  #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
@@ -250,7 +251,7 @@ mylog "Starting tests to check out agent config files for various cluster config
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete $ctype dir: $subdir/aba/standard" rm -rf $subdir/aba/$ctype
 
 test-cmd -m "Copy test script" scp test/misc/test_ssh_ntp.sh $TEST_USER@$int_bastion_hostname:
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "echo until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do sleep 10\; done > test_ssh.sh"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "sleep 50; echo until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do sleep 10\; done > test_ssh.sh"
 
 # Init
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster -i 10.0.1.201 --name $ctype --type $ctype --step cluster.conf"
