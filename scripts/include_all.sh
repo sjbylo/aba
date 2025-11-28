@@ -571,10 +571,10 @@ install_rpms() {
 ask() {
 	aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
 	local ret_default=
-	[ "$ASK_OVERRIDE" ] && ret_default=1 #return 0  # reply "default reply"
+	[ "$ASK_OVERRIDE" ] && ret_default="-y" #return 0  # reply "default reply"
 	source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
 	aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
-	[ ! "$ask" ] && ret_default=1 #return 0  # reply "default reply"
+	[ ! "$ret_default" ] && [ ! "$ask" ] && ret_default="aba.conf:ask=false" #return 0  # reply "default reply"
 
 	# Default reply is 'yes' (or 'no') and return 0
 	yn_opts="(Y/n)"
@@ -585,7 +585,7 @@ ask() {
 	[ ! "$ret_default" ] && [ "$1" == "-t" ] && timer="-t $2" && shift 2
 
 	echo_yellow -n "[ABA] $@? $yn_opts: "
-	[ "$ret_default" ] && echo_white "<default answer given>" && return 0
+	[ "$ret_default" ] && echo_white "<default answer provided due to '$ret_default'>" && return 0
 	read $timer yn
 
 	# Return default response, 0
