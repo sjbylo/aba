@@ -35,7 +35,7 @@ Options:
         --data-disk [<size>]              # Size (GB) of thin-provisioned 'data disk' or empty for none.
 
 Usage (from a cluster directory):
-  aba --cmd "oc command"                  # Run this 'oc command' on the current cluster.
+  aba run --cmd "oc command"              # Run this 'oc command' on the current cluster.
   aba ls                                  # List all cluster node VMs (for platform=vmw only).
   aba shutdown                            # Gracefully shut down the cluster (any platform).
   aba startup                             # Gracefully start up the cluster (any platform).

@@ -60,7 +60,7 @@ Usage: Provision OpenShift cluster
          --ingress-vip <ip>              # IP addr for application ingress 
      -I, --int-connection <proxy|direct> # Install from the public mirror over the Internet
 
-   aba --cmd "oc command"                # Run this oc command on the current cluster
+   aba run --cmd "oc command"            # Run this oc command on the current cluster
 
    aba clean                             # Clean up all generated files. 
    <<options>>:
