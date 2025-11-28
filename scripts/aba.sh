@@ -930,6 +930,7 @@ aba_debug "Running aba interactive mode ..."
 ### replace-value-conf aba.conf ask true   # Do not make this permanent!
 source <(normalize-aba-conf)
 export ask=1  # In interactive mode let's use the safe option!
+export ASK_OVERRIDE=1  # This is needed 'cos it overrides $ask, even if $ask is false (re-read from aba.conf omg this needs to be simplified!)
 
 #verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_version or channel defined
 
