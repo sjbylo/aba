@@ -50,8 +50,8 @@ rm -rf aba
 tar xvf delete-me*tar
 rm -vf delete-me*tar
 cd aba
-[ "$SPLIT" ] && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar mirror/save   # Merge the two repos (to save disk space on this filesystem) 
-rm -rf $TEST_DIR_CONN/aba
+[ "$SPLIT" ] && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
+rm -rf $TEST_DIR_CONN/aba   # Not needed anymore
 ./install
 ./aba   # Show instructions 
 ./aba -d mirror load -H registry4.example.com -r -y
