@@ -103,17 +103,17 @@ verify: agentconf  ## Extract cluster configuration details from the generated a
 .bm-message:
 	@echo
 	@echo "Next steps:"
-	@echo "1 cd <cluster name>    # If not already, change into your cluster directory."
+	@echo "1 cd $(shell basename $(PWD))       # If not already, change into your cluster directory."
 	@echo "2 Check & edit the agent configuration files: "
-	@echo "   - $(PWD)/install-config.yaml:"
-	@echo "   - $(PWD)/agent-config.yaml:"
-	@echo "       You must modify the mac addresses to match your host's network interfaces."
-	@echo "       Optionally, add drive & NIC hints and any other network configurations."
+	@echo "  - $(PWD)/install-config.yaml:"
+	@echo "  - $(PWD)/agent-config.yaml:"
+	@echo "    - You must modify the mac addresses to match your host's network interfaces."
+	@echo "    - Optionally, add drive & NIC hints and any other network configurations."
 	@echo "3 Run 'aba iso' to create the ISO file."
-	@echo "4 Power on all your servers and boot them with the ISO file."
+	@echo "4 Power on all of your servers and boot them with the ISO file."
 	@echo "5 Verify that the servers start up and can connect to the registry successfully."
-	@echo "   - aba ssh    # connect to node0 for any needed troubleshooting."
-	@echo "6 Then, run 'aba mon' to monitor the installation progress."
+	@echo "  - aba ssh            # connect to the first node for any needed troubleshooting."
+	@echo "6 Run 'aba mon' to monitor the installation progress until its completion."
 	@echo 
 	@touch .bm-message
 
@@ -125,8 +125,9 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml   # Not
 .bm-nextstep:
 	@echo "Next steps:"
 	@echo "1 Boot your hosts with the ISO file."
-	@echo "2 if needed, run 'aba ssh' to log into node0 to troubleshoot."
-	@echo "3 then run 'aba mon' to monitor the installation progress."
+	@echo "2 Verify that the servers start up and can connect to the registry successfully."
+	@echo "3 If needed, run 'aba ssh' to log into the first node to troubleshoot."
+	@echo "4 Run 'aba mon' to monitor the installation progress until its completion."
 	@touch .bm-nextstep
 	@exit 0
 
