@@ -12,6 +12,7 @@ do
 	[ "$1" = "split" ] && split_bundle=1 && shift
 done
 
+aba_debug aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
 
 # This will have been completed behand, but just in case!
 install_rpms $(cat templates/rpms-external.txt) || exit 1
