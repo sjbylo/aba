@@ -134,9 +134,7 @@ else
 			"Because both files reside on the same filesystem, you may temporarily" \
 			"need roughly double (or more with the cache) the required space. " \
 			"Please ensure sufficient disk space is available." 
-
-		echo >&2
-		aba_warning -p "IMPORTANT" \
+			"IMPORTANT" \
 			"If disk space is limited, consider using the '--split' flag. This option" \
 			"excludes the large image-set archive files from the final install bundle." \
 			"It is useful in restricted environments where you cannot store or move" \

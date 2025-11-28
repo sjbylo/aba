@@ -33,6 +33,8 @@ aba -y bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel fast 
 	--op-sets abatest --ops yaks vault-secrets-operator flux --base-domain example.com \
 	--machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp 10.0.1.8  ntp.example.com --out $TEST_DIR_DISCO/delete-me \
 	$SPLIT
+
+# Keep empty line above!
 echo "aba bundle returned: $?"
 
 # Go offline
