@@ -25,7 +25,7 @@ echo_yellow "[ABA] Running: openshift-install agent wait-for install-complete --
 #sleep 60  # wait a bit to ensure the agent is running
 openshift-install agent wait-for install-complete --dir $ASSETS_DIR $opts
 ret=$?
-[ "$ABA_DEBUG" ] && echo "[ABA] openshift-install returned: $ret" >&2
+[ "$DEBUG_ABA" ] && echo "[ABA] openshift-install returned: $ret" >&2
 
 # All exit codes of openshift-install from source file: cmd/openshift-install/create.go
 # Declare an associative array with exit codes as keys

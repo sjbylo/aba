@@ -134,7 +134,7 @@ else
 			"to the file you specified: $bundle_dest_file" \
 			"Because both files reside on the same filesystem, you may temporarily" \
 			"need roughly double (or more with the cache) the required space. " \
-			"Please ensure sufficient disk space is available." 
+			"Please ensure sufficient disk space is available." \
 			"IMPORTANT" \
 			"If disk space is limited, consider using the '--split' flag. This option" \
 			"excludes the large image-set archive files from the final install bundle." \
