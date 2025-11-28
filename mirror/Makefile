@@ -27,7 +27,8 @@ else
 endif
 ##########################
 
-all: mirror
+#all: mirror
+all: install
 
 ##@ Help-related tasks
 .PHONY: help
@@ -151,7 +152,7 @@ uninstall-docker-registry:
 mirror.conf: ../aba.conf .init                        ## Configure the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh -f $(force) $(debug)
 
-mirror: install
+#mirror: install
 install: .installed
 .installed: .init .rpmsext mirror.conf mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 	@rm -f .uninstalled 

@@ -125,8 +125,8 @@ Nov 19 02:39:26 master1 bootkube.sh[10004]: Sending bootstrap-success event. Wai
 Once bootkube has finished and the host has restarted run the following command to observe the installation of OpenShift:
 
 ```
-aba cmd --cmd "get co"
-aba cmd --cmd "get nodes"
+aba run --cmd "get co"
+aba run --cmd "get nodes"
 ```
 
 ## Other problems that might happen during mirroring: 

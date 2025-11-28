@@ -411,10 +411,10 @@ test-cmd                                     -m "Delete loaded image set 2 file"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded image set 2 file on registry" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
 # Is the cluster can be reached ... use existing cluster
-#if test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno cmd --cmd 'oc get clusterversion'"; then
+#if test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno run --cmd 'oc get clusterversion'"; then
 # Do not use test-cmd here since that will never retiurn the true result!
 mylog "Cecking if cluster was installed or not, if error, then not!"
-if ssh $TEST_USER@$int_bastion_hostname "aba --dir $subdir/aba/sno cmd --cmd 'oc get clusterversion'"; then
+if ssh $TEST_USER@$int_bastion_hostname "aba --dir $subdir/aba/sno run --cmd 'oc get clusterversion'"; then
 	mylog "Using existing sno cluster"
 else
 	mylog "Creating the sno cluster"
@@ -431,15 +431,15 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Checking cluster operator statu
 ######################
 
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deploying vote-app on cluster" $subdir/aba/test/deploy-test-app.sh $subdir
-test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/sno cmd --cmd 'oc delete project demo || true'"
-test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/sno cmd --cmd 'oc new-project demo'"
+test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo || true'"
+test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc new-project demo'"
 
 test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" sleep 30
 # error: Post "https://api.sno.example.com:6443/api/v1/namespaces/demo/services": dial tcp 10.0.1.201:6443: connect: connection refused
-test-cmd -r 5 10 -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/sno cmd --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+test-cmd -r 5 10 -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for vote-app rollout" "aba --dir $subdir/aba/sno cmd --cmd 'oc rollout status deployment vote-app -n demo'"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting vote-app" "aba --dir $subdir/aba/sno cmd --cmd 'oc delete project demo'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for vote-app rollout" "aba --dir $subdir/aba/sno run --cmd 'oc rollout status deployment vote-app -n demo'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo'"
 
 mylog "Adding advanced-cluster-management operator images to mirror/save/imageset-config-save.yaml file on `hostname`"
 
@@ -496,7 +496,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Run 'day2' on sno clust
 
 test-cmd -m "Pausing 30s" sleep 30
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno cmd --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
+test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
 
 # Needed for acm-subs.yaml
 test-cmd -m "Copy over test dir for the acm-*.yaml files" scp -rp test $TEST_USER@$int_bastion_hostname:$subdir/aba
