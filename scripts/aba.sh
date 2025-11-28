@@ -733,8 +733,8 @@ do
 		#if [[ "$BUILD_COMMAND" =~ "ssh" ]]; then
 		#	BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
 		#	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
-		#elif [[ "$BUILD_COMMAND" =~ "cmd" ]]; then
-		if [[ "$BUILD_COMMAND" =~ "cmd" ]]; then
+		#elif [[ "$BUILD_COMMAND" =~ "run" ]]; then
+		if [[ "$BUILD_COMMAND" =~ "run" ]]; then
 			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
 			aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
 		else
@@ -845,12 +845,12 @@ do
 			#	cur_target=$1
 			#	# Do not append "cluster" to $BUILD_COMMAND
 			#else
-				# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'cmd' etc 
+				# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'run' etc 
 				# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
 			cur_target=$1
 		#	if [ "$cur_target" = "ssh" ]; then
 			case $cur_target in
-				ssh|cmd)
+				ssh|run)
 					# FIXME: Add more here: day2 day2-ntp day2-osus shell login etc  (all items without any deps)
 					:
 					;;
@@ -872,7 +872,7 @@ if [ "$cur_target" ]; then
 			$ABA_ROOT/scripts/ssh-rendezvous.sh "$cmd"
 			exit 0
 		;;
-		cmd)
+		run)
 			$ABA_ROOT/scripts/oc-command.sh "$cmd"
 			exit 0
 		;;
