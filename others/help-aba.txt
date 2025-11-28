@@ -17,6 +17,8 @@ Other commands:
   aba clean                             # Clean up all generated files
   aba [-d cli] download                 # Download all required CLI installation files only
   aba [-d cli] install                  # Download and install all the CLI binaries into ~/bin
+  aba [-d cli] oc                       # Download and install the oc binary
+  aba [-d cli] openshift-install        # Download and install the openshift-install binary
   aba ocp-versions|ocp-ver              # Show a table of the latest versions of OpenShift
   aba help                              # See help for all steps/targets
 
