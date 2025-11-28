@@ -68,6 +68,9 @@ export ABA_TESTING=1   # No stats recorded
 set -x
 
 . ~steve/.proxy-set.sh  # Go online!
+# Test connectivity is not working
+echo_step Test internet connection with curl google.com ...
+curl -sfkIL google.com >/dev/null  # Must work
 
 [ $# -lt 2 ] && exit 1
 VER=$1; shift
@@ -112,15 +115,19 @@ fi
 
 # Remove any quay 
 if podman ps | grep registry; then
+(
+	cd ..
 	# Uninstall Quay
 	./install  # install aba
 	aba -A
 	#aba uninstall  || true
+	cd mirror
 	./mirror-registry uninstall --autoApprove -v || true
 	sudo rm -rf ~/quay-install
 	sudo rm -rf ~/docker-reg
 	./mirror-registry uninstall --autoApprove -v || true
 	podman rmi `podman images -q` ##--force
+)
 fi
 sudo rm -rf ~/quay-install
 sudo rm -rf ~/docker-reg
@@ -280,6 +287,9 @@ rm -rf $WORK_DIR/aba # Remove the unneeded repo to save space
 
 echo_step Going offline to test the install bundle ...
 . ~steve/.proxy-unset.sh   # Go offline!
+# Test connectivity is not working
+echo_step Test internet connection with curl google.com ...
+! curl -sfkIL google.com >/dev/null  # Must "Connection timed out"
 
 # Should we delete here since we want to simulate a fresh/empty internal bastion?
 ###rm -rf ~/.oc-mirror  # We need some storage back!
@@ -343,6 +353,8 @@ echo >> $WORK_TEST_LOG
 echo "Quay installed: ok" >> $WORK_TEST_LOG
 echo "All images loaded (disk2mirror) into Quay: ok" >> $WORK_TEST_LOG
 
+echo_step "Be sure to delete the cached agent files, otherwise we may mistakenly use a bad one instead of from the generated archive file! (like with v4.19.18!)"
+rm -rf ~/.cache/agent 
 echo_step Create the cluster ...
 aba cluster --name sno4 --type sno --starting-ip 10.0.1.204 --mmem 20 --mcpu 10 --step install
 
@@ -500,6 +512,9 @@ sudo rm -rf ~/quay-install
 sudo rm -rf ~/docker-reg
 
 . ~steve/.proxy-set.sh  # Go online!
+# Test connectivity is not working
+echo_step Test internet connection with curl google.com ...
+curl -sfkIL google.com >/dev/null  # Must work
 
 [ "$NOTIFY" ] && notify.sh "New bundle created for $BUNDLE_NAME"
 

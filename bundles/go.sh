@@ -41,20 +41,22 @@ which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
 echo Starting $0 at $(date)
 
 # Define the operator sets and subsets 
-arr_op_set=();			arr_name=()
-arr_op_set+=(" ");		arr_name+=(base)
-arr_op_set+=("ocp");		arr_name+=(ocp)
-arr_op_set+=("ocp mesh3");	arr_name+=(mesh3)
-arr_op_set+=("ocp odf ocpv");	arr_name+=(ocpv)
-arr_op_set+=("ocp sec");	arr_name+=(sec)
-#arr_op_set+=("ocp ai"); 	arr_name+=(ai)
-arr_op_set+=("ocp gpu ai"); 	arr_name+=(ai)
+arr_op_set=();				arr_name=()
+arr_op_set+=(" ");			arr_name+=(base)
+arr_op_set+=("ocp");			arr_name+=(ocp)
+arr_op_set+=("ocp mesh3");		arr_name+=(mesh3)
+arr_op_set+=("ocp odf sec acm");	arr_name+=(opp)
+arr_op_set+=("ocp odf ocpv");		arr_name+=(ocpv)
+arr_op_set+=("ocp sec");		arr_name+=(sec)
+arr_op_set+=("ocp gpu ai"); 		arr_name+=(ai)
 
 export OC_MIRROR_CACHE=$HOME  # Set this so that multiple oc-mirror invocations can use the cache and we save time & bandwidth.
 # Can also delete $OC_MIRROR_CACHE/.oc-mirror dir
 export PLAIN_OUTPUT=1  # Supress curl progress bars and other color output
 
-rm -rf ~/.oc-mirror/  # This is needed due to space limitations
+rm -rf ~/.oc-mirror/  # This is needed due to space limitations...  Also don't want some kind of "contamination"! 
+# If we use other files, e.g. caches for testing and the tests pass, then the actual archive might container a bug and fail later on!
+# e.g. "Expected version 9.6.20251015-1 but found 9.0.20250510-0" -> Bug https://issues.redhat.com/browse/OCPBUGS-65899 
 
 # Discovered latest OCP versions
 versions=()
@@ -98,6 +100,7 @@ do
 				echo "Failed: bundle $ver-$name ($op_sets) at $(date)" >&2
 				echo "##################################################" >&2
 				echo Showing last log lines:  >&2
+				touch ~/tmp/bundle-go.out
 				[ "$NOTIFY" ] && echo -e "Install bundle $ver-$name ($op_sets)\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2
 				echo Quitting $0 at $(date)
 
