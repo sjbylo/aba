@@ -120,6 +120,11 @@ $DOCKER run -d \
     docker.io/library/registry:latest
 #    registry:2
 
+aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
+$SUDO firewall-cmd --state && \
+	$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
+		$SUDO firewall-cmd --reload
+
 # --- Step 7: Add CA to system trust ---
 #echo_yellow "Adding CA to system trust (requires sudo)..."
 # No need: only for docker
@@ -199,11 +204,6 @@ fi
 #
 #	pass_check "$DOCKER pull/push succeeded"
 #fi
-
-aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
-$SUDO firewall-cmd --state && \
-	$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
-		$SUDO firewall-cmd --reload
 
 # --- Step 9: Completion message ---
 aba_info_ok "✅ Secure Docker Registry deployment complete!"
