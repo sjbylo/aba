@@ -265,8 +265,8 @@ test-cmd -m "Deleting existing sno dir" rm -rf sno
 
 test-cmd -m "Installing sno cluster with 'aba cluster -n sno -t sno --step $default_target'" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target
 test-cmd -m "Delete cluster (if needed)" aba --dir sno delete 
-test-cmd -m "Delete the registry" aba --dir mirror uninstall 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
+test-cmd -m "Delete the remote registry" aba --dir mirror uninstall 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify remote mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 #####################################################################################################################
@@ -355,7 +355,7 @@ test-cmd -m "Checking cluster operators" aba --dir sno run
 
 #######################
 #  Delete the reg. first!
-test-cmd -m "Delete the registry so it will be re-created again during 'aba -d mirror save load' next" aba --dir mirror uninstall 
+test-cmd -m "Delete the registry so it will be re-created again in next test" aba --dir mirror uninstall 
 #  This will save the images, install (the reg.) then load the images
 test-cmd -r 15 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
 
@@ -392,7 +392,7 @@ test-cmd -m "Verify ISO file now exists"		ls -l standard/iso-agent-based/agent.*
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
-test-cmd -m "Delete the registry" aba --dir mirror uninstall 
+test-cmd -m "Delete the remote registry" aba --dir mirror uninstall 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
 
 #####################################################################################################################

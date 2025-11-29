@@ -520,7 +520,9 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Waiting up to 8 mins for
 #### TESTING ACM + MCH 
 
 # Apply NTP config, but don't wait for it to complete!
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Initiate NTP config but not wait for completion" "aba --dir $subdir/aba/sno day2-ntp"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check status of NTP config" "aba --dir $subdir/aba/sno ssh --cmd 'chronyc sources'"
+
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Initiate NTP config" "aba --dir $subdir/aba/sno day2-ntp"
 test-cmd -m "Pausing 30s" read -t 60 xy||true
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config" "until aba --dir $subdir/aba/sno ssh --cmd \"sudo chronyc sources | grep $ntp_ip_grep\"; do sleep 10; done"
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config (loop)" "until bash -x test_ssh_ntp.sh $subdir/aba/sno $ntp_ip_grep; do sleep 10; done"
