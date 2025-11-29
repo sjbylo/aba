@@ -435,7 +435,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Checking cluster operator statu
 test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo'" || true
 test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc new-project demo'"
 
-test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" read -t 30 xy
+test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" read -t 30 xy||true
 # error: Post "https://api.sno.example.com:6443/api/v1/namespaces/demo/services": dial tcp 10.0.1.201:6443: connect: connection refused
 test-cmd -r 5 10 -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 
@@ -495,7 +495,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded image set 3 file 
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
 
-test-cmd -m "Pausing 30s" read -t 30 xy
+test-cmd -m "Pausing 30s" read -t 30 xy||true
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
 
@@ -508,11 +508,11 @@ acm_channel=$(cat mirror/.index/redhat-operator-index-v$ocp_ver_major | grep ^ad
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Install ACM Operator" "i=0; until oc apply -f $subdir/aba/test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done"
 
-###test-cmd read -t 60 xy
+###test-cmd read -t 60 xy||true
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Install Multiclusterhub" "i=0; until oc apply -f $subdir/aba/test/acm-mch.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done"
 
-test-cmd -m "Leave time for ACM to deploy ..." read -t 30 xy
+test-cmd -m "Leave time for ACM to deploy ..." read -t 30 xy||true
 
 # Need 'cd' here due to '=$subdir' not 'resolving' ok
 # cd $subdir only works in "" .. and will work for root or user
@@ -521,7 +521,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Waiting up to 8 mins for
 
 # Apply NTP config, but don't wait for it to complete!
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Initiate NTP config but not wait for completion" "aba --dir $subdir/aba/sno day2-ntp"
-test-cmd -m "Pausing 30s" read -t 60 xy
+test-cmd -m "Pausing 30s" read -t 60 xy||true
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config" "until aba --dir $subdir/aba/sno ssh --cmd \"sudo chronyc sources | grep $ntp_ip_grep\"; do sleep 10; done"
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config (loop)" "until bash -x test_ssh_ntp.sh $subdir/aba/sno $ntp_ip_grep; do sleep 10; done"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/sno '$ntp_ip_grep'"
