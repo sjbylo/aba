@@ -870,11 +870,11 @@ if [ "$cur_target" ]; then
 	case $cur_target in
 		ssh)
 			$ABA_ROOT/scripts/ssh-rendezvous.sh "$cmd"
-			exit 0
+			exit 
 		;;
 		run)
 			$ABA_ROOT/scripts/oc-command.sh "$cmd"
-			exit 0
+			exit 
 		;;
 	esac
 fi

@@ -347,7 +347,7 @@ test-cmd -m "Creating iso: CIDR 10.0.0.0/20 with start ip 10.0.1.201" aba cluste
 ###test-cmd -m "Setting starting_ip=10.0.1.201" aba -d sno -i 10.0.1.201
 
 test-cmd -m "Installing sno cluster" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step install
-test-cmd -m "Checking cluster operators" aba --dir sno cmd
+test-cmd -m "Checking cluster operators" aba --dir sno run
 
 #####################################################################################################################
 #####################################################################################################################

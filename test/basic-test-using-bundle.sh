@@ -1,7 +1,7 @@
 #!/bin/bash -ex
 # Basic test script to show how to create a custom bundle (*split* or normal) and then install OCP disonnected
 
-SPLIT="--split"   		# Test with *split* bundle. Add comment for normal bundle.
+#SPLIT="--split"   		# Test with *split* bundle. Add comment for normal bundle.
 CLUSTER_NAME=sno3
 STARTING_IP=10.0.1.203
 TEST_DIR_CONN=~/tmp/connected

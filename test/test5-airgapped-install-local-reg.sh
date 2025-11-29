@@ -234,7 +234,7 @@ test-cmd -m "Sleep 30" sleep 30
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 8 1.6 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking cluster operators" aba --dir $subdir/aba/$cluster_type cmd
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking cluster operators" aba --dir $subdir/aba/$cluster_type run
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Listing VMs (should show 24G memory)" "aba --dir $subdir/aba/$cluster_type ls"
 
 ### CONFIG & CHECK OPERATORS ###
@@ -364,13 +364,13 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 #### DONE ABOVE NOW !!! test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing $cluster_type cluster, ready to deploy test app" "aba --dir $subdir/aba $cluster_type"
 
 mylog "Deploying test vote-app from: $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo || true'" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo'" || true
 test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc rollout status deployment vote-app -n demo'"
 
 mylog "Deploying test vote-app from: quay.io/sjbylo/flask-vote-app:latest using ImageDigestMirrorSet"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo || true'" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo'" || true
 test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
 
 mylog "Applying ImageDigestMirrorSet for quay.io/sjbylo at $TEST_USER@$int_bastion_hostname"
@@ -547,7 +547,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated 
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator status" aba --dir $subdir/aba/$cluster_type cmd 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator status" aba --dir $subdir/aba/$cluster_type run 
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/$cluster_type login)"
 
@@ -612,9 +612,9 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster nodes" "aba -
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster auth" "aba --dir $subdir/aba/sno run --cmd 'whoami' | grep system:admin"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster version" "aba --dir $subdir/aba/sno run --cmd 'version'"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster pending pods" "aba --dir $subdir/aba/sno run --cmd 'get po -A | grep -v -e Running -e Complete'"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster COs" "aba --dir $subdir/aba/sno cmd"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster COs" "aba --dir $subdir/aba/sno run"
 test-cmd -m "Wait for cluster to settle" sleep 30
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all 'cluster operators' to become available?" "aba --dir $subdir/aba/sno cmd; aba --dir $subdir/aba/sno cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all 'cluster operators' to become available?" "aba --dir $subdir/aba/sno run; aba --dir $subdir/aba/sno run | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
 ##### MESH STOPPED test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster up and app running" "aba --dir $subdir/aba/sno run --cmd 'get po -A | grep ^travel-.*Running'"
@@ -694,21 +694,21 @@ build_and_test_cluster() {
 	fi
 
 	#####
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator status" aba --dir $subdir/aba/$cluster_name cmd 
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator status" aba --dir $subdir/aba/$cluster_name run 
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
 
-	#test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "aba --dir $subdir/aba/$cluster_name cmd"
+	#test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "aba --dir $subdir/aba/$cluster_name run"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all cluster operators available?" "aba --dir $subdir/aba/$cluster_name cmd; until aba --dir $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all cluster operators available?" "aba --dir $subdir/aba/$cluster_name run; until aba --dir $subdir/aba/$cluster_name run | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
-	##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to become *fully* available (available/complete/non-degraded)?" "i=0; until aba --dir $subdir/aba/$cluster_name cmd | tail -n +2 |grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$'|wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to become *fully* available (available/complete/non-degraded)?" "i=0; until aba --dir $subdir/aba/$cluster_name cmd | tail -n +2 |                                              awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$'|wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+	##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to become *fully* available (available/complete/non-degraded)?" "i=0; until aba --dir $subdir/aba/$cluster_name run | tail -n +2 |grep -v VSphereCSIDriverOperatorCRProgressing|awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$'|wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to become *fully* available (available/complete/non-degraded)?" "i=0; until aba --dir $subdir/aba/$cluster_name run | tail -n +2 |                                              awk '{print \$3,\$4,\$5}' |tail -n +2 |grep -v '^True False False$'|wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Show all cluster operators" "aba --dir $subdir/aba/$cluster_name cmd"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Show all cluster operators" "aba --dir $subdir/aba/$cluster_name run"
 
 	# Restart cluster test 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check node status" "aba --dir $subdir/aba/$cluster_name ls"
@@ -725,13 +725,13 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster auth" "aba --dir $subdir/aba/$cluster_name run --cmd 'whoami' | grep system:admin"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster version" "aba --dir $subdir/aba/$cluster_name run --cmd 'version'"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster pending pods" "aba --dir $subdir/aba/$cluster_name run --cmd 'get po -A | grep -v -e Running -e Complete'"
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster operators" "aba --dir $subdir/aba/$cluster_name cmd"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster operators" "aba --dir $subdir/aba/$cluster_name run"
 	test-cmd -m "Wait for cluster to settle" sleep 60
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all co available?" "aba --dir $subdir/aba/$cluster_name cmd; until aba --dir $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all co available?" "aba --dir $subdir/aba/$cluster_name run; until aba --dir $subdir/aba/$cluster_name run | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 	# Deploy test app
-	test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc delete project demo || true'" 
-	test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-project demo' || true" # || true
+	test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc delete project demo'" || true
+	test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-project demo'" || true
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc rollout status deployment vote-app -n demo'"
 }
@@ -789,7 +789,7 @@ test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Monitoring $cluster_name
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30mins for all cluster operators to become available?" "aba --dir $subdir/aba/$cluster_name cmd; i=0; until aba --dir $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; echo -n .; sleep 10; done"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting ~30mins for all cluster operators to become available?" "aba --dir $subdir/aba/$cluster_name run; i=0; until aba --dir $subdir/aba/$cluster_name run | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; echo -n .; sleep 10; done"
 
 # Restart cluster test 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
@@ -806,9 +806,9 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster nodes" "aba -
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster auth" "aba --dir $subdir/aba/$cluster_name run --cmd 'whoami' | grep system:admin"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster version" "aba --dir $subdir/aba/$cluster_name run --cmd 'version'"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster pending pods" "aba --dir $subdir/aba/$cluster_name run --cmd 'get po -A | grep -v -e Running -e Complete'"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster operators" "aba --dir $subdir/aba/$cluster_name cmd"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster operators" "aba --dir $subdir/aba/$cluster_name run"
 test-cmd -m "Wait for cluster to settle" sleep 10
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all co available?" "aba --dir $subdir/aba/$cluster_name cmd; aba --dir $subdir/aba/$cluster_name cmd | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all co available?" "aba --dir $subdir/aba/$cluster_name run; aba --dir $subdir/aba/$cluster_name run | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
 # keep it # test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Deleting $cluster_name cluster" "aba --dir $subdir/aba/$cluster_name delete" 
