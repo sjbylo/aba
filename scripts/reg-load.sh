@@ -68,7 +68,8 @@ do
 
 	aba_info -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror load --retry <count>'" || echo
-	aba_info "Running: $(cat load-mirror.sh)"
+	aba_info "Running:"
+	aba_info "$(cat load-mirror.sh)"
 	echo
 
 	# v1/v2 switch. For v2 need to do extra check!

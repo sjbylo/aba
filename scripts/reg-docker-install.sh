@@ -46,7 +46,7 @@ fail_checkp() {
 }
 
 pass_check() {
-    aba_info_ok "[ABA] ✅ $1"
+    aba_info_ok "✅ $1"
 }
 
 # --- Step 1: Create directories ---
@@ -55,7 +55,7 @@ mkdir -p "$REGISTRY_DATA_DIR" "$REGISTRY_CERTS_DIR" "$REGISTRY_AUTH_DIR"
 
 # --- Step 2: Generate CA ---
 if [[ ! -f "$REGISTRY_CERTS_DIR/ca.crt" || ! -f "$REGISTRY_CERTS_DIR/ca.key" ]]; then
-    echo_yellow "[ABA] Generating CA certificate..."
+    echo_yellow "Generating CA certificate..."
     openssl genrsa -out "$REGISTRY_CERTS_DIR/ca.key" 4096
     openssl req -x509 -new -nodes -key "$REGISTRY_CERTS_DIR/ca.key" \
         -sha256 -days 3650 -out "$REGISTRY_CERTS_DIR/ca.crt" \
@@ -67,7 +67,7 @@ fi
 
 # --- Step 3: Generate registry cert signed by CA ---
 if [[ ! -f "$REGISTRY_CERTS_DIR/registry.crt" || ! -f "$REGISTRY_CERTS_DIR/registry.key" ]]; then
-    echo_yellow "[ABA] Generating registry certificate signed by CA..."
+    echo_yellow "Generating registry certificate signed by CA..."
     openssl genrsa -out "$REGISTRY_CERTS_DIR/registry.key" 4096
     openssl req -new -key "$REGISTRY_CERTS_DIR/registry.key" \
         -out "$REGISTRY_CERTS_DIR/registry.csr" \
@@ -85,8 +85,12 @@ else
     aba_info_ok "Existing registry certificate found, skipping."
 fi
 
+if [ ! "$REGISTRY_PASS" ]; then
+	REGISTRY_PASS=$(openssl rand -base64 12)
+fi
+
 # --- Step 4: Generate htpasswd credentials ---
-echo_yellow "[ABA] Creating authentication file..."
+echo_yellow "Creating authentication file..."
 htpasswd -Bbn "$REGISTRY_USER" "$REGISTRY_PASS" > "$REGISTRY_AUTH_DIR/htpasswd"
 #$DOCKER run --rm --entrypoint htpasswd httpd:2 -Bbn "$REGISTRY_USER" "$REGISTRY_PASS" \ 
 #    > "$REGISTRY_AUTH_DIR/htpasswd"
@@ -94,7 +98,7 @@ aba_info_ok "Credentials stored for user '$REGISTRY_USER'."
 
 # --- Step 5: Stop & remove old registry if exists ---
 if $DOCKER ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
-    echo_yellow "[ABA] Stopping and removing old registry container..."
+    echo_yellow "Stopping and removing old registry container..."
     $DOCKER rm -f "$REGISTRY_NAME" || true
 fi
 
@@ -119,7 +123,7 @@ $DOCKER run -d \
 # --- Step 7: Add CA to system trust ---
 #echo_yellow "Adding CA to system trust (requires sudo)..."
 # No need: only for docker
-###sudo cp "$REGISTRY_CERTS_DIR/ca.crt" /etc/pki/ca-trust/source/anchors/
+###$SUDO cp "$REGISTRY_CERTS_DIR/ca.crt" /etc/pki/ca-trust/source/anchors/
 
 mkdir -p regcreds
 cp "$REGISTRY_CERTS_DIR/ca.crt" regcreds/rootCA.pem
@@ -142,7 +146,7 @@ else
 fi
 
 # Not needed
-####sudo cp "$REGISTRY_CERTS_DIR/ca.crt"  /etc/docker/certs.d/$REGISTRY_URL_SERVICE/ca.crt
+####$SUDO cp "$REGISTRY_CERTS_DIR/ca.crt"  /etc/docker/certs.d/$REGISTRY_URL_SERVICE/ca.crt
 
 # 2. docker login
 if echo "$REGISTRY_PASS" | $DOCKER login "$REGISTRY_URL" --username "$REGISTRY_USER" --password-stdin >/dev/null 2>&1; then
@@ -196,14 +200,18 @@ fi
 #	pass_check "$DOCKER pull/push succeeded"
 #fi
 
+aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
+$SUDO firewall-cmd --state && \
+	$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
+		$SUDO firewall-cmd --reload
 
 # --- Step 9: Completion message ---
-aba_info_ok "[ABA] ✅ Secure Docker Registry deployment complete!"
-aba_info_ok "[ABA] Access: $REGISTRY_URL"
-#aba_info_ok "Login username: $REGISTRY_USER"
-#aba_info_ok "Login password: $REGISTRY_PASS"
-aba_info_ok [ABA] docker login "$REGISTRY_URL" --username "$REGISTRY_USER" --password "$REGISTRY_PASS"
-aba_info_ok [ABA] podman login "$REGISTRY_URL" --username "$REGISTRY_USER" --password "$REGISTRY_PASS"
+aba_info_ok "✅ Secure Docker Registry deployment complete!"
+aba_info_ok "Access: $REGISTRY_URL"
+aba_info_ok "Login username: $REGISTRY_USER"
+aba_info_ok "Login password: $REGISTRY_PASS"
+aba_info_ok docker login "$REGISTRY_URL" --username "$REGISTRY_USER" --password "$REGISTRY_PASS"
+aba_info_ok podman login "$REGISTRY_URL" --username "$REGISTRY_USER" --password "$REGISTRY_PASS"
 
 exit 0
 
