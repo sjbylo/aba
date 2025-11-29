@@ -13,6 +13,7 @@ CLOUD_DIR=/nas/redhat/aba-openshift-install-bundles
 
 mkdir -p ~/tmp
 rpm -q podman || sudo dnf install podman -y
+hash -r # Forget all cached command locations!
 
 # ===========================
 # Color Echo Functions
