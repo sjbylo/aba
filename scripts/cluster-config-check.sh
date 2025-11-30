@@ -12,6 +12,6 @@ ACONF=$MANIFEST_SRC_DIR/agent-config.yaml
 
 # If one of the files is missing, stop!
 if [ ! -s $ICONF -o ! -s $ACONF ]; then
-	aba_abort "Cannot parse cluster configuration. 'install-config.yaml' and/or 'agent-config.yaml' do not exist."
+	aba_abort "Cannot parse cluster configuration. 'install-config.yaml' and/or 'agent-config.yaml' do not exist.  Try 'aba -d mycluster agentconf'"
 fi
 

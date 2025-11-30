@@ -930,7 +930,7 @@ aba_debug "Running aba interactive mode ..."
 ### replace-value-conf aba.conf ask true   # Do not make this permanent!
 source <(normalize-aba-conf)
 export ask=1  # In interactive mode let's use the safe option!
-export ASK_OVERRIDE=1  # This is needed 'cos it overrides $ask, even if $ask is false (re-read from aba.conf omg this needs to be simplified!)
+export ASK_OVERRIDE=  # This is needed 'cos it overrides $ask, even if $ask is false (re-read from aba.conf omg this needs to be simplified!)
 
 #verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_version or channel defined
 
@@ -1146,17 +1146,20 @@ sleep 0.3
 ##############################################################################################################################
 source <(normalize-aba-conf)
 verify-aba-conf || exit 1
+export ask=1 # Must set for interactive mode!
 
 ##############################################################################################################################
 # Determine editor
 
 if [ ! "$editor" ]; then
 	echo
-	echo    "Aba can use an editor to aid in the workflow."
-	echo_yellow -n "Enter your preferred editor or set to 'none' if you prefer to launch the editor yourself! ('vi', 'nano' etc or 'none')? [vi]: "
+	def_editor="${EDITOR:-${VISUAL:-vi}}"
+
+	echo    "Aba uses an editor to aid in the workflow."
+	echo_yellow -n "Enter your preferred editor or set to 'none' if you prefer to do this manually! ('vi', 'emacs', 'nano' etc or 'none')? [$def_editor]: "
 	read new_editor
 
-	[ ! "$new_editor" ] && new_editor=vi  # default
+	[ ! "$new_editor" ] && new_editor=$def_editor  # default
 
 	if [ "$new_editor" != "none" ]; then
 		if ! which $new_editor >/dev/null 2>&1; then
@@ -1166,7 +1169,7 @@ if [ ! "$editor" ]; then
 
 	replace-value-conf -n editor -v "$new_editor" -f aba.conf
 	export editor=$new_editor
-	echo_white "'editor' set to '$new_editor' in aba.conf"
+	#echo_white "'editor' set to '$new_editor' in aba.conf"
 
 	sleep 0.3
 fi
@@ -1217,6 +1220,9 @@ echo       "Fully Disconnected (air-gapped)"
 echo_white "If you plan to install OpenShift in a fully disconnected (air-gapped) environment, Aba can download all required components—including"
 echo_white "the Quay mirror registry install file, container images, and CLI install files—and package them into an install bundle that you can"
 echo_white "transfer into your disconnected environment."
+
+aba_debug ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
+
 if ask "Install OpenShift into a fully disconnected network environment"; then
 	echo
 	echo_yellow "Instructions for a fully disconnected installation"
