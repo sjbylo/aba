@@ -432,7 +432,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Checking cluster operator statu
 ######################
 
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deploying vote-app on cluster" $subdir/aba/test/deploy-test-app.sh $subdir
-test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo'" || true
+test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo || true'"
 test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc new-project demo'"
 
 test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" read -t 30 xy||true
