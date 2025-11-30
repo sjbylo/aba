@@ -38,9 +38,10 @@ aba_debug "Verifying resolution of mirror hostname: $reg_host"
 fqdn_ip=$(dig +short $reg_host | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}') || true
 if [ ! "$fqdn_ip" ]; then
 	aba_abort \
-		"Hostname: $reg_host does not resolve properly. An IP address is expected!" \
+		"Hostname: $reg_host does not resolve to an IP address!" \
 		"Command used: dig $reg_host +short" \
-		"Correct the problem and try again!"
+		"OpenShift requires valid DNS records for both the API and Apps ingress." \
+		"Please add/correct your DNS entries or update $PWD/mirror.conf and try again."
 fi
 
 # Detect any existing mirror registry?
@@ -59,6 +60,7 @@ if [ "$reg_code" = "200" ]; then
 		"To use this registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." \
 		"The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." \
 		"The pull secret file can also be created and verified using 'aba -d mirror password'" \
+		"if you don't recognize: $reg_url, be sure to edit the file: $PWD/mirror.conf!" \
 		"See the README.md for further information." 
 fi
 
@@ -75,19 +77,17 @@ if [ "$reg_code" = "200" ]; then
 		"If this is your existing registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." \
 		"The files must be named 'pull-secret-mirror.json' and 'rootCA.pem' respectively." \
 		"The pull secret file can also be created and verified using 'aba -d mirror password'" \
+		"if you don't recognize: $reg_url, be sure to edit the file: $PWD/mirror.conf!" \
 		"See the README.md for further information."
 fi
 
 [ ! "$data_dir" ] && data_dir=\~
 reg_root=$data_dir/quay-install
 
-#if [ "$reg_root" ]; then
-	# Check if not absolute path
-	if [[ "$reg_root" != /* && "$reg_root" != ~* ]]; then
-		aba_abort \
-			"reg_root value must be an 'absolute path', i.e. starting with a '/' or a '~' char! Fix this in mirror/mirror.conf and try again!" 
-	fi
-#fi
+if [[ "$reg_root" != /* && "$reg_root" != ~* ]]; then
+	aba_abort \
+		"The value: data_dir must be an 'absolute path', i.e. starting with a '/' or a '~' char! Fix this in $PWD/mirror.conf and try again!" 
+fi
 
 mkdir -p ~/.aba
 ssh_conf_file=~/.aba/ssh.conf
