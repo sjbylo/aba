@@ -65,7 +65,7 @@ ACONF=$MANIFEST_SRC_DIR/agent-config.yaml
 if [ ! -s $ICONF -o ! -s $ACONF ]; then
 	aba_abort \
 		"One of the files $ICONF and/or $ACONF does not exist." \
-		"Cannot parse cluster configuration. Are you running this in your 'cluster' directory?"
+		"Cannot parse cluster configuration. Are you running this in your 'cluster' directory? Try 'aba -d mycluster agentconf'"
 fi
 
 ICONF_TMP=$(cat $ICONF | yaml2json)

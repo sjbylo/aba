@@ -229,7 +229,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node cpu to 24 for
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 -s install" 
 
-test-cmd -m "Sleep 30" read -t 30 xy||true
+test-cmd -m "Sleep 30" "read -t 30 xy||true"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 8 1.6 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
@@ -242,7 +242,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Listing VMs (should show 24
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Run day2: configure OperatorHub" "aba --dir $subdir/aba/sno day2" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests'"
-test-cmd -m "Sleep 2m" read -t 120 xy||true
+test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests'"
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
@@ -308,7 +308,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/sno day2"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests'"
-test-cmd -m "Sleep 2m" read -t 120 xy||true
+test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests'"
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
@@ -356,7 +356,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/sno day2"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests'"
-test-cmd -m "Sleep 2m" read -t 120 xy||true
+test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests'"
 
 ## TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete loaded image set archive file" rm -v $subdir/aba/mirror/save/mirror_*.tar
@@ -387,7 +387,7 @@ spec:
     source: quay.io/sjbylo
 END
 
-test-cmd -m "Wait 30s for ImageDigestMirrorSet to process" read -t 30 xy||true
+test-cmd -m "Wait 30s for ImageDigestMirrorSet to process" "read -t 30 xy||true"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc rollout status deployment vote-app -n demo'"
@@ -459,7 +459,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Configuring day2 ops" "aba --dir $subdir/aba/sno day2"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests'"
-test-cmd -m "Sleep 2m" read -t 120 xy||true
+test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests'"
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
@@ -560,7 +560,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operato
 # Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'aba day2' ...
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m "Run 'day2' to integrate operator hub and apply configs" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests'"
-test-cmd -m "Sleep 2m" read -t 120 xy||true
+test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests'"
 
 #### Do upgrade
@@ -583,7 +583,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operato
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 8 5 "cd $subdir/aba/sno; i=0; until oc adm upgrade --to-latest=true --allow-not-recommended; do let i=\$i+1; [ \$i -gt 3 ] && exit 1; sleep 20; done" 
 # Consider using "--allow-upgrade-with-warnings" in the above trigger 
-test-cmd -m "Sleeping 60s" read -t 60 xy||true
+test-cmd -m "Sleeping 60s" "read -t 60 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc adm upgrade --include-not-recommended" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Show desired cluster version" "oc get clusterversion version -o jsonpath='{.status.desired.version}'; echo"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check desired cluster version is $ocp_version_desired" "oc get clusterversion version -o jsonpath='{.status.desired.version}' | grep $ocp_version_desired" # This may detect a non-recommended version
@@ -606,14 +606,14 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking for all nodes 'pow
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Output node status" "aba --dir $subdir/aba/sno ls"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Start cluster gracefully" "aba --dir $subdir/aba/sno startup --wait"
-###test-cmd -m "Wait for cluster to settle" read -t 30 xy||true
+###test-cmd -m "Wait for cluster to settle" "read -t 30 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all nodes to become 'Ready'" "cd $subdir/aba/sno; until oc get nodes| grep Ready|grep -v Not |wc -l| grep ^1$; do sleep 10; echo -n .; done"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster nodes" "aba --dir $subdir/aba/sno run --cmd 'get nodes'"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster auth" "aba --dir $subdir/aba/sno run --cmd 'whoami' | grep system:admin"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster version" "aba --dir $subdir/aba/sno run --cmd 'version'"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster pending pods" "aba --dir $subdir/aba/sno run --cmd 'get po -A | grep -v -e Running -e Complete'"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster COs" "aba --dir $subdir/aba/sno run"
-test-cmd -m "Wait for cluster to settle" read -t 30 xy||true
+test-cmd -m "Wait for cluster to settle" "read -t 30 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all 'cluster operators' to become available?" "aba --dir $subdir/aba/sno run; aba --dir $subdir/aba/sno run | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$"
 # Restart cluster test end 
 
@@ -687,6 +687,7 @@ build_and_test_cluster() {
 
 		aba --dir $subdir/aba/$cluster_name stop --wait
 		aba --dir $subdir/aba/$cluster_name start
+		echo Pausing 60s
 		read -t 60 xy||true
 		aba --dir $subdir/aba/$cluster_name mon
 
@@ -714,19 +715,19 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check node status" "aba --dir $subdir/aba/$cluster_name ls"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Shut cluster down gracefully and wait for powerdown" "yes | aba --dir $subdir/aba/$cluster_name shutdown --wait"
 
-	####test-cmd -m "Wait for cluster to power down" read -t 30 xy||true
+	####test-cmd -m "Wait for cluster to power down" "read -t 30 xy||true"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking for all nodes 'poweredOff'" "until aba --dir $subdir/aba/$cluster_name ls |grep poweredOff |wc -l| grep ^$cnt$; do sleep 10; done"
 
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check node status" "aba --dir $subdir/aba/$cluster_name ls"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Start cluster gracefully" "aba --dir $subdir/aba/$cluster_name startup"
-	####test-cmd -m "Wait for cluster to settle" read -t 30 xy||true
+	####test-cmd -m "Wait for cluster to settle" "read -t 30 xy||true"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking for all nodes 'Ready'" "until aba --dir $subdir/aba/$cluster_name run --cmd 'oc get nodes'| grep Ready|grep -v Not|wc -l| grep ^$cnt$; do sleep 10; done"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster nodes" "aba --dir $subdir/aba/$cluster_name run --cmd 'get nodes'"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster auth" "aba --dir $subdir/aba/$cluster_name run --cmd 'whoami' | grep system:admin"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster version" "aba --dir $subdir/aba/$cluster_name run --cmd 'version'"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster pending pods" "aba --dir $subdir/aba/$cluster_name run --cmd 'get po -A | grep -v -e Running -e Complete'"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Check cluster operators" "aba --dir $subdir/aba/$cluster_name run"
-	test-cmd -m "Wait for cluster to settle" read -t 60 xy||true
+	test-cmd -m "Wait for cluster to settle" "read -t 60 xy||true"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all co available?" "aba --dir $subdir/aba/$cluster_name run; until aba --dir $subdir/aba/$cluster_name run | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 	# Deploy test app
