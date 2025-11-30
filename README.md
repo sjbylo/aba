@@ -36,6 +36,20 @@ Use Aba to quickly set up OpenShift in a disconnected environment while letting 
 - [Feature Backlog and Ideas](#feature-backlog-and-ideas)
 - [Miscellaneous](#miscellaneous)
 - [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
+  - [Q: Does Aba know what RPM packages to install?](#q-does-aba-know-what-rpm-packages-to-install)
+  - [Q: Can bonds and/or vlan be configured on my nodes?](#q-can-bonds-andor-vlan-be-configured-on-my-nodes)
+  - [Q: How can I determine the network interface names of my bare-metal servers?](#q-how-can-i-determine-the-network-interface-names-of-my-bare-metal-servers)
+  - [Q: Can Aba run inside a container?](#q-can-aba-run-inside-a-container)
+  - [Q: Does Aba support ARM?](#q-does-aba-support-arm)
+  - [Q: How much disk space do I need when using Aba?](#q-how-much-disk-space-do-i-need-when-using-aba)
+  - [Q: Can I install Operators from community catalogs?](#q-can-i-install-operators-from-community-catalogs)
+  - [Q: Where are cluster types (SNO, compact, standard) configured?](#q-where-are-cluster-types-sno-compact-standard-configured)
+  - [Q: How to configure passwordless sudo?](#q-how-to-configure-passwordless-sudo)
+  - [Q: Can I use Aba to install user provisioned infrastructure (UPI)?](#q-can-i-use-aba-to-install-user-provisioned-infrastructure-upi)
+  - [Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do)
+  - [Q: Is there a discussion forum?](#q-is-there-a-discussion-forum)
+  - [Q: I accidentally uninstalled my mirror registry, how can I recover?](#q-i-accidentally-uninstalled-my-mirror-registry-how-can-i-recover)
+  - [Q: I see the error `load pubkey "/home/joe/.ssh/quay_installer": Invalid key length` when installing Quay/loading images, what can I do?](#q-i-see-the-error-load-pubkey-homejoesshquay_installer-invalid-key-length-when-installing-quayloading-images-what-can-i-do)
 - [License](#license)
 
 
@@ -1082,7 +1096,7 @@ aba
 
 # Frequently Asked Questions (FAQ)
 
-# Q: Does Aba know what RPM packages to install?
+## Q: Does Aba know what RPM packages to install?
 
 **Yes.** Aba uses predefined package list files depending on whether you're in a connected or air-gapped environment:
 - _Connected workstation_ or laptop: `aba/templates/rpms-external.txt`
@@ -1092,31 +1106,31 @@ You can let Aba install them automatically (if `dnf` is configured) or install t
 
 ---
 
-# Q: Can bonds and/or vlan be configured on my nodes?
+## Q: Can bonds and/or vlan be configured on my nodes?
 
 **Yes.** Configure bonds and/or vlan in the `cluster.conf` file, in your "cluster directory". If you provide more than one comma separated network interface names in the `ports` value, Aba will create a bond.  If you provide a value for the `vlan` tag, Aba will use that and configure vlan.  If you use both aba will configure vlan on bonded interfaces. 
 
 ---
 
-# Q: How can I determine the network interface names of my bare-metal servers?
+## Q: How can I determine the network interface names of my bare-metal servers?
 
 Boot your servers using the Red Hat CoreOS live DVD and check the output of the `ip a` command. 
 
 ---
 
-# Q: Can Aba run inside a container?
+## Q: Can Aba run inside a container?
 
 **Preferably, run Aba in an x86 RHEL 8 or 9 VM.** (VM or physical). Aba has been tested in a container, see the `Advanced` section. However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing _Mirror Registry for Red Hat OpenShift_ (Quay) or managing certain system-level dependencies might not work.
 
 ---
 
-# Q: Does Aba support ARM?
+## Q: Does Aba support ARM?
 
 **Yes.** Aba is developed and validated for x86_64 architecture, but running on ARM is also supported. You can have a RHEL ARM or Centos Stream Instance as the bastion.  See the `Advanced` section.
 
 ---
 
-# Q: How much disk space do I need when using Aba?
+## Q: How much disk space do I need when using Aba?
 
 Running out of disk space is the most likely problem you will encounter when configuring your registry!
 
@@ -1125,13 +1139,13 @@ Running out of disk space is the most likely problem you will encounter when con
 
 ---
 
-# Q: Can I install Operators from community catalogs?
+## Q: Can I install Operators from community catalogs?
 
 **Yes!** Aba currently supports all four of Red Hat’s official catalogs (redhat-operator, certified-operator, redhat-marketplace and community-operator) via `oc-mirror`. 
 
 ---
 
-# Q: Where are cluster types (SNO, compact, standard) configured?
+## Q: Where are cluster types (SNO, compact, standard) configured?
 
 These are set during cluster creation using:
 ```
@@ -1141,7 +1155,7 @@ The following values in cluster.conf define the cluster topology:
 1. num_masters
 2. num_workers
 
-# Q: How to configure passwordless sudo?
+## Q: How to configure passwordless sudo?
 
 Run the following as the user who you want to grant passwordless sudo permission (enter the root password):
 
@@ -1155,11 +1169,11 @@ Or, as root, write the following to a file under /etc.  Replace `username` with 
 echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 ```
 
-# Q: Can I use Aba to install user provisioned infrastructure (UPI)?
+## Q: Can I use Aba to install user provisioned infrastructure (UPI)?
 
 **Partially, yes!** Aba can be used to set up the registry and generate the `install-config.yaml` file which can be used to install OpenShift for UPI.  With some juggling, the day2 operations (OperatorHub, OSUS, Shutdown, Startup and NTP) can be used for UPI too. 
 
-# Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?
+## Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?
 
 **Use Docker Registry instead!** To replace Quay with the Docker Registry, run:
 
@@ -1178,12 +1192,12 @@ aba -d mirror uninstall-docker-registry        # Remove the Docker Registry pod.
 ```
 - Note: Like all tools that Aba uses, the Quay mirror registry is supported by Red Hat but the Docker Registry is not.
 
-# Q: Is there a discussion forum?
+## Q: Is there a discussion forum?
 
 If you have access, join the [Slack Channel](https://red.ht/slack-forum-aba). 
 
 
-# Q: I accidentally uninstalled my mirror registry, how can I recover?
+## Q: I accidentally uninstalled my mirror registry, how can I recover?
 
 You cluster cannot pull images any more since the mirror registry is no longer available. Your cluster may startup ok. but over time pods may start to fail. 
 
@@ -1207,7 +1221,7 @@ Next:
 This SHOULD set up OperatorHub again.
 
 
-# Q: I see the error `load pubkey "/home/joe/.ssh/quay_installer": Invalid key length` when installing Quay/loading images, what can I do?
+## Q: I see the error `load pubkey "/home/joe/.ssh/quay_installer": Invalid key length` when installing Quay/loading images, what can I do?
 
 The key file created by the Quay installer is too weak for your system policy.  
 Delete the key files and re-create them with:
