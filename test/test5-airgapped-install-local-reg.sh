@@ -364,7 +364,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 #### DONE ABOVE NOW !!! test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing $cluster_type cluster, ready to deploy test app" "aba --dir $subdir/aba $cluster_type"
 
 mylog "Deploying test vote-app from: $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app"
-test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo'" 
+test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo || true'" 
 test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc rollout status deployment vote-app -n demo'"
@@ -730,7 +730,7 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all co available?" "aba --dir $subdir/aba/$cluster_name run; until aba --dir $subdir/aba/$cluster_name run | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 	# Deploy test app
-	test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc delete project demo'" || true
+	test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc delete project demo || true'"
 	test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-project demo'" || true
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc rollout status deployment vote-app -n demo'"
