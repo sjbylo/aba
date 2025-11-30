@@ -572,10 +572,12 @@ ask() {
 	aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
 	local ret_default=
 
-	[ "$ASK_OVERRIDE" ] && ret_default="-y" #return 0  # reply "default reply"
-	source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
-	aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
-	[ ! "$ret_default" ] && [ ! "$ask" ] && ret_default="aba.conf:ask=false" #return 0  # reply "default reply"
+	if [ ! "$ASK_ALWAYS" ]; then  # FIXME: Simplify all this!
+		[ "$ASK_OVERRIDE" ] && ret_default="-y" #return 0  # reply "default reply"
+		source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
+		aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
+		[ ! "$ret_default" ] && [ ! "$ask" ] && ret_default="aba.conf:ask=false" #return 0  # reply "default reply"
+	fi
 
 	# Default reply is 'yes' (or 'no') and return 0
 	yn_opts="(Y/n)"
