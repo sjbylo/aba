@@ -1010,6 +1010,14 @@ fi
 
 [ "$ocp_channel" = "eus" ] && ocp_channel=stable  # btw .../ocp/eus/release.txt does not exist!
 
+# FIXME: download in background needed?
+#( 
+#	fetch_latest_version stable &
+#	fetch_previous_version stable &
+#	fetch_latest_version fast &
+#	fetch_previous_version fast &
+#) >/dev/null 2>&1 & 
+
 if [ "$ocp_channel" ]; then
 	#echo_white "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
 	echo_white "OpenShift update channel is set to '$ocp_channel' in aba.conf."
@@ -1054,11 +1062,10 @@ else
 
 	replace-value-conf -q -n ocp_channel -v $ocp_channel -f aba.conf
 	echo_white "'ocp_channel' set to '$ocp_channel' in aba.conf"
-
-	#### chan=$ocp_channel # Used below
 fi
 
-sleep 0.3
+#sleep 0.3
+
 
 ##############################################################################################################################
 # Determine OCP version 
@@ -1132,10 +1139,10 @@ else
 	replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
 	echo_white "'ocp_version' set to '$target_ver' in aba.conf"
 
-	sleep 0.3
+	#sleep 0.3
 fi
 
-sleep 0.3
+#sleep 0.3
 
 # Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
 # FIXME: Any better way to do this?! .. or just keep this check in 'aba -d mirror sync' and 'aba -d mirror save' (i.e. before we d/l the images
@@ -1170,9 +1177,8 @@ if [ ! "$editor" ]; then
 
 	replace-value-conf -n editor -v "$new_editor" -f aba.conf
 	export editor=$new_editor
-	#echo_white "'editor' set to '$new_editor' in aba.conf"
 
-	sleep 0.3
+	#sleep 0.3
 fi
 
 ##############################################################################################################################
@@ -1182,6 +1188,9 @@ if [ ! -f .aba.conf.seen ]; then
 	if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, pull secret, default base domain & net address, dns & ntp etc (if known)"; then
 		# If edited/seen, no need to ask again.
 		touch .aba.conf.seen
+	else
+		touch .aba.conf.seen
+		exit 0
 	fi
 fi
 
@@ -1198,7 +1207,7 @@ if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 	if jq empty $pull_secret_file; then
 		echo_white "Pull secret found at '$pull_secret_file'."
 
-		sleep 0.3
+		#sleep 0.3
 	else
 		aba_abort "Error: Pull secret file sytax error: $pull_secret_file!" 
 	fi
@@ -1255,15 +1264,15 @@ if ask "Install OpenShift from a mirror registry that is synchonized directly fr
 	echo_white "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 	echo
 	echo_white "Run:"
-	echo_white "  aba -d mirror install              # to configure an existing registry or install Quay."
-	echo_white "  aba -d mirror sync --retry <count> # to synchronize all container images - from the Internet - into your registry."
+	echo_white "  aba -d mirror install                # to configure an existing registry or install Quay."
+	echo_white "  aba -d mirror sync --retry <count>   # to synchronize all container images - from the Internet - into your registry."
 	echo
 	echo_white "Or run:"
-	echo_white "  aba -d mirror sync --retry <count> # to complete both actions and ensure any image synchronization issues are retried."
+	echo_white "  aba -d mirror sync --retry <count>   # to complete both actions and ensure any image synchronization issues are retried."
 	echo
-	echo_white "  aba mirror --help                  # See for help."
+	echo_white "  aba mirror --help                    # See for help."
 
-	echo_white "Once the images are stored in the mirror registry, you can proceed with the OpenShift installation by following the instructions provided."
+	echo_white "After the images are stored in your mirror registry, proceed with the OpenShift installation."
 	echo
 
 	exit 0

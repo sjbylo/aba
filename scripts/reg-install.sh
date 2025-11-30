@@ -109,7 +109,7 @@ if [ "$reg_ssh_key" ]; then
 	aba_debug "Starting to install Quay to remote host"
 
 	# First, ensure the reg host points to a remote host and not this localhost
-	aba_info "You have configured the Quay mirror to be installed on a remote host (since 'reg_ssh_key' *is defined* in 'mirror/mirror.conf')."
+	aba_info "The Quay mirror registry is configured to be installed on a *remote* host (since 'reg_ssh_key' *is defined* in 'mirror/mirror.conf')."
 	aba_info "Verifying FQDN '$reg_host' points to a remote host ..."
 
 	# try to create a random file on the host and check the file does not exist on this localhost 
@@ -124,6 +124,13 @@ if [ "$reg_ssh_key" ]; then
 	if [ -f $flag_file ]; then
 		rm -f $flag_file
 
+		# FIXME: The following would be to continue with local host installation...
+		# CONT # echo_red "The mirror registry is configured to be installed on a *remote* host." 
+		# CONT # echo_red "But $reg_host ($fqdn_ip) reaches this localhost ($(hostname -s)) instead!" 
+		# CONT # echo_red "Quay will be installed on this localhost unless you properly set reg_ssh_key in aba/mirror/mirror.conf" 
+		# CONT # echo_red "IGNORING value reg_ssh_key for now so Quay will be installed on localhost!"
+		# CONT # reg_ssh_key=
+
 		aba_abort \
 			"The mirror registry is configured to be installed on a *remote* host." \
 			"But $reg_host ($fqdn_ip) reaches this localhost ($(hostname -s)) instead!" \
@@ -133,7 +140,9 @@ if [ "$reg_ssh_key" ]; then
 			"resolve to an IP that can be used to reach the *remote* host via ssh." \
 			"Correct the problem, either in 'aba/mirror/mirror.conf' or in the DNS, and try again." 
 	fi
+# CONT # fi
 
+# CONT # if [ "$reg_ssh_key" ]; then
 	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host rm -f $flag_file
 
 	aba_info "Ssh access to remote host ($reg_ssh_user@$reg_host using key $reg_ssh_key) is working ..."
@@ -232,7 +241,7 @@ else
 	# First, ensure the reg host points to this localhost and not a remote host
 	# Sanity check to see if the correct host was defined
 	# Resolve FQDN
-	aba_info "You have configured the Quay mirror to be installed on this localhost (since 'reg_ssh_key' *is not defined* in 'aba/mirror/mirror.conf')."
+	aba_info "The Quay mirror is configured to be installed on *localhost* (since 'reg_ssh_key' *is not defined* in 'aba/mirror/mirror.conf')."
 	aba_info "Verifying FQDN '$reg_host' (IP: $fqdn_ip) allows access to this localhost ..."
 
 	# Get local IP addresses

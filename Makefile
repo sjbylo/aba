@@ -117,5 +117,6 @@ reset: # Clean up *everything*.  Only use if you know what you are doing! Note t
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
 	make -sC cli reset
 	make -sC mirror reset 
+	rm -rf ~/.aba/cache ~/.aba/tmp
 	rm -f aba.conf ~/.aba.conf*
 

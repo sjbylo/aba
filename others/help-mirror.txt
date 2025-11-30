@@ -12,18 +12,18 @@ Options:
   -u, --reg-user string                # The username used to access the registry (default is 'init').
       --data-dir </path/to/dir>        # Install Quay images/cache to this dir instead of ~/quay-install.
       --reg-path <string>              # The path to store images inside the mirror registry.
+  -r, --retry [<count>]                # Retry <count> times on oc-mirror error.
 
 Related commands:
-  aba [-d mirror] sync                 # Copy images from the Internet into the mirror registry (mirror2mirror).
-    -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
+  aba [-d mirror] sync [--retry #]     # Copy images from the Internet into the mirror registry (mirror2mirror).
 
-  aba [-d mirror] save                 # Copy images from the Internet to disk (mirror2disk).
-    -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
+  aba [-d mirror] save [--retry #]     # Copy images from the Internet to disk (mirror2disk).
 
-  aba [-d mirror] load                 # Copy images from disk to the mirror registry (disk2mirror).
-    -r, --retry [<count>]              # Retry <count> times on oc-mirror error.
+  aba [-d mirror] load [--retry #]     # Copy images from disk to the mirror registry (disk2mirror).
 
   aba [-d mirror] verify               # Verify mirror registry connection credentials are working.
+
+  aba [-d mirror] password             # Optional: Create pull secret file for existing mirror registry, if needed.
 
 Examples of fully disconnected mode (air-gapped):
 
