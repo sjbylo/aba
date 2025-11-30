@@ -609,7 +609,7 @@ edit_file() {
 	if [ "$ask" ]; then
 		if [ ! "$editor" -o "$editor" == "none" ]; then
 			echo
-			echo_yellow "The file '$PWD/$conf_file' has been created. Please edit/verify it & continue/try again."
+			echo_yellow "The file '$PWD/$conf_file' has been created (editor=none in aba.conf). Please edit it & repeat the same command."
 
 			return 1
 		else
