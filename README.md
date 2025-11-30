@@ -7,7 +7,7 @@ Because Aba is based on the [Agent-based installer](https://www.redhat.com/en/bl
 
 >> **Download curated, ready-made, up-to-date, and tested Aba install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy (requires Google account)**
 
-# Who should use Aba? <!-- omit in toc -->
+# Who should use Aba?<!-- omit in toc -->
 
 Use Aba to quickly set up OpenShift in a disconnected environment while letting it handle the heavy lifting for you.
 
@@ -1122,6 +1122,8 @@ Boot your servers using the Red Hat CoreOS live DVD and check the output of the 
 
 **Preferably, run Aba in an x86 RHEL 8 or 9 VM.** (VM or physical). Aba has been tested in a container, see the `Advanced` section. However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing _Mirror Registry for Red Hat OpenShift_ (Quay) or managing certain system-level dependencies might not work.
 
+[Back to top](#who-should-use-aba)
+
 ---
 
 ## Q: Does Aba support ARM?
@@ -1142,6 +1144,8 @@ Running out of disk space is the most likely problem you will encounter when con
 ## Q: Can I install Operators from community catalogs?
 
 **Yes!** Aba currently supports all four of Red Hat’s official catalogs (redhat-operator, certified-operator, redhat-marketplace and community-operator) via `oc-mirror`. 
+
+[Back to top](#who-should-use-aba)
 
 ---
 
@@ -1191,6 +1195,8 @@ To uninstall the Docker Registry, run:
 aba -d mirror uninstall-docker-registry        # Remove the Docker Registry pod.
 ```
 - Note: Like all tools that Aba uses, the Quay mirror registry is supported by Red Hat but the Docker Registry is not.
+
+[Back to top](#who-should-use-aba)
 
 ## Q: Is there a discussion forum?
 
