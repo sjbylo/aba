@@ -587,7 +587,8 @@ ask() {
 	timer=
 	[ ! "$ret_default" ] && [ "$1" == "-t" ] && timer="-t $2" && shift 2
 
-	echo_yellow -n "[ABA] $@? $yn_opts: "
+	echo
+ 	echo_yellow -n "[ABA] $@? $yn_opts: "
 	[ "$ret_default" ] && echo_white "<default answer provided due to '$ret_default'>" && return 0
 	read $timer yn
 
