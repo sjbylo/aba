@@ -198,10 +198,11 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host 
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Activating shortcuts.conf on remote host" "cd $subdir/aba; cp -f .shortcuts.conf shortcuts.conf"
 
 # FIXME: Is this needed since we use "full tar" copy above?
-[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+###test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 # This user's action is expected to fail since there are no login credentials for the "existing reg."
-test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
+#test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
+! test-cmd -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
 
 # But, now regcreds/ is created...
 mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $TEST_USER@$int_bastion_hostname"
@@ -362,17 +363,18 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster with 'aba -
 
 mylog Adding vote-app image to imageset conf file on `hostname`
 
-[ "$oc_mirror_version" = "v1" ] && gvk=v1alpha2 || gvk=v2alpha1
+#[ "$oc_mirror_version" = "v1" ] && gvk=v1alpha2 || gvk=v2alpha1
+gvk=v2alpha1
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y%m%d_%H%M%S")
-if [ "$oc_mirror_version" = "v2" ]; then
+#if [ "$oc_mirror_version" = "v2" ]; then
 tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/$gvk
 mirror:
 END
-fi
+#fi
 # For oc-miror v2
 
 # Note that if multiple 'additionalImages:' lines are added, it seems to cause oc-mirror v1 to delete images unexpectedly
@@ -380,6 +382,8 @@ tee -a mirror/save/imageset-config-save.yaml <<END
   additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
+
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 test-cmd -r 15 1 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save  --retry"
 
@@ -404,7 +408,10 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load --retry"
 
@@ -454,13 +461,13 @@ mylog Appending redhat-operator-index:v$ocp_ver_major header into mirror/save/im
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y%m%d_%H%M%S")
-if [ "$oc_mirror_version" = "v2" ]; then
-tee mirror/save/imageset-config-save.yaml <<END
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/$gvk
-mirror:
-END
-fi
+#if [ "$oc_mirror_version" = "v2" ]; then
+#tee mirror/save/imageset-config-save.yaml <<END
+#kind: ImageSetConfiguration
+#apiVersion: mirror.openshift.io/$gvk
+#mirror:
+#END
+#fi
 # For oc-miror v2
 
 tee -a mirror/save/imageset-config-save.yaml <<END
@@ -469,11 +476,15 @@ tee -a mirror/save/imageset-config-save.yaml <<END
     packages:
 END
 
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+
 # Append the correct values for each operator
 test-cmd -m "Adding advanced-cluster-management  operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: advanced-cluster-management$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
 
 test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
 ### WORKING BUT 60+ GB OF DATA !!! ### test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep     -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"   # Fetch all ??
+
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 
 test-cmd -r 15 1 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save  --retry"
@@ -486,7 +497,8 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$s
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load --retry"
 
