@@ -111,19 +111,21 @@ test-cmd() {
 				echo "Running command: \"$cmd\" on host $host"
 				# Added ". ~/.bash_profile" for RHEL8!
 				#ssh -o LogLevel=ERROR $host -- "export TERM=xterm;. \$HOME/.bash_profile;$cmd" &    # For testing, TERM sometimes needs to be set to anything
-				ssh -t -o LogLevel=ERROR $host -- ". \$HOME/.bash_profile;$cmd" &    # For testing, force tty with -t
+				# REMOVE BG JOB # #ssh -t -o LogLevel=ERROR $host -- ". \$HOME/.bash_profile;$cmd" &    # For testing, force tty with -t
+				ssh -t -o LogLevel=ERROR $host -- ". \$HOME/.bash_profile;$cmd"    # For testing, force tty with -t
 			else
 				echo "Running command: \"$cmd\" from localhost:$PWD"
-				eval "$cmd" &
+				# REMOVE BG JOB # #eval "$cmd" &
+				eval "$cmd"
 			fi
-			sub_pid=$!  # Capture the PID of the subprocess
-			psc=$(ps -p $sub_pid -o cmd=)
+			# REMOVE BG JOB # sub_pid=$!  # Capture the PID of the subprocess
+			# REMOVE BG JOB # psc=$(ps -p $sub_pid -o cmd=)
 			#draw-line .
-			echo
+			# REMOVE BG JOB # echo
 			#echo "> waiting for: $sub_pid '$psc'"
-			wait "$sub_pid"
+			# REMOVE BG JOB # wait "$sub_pid"
 			ret=$?
-			sub_pid=
+			# REMOVE BG JOB # sub_pid=
 
 			[ $ret -eq 130 ] && break  # on Ctrl-C *during command execution*
 
@@ -169,10 +171,10 @@ test-cmd() {
 		# FIXME: Added above now (as we want to return the actual error)
 		#[ "$ignore_result" ] && echo "Ignoring result [$ret] and returning 0" && return 0  # We want to return 0 to ignore any errors (-i)
 
-		sub_pid=  #FIXME
-		if [[ $ret -eq 130 ]]; then
-			sub_pid=
-		fi
+		# REMOVE BG JOB # sub_pid=  #FIXME
+		# REMOVE BG JOB # if [[ $ret -eq 130 ]]; then
+		# REMOVE BG JOB # 	sub_pid=
+		# REMOVE BG JOB # fi
 			
 		( echo -e "test.log:\n"; tail -8 test/test.log; echo -e "\noutput.log:\n"; tail -20 test/output.log ) | notify.sh "Aborting cmd: $cmd" || true
 
