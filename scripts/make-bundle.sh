@@ -128,14 +128,14 @@ else
 	if files_on_same_device mirror $bundle_dest_file; then
 		# FIXME: Do rough calculation of available vs required disk space ... and check ...
 		aba_warning \
-			"Make sure you have enough free disk space in $PWD." \
+			"Make sure you have enough free disk space under: $PWD" \
 			"The image-set archive created by oc-mirror will first be written to" \
 			"aba/mirror/save/mirror_000001.tar, and then a full copy of the repository will be written" \
 			"to the file you specified: $bundle_dest_file" \
 			"Because both files reside on the same filesystem, you may temporarily" \
 			"need roughly double (or more with the cache) the required space. " \
 			"Please ensure sufficient disk space is available." \
-			"IMPORTANT" \
+			"IMPORTANT:" \
 			"If disk space is limited, consider using the '--split' flag. This option" \
 			"excludes the large image-set archive files from the final install bundle." \
 			"It is useful in restricted environments where you cannot store or move" \

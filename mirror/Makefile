@@ -123,10 +123,11 @@ mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry bin
 .PHONY: download-registries
 download-registries: mirror-registry-amd64.tar.gz docker-reg-image.tgz
 
-mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball
+mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball (note: no arm64 version available as of Dec 25)
 	echo "Downloading https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz ..."
 	curl $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
 	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
+	tar tzf mirror-registry-amd64.tar.gz >/dev/null && echo "File valid"
 
 # Store the docker registry image so it can be used in air-gapped env.
 REG_IMAGE = docker.io/library/registry:latest
