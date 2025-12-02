@@ -266,7 +266,7 @@ mylog Runtest: vote-app
 [ "$oc_mirror_version" = "v1" ] && gvk=v1alpha2 || gvk=v2alpha1
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
-if [ "$oc_mirror_version" = "v2" ]; then
+# CHANGE ACCUMULATE # if [ "$oc_mirror_version" = "v2" ]; then
 # Create fresh file for v2
 tee mirror/save/imageset-config-save.yaml <<END
 kind: ImageSetConfiguration
@@ -274,9 +274,9 @@ apiVersion: mirror.openshift.io/$gvk
 mirror:
   additionalImages:
 END
-else
-	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
-fi
+# CHANGE ACCUMULATE # else
+# CHANGE ACCUMULATE # 	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
+# CHANGE ACCUMULATE # fi
 # For oc-miror v2
 
 mylog Add ubi9 image to imageset conf file 
@@ -315,17 +315,17 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
-if [ "$oc_mirror_version" = "v2" ]; then
+# CHANGE ACCUMULATE # if [ "$oc_mirror_version" = "v2" ]; then
 # Create fresh file for v2
-tee mirror/save/imageset-config-save.yaml <<END
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/$gvk
-mirror:
-  additionalImages:
-END
+# CHANGE ACCUMULATE # tee mirror/save/imageset-config-save.yaml <<END
+# CHANGE ACCUMULATE # kind: ImageSetConfiguration
+# CHANGE ACCUMULATE # apiVersion: mirror.openshift.io/$gvk
+# CHANGE ACCUMULATE # mirror:
+# CHANGE ACCUMULATE #   additionalImages:
+# CHANGE ACCUMULATE # END
 #else
 #	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
-fi
+# CHANGE ACCUMULATE # fi
 # For oc-miror v2
 
 mylog Add vote-app image to imageset conf file 
@@ -411,16 +411,16 @@ mylog "Append svc mesh (note: kiali op. installed already) operators to imageset
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
-if [ "$oc_mirror_version" = "v2" ]; then
-tee mirror/save/imageset-config-save.yaml <<END
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/$gvk
-mirror:
-  additionalImages:
-END
+# CHANGE ACCUMULATE # if [ "$oc_mirror_version" = "v2" ]; then
+# CHANGE ACCUMULATE # tee mirror/save/imageset-config-save.yaml <<END
+# CHANGE ACCUMULATE # kind: ImageSetConfiguration
+# CHANGE ACCUMULATE # apiVersion: mirror.openshift.io/$gvk
+# CHANGE ACCUMULATE # mirror:
+# CHANGE ACCUMULATE #   additionalImages:
+# CHANGE ACCUMULATE # END
 #else
 #	echo "  additionalImages:" | tee -a mirror/save/imageset-config-save.yaml
-fi
+# CHANGE ACCUMULATE # fi
 # For oc-miror v2
 
 # FIXME: Get values from the correct file!
@@ -492,7 +492,7 @@ done
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
 
-if [ "$oc_mirror_version" = "v2" ]; then
+# CHANGE ACCUMULATE # if [ "$oc_mirror_version" = "v2" ]; then
 	# Create fresh file for v2
 	# head -13, the header including the "shortestPath" and "graph: true" lines
 	#test-cmd -m "Restore the image set config file for the cluster release images" "head -13 mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml"
@@ -507,7 +507,7 @@ tee -a mirror/save/imageset-config-save.yaml <<END
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
     packages:
 END
-fi
+# CHANGE ACCUMULATE # fi
 # For oc-miror v2
 
 ## upgrade tests
