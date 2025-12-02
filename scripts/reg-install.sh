@@ -116,8 +116,9 @@ if [ "$reg_ssh_key" ]; then
 	if ! ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host touch $flag_file; then
 		aba_abort \
 			"Can't ssh to '$reg_ssh_user@$reg_host' using key '$reg_ssh_key'" \
-			"Configure password-less ssh to the remote host '$reg_ssh_user@$reg_host' and try again." \
-			"Test with command: ssh -i $reg_ssh_key $reg_ssh_user@$reg_host" 
+			"Tested with command: ssh -i $reg_ssh_key $reg_ssh_user@$reg_host" \
+			"Ensure password-less ssh to the remote host '$reg_ssh_user@$reg_host' is working and try again." \
+			"Or, you might need to set 'reg_ssh_user' in mirror.conf?" 
 	fi
 
 	# If the flag file exists on localhost, then the FQDN points to this host (mirror.conf wrong!) 

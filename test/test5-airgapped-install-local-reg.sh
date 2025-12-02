@@ -375,17 +375,29 @@ test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" 
 
 mylog "Applying ImageDigestMirrorSet for quay.io/sjbylo at $TEST_USER@$int_bastion_hostname"
 # This is also needed
-ssh $TEST_USER@$int_bastion_hostname "aba --dir subdir/aba/sno run --cmd 'oc apply -f -'" <<END
+test-cmd -m "Applying ImageDigestMirrorSet" -h $TEST_USER@$int_bastion_hostname "aba --dir subdir/aba/sno run --cmd 'oc apply -f -'" <<END
 apiVersion: config.openshift.io/v1
 kind: ImageDigestMirrorSet
 metadata:
-  name: idms-generic-0-vote-app
+  name: idms-vote-app
 spec:
   imageDigestMirrors:
   - mirrors:
     - registry.example.com:8443/ocp4/openshift4/sjbylo
     source: quay.io/sjbylo
 END
+
+#ssh $TEST_USER@$int_bastion_hostname "aba --dir subdir/aba/sno run --cmd 'oc apply -f -'" <<END
+#apiVersion: config.openshift.io/v1
+#kind: ImageDigestMirrorSet
+#metadata:
+#  name: idms-generic-0-vote-app
+#spec:
+#  imageDigestMirrors:
+#  - mirrors:
+#    - registry.example.com:8443/ocp4/openshift4/sjbylo
+#    source: quay.io/sjbylo
+#END
 
 test-cmd -m "Wait 30s for ImageDigestMirrorSet to process" "read -t 30 xy||true"
 
@@ -539,7 +551,8 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set conf file e
 
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/save/mirror_*.tar
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Win back disk space for the next test command" "cd $subdir/aba/mirror; rm -rf \$HOME.cache/agent/ image-archive.tar quay.tar" 
+#test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Win back disk space for the next test command" "cd $subdir/aba/mirror; rm -rf \$HOME.cache/agent/ image-archive.tar quay.tar" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Win back disk space for the next test command" "rm -rf ~/.oc-mirror/.cache"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 3 -m  "Loading cincinnati operator images to mirror" "cd $subdir/aba/mirror; aba load --retry" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 9 -m  "Deleting remote image set archive file to save space" "cd $subdir/aba/mirror; rm -v save/mirror_000001.tar" 
