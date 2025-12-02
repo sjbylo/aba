@@ -190,7 +190,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdi
 test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and extract to '$reg_ssh_user@$int_bastion_hostname:$subdir'" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks vault-secrets-operator flux --base-domain example.com --machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp $ntp_ip  ntp.example.com --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
 # Back up the image set conf file so we can upgrade the cluster later
-[ "$oc_mirror_version" = "v2" ] && test-cmd -m "Back up the image set conf file so we can use it to upgrade the cluster later" cp mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.release.images
+test-cmd -m "Back up the image set conf file so we can use it to upgrade the cluster later" cp mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.release.images
 
 # Smoke tests!
 test-cmd -m  "Verifying existance of file 'mirror/save/mirror_*.tar'" "ls -lh mirror/save/mirror_*.tar" 
@@ -246,7 +246,7 @@ test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests'"
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
-test-cmd sleep 10
+test-cmd -m "Pause, so the operator will show up" sleep 60
 for op in web-terminal yaks vault-secrets-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests' | grep -i $op"
@@ -283,6 +283,8 @@ mylog Add ubi9 image to imageset conf file
 tee -a mirror/save/imageset-config-save.yaml <<END
   - name: registry.redhat.io/ubi9/ubi:latest
 END
+
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 test-cmd -r 3 1 -m "Saving ubi images to local disk on `hostname`" "aba --dir mirror save --retry"
 
@@ -332,6 +334,8 @@ mylog Add vote-app image to imageset conf file
 tee -a mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
+
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 test-cmd -r 3 3 -m "Saving vote-app image to local disk" "aba --dir mirror save --retry" 
 
@@ -436,6 +440,8 @@ tee -a mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/kiali/demo_travels_travels:v1
 END
 
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+
 test-cmd -m "Checking for file mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml" "test -s mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml"
 test-cmd -m "Checking for servicemeshoperator3 in mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | grep -A2 servicemeshoperator3$"
 
@@ -446,9 +452,13 @@ tee -a mirror/save/imageset-config-save.yaml <<END
     packages:
 END
 
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+
 # Append the correct values for each operator
 mylog Append sm and kiali operators to imageset conf
 grep -A2 -e "name: servicemeshoperator3$"  mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 ########
 test-cmd -r 3 3 -m "Saving mesh operators to local disk" "aba --dir mirror save --retry"
@@ -475,7 +485,7 @@ test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests'"
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
-test-cmd sleep 10
+test-cmd -m "Pause, so the operator will show up" sleep 60
 for op in servicemeshoperator3 #web-terminal yaks vault-secrets-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests' | grep -i $op"
@@ -483,7 +493,7 @@ done
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
 #for op in web-terminal yaks vault-secrets-operator flux
-test-cmd sleep 10
+test-cmd -m "Pause, so the operator will show up" sleep 60
 for op in              yaks vault-secrets-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests' | grep -i $op"
@@ -498,6 +508,9 @@ done
 	#test-cmd -m "Restore the image set config file for the cluster release images" "head -13 mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml"
 	# Safer to use sed: output the lines between A,B
 	test-cmd -m "Restore the image set config file for the cluster release images" "sed -n '/File generated by aba/,/graph: true/p' mirror/save/imageset-config-save.yaml.release.images > mirror/save/imageset-config-save.yaml"
+
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+
 #tee -a mirror/save/imageset-config-save.yaml <<END
 #kind: ImageSetConfiguration
 #apiVersion: mirror.openshift.io/$gvk
@@ -510,9 +523,13 @@ END
 # CHANGE ACCUMULATE # fi
 # For oc-miror v2
 
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+
 ## upgrade tests
 mylog Appending cincinnati operator to imageset conf
 grep -A2 -e "name: cincinnati-operator$"	mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml
+
+test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 ####### upgrade cluster?  Change channel from stable (as set above) to "fast"
 
