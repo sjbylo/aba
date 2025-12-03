@@ -113,7 +113,7 @@ make -C cli download	# Downlaod required CLIs install files.
 if [ "$split_bundle" ]; then
 	# User wants to create a *split* bundle...
 
-	echo_magenta "[ABA] A *split* install bundle will be created (the bundle will not contain the image-set archive file)."
+	echo_magenta "[ABA] A *split* install bundle will be created (the image-set archive file will be kept separate from the install bundle)."
 	#echo_magenta "[ABA] This is because the bundle file and the image-set archive are on the same filesystem."
 	#echo_magenta "[ABA] TO GENERATE A *FULL* INSTALL BUNDLE, WRITE IT DIRECTLY TO EXTERNAL MEDIA OR TO A SEPARATE FILESYSTEM."
 
