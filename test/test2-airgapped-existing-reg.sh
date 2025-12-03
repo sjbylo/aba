@@ -382,7 +382,7 @@ tee -a mirror/save/imageset-config-save.yaml <<END
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+^test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 test-cmd -r 15 1 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save  --retry"
 
@@ -410,7 +410,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror regi
 #[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
-test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+^test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load --retry"
 
@@ -475,7 +475,7 @@ tee -a mirror/save/imageset-config-save.yaml <<END
     packages:
 END
 
-test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+^test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 # Append the correct values for each operator
 test-cmd -m "Adding advanced-cluster-management  operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: advanced-cluster-management$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
@@ -483,7 +483,7 @@ test-cmd -m "Adding advanced-cluster-management  operator to mirror/save/imagese
 test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
 ### WORKING BUT 60+ GB OF DATA !!! ### test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep     -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"   # Fetch all ??
 
-test-cmf -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+^test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
 
 test-cmd -r 15 1 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save  --retry"
