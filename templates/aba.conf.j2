@@ -6,17 +6,18 @@ ocp_version=		# Target OpenShift version. See https://console.redhat.com/openshi
 platform=bm			# Deployment platform: 'vmw' (vCenter/ESXi) or 'bm' (bare-metal, skips VM creation). 
 pull_secret_file=~/.pull-secret.json	# File path for your Red Hat pull secret, used for image downloads only.
 					# Get it from: https://console.redhat.com/openshift/downloads -> Tokens -> Pull-secret.
-editor=			# Text editor to use (e.g. nano, vi). Set to 'none' for manual config editing.
+editor=			# Text editor to use, such as: nano, vi, emacs. Set to 'none' for manual config editing.
 ask=true			# Ask for confirmation before major actions (install, delete, etc.).
 
 # Set the following values only if they are known.
 
-op_sets=			# Optional: Comma-separated operator sets (e.g. op_sets=odf,ocpv,acm,mesh3).
+op_sets=			# Optional: Comma-separated operator sets, such as: op_sets=odf,ocpv,acm,mesh3).
 				# Operator sets are defined under 'templates/operator-set-*'. Add or edit as needed.
 				# Valid values: ocp,acm,ocpv,odf,appdev,mesh2,mesh3,odfdr,quay,sec,ai
 				# 'all' includes every operator in redhat-operator-index (ensure sufficient disk space!).
 
-ops=				# Optional: Comma-separated individual operators (e.g. ops=web-terminal,devworkspace-operator).
+ops=				# Optional: Comma-separated individual operator names such as: ops=web-terminal,devworkspace-operator
+				# If needed, fetch operator names from the files: mirror/imageset-config-*.yaml, generate by: aba catalog
 
 # Set the following important values for your disconnected network, if known
 # When a cluster is created, these values will be included - and can be overridden - in the cluster’s cluster.conf file.
