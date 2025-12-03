@@ -116,15 +116,16 @@ test-cmd() {
 			else
 				echo "Running command: \"$cmd\" from localhost:$PWD"
 				# REMOVE BG JOB # #eval "$cmd" &
-				eval "$cmd"
+				( eval "$cmd" )   # Put into sub-shell to avoind any 'contaminiation' here
 			fi
+			ret=$?
 			# REMOVE BG JOB # sub_pid=$!  # Capture the PID of the subprocess
 			# REMOVE BG JOB # psc=$(ps -p $sub_pid -o cmd=)
 			#draw-line .
 			# REMOVE BG JOB # echo
 			#echo "> waiting for: $sub_pid '$psc'"
 			# REMOVE BG JOB # wait "$sub_pid"
-			ret=$?
+			#ret=$?
 			# REMOVE BG JOB # sub_pid=
 
 			[ $ret -eq 130 ] && break  # on Ctrl-C *during command execution*
