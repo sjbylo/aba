@@ -39,23 +39,23 @@ draw-line() {
 }
 
 # Define a cleanup function to handle Ctrl-C
-cleanup_tests() {
-	if [[ -n "$sub_pid" ]]; then
-		echo -n "Process is: "
-		ps -p $sub_pid -o cmd=
-		echo "Interrupt received. Terminating pid "$sub_pid" ..."
-		kill "$sub_pid" #2>/dev/null
-		wait "$sub_pid" #2>/dev/null
-		echo "Test command terminated."
-	else
-		echo Stopping $0
-		echo
-		exit 1
-	fi
-}
+#cleanup_tests() {
+#	if [[ -n "$sub_pid" ]]; then
+#		echo -n "Process is: "
+#		ps -p $sub_pid -o cmd=
+#		echo "Interrupt received. Terminating pid "$sub_pid" ..."
+#		kill "$sub_pid" #2>/dev/null
+#		wait "$sub_pid" #2>/dev/null
+#		echo "Test command terminated."
+#	else
+#		echo Stopping $0
+#		echo
+#		exit 1
+#	fi
+#}
 
 # Trap Ctrl-C (SIGINT) and call cleanup_tests function
-trap cleanup_tests SIGINT
+#trap cleanup_tests SIGINT
 
 # -h remote <host or ip> to run the test on (optional)
 # -r <count> <backoff>  (optional)
@@ -241,27 +241,13 @@ init_bastion() {
 
 	mylog "Revert internal bastion vm ($int_bastion_vm_name) to snapshot and powering on ..."
 
-	##### DO NOT DO THIS!! TOO MANY CHANGES TO RUN MULTIPLE TESTS 
-	#test_vm=bastion-aba-$(hostname)
-	#source_bastion_vm=rhel9-aba-source
-	#snapshot_name=aba-test
-	#mac=$(cat mac_address.txt)
-	# govc vm.destroy $test_vm || true
-	# govc snapshot.revert -vm $source_bastion_vm_name $snapshot_name
-	# govc vm.clone -vm $source_bastion_vm_name -on=false "$test_vm"
-	# govc vm.network.change -vm "$test_vm" -net.adapter "vmxnet3" -net.address "00:50:56:12:99:99" ethernet-0
-	##### DO NOT DO THIS!! TOO MANY CHANGES TO RUN MULTIPLE TESTS 
-
-
-	aba --dir cli ~/bin/govc
+	test-cmd -m "Install govc" aba --dir cli ~/bin/govc
 
 	govc vm.power -off bastion-internal-rhel8  || true
 	govc vm.power -off bastion-internal-rhel9  || true
 	govc vm.power -off bastion-internal-rhel10 || true
-	echo "Reverting VM: $int_bastion_vm_name to snapshot: aba-test ..."   # Do we need to revert all to ensure all disk space is recovered??
-	#govc snapshot.revert -vm bastion-internal-rhel8  aba-test || exit 1
-	#govc snapshot.revert -vm bastion-internal-rhel9  aba-test || exit 1
-	#govc snapshot.revert -vm bastion-internal-rhel10 aba-test || exit 1
+
+	echo "Reverting VM: $int_bastion_vm_name to snapshot: aba-test ..."
 	govc snapshot.revert -vm $int_bastion_vm_name $snap_name || exit 1
 	sleep 8
 	govc vm.power -on $int_bastion_vm_name
@@ -284,65 +270,66 @@ init_bastion() {
 
 	net_if=ens160 # Not used below!
 
-cat <<END | ssh $def_user@$int_bastion_hostname -- bash
-rm -vrf ~/.cache/agent/   # Just to be sure, remove old images
-rm -vrf ~/bin/*    	 # To make sure we do things from scratch!
-rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
-END
+	cat <<-END | ssh $def_user@$int_bastion_hostname -- bash
+		rm -vrf ~/.cache/agent/   # Just to be sure, remove old images
+		rm -vrf ~/bin/*    	 # To make sure we do things from scratch!
+		rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
+	END
 
 	# General bastion config, e.g. date/time/timezone and also root ssh
-cat <<END | ssh $def_user@$int_bastion_hostname -- sudo bash
-set -ex
-whoami
-#dnf update -y
-rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
-# Try to keep SELinux turned on
-getenforce
-#setenforce 0
-#getenforce
-#### This is a hack for RHEL 9 where curl to registry.example.com:8443 fails on 10.0.1.2 host.
-###echo "127.0.0.1 registry.example.com  # Hack for mirror-registry install on rhel9" >> /etc/hosts 
-# Set the subnet mask to /20
-# USING NEW DHCP # nmcli con show
-# USING NEW DHCP # ip a
-# USING NEW DHCP # #ifconfig $net_if
-# USING NEW DHCP # nmcli con modify $net_if ipv4.addresses 10.0.1.2/20
-# USING NEW DHCP # nmcli con modify $net_if ipv4.method manual
-# USING NEW DHCP # nmcli con modify $net_if ipv4.dns 10.0.1.8
-# USING NEW DHCP # (sleep 2; nmcli con up $net_if) &
-# USING NEW DHCP # echo Running nmcli con down $net_if
-# USING NEW DHCP # nmcli con down $net_if
-# USING NEW DHCP # echo waiting to re-activate $net_if
-# USING NEW DHCP # wait 
-# USING NEW DHCP # nmcli con show
-# USING NEW DHCP # #ifconfig $net_if
-ip a
-timedatectl
-dnf install chrony podman -y
-# Next line needed by RHEL8
-systemctl start chronyd
-sleep 1
-chronyc sources -v
-chronyc add server 10.0.1.8 iburst
-timedatectl set-timezone Asia/Singapore
-chronyc -a makestep
-sleep 8
-chronyc sources -v
-timedatectl
-mkdir -p /root/.ssh
-echo $pub_key > /root/.ssh/authorized_keys
-chmod 600 /root/.ssh/authorized_keys
-mkdir -p ~/subdir
-echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bashrc
-echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bash_profile
-dnf update -y   # I guess we should do this and add to the vmw snap every now and then
-reboot
-END
+	cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
+		set -ex
+		whoami
+		#dnf update -y
+		rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
+		# Try to keep SELinux turned on
+		getenforce
+		#setenforce 0
+		#getenforce
+		#### This is a hack for RHEL 9 where curl to registry.example.com:8443 fails on 10.0.1.2 host.
+		###echo "127.0.0.1 registry.example.com  # Hack for mirror-registry install on rhel9" >> /etc/hosts 
+		# Set the subnet mask to /20
+		# USING NEW DHCP # nmcli con show
+		# USING NEW DHCP # ip a
+		# USING NEW DHCP # #ifconfig $net_if
+		# USING NEW DHCP # nmcli con modify $net_if ipv4.addresses 10.0.1.2/20
+		# USING NEW DHCP # nmcli con modify $net_if ipv4.method manual
+		# USING NEW DHCP # nmcli con modify $net_if ipv4.dns 10.0.1.8
+		# USING NEW DHCP # (sleep 2; nmcli con up $net_if) &
+		# USING NEW DHCP # echo Running nmcli con down $net_if
+		# USING NEW DHCP # nmcli con down $net_if
+		# USING NEW DHCP # echo waiting to re-activate $net_if
+		# USING NEW DHCP # wait 
+		# USING NEW DHCP # nmcli con show
+		# USING NEW DHCP # #ifconfig $net_if
+		ip a
+		timedatectl
+		dnf install chrony podman -y
+		# Next line needed by RHEL8
+		systemctl start chronyd
+		sleep 1
+		chronyc sources -v
+		chronyc add server 10.0.1.8 iburst
+		timedatectl set-timezone Asia/Singapore
+		chronyc -a makestep
+		sleep 8
+		chronyc sources -v
+		timedatectl
+		mkdir -p /root/.ssh
+		echo $pub_key > /root/.ssh/authorized_keys
+		chmod 600 /root/.ssh/authorized_keys
+		mkdir -p ~/subdir
+		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bashrc
+		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bash_profile
+		dnf update -y   # I guess we should do this and add to the vmw snap every now and then
+		reboot
+	END
 
-	sleep 15  # Wait for restart 
+	test-cmd -m "Wait for restart" sleep 20
 
 	# Copy over the ssh config to /root on bastion (in case test_user = root)
-	eval scp ~$def_user/.ssh/config root@$int_bastion_hostname:.ssh/config
+	# ~$user only expands to /home/$user is the $user exists
+	test-cmd -m "Copy over ssh config" eval scp ~$def_user/.ssh/config root@$int_bastion_hostname:.ssh/config  # Required
 
 	##test-cmd -m "Verify ssh to root@$int_bastion_hostname" ssh root@$int_bastion_hostname whoami
 	test-cmd -r 4 10 -h root@$int_bastion_hostname -m "Verify ssh to root@$int_bastion_hostname" whoami
@@ -381,30 +368,19 @@ END
 	u=testy
 
 	mylog "Create testy user ..."
-cat << END  | ssh $def_user@$int_bastion_hostname -- sudo bash 
-set -ex
-userdel $u -r -f || true
-useradd $u -p not-used
-mkdir ~$u/.ssh 
-chmod 700 ~$u/.ssh
-#cp -p ~steve/.pull-secret.json ~$u 
-echo "$pub_key" > ~$u/.ssh/authorized_keys
-chmod 600 ~$u/.ssh/authorized_keys
-chown -R $u.$u ~$u
-echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
-END
+	cat <<-END  | ssh $def_user@$int_bastion_hostname -- sudo bash 
+		set -ex
+		userdel $u -r -f || true
+		useradd $u -p not-used
+		mkdir ~$u/.ssh 
+		chmod 700 ~$u/.ssh
+		#cp -p ~steve/.pull-secret.json ~$u 
+		echo "$pub_key" > ~$u/.ssh/authorized_keys
+		chmod 600 ~$u/.ssh/authorized_keys
+		chown -R $u.$u ~$u
+		echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
+	END
 
 	test-cmd -m "Verify ssh to testy@$int_bastion_hostname" "ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname whoami | grep testy"
-
-	###test-cmd -h $u@$int_bastion_hostname -m "Delete and create 'sub dir' on remote host for user $u" "rm -vrf $subdir && mkdir -v $subdir"
 	test-cmd -m "Delete and create 'sub dir' on remote host for user $u" "ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname -- 'rm -vrf $subdir && mkdir -v $subdir'"
-
-##	if [ "$test_user" = "root" ]; then
-##		# /root does not have enough space by default, so we link it to ~steve/root
-##		test-cmd -h $test_user@$int_bastion_hostname -m "Create sub dir on remote host for $test_user" "rm -vrf $subdir && mkdir -vp ~steve/root/subdir && ln -vs ~steve/root/subdir && ls -l subdir"
-##		test-cmd -h $test_user@$int_bastion_hostname -m "Create dir on remote host for oc-mirror cache ($test_user)" "mkdir -vp ~steve/root/.oc-mirror && ln -vs ~steve/root/.oc-mirror && ls -l .oc-mirror"
-##		test-cmd -h $test_user@$int_bastion_hostname -m "Create 2nd dir on remote host for oc-mirror cache ($test_user)" "mkdir -p ~steve/root/quay-install && ln -vs ~steve/root/quay-install && ls -l quay-install"
-##	else
-##		test-cmd -h $test_user@$int_bastion_hostname -m "Create sub dir on remote host for $test_user" "rm -vrf $subdir && mkdir -v $subdir"
-##	fi
 }

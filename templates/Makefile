@@ -239,6 +239,7 @@ shell:  ## Gain access to the installed cluster.  Run '. <(aba -s shell)'
 getco: ## Run 'oc get co' command on the cluster.
 	oc --kubeconfig iso-agent-based/auth/kubeconfig get co
 
+# FIXME: cmd and ssh have both moved to "aba.sh" - remove here when working.  Do same for other target without deps e.g day2 etc
 #.PHONY: cmd
 #cmd: ## Run any oc command on the cluster. Must provide command, e.g. --cmd "oc get pods -A", default command is 'oc get co'.
 #	$(SCRIPTS)/oc-command.sh $(cmd)
