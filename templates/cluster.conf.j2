@@ -37,9 +37,9 @@ ntp_servers={{ ntp_servers }}			# Comma-separated NTP servers (optional)
 					# Used during bootstrap and post-install
 					# Needed if host clock isn't synced
 
-ports={{ ports }}				# Space-separated interface names for machine network
+ports={{ ports }}				# Comma-separated interface names for machine network
 					# Single: ports=ens1f0
-					# Multiple (bonded): ports="ens1f0 ens2f0 ens3f0 ens4f0"
+					# Multiple (bonded): ports="ens1f0,ens2f0,ens3f0,ens4f0"
 vlan={{ vlan }}					# Optional VLAN tag (works with or without bonding)
 
 ssh_key_file=~/.ssh/id_rsa		# Path to SSH key (recommended)

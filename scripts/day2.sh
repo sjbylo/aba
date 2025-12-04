@@ -134,7 +134,7 @@ if [ "$latest_working_dir" ]; then
 		aba_warning -p IMPORANT \
 			"No CatalogSource files found under $latest_working_dir/cluster-resources" \
 			"This usually means that Aba has not yet pushed any operator images to your mirror registry." \
-			"If your mirror registry was populated with images separately, you will need to create and apply your own CatalogSources."
+			"If your mirror registry was populated with images separately, you will need to apply the CatalogSources manually."
 
 	for f in $cs_file_list
 	do
