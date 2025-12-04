@@ -46,21 +46,21 @@ _color_echo() {
 }
 
 # Standard 8 colors
-echo_black()   { set +x; _color_echo 0 "$@"; set -x; }
-echo_red()     { set +x; _color_echo 1 "$@"; set -x; }
-echo_green()   { set +x; _color_echo 2 "$@"; set -x; }
-echo_yellow()  { set +x; _color_echo 3 "$@"; set -x; }
-echo_blue()    { set +x; _color_echo 4 "$@"; set -x; }
-echo_magenta() { set +x; _color_echo 5 "$@"; set -x; }
-echo_cyan()    { set +x; _color_echo 6 "$@"; set -x; }
-echo_white()   { set +x; _color_echo 7 "$@"; set -x; }
+#echo_black()   { set +x; _color_echo 0 "$@"; set -x; }
+#echo_red()     { set +x; _color_echo 1 "$@"; set -x; }
+#echo_green()   { set +x; _color_echo 2 "$@"; set -x; }
+#echo_yellow()  { set +x; _color_echo 3 "$@"; set -x; }
+#echo_blue()    { set +x; _color_echo 4 "$@"; set -x; }
+#echo_magenta() { set +x; _color_echo 5 "$@"; set -x; }
+#echo_cyan()    { set +x; _color_echo 6 "$@"; set -x; }
+#echo_white()   { set +x; _color_echo 7 "$@"; set -x; }
 
 echo_step() {
 	set +x
 	echo
-        echo_green "##################"
-        echo_green $@
-        echo_green "##################"
+        echo "##################"
+        echo $@
+        echo "##################"
 	set -x
 }
 
@@ -163,7 +163,9 @@ rm -rf aba
 
 # Install aba from the Internet
 set +x
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
+GIT_BRANCH=${GIT_BRANCH:-main}
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install) -- $GIT_BRANCH"
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
 #bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 cd aba
 ####./install  # Done above
@@ -275,7 +277,7 @@ make tar out=- | split -b 10G - $WORK_BUNDLE_DIR/ocp_${VER}_${NAME}_
 # (2) Fix up aba.conf so we can test the bundle
 cp ~/aba.conf.bk aba.conf
 
-echo_green Calculating the checksums in the background ...
+echo Calculating the checksums in the background ...
 
 (
 	cd $WORK_BUNDLE_DIR && cksum ocp_* > CHECKSUM.txt
@@ -419,7 +421,7 @@ todel=$(ls -d $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME   $CLOUD_DIR/$MAJOR_VER.[0-9]*-
 ls -l  $CLOUD_DIR
 ls -ld $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME   $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME-* 2>/dev/null || true
 
-[ ! "$todel" ] && echo_green No older install bundles to delete || echo_red Install bundles to delete: $todel
+[ ! "$todel" ] && echo No older install bundles to delete || echo Install bundles to delete: $todel
 
 echo_step Create the install bundle dir and copy the files ...
 
