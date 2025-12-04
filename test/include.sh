@@ -39,23 +39,23 @@ draw-line() {
 }
 
 # Define a cleanup function to handle Ctrl-C
-cleanup_tests() {
-	if [[ -n "$sub_pid" ]]; then
-		echo -n "Process is: "
-		ps -p $sub_pid -o cmd=
-		echo "Interrupt received. Terminating pid "$sub_pid" ..."
-		kill "$sub_pid" #2>/dev/null
-		wait "$sub_pid" #2>/dev/null
-		echo "Test command terminated."
-	else
-		echo Stopping $0
-		echo
-		exit 1
-	fi
-}
+#cleanup_tests() {
+#	if [[ -n "$sub_pid" ]]; then
+#		echo -n "Process is: "
+#		ps -p $sub_pid -o cmd=
+#		echo "Interrupt received. Terminating pid "$sub_pid" ..."
+#		kill "$sub_pid" #2>/dev/null
+#		wait "$sub_pid" #2>/dev/null
+#		echo "Test command terminated."
+#	else
+#		echo Stopping $0
+#		echo
+#		exit 1
+#	fi
+#}
 
 # Trap Ctrl-C (SIGINT) and call cleanup_tests function
-trap cleanup_tests SIGINT
+#trap cleanup_tests SIGINT
 
 # -h remote <host or ip> to run the test on (optional)
 # -r <count> <backoff>  (optional)
