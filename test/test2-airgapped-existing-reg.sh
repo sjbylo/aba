@@ -251,7 +251,7 @@ mylog "Starting tests to check out agent config files for various cluster config
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete $ctype dir: $subdir/aba/standard" rm -rf $subdir/aba/$ctype
 
 test-cmd -m "Copy test script" scp test/misc/test_ssh_ntp.sh $TEST_USER@$int_bastion_hostname:
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "echo sleep 50\; until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do sleep 10\; done > test_ssh.sh"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do sleep 10\; done > test_ssh.sh"
 
 # Init
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster -i 10.0.1.201 --name $ctype --type $ctype --step cluster.conf"
@@ -266,6 +266,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config fil
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$ctype upload" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
 # Test node0 is accessible
+test-cmd -m "Pausing ..." sleep 50
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'ens160: .*state UP '"
 
@@ -291,12 +292,14 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config fil
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$ctype upload" 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
 # Test node0 is accessible
+test-cmd -m "Pausing ..." sleep 50
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'bond'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 10 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep 'bond0: .* state UP '"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype '$ntp_ip_grep'"
 
 # Test node0 is accessible
+test-cmd -m "Pausing ..." sleep 50
 test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 5m bash -x test_ssh.sh"
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$ctype '$ntp_ip_grep'"

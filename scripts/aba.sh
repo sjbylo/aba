@@ -734,14 +734,14 @@ do
 		#	BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
 		#	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
 		#elif [[ "$BUILD_COMMAND" =~ "run" ]]; then
-		if [[ "$BUILD_COMMAND" =~ "run" ]]; then
-			BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
-			aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
-		else
-			# Assume it's a kube command by default
-			BUILD_COMMAND="$BUILD_COMMAND cmd cmd='$cmd'"
-			aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
-		fi
+	#	if [[ "$cur_target" = "run" ]]; then
+	#		#BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
+	#		#aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
+	#	else
+	#		# Assume it's a kube command by default
+	#		BUILD_COMMAND="$BUILD_COMMAND cmd cmd='$cmd'"
+	#		aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
+	#	fi
 	#elif [ "$1" = "create" ]; then # Ignore this arg
 	#	shift
 #	elif [ "$1" = "clux" ]; then  #FIXME: THIS IS EXPERIMENTAL ONLY! Change to 'cluster' once tested.
@@ -841,14 +841,8 @@ do
 		if echo "$1" | grep -q "^-"; then
 			aba_abort "$(basename $0): Error: no such option $1" 
 		else
-			#if [ "$1" = "cluster" ]; then
-			#	cur_target=$1
-			#	# Do not append "cluster" to $BUILD_COMMAND
-			#else
-				# Assume any other args are "commands", e.g. 'cluster', 'verify', 'mirror', 'ssh', 'run' etc 
-				# Gather options and args not recognized above and pass them to "make"... yes, we're using make! 
 			cur_target=$1
-		#	if [ "$cur_target" = "ssh" ]; then
+
 			case $cur_target in
 				ssh|run)
 					# FIXME: Add more here: day2 day2-ntp day2-osus shell login etc  (all items without any deps)
