@@ -136,7 +136,7 @@ if [ "$use_mirror" ]; then
 	if [ "$show_mirror_missing_err" ]; then
 		aba_warning \
 			"No internet connection (proxy or direct) has been defined in cluster.conf." \
-			"If this is *unexpected*, either install/set up a mirror registry or define internet connectivity in $PWD/cluster.conf." \
+			"If this is *unexpected*, either install/set up a mirror registry or define int_connection in $PWD/cluster.conf." \
 			"Refer to the README.md for more." 
 
 		sleep 2

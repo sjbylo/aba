@@ -221,5 +221,4 @@ aba_debug "arr_macs=${arr_macs[@]}"
 scripts/j2 templates/$template_file > agent-config.yaml
 
 aba_info_ok "$PWD/agent-config.yaml generated successfully!"
-echo
 

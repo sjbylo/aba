@@ -38,6 +38,7 @@ ifneq ($(platform),vmw)   # if platform is not 'vmw', i.e. bare-metal is assumed
 	endif
 else  # If platform is 'vmw', all steps can be automated 
 	# Create the agent based config files and the matching VMs
+	vmware-conf = vmware.conf  # Add this dependency
 	TARGET_DEPENDENCIES = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .auto-agent-up .install-complete
 endif
 
@@ -87,7 +88,7 @@ cluster.conf: .init mirror.conf  ## Initialize the OpenShift cluster.conf file.
 agentconf: install-config.yaml agent-config.yaml  ## Convenient step/target to only generate the agent config files, so they can be edited. 
 
 # Note that install-config.yaml can be configured with vSphere params (need 'vmware.conf')
-install-config.yaml: .init vmware.conf cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
+install-config.yaml: .init $(vmware-conf) cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
 	make -sC ../cli 
 	$(SCRIPTS)/verify-config.sh
 	$(SCRIPTS)/create-install-config.sh $(debug)
@@ -103,17 +104,18 @@ verify: agentconf  ## Extract cluster configuration details from the generated a
 .bm-message:
 	@echo
 	@echo "Next steps:"
+	@echo
 	@echo "1 cd $(shell basename $(PWD))       # If not already, change into your cluster directory."
 	@echo "2 Check & edit the agent configuration files: "
 	@echo "  - $(PWD)/install-config.yaml:"
 	@echo "  - $(PWD)/agent-config.yaml:"
-	@echo "    - You must modify the mac addresses to match your host's network interfaces."
-	@echo "    - Optionally, add drive & NIC hints and any other network configurations."
-	@echo "3 Run 'aba iso' to create the ISO file."
-	@echo "4 Power on all of your servers and boot them with the ISO file."
-	@echo "5 Verify that the servers start up and can connect to the registry successfully."
-	@echo "  - aba ssh            # connect to the first node for any needed troubleshooting."
-	@echo "6 Run 'aba mon' to monitor the installation progress until its completion."
+	@echo "    - You *MUST* modify the mac addresses to match your server's network interfaces."
+	@echo "    - Optionally, add drive & NIC hints and any other required modifications."
+	@echo "3 Run: 'aba install' again to create the ISO file (or run: 'aba iso')."
+#	@echo "4 Power on all of your servers and boot them with the ISO file."
+#	@echo "5 Verify that the servers start up and can connect to the registry successfully."
+#	@echo "  - aba ssh            # connect to the first node for any needed troubleshooting."
+#	@echo "6 Run 'aba mon' to monitor the installation progress until its completion."
 	@echo 
 	@touch .bm-message
 
@@ -123,11 +125,14 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml   # Not
 	$(SCRIPTS)/generate-image.sh $(debug)
 
 .bm-nextstep:
+	@echo
 	@echo "Next steps:"
-	@echo "1 Boot your hosts with the ISO file."
+	@echo
+	@echo "1 Boot your servers with the ISO file."
 	@echo "2 Verify that the servers start up and can connect to the registry successfully."
 	@echo "3 If needed, run 'aba ssh' to log into the first node to troubleshoot."
-	@echo "4 Run 'aba mon' to monitor the installation progress until its completion."
+	@echo "4 Run: 'aba install' again to monitor the installation progress until its completion (or run: 'aba mon')."
+	@echo 
 	@touch .bm-nextstep
 	@exit 0
 
@@ -136,7 +141,7 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml   # Not
 	@touch .autopoweroff
 
 upload: .autoupload  ## Upload the ISO to the VMW platform to [Datastore] images/agent-<cluster-name>.iso
-.autoupload: vmware.conf .autopoweroff
+.autoupload: $(vmware-conf) .autopoweroff
 	$(SCRIPTS)/vmw-upload.sh $(debug) 
 	@touch .autoupload
 
@@ -157,7 +162,7 @@ refresh: vmw agentconf  ## Delete & create the VMs. This will automatically star
 	$(SCRIPTS)/vmw-refresh.sh workers=$(workers) masters=$(masters) 
 
 # This target is the same as 'refresh' but should only run once depending on .init .autoupload & vmware.conf
-.autorefresh: .init .autoupload vmware.conf
+.autorefresh: .init .autoupload $(vmware-conf)
 	$(SCRIPTS)/vmw-refresh.sh $(debug)
 	@touch .autorefresh
 
