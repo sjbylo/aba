@@ -41,7 +41,7 @@ export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 # FIXME: this is a hack. Better implement as dep in makefile?
 #scripts/create-containers-auth.sh >/dev/null 2>&1
-scripts/create-containers-auth.sh >/dev/null  # Ensure any errors are output
+scripts/create-containers-auth.sh >/dev/null  # Ensure only errors are output
 
 ################################################################
 # Start of download ...
@@ -104,12 +104,14 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 		exit 0
 	fi
 
-	# No need to wait if operator vars are not defined in aba.conf!
-	if [ ! "$op_sets" -a ! "$ops" ]; then
-		aba_debug "No operators defined ... exiting"
-
-		exit 0
-	fi
+# May want to download catalogs even if operators not defined
+#	# No need to wait if operator vars are not defined in aba.conf!
+#	if [ ! "$op_sets" -a ! "$ops" ]; then
+#		aba_debug "No operators defined ... exiting"
+#
+#		exit 0
+#	fi
+# May want to download catalogs even if operators not defined
 
 	# Check to be sure the command with the expected pid is running
 

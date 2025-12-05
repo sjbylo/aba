@@ -59,6 +59,7 @@ else
 	aba_info_ok "Run 'aba info' to view this information again."
 	aba_info_ok "Run 'aba help' and 'aba -h' for more options."
 
-	[ ! -f ~/.aba/.first_cluster_success ] && echo && echo_yellow "Well done! You've installed your first cluster using Aba! Please consider giving our project a star to let us know at: https://github.com/sjbylo/aba  Thank you! :)" && touch ~/.aba/.first_cluster_success
+	[ ! -f ~/.aba/.first_cluster_success ] && echo && echo_yellow "Well done! You've installed your first cluster using Aba! Please consider giving our project a star to let us know at: https://github.com/sjbylo/aba  Thank you! :)" && touch ~/.aba/.first_cluster_success || true
 fi
 
+exit 0
