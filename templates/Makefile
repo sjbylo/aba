@@ -12,7 +12,7 @@ arch   := $(strip $(shell uname -m))
 #debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
 
 -include ../aba.conf
-#### use aba.conf instead ??? ### platform := $(strip $(shell echo $(platform)))
+platform := $(strip $(shell echo $(platform)))  # This is required
 
 # The next section is (unfortunately) needed because making a bare-metal cluster has a different flow, with interruptions!
 # 1. Before iso creation, the Agent-based installer config files need to be changed: mac addresses added, disk hints ... etc.
