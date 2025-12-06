@@ -6,7 +6,7 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
 try_tot=1  # def. value
-[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
+#[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
 [ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && aba_info "Attempting $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
 
 umask 077

@@ -109,7 +109,7 @@ aba_debug "ABA_ROOT=[$ABA_ROOT]"
 BUILD_COMMAND=
 
 # Init aba.conf
-if [ ! -f $ABA_ROOT/aba.conf ]; then
+if [ ! -s $ABA_ROOT/aba.conf ]; then
 
 	aba_debug Adding network values to $ABA_ROOT/aba.conf
 

@@ -168,6 +168,8 @@ mylog
 
 rm -rf ~/.cache/agent/*
 
+rm -rf $HOME/*/.oc-mirror/.cache
+
 ### Do a test to check reg prob (which MUST fail aba -f)
 test-cmd -m "Show aba.conf" normalize-aba-conf
 test-cmd -m "Show mirror/mirror.conf" "cd mirror; normalize-mirror-conf"
@@ -315,7 +317,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$ctype/cluster.conf | awk '{print $1}'"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting ports" "sed -i 's/^.*ports=.*/ports=ens160,ens192 /g' $subdir/aba/$ctype/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$ctype upload" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$ctype refresh" 
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs (cannot test VLAN)" "aba --dir $subdir/aba/$ctype refresh" 
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'|grep '\.888'"
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$ctype ssh --cmd 'ip a'| grep 'bond0: .* state UP '"
 #test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$ctype ssh --cmd "chronyc sources | grep $ntp_ip_grep"

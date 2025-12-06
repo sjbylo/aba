@@ -72,7 +72,7 @@ endif
 
 # Include aba.conf if it exists
 -include ../aba.conf
-ocp_version := $(strip $(shell echo $(ocp_version)))
+# NO NEED - fetch from aba.conf instead ### ocp_version := $(strip $(shell echo $(ocp_version)))
 
 install: oc openshift-install oc-mirror govc butane
 

@@ -58,9 +58,9 @@ _color_echo() {
 echo_step() {
 	set +x
 	echo
-        echo "##################"
+        echo "##################################################################################################"
         echo $@
-        echo "##################"
+        echo "##################################################################################################"
 	set -x
 }
 
@@ -356,7 +356,7 @@ echo >> $WORK_TEST_LOG
 echo "Quay installed: ok" >> $WORK_TEST_LOG
 echo "All images loaded (disk2mirror) into Quay: ok" >> $WORK_TEST_LOG
 
-echo_step "Be sure to delete the cached agent files, otherwise we may mistakenly use a bad one instead of from the generated archive file! (like with v4.19.18!)"
+echo_step "Be sure to delete the cached agent ISO, otherwise we may mistakenly use the cached ISO instead of a possibly bad one from the release payload! (like with v4.19.18!)"
 rm -rf ~/.cache/agent 
 echo_step Create the cluster ...
 aba cluster --name sno4 --type sno --starting-ip 10.0.1.204 --mmem 20 --mcpu 10 --step install

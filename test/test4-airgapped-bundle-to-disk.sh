@@ -82,6 +82,8 @@ mylog "Test to create an install bundle and save to disk."
 
 rm -rf ~/.cache/agent/*
 
+rm -rf $HOME/*/.oc-mirror/.cache
+
 rm -f aba.conf  # Set it up next
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=p

@@ -56,6 +56,8 @@ mylog
 
 rm -rf ~/.cache/agent/*
 
+rm -rf $HOME/*/.oc-mirror/.cache
+
 aba --dir ~/aba reset --force
 
 ntp_ip=10.0.1.8 # If available

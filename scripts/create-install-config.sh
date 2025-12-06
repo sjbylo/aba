@@ -3,9 +3,7 @@
 
 source scripts/include_all.sh
 
-[ "$1" ] && export DEBUG_ABA=1
 aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
-
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)

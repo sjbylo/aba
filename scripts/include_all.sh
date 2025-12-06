@@ -300,6 +300,7 @@ normalize-aba-conf() {
 
 verify-aba-conf() {
 	[ ! "$verify_conf" ] && return 0
+	[ -f aba.conf -a ! -s aba.conf ] && echo_red "$PWD/aba.conf file is empty!" && return 1
 	[ ! -s aba.conf ] && return 0
 
 	local ret=0
@@ -387,6 +388,8 @@ normalize-mirror-conf()
 
 verify-mirror-conf() {
 	[ ! "$verify_conf" ] && return 0
+	# If the file exists and is empty?
+	[ -f mirror.conf -a ! -s mirror.conf ] && echo_red "$PWD/mirror.conf file is empty!" && return 1
 	[ ! -s mirror.conf ] && return 0
 
 	local ret=0
@@ -447,6 +450,7 @@ normalize-cluster-conf()
 
 verify-cluster-conf() {
 	[ ! "$verify_conf" ] && return 0
+	[ -f cluster.conf -a ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
 	[ ! -s cluster.conf ] && return 0
 
 	local ret=0
