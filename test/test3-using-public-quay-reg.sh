@@ -55,6 +55,8 @@ mylog
 
 rm -rf ~/.cache/agent/*
 
+rm -rf $HOME/*/.oc-mirror/.cache
+
 # FIXME: Don't think we need this since test-cmd will loop on error unless -i is used
 #set -ex
 

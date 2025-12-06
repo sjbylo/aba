@@ -52,6 +52,10 @@ mkdir -p $ASSETS_DIR
 
 cp install-config.yaml agent-config.yaml $ASSETS_DIR 
 
+# It is important to delete the cached image as we MUST use the image from the release payload to build the ISO.
+# Avoid the scenario where we use a working cached image but not a possibly broken image from the payload (like for v4.19.18)
+#rm -rf ~/.cache/agent  # Needed? FIXME
+
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
 echo_yellow "[ABA] Running: $openshift_install_mirror agent create image --dir $ASSETS_DIR "

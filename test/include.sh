@@ -198,7 +198,7 @@ test-cmd() {
 	done
 
 	# Remember we don't want to process this signal after command execution.
-	trap - SIGINT
+	#trap - SIGINT
 
 	echo Returning val $ret
 	return $ret
@@ -273,7 +273,9 @@ init_bastion() {
 	cat <<-END | ssh $def_user@$int_bastion_hostname -- bash
 		rm -vrf ~/.cache/agent/   # Just to be sure, remove old images
 		rm -vrf ~/bin/*    	 # To make sure we do things from scratch!
-		rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
+		rm -f  $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
+		rm -rf $HOME/.oc-mirror/.cache   # Ensure all cache gone
+		rm -rf $HOME/*/.oc-mirror/.cache
 	END
 
 	# General bastion config, e.g. date/time/timezone and also root ssh

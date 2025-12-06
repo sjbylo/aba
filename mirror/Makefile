@@ -4,10 +4,10 @@ endif
 
 TEMPLATES = ../templates
 SCRIPTS   = ../scripts
-debug   ?=
-force   ?= no
-bg   ?=
-catalog-name   ?=
+##debug   ?=
+force     ?= no
+bg        ?=
+##catalog-name   ?=
 
 ##########################
 # Allow env variable to force plain output (e.g., PLAIN_OUTPUT=1)
@@ -27,7 +27,6 @@ else
 endif
 ##########################
 
-#all: mirror
 all: install
 
 ##@ Help-related tasks
@@ -78,7 +77,8 @@ sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror              instal
 	###
 	### Upload images to the mirror registry from the Internet (mirror-to-mirror)
 	###
-	$(SCRIPTS)/reg-sync.sh $(debug) $(retry)
+#	$(SCRIPTS)/reg-sync.sh $(debug) $(retry)
+	$(SCRIPTS)/reg-sync.sh          $(retry)
 
 ~/.pull-secret.json:
 	$(SCRIPTS)/install-pull-secret.sh
@@ -93,7 +93,8 @@ save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror downlo
 	###
 	### Save images from the Internet to local disk (mirror-to-disk)
 	###
-	$(SCRIPTS)/reg-save.sh $(debug) $(retry)
+#	$(SCRIPTS)/reg-save.sh $(debug) $(retry)
+	$(SCRIPTS)/reg-save.sh          $(retry)
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
@@ -101,7 +102,8 @@ load: .init cli-oc-mirror .rpmsint install verify  ## Load the saved images into
 	###
 	### Load images from local disk to mirror registry (disk-to-mirror)
 	###
-	$(SCRIPTS)/reg-load.sh $(debug) $(retry)
+#	$(SCRIPTS)/reg-load.sh $(debug) $(retry)
+	$(SCRIPTS)/reg-load.sh          $(retry)
 
 .PHONY: testload
 testload: save install load     # Test the save, install, load process on a connected host
@@ -151,14 +153,14 @@ uninstall-docker-registry:
 #mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
 #mirror.conf: .init                     ../aba.conf   ## Configure the mirror.conf file.
 mirror.conf: ../aba.conf .init                        ## Configure the mirror.conf file.
-	$(SCRIPTS)/create-mirror-conf.sh -f $(force) $(debug)
+	$(SCRIPTS)/create-mirror-conf.sh -f $(force)
 
 #mirror: install
 install: .installed
 .installed: .init .rpmsext mirror.conf mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 	@rm -f .uninstalled 
-	$(SCRIPTS)/reg-install.sh $(debug) 
-	$(SCRIPTS)/reg-verify.sh $(debug) 
+	$(SCRIPTS)/reg-install.sh
+	$(SCRIPTS)/reg-verify.sh
 	@touch .installed
 
 .PHONY: installclean
@@ -168,11 +170,11 @@ installclean:
 .PHONEY: password pw
 password: pw
 pw: 
-	$(SCRIPTS)/reg-existing-create-pull-secret.sh $(debug)
+	$(SCRIPTS)/reg-existing-create-pull-secret.sh
 
 .PHONY: verify
 verify: .init ## Using the credential files in 'aba/mirror/regcreds' dir and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
-	@$(SCRIPTS)/reg-verify.sh $(debug)
+	@$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 
 	@touch .installed
 
@@ -193,7 +195,14 @@ inc:   ## Same as 'make tar' except a timestamp file is used to only backup file
 	@make -sC .. inc $(out)
 
 .PHONY: index
-index: init catalog
+#index: init catalog
+index: init
+	@make -sC ../cli oc-mirror >/dev/null 2>&1
+	$(SCRIPTS)/download-operator-index.sh true redhat-operator
+	$(SCRIPTS)/download-operator-index.sh true certified-operator
+	$(SCRIPTS)/download-operator-index.sh true redhat-marketplace
+	$(SCRIPTS)/download-operator-index.sh true community-operator
+	make catalog bg=  # This will block and wait for downloads
 
 .PHONY: catalog
 # Note that this runs in the background (called by aba) and output is sent to /dev/null
@@ -207,7 +216,7 @@ catalog: init               ## Download and render all the latest Operators into
 #uninstall: .init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
 uninstall: .init             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
 .uninstalled: 
-	$(SCRIPTS)/reg-uninstall.sh  $(debug)
+	$(SCRIPTS)/reg-uninstall.sh
 	@rm -f .installed
 	@touch .uninstalled
 

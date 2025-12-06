@@ -7,11 +7,11 @@ endif
 
 TEMPLATES = templates
 SCRIPTS   = scripts
-name     ?= standard
-type     ?= standard
-split    ?=
+name     ?= standard	# def. cluster name
+type     ?= standard	# def. cluster type
+split    ?=		# by def. do not split the install bundle
 
-debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
+#debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
 
 .PHONY: aba
 aba:  ## Run aba in interactive mode, to set up 'aba.conf'
@@ -34,7 +34,7 @@ init: aba .init
 .PHONY: vmw
 vmw:
 	@make -sC cli govc
-	@$(SCRIPTS)/install-vmware.conf.sh $(debug)
+	@$(SCRIPTS)/install-vmware.conf.sh #  $(debug)
 
 .PHONY: cli
 cli:  ## Download and install the CLI binaries into ~/bin

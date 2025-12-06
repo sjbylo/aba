@@ -82,6 +82,8 @@ mylog "Test to install a local reg. on $int_bastion_hostname and save + copy + l
 
 rm -rf ~/.cache/agent/*
 
+rm -rf $HOME/*/.oc-mirror/.cache
+
 rm -f aba.conf  # Set it up next
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=p

@@ -49,7 +49,7 @@ $create_cluster_cmd
 [ "$step" ] && target="$step"
 
 msg="Install the cluster with: aba -d $name install  OR  cd $name; aba install"
-[ "$target" ] && msg="Proceed with by running: aba -d $name $target  OR  cd $name; aba $target"
+[ "$target" ] && msg="Proceed by running: aba -d $name $target  OR  cd $name; aba $target"
 
 # adding "exit 0" here to give best practise instuctions to cd into the cluster dir!
 if [ "$ask" ]; then
@@ -63,7 +63,8 @@ fi
 
 # Let's be explicit, only run make if there is a given target, e.g. 'install' or 'iso' etc
 if [ "$target" ]; then
-	aba_info "Running: make -s $target" >&2
+	#aba_info "Running: make -s $target" >&2
+	aba_info "Targeting step: $target in dir: $PWD" >&2
 	make -s $target
 fi
 
