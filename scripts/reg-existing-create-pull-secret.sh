@@ -1,10 +1,10 @@
 #!/bin/bash -e
+# Create the pull secret for your existing mirror registry.
+# Usage: aba -d mirror -H myreg.example.com password 
 
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
-
-
 
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
@@ -19,11 +19,15 @@ export enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)
 
 mkdir -p regcreds
 # Inputs: enc_password, reg_host and reg_port 
-scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
+scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/.pull-secret-mirror.json
 
 # Note that for https, the installation of OCP *will* require the registry's root certificate 
 podman logout --all >/dev/null
-podman login --tls-verify=false --authfile=regcreds/pull-secret-mirror.json  $reg_host:$reg_port
+if podman login --tls-verify=false --authfile=regcreds/.pull-secret-mirror.json  $reg_host:$reg_port; then
+	mv regcreds/.pull-secret-mirror.json regcreds/pull-secret-mirror.json
+else
+	rm -f regcreds/.pull-secret-mirror.json
+fi
 
 [ ! -s regcreds/rootCA.pem ] && \
 	aba_warning -p IMPORTANT \
