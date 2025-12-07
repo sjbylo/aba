@@ -25,7 +25,7 @@ if [ ! -s regcreds/pull-secret-mirror.json ]; then
 		"No mirror registry credential file found in: $PWD/regcreds/pull-secret-mirror.json" \
 		"You have two options:" \
 		"- To install Quay, see: aba mirror --help" \
-		"- To use an existing mirror registry, copy its pull secret and root CA files into: $PWD/mirror/regcreds/ and try again." \
+		"- To use an existing mirror registry, copy its pull secret and root CA files into: $PWD/regcreds/ and try again." \
 		"  The files must be named 'regcreds/pull-secret-mirror.json' and 'regcreds/rootCA.pem' respectively." \
 		"See the README.md for more."
 fi

@@ -718,6 +718,9 @@ do
 	elif [ "$1" = "--masters" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND masters=1"
 		shift
+	elif [ "$1" = "--start" ]; then
+		BUILD_COMMAND="$BUILD_COMMAND start=--start"
+		shift
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
 		cmd=

@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
 # Create the VMs for the cluster
 
-#set -euo pipefail
-
 source scripts/include_all.sh
 
 START_VM=
-NO_MAC=
+NO_MAC_CHECK=
 if [ "$1" = "--start" ]; then
 	START_VM=1; shift
 fi
-if [ "$1" = "--nomac" ]; then
-	NO_MAC=1; shift
+if [ "$1" = "--nomaccheck" ]; then
+	NO_MAC_CHECK=1; shift
 fi
 
 # Load configuration
@@ -43,7 +41,7 @@ if [ -n "${VC:-}" ]; then
 fi
 
 # Check for mac collisions? 
-if [ -z "${NO_MAC:-}" ]; then
+if [ -z "${NO_MAC_CHECK:-}" ]; then
 	scripts/check-macs.sh || exit 1
 fi
 
@@ -140,7 +138,8 @@ create_node() {
 			govc vm.power -on $vm_name
 		fi
 
-		(( i++ ))
+		let i=$i+1
+		#(( i++ ))
 	done
 }
 

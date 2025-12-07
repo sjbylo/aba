@@ -13,5 +13,5 @@ ask "To (re)start the installation, delete, re-create & start the VM(s)" || exit
 # If "n" to delete, then stop
 scripts/vmw-delete.sh || true
 
-scripts/vmw-create.sh --start --nomac
+scripts/vmw-create.sh --start --nomaccheck  # Do not re-check the mac addresses since we are re-creating the exact same VMs
 

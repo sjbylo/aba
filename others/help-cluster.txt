@@ -36,7 +36,13 @@ Options:
 
 Usage (from a cluster directory):
   aba run --cmd "oc command"              # Run this 'oc command' on the current cluster.
-  aba ls                                  # List all cluster node VMs (for platform=vmw only).
   aba shutdown                            # Gracefully shut down the cluster (any platform).
   aba startup                             # Gracefully start up the cluster (any platform).
-  aba help                                # See help for all steps/targets.
+
+Usage for platform=vmw:
+  aba ls                                  # List all cluster node VMs
+  aba refresh                             # Re-create the VMs
+  aba create [--start]                    # Create the VMs if they don't exist
+  aba stop                                # Shut down the VMs 
+  aba start                               # Start the VMs 
+  aba kill                                # Power off the VMs 

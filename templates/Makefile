@@ -16,7 +16,7 @@ platform := $(strip $(shell echo $(platform)))
 
 # The next section is (unfortunately) needed because making a bare-metal cluster has a different flow, with interruptions!
 # 1. Before iso creation, the Agent-based installer config files need to be changed: mac addresses added, disk hints ... etc.
-# 2. And, after iso creation, the iso hosts need to be booted before 'mon' target is run.
+# 2. And, after iso creation, the servers need to be booted before the 'mon' target is run.
 ifneq ($(platform),vmw)   # if platform is not 'vmw', i.e. bare-metal is assumed 
 	ifeq ($(wildcard .bm-message),)
 		# if .bm-message DOES NOT exists
@@ -131,7 +131,7 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml   # Not
 	@echo "1 Boot your servers with the ISO file."
 	@echo "2 Verify that the servers start up and can connect to the registry successfully."
 	@echo "3 If needed, run 'aba ssh' to log into the first node to troubleshoot."
-	@echo "4 Run: 'aba install' again to monitor the installation progress until its completion (or run: 'aba mon')."
+	@echo "4 It is important to run: 'aba install' again to monitor the installation progress until its completion (or run: 'aba mon')."
 	@echo 
 	@touch .bm-nextstep
 	@exit 0
@@ -168,7 +168,7 @@ refresh: vmw agentconf  ## Delete & create the VMs. This will automatically star
 
 .PHONY: create
 create: vmw agentconf      ## Create the VMs based on the 'agent-based' config files. Use 'aba start' to start them. 
-	$(SCRIPTS)/vmw-exists.sh || $(SCRIPTS)/vmw-create.sh && exit 0
+	$(SCRIPTS)/vmw-exists.sh || $(SCRIPTS)/vmw-create.sh $(start) && exit 0
 
 ###ls: vmware.conf  ## List VMs and their power state.
 .PHONY: ls
