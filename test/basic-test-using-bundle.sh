@@ -16,6 +16,7 @@ sudo rm -fv $(which aba)
 rm -rf ~/.oc-mirror/.cache
 rm -fv ~/bin/{oc-mirror,oc,openshift-install}
 rm -rf $TEST_DIR_CONN/aba 
+rm -f ~/.aba/.first_cluster_success
 
 # Go online
 export no_proxy=.lan,.example.com
