@@ -115,7 +115,9 @@ if [ "$failed" ]; then
 	let try=$try-1
 	aba_warning -n "Image loading aborted ..."
 	[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
-	aba_warning "Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." 
+	aba_warning \
+		"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." 
+
 	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
 
 	exit 1
@@ -132,9 +134,10 @@ aba_info_ok "Use 'aba cluster --help' for more information about installing clus
 
 echo
 if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then
-aba_warning -p IMPORANT \
-	"If you have already installed a cluster, (re-)run the command 'aba -d <clustername> day2'" \
-	"to configure/refresh OperatorHub/Catalogs, Signatures etc."
+	aba_warning -c magenta -p IMPORANT \
+		"If you have already installed a cluster, (re-)run the command 'aba -d <clustername> day2'" \
+		"to configure/refresh OperatorHub/Catalogs, Signatures etc."
+	echo
 fi
 
 exit 0

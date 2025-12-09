@@ -153,9 +153,10 @@ aba_info_ok "Use 'aba cluster --help' for more information about installing clus
 
 echo
 if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then
-aba_warning -p IMPORANT \
-	"If you have already installed a cluster, (re-)run the command 'aba -d <clustername> day2'" \
-	"to configure/refresh OperatorHub/Catalogs, Signatures etc."
+	aba_warning -c magenta -p IMPORANT \
+		"If you have already installed a cluster, (re-)run the command 'aba -d <clustername> day2'" \
+		"to configure/refresh OperatorHub/Catalogs, Signatures etc."
+	echo
 fi
 
 exit 0
