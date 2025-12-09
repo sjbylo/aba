@@ -7,6 +7,6 @@ aba_debug "Starting: $0 $*"
 
 [ -f .install-complete ] && \
 	echo_red "This cluster has already been deployed successfully!" && \
-	echo_red "Run 'aba clean; aba' to re-install the cluster or remove the '.install-complete' flag file and try again." && exit 1
+	echo_red "Run 'aba clean; aba install' to re-install the cluster or remove the '.install-complete' flag file and try again." && exit 1
 
 exit 0
