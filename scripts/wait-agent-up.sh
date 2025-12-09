@@ -21,18 +21,20 @@ aba_info =======================================================================
 
 # Wait for the Agent port to become alive on the rendezvous node0...
 if [ ! -f .install-complete ]; then
-	AGENT_HOST=$(cat iso-agent-based/rendezvousIP)
+	AGENT_IP=$(cat iso-agent-based/rendezvousIP)
 	AGENT_PORT=8090
-	agent_url="http://$AGENT_HOST:$AGENT_PORT/"
+	agent_url="http://$AGENT_IP:$AGENT_PORT/"
 	max_retries=10
 	delay=8
 
 	aba_info "Waiting for Agent to come alive at $agent_url ..."
 	for ((i=1; i<=max_retries; i++)); do
+		[ "$no_proxy" ] && export no_proxy=$AGENT_IP,$no_proxy || export no_proxy=$AGENT_IP
 		code=$(curl --connect-timeout 10 -s -o /dev/null -w "%{http_code}" --max-time 3 "$agent_url")
 
 		aba_debug return code=$code
 
+		# If return code is 4xx, then stop
 		if [[ $code =~ ^4..$ ]]; then
 			break
 		fi
