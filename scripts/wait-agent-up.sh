@@ -36,13 +36,17 @@ if [ ! -f .install-complete ]; then
 
 		# If return code is 4xx, then stop
 		if [[ $code =~ ^4..$ ]]; then
-			break
+			aba_info_ok Agent detected
+			sleep 8
+			exit 0
 		fi
 
 		sleep "$delay"
 		let delay=$delay+2
 	done
 
+	aba_red "[ABA] Agent not detected"
 	sleep 8
 fi
+
 
