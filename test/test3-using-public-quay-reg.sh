@@ -107,6 +107,9 @@ aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
 
 test-cmd -m "Removing sno dir" rm -rf sno
+
+test-cmd -m "Remove CLIs" aba -d cli reset -f
+
 test-cmd -m "Testing direct internet config" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf -I direct
 test-cmd -m "Creating agentconf" aba -d sno agentconf
 test-cmd -m "Verifying direct internet config - 'registry.redhat.io' exists" 		"grep registry.redhat.io	sno/install-config.yaml"
@@ -120,6 +123,9 @@ test-cmd -m "Verifying direct internet config - 'mirrors:' does not exist" 		"! 
 test-cmd -m "Creating iso for 'int_connection=direct' SNO cluster" aba -d sno iso
 
 test-cmd -m "Removing sno dir" rm -rf sno
+
+test-cmd -m "Remove CLIs" aba -d cli reset -f
+
 test-cmd -m "Creating sno/cluster.conf." aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf -I proxy
 
 test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." "aba -d sno install"  # Note, this is NOT the same as "aba cluster -n sno -t sno --starting-ip 10.0.1.201" command

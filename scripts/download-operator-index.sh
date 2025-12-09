@@ -71,7 +71,7 @@ if [ "$bg" ]; then
 fi
 
 if [[ -s $index_file && -f $done_file ]]; then
-	aba_info "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file" >&2
+	aba_info "Operator index: $catalog_name v$ocp_ver_major already downloaded to file mirror/$index_file" >&2
 
 	# Check age of file is older than one day
 	if [ "$(find $index_file -type f -mtime +0)" ]; then
@@ -99,7 +99,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 
 	# Check if still downloading...
 	if [[ -s $index_file && -f $done_file ]]; then
-		aba_info "Operator $catalog_name index v$ocp_ver_major already downloaded to file mirror/$index_file"
+		aba_info "Operator index $catalog_name v$ocp_ver_major already downloaded to file mirror/$index_file"
 
 		exit 0
 	fi
