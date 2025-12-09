@@ -259,7 +259,7 @@ butane-binary: ## Download butane binary
 	echo Downloading https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch)
 	curl -f --retry 8 $(CURL_PROGRESS) -f -L -o butane-binary --connect-timeout 30 https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane-$(butane_arch)
 	chmod +x butane-binary
-	file butane-binary | grep -q "executable" || { rm -f butane-binary; exit 1; } # in case of 5xx errors!
+	file butane-binary | grep -q -e "executable" -e "dynamically linked" || { rm -f butane-binary; exit 1; } # in case of 5xx errors!
 	./butane-binary --help >/dev/null 2>&1  # Be sure it's valid
 	echo "File butane-binary is valid!"
 
