@@ -26,8 +26,10 @@ verify-aba-conf || exit 1
 scripts/create-containers-auth.sh
 
 aba_info "Now saving (mirror2disk) images from external network to mirror/save/ directory."
-aba_info "Warning: Ensure there is enough disk space under $PWD/save.  "
-aba_info "This can take 5 to 20 minutes to complete or even longer if Operator images are being saved!"
+
+aba_warning \
+	"Ensure there is enough disk space under $PWD/save." \
+	"This can take 5 to 20 minutes to complete or even longer if Operator images are being saved!"
 echo 
 
 [ ! "$data_dir" ] && data_dir=\~
