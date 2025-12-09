@@ -8,10 +8,11 @@ OPERAND=
 OPERAND_NS=
 OPERAND_NAME=
 
-echo_green()    { [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+#echo_green()    { [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 echo_step() {
-	echo_green ##################
-	echo_green $@
+	echo ##################
+	echo $@
+	echo ##################
 }
 
 resultOut() {

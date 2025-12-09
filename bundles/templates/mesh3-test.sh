@@ -21,12 +21,13 @@ waitAllPodsInNamespace() {
 	echo All pods ready in namespace $1
 }
 
-echo_green() { [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+#echo_green() { [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 
 echo_step() {
 	echo
-	echo_green ##################
-	echo_green $@
+	echo ##################
+	echo $@
+	echo ##################
 	echo
 }
 

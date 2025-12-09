@@ -1,10 +1,11 @@
 #!/bin/bash -e
 # Log into a cluster and run this test script to install OCP-V and MTV
 
-echo_green()    { [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
+#echo_green()    { [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 echo_step() {
-	echo_green ##################
-	echo_green $@
+	echo ##################
+	echo $@
+	echo ##################
 }
 
 { true >&3; } 2>/dev/null || exec 3>&1  # If channel 3 not open, then open it
