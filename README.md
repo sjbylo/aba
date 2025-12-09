@@ -682,7 +682,7 @@ cd mycluster
 Now manually edit the generated `install-config.yaml` and `agent-config.yaml` files as needed (for example, to add or change the bare-metal MAC addresses), then proceed with the cluster installation workflow:
 
 ```
-aba
+aba install
 ```
 
 As an example, you could edit `agent-config.yaml` to include the following to direct agent-based installer to install RHCOS onto the 2nd disk, e.g. /dev/sdb:
@@ -716,7 +716,7 @@ export ASSETS_DIR=iso-agent-based
 Run aba again to rebuild the agent-based ISO. You should boot the bare-metal servers with the iso file, e.g.:
 
 ```
-aba
+aba install
 ...
 aba iso              # Generate the ISO file
 ...
