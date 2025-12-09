@@ -53,9 +53,11 @@ reg_root=$data_dir/quay-install
 echo
 aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 
-# Check if aba installed Quay or it's an existing reg.
+# Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
 if [ -s ./reg-uninstall.sh ]; then
-	aba_warning "Ensure there is enough disk space under $reg_root.  This can take 5 to 20 minutes to complete or even longer if Operator images are being copied!"
+	aba_warning \
+		"Ensure there is enough disk space under $reg_root." \
+		"This can take 5 to 20 minutes to complete or even longer if Operator images are being copied!"
 fi
 echo
 
