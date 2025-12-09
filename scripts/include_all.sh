@@ -185,6 +185,7 @@ aba_abort() {
 aba_warning() {
         local prefix="Warning"
 	local newline=
+	local col=red
 
 	# Parse optional -p PREFIX
 	while [ $# -gt 0 ]
@@ -192,6 +193,9 @@ aba_warning() {
 		if [ "$1" = "-p" ]; then
 			prefix="$2"
 			shift 
+		elif [ "$1" = "-c" ]; then
+			col=$2
+			shift
 		elif [ "$1" = "-n" ]; then
 			newline='-n'
 		else
@@ -211,13 +215,13 @@ aba_warning() {
 	printf -v indent "%*s" "$indent_len" ""
 
 	# Print main message
-	echo_red $newline "[ABA] $prefix: $main_msg" >&2
+	echo_$col $newline "[ABA] $prefix: $main_msg" >&2
 
 	#[ "$*" ] && newline=  # Note, '-n' only make sense for a single line
 
 	# Print follow-up lines with calculated indentation
 	for line in "$@"; do
-		echo_red "[ABA] ${indent}${line}" >&2
+		echo_$col "[ABA] ${indent}${line}" >&2
 	done
 
 	sleep 1
@@ -389,7 +393,7 @@ normalize-mirror-conf()
 verify-mirror-conf() {
 	[ ! "$verify_conf" ] && return 0
 	# If the file exists and is empty?
-	[ -f mirror.conf -a ! -s mirror.conf ] && echo_red "$PWD/mirror.conf file is empty!" && return 1
+	#[ -f mirror.conf -a ! -s mirror.conf ] && echo_red "$PWD/mirror.conf file is empty!" && return 1  # Causes error when installing cluster directly form internet
 	[ ! -s mirror.conf ] && return 0
 
 	local ret=0
