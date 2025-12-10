@@ -496,10 +496,10 @@ oc whoami
 - provides access via "oc login".
 
 
-If needed, you can also run commands against the cluster, e.g. to show the cluster operator progress:
+If needed, you can also run oc commands against the cluster, e.g. to show the cluster operator progress:
 
 ```
-watch aba --cmd "get co"
+watch aba run --cmd "get co"
 ```
 
 If you want to create the agent-based config files, e.g. to make changes to `install-config.yaml` and `agent-config.yaml`, use:
