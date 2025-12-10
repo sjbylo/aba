@@ -68,7 +68,7 @@ max_ports_per_node=$(( num_ports_per_node - 1 ))
 
 # Check if install is on vSphere and add memory, if needed,
 # due to this 'out of disk space' issue: https://issues.redhat.com/browse/OCPBUGS-62790
-[ "$GOVC_URL" ] && [ "$master_mem" -le 16 ] && master_mem=18 && echo_warning "Adding more master memory due to issue: https://issues.redhat.com/browse/OCPBUGS-62790" 
+[ "$GOVC_URL" ] && [ "$master_mem" -le 16 ] && master_mem=18 && aba_warning "Adding more master memory due to issue: https://issues.redhat.com/browse/OCPBUGS-62790" 
 aba_debug master_mem=$master_mem
 
 # Common VM creation function
