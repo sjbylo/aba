@@ -98,7 +98,7 @@ if [ ! "$SNO" ]; then
 	[ "$actual_ip_of_api" != "$api_vip" ] && \
 		aba_abort "DNS record $cl_api_domain does not resolve to $api_vip, it resolves to $actual_ip_of_api!"
 
-	aba_info "DNS record for OCP api ($cl_api_domain) exists: $actual_ip_of_api."
+	aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api."
 
 	# Ensure apps DNS exists and points to correct ip
 	[ "$actual_ip_of_ingress" != "$ingress_vip" ] && \
@@ -112,7 +112,7 @@ else
 	[ "$actual_ip_of_api" != "$rendezvous_ip" ] && \
 		aba_abort "DNS record $cl_api_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_api!"
 
-	aba_info "DNS record for OCP api ($cl_api_domain) exists: $actual_ip_of_api"
+	aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
 
 	# Ensure apps DNS exists 
 	[ "$actual_ip_of_ingress" != "$rendezvous_ip" ] && \

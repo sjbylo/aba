@@ -1,5 +1,5 @@
 #!/bin/bash 
-# This script compares the OCP target version in aba.conf with versions defined in any existing imageset config files under mirror/sync/ or save/
+# This script compares the OpenShift target version in aba.conf with versions defined in any existing imageset config files under mirror/sync/ or save/
 # Warns if there is a mismatch that needs to be addressed.
 # Only if the ISC file has been updated by user.
 

@@ -67,7 +67,7 @@ test-cmd -m "Cleaning up - aba reset --force" aba reset -f
 rm -rf sno compact standard 
 
 # Need this so this test script can be run standalone
-##[ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
+##[ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OpenShift
 [ ! "$internal_bastion_rhel_ver" ] && export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 
 int_bastion_hostname=registry.example.com
@@ -589,7 +589,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for al
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
-# Sometimes the cluster is not fully ready... OCP API can fail, so re-run 'aba day2' ...
+# Sometimes the cluster is not fully ready... OpenShift API can fail, so re-run 'aba day2' ...
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m "Run 'day2' to integrate operator hub and apply configs" "aba --dir $subdir/aba/sno day2"  # Install CA cert and activate local op. hub
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests'"
 test-cmd -m "Sleep 2m" "read -t 120 xy||true"

@@ -1,5 +1,5 @@
 #!/bin/bash 
-# Create a install bundle which can be used to install OCP in an air-gapped env.
+# Create a install bundle which can be used to install OpenShift in an air-gapped env.
 
 source scripts/include_all.sh
 

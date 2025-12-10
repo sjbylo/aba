@@ -87,7 +87,7 @@ create_node() {
 		aba_info "$vm_name: [${cpu_count}C/${mem_gb}G] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 
 		govc vm.create \
-			-annotation="Created on $(date) as ${role} node for OCP cluster ${CLUSTER_NAME}.${base_domain} version v${ocp_version} from $(hostname):$PWD" \
+			-annotation="Created on $(date) as ${role} node for OpenShift cluster ${CLUSTER_NAME}.${base_domain} version v${ocp_version} from $(hostname):$PWD" \
 			-version vmx-15 \
 			-g rhel8_64Guest \
 			-firmware=efi \
