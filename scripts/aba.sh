@@ -1003,7 +1003,7 @@ fi
 # Fresh GitHub clone of Aba repo detected!
 
 ##############################################################################################################################
-# Determine OCP channel
+# Determine OpenShift channel
 
 [ "$ocp_channel" = "eus" ] && ocp_channel=stable  # btw .../ocp/eus/release.txt does not exist!
 
@@ -1065,7 +1065,7 @@ fi
 
 
 ##############################################################################################################################
-# Determine OCP version 
+# Determine OpenShift version 
 
 if [ "$ocp_version" ]; then
 	#echo_white "OpenShift version is defined in aba.conf as '$ocp_version'."
@@ -1083,7 +1083,7 @@ else
 		aba_abort "Failed to access https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt" 
 	fi
 
-	## Get the latest stable OCP version number, e.g. 4.14.6
+	## Get the latest stable OpenShift version number, e.g. 4.14.6
 	channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 	default_ver=$channel_ver
 
@@ -1128,7 +1128,7 @@ else
 		[ "$target_ver" = "l" -a "$channel_ver" ] && target_ver=$channel_ver       # latest
 		[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev  # previous latest
 
-		# If user enters just a point version, x.y, fetch the latest .z value for that point version of OCP
+		# If user enters just a point version, x.y, fetch the latest .z value for that point version of OpenShift
 		echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver")
 	done
 

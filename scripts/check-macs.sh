@@ -76,7 +76,7 @@ if [ "$list_of_matching_arp_entries" ]; then
 			aba_abort \
 				"One or more mac addresses are *currently* in use:$P" \
 				"Consider Changing 'mac_prefix' in cluster.conf and try again." \
-				"If you're running multiple OCP clusters, ensure no mac/ip addresses overlap!" 
+				"If you're running multiple OpenShift clusters, ensure no mac/ip addresses overlap!" 
 		fi
 	fi
 fi

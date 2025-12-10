@@ -44,7 +44,7 @@ if ! skopeo inspect                  docker://$reg_host:$reg_port$reg_path/opens
 	fi
 fi
 
-# Extract openshift-install binary from the mirror, if not already.  Use this binary to install OCP. 
+# Extract openshift-install binary from the mirror, if not already.  Use this binary to install OpenShift. 
 openshift_install_mirror="./openshift-install-$ocp_version-$reg_host-$reg_port-$(echo $reg_path | tr / -)"
 if [ ! -x $openshift_install_mirror ]; then
 	# HACK

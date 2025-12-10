@@ -21,7 +21,7 @@ mkdir -p regcreds
 # Inputs: enc_password, reg_host and reg_port 
 scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/.pull-secret-mirror.json
 
-# Note that for https, the installation of OCP *will* require the registry's root certificate 
+# Note that for https, the installation of OpenShift *will* require the registry's root certificate 
 podman logout --all >/dev/null
 if podman login --tls-verify=false --authfile=regcreds/.pull-secret-mirror.json  $reg_host:$reg_port; then
 	mv regcreds/.pull-secret-mirror.json regcreds/pull-secret-mirror.json

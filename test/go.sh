@@ -20,8 +20,8 @@ hash -r  # Forget all command locations in $PATH
 export TEST_CHANNEL=stable
 #export TEST_CHANNEL=candidate  # This only works if e.g. 4.19.0 is available, does not yet work for release candidate versions e.g. 4.19.0.rc#
 
-export VER_OVERRIDE=l # Uncomment to use the 'latest' version of OCP in the channel 
-#export VER_OVERRIDE=p # Uncomment to use the 'previous' stable version of OCP
+export VER_OVERRIDE=l # Uncomment to use the 'latest' version of OpenShift in the channel 
+#export VER_OVERRIDE=p # Uncomment to use the 'previous' stable version of OpenShift
 #export VER_OVERRIDE=4.16.30
 #export VER_OVERRIDE=4.14.30
 

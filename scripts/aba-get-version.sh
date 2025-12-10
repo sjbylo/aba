@@ -22,7 +22,7 @@ export PATH=$PWD/bin:$PATH
 ##cat others/message.txt
 
 ############
-# Determine OCP version 
+# Determine OpenShift version 
 
 export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
 
@@ -32,7 +32,7 @@ if ! curl --connect-timeout 10 --retry 8 -sL https://mirror.openshift.com/pub/op
 	aba_abort "Error: Cannot access https://access mirror.openshift.com/.  Ensure you have Internet access to download the needed images."
 fi
 
-## Get the latest stable OCP version number, e.g. 4.14.6
+## Get the latest stable OpenShift version number, e.g. 4.14.6
 stable_ver=$(cat $tmp_dir/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 default_ver=$stable_ver
 

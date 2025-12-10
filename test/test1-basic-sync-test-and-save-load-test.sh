@@ -35,7 +35,7 @@ rm -f ~/.aba.previous.backup
 rm -f ~/.ssh/quay_installer*
 
 # Need this so this test script can be run standalone
-###[ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OCP
+###[ ! "$VER_OVERRIDE" ] && #export VER_OVERRIDE=4.16.12 # Uncomment to use the 'latest' stable version of OpenShift
 [ ! "$internal_bastion_rhel_ver" ] && export internal_bastion_rhel_ver=rhel9  # rhel8 or rhel9
 
 int_bastion_hostname=registry.example.com

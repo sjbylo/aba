@@ -1,5 +1,5 @@
 #!/bin/bash -ex
-# Basic test script to show how to create a custom bundle (*split* or normal) and then install OCP disonnected
+# Basic test script to show how to create a custom bundle (*split* or normal) and then install OpenShift disonnected
 
 [ "$1" ] && SPLIT="--split"   		# Test with *split* bundle with any arg.
 

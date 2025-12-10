@@ -34,7 +34,7 @@ fi
 aba_debug "Verifying resolution of mirror hostname: $reg_host"
 
 # Check the hostname (FDQN) resolves to an IP address, as expected 
-# You MUST have a proper DNS entry for OCP to install!
+# You MUST have a proper DNS entry for OpenShift to install!
 fqdn_ip=$(dig +short $reg_host | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}') || true
 if [ ! "$fqdn_ip" ]; then
 	aba_abort \
