@@ -63,8 +63,8 @@ mac_prefix={{ mac_prefix }}		# MAC prefix for VMs; replaced by random hex if 'x'
 					# Ensure addresses are unique and unused
 					# For bare metal, MACs can be edited in agent-config.yaml
 
-master_cpu_count={{ master_cpu_count }}			# CPU cores and memory per master
-master_mem={{ master_mem }}				# Minimum for SNO: 8 CPUs
+master_cpu_count={{ master_cpu_count }}			# CPU cores and memory per master (>16GB on vSphere)
+master_mem={{ master_mem }}				# Minimum for SNO: 8 CPUs.
 worker_cpu_count={{ worker_cpu_count }}			# CPU cores and memory per worker
 worker_mem={{ worker_mem }}				# Ignored for SNO
 

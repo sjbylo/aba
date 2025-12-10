@@ -66,6 +66,11 @@ worker_nested_hv=true
 num_ports_per_node=$PORTS_PER_NODE
 max_ports_per_node=$(( num_ports_per_node - 1 ))
 
+# Check if install is on vSphere and add memory, if needed,
+# due to this 'out of disk space' issue: https://issues.redhat.com/browse/OCPBUGS-62790
+[ "$GOVC_URL" ] && [ "$master_mem" -le 16 ] && master_mem=18 && echo_warning "Adding more master memory due to issue: https://issues.redhat.com/browse/OCPBUGS-62790" 
+aba_debug master_mem=$master_mem
+
 # Common VM creation function
 create_node() {
 	local role=$1         # "control" or "worker"
@@ -116,7 +121,7 @@ create_node() {
 			-memory-hot-add-enabled=true \
 			-nested-hv-enabled=$nested_hv
 
-		aba_info "Attaching thin OS disk on [$GOVC_DATASTORE]"
+		aba_info "Attaching thin OS disk of size 120GB on [$GOVC_DATASTORE]"
 		govc vm.disk.create \
 			-vm $vm_name \
 			-name $vm_name/$vm_name \
