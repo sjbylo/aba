@@ -7,8 +7,6 @@ aba_debug "Starting: $0 $*"
 
 trap - ERR  # We don't want to catch on error. error handling added below. 
 
- 
-
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
 	eval $(scripts/cluster-config.sh $@ || exit 1)
@@ -19,7 +17,15 @@ echo "[ABA] ====================================================================
 
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
+
+[ ! -f $ASSETS_DIR/rendezvousIP ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
+
+[ "$no_proxy" ] && no_proxy="$(cat $ASSETS_DIR/rendezvousIP),$no_proxy"   # Needed since we're using the IP address to access
+[ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"
+
 echo_yellow "[ABA] Running: openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR"
+
+
 openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR $opts
 ret=$?
 aba_debug openshift-install returned: $ret 

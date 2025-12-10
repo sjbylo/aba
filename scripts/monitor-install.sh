@@ -7,8 +7,6 @@ aba_debug "Starting: $0 $*"
 
 trap - ERR  # We don't want to catch on error. error handling added below. 
 
- 
-
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
 	eval $(scripts/cluster-config.sh $@ || exit 1)
@@ -20,12 +18,17 @@ echo "[ABA] ====================================================================
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
 
+[ ! -f $ASSETS_DIR/rendezvousIP ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
+
+[ "$no_proxy" ] && no_proxy="$(cat $ASSETS_DIR/rendezvousIP),$no_proxy"   # Needed since we're using the IP address to access
+[ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"
+
 echo_yellow "[ABA] Running: openshift-install agent wait-for install-complete --dir $ASSETS_DIR"
 
 #sleep 60  # wait a bit to ensure the agent is running
 openshift-install agent wait-for install-complete --dir $ASSETS_DIR $opts
 ret=$?
-[ "$DEBUG_ABA" ] && echo "[ABA] openshift-install returned: $ret" >&2
+aba_debug openshift-install returned: $ret 
 
 # All exit codes of openshift-install from source file: cmd/openshift-install/create.go
 # Declare an associative array with exit codes as keys
@@ -38,37 +41,37 @@ declare -A wait_for_exit_reasons=(
     [8]="Interrupted"
 )
 
+# ret = 8 means openshift-install was interrupted (e.g. Ctrl-c), for that we don't want to show any errors. 
+[ $ret -eq 8 ] && exit 0
+
 if [ $ret -ne 0 ]; then
-	# ret = 8 means openshift-install was interrupted (e.g. Ctrl-c), for that we don't want to show any errors. 
-	if [ $ret -ne 8 ]; then
-		echo 
-		echo_red "[ABA] Error: Something went wrong with the installation.  Fix the problem and try again!" >&2
-		[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
-
-		exit $ret
-	fi
-else
 	echo 
-	aba_info_ok "The cluster has been successfully installed!"
-	aba_info_ok "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
-	aba_info_ok "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
-	[ -f regcreds/pull-secret-mirror.json ] && \
-		aba_info_ok "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
-		aba_info_ok "Run 'aba day2-osus' to configure the OpenShift Update Service."
-	aba_info_ok "Run 'aba day2-ntp' to configure NTP on this cluster."
-	aba_info_ok "Run 'aba info' to view this information again."
-	aba_info_ok "Run 'aba help' and 'aba -h' for more options."
+	echo_red "[ABA] Error: Something went wrong with the installation.  Fix the problem and try again!" >&2
+	[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
 
-	if [ ! -f ~/.aba/.first_cluster_success ]; then
-		echo
-		echo_yellow ">>> Well done! You've installed your first cluster using Aba! <<<"
-		echo        "   Please consider giving our project a star to let us know at:  "
-		echo        "                https://github.com/sjbylo/aba"
-		echo_yellow "                          Thank you! :)"
-		echo
+	exit $ret
+fi
 
-		touch ~/.aba/.first_cluster_success
-	fi
+echo 
+aba_info_ok "The cluster has been successfully installed!"
+aba_info_ok "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
+aba_info_ok "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
+[ -f regcreds/pull-secret-mirror.json ] && \
+	aba_info_ok "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
+	aba_info_ok "Run 'aba day2-osus' to configure the OpenShift Update Service."
+aba_info_ok "Run 'aba day2-ntp' to configure NTP on this cluster."
+aba_info_ok "Run 'aba info' to view this information again."
+aba_info_ok "Run 'aba help' and 'aba -h' for more options."
+
+if [ ! -f ~/.aba/.first_cluster_success ]; then
+	echo
+	echo_yellow ">>> Well done! You've installed your first cluster using Aba! <<<"
+	echo        "   Please consider giving our project a star to let us know at:  "
+	echo        "                https://github.com/sjbylo/aba"
+	echo_yellow "                          Thank you! :)"
+	echo
+
+	touch ~/.aba/.first_cluster_success
 fi
 
 exit 0

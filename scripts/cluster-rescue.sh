@@ -1,6 +1,6 @@
 #!/bin/bash 
 
-# Prep execution on one node
+# Prep execution on one node. Copy script to node and execute it there.
 if [ ! "$1" = "--exec" ]; then
 	source scripts/include_all.sh 
 
@@ -10,14 +10,15 @@ if [ ! "$1" = "--exec" ]; then
 
 	verify-cluster-conf || exit 1
 
-	# This will run locally and will copy and exec the rescue script (below)
-	if [ ! -f iso-agent-based/rendezvousIP ]; then
-		echo_red "Error: iso-agent-based/rendezvousIP file missing.  Run 'aba' or 'aba iso' to create it." >&2
-
-		exit 1
+	if [ ! "$CLUSTER_NAME" ]; then
+		scripts/cluster-config-check.sh
+		eval $(scripts/cluster-config.sh $@ || exit 1)
 	fi
 
-	ip=$(cat iso-agent-based/rendezvousIP)
+	# This will run locally and will copy and exec the rescue script (below)
+	[ ! -f $ASSETS_DIR/rendezvousIP ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
+
+	ip=$(cat $ASSETS_DIR/rendezvousIP)
 
 	scp -i $ssh_key_file $0 core@$ip:
 	ssh -i $ssh_key_file    core@$ip -- sudo bash $(basename $0) --exec

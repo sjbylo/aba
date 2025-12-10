@@ -82,6 +82,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 
 	# The above workaround describes re-creating the is/oauth-proxy 
 	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
+		aba_info "'Unknown authority' found in imagestream/oauth-proxy in namespace openshift."
 		try_cmd 5 5 15 oc delete imagestream -n openshift oauth-proxy
 
 		echo_red "[ABA] Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 2 to 3 minutes."
@@ -94,7 +95,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 			sleep 10
 		done
 	else
-		aba_info "'unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
+		aba_info "'Unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
 	fi
 	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
 else	
@@ -126,8 +127,6 @@ if [ "$latest_working_dir" ]; then
 	done
 
 	# Apply any CatalogSource files created by oc-mirror v2
-
-	##f=$(ls -t1 $latest_working_dir/cluster-resources/cs-redhat-operator-index*yaml | head -1)
 	cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
 
 	[ ! "$cs_file_list" ] && \
@@ -212,7 +211,17 @@ if [ "$latest_working_dir" ]; then
 	fi
 else
 	# FIXME: Only show warning IF the mirror has been used for this cluster
-	aba_warning "missing directory $PWD/mirror/save/working-dir and/or $PWD/mirror/sync/working-dir"
+	aba_warning "Missing oc-mirror working directory: $PWD/mirror/save/working-dir and/or $PWD/mirror/sync/working-dir"
+	aba_warning -p IMPORANT \
+		"No cluster resource files found (CatalogSource, idms/itms ...) " \
+		"This usually occurs when Aba has not yet pushed any operator images to your mirror registry — either because mirroring" \
+		"hasn’t been run, or it wasn’t done from this host." \
+		"If the registry was filled using another method, you must manually create and apply the required CatalogSources for the operators." \
+		"If the oc-mirror working-dir/ is on another host, copy the directory to this host and try again!" 
+
+		#"This usually means that Aba has not yet pushed any operator images to your mirror registry (or not from this host)." \
+		#"If your mirror registry was populated with images separately, you will need to apply the CatalogSources manually."
+
 fi
 
 # Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
