@@ -47,7 +47,7 @@ if [ ! -f .install-complete ]; then
 		let delay=$delay+2
 	done
 
-	aba_red "[ABA] Agent not detected"
+	echo_red "[ABA] Agent not detected"
 	sleep 8
 fi
 
