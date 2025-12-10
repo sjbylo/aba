@@ -182,7 +182,7 @@ OP=
 #echo Waiting 60s ...
 #read -t 60 || true
 
-aba --pull-secret $PS_FILE --platform bm --channel fast --version $VER $OP --base-domain $BASE_DOM
+aba --pull-secret $PS_FILE --platform bm --channel stable --version $VER $OP --base-domain $BASE_DOM
 
 sleep 2
 ls -l ~/bin/oc-mirror 
