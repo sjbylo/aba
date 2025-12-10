@@ -866,10 +866,12 @@ if [ "$cur_target" ]; then
 	aba_debug cur_target=$cur_target
 	case $cur_target in
 		ssh)
+			trap - ERR  # No need for this anymore
 			$ABA_ROOT/scripts/ssh-rendezvous.sh "$cmd"
 			exit 
 		;;
 		run)
+			trap - ERR  # No need for this anymore
 			$ABA_ROOT/scripts/oc-command.sh "$cmd"
 			exit 
 		;;
