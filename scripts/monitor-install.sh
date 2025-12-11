@@ -65,10 +65,10 @@ aba_info_ok "Run 'aba help' and 'aba -h' for more options."
 
 if [ ! -f ~/.aba/.first_cluster_success ]; then
 	echo
-	echo_yellow ">>> Well done! You've installed your first cluster using Aba! <<<"
-	echo        "   Please consider giving our project a star to let us know at:  "
-	echo        "                https://github.com/sjbylo/aba"
-	echo_yellow "                          Thank you! :)"
+	echo ">>> Congratulations! You've installed your first OpenShift cluster using Aba! <<<"
+	echo ">>>       Please consider giving our project a star to let us know, at:       <<<"
+	echo ">>>                    https://github.com/sjbylo/aba                          <<<"
+	echo ">>>                             Thank you! :)                                 <<<"
 	echo
 
 	touch ~/.aba/.first_cluster_success
