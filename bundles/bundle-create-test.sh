@@ -359,7 +359,7 @@ echo "All images loaded (disk2mirror) into Quay: ok" >> $WORK_TEST_LOG
 echo_step "Be sure to delete the cached agent ISO, otherwise we may mistakenly use the cached ISO instead of a possibly bad one from the release payload! (like with v4.19.18!)"
 rm -rf ~/.cache/agent 
 echo_step Create the cluster ...
-aba cluster --name sno4 --type sno --starting-ip 10.0.1.204 --mmem 20 --mcpu 10 --step install
+aba cluster --name bundle --type sno --starting-ip 10.0.1.204 --mmem 20 --mcpu 10 --step install
 
 echo_step Test this cluster type: $NAME ...
 
@@ -368,7 +368,7 @@ echo "Cluster installation test: ok" >> $WORK_TEST_LOG
 # Test integrations ...
 (
 	set -x
-	cd sno4
+	cd bundle
 
 	# Verify at least one operator is available (base has none) and integrate OSUS
 	if [ "$NAME" != "base" ]; then
