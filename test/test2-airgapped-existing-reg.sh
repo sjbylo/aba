@@ -314,7 +314,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$c
 # Test vlan with bond
 # Note, can't test a full install using vlan in my test lab
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$ctype/cluster.conf | awk '{print $1}'"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting starting IP" aba -d $subdir/aba/$ctype/ -i 10.10.10.50 ## -n standard-vlan -t standard
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting starting IP" aba -d $subdir/aba/$ctype/ -i 10.10.10.10 ## -n standard-vlan -t standard
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*cluster_name=.*/cluster_name=vlan /g' $subdir/aba/$ctype/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan=.*/vlan=10 /g' $subdir/aba/$ctype/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*next_hop_address=.*/next_hop_address=10.10.10.1 /g' $subdir/aba/$ctype/cluster.conf"
