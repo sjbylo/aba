@@ -323,6 +323,14 @@ init_bastion() {
 		mkdir -p ~/subdir
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bashrc
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bash_profile
+		#### Set up private net - start ####
+		iptables -t nat -A POSTROUTING -o ens192 -s 10.10.10.0/24 -j MASQUERADE
+		echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/99-ipforward.conf
+		sysctl -p /etc/sysctl.d/99-ipforward.conf
+		firewall-cmd --add-masquerade --zone=public --permanent
+		firewall-cmd --add-forward --zone=public --permanent
+		firewall-cmd --reload
+		#### Set up private net - done  ####
 		dnf update -y   # I guess we should do this and add to the vmw snap every now and then
 		reboot
 	END
