@@ -324,6 +324,13 @@ init_bastion() {
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bashrc
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bash_profile
 		####################################
+		#### Set up some network config  ###
+		####################################
+		nmcli connection modify ens192 ipv4.never-default yes
+		nmcli connection modify ens224 ipv4.never-default yes
+		nmcli connection modify ens192 ipv6.method disabled
+		nmcli connection modify ens224 ipv6.method disabled
+		####################################
 		#### Set up private net - start ####
 		####################################
 		# Used to test VLAN config
@@ -335,7 +342,14 @@ init_bastion() {
 		# Check vlan 
 		nmcli -f GENERAL,IP4,IP6 connection show ens224.10
 		ip a
+		# Set MASQUERADE persistently
+		sudo dnf install -y iptables-services
+		sudo systemctl enable iptables
 		iptables -t nat -A POSTROUTING -o ens192 -s 10.10.10.0/24 -j MASQUERADE
+		sudo service iptables save
+		iptables -t nat -L POSTROUTING -n -v
+		# Set MASQUERADE persistently - done
+		# Set forwarding
 		echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/99-ipforward.conf
 		sysctl -p /etc/sysctl.d/99-ipforward.conf
 		#firewall-cmd --add-masquerade --zone=public --permanent
