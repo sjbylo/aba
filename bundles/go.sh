@@ -80,44 +80,34 @@ echo
 
 for ver in ${versions[@]}
 do
-	#bundle_name="${ver}-$name"
-	#echo
-	#echo Running: bundle-create-test.sh $ver base
-	#sleep 1
-	#if ./bundle-create-test.sh $ver base; then   # Create base bundle
-		#for i in ${!arr_op_set[@]}
-		for i in ${!arr_name[@]}
-		do
-			op_sets=${arr_op_set[$i]}
-			name=${arr_name[$i]}
-			bundle_name="${ver}-$name"
+	for i in ${!arr_name[@]}
+	do
+		op_sets=${arr_op_set[$i]}
+		name=${arr_name[$i]}
+		bundle_name="${ver}-$name"
 
-			echo
-			echo Running: bundle-create-test.sh $ver $name $op_sets
-			sleep 1
-			if ! ./bundle-create-test.sh $ver $name $op_sets; then
-				echo "##################################################" >&2
-				echo "Failed: bundle $ver-$name ($op_sets) at $(date)" >&2
-				echo "##################################################" >&2
-				echo Showing last log lines:  >&2
-				touch ~/tmp/bundle-go.out
-				[ "$NOTIFY" ] && echo -e "Install bundle $ver-$name ($op_sets)\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2
-				echo Quitting $0 at $(date)
+		echo
+		echo Running: bundle-create-test.sh $ver $name $op_sets
+		sleep 1
+		if ! ./bundle-create-test.sh $ver $name $op_sets; then
+			echo "##################################################" >&2
+			echo "Failed: bundle $ver-$name ($op_sets) at $(date)" >&2
+			echo "##################################################" >&2
+			echo Showing last log lines:  >&2
+			touch ~/tmp/bundle-go.out
+			[ "$NOTIFY" ] && echo -e "Install bundle $ver-$name ($op_sets)\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2
+			echo Quitting $0 at $(date)
 
-				#exit 1  # Exit if we want to check what failed
-			fi
-		done
-	#else
-	#	echo "##################################################" >&2
-	#	echo "Failed: bundle ${ver}-base at $(date)" >&2
-	#	echo "##################################################" >&2
-	#	echo Showing last log lines:  >&2
-	#	[ "$NOTIFY" ] && echo -e "Install bundle ${ver}-base\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2 
-	#	echo Bundle create failed $0 at $(date)
-	#
-	#	exit 1 #Exit if we want to check what failed   # If the base does not work, then give up for the rest of the bundle types
-	#fi
+			#exit 1  # Exit if we want to check what failed
+		fi
+	done
 done
+
+{
+	date 
+	du -h -s /nas/redhat/aba-openshift-install-bundles/4* 
+	echo
+} | tee -a ~/tmp/install-bundle-size.txt
 
 [ "$NOTIFY" ] && echo "Completed at $(date)" | tee >(notify.sh $0:) 
 
