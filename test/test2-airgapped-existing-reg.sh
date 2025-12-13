@@ -240,7 +240,7 @@ mylog "Starting tests for all combinations of config files for various cluster t
 
 test-cmd -m "Copy test script" scp test/misc/test_ssh_ntp.sh $TEST_USER@$int_bastion_hostname:
 
-for vlan in 10 -
+for vlan in 10 ""
 do
 	for ctype in sno compact standard
 	do
@@ -284,7 +284,7 @@ do
 
 	mylog "Running tests: cname=$cname ctype=$ctype next_hop_address=$next_hop_address machine_network=$machine_network start_ip=$start_ip"
 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "echo until aba --dir $subdir/aba/$ctype ssh --cmd hostname\; do sleep 10\; done > test_ssh.sh"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "echo until aba --dir $subdir/aba/$cname ssh --cmd hostname\; do sleep 10\; done > test_ssh.sh"
 
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete $cname dir: $subdir/aba/$cname" rm -rf $subdir/aba/$cname
 
@@ -295,6 +295,7 @@ do
 	# Standard config (no bonding) 
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting ports" "sed -i 's/^.*ports=.*/ports=ens160 /g' $subdir/aba/$cname/cluster.conf"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $subdir/aba/$cname/cluster.conf"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
 
 	# exec
@@ -316,6 +317,7 @@ do
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, port1=ens192 (deprecated!)" "sed -i 's/^.*port1=.*/port1=ens192 /g' $subdir/aba/$cname/cluster.conf"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/$cname/cluster.conf"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $subdir/aba/$cname/cluster.conf"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
 
 	# exec

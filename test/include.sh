@@ -342,6 +342,7 @@ init_bastion() {
 		#firewall-cmd --add-forward --zone=public --permanent
 		#firewall-cmd --reload
 		systemctl stop firewalld  # Actually, we don't need this!
+		systemctl disable firewalld
 		####################################
 		#### Set up private net - done  ####
 		####################################

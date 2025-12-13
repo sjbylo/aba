@@ -1,6 +1,7 @@
 #!/bin/bash 
 
 source scripts/include_all.sh
+trap - ERR
 
 aba_debug "Starting: $0 $*"
 
