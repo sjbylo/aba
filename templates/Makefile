@@ -158,7 +158,8 @@ startup:             ## Start all VMs and allow all pods to start (uncorden).  S
 
 # This target is a duplicate of .autorefresh below, except for the touch command.  'aba refresh' is for interactive use and will always run.
 .PHONY: refresh
-refresh: vmw agentconf  ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
+#refresh: vmw agentconf  ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
+refresh: vmw upload  ## Delete & create the VMs. This will automatically start the cluster installation again which can be useful when your cluster is broken and you want to redeploy it.
 	$(SCRIPTS)/vmw-refresh.sh workers=$(workers) masters=$(masters) 
 
 # This target is the same as 'refresh' but should only run once depending on .init .autoupload & vmware.conf
