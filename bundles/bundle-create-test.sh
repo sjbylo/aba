@@ -245,7 +245,8 @@ read -t 6  || true
 
 echo_step Save images to disk ...
 
-rm -rf ~/.oc-mirror  # We don't want to include all the older images?!?!
+##### TRY WITHOUT rm -rf ~/.oc-mirror  # We don't want to include all the older images?!?!
+sed -i "s/--since 2025-01-01//g" scripts/reg-save.sh  # Experimental: keeping the cache for re-use to speed things up
 aba -d mirror save -r 8
 
 ###rm -rf ~/.oc-mirror  # We need some storage back!
@@ -359,7 +360,7 @@ echo "All images loaded (disk2mirror) into Quay: ok" >> $WORK_TEST_LOG
 echo_step "Be sure to delete the cached agent ISO, otherwise we may mistakenly use the cached ISO instead of a possibly bad one from the release payload! (like with v4.19.18!)"
 rm -rf ~/.cache/agent 
 echo_step Create the cluster ...
-aba cluster --name bundle --type sno --starting-ip 10.0.1.204 --mmem 20 --mcpu 10 --step install
+aba cluster --name bundle --type sno --starting-ip 10.0.1.209 --mmem 20 --mcpu 10 --step install
 
 echo_step Test this cluster type: $NAME ...
 
