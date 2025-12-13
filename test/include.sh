@@ -326,6 +326,8 @@ init_bastion() {
 		####################################
 		#### Set up private net - start ####
 		####################################
+		# Used to test VLAN config
+		nmcli connection modify "Wired connection 1" connection.id ens224
 		nmcli connection modify ens224 ipv4.method disabled ipv6.method disabled      # disable 
 		nmcli connection up ens224
 		# Create vlan interface 
@@ -336,9 +338,10 @@ init_bastion() {
 		iptables -t nat -A POSTROUTING -o ens192 -s 10.10.10.0/24 -j MASQUERADE
 		echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/99-ipforward.conf
 		sysctl -p /etc/sysctl.d/99-ipforward.conf
-		firewall-cmd --add-masquerade --zone=public --permanent
-		firewall-cmd --add-forward --zone=public --permanent
-		firewall-cmd --reload
+		#firewall-cmd --add-masquerade --zone=public --permanent
+		#firewall-cmd --add-forward --zone=public --permanent
+		#firewall-cmd --reload
+		systemctl stop firewalld  # Actually, we don't need this!
 		####################################
 		#### Set up private net - done  ####
 		####################################
