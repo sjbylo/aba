@@ -291,6 +291,7 @@ do
 	# Init
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster -i $start_ip --name $cname --type $ctype --step cluster.conf"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $subdir/aba/$cname/cluster.conf"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting next_hop_address" "sed -i \"s/^.*next_hop_address=.*/next_hop_address=$next_hop_address /g\" $subdir/aba/$cname/cluster.conf"
 
 	# Standard config (no bonding) 
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
@@ -319,6 +320,10 @@ do
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/$cname/cluster.conf"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $subdir/aba/$cname/cluster.conf"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
+
+	# Set balance-xor, if mode available
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create agent config file" "aba --dir $subdir/aba/$cname agent-config.yaml" 
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting mode" "sed -i \"s/mode: active-backup/mode: balance-xor/g\" $subdir/aba/$cname/agent-config.yaml"
 
 	# exec
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/$cname iso" 
@@ -411,7 +416,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upgrade cluster.conf" "sed -i '
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, port1=ens192 (deprecated!)" "sed -i 's/^.*port1=.*/port1=ens192/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, ports=ens160,ens192,ens224" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8,ntp.example.com/g' $subdir/aba/sno/cluster.conf"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8/g' $subdir/aba/sno/cluster.conf"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target" 
 

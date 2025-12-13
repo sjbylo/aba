@@ -1,10 +1,13 @@
 #!/bin/bash 
 # ssh into rendezvous server (node0)
 
+[ ! -f scripts/include_all.sh ] && echo "Error: Cluster directory $PWD not yet initialized!  See: aba cluster --help" >&2 && exit 1
 source scripts/include_all.sh 
 trap - ERR
 
-aba_debug "Starting: $0 $*"
+[ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized!  See: aba cluster --help"
+
+aba_debug "Starting: $0 $* from $PWD"
 
 source <(normalize-cluster-conf) 
 

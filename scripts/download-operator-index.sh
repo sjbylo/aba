@@ -134,7 +134,7 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 	fi
 
 	handle_interupt() { echo_red "Stopped waiting for download to complete" >&2; exit 0; }
-	echo_magenta "Waiting for operator $catalog_name index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
+	echo_magenta "[ABA] Waiting for operator $catalog_name index v$ocp_ver_major to finish downloading in the background (process id = `cat $pid_file`) ..."
 	if ! try_cmd -q 5 0 120 test -f $done_file; then
 		rm -f $lock_file  # Remove just the lock file
 	       	aba_abort "Giving up waiting for $catalog_name index download! Please check: mirror/$log_file"  # keep checking completion for max 600s (5 x 120s)
