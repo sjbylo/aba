@@ -166,7 +166,7 @@ if [ "$reg_ssh_key" ]; then
 	# Note that the mirror-registry installer does not open the port for us
 	if ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "rpm -q firewalld >/dev/null"; then
 		aba_info Allowing firewall access to the registry at $reg_host/$reg_port ...
-		if systemctl is-active firewalld >/dev/null; then
+		if ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "systemctl is-active firewalld >/dev/null"; then
 			ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "$SUDO firewall-cmd --state >/dev/null && \
 				$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent >/dev/null && \
 					$SUDO firewall-cmd --reload >/dev/null"
@@ -321,10 +321,16 @@ else
 	aba_info "Installing Quay registry on localhost ..."
 
 	# mirror-registry installer does not open the port for us
-	aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
-	$SUDO firewall-cmd --state && \
-		$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
-			$SUDO firewall-cmd --reload
+	if rpm -q firewalld >/dev/null; then
+		aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
+		if systemctl is-active firewalld >/dev/null; then
+			$SUDO firewall-cmd --state && \
+				$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
+					$SUDO firewall-cmd --reload
+		else
+			$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
+		fi
+	fi
 
 	# Create random password
 	if [ ! "$reg_pw" ]; then
