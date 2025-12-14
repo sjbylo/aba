@@ -149,14 +149,14 @@ mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key 
 # This should also set the firewall rule in 'firewalld offline' mode
 # Note that the firewalld is used for the VLAN/private network config ... 'test1' should be ok
 test-cmd -m "Show Firewalld status" -h $TEST_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld"
-test-cmd -h $TEST_USER@$int_bastion_hostnam -m "Bring down firewalld to test the mirror can be installed to remote host ok" "sudo systemctl disable firewalld && sudo systemctl stop firewalld"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Bring down firewalld to test the mirror can be installed to remote host ok" "sudo systemctl disable firewalld && sudo systemctl stop firewalld"
 
 # Install & sync mirror on remote host
 test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba -d mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
 test-cmd -m "Show Firewalld status" -h $TEST_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld"
 
-test-cmd -h $TEST_USER@$int_bastion_hostnam -m "Bring up firewalld to test the mirror port port was added during mirror installation (above)" "sudo systemctl enable firewalld && sudo systemctl start firewalld"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Bring up firewalld to test the mirror port port was added during mirror installation (above)" "sudo systemctl enable firewalld && sudo systemctl start firewalld"
 
 test-cmd -m "Show Firewalld status" -h $TEST_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld"
 
