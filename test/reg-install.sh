@@ -4,12 +4,12 @@
 cd `dirname $0`
 
 # FIXME: needed?
-$SUDO dnf install hostname -y   # Hack due to tests for missing packages
+sudo dnf install hostname -y   # Hack due to tests for missing packages
 
 curl --retry 8 -ILsk -o /dev/null https://localhost:8443/health/instance && echo "Mirror registry already installed on `hostname`" && exit 0
 
 if ! rpm -q podman || ! rpm -q rsync; then
-	$SUDO dnf install podman rsync -y
+	sudo dnf install podman rsync -y
 fi
 
 if [ ! -x ./mirror-registry ]; then
@@ -34,12 +34,12 @@ if rpm -q firewalld >/dev/null; then
 	echo Allowing firewall access to the registry at $reg_host/$reg_port ...
 	if systemctl is-active firewalld >/dev/null; then
 		{
-			$SUDO firewall-cmd --state
-			$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent
-			$SUDO firewall-cmd --reload
+			sudo firewall-cmd --state
+			sudo firewall-cmd --add-port=$reg_port/tcp --permanent
+			sudo firewall-cmd --reload
 		} >/dev/null
 	else
-		$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
+		sudo firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
 	fi
 fi
 
@@ -56,9 +56,9 @@ reg_url=https://$reg_host:$reg_port
 #scp -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
 
 # Check if the cert needs to be updated
-$SUDO diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-	$SUDO cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
-		$SUDO update-ca-trust extract
+sudo diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
+	sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+		sudo update-ca-trust extract
 
 podman logout --all 
 echo -n "Checking registry access is working using 'podman login': "
