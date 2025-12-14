@@ -323,21 +323,24 @@ init_bastion() {
 		mkdir -p ~/subdir
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bashrc
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bash_profile
+
 		####################################
-		#### Set up some network config  ###
+		#### Tidy up network config      ###
 		####################################
-		# RM # nmcli connection modify "Wired connection 1" connection.id ens224
-		# RM # nmcli connection modify ens192 ipv4.never-default yes
-		# RM # nmcli connection modify ens224 ipv4.never-default yes
-		# RM # nmcli connection modify ens192 ipv6.method disabled
-		# RM # nmcli connection modify ens224 ipv6.method disabled
+		nmcli connection modify "Wired connection 1" connection.id ens224
+		nmcli connection modify ens192 ipv4.never-default yes
+		nmcli connection modify ens224 ipv4.never-default yes
+		nmcli connection modify ens192 ipv6.method disabled
+		nmcli connection modify ens224 ipv6.method disabled
+
 		####################################
-		#### Set up private net - start ####
+		#### Set up private /24 net     ####
 		####################################
 		# Used to test VLAN config
-		# RM # nmcli connection modify ens224 ipv4.method disabled ipv6.method disabled      # disable 
-		# RM # nmcli connection up ens224
+		nmcli connection modify ens224 ipv4.method disabled ipv6.method disabled      # disable 
+		nmcli connection up ens224
 		# Create vlan interface 
+		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 id 10 ipv4.method manual ipv4.addresses 10.10.10.1/24 ipv4.never-default yes
 
 		echo "=== Removing iptables-services ==="
 		systemctl disable --now iptables || true
@@ -353,8 +356,7 @@ init_bastion() {
 		sysctl -p /etc/sysctl.d/99-ipforward.conf
 
 		echo "=== Adding rich NAT MASQUERADE rule for 10.10.10.0/24 ==="
-		firewall-cmd --permanent --zone=public \
-  			--add-rich-rule='rule family="ipv4" source address="10.10.10.0/24" masquerade'
+		firewall-cmd --permanent --zone=public --add-rich-rule='rule family="ipv4" source address="10.10.10.0/24" masquerade'
 
 		echo "=== Reloading firewalld ==="
 		firewall-cmd --reload
@@ -362,10 +364,11 @@ init_bastion() {
 		echo "=== FIREWALLD NAT SETUP COMPLETE ==="
 		firewall-cmd --list-all --zone=public
 
-		# RM # nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 id 10 ipv4.method manual ipv4.addresses 10.10.10.1/24 ipv4.never-default yes
 		# Check vlan 
-		# RM # nmcli -f GENERAL,IP4,IP6 connection show ens224.10
-		# RM # ip a
+		nmcli -f GENERAL,IP4,IP6 connection show ens224.10
+		ip a
+		ip route
+
 		# Set MASQUERADE persistently
 		# RM # sudo dnf install -y iptables-services
 		# RM # sudo systemctl enable iptables
