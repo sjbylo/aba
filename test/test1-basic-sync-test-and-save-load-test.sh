@@ -145,7 +145,10 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 ######################
 # This will install mirror and sync images
 mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key ~/.ssh/id_rsa and then ..."
+# This should also set the firewall rule in 'firewalld offline' mode
 test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba -d mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+# Note that the firewalld is disabled due to the simplfying the private network.  Since there are no VLAN/private network tests 'test1' it should be ok
+test-cmd -h $TEST_USER@$int_bastion_hostnam -m "Bring up firewalld to test the mirror port port was added during mirror installation (above)" "sudo systemctl enable firewalld && sudo systemctl start firewalld"
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
