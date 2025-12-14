@@ -157,17 +157,23 @@ if [ "$reg_ssh_key" ]; then
 	> .remote_host_check.out
 	err=
 	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host "set -x; ip a" >> .remote_host_check.out 2>&1
-	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host "set -x; rpm -q podman || sudo dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
-	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host "set -x; rpm -q jq 	|| sudo dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
+	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host "set -x; rpm -q podman || $SUDO dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
+	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host "set -x; rpm -q jq 	|| $SUDO dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
 	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host "set -x; podman images" >> .remote_host_check.out 2>&1 || err=1
 
 	[ "$err" ] && aba_abort "Install 'podman' and 'jq' on the remote host '$reg_host' and try again."
 
 	# Note that the mirror-registry installer does not open the port for us
-	aba_info Allowing firewall access to the registry at $reg_host/$reg_port ...
-	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "sudo firewall-cmd --state && \
-		sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
-			sudo firewall-cmd --reload"
+	if rpm -q firewalld >/dev/null; then
+		aba_info Allowing firewall access to the registry at $reg_host/$reg_port ...
+		if systemctl is-active firewalld >/dev/null; then
+			ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "$SUDO firewall-cmd --state >/dev/null && \
+				$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent >/dev/null && \
+					$SUDO firewall-cmd --reload >/dev/null"
+		else
+			ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null"
+		fi
+	fi
 
 	# Fetch the actual absolute dir path for $reg_root.  "~" on remote host may be diff. to this localhost. Ansible installer does not eval "~"
 	reg_root=$(ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host echo $reg_root)
