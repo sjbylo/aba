@@ -338,6 +338,30 @@ init_bastion() {
 		# RM # nmcli connection modify ens224 ipv4.method disabled ipv6.method disabled      # disable 
 		# RM # nmcli connection up ens224
 		# Create vlan interface 
+
+		echo "=== Removing iptables-services ==="
+		systemctl disable --now iptables || true
+		dnf remove -y iptables-services || true
+
+		echo "=== Enabling firewalld ==="
+		systemctl enable --now firewalld
+
+		echo "=== Enabling IP forwarding ==="
+		cat >/etc/sysctl.d/99-ipforward.conf <<EOF
+		net.ipv4.ip_forward = 1
+		EOF
+		sysctl -p /etc/sysctl.d/99-ipforward.conf
+
+		echo "=== Adding rich NAT MASQUERADE rule for 10.10.10.0/24 ==="
+		firewall-cmd --permanent --zone=public \
+  			--add-rich-rule='rule family="ipv4" source address="10.10.10.0/24" masquerade'
+
+		echo "=== Reloading firewalld ==="
+		firewall-cmd --reload
+
+		echo "=== FIREWALLD NAT SETUP COMPLETE ==="
+		firewall-cmd --list-all --zone=public
+
 		# RM # nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 id 10 ipv4.method manual ipv4.addresses 10.10.10.1/24 ipv4.never-default yes
 		# Check vlan 
 		# RM # nmcli -f GENERAL,IP4,IP6 connection show ens224.10
