@@ -164,7 +164,7 @@ if [ "$reg_ssh_key" ]; then
 	[ "$err" ] && aba_abort "Install 'podman' and 'jq' on the remote host '$reg_host' and try again."
 
 	# Note that the mirror-registry installer does not open the port for us
-	if rpm -q firewalld >/dev/null; then
+	if ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "rpm -q firewalld >/dev/null"; then
 		aba_info Allowing firewall access to the registry at $reg_host/$reg_port ...
 		if systemctl is-active firewalld >/dev/null; then
 			ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "$SUDO firewall-cmd --state >/dev/null && \
