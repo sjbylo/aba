@@ -352,11 +352,14 @@ init_bastion() {
 		# Set forwarding
 		echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/99-ipforward.conf
 		sysctl -p /etc/sysctl.d/99-ipforward.conf
-		#firewall-cmd --add-masquerade --zone=public --permanent
-		#firewall-cmd --add-forward --zone=public --permanent
-		#firewall-cmd --reload
-		systemctl stop firewalld  # Actually, we don't need this!
-		systemctl disable firewalld
+
+		firewall-cmd --add-masquerade --zone=public --permanent
+		firewall-cmd --add-forward --zone=public --permanent
+		firewall-cmd --reload
+
+		#systemctl stop firewalld  # Actually, we don't need this!
+		#systemctl disable firewalld
+
 		####################################
 		#### Set up private net - done  ####
 		####################################
