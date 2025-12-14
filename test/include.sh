@@ -391,10 +391,10 @@ init_bastion() {
 		#### Set up private net - done  ####
 		####################################
 		dnf update -y   # I guess we should do this and add to the vmw snap every now and then
-		reboot
+		#reboot
 	END
 
-	test-cmd -m "Wait for restart" sleep 20
+	# no reboot # test-cmd -m "Wait for restart" sleep 20
 
 	# Copy over the ssh config to /root on bastion (in case test_user = root)
 	# ~$user only expands to /home/$user is the $user exists
