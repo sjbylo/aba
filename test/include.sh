@@ -326,39 +326,39 @@ init_bastion() {
 		####################################
 		#### Set up some network config  ###
 		####################################
-		nmcli connection modify "Wired connection 1" connection.id ens224
-		nmcli connection modify ens192 ipv4.never-default yes
-		nmcli connection modify ens224 ipv4.never-default yes
-		nmcli connection modify ens192 ipv6.method disabled
-		nmcli connection modify ens224 ipv6.method disabled
+		# RM # nmcli connection modify "Wired connection 1" connection.id ens224
+		# RM # nmcli connection modify ens192 ipv4.never-default yes
+		# RM # nmcli connection modify ens224 ipv4.never-default yes
+		# RM # nmcli connection modify ens192 ipv6.method disabled
+		# RM # nmcli connection modify ens224 ipv6.method disabled
 		####################################
 		#### Set up private net - start ####
 		####################################
 		# Used to test VLAN config
-		nmcli connection modify ens224 ipv4.method disabled ipv6.method disabled      # disable 
-		nmcli connection up ens224
+		# RM # nmcli connection modify ens224 ipv4.method disabled ipv6.method disabled      # disable 
+		# RM # nmcli connection up ens224
 		# Create vlan interface 
-		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 id 10 ipv4.method manual ipv4.addresses 10.10.10.1/24 ipv4.never-default yes
+		# RM # nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 id 10 ipv4.method manual ipv4.addresses 10.10.10.1/24 ipv4.never-default yes
 		# Check vlan 
-		nmcli -f GENERAL,IP4,IP6 connection show ens224.10
-		ip a
+		# RM # nmcli -f GENERAL,IP4,IP6 connection show ens224.10
+		# RM # ip a
 		# Set MASQUERADE persistently
-		sudo dnf install -y iptables-services
-		sudo systemctl enable iptables
-		iptables -t nat -A POSTROUTING -o ens192 -s 10.10.10.0/24 -j MASQUERADE
-		sudo service iptables save
-		iptables -t nat -L POSTROUTING -n -v
+		# RM # sudo dnf install -y iptables-services
+		# RM # sudo systemctl enable iptables
+		# RM # iptables -t nat -A POSTROUTING -o ens192 -s 10.10.10.0/24 -j MASQUERADE
+		# RM # sudo service iptables save
+		# RM # iptables -t nat -L POSTROUTING -n -v    # Show config
 		# Set MASQUERADE persistently - done
 		# Set forwarding
-		echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/99-ipforward.conf
-		sysctl -p /etc/sysctl.d/99-ipforward.conf
+		# RM # echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.d/99-ipforward.conf
+		# RM # sysctl -p /etc/sysctl.d/99-ipforward.conf
 
-		firewall-cmd --add-masquerade --zone=public --permanent
-		firewall-cmd --add-forward --zone=public --permanent
-		firewall-cmd --reload
+		# RM # firewall-cmd --add-masquerade --zone=public --permanent
+		# RM # firewall-cmd --add-forward --zone=public --permanent
+		# RM # firewall-cmd --reload
 
-		#systemctl stop firewalld  # Actually, we don't need this!
-		#systemctl disable firewalld
+		# RM # #systemctl stop firewalld  # Actually, we don't need this!
+		# RM # #systemctl disable firewalld
 
 		####################################
 		#### Set up private net - done  ####
