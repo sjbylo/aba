@@ -326,6 +326,7 @@ init_bastion() {
 		####################################
 		#### Set up some network config  ###
 		####################################
+		nmcli connection modify "Wired connection 1" connection.id ens224
 		nmcli connection modify ens192 ipv4.never-default yes
 		nmcli connection modify ens224 ipv4.never-default yes
 		nmcli connection modify ens192 ipv6.method disabled
@@ -334,7 +335,6 @@ init_bastion() {
 		#### Set up private net - start ####
 		####################################
 		# Used to test VLAN config
-		nmcli connection modify "Wired connection 1" connection.id ens224
 		nmcli connection modify ens224 ipv4.method disabled ipv6.method disabled      # disable 
 		nmcli connection up ens224
 		# Create vlan interface 
