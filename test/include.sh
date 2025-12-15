@@ -270,8 +270,11 @@ init_bastion() {
 
 	net_if=ens160 # Not used below!
 
+	mylog "Cleaning files @ $def_user@$int_bastion_hostname"
 	# Clean up as test user
 	cat <<-END | ssh $def_user@$int_bastion_hostname -- bash
+		set -ex
+		whoami
 		rm -vrf ~/.cache/agent/   # Just to be sure, remove old images
 		rm -vrf ~/bin/*    	 # To make sure we do things from scratch!
 		rm -f  $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
@@ -279,6 +282,7 @@ init_bastion() {
 		rm -rf $HOME/*/.oc-mirror/.cache
 	END
 
+	mylog "Running VM config as root"
 	# General bastion config, e.g. date/time/timezone and also root ssh
 	cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
 		set -ex
