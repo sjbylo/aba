@@ -3,9 +3,6 @@
 
 source scripts/include_all.sh
 
-### scripts/install-govc.sh
-
-
 
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER variable
@@ -43,7 +40,7 @@ ask "Delete the above virtual machine(s)" || exit 1
 
 for name in $CP_NAMES $WORKER_NAMES; do
 	aba_info Destroy VM ${CLUSTER_NAME}-$name
-	govc vm.destroy ${CLUSTER_NAME}-$name || true
+	govc vm.destroy ${CLUSTER_NAME}-$name || true  # FIXME: should check first if the VM exists and only then delete instead of using || true
 done
 
 if [ "$VC" ]; then

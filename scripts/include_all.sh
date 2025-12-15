@@ -266,9 +266,8 @@ show_error() {
 }
 
 # Set the trap to call the show_error function on ERR signal
-#[ ! "$1" ] && trap 'show_error' ERR
 # If no first argument is provided, set a trap for errors
-[ -z "${1-}" ] && trap 'show_error' ERR
+[ -z "${1-}" ] && trap 'show_error' ERR && [ "$ABA_DEBUG" ] && echo Error trap set 2>&1
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
@@ -778,6 +777,8 @@ _fetch_graph_cached() {
 	local channel="${1:-stable}"
 	local minor="$2"
 	local tmp_file
+
+	[ "$ARCH" = "x86_64" ] && ARCH=amd64
 
 	aba_debug "_fetch_graph_cached(): channel=$channel minor=$minor"
 	[ ! "$minor" ] && minor=$(fetch_latest_minor_version $channel)
