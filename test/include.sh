@@ -400,7 +400,7 @@ init_bastion() {
 		####################################
 
 		#dnf update -y # This moved upwards due to restart issues!  # I guess we should do this and add to the vmw snap every now and then
-		reboot  # For some reason, a reboot causes the quay to fail installation to remote host ;/
+		#reboot  # For some reason, a reboot causes the quay to fail installation to remote host ;/
 	END
 
 	# no reboot # test-cmd -m "Wait for restart" sleep 20
