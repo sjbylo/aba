@@ -927,7 +927,7 @@ In a partially disconnected environment, the following can be done:
 
 # Advanced Use
 
-### Aba can run in a container (partial support)
+## Aba can run in a container (partial support)
 
   - Tested on Mac M1 (`arm64`) with successful results.
   - You can run Aba in a container, for example:
@@ -976,7 +976,7 @@ aba
 After this, proceed with loading the images into your registry using `aba -d mirror load`.  Continue to follow the instructions in the [Fully Disconnected (Air-Gapped) Scenario](#fully-disconnected-air-gapped) section.
 
 
-
+<!--
 ### Cluster presets are used mainly to automate the testing of Aba.
 
 >> **This feature is deprecated and will be removed in a future version!**
@@ -997,8 +997,9 @@ aba standard   # for a 3+2 topology (note, *all* parameters in 'aba.conf' must b
 ```
 - Run this to create a compact cluster (works in a similar way to the above).
 
+-->
 
-### To install aba from the dev branch run the following:
+## To install aba from the dev branch run the following:
 
 ```
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
@@ -1007,13 +1008,13 @@ bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubuserc
 [Back to top](#who-should-use-aba)
 
 
-### Installing RPMS
+## Installing RPMS
 
 - **Required RPMs:**
   - The _bastion_ must be able to install required RPM packages from an appropriate repository.
   - If RPMs cannot be installed using `sudo dnf install ...`, ensure they are pre-installed (for example, from a DVD during RHEL installation).
-  - If RPMs are not available in your disconnected environment, you can use `aba -d rpms download` to download the required packages on a connected workstation.   Copy them to the bastion and install using `dnf localinstall rpms/*.rpm`.  
-    **Note:** This works only if your connected workstation and internal bastion are running the **exact same version of RHEL** (based on testing experience).
+  - If RPMs are not available in your disconnected environment, you can use `aba -d rpms download` to download the required packages on the _connected workstation_.   Copy them to the bastion and install using `dnf localinstall rpms/*.rpm`.  
+    **Note:** This works only if your connected workstation and internal bastion are running the **exact same version of RHEL** (based on out test results).
 
 If you do not have those RPM packages installed, aba attempts to install them using dnf. If dnf is not configured in your disconnected environment, you’ll need to install the packages manually (e.g., from a DVD or another source). 
 
