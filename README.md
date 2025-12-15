@@ -162,7 +162,7 @@ For more, see the [Example Credentials](#example-credentials-for-an-existing-mir
 To install OpenShift in a fully disconnected (air-gapped) environment, one workstation or laptop that is connected to the Internet and one disconnected bastion are required. From now on, we will refer to these as _connected workstation_ and _internal bastion_ or just _bastion_.
 
 #### Connected Workstation Prerequisites
-   - An x86 RHEL 8 or 9 or Fedora (e.g. VM) with Internet access, typically on a laptop.
+   - An x86 or arm RHEL 8 or 9 or Fedora (e.g. VM) with Internet access, typically on a laptop.
    - Aba requires root access, either directly or via passwordless sudo.
    - To install Aba refer to these [instructions](#install-aba).
    - Download and store the Red Hat registry pull secret to `~/.pull-secret.json`.
@@ -174,7 +174,7 @@ To install OpenShift in a fully disconnected (air-gapped) environment, one works
 #### Internal Bastion Prerequisites
 <!-- this is a perma-link from Aba blog, Oct 2025 -->
 
-   - A RHEL 8 or 9 VM or host within your fully disconnected environment.
+   - An x86 or arm RHEL 8 or 9 VM or host within your fully disconnected environment.
    - Aba requires root access, either directly or via passwordless sudo.
    - Install required RPMs as listed in the file `aba/templates/rpms-internal.txt`.  **Note:** This file lists the package names to be installed on the _internal bastion_ and is different from the file mentioned above for the _connected workstation_.
    - Optionally, run `sudo dnf update` to ensure all packages are up to date.
@@ -1207,7 +1207,7 @@ Boot your servers using the Red Hat CoreOS live DVD and check the output of the 
 
 ## Q: Can Aba run inside a container?
 
-**Preferably, run Aba in an x86 RHEL 8 or 9 VM.** (VM or physical). Aba has been tested in a container, see the `Advanced` section. However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing _Mirror Registry for Red Hat OpenShift_ (Quay) or managing certain system-level dependencies might not work.
+**Preferably, run Aba in an x86 or arm RHEL 8 or 9 VM.** (VM or physical). Aba has been tested in a container, see the `Advanced` section. However, there are no hard limitations that prevent you from experimenting with containerized execution. Just be aware of storage, permission, and tool compatibility caveats. For example, installing _Mirror Registry for Red Hat OpenShift_ (Quay) or managing certain system-level dependencies might not work.
 
 [Back to top](#who-should-use-aba)
 
@@ -1215,7 +1215,7 @@ Boot your servers using the Red Hat CoreOS live DVD and check the output of the 
 
 ## Q: Does Aba support ARM?
 
-**Yes.** Aba is developed and validated for x86_64 architecture, but running on ARM is also supported. You can have a RHEL ARM or Centos Stream Instance as the bastion.  See the `Advanced` section.
+**Yes.** Aba supports both x86_64 and aarch64 (ARM) architectures. A RHEL (aarch64) or CentOS Stream (aarch64) instance can be used as the bastion host.  Since there is no official Quay installer for ARM, use an existing registry or the Docker registry instead (see the FAQ for how to use the docker registry instead of Quay).
 
 ---
 
