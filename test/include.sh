@@ -282,14 +282,21 @@ init_bastion() {
 		rm -rf $HOME/*/.oc-mirror/.cache
 	END
 
+	mylog "VM Update and reboot..."
+	cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
+		set -ex
+		whoami
+		dnf update -y   # We should do this and add to the vmw snap every now and then
+		reboot
+	END
+
+	test-cmd -m "Wait for restart" sleep 20
+
 	mylog "Running VM config as root"
 	# General bastion config, e.g. date/time/timezone and also root ssh
 	cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
 		set -ex
 		whoami
-
-		#dnf update -y
-		dnf update -y   # We should do this and add to the vmw snap every now and then
 
 		rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
 
@@ -407,7 +414,7 @@ init_bastion() {
 		#reboot  # For some reason, a reboot causes the quay to fail installation to remote host ;/
 	END
 
-	# no reboot # test-cmd -m "Wait for restart" sleep 20
+	# reboot now done above # test-cmd -m "Wait for restart" sleep 20
 
 	# Copy over the ssh config to /root on bastion (in case test_user = root)
 	# ~$user only expands to /home/$user is the $user exists

@@ -563,7 +563,7 @@ install_rpms() {
 	rpm -q --quiet python3 || rpm -q --quiet python36 || rpms_to_install=" python3$rpms_to_install"
 
 	if [ "$rpms_to_install" ]; then
-		echo "Installing required rpms:$rpms_to_install (logging to .dnf-install.log). Please wait!" >&2  # send to stderr so this can be seen during "aba bundle -o -"
+		echo "Installing required rpm packages:$rpms_to_install (logging to .dnf-install.log). Please wait!" >&2  # send to stderr so this can be seen during "aba bundle -o -"
 		if ! $SUDO dnf install $rpms_to_install -y >> .dnf-install.log 2>&1; then
 			aba_warning \
 				"an error occurred during rpm installation. See the logs at .dnf-install.log." \
@@ -1146,7 +1146,8 @@ get_ntp_servers() {
     echo $ntp | grep -q -E '^(([0-9]{1,3}(\.[0-9]{1,3}){3})|([A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*))(,(([0-9]{1,3}(\.[0-9]{1,3}){3})|([A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)))*$' || ntp=
 
     # fallback
-    echo "${ntp:-pool.ntp.org}"
+    #echo "${ntp:-pool.ntp.org}"
+    echo "$ntp"
 }
 
 trust_root_ca() {

@@ -115,7 +115,7 @@ do
 			if [ -s "$error_file" ]; then
 				mkdir -p sync/saved_errors
 				cp $error_file sync/saved_errors
-				echo_red "Error detected and log file saved in sync/saved_errors/$(basename $error_file)" >&2
+				echo_red "[ABA] Error detected and log file saved in sync/saved_errors/$(basename $error_file)" >&2
 			fi
 		#fi
 
