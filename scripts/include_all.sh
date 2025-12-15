@@ -16,9 +16,9 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 # Set up the arch vars
 export ARCH=$(uname -m)
-export arch=amd64
-export ARCH=amd64
-[ "$ARCH" = "aarch64" -o "$ARCH" = "arm64" ] && export ARCHt=arm64  # ARM
+#export arch=amd64
+#export ARCH=amd64
+[ "$ARCH" = "aarch64" -o "$ARCH" = "arm64" ] && export ARCH=arm64  # ARM
 #[ "$ARCH" = "x86_64" ]	&& export ARCH=amd64   # Intel
 
 # ===========================
