@@ -7,6 +7,8 @@ ABA_VERSION=20251213205718
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
 ARCH=$(uname -m)
+[ "$ARCH" = "aarch64" ] && export ARCH=arm64  # ARM
+[ "$ARCH" = "x86_64" ] && export ARCH=amd64   # Intel
 
 uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a Centos-Stream container. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 

@@ -4,7 +4,7 @@ kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   platform:
-{%- if ARCH != 'amd64' %}
+{%- if ARCH != 'amd64' and ARCH != 'x86_64' %}
     architectures:
     - {{ ARCH }}
 {%- endif %}
