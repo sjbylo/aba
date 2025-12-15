@@ -35,8 +35,8 @@ REGISTRY_NAME="registry"
 INTERNAL_PORT=5000
 EXTERNAL_PORT="${EXTERNAL_PORT:-8443}"
 REGISTRY_DATA_DIR="$data_dir/docker-reg/data"
-REGISTRY_CERTS_DIR=".docker-certs"
-REGISTRY_AUTH_DIR=".docker-auth"
+REGISTRY_CERTS_DIR=~/.aba/.docker-certs
+REGISTRY_AUTH_DIR=~/.aba/.docker-auth
 
 REGISTRY_USER="${REGISTRY_USER:-init}"
 REGISTRY_PASS="${REGISTRY_PASS:-p4ssw0rd}"

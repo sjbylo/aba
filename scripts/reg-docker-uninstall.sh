@@ -35,8 +35,8 @@ REGISTRY_NAME="registry"
 #INTERNAL_PORT=5000
 #EXTERNAL_PORT="${EXTERNAL_PORT:-8443}"
 REGISTRY_DATA_DIR="$data_dir/docker-reg/data"
-#REGISTRY_CERTS_DIR=".docker-certs"
-#REGISTRY_AUTH_DIR=".docker-auth"
+REGISTRY_CERTS_DIR=~/.aba/.docker-certs
+REGISTRY_AUTH_DIR=~/.aba/.docker-auth
 
 if $DOCKER ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
     echo_yellow "Stopping and removing old registry container..."
@@ -44,6 +44,6 @@ if $DOCKER ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
 fi
 
 # FIXME: should ask for permission?
-sudo rm -rf $(dirname $REGISTRY_DATA_DIR)
+sudo rm -rf $(dirname $REGISTRY_DATA_DIR) $REGISTRY_CERTS_DIR $REGISTRY_AUTH_DIR
 
 exit 0
