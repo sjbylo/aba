@@ -31,6 +31,7 @@ fi
 #[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
 # Check twice for the image (skopeo sometimes fails when it shouldn't!)
+aba_debug Running: skopeo inspect docker://$reg_host:$reg_port$reg_path/openshift/release-images$release_sha
 if ! skopeo inspect                  docker://$reg_host:$reg_port$reg_path/openshift/release-images$release_sha >/dev/null; then
 	sleep 10
 	if ! skopeo inspect                  docker://$reg_host:$reg_port$reg_path/openshift/release-images$release_sha >/dev/null; then
