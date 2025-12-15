@@ -35,8 +35,8 @@ REGISTRY_NAME="registry"
 #INTERNAL_PORT=5000
 #EXTERNAL_PORT="${EXTERNAL_PORT:-8443}"
 REGISTRY_DATA_DIR="$data_dir/docker-reg/data"
-REGISTRY_CERTS_DIR=~/.aba/.docker-certs
-REGISTRY_AUTH_DIR=~/.aba/.docker-auth
+REGISTRY_CERTS_DIR=.docker-certs  # Is mounted into container
+REGISTRY_AUTH_DIR=.docker-auth
 
 if $DOCKER ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
     echo_yellow "Stopping and removing old registry container..."
