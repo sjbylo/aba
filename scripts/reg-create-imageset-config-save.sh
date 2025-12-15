@@ -50,7 +50,7 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" save/imageset-config-save.yaml
 	touch save/.created
 
-	aba_info_ok "Image set config file created: mirror/save/imageset-config-save.yaml"
+	aba_info_ok "Image set config file created: mirror/save/imageset-config-save.yaml ($ocp_channel-$ocp_version $ARCH)"
 	aba_info    "Reminder: Edit this file to add more content, e.g. Operators, and then run 'aba -d mirror save' again to update the images."
 else
 	# Check disk space under save/. 

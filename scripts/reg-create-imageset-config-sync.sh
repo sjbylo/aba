@@ -45,7 +45,7 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" sync/imageset-config-sync.yaml
 	touch sync/.created
 
-	aba_info_ok "Image set config file created: mirror/sync/imageset-config-sync.yaml"
+	aba_info_ok "Image set config file created: mirror/sync/imageset-config-sync.yaml ($ocp_channel-$ocp_version $ARCH)"
 	aba_info    "Reminder: Edit this file to add more content, e.g. Operators, and then run 'aba -d mirror sync' again."
 else
 	aba_info "Using existing image set config file (save/imageset-config-sync.yaml)"
