@@ -33,6 +33,10 @@ Use Aba to quickly set up OpenShift in a disconnected environment while letting 
 - [Creating a Custom Install Bundle](#creating-a-custom-install-bundle)
 - [How to Customize the Agent-based Configuration Files](#how-to-customize-the-agent-based-configuration-files)
 - [Day 2 Operations](#day-2-operations)
+  - [Login and Verify Cluster State](#login-and-verify-cluster-state)
+  - [Connect OperatorHub to Internal Mirror Registry](#connect-operatorhub-to-internal-mirror-registry)
+  - [Synchronize NTP Across Cluster Nodes](#synchronize-ntp-across-cluster-nodes)
+  - [Enable OpenShift Update Service (OSUS)](#enable-openshift-update-service-osus)
 - [Advanced Use](#advanced-use)
   - [Creating an Install bundle on a Restricted VM or Laptop](#creating-an-install-bundle-on-a-restricted-vm-or-laptop)
 - [Feature Backlog and Ideas](#feature-backlog-and-ideas)
@@ -754,9 +758,9 @@ aba info
 ```
 - This displays access information for your cluster, including OpenShift Console URL, kubeadmin credentials, and next-step guidance.
 
-### Login and Verify Cluster State
+## Login and Verify Cluster State
 
-#### Option A: Use kubeadmin credentials
+### Option A: Use kubeadmin credentials
 ```
 aba login
 ```
@@ -770,7 +774,7 @@ Alternatively, you can try
 
 
 
-#### Option B: Use kubeconfig export
+### Option B: Use kubeconfig export
 ```
 . <(aba shell)
 ```
@@ -787,7 +791,7 @@ oc get co
 
 
 
-### Connect OperatorHub to Internal Mirror Registry
+## Connect OperatorHub to Internal Mirror Registry
 
 ```
 aba day2
@@ -801,7 +805,7 @@ Re-run this command whenever new Operators are added or updated in your mirror r
 This step refreshes OpenShift’s OperatorHub configuration (catalog) so it includes the latest mirrored Operators.
 
 
-### Synchronize NTP Across Cluster Nodes
+## Synchronize NTP Across Cluster Nodes
 
 ```
 aba day2-ntp
@@ -810,7 +814,7 @@ aba day2-ntp
 
 
 
-### Enable OpenShift Update Service (OSUS)
+## Enable OpenShift Update Service (OSUS)
 
 ```
 aba day2-osus
@@ -819,6 +823,78 @@ aba day2-osus
 
 **NOTE:** The `cincinnati-operator` must be available in the mirror for OSUS to work!
 
+
+
+### Updating an OpenShift Cluster
+
+After your first OpenShift cluster has been installed, the mirror registry can continue to be managed using **Aba**, or you can switch entirely to using `oc-mirror`.
+
+The usual Aba workflows can be repeated in the *same way*—for example, to incrementally add operators or download new platform images in preparation for an OpenShift upgrade.
+
+First, ensure that **OpenShift Update Service (OSUS)** is enabled (see above).
+
+---
+
+### Updating a cluster in a fully disconnected environment
+
+In a fully disconnected environment, you can do one of the following:
+
+- **Use Aba to add more operators**  
+  Edit `aba/aba.conf` on the _connected workstation_ to add additional operators or operator sets and then run:
+  ```
+  aba -d mirror save
+  ```
+- **Manually edit the image-set configuration (advanced / flexible option)**  
+  Edit `aba/mirror/save/imageset-config-save.yaml` yourself—for example, to add more images or fetch newer platform versions.
+  - To mirror images for OpenShift upgrades, you must manually adjust the `min` and `max` versions in `imageset-config-save.yaml`.  
+    Aba does **not** manage these values automatically.
+
+- Run `aba -d mirror save` to download the images to disk and wait for completion.
+
+- Copy the following files from the _connected workstation_ to the _internal bastion_, under `aba/mirror/save`:
+  - Image-set configuration file:  
+    aba/mirror/save/imageset-config-save.yaml
+  - Image-set archive file:  
+    aba/mirror/save/mirror_000001.tar
+
+- On the _internal bastion_, run:
+  ```
+  aba -d mirror load
+  ```
+  This pushes the images from disk into the _internal mirror registry_.
+
+- Run the following to update operator catalogs and release signatures in the cluster:
+  ```
+  aba -d <cluster name> day2
+  ```
+- Add operators or upgrade OpenShift in the usual way.
+
+---
+
+### Updating a cluster in a partially disconnected environment
+
+In a partially disconnected environment, the following workflow can be used:
+
+- Edit the image-set configuration file on the _connected bastion_:
+
+  aba/mirror/sync/imageset-sync.yaml
+
+  Add additional images or update platform versions as needed.
+
+- Run:
+  ```
+  aba -d mirror sync
+  ```
+  This downloads and pushes images directly into the _internal mirror registry_.
+
+- Update operator catalogs and release signatures:
+  ```
+  aba -d <cluster name> day2
+  ```
+- Add operators or upgrade OpenShift in the usual way.
+
+
+<!--
 
 ### Updating an OpenShift Cluster
 
@@ -847,7 +923,7 @@ In a partially disconnected environment, the following can be done:
 - Run `aba -d <cluster name> day2` to update any operator catalogs and release signatures in your cluster(s).   
 - Add operators or upgrade OpenShift on the usual way. 
 
-
+--> 
 
 # Advanced Use
 
