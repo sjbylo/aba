@@ -158,6 +158,7 @@ test-cmd -r 15 3 -m "Syncing images from external network to internal mirror reg
 test-cmd -m "Show Firewalld status" -h $TEST_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Bring up firewalld to test the 8443 port was added during mirror installation (above)" "sudo systemctl enable firewalld && sudo systemctl start firewalld"
 test-cmd -m "Show Firewalld status" -h $TEST_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
+test-cmd -m "Test firewalld port open" -h $TEST_USER@$int_bastion_hostname "sudo firewall-cmd --list-all | grep \"ports: .*8443/tcp\""  # This port must be open
 
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"

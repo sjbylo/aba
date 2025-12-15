@@ -270,6 +270,7 @@ init_bastion() {
 
 	net_if=ens160 # Not used below!
 
+	# Clean up as test user
 	cat <<-END | ssh $def_user@$int_bastion_hostname -- bash
 		rm -vrf ~/.cache/agent/   # Just to be sure, remove old images
 		rm -vrf ~/bin/*    	 # To make sure we do things from scratch!
@@ -284,7 +285,7 @@ init_bastion() {
 		whoami
 
 		#dnf update -y
-		dnf update -y   # I guess we should do this and add to the vmw snap every now and then
+		dnf update -y   # We should do this and add to the vmw snap every now and then
 
 		rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
 
@@ -398,8 +399,8 @@ init_bastion() {
 		#### Set up private net - done  ####
 		####################################
 
-		#dnf update -y   # I guess we should do this and add to the vmw snap every now and then
-		#reboot  # For some reason, a reboot causes the quay to fail installation to remote host ;/
+		#dnf update -y # This moved upwards due to restart issues!  # I guess we should do this and add to the vmw snap every now and then
+		reboot  # For some reason, a reboot causes the quay to fail installation to remote host ;/
 	END
 
 	# no reboot # test-cmd -m "Wait for restart" sleep 20

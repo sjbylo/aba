@@ -40,7 +40,7 @@ if [ ! "$fqdn_ip" ]; then
 	aba_abort \
 		"Hostname: $reg_host does not resolve to an IP address!" \
 		"Command used: dig $reg_host +short" \
-		"OpenShift requires valid DNS records for both the API and Apps ingress." \
+		"The mirror registry requires a valid DNS record (FQDN)! OpenShift itself also requires two records for API and App ingress!" \
 		"Please add/correct your DNS entries or update $PWD/mirror.conf and try again."
 fi
 
