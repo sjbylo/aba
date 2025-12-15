@@ -80,7 +80,7 @@ Aba helps you with the following and more:
 1. Installs and integrates OpenShift Update Service (OSUS) to make upgrades a single-click.
 1. Helps configure OpenShift with your NTP servers.
 1. Enables graceful cluster shutdown and startup.
-1. Allows for the modification of generated configuration files (image set & agent based), if more control is required. 
+1. Allows for the modification of generated configuration files (image-set & agent based), if more control is required. 
 
 All Aba commands and actions are idempotent. If something goes wrong, fix it and run the command again — Aba will always try to do the right thing.
 
@@ -611,7 +611,7 @@ aba bundle \
 - Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
 - Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_* | tee CHECKSUM.txt`.  It is important to verify the files after copying them into the air-gapped environment!
-- Warning: --force will overwrite any existing image set files under aba/mirror/save!
+- Warning: --force will overwrite any existing image-set files under aba/mirror/save!
 - See `aba bundle --help` for more.
 
 Copy the files to your RHEL 8 or 9 bastion within the disconnected environment.
@@ -631,7 +631,7 @@ cd aba
 aba         # Run aba and follow the instructions
 ```
 
-Note: You will find the large image set tar file under `aba/mirror/save`.
+Note: You will find the large image-set tar file under `aba/mirror/save`.
 
 You can now install the _Mirror Registry for Red Hat OpenShift_ (Quay) to localhost and then load it with images using the following command (run: aba -d mirror load --help or see below for more details):
 
@@ -815,33 +815,37 @@ aba day2-ntp
 ```
 aba day2-osus
 ```
-- Configures OpenShift to receive updates via your _internal mirror_. Useful for enabling controlled cluster upgrades in disconnected environments.
+- Configures OpenShift to receive updates via your _internal mirror_. Useful for enabling controlled cluster upgrades from the OpenShift Console in disconnected environments.
 
 **NOTE:** The `cincinnati-operator` must be available in the mirror for OSUS to work!
 
 
 ### Updating an OpenShift Cluster
 
-After Aba has installed it's first OpenShift cluster, the mirror should be managed using `oc-mirror` in the usual way or Aba can be used to assist. 
+After your first OpenShift cluster has been installed the mirror registry can be managed using Aba OR you can switch entirly to using `oc-mirror`. 
 The usual workflows with Aba can be repeated in the *same way*, for example, to incrementally install operators or download new versions of platform images to upgrade OpenShift.  
 
 First enable OpenShift Update Service (see above).  
 
 In a fully disconnected environment, you can do one of the following:
 
-- Edit the `aba/mirror/save/imageset-save.yaml` image set configuration file on the _connected workstation_ to add more images or to fetch the latest platform images.
-- Run `aba -d mirror save`
-- Copy the image set archive file (aba/mirror/save/mirror_000001.tar) from the _connected workstation_ to your _internal bastion_.
-- Run `aba -d mirror load` to load the images from disk into the _internal mirror registry_.
-- Upgrade OpenShift on the usual way. 
+- Use Aba to add more operators: Edit `aba/aba.conf` on the _connected workstation_ to add more operators and/or images and run `aba -d mirror save` again. 
+- If you want more flexibility, edit the `aba/mirror/save/imageset-config-save.yaml` image-set configuration file yourself, e.g. to add more images and/or fetch the latest platform images.
+  - To mirror images for cluster upgrades you will need to edit `imageset-config-save.yaml` yourself by modifying the `min` and `max` versions in the usual way.  Aba does not do this for you. 
+- Run `aba -d mirror save` to download the images onto your disk and wait for completion.
+- Copy the following files from the _connected workstation_ to your _internal bastion_ under aba/mirror/save:
+  - Image-set config file: aba/mirror/save/imageset-config-save.yaml
+  - Image-set archive file: aba/mirror/save/mirror_000001.tar
+- On the _internal bastion_, run `aba -d mirror load` to push the images from the disk to the _internal mirror registry_.
+- Run `aba -d <cluster name> day2` to update any operator catalogs and release signatures in your cluster(s).   
+- Add operators or upgrade OpenShift on the usual way. 
 
 In a partially disconnected environment, the following can be done:
 
-- Edit the `aba/mirror/sync/imageset-sync.yaml` image set configuration file on the _connected bastion_ to add more images or to fetch the latest platform images.
-- Run `aba -d mirror sync` to download and push the images into your internal mirror registry.
-- Run `aba -d mycluster day2` to update any operator catalogs and release signatures in your cluster(s).   
-- Upgrade OpenShift on the usual way. 
-
+- Edit the `aba/mirror/sync/imageset-sync.yaml` image-set configuration file on the _connected bastion_ to add more images or to fetch the latest platform images.
+- Run `aba -d mirror sync` to download and push the images into your _internal mirror_ registry.
+- Run `aba -d <cluster name> day2` to update any operator catalogs and release signatures in your cluster(s).   
+- Add operators or upgrade OpenShift on the usual way. 
 
 
 
@@ -876,10 +880,10 @@ In such cases, an alternative method can be used, where the files are copied sep
 
 Example:
 ```
-aba tarrepo --out $HOME/temp/dir/aba.tar      # Creates the install bundle, excluding the large image set archive file(s).
+aba tarrepo --out $HOME/temp/dir/aba.tar      # Creates the install bundle, excluding the large image-set archive file(s).
 ```
-- Writes the _install bundle_ to the temporary directory, **excluding** the large image set archive tar files under `aba/mirror/save/mirror_000001.tar`.  
-- The image set archive file(s) under `aba/mirror/save` and the _install bundle_ (tarball `aba.tar`) can then be copied separately to a storage device, such as a USB stick, S3 bucket, or other method.
+- Writes the _install bundle_ to the temporary directory, **excluding** the large image-set archive tar files under `aba/mirror/save/mirror_000001.tar`.  
+- The image-set archive file(s) under `aba/mirror/save` and the _install bundle_ (tarball `aba.tar`) can then be copied separately to a storage device, such as a USB stick, S3 bucket, or other method.
 
 Copy the `aba.tar` file to the _internal bastion_ and unpack the archive. Note the directory `aba/mirror/save` which does NOT contain archive files. 
 Copy or move the image archive tar file(s), as is, from where you stored them, into the `aba/mirror/save` directory on the _internal bastion_.
@@ -981,7 +985,7 @@ We need help!  Here are some ideas for new features and enhancements.
 
 - ~~Disable public OperatorHub and configure the internal registry to serve images.~~
 
-- ~~Make it easier to populate the imageset config file with current values, i.e. download the values from the latest catalog and insert them into the image set archive file.~~
+- ~~Make it easier to populate the imageset config file with current values, i.e. download the values from the latest catalog and insert them into the image-set archive file.~~
 
 
 [Back to top](#who-should-use-aba)
