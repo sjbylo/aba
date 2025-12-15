@@ -975,7 +975,7 @@ if [ -f .bundle ]; then
 	echo
 	echo_yellow "IMPORTANT: Review the values in aba.conf and update them to ensure they are complete and correctly match your disconnected environment."
 
-	echo_white "Current values in aba.conf:"
+	echo_white "Existing values in aba.conf:"
 	to_output=$(normalize-aba-conf | sed -e "s/^export //g" -e "/^pull_secret_file=.*/d")  # In disco env, no need to show pull-secret.
 	output_table 3 "$to_output"
 

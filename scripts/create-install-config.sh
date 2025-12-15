@@ -20,7 +20,8 @@ if [ "$platform" = "bm" ]; then
 elif [ "$platform" = "vmw" ]; then
 	to_output=$(normalize-cluster-conf | sed -e "s/^export //g")
 fi
-aba_info "Current values in cluster.conf:"
+echo
+aba_info "Showing existing values in cluster.conf:"
 output_table 3 "$to_output"
 echo
 
@@ -36,7 +37,7 @@ aba_debug rendezvous_ip: $starting_ip
 
 # Change the default of bare-metal host prefix
 if [ "$platform" = "bm" -a $hostPrefix -eq 23 ]; then
-	aba_info "Adjusting the default host prefix from 23 to 22 for bare-metal servers."
+	aba_info "Adjusting the default host prefix from 23 to 22 for bare-metal servers"
 	export hostPrefix=22
 fi
 
@@ -48,9 +49,9 @@ fi
 
 use_mirror=1
 
-# See if the cluster wide proxy should be added or not
+# See if the cluster wide proxy should be added to install_config.yaml or not
 if [ "$int_connection" = "direct" ]; then
-	aba_info "Using direct internet access"
+	aba_info "Using direct internet access: int_connection=direct"
 
 	use_mirror=
 elif [ "$int_connection" = "proxy" ]; then
@@ -62,11 +63,11 @@ elif [ "$int_connection" = "proxy" ]; then
 			aba_info "Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry."
 		else
 			aba_abort \
-				"Error: No pull secret found at $pull_secret_file.  Aborting!  See the README.md file for help!" \
+				"No pull secret found at $pull_secret_file.  Aborting!  See the README.md file for help!" \
 				"Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" 
 		fi
 
-		aba_info_ok "Configuring 'cluster wide proxy' using the following proxy settings:"
+		aba_info_ok "Configuring the cluster wide proxy using the following settings:"
 		aba_info "  http_proxy=$http_proxy"
 		aba_info "  https_proxy=$https_proxy"
 		aba_info "  no_proxy=$no_proxy"
@@ -78,36 +79,45 @@ elif [ "$int_connection" = "proxy" ]; then
 		export use_proxy=1
 		use_mirror=
 	else
-		aba_warning "The proxy value in cluster.conf is set but not all proxy vars are set. Ignoring." \
+		aba_warning \
+			"Ignoring value: proxy in cluster.conf! It is set but not all required proxy vars are set." \
 			"If you want to configure the cluster wide proxy, set 'int_connection=proxy' or override by" \
-			"setting the '*_proxy' values in 'cluster.conf'" 
+			"setting the '*_proxy' values directly in 'cluster.conf'." 
 
 		sleep 2
 	fi
 elif [ "$int_connection" ]; then
 	aba_warning "Internet connection incorrectly defined in cluster.conf" >&2
-else
-	aba_info "Not configuring the Internet connectivity (proxy or direct) since values not set in cluster.conf."
+#else
+#	aba_info "Not configuring the Internet connectivity (proxy or direct) since value: int_connection not set in cluster.conf"
+# Added Validating availability... below to make more sense!
 fi
 
 # If the proxy is not in use (usually the case in disco env), find the pull secret to use/prioritize the mirror ...
 if [ "$use_mirror" ]; then
+	# From this point on we are expecting to find a mirror ...
+	aba_info "Validating credentials of mirror registry ..."
+
 	if [ -s regcreds/pull-secret-mirror.json ]; then
 		export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
+
 		aba_info Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at: $reg_host
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	elif [ -s regcreds/pull-secret-full.json ]; then
 		export pull_secret=$(cat regcreds/pull-secret-full.json) 
+
 		aba_info Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at: $reg_host
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	else
-		aba_warning \
-			"No pull secret files found in directory: aba/mirror/regcreds." \
-			"A mirror registry has not been installed or configured!  See aba mirror --help."
+		aba_warning -p Attention \
+			"Expected to find mirror credentials but found none!" \
+			"No pull secret files found in directory: aba/mirror/regcreds" \
+			"A mirror registry has NOT been installed or configured!  See: aba mirror --help"
+
 		show_mirror_missing_err=1
 	fi
 
@@ -119,23 +129,26 @@ if [ "$use_mirror" ]; then
 		# Only show this warning IF there is no internet connection?
 		# Or, only show if proxy is NOT being used?
 		#if [ "$use_proxy" ]; then
-		#	echo_red "No private mirror registry configured! Using proxy settings to access Red Hat's public registry." >&2
+		#	echo_red "No private mirror registry configured! Using proxy settings to access Red Hat's public registry" >&2
 		#else
 		# Should check accessibility to registry.redhat.io?
-			aba_warning \
-				"Root CA file missing: aba/mirror/regcreds/rootCA.pem." \
-				"No private mirror registry available!" \
-				"As a result, no 'additionalTrustBundle' will be added to 'install-config.yaml'."
+			aba_warning -p Attention \
+				"Root CA file missing: aba/mirror/regcreds/rootCA.pem" \
+				"No mirror registry available!" \
+				"No value: additionalTrustBundle will be added to install-config.yaml"
 
 			show_mirror_missing_err=1
 		#fi
 	fi
 
 	if [ "$show_mirror_missing_err" ]; then
-		aba_warning \
-			"No internet connection (proxy or direct) has been defined in cluster.conf." \
-			"If this is *unexpected*, either install/set up a mirror registry or define int_connection in $PWD/cluster.conf." \
-			"Refer to the README.md for more." 
+		aba_warning -p Attention \
+			"No mirror registry found and no Internet connection (proxy or direct) defined in cluster.conf" \
+			"If this is *unexpected*, you should do one of the following:" \
+			"  1) Install a mirror registry: see aba mirror --help" \
+			"  2) Integrate an existing mirror registry or" \
+			"  3) Define int_connection in $PWD/cluster.conf for an online installation" \
+			"Refer to the README.md for more" 
 
 		sleep 2
 	fi
@@ -145,7 +158,9 @@ fi
 if [ ! "$pull_secret" ]; then
 	if [ -s "$pull_secret_file" ]; then
 		export pull_secret=$(cat "$pull_secret_file" | jq .) 
+
 		aba_info Using pull secret file at $pull_secret_file to access Red Hat registry
+
 		# Note, no image_content_sources needed
 		export image_content_sources=
 	else
@@ -165,7 +180,7 @@ export ssh_key_pub=$(cat $ssh_key_file.pub)
 
 # Check the private registry is defined, if it's in use
 if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
-	[ ! "$reg_host" ] && aba_abort "Error: registry host value reg_host is not defined in mirror.conf!"
+	[ ! "$reg_host" ] && aba_abort "registry host value: reg_host is not defined in mirror.conf!"
 fi
 
 # Check that the release image is available in the private registry
@@ -174,11 +189,9 @@ if [ "$additional_trust_bundle" -a "$image_content_sources" ]; then
 	scripts/verify-release-image.sh
 fi
 
-#if [ "$INFO_ABA" ]; then
-	aba_info
-	aba_info Generating Agent-based configuration file: $PWD/install-config.yaml 
-	aba_info
-#fi
+aba_info
+aba_info Generating Agent-based configuration file: $PWD/install-config.yaml 
+aba_info
 
 # Input is additional_trust_bundle, ssh_key_pub, image_content_sources, pull_secret, use_proxy, arch ...
 aba_debug Creating install-config.yaml ...
