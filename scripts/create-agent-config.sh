@@ -76,8 +76,6 @@ generate_ip_array() {
   echo "${ip_array[@]}"
 }
 
-##############
-
 # Function to generate a random HEX digit
 generate_random_hex() {
     printf "%x" $((RANDOM%16))
@@ -104,12 +102,9 @@ mac_prefix=$(replace_hash_with_random_hex "$mac_prefix")
 
 
 # Set the rendezvous_ip to the the first master's ip
-#export machine_ip_prefix=$(echo $machine_network | cut -d\. -f1-3).
-#export rendezvous_ip=$machine_ip_prefix$starting_ip
-#ip_cnt=$(expr $num_masters + $num_workers)
 num_nodes=$(( num_masters + num_workers ))
 if ! echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-	aba_abort "Error: value 'starting_ip' [$starting_ip] is missing or invalid. Should be an IP address from within your machine CIDR."
+	aba_abort "Starting IP address value: starting_ip [$starting_ip] is missing or invalid. Should be an IP address from within your machine CIDR ($machine_network/$prefix_length)."
 fi
 
 export rendezvous_ip=$starting_ip
@@ -128,7 +123,7 @@ aba_debug arr_ports=${arr_ports[@]}
 aba_debug $(echo "$arr_ports" | wc -l)
 aba_debug num_ports=${#arr_ports[@]}
 
-aba_info "Ports: ${arr_ports[@]} and num_ports=$num_ports"
+aba_info "$num_ports port(s): ${arr_ports[@]}"
 
 # Generate the mac addresses or get them from 'macs.conf'
 # Goal is to allow user to BYO mac addresses for bare-metal use-case. So, we generate the addresses in advance into an array "arr_". scripts/j2 will create a python list.
@@ -142,6 +137,7 @@ if [[ -s macs.conf ]]; then
 	# Extract all MAC addresses into an array
 	mapfile -t mac_array < <(grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' macs.conf | head -n $expected_mac_count)
 	mac_count=${#mac_array[@]}
+
 	# Store as newline-separated string
 	mac_list=$(printf "%s\n" "${mac_array[@]}")
 
@@ -151,63 +147,63 @@ if [[ -s macs.conf ]]; then
 	aba_debug uniq_count=$uniq_count mac_count=$mac_count expected_mac_count=$expected_mac_count
 
 	if (( uniq_count != mac_count )); then
-	    aba_abort "Duplicate MAC addresses found in macs.conf! ($mac_count total, $uniq_count unique)"
+		aba_abort "Duplicate MAC addresses found in macs.conf! ($mac_count total, $uniq_count unique)"
 	fi
 
 	# Warn if fewer MAC addresses than expected
 	if (( mac_count < expected_mac_count )); then
-		aba_warning "Found only $mac_count valid MAC addresses in macs.conf.  Expecting: $expected_mac_count for the whole cluster ($num_ports port(s) per node x $num_nodes nodes)." >&2
+		aba_warning "Found only $mac_count valid MAC addresses in macs.conf.  Expecting: $expected_mac_count for the whole cluster ($num_ports port(s) per node x $num_nodes nodes)."
 	fi
-
 else
 	# Since the jinja2 template now uses a simple list, we can also auto-generate the addresses in a similar way for VMs. 
-	# Note, double the number of mac addresses are genrated in case port bonding is required (ports and vlan in cluster.conf)
-	#for i in $(seq 1 `expr $num_masters \* $num_ports + $num_workers \* $num_ports`); do
+	# Note, double (or more of) the number of mac addresses are genrated in case port bonding is required (ports and vlan in cluster.conf)
+
 	mac_list=$(
 		for ((i=1; i <= num_nodes * num_ports; i++)); do
 			printf "%s%02x\n" "$mac_prefix" "$i"
 		done
 	)
-
-	#mac_list=$(for i in $(seq 1 `expr \( $num_masters + $num_workers \) \* $num_ports`); do
-	#	printf "%s%02x\n" $mac_prefix $i   # append running hex value
-	#done)  # FIXME > .macs.conf
 fi
 
-export arr_macs=$(echo "$mac_list" | tr "\n" " " | tr -s "[:space:]")  # scripts/j2 converts env vars starting with "arr_" into a python list which jinja2 can work with.
+# scripts/j2 converts env vars starting with "arr_" into a python list which jinja2 can work with.
+export arr_macs=$(echo "$mac_list" | tr "\n" " " | tr -s "[:space:]")
 
 # Set up the dns server(s)
-export arr_dns_servers=$(echo $dns_servers | tr "," " " | tr -s "[:space:]")  # scripts/j2 converts env vars starting with "arr_" into a python list which jinja2 can work with.
+# scripts/j2 converts env vars starting with "arr_" into a python list which jinja2 can work with.
+export arr_dns_servers=$(echo $dns_servers | tr "," " " | tr -s "[:space:]")
 aba_info "Adding DNS server(s): $arr_dns_servers"
 
 # Set up the ntp server(s)
-export arr_ntp_servers=$(echo $ntp_servers | tr "," " " | tr -s "[:space:]")  # scripts/j2 converts env vars starting with "arr_" into a python list which jinja2 can work with.
+# scripts/j2 converts env vars starting with "arr_" into a python list which jinja2 can work with.
+export arr_ntp_servers=$(echo $ntp_servers | tr "," " " | tr -s "[:space:]")
 aba_info "Adding NTP server(s): $arr_ntp_servers"
 
 # Use j2cli to render the templates
-#if [ "$INFO_ABA" ]; then
-	aba_info
-	aba_info Generating Agent-based configuration file: $PWD/agent-config.yaml 
-	aba_info
-#fi
+echo
+aba_info Generating Agent-based configuration file: $PWD/agent-config.yaml 
+echo
 
 if [ $num_ports -gt 1 ]; then
 	if [ "$vlan" ]; then
 		# Multiple ports and vlan defined
 		template_file=agent-config-vlan-bond.yaml.j2
+
 		aba_info "Using vlan and bonding agent config template: templates/$template_file (ports=${arr_ports[@]} vlan=$vlan)"
 	else
 		# Multiple ports and no vlan
 		template_file=agent-config-bond.yaml.j2
+
 		aba_info "Using access mode bonding agent config template: templates/$template_file (ports=${arr_ports[@]})"
 	fi
 elif [ "$vlan" ]; then
 	# Only one port and vlan defined
 	template_file=agent-config-vlan.yaml.j2
+
 	aba_info "Using vlan agent config template: templates/$template_file (ports=${arr_ports[@]} vlan=$vlan)"
 else
 	# Only one port no vlan defined
 	template_file=agent-config.yaml.j2
+
 	aba_info "Using standard agent config template: templates/$template_file (ports=${arr_ports[@]})"
 fi
 

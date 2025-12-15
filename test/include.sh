@@ -282,14 +282,20 @@ init_bastion() {
 	cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
 		set -ex
 		whoami
+
 		#dnf update -y
+		dnf update -y   # I guess we should do this and add to the vmw snap every now and then
+
 		rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
-		# Try to keep SELinux turned on
+
+		# Keep SELinux turned on
 		getenforce
 		#setenforce 0
 		#getenforce
+
 		#### This is a hack for RHEL 9 where curl to registry.example.com:8443 fails on 10.0.1.2 host.
 		###echo "127.0.0.1 registry.example.com  # Hack for mirror-registry install on rhel9" >> /etc/hosts 
+
 		# Set the subnet mask to /20
 		# USING NEW DHCP # nmcli con show
 		# USING NEW DHCP # ip a
@@ -304,6 +310,7 @@ init_bastion() {
 		# USING NEW DHCP # wait 
 		# USING NEW DHCP # nmcli con show
 		# USING NEW DHCP # #ifconfig $net_if
+
 		ip a
 		timedatectl
 		dnf install chrony podman -y
@@ -390,8 +397,9 @@ init_bastion() {
 		####################################
 		#### Set up private net - done  ####
 		####################################
-		dnf update -y   # I guess we should do this and add to the vmw snap every now and then
-		#reboot
+
+		#dnf update -y   # I guess we should do this and add to the vmw snap every now and then
+		#reboot  # For some reason, a reboot causes the quay to fail installation to remote host ;/
 	END
 
 	# no reboot # test-cmd -m "Wait for restart" sleep 20
