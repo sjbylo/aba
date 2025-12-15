@@ -1034,11 +1034,29 @@ process_args() {
 	shift $#
 }
 
-# Track anonymous events run by any aba using name "$1" (optional)
+# Track anonymous install events
 aba-track() {
-	# Note this tracker has only one counter: 'installed'
-	[ ! "$ABA_TESTING" ] && ( curl --retry 8 --fail -s https://abacus.jasoncameron.dev/hit/bylo.de-aba/installed >/dev/null 2>&1 & disown ) & disown
+    # Note this tracker has only one counter: 'installed'
+    [ "$ABA_TESTING" ] && return 0
+
+    (
+        curl \
+          --fail \
+          --silent \
+          --retry 999 \
+          --retry-delay 30 \
+          --retry-max-time 10800 \
+          --connect-timeout 10 \
+          --max-time 20 \
+          https://abacus.jasoncameron.dev/hit/bylo.de-aba/installed \
+          >/dev/null 2>&1
+    ) & disown
 }
+
+#aba-track() {
+#	# Note this tracker has only one counter: 'installed'
+#	[ ! "$ABA_TESTING" ] && ( curl --retry 20 --fail -s https://abacus.jasoncameron.dev/hit/bylo.de-aba/installed >/dev/null 2>&1 & disown ) & disown
+#}
 
 # =========================================================
 # Deduce reasonable defaults for OpenShift cluster config
