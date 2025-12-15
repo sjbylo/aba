@@ -10,6 +10,7 @@ SCRIPTS   = scripts
 name     ?= standard	# def. cluster name
 type     ?= standard	# def. cluster type
 split    ?=		# by def. do not split the install bundle
+MIRROR_CMDS := save load sync verify
 
 #debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
 
@@ -36,13 +37,11 @@ vmw:
 	@make -sC cli govc
 	@$(SCRIPTS)/install-vmware.conf.sh #  $(debug)
 
-.PHONY: cli
-cli:  ## Download and install the CLI binaries into ~/bin
-	@echo "Run: aba -d cli install"
-
-.PHONY: download
-download:  ## Download all required CLI install files without installing. 
-	@echo "Run: aba -d cli download"
+#.PHONY: cli
+#cli:  ## Download and install the CLI binaries into ~/bin
+#	@echo "Run either one of:"
+#	@echo "  aba -d cli install"
+#	@echo "  cd cli && aba install"
 
 .PHONY: catalog
 # -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
@@ -65,21 +64,37 @@ tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Defa
 tarrepo:  ## Archive the full repo *excluding* the aba/mirror/mirror_*.tar files. Works in the same way as 'aba tar'.
 	@$(SCRIPTS)/backup.sh --repo $(out)
 
-.PHONY: save
-save:
-	@echo "Run: aba -d mirror save"
+.PHONY: download
+download:  ## Download all required CLI install files without installing. 
+	@echo "Run either one of:"
+	@echo "  aba -d cli $@"
+	@echo "  cd cli && aba $@"
 
-.PHONY: load
-load:
-	@echo "Run: aba -d mirror load"
+#.PHONY: save load sync verify
+#save load sync verify:
+.PHONY: $(MIRROR_CMDS)
+$(MIRROR_CMDS):
+	@echo "Run either one of:"
+	@echo "  aba -d mirror $@"
+	@echo "  cd mirror && aba $@"
 
-.PHONY: sync
-sync:
-	@echo "Run: aba -d mirror sync"
-
-.PHONY: verify
-verify:
-	@echo "Run: aba -d mirror verify"
+#.PHONY: load
+#load:
+#	@echo "Run either one of:"
+#	@echo "  aba -d mirror $@"
+#	@echo "  cd mirror && aba $@"
+#
+#.PHONY: sync
+#sync:
+#	@echo "Run either one of:"
+#	@echo "  aba -d mirror $@"
+#	@echo "  cd mirror && aba $@"
+#
+#.PHONY: verify
+#verify:
+#	@echo "Run either one of:"
+#	@echo "  aba -d mirror $@"
+#	@echo "  cd mirror && aba $@"
 
 .PHONY: cluster
 cluster:  aba.conf  ## Initialize install dir and install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
