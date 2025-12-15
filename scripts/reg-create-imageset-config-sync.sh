@@ -25,16 +25,17 @@ mkdir -p sync
 # Generate first imageset-config file for syncing images.  
 # Do not overwrite the file if it has been modified. Allow users to add images and operators to imageset-config-sync.yaml and run "make sync" again. 
 if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-config-sync.yaml ]; then
-	###rm -rf sync/*
+	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
-	export ocp_ver=$ocp_version
+	#export ocp_ver=$ocp_version
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 	aba_info "Generating image set configuration: sync/imageset-config-sync.yaml to sync images to the mirror registry ..."
 	[ ! "$excl_platform" ] && aba_info "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$ARCH' ..."
 
-	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "Error: ocp_channel or ocp_version incorrectly defined in aba.conf" 
+	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf" 
 
+	aba_debug Values: ARCH=$ARCH ocp_channel=$ocp_channel ocp_version=$ocp_version
 	scripts/j2 ./templates/imageset-config-sync-$oc_mirror_version.yaml.j2 > sync/imageset-config-sync.yaml 
 	touch sync/.created # In case next line fails!
 

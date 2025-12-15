@@ -10,8 +10,8 @@ mirror:
 {%- endif %}
     channels:
     - name: {{ ocp_channel }}-{{ ocp_ver_major }}
-      minVersion: {{ ocp_ver }}
-      maxVersion: {{ ocp_ver }}
+      minVersion: {{ ocp_version }}
+      maxVersion: {{ ocp_version }}
       type: ocp
 #      shortestPath: true
     graph: true
