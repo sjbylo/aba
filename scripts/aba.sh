@@ -177,7 +177,7 @@ do
 		# If there are commands/targets to execute in the CWD, do it...
 		BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
 		# Simplify option/arg processing
-		[ "$BUILD_COMMAND" ] && aba_abort "Option $1 not allowed after a command: [$BUILD_COMMAND]"
+		[ "$BUILD_COMMAND" ] && aba_abort "option $1 not allowed after a command: [$BUILD_COMMAND]"
 
 		# FIXME: change this
 		#if [ "$BUILD_COMMAND" ]; then
@@ -250,8 +250,8 @@ do
 			BUILD_COMMAND="$BUILD_COMMAND out=-"  # FIXME: This only works if command=bundle
 		else
 			echo "$1" | grep -q "^-" && aba_abort "in parsing --out path argument"
-			[ "$1" ] && [ ! -d $(dirname $1) ] && aba_abort "Directory: [$(dirname $1)] incorrect or missing!"
-			[ -f "$1.tar" ] && aba_abort "Install bundle file [$1.tar] already exists!"
+			[ "$1" ] && [ ! -d $(dirname $1) ] && aba_abort "directory: [$(dirname $1)] incorrect or missing!"
+			[ -f "$1.tar" ] && aba_abort "install bundle file [$1.tar] already exists!"
 
 			BUILD_COMMAND="$BUILD_COMMAND out='$1'"
 		fi
@@ -259,7 +259,7 @@ do
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
 		opt=$1
 		# Be strict if arg missing
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $opt"
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $opt"
 		chan=$2  # This $chan var can be used below for "--version"
 		# As far as possible, always ensure there is a valid value in aba.conf
 		case "$chan" in
@@ -268,7 +268,7 @@ do
 			eus | e)	chan=eus ;;
 			candidate | c)	chan=candidate ;;
 			*)
-				aba_abort "Wrong value [$chan] after option $opt" 
+				aba_abort "wrong value [$chan] after option $opt" 
 				;;
 		esac
 		replace-value-conf -n ocp_channel -v $chan -f $ABA_ROOT/aba.conf 
@@ -277,14 +277,17 @@ do
 	elif [ "$1" = "--version" -o "$1" = "-v" ]; then
 		opt=$1
 		# Be strict if arg missing
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $opt"
-		ver=$2
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $opt"
+		arg=$2
+		ver=$arg
 		[ ! "$chan" ] && chan=$ocp_channel  # Prioritize the $chan var (from above) or fetch from aba.conf file
-		case "$ver" in
+		case "$arg" in
 			latest | l)
+				tmp_out=latest
 				ver=$(fetch_latest_version "$chan")
 			;;
 			previous | p)
+				tmp_out=previous
 				ver=$(fetch_previous_version "$chan")
 			;;
 		esac
@@ -296,10 +299,10 @@ do
 		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
 
 		# As far as possible, always ensure there is a valid value in aba.conf
-		[ ! "$ver" ] && aba_abort "Failed to look up the latest version for [$2] after option $opt" 
+		[ ! "$ver" ] && aba_abort "failed to look up the $tmp_out version for channel [$chan] after option [$opt $arg]" 
 
 		# ver should now be x.y.z format
-		! echo $ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+$" && aba_abort "Error: incorrect version format: [$ver] from arg [$2] after option $opt" 
+		! echo $ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+$" && aba_abort "incorrect version format: [$ver] for channel [$chan] after option [$opt $arg]" 
 
 		replace-value-conf -n ocp_version -v $ver -f $ABA_ROOT/aba.conf
 
@@ -311,7 +314,7 @@ do
 		shift 2
 		ocp_version=$ver
 	elif [ "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_ROOT/mirror mirror.conf force=yes
 		replace-value-conf -n reg_host -v "$2" -f $ABA_ROOT/mirror/mirror.conf
@@ -333,14 +336,14 @@ do
 		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $ABA_ROOT/mirror/mirror.conf
 		shift
 	elif [ "$1" = "--data-dir" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1"
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_ROOT/mirror mirror.conf force=yes
 		replace-value-conf -n data_dir -v "$2" -f $ABA_ROOT/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-user" ]; then
 		# The username used to access the mirror registry 
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_ROOT/mirror mirror.conf force=yes
 		replace-value-conf -n reg_user -v "$2" -f $ABA_ROOT/mirror/mirror.conf
@@ -354,24 +357,24 @@ do
 		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $ABA_ROOT/mirror/mirror.conf
 		shift
 	elif [ "$1" = "--reg-path" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" >&2 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" >&2 
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_ROOT/mirror mirror.conf force=yes
 		replace-value-conf -n reg_path -v "$2" -f $ABA_ROOT/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
-		[ ! "$domain" ] && aba_abort "Error: Domain format incorrect [$2]" 
+		[ ! "$domain" ] && aba_abort "domain format incorrect [$2]" 
 		replace-value-conf -n domain -v "$domain" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
 			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		else
-			aba_abort "Error: Invalid CIDR [$2]" 
+			aba_abort "invalid CIDR [$2]" 
 		fi
 		shift 2
 	elif [ "$1" = "--dns" -o "$1" = "-N" ]; then
@@ -383,7 +386,7 @@ do
 			if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 				[ "$dns_ips" ] && dns_ips="$dns_ips,$2" || dns_ips="$2"
 			else
-				aba_abort "Skipping invalid IP address [$2]"
+				aba_abort "skipping invalid IP address [$2]"
 			fi
 			shift
 		done
@@ -424,10 +427,10 @@ do
 				if (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 )); then
 					api_vip=$2
 				else
-					aba_abort "Invalid IPv4 address [$2]" 
+					aba_abort "invalid IPv4 address [$2]" 
 				fi
 			else
-				aba_abort "Argument invalid [$2] after option: $1" 
+				aba_abort "argument invalid [$2] after option: $1" 
 			fi
 			shift
 		fi
@@ -452,10 +455,10 @@ do
 				if (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 )); then
 					ingress_vip=$2
 				else
-					aba_abort "Invalid IPv4 address [$2]" 
+					aba_abort "invalid IPv4 address [$2]" 
 				fi
 			else
-				aba_abort "Argument invalid [$2] after option: $1" 
+				aba_abort "argument invalid [$2] after option: $1" 
 			fi
 			shift
 		fi
@@ -480,7 +483,7 @@ do
 		BUILD_COMMAND="$BUILD_COMMAND ports='$ports_vals'"
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		replace-value-conf -n platform -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
@@ -526,16 +529,16 @@ do
 		replace-value-conf -n excl_platform -v "true" -f $ABA_ROOT/aba.conf
 		shift
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		editor="$2"
 		replace-value-conf -n editor -v $editor -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--pull-secret" -o "$1" = "-S" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		replace-value-conf -n pull_secret_file -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		[ -s $1 ] && cp "$2" vmware.conf
 		shift 2
 	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # One off, accept the default answer to all prompts for this invocation
@@ -556,7 +559,7 @@ do
 		export ask=
 		shift 
 	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then  # FIXME opt.
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
 				replace-value-conf -n master_cpu -v $2 -f cluster.conf
@@ -564,11 +567,11 @@ do
 				BUILD_COMMAND="$BUILD_COMMAND master_cpu_count=$2"
 			fi
 		else
-			aba_abort "Argument invalid [$2] after option $1" 
+			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
 	elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then  # FIXME opt.
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1"
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
 				replace-value-conf -n master_mem -v $2 -f cluster.conf
@@ -576,11 +579,11 @@ do
 				BUILD_COMMAND="$BUILD_COMMAND master_mem=$2"
 			fi
 		else
-			aba_abort "Argument invalid [$2] after option $1" 
+			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
 	elif [ "$1" = "--wcpu" -o "$1" = "--worker-cpu" ]; then  # FIXME opt.
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1"
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
 				replace-value-conf -n worker_cpu -v $2 -f cluster.conf
@@ -588,11 +591,11 @@ do
 				BUILD_COMMAND="$BUILD_COMMAND worker_cpu_count=$2"
 			fi
 		else
-			aba_abort "Argument invalid [$2] after option $1" 
+			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
 	elif [ "$1" = "--wmem" -o "$1" = "--worker-memory" ]; then  # FIXME opt.
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
 				replace-value-conf -n worker_mem -v $2 -f cluster.conf
@@ -600,7 +603,7 @@ do
 				BUILD_COMMAND="$BUILD_COMMAND worker_mem=$2"
 			fi
 		else
-			aba_abort "Argument invalid [$2] after option $1" 
+			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
 #	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
@@ -608,13 +611,13 @@ do
 #		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 #			BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'"  # FIXME: This is confusing and prone to error
 #		else
-#			aba_abort "Argument invalid [$2] after option $1" 
+#			aba_abort "argument invalid [$2] after option $1" 
 #		fi
 #		shift 2
 #
 #
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			if [ -f cluster.conf ]; then
 				replace-value-conf -n starting_ip -v $2 -f cluster.conf
@@ -622,7 +625,7 @@ do
 				BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'" # FIXME: Still needed?
 			fi
 		else
-			aba_abort "Argument invalid [$2] after option $1" 
+			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
 
@@ -634,7 +637,7 @@ do
 				BUILD_COMMAND="$BUILD_COMMAND data_disk=$2"
 			fi
 		else
-			aba_abort "Argument invalid [$2] after option $1" 
+			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
 	elif [ "$1" = "--int-connection" -o "$1" = "-I" ]; then
@@ -649,7 +652,7 @@ do
 				[ "$2" = "p" ] && int_connection=proxy
 				[ "$2" = "d" ] && int_connection=direct
 			else
-				aba_abort "Argument invalid [$int_connection] after option: $1" 
+				aba_abort "argument invalid [$int_connection] after option: $1" 
 				exit 1
 			fi
 			shift
@@ -666,31 +669,31 @@ do
 		fi
 		shift
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if [ "$cur_target" = "cluster" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
 		else
-			aba_abort "Can only use option $1 after target 'cluster'.  See aba cluster -h" 
+			aba_abort "can only use option $1 after target 'cluster'.  See aba cluster -h" 
 
 			exit 1
 		fi
 
 		shift 2
 	elif [ "$1" = "--type" -o "$1" = "-t" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		# If there's another arg and it's an expected cluster type, accept it, otherwise error.
 		if echo "$2" | grep -qE "^sno$|^compact$|^standard$"; then
 			if [ "$cur_target" = "cluster" ]; then
 				BUILD_COMMAND="$BUILD_COMMAND type='$2'"
 				shift 2
 			else
-				aba_abort "Can only use option $1 after target 'cluster'.  See aba cluster -h" 
+				aba_abort "can only use option $1 after target 'cluster'.  See aba cluster -h" 
 			fi
 		else
-			aba_abort "Error: Missing or incorrect argument (sno|compact|standard) after option $1" 
+			aba_abort "missing or incorrect argument (sno|compact|standard) after option $1" 
 		fi
 	elif [ "$1" = "--step" -o "$1" = "-s" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		# If there's another arg and it's NOT an option (^-) then accept it, otherwise error
 		BUILD_COMMAND="$BUILD_COMMAND target='$2'"  # FIXME: Also confusing, similar to --name
 		shift 2
@@ -753,29 +756,29 @@ do
 #		while [ "$*" ] 
 #		do
 #			if [ "$1" = "--name" -o "$1" = "-n" ]; then
-#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" 
+#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Missing argument after option $1" 
 #
 #				name="$2"
 #				is_valid_dns_label $name
 #				shift 2
 #			elif [[ "$1" == "--type" || "$1" == "-t" ]]; then
-#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" 
+#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Missing argument after option $1" 
 #
 #				case "$2" in
 #					sno|compact|standard)
 #						type=$2
 #					;;
 #					*)
-#						aba_abort "Error: Invalid type '$2'. Expected one of: sno, compact, standard." 
+#						aba_abort "Invalid type '$2'. Expected one of: sno, compact, standard." 
 #					;;
 #				esac
 #				shift 2
 #			elif [[ "$1" == "--starting-ip" || "$1" == "-i" ]]; then
-#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" 
+#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Missing argument after option $1" 
 #				starting_ip="$2"
 #				shift 2
 #			elif [[ "$1" == "--step" || "$1" == "-s" ]]; then
-#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Error: Missing argument after option $1" 
+#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Missing argument after option $1" 
 #				step="$2"
 #				shift 2
 #			elif [[ "$1" == "--ports" || "$1" == "-p" ]]; then
@@ -802,7 +805,7 @@ do
 #							int_connection="direct"
 #							;;
 #						*)
-#							aba_abort "Error: Invalid argument [$2] after option '$1'. Expected one of: proxy, direct." 
+#							aba_abort "Invalid argument [$2] after option '$1'. Expected one of: proxy, direct." 
 #							;;
 #					esac
 #					shift
@@ -812,7 +815,7 @@ do
 #				fi
 #				shift
 #			elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
-#				[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+#				[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Missing argument after option $1" 
 #				if echo "$2" | grep -q -E '^[0-9]+$'; then
 #					master_mem=$2
 #				else
@@ -820,7 +823,7 @@ do
 #				fi
 #				shift 2
 #			elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
-#				[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Error: Missing argument after option $1" 
+#				[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Missing argument after option $1" 
 #				if echo "$2" | grep -q -E '^[0-9]+$'; then
 #					master_cpu_count=$2
 #				else
@@ -837,7 +840,7 @@ do
 #			aba_debug scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
 #			scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
 #		else
-#			aba_abort "Error: Must provide at least --name after 'clux'" 
+#			aba_abort "Must provide at least --name after 'clux'" 
 #			exit 1
 #		fi
 	else
@@ -1082,7 +1085,7 @@ else
 
 	if ! release_text=$(curl -f --connect-timeout 30 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
-		aba_abort "Failed to access https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt" 
+		aba_abort "failed to access https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt" 
 	fi
 
 	## Get the latest stable OpenShift version number, e.g. 4.14.6
@@ -1170,7 +1173,7 @@ if [ ! "$editor" ]; then
 
 	if [ "$new_editor" != "none" ]; then
 		if ! which $new_editor >/dev/null 2>&1; then
-			aba_abort "Editor '$new_editor' command not found! Please install your preferred editor and try again!" 
+			aba_abort "editor '$new_editor' command not found! Please install your preferred editor and try again!" 
 		fi
 	fi
 
@@ -1208,7 +1211,7 @@ if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 
 		#sleep 0.3
 	else
-		aba_abort "Error: Pull secret file sytax error: $pull_secret_file!" 
+		aba_abort "pull secret file sytax error: $pull_secret_file!" 
 	fi
 else
 	echo
