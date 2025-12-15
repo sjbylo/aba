@@ -107,37 +107,21 @@ create_node() {
 			-on=false \
 			$vm_name"
 
-		aba_debug Running: $cmd; eval $cmd
-
-#		govc vm.create \
-#			-annotation="Created on $(date) as ${role} node for OpenShift cluster ${CLUSTER_NAME}.${base_domain} version v${ocp_version} from $(hostname):$PWD" \
-#			-version vmx-15 \
-#			-g rhel8_64Guest \
-#			-firmware=efi \
-#			-c=$cpu_count \
-#			-m=$(( mem_gb * 1024 )) \
-#			-net.adapter vmxnet3 \
-#			-net.address="$mac" \
-#			-disk-datastore=$GOVC_DATASTORE \
-#			-iso-datastore=$ISO_DATASTORE \
-#			-iso="images/agent-${CLUSTER_NAME}.iso" \
-#			-folder="$cluster_folder" \
-#			-on=false \
-#			$vm_name
+		aba_debug Running: $cmd
+		eval $cmd  # eval needed for the ''s
 
 		for cnt in $(seq 1 $max_ports_per_node); do
 			local sub_idx=$(( idx + cnt ))
 			local sub_mac=${mac_array[$sub_idx]}
 			aba_info "Adding network interface [$((cnt + 1))/$num_ports_per_node] with mac address: $sub_mac"
 
-			cmd="govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address $sub_mac"
-			aba_debug Running: $cmd; $cmd
-
-			#govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address "$sub_mac"
+			cmd="govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address '$sub_mac'"
+			aba_debug Running: $cmd; eval $cmd  # eval needed for the ''s
 		done
 
 		cmd="govc device.boot -secure -vm $vm_name"
-		aba_debug Running: $cmd; $cmd
+		aba_debug Running: $cmd
+		$cmd
 
 		#govc device.boot -secure -vm $vm_name
 
@@ -146,13 +130,9 @@ create_node() {
 			-cpu-hot-add-enabled=true \
 			-memory-hot-add-enabled=true \
 			-nested-hv-enabled=$nested_hv"
-		aba_debug Running: $cmd; $cmd
 
-#		govc vm.change -vm $vm_name \
-#			-e disk.enableUUID=TRUE \
-#			-cpu-hot-add-enabled=true \
-#			-memory-hot-add-enabled=true \
-#			-nested-hv-enabled=$nested_hv
+		aba_debug Running: $cmd
+		$cmd
 
 		aba_info "Attaching thin OS disk of size 120GB on [$GOVC_DATASTORE]"
 		cmd="govc vm.disk.create \
@@ -161,26 +141,33 @@ create_node() {
 			-size 120GB \
 			-thick=false \
 			-ds=$GOVC_DATASTORE"
-		aba_debug Running: $cmd; $cmd
+
+		aba_debug Running: $cmd
+		$cmd
 
 		if [ -n "${data_disk:-}" ]; then
 			aba_info "Attaching a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
+
 			cmd="govc vm.disk.create \
 				-vm $vm_name \
 				-name $vm_name/${vm_name}_data \
 				-size ${data_disk}GB \
 				-thick=false \
 				-ds=$GOVC_DATASTORE"
-			aba_debug Running: $cmd; $cmd
+
+			aba_debug Running: $cmd
+			$cmd
 		fi
 
 		if [ -n "${START_VM:-}" ]; then
 			cmd="govc vm.power -on $vm_name"
-			aba_debug Running: $cmd; $cmd
+
+			aba_debug Running: $cmd
+			$cmd
 		fi
 
 		let i=$i+1
-		#(( i++ ))
+		#(( i++ ))  # For some reason was not working!
 	done
 }
 
