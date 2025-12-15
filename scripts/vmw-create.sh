@@ -130,7 +130,7 @@ create_node() {
 			local sub_mac=${mac_array[$sub_idx]}
 			aba_info "Adding network interface [$((cnt + 1))/$num_ports_per_node] with mac address: $sub_mac"
 
-			cmd="govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address '$sub_mac'"
+			cmd="govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address $sub_mac"
 			aba_debug Running: $cmd; $cmd
 
 			#govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address "$sub_mac"
