@@ -293,7 +293,7 @@ init_bastion() {
 	test-cmd -m "Wait for restart" sleep 20
 
 	# Wait for host to come up
-	while ! ssh $def_user@$int_bastion_hostname -- "date"
+	while ! ssh $def_user@$int_bastion_hostname -- "echo 'registry up!'"
 	do
 		sleep 3
 	done
