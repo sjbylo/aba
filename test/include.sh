@@ -292,6 +292,13 @@ init_bastion() {
 
 	test-cmd -m "Wait for restart" sleep 20
 
+	# Wait for host to come up
+	while ! ssh $def_user@$int_bastion_hostname -- "date"
+	do
+		sleep 3
+	done
+
+
 	mylog "Running VM config as root"
 	# General bastion config, e.g. date/time/timezone and also root ssh
 	cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
