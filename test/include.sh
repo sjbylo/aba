@@ -353,6 +353,7 @@ init_bastion() {
 		####################################
 		#### Tidy up network config      ###
 		####################################
+		nmcli connection show
 		nmcli connection modify "Wired connection 1" connection.id ens224
 		nmcli connection modify ens192 ipv4.never-default yes
 		nmcli connection modify ens224 ipv4.never-default yes
