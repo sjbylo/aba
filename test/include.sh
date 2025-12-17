@@ -239,9 +239,9 @@ init_bastion() {
 
 	local def_user=steve  # This is the intial, pre-configured user to use
 
-	mylog "Revert internal bastion vm ($int_bastion_vm_name) to snapshot and powering on ..."
-
 	test-cmd -m "Install govc" aba --dir cli ~/bin/govc
+
+	mylog "Revert internal bastion vm ($int_bastion_vm_name) to snapshot and powering on ..."
 
 	govc vm.power -off bastion-internal-rhel8  || true
 	govc vm.power -off bastion-internal-rhel9  || true

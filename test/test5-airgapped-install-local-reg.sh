@@ -101,13 +101,15 @@ echo ocp_version=$ocp_version
 ocp_version_desired=$ocp_version  # Get the version from aba.conf since that will be the "latest & previous" version.
 mylog ocp_version_desired is $ocp_version_desired
 ocp_version_major=$(echo $ocp_version_desired | cut -d\. -f1-2)
-ocp_version_point=$(echo $ocp_version_desired | cut -d\. -f3)
-mylog ocp_version_point is $ocp_version_point
-## Reduce the version to create 'bundle' (below) with by about half
-#ocp_version_older=$ocp_version_major.$(expr $ocp_version_point / 2 + 1)
-#ocp_version_older_point=$(expr $ocp_version_point / 2 )  # can have too much image data involved - out of disk space during testing
-ocp_version_older_point=$(expr $ocp_version_point - 1 )  # Change to one patch version lower
-ocp_version_older=$ocp_version_major.$ocp_version_older_point
+##ocp_version_point=$(echo $ocp_version_desired | cut -d\. -f3)
+#mylog ocp_version_point is $ocp_version_point
+## Reduce the version to create 'bundle' (below) with 
+source scripts/include_all.sh  # Used to fetch the previous available version
+trap - ERR
+ocp_version_older=$(fetch_all_versions $ocp_channel | tail -2 | head -1)  # Fetch 2nd fron last version
+mylog Setting older OCP version to $ocp_version_older
+# CAN BE MISSING # ocp_version_older_point=$(expr $ocp_version_point - 1 )  # Change to one patch version lower # fails if the version below is missing!
+# CAN BE MISSING # ocp_version_older=$ocp_version_major.$ocp_version_older_point
 # Ensure the version is available! # No need, since we use "- 1" now
 ###make -C cli oc-mirror
 #ver_list=$(~/bin/oc-mirror list releases --channel=$ocp_channel-$ocp_version_major)
