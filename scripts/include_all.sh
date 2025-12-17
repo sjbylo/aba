@@ -245,8 +245,6 @@ aba_warning() {
 #}
 
 
-####################
-
 if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
 	aba_debug "$0: Adding $HOME/bin to \$PATH for user $(whoami)" >&2
 	PATH="$HOME/bin:$PATH"
@@ -708,8 +706,6 @@ files_on_same_device() {
 	[ "$DEV1" == "$DEV2" ] && return 0 || return 1
 }
 
-#######
-
 # Cincinnati API endpoint
 ABA_GRAPH_API="https://api.openshift.com/api/upgrades_info/v1/graph"
 
@@ -781,7 +777,9 @@ _fetch_graph_cached() {
 	[ "$ARCH" = "x86_64" ] && ARCH=amd64
 
 	aba_debug "_fetch_graph_cached(): channel=$channel minor=$minor"
-	[ ! "$minor" ] && minor=$(fetch_latest_minor_version $channel)
+	if [ ! "$minor" ]; then
+		minor=$(fetch_latest_minor_version $channel) || return 1
+	fi
 	aba_debug "_fetch_graph_cached(): channel=$channel minor=$minor"
 	chann_minor=$channel-$minor
 
@@ -805,6 +803,7 @@ _fetch_graph_cached() {
 	if ! curl -f -sS -H "Accept: application/json" "${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}" > "$tmp_file"; then
 		echo "ERROR: Failed to fetch Cincinnati graph for channel $chann_minor arch:$ARCH" >&2
 		rm -f "$tmp_file"
+		aba_debug "_fetch_graph_cached() curl failed"
 		return 1
 	fi
 
@@ -812,6 +811,7 @@ _fetch_graph_cached() {
 	if ! jq -c '.' "$tmp_file" >/dev/null 2>&1; then
 		echo "ERROR: Invalid JSON received from Cincinnati API for channel: $chann_minor arch:$ARCH" >&2
 		rm -f "$tmp_file"
+		aba_debug "_fetch_graph_cached() jq failed"
 		return 1
 	fi
 
@@ -821,7 +821,7 @@ _fetch_graph_cached() {
 	# Output cached graph
 	cat "$cache_file"
 
-	return 0
+	return 
 }
 
 ############################################
@@ -833,11 +833,12 @@ fetch_all_versions() {
 
 	aba_debug "fetch_all_versions(): channel=$channel minor=$minor"
 
+	set -o pipefail
 	_fetch_graph_cached "$channel" "$minor" \
 		| jq -r '.nodes[].version' \
 		| sort -V
 
-	return 0
+	return
 }
 
 
@@ -850,7 +851,7 @@ fetch_latest_version() {
 	aba_debug "fetch_latest_version(): channel=$channel"
 	fetch_all_versions "$channel" | tail -n1
 
-	return 0
+	return 
 }
 
 
@@ -873,16 +874,13 @@ fetch_latest_z_version() {
 	local minor="$2"
 
 	aba_debug "fetch_latest_z_version(): channel=$channel minor=$minor"
-	[ ! "$minor" ] && minor=$(fetch_latest_minor_version $channel)
+	if [ ! "$minor" ]; then
+		minor=$(fetch_latest_minor_version $channel) || return 1
+	fi
 	aba_debug "fetch_latest_z_version(): channel=$channel minor=$minor"
 
 	fetch_all_versions "$channel" "$minor" \
 		| tail -n1
-
-		#| grep "^${minor}\." \
-		#| tail -n1
-
-	return 0
 }
 
 
@@ -895,7 +893,9 @@ fetch_previous_version() {
 	local channel="${1:-stable}"
 
 	aba_debug "fetch_previous_version(): channel=$channel minor=$minor"
-	local minor="$(fetch_latest_minor_version "$channel")"
+	if [ ! "$minor" ]; then
+		minor=$(fetch_latest_minor_version $channel) || return 1
+	fi
 	aba_debug "fetch_previous_version(): channel=$channel minor=$minor"
 
 	#local major minor
@@ -915,8 +915,6 @@ fetch_previous_version() {
 
 	aba_debug "fetch_latest_z_version \"$channel\" \"$prev_minor\""
 	fetch_latest_z_version "$channel" "$prev_minor"
-	
-	return 0
 }
 
 #######
