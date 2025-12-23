@@ -164,6 +164,7 @@ rm -rf aba
 # Install aba from the Internet
 set +x
 GIT_BRANCH=${GIT_BRANCH:-main}
+echo_step Install Aba from branch $GIT_BRANCH
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install) -- $GIT_BRANCH"
 #bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
 #bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
@@ -184,8 +185,10 @@ OP=
 
 aba --pull-secret $PS_FILE --platform bm --channel stable --version $VER $OP --base-domain $BASE_DOM
 
+aba -d cli oc-mirror
 sleep 2
 ls -l ~/bin/oc-mirror 
+~/bin/oc-mirror  --help > /dev/null 2>&1
 sleep 5
 set -x
 sleep 10 # wait for "download-operator"
@@ -247,7 +250,11 @@ echo_step Save images to disk ...
 
 ##### TRY WITHOUT rm -rf ~/.oc-mirror  # We don't want to include all the older images?!?!
 sed -i "s/--since 2025-01-01//g" scripts/reg-save.sh  # Experimental: keeping the cache for re-use to speed things up
+aba -d cli downloadall  # Just to be sure we have everything
 aba -d mirror save -r 8
+
+# Need to explicitly fetch govc since we are in 'bm' mode
+aba -d cli govc
 
 ###rm -rf ~/.oc-mirror  # We need some storage back!
 

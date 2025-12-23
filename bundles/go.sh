@@ -54,6 +54,8 @@ export OC_MIRROR_CACHE=$HOME  # Set this so that multiple oc-mirror invocations 
 # Can also delete $OC_MIRROR_CACHE/.oc-mirror dir
 export PLAIN_OUTPUT=1  # Supress curl progress bars and other color output
 
+rm -vf ~/bin/{aba,butane,govc,kubectl,oc,oc-mirror,openshift-install}
+rm -rf ~/.aba
 rm -rf ~/.oc-mirror/  # This is needed due to space limitations...  Also don't want some kind of "contamination"! 
 # If we use other files, e.g. caches for testing and the tests pass, then the actual archive might container a bug and fail later on!
 # e.g. "Expected version 9.6.20251015-1 but found 9.0.20250510-0" -> Bug https://issues.redhat.com/browse/OCPBUGS-65899 
