@@ -73,10 +73,19 @@ endif
 # Include aba.conf if it exists
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
+platform := $(strip $(shell echo $(platform)))
+
+# Only if platform not "bm" we need govc for vmw or libvirt
+ifneq ($(platform),bm)
+	govc_bin := govc
+	govc_tar := govc_Linux_$(govc_arch).tar.gz
+endif
 
 # Targets
 
-install: oc openshift-install oc-mirror govc butane
+install: oc openshift-install oc-mirror butane $(govc_bin)
+
+installall: oc openshift-install oc-mirror butane govc
 
 # For "reset" and "oc-mirror" and "govc" targets we DO NOT need to check for the target ocp version
 # If 'reset' found in $MAKECMDGOALS, i.e. no reset target provided
@@ -129,7 +138,9 @@ rhel8_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-rhel8-$(ocp_version).tar.gz
 rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
 
 # Download *all* the tar files that might be use in the disconnected env, both rhel9 and rhel8.
-download: .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz govc_Linux_$(govc_arch).tar.gz butane-binary
+download: .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz butane-binary $(govc_tar)
+
+downloadall: .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz butane-binary govc_Linux_$(govc_arch).tar.gz
 
 
 ########################################
@@ -210,8 +221,8 @@ openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install ta
 ########################################
 oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 ~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz # ~/bin/oc # is this really needed for oc-mirror - no!
-	@echo $(os_ver) | grep -q "^9\." && echo Extracting oc-mirror.rhel9.tar.gz to ~/bin/oc-mirror || echo Extracting oc-mirror.tar.gz to ~/bin/oc-mirror
-	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
+	@echo $(os_ver) | grep -q "^9\." && echo Extracting oc-mirror.rhel9.tar.gz to ~/bin/oc-mirror	|| echo Extracting oc-mirror.tar.gz to ~/bin/oc-mirror
+	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror		|| tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
 	~/bin/oc-mirror --help >/dev/null || { echo "Error: ~/bin/oc-mirror binary invalid"; exit 1; }
 
@@ -237,17 +248,18 @@ oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 ########################################
 # Use either x86_64 or arm64 
 govc: ~/bin/govc  ## Install govc to ~/bin/govc
-~/bin/govc: .init govc_Linux_$(govc_arch).tar.gz
-	@echo Extracting govc_Linux_$(govc_arch).tar.gz to ~/bin/govc
-	tar -C ~/bin -xmzf govc_Linux_$(govc_arch).tar.gz govc
+~/bin/govc: .init $(govc_tar)
+	@echo Extracting $(govc_tar) to ~/bin/govc
+	tar -C ~/bin -xmzf $(govc_tar) govc
 	~/bin/govc --help >/dev/null 2>&1
 
-govc_Linux_$(govc_arch).tar.gz:   ## Download govc tarball
-	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz
-	curl --retry 8 -f $(CURL_PROGRESS) -L -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz"
-	file govc_Linux_$(govc_arch).tar.gz | grep -q "gzip compressed data" || { rm -f govc_Linux_$(govc_arch).tar.gz; exit 1; } # in case of 5xx errors!
-	tar tvf govc_Linux_$(govc_arch).tar.gz >/dev/null|| { rm -f govc_Linux_$(govc_arch).tar.gz; exit 1; } # in case of 5xx errors!  # Be sure it's valid
-	echo "File govc_Linux_$(govc_arch).tar.gz is valid!"
+#govc_Linux_$(govc_arch).tar.gz:   ## Download govc tarball
+$(govc_tar):   ## Download govc tarball
+	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/$(govc_tar)
+	curl --retry 8 -f $(CURL_PROGRESS) -L -O "https://github.com/vmware/govmomi/releases/latest/download/$(govc_tar)"
+	file $(govc_tar) | grep -q "gzip compressed data" || { rm -f $(govc_tar); exit 1; } # in case of 5xx errors!
+	tar tvf $(govc_tar) >/dev/null|| { rm -f $(govc_tar); exit 1; } # in case of 5xx errors!  # Be sure it's valid
+	echo "File $(govc_tar) is valid!"
 
 # Use either amd64 or aarch64 
 butane: ~/bin/butane ## Install butane to ~/bin/butane
