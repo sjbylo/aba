@@ -213,7 +213,7 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 	@echo $(os_ver) | grep -q "^9\." && echo Extracting oc-mirror.rhel9.tar.gz to ~/bin/oc-mirror || echo Extracting oc-mirror.tar.gz to ~/bin/oc-mirror
 	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror || tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
-	~/bin/oc-mirror --help >/dev/null 2>&1
+	~/bin/oc-mirror --help >/dev/null || { echo "Error: ~/bin/oc-mirror binary invalid"; exit 1; }
 
 # Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
 
