@@ -297,5 +297,5 @@ clean: ## Clean up installed binaries
 
 .PHONY: reset
 reset: clean # Clean up everything. Only use if you know what you are doing!
-	rm -f *.tar.gz .init butane-binary .*-download
+	rm -f *.tar.gz .init butane-* .*-download
 
