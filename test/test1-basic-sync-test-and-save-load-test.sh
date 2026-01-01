@@ -394,7 +394,7 @@ test-cmd -m "Setting platform=bm in aba.conf" aba --platform bm
 
 test-cmd -m "Testing downloadall - rm govc" rm -f cli/govc*
 test-cmd -m "Testing downloadall - checking govc tar file does NOT exists" ! test -f cli/govc*gz
-test-cmd -m "Testing downloadall - bm install should also downlaod govc binary" aba -d cli downloadall
+test-cmd -m "Testing downloadall - bm install should also download govc binary" aba -d cli downloadall
 test-cmd -m "Testing downloadall - checking govc tar file exists" test -f cli/govc*gz
 
 ####> vmware.conf
