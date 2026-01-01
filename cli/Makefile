@@ -65,6 +65,8 @@ ifeq ($(arch),x86_64)
 	butane_arch := amd64
 endif
 
+butane_binary_file = butane-$(butane_arch)
+
 govc_arch := $(arch)
 ifeq ($(arch),aarch64)
 	govc_arch := arm64
@@ -139,8 +141,10 @@ rhel9_oc_url      	:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clie
 rhel8_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-rhel8-$(ocp_version).tar.gz
 rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
 
+openshift_install_file	:= openshift-install-$(os)-$(ocp_version).tar.gz
+
 # Download *all* the tar files that might be use in the disconnected env, both rhel9 and rhel8.
-download: .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz butane-binary $(govc_tar_target)
+download: .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download $(gen_oc_tar_file) $(openshift_install_file) oc-mirror.tar.gz oc-mirror.rhel9.tar.gz $(butane_binary_file) $(govc_tar_target)
 
 # This is the same as download but with govc added 
 downloadall: download $(govc_tar_file)
@@ -150,10 +154,9 @@ downloadall: download $(govc_tar_file)
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
 oc: ~/bin/oc  ## Install oc into ~/bin
 ~/bin/oc: .init $(full_oc_tar_file)
-#	@(file $(full_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(full_oc_tar_file) to ~/bin/oc ... && tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl) || (file $(gen_oc_tar_file) | grep -q "gzip compressed data" && echo Extracting $(gen_oc_tar_file) to ~/bin/oc ... 
 	file $(full_oc_tar_file) | grep -q "gzip compressed data"
-	@echo Extracting $(full_oc_tar_file) to ~/bin/oc ... 
-	tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl || { echo Extracting $(gen_oc_tar_file) instead to ~/bin/oc ...; tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl; } || { echo ERROR: Invalid files: $(full_oc_tar_file) or $(gen_oc_tar_file); exit 1; }
+	@echo Extracting $(full_oc_tar_file) to ~/bin/oc
+	tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl || { echo Extracting $(gen_oc_tar_file) instead to ~/bin/oc; tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl; } || { echo ERROR: Invalid files: $(full_oc_tar_file) or $(gen_oc_tar_file); exit 1; }
 	~/bin/oc --help >/dev/null 2>&1
 
 # Download just the oc tar files
@@ -161,10 +164,8 @@ octars: $(gen_oc_tar_file) .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-
 
 # Download
 $(full_oc_tar_file):  ## Downlaod oc tarball for this hosts rhel version, otherwise download the fallback tarball.
-#	@curl -sfkLI $(full_oc_url) >/dev/null && echo Downloading $(full_oc_url) ... && curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || (echo "Downloading fallback file $(gen_oc_url) ..."; curl $(CURL_PROGRESS) -O -L $(gen_oc_url))
 	@curl -sfkLI $(full_oc_url) >/dev/null
-	echo Downloading $(full_oc_url) ... 
-	#curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || { echo "Downloading fallback file $(gen_oc_url) ..."; curl -f $(CURL_PROGRESS) -O -L $(gen_oc_url); }
+	echo Downloading $(full_oc_url)
 	curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || make -s $(gen_oc_tar_file)
 	tar tzvf $(full_oc_tar_file) >/dev/null || { rm -f $(full_oc_tar_file); exit 1; }
 	echo "File $(full_oc_tar_file) checksum valid!"  # Be sure it's valid
@@ -173,7 +174,7 @@ $(full_oc_tar_file):  ## Downlaod oc tarball for this hosts rhel version, otherw
 # Download
 $(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
 	@curl -sfkLI $(gen_oc_url) >/dev/null 
-	echo Downloading $(gen_oc_url) ... 
+	echo Downloading $(gen_oc_url)
 	curl -f $(CURL_PROGRESS) -O -L $(gen_oc_url) || { echo $(gen_oc_tar_file) failed download; > $(gen_oc_tar_file); }
 	[ -s $(gen_oc_tar_file) ]
 	tar tvzf $(gen_oc_tar_file) >/dev/null || { rm -f $(gen_oc_tar_file); exit 1; }  # Validate tar file!
@@ -182,7 +183,7 @@ $(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
 # Ensure all possible tarballs are downloaded
 .$(rhel9_oc_tar_file)-download:  ## Downlaod oc tarball for rhel9, if available
 	curl -sfkLI $(rhel9_oc_url) >/dev/null # Check connection only
-	echo Downloading $(rhel9_oc_url) ...
+	echo Downloading $(rhel9_oc_url)
 	curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || { echo $(rhel9_oc_tar_file) failed download; > $(rhel9_oc_tar_file); }
 	tar tvzf $(rhel9_oc_tar_file) >/dev/null || { rm -f $(rhel9_oc_tar_file); exit 1; }  # Validate tar file!
 	echo "File $(rhel9_oc_tar_file) checksum valid!"  # Be sure it's valid
@@ -192,7 +193,7 @@ $(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
 .$(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
 #	@curl -sfkLI $(rhel8_oc_url) >/dev/null && echo Downloading $(rhel8_oc_url) ... && curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || (echo $(rhel8_oc_tar_file) failed download; > $(rhel8_oc_tar_file))
 	curl -sfkLI $(rhel8_oc_url) >/dev/null # Check connection only
-	echo Downloading $(rhel8_oc_url) ...
+	echo Downloading $(rhel8_oc_url)
 	curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || { echo $(rhel8_oc_tar_file) failed download; > $(rhel8_oc_tar_file); }
 	tar tvzf $(rhel8_oc_tar_file) >/dev/null || { rm -f $(rhel8_oc_tar_file); exit 1; }  # Validate tar file!
 	echo "File $(rhel8_oc_tar_file) checksum valid!"  # Be sure it's valid
@@ -203,32 +204,27 @@ $(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
 # Be sure that the correct version is installed by creating .*installed flag file
 
 openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/bin
-~/bin/openshift-install: .init .$(ocp_version)-openshift-install-$(os)-installed
-	@file openshift-install-$(os)-$(ocp_version).tar.gz | grep -q "gzip compressed data" || { echo ERROR: Invalid file: openshift-install-$(os)-$(ocp_version).tar.gz; exit 1;}
-	@echo Extracting  openshift-install-$(os)-$(ocp_version).tar.gz to ~/bin/openshift-install
-	tar -C ~/bin -xmzf openshift-install-$(os)-$(ocp_version).tar.gz openshift-install
-	~/bin/openshift-install --help >/dev/null 2>&1
+~/bin/openshift-install: .init $(openshift_install_file)
+	@echo Extracting  $(openshift_install_file) to $@
+	tar -C ~/bin -xmzf $(openshift_install_file) openshift-install
+	$@ --help >/dev/null || { echo "Error: file $@ invalid!"; exit 1; }
 
-.$(ocp_version)-openshift-install-$(os)-installed: openshift-install-$(os)-$(ocp_version).tar.gz
-	@rm -f .??*-openshift-install-$(os)-installed
-	@touch .$(ocp_version)-openshift-install-$(os)-installed 
+openshift_install_url := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)
 
-openshift-install-$(os)-$(ocp_version).tar.gz:  ## Download openshift-install tarball
-	@echo Downloading https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
-	curl -f --retry 8 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/openshift-install-$(os)-$(ocp_version).tar.gz
-	file openshift-install-$(os)-$(ocp_version).tar.gz | grep -q "gzip compressed data" || { rm -f openshift-install-$(os)-$(ocp_version).tar.gz; exit 1; } # in case of 5xx errors!
-#	tar tvf openshift-install-$(os)-$(ocp_version).tar.gz >/dev/null|| { rm -f openshift-install-$(os)-$(ocp_version).tar.gz; exit 1; } # in case of 5xx errors!  # Be sure it's valid
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-install-sha256sum.txt https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/sha256sum.txt && cs=`sha256sum openshift-install-$(os)-$(ocp_version).tar.gz` && grep -q "$$cs" openshift-install-sha256sum.txt || { echo "Error: file openshift-install-$(os)-$(ocp_version).tar.gz checksum invalid!"; exit 1; }
-	echo "File openshift-install-$(os)-$(ocp_version).tar.gz checksum valid!"
+$(openshift_install_file):  ## Download openshift-install tarball
+	@echo Downloading $(openshift_install_url)/$@
+	curl -f --retry 8 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$@
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-install-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" openshift-install-sha256sum.txt || { echo "Error: file $@ checksum invalid!"; exit 1; }
+	echo "File $@ checksum valid!"
 
 
 ########################################
 oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
-~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz # ~/bin/oc # is this really needed for oc-mirror - no!
+~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz
 	@echo $(os_ver) | grep -q "^9\." && echo Extracting oc-mirror.rhel9.tar.gz to ~/bin/oc-mirror	|| echo Extracting oc-mirror.tar.gz to ~/bin/oc-mirror
 	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror		|| tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
-#	~/bin/oc-mirror --help >/dev/null || { echo "Error: ~/bin/oc-mirror binary invalid"; exit 1; }
+	~/bin/oc-mirror --help >/dev/null 2>&1 || { echo "Error: ~/bin/oc-mirror binary invalid"; exit 1; }
 
 # Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
 
@@ -237,8 +233,8 @@ oc_mirror_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clie
 oc-mirror.tar.gz: ## Download oc-mirror tarball
 	echo Downloading $(oc_mirror_url)
 	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url)
-	file $@ | grep -q "gzip compressed data" || { rm -f $@; exit 1; } # in case of 5xx errors!
-	tar tvf $@ >/dev/null|| { rm -f $@; exit 1; } # in case of 5xx errors!  # Be sure it's valid
+#	file $@ | grep -q "gzip compressed data" || { rm -f $@; exit 1; } # in case of 5xx errors!
+#	tar tvf $@ >/dev/null|| { rm -f $@; exit 1; } # in case of 5xx errors!  # Be sure it's valid
 	curl -f --retry 8 -sL $(CURL_PROGRESS) -o oc-mirror-sha256sum.txt $(oc_mirror_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" oc-mirror-sha256sum.txt || { echo "Error: file $@ checksum invalid!"; exit 1; }
 	echo "File $@ checksum valid!"
 
@@ -247,8 +243,8 @@ oc_mirror_url_rhel9_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 	echo Downloading $(oc_mirror_url_rhel9)
 	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url_rhel9)
-	file oc-mirror.rhel9.tar.gz | grep -q "gzip compressed data" || { rm -f oc-mirror.rhel9.tar.gz; exit 1; } # in case of 5xx errors!
-	tar tvf oc-mirror.rhel9.tar.gz >/dev/null|| { rm -f oc-mirror.rhel9.tar.gz; exit 1; } # in case of 5xx errors!  # Be sure it's valid
+#	file oc-mirror.rhel9.tar.gz | grep -q "gzip compressed data" || { rm -f oc-mirror.rhel9.tar.gz; exit 1; } # in case of 5xx errors!
+#	tar tvf oc-mirror.rhel9.tar.gz >/dev/null|| { rm -f oc-mirror.rhel9.tar.gz; exit 1; } # in case of 5xx errors!  # Be sure it's valid
 	curl -f --retry 8 -sL $(CURL_PROGRESS) -o oc-mirror-rhel9-sha256sum.txt $(oc_mirror_url_rhel9_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" oc-mirror-rhel9-sha256sum.txt || { echo "Error: file $@ checksum invalid!"; exit 1; }
 	echo "File $@ checksum valid!"
 
@@ -263,35 +259,31 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 
 govc_url = https://github.com/vmware/govmomi/releases/latest/download
 govc_tar_url_sha256sum = $(govc_url)/checksums.txt
+govc_tar_file_sha256sum = $(govc_tar_file)-sha256sum.txt
 $(govc_tar_file):   ## Download govc tarball
-	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/$@
-	curl --retry 8 -f $(CURL_PROGRESS) -L -O "https://github.com/vmware/govmomi/releases/latest/download/$@"
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(govc_tar_file)-sha256sum.txt $(govc_tar_url_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(govc_tar_file)-sha256sum.txt || { echo "Error: file $@ checksum invalid!"; exit 1; }
-#	file $@ | grep -q "gzip compressed data" || { rm -f $@; exit 1; } # in case of 5xx errors!
-#	tar tvf $@ >/dev/null|| { rm -f $@; exit 1; } # in case of 5xx errors!  # Be sure it's valid
-	echo "File $@ is valid!"
+	echo Downloading $(govc_url)/$@
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -O "$(govc_url)/$@"
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(govc_tar_file_sha256sum) $(govc_tar_url_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(govc_tar_file_sha256sum) || { echo "Error: file $@ checksum invalid!"; mv $(govc_tar_file) .$(govc_tar_file); exit 1; }
+	echo "File $@ checksum valid!"
 
 # Use either amd64 or aarch64 
 .PHONY: butane
 butane: ~/bin/butane ## Install butane to ~/bin/butane
-~/bin/butane: butane-binary
-	@echo Copying butane-binary to ~/bin/butane
-	cp butane-binary ~/bin/butane
-	chmod +x ~/bin/butane
-	~/bin/butane --help >/dev/null 2>&1  # Be sure it's valid
+~/bin/butane: $(butane_binary_file)
+	@echo Copying butane binary to $@
+	cp $(butane_binary_file) $@
+	chmod +x $@
+	$@ --help >/dev/null 2>&1 || { echo "Error: $@ binary invalid"; exit 1; }  # Be sure it's valid
 
 butane_binary_url = https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest
-butane_binary_file = butane-$(butane_arch)
 butane_binary_file_url = $(butane_binary_url)/$(butane_binary_file)
 butane_binary_url_sha256sum = $(butane_binary_url)/sha256sum.txt
-butane-binary: $(butane_binary_file)
+
 $(butane_binary_file): ## Download butane binary 
 	echo Downloading $(butane_binary_file_url)
-	curl -f --retry 8 $(CURL_PROGRESS) -f -L -o $@ --connect-timeout 30 $(butane_binary_file_url)
+	curl -f --retry 8 $(CURL_PROGRESS) -sL -o $@ --connect-timeout 30 $(butane_binary_file_url)
 	chmod +x $@
-#	file $@ | grep -q -e "executable" -e "dynamically linked" || { rm -f $@; exit 1; } # in case of 5xx errors!
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(butane_binary_file)-sha256sum.txt $(butane_binary_url_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(butane_binary_file)-sha256sum.txt || { echo "Error: file $@ checksum invalid!"; exit 1; }
-	ln -f $@ butane-binary
+	curl -f --retry 8 $(CURL_PROGRESS) -sL -o $(butane_binary_file)-sha256sum.txt $(butane_binary_url_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(butane_binary_file)-sha256sum.txt || { echo "Error: file $@ checksum invalid!"; exit 1; }
 	echo "File $@ checksum valid!"
 
 
@@ -302,5 +294,5 @@ clean: ## Clean up installed binaries
 
 .PHONY: reset
 reset: clean # Clean up everything. Only use if you know what you are doing!
-	rm -f *.tar.gz .init butane-* .*-download
+	rm -f *.tar.gz .init butane* .*-download
 
