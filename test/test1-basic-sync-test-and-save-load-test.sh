@@ -392,6 +392,11 @@ mylog "Bare-metal simulation: Changing 'platform' to non-vmware in 'aba.conf' fi
 #sed -i "s/^platform=.*/platform=bm/g" aba.conf
 test-cmd -m "Setting platform=bm in aba.conf" aba --platform bm
 
+test-cmd -m "Testing downloadall - rm govc" rm -f cli/govc*
+test-cmd -m "Testing downloadall - checking govc tar file does NOT exists" ! test -f cli/govc*gz
+test-cmd -m "Testing downloadall - bm install should also downlaod govc binary" aba -d cli downloadall
+test-cmd -m "Testing downloadall - checking govc tar file exists" test -f cli/govc*gz
+
 ####> vmware.conf
 rm -rf standard   # Needs to be 'standard' as there was a bug for iso creation in this topology
 ####test-cmd -m "Creating standard iso file with 'aba cluster -n standard -t standard --step iso'" aba cluster -n standard -t standard --step iso # Since we're simulating bare-metal, only create iso

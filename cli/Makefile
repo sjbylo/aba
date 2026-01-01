@@ -70,6 +70,8 @@ ifeq ($(arch),aarch64)
 	govc_arch := arm64
 endif
 
+govc_tar_file := govc_Linux_$(govc_arch).tar.gz
+
 # Include aba.conf if it exists
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
@@ -78,7 +80,7 @@ platform := $(strip $(shell echo $(platform)))
 # Only if platform not "bm" we need govc for vmw or libvirt
 ifneq ($(platform),bm)
 	govc_bin := govc
-	govc_tar_target := govc_Linux_$(govc_arch).tar.gz
+	govc_tar_target := $(govc_tar_file)
 endif
 
 # Targets
@@ -141,7 +143,7 @@ rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/o
 download: .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download $(gen_oc_tar_file) openshift-install-$(os)-$(ocp_version).tar.gz oc-mirror.tar.gz oc-mirror.rhel9.tar.gz butane-binary $(govc_tar_target)
 
 # This is the same as download but with govc added 
-downloadall: download govc_Linux_$(govc_arch).tar.gz
+downloadall: download $(govc_tar_file)
 
 
 ########################################
@@ -254,17 +256,20 @@ oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 ########################################
 # Use either x86_64 or arm64 
 govc: ~/bin/govc  ## Install govc to ~/bin/govc
-~/bin/govc: .init govc_Linux_$(govc_arch).tar.gz
-	@echo Extracting govc_Linux_$(govc_arch).tar.gz to ~/bin/govc
-	tar -C ~/bin -xmzf govc_Linux_$(govc_arch).tar.gz govc
+~/bin/govc: .init $(govc_tar_file)
+	@echo Extracting $(govc_tar_file) to ~/bin/govc
+	tar -C ~/bin -xmzf $(govc_tar_file) govc
 	~/bin/govc --help >/dev/null 2>&1
 
-govc_Linux_$(govc_arch).tar.gz:   ## Download govc tarball
-	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz
-	curl --retry 8 -f $(CURL_PROGRESS) -L -O "https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_$(govc_arch).tar.gz"
-	file govc_Linux_$(govc_arch).tar.gz | grep -q "gzip compressed data" || { rm -f govc_Linux_$(govc_arch).tar.gz; exit 1; } # in case of 5xx errors!
-	tar tvf govc_Linux_$(govc_arch).tar.gz >/dev/null|| { rm -f govc_Linux_$(govc_arch).tar.gz; exit 1; } # in case of 5xx errors!  # Be sure it's valid
-	echo "File govc_Linux_$(govc_arch).tar.gz is valid!"
+govc_url = https://github.com/vmware/govmomi/releases/latest/download
+govc_tar_url_sha256sum = $(govc_url)/checksums.txt
+$(govc_tar_file):   ## Download govc tarball
+	echo Downloading https://github.com/vmware/govmomi/releases/latest/download/$@
+	curl --retry 8 -f $(CURL_PROGRESS) -L -O "https://github.com/vmware/govmomi/releases/latest/download/$@"
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(govc_tar_file)-sha256sum.txt $(govc_tar_url_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(govc_tar_file)-sha256sum.txt || { echo "Error: file $@ checksum invalid!"; exit 1; }
+#	file $@ | grep -q "gzip compressed data" || { rm -f $@; exit 1; } # in case of 5xx errors!
+#	tar tvf $@ >/dev/null|| { rm -f $@; exit 1; } # in case of 5xx errors!  # Be sure it's valid
+	echo "File $@ is valid!"
 
 # Use either amd64 or aarch64 
 .PHONY: butane
