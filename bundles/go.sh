@@ -76,7 +76,7 @@ done
 list=$(echo ${versions[@]} | tr ' ' '\n')
 echo "#######################"
 echo -e "Creating install bundles for versions:\n$list"
-[ "$NOTIFY" ] && echo -e "Creating install bundles for versions:\n$list" | notify.sh Creating install bundles:
+####[ "$NOTIFY" ] && echo -e "Creating install bundles for versions:\n$list" | notify.sh Creating install bundles:
 echo "#######################"
 echo
 
@@ -91,13 +91,13 @@ do
 		echo
 		echo Running: bundle-create-test.sh $ver $name $op_sets
 		sleep 1
-		if ! ./bundle-create-test.sh $ver $name $op_sets; then
+		if ! time ./bundle-create-test.sh $ver $name $op_sets; then
 			echo "##################################################" >&2
-			echo "Failed: bundle $ver-$name ($op_sets) at $(date)" >&2
+			echo "FAILED: bundle $ver-$name ($op_sets) at $(date)" >&2
 			echo "##################################################" >&2
 			echo Showing last log lines:  >&2
 			touch ~/tmp/bundle-go.out
-			[ "$NOTIFY" ] && echo -e "Install bundle $ver-$name ($op_sets)\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh Failed: at $(date)) >&2
+			[ "$NOTIFY" ] && echo -e "Install bundle $ver-$name ($op_sets)\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh FAILED: at $(date)) >&2
 			echo Quitting $0 at $(date)
 
 			#exit 1  # Exit if we want to check what failed
