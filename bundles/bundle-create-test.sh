@@ -162,15 +162,15 @@ echo_step Install Aba to $PWD/aba ...
 rm -rf aba
 
 # Install aba from the Internet
-set +x
 GIT_BRANCH=${GIT_BRANCH:-main}
 echo_step Install Aba from branch $GIT_BRANCH
+set +x
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install) -- $GIT_BRANCH"
 #bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" --dev
+set -x
 cd aba
 ####./install  # Done above
-set -x
 
 # Create bundle? 
 echo Create the bundle in $WORK_BUNDLE_DIR ...
@@ -250,9 +250,7 @@ echo_step Save images to disk ...
 
 ##### TRY WITHOUT rm -rf ~/.oc-mirror  # We don't want to include all the older images?!?!
 sed -i "s/--since 2025-01-01//g" scripts/reg-save.sh  # Experimental: keeping the cache for re-use to speed things up
-#aba -d cli downloadall  # Just to be sure we have everything
-aba -d cli download  # Just to be sure we have everything
-aba -d cli govc  # Just to be sure we have everything
+aba -d cli downloadall  # Just to be sure we have everything
 aba -d mirror save -r 8
 
 # Need to explicitly fetch govc since we are in 'bm' mode
@@ -335,6 +333,7 @@ sed -i "s/platform=bm/platform=vmw/g" aba.conf
 ./install
 aba
 aba -A
+aba --machine-network 10.0.0.0/20 --ntp 10.0.1.8 --default-route 10.0.1.1  # Just to be sure, needed on dual-homed bastion
 
 echo_step Install Quay and load the images ...
 
