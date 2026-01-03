@@ -956,7 +956,7 @@ if [ -f .bundle ]; then
 	# make & jq are needed below and in the next steps. Best to install all at once.
 	scripts/install-rpms.sh internal
 
-	echo_yellow "Aba install bundle detected for OpenShift version '$ocp_version'."
+	echo_yellow "Aba install bundle detected for OpenShift v$ocp_version."
 
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
