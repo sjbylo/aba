@@ -1,3 +1,5 @@
-cincinnati-operator
+# Name: OpenShift Logging with Loki
 elasticsearch-operator
 loki-operator
+
+cincinnati-operator
