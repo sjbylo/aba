@@ -1,6 +1,8 @@
 #!/bin/bash -e
 # Log into a cluster and run this test script to install OCP-V and MTV
 
+oc whoami || . <(aba login) 
+
 #echo_green()    { [ "$TERM" ] && tput setaf 2; echo -e "$@"; [ "$TERM" ] && tput sgr0; }
 echo_step() {
 	echo ##################

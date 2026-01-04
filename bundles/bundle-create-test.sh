@@ -162,12 +162,12 @@ echo_step Install Aba to $PWD/aba ...
 rm -rf aba
 
 # Install aba from the Internet
-GIT_BRANCH=${GIT_BRANCH:-main}
+export GIT_BRANCH=${GIT_BRANCH:-main}
 echo_step Install Aba from branch $GIT_BRANCH
 set +x
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install) -- $GIT_BRANCH"
 #bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" --dev
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 set -x
 cd aba
 ####./install  # Done above
