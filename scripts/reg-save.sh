@@ -130,7 +130,7 @@ aba_info_ok -n "Images saved successfully!"
 [ $try_tot -gt 1 -a $try -gt 1 ] && aba_info " (after $try attempts!)" || echo   # Show if more than 1 attempt
 echo 
 
-aba_info_ok "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which you transfer to your disconnected environment."
+aba_info_ok "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which can be transferred to your disconnected environment."
 aba_info_ok "In your disconnected environment, unpack the install bundle and run 'cd aba; ./install; aba' for further instructions."
 echo
 
