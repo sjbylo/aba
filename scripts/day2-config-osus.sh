@@ -16,6 +16,14 @@ verify-aba-conf || exit 1
 verify-cluster-conf || exit 1
 verify-mirror-conf || exit 1
 
+# Stop processing (CatalogSources and Signatires etc) if this cluster is a connected cluster!
+if [ "$int_connection" ]; then
+	aba_info "Your cluster is a 'connected cluster' since the value 'int_connection' is set to $int_connection in $PWD/cluster.conf"
+	aba_info "There is nothing for 'aba day2-osus' to do and there is no need to run: aba day2 also."
+
+	exit 0
+fi
+
 NAME=osus
 NAMESPACE=openshift-update-service
 
