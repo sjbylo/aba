@@ -496,7 +496,9 @@ rm -f $CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING
 echo_step "Show content of new bundle in cloud dir $CLOUD_DIR_BUNDLE:"
 
 ls -al $CLOUD_DIR_BUNDLE
+echo
 ls -al $CLOUD_DIR_BUNDLE/build
+echo
 
 echo_step "Delete older bundles? ..."
 
