@@ -49,7 +49,7 @@ OC="oc --kubeconfig $PWD/iso-agent-based/auth/kubeconfig"
 
 # Just to be as sure as possible we can access the cluster!
 if ! try_cmd -q 1 0 2 $OC get nodes ; then
-	try_cmd -q 3 0 40 $OC get nodes 
+	try_cmd -q 3 0 40 $OC get nodes || aba_abort "Giving up waiting!"
 fi
 
 echo
@@ -103,11 +103,8 @@ check_and_approve_csrs() {
 
 (check_and_approve_csrs) &>/dev/null & 
 pid=$!
-#myexit() { [ ! "$pid" ] && return; kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; exit $1; }
 myexit() { [ "$pid" ] && { kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; }; exit $1; }
-#trap myexit SIGINT SIGTERM
 trap myexit EXIT
-#trap 'kill 0' EXIT
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
