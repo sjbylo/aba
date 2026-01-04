@@ -1,6 +1,8 @@
 #!/bin/bash -ex
 # Log into a cluster and run this test script to install $NAME
 
+oc whoami || . <(aba login) 
+
 NAME="OpenShift AI"
 OP=rhods-operator
 NS=redhat-ods-operator

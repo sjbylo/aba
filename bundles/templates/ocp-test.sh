@@ -1,6 +1,8 @@
 #!/bin/bash -e
 # Log into a cluster and run this test script to install $NAME
 
+oc whoami || . <(aba login) 
+
 NAME="Web Terminal"
 OP=web-terminal
 NS=openshift-operators

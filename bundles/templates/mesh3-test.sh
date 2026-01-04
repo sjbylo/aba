@@ -1,6 +1,8 @@
 #!/bin/bash -e
 # Log into a cluster and run this test script to install OpenShift Service Mesh
 
+oc whoami || . <(aba login) 
+
 FEATURE_NAME="OpenShift Service Mesh"
 OP_NAME=(servicemeshoperator3 kiali-ossm)
 OP_CSV=(servicemeshoperator3 kiali-operator)
