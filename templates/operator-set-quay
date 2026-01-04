@@ -1,4 +1,6 @@
 # Name: Red Hat Quay
+# Please let us know if there any missing dependencies
+
 cincinnati-operator
 quay-bridge-operator
 quay-operator

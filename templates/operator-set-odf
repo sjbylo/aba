@@ -1,4 +1,6 @@
 # Name: OpenShift Data Foundation
+# Please let us know if there any missing dependencies
+
 odf-operator
 lvms-operator
 rook-ceph-operator
@@ -14,6 +16,7 @@ cephcsi-operator
 odf-dependencies
 odr-cluster-operator
 odr-hub-operator
+odf-external-snapshotter-operator
 
 # Only for local storage deployments
 local-storage-operator

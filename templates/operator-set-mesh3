@@ -1,4 +1,6 @@
 # Name: Service Mesh v3
+# Please let us know if there any missing dependencies
+
 servicemeshoperator3
 kiali-ossm
 

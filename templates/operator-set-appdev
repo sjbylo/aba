@@ -1,4 +1,6 @@
 # Name: Application Development
+# Please let us know if there any missing dependencies
+
 openshift-gitops-operator
 openshift-pipelines-operator-rh
 devspaces

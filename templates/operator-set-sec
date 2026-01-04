@@ -1,4 +1,6 @@
 # Name: OpenShift Security
+# Please let us know if there any missing dependencies
+
 cincinnati-operator
 rhacs-operator
 openshift-cert-manager-operator

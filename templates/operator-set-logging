@@ -1,4 +1,6 @@
 # Name: OpenShift Logging with Loki
+# Please let us know if there any missing dependencies
+
 elasticsearch-operator
 loki-operator
 
