@@ -1,4 +1,6 @@
 # Name: Service Mesh v2
+# Please let us know if there any missing dependencies
+
 kiali-ossm
 jaeger-product
 servicemeshoperator

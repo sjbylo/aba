@@ -1,11 +1,9 @@
-# Name: ODF & Multi Cluster Orchestration
-ocs-operator
-odf-operator
-mcg-operator
-odf-csi-addons-operator
+# Name: ODF Multi Cluster Orchestration
+# Please let us know if there any missing dependencies
+
 odr-cluster-operator
 odr-hub-operator
-local-storage-operator
 odf-multicluster-orchestrator
 
+# Required for OSUS
 cincinnati-operator

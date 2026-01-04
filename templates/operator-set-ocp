@@ -1,4 +1,6 @@
 # Name: OpenShift Operations
+# Please let us know if there any missing dependencies
+
 kubernetes-nmstate-operator
 node-maintenance-operator
 node-healthcheck-operator

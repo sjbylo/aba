@@ -1,4 +1,6 @@
 # Name: GPU Support for Red Hat AI
+# Please let us know if there any missing dependencies
+
 # GPU
 nfd
 gpu-operator-certified
