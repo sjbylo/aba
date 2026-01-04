@@ -59,7 +59,7 @@ test-cmd -m "Installing aba" ./install
 
 test-cmd -m "Cleaning up - aba reset --force" aba reset -f
 
-####mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
+####mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
 ### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 #test-cmd -m "Cleaning up mirror - clean" "aba -s -C mirror clean" 
@@ -190,7 +190,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 
 ### CREATE BUNDLE & COPY TO BASTION ###
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -p $subdir" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -v -p $subdir" 
 test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and extract to '$reg_ssh_user@$int_bastion_hostname:$subdir'" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks vault-secrets-operator flux --base-domain example.com --machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp $ntp_ip  ntp.example.com --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
 # Back up the image set conf file so we can upgrade the cluster later
@@ -550,7 +550,7 @@ test-cmd -r 3 3 -m "Saving cincinnati operator images to local disk" "aba --dir 
 mylog Downloading the mesh demo into test/mesh, for use by deploy script
 (
 	pwd && \
-	rm -rf test/mesh && mkdir test/mesh && cd test/mesh && \
+	rm -rf test/mesh && mkdir -v test/mesh && cd test/mesh && \
 	git clone https://github.com/sjbylo/openshift-service-mesh-demo.git && \
 	pwd && \
 	cd openshift-service-mesh-demo && \
@@ -784,7 +784,7 @@ done
 cluster_name=standard
 
 # Test bare-metal with BYO macs
-##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster dir" "cd $subdir/aba; rm -rf $cluster_name; mkdir -p $cluster_name; ln -s ../templates/Makefile $cluster_name; aba --dir $cluster_name init" 
+##test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating $cluster_name cluster dir" "cd $subdir/aba; rm -rf $cluster_name; mkdir -v -p $cluster_name; ln -s ../templates/Makefile $cluster_name; aba --dir $cluster_name init" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Creating cluster.conf for 'macs.conf' test" "aba -d $subdir/aba cluster --name $cluster_name --type $cluster_name --step cluster.conf"
 mylog "Generating macs.conf file at $reg_ssh_user@$int_bastion_hostname:$subdir/aba/$cluster_name/macs.conf"
 echo -n "\
@@ -855,7 +855,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "If cluster up, shutting clus
 
 #test-cmd -m "aba reset --force"
 # keep it # aba --dir ~/aba reset --force
-# keep it # mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
+# keep it # mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 
 ##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete the registry" "aba --dir $subdir/aba/mirror uninstall"
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete the registry (docker)" "aba --dir $subdir/aba/mirror uninstall-docker-registry"  # We now test this guy!

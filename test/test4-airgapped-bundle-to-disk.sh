@@ -59,7 +59,7 @@ test-cmd -m "Installing aba" ./install
 
 test-cmd -m "Cleaning up - aba reset --force" aba reset -f
 
-####mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
+####mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
 ### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 #test-cmd -m "Cleaning up mirror - clean" "aba -s -C mirror clean" 
@@ -187,7 +187,7 @@ reg_ssh_user=$TEST_USER
 
 ### CREATE BUNDLE & COPY TO BASTION ###
 
-test-cmd mkdir -p ~/tmp
+test-cmd mkdir -v -p ~/tmp
 # Test split install bundle 
 test-cmd rm -fv ~/tmp/delete-me*tar
 
