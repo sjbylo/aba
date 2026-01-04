@@ -266,11 +266,11 @@ cd aba
 ./install
 aba          # Let Aba guide you through the OpenShift installation workflow (interactive mode)
 ```
-- clones the Github repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your domain name, machine network CIDR etc (if known).
+- clones the Github repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your base domain name, machine network CIDR etc (if known).
 - If needed, add any required operators to the `aba.conf` file by setting the `op_sets=` and/or `ops=` values.
 - helps you decide the method of deployment and how you should proceed.  For more, see the [Aba OpenShift Installation Workflow Diagram](#aba-openshift-installation-workflow-diagram). 
 
-Note that 'aba' will create the `aba.conf` file which contains some values that you *should change* as soon as you can, such as your _preferred platform_, your _domain name_, your _network address_ and any _operators_ you will require etc (if known).
+Note that 'aba' will create the `aba.conf` file which contains some values that you *should change* as soon as you can, such as your _preferred platform_, your _base domain name_, your _network address_ and any _operators_ you will require etc (if known).
 
 Now, continue with either [Partially Disconnected Scenario](#partially-disconnected-scenario) or [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario) below.
 
@@ -589,7 +589,7 @@ cd aba
 
 Connect a large USB media stick (or other device) to your VM and write the `install bundle` to it:
 
-Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any existing files under aba/mirror/save.
+Note: It is recommended to run `aba bundle` on a fresh install of Aba or use the --force flag to overwrite any existing image-set files under aba/mirror/save.
 
 >> **A bug has been fixed in the `aba bundle` command causing the error: `directory ... aba/tar does not exist!`**
 
@@ -613,16 +613,16 @@ aba bundle \
 
 - This will generate several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.
 - The OpenShift version can be automatically set to the most recent 'previous' point version (using '--version p') or to the 'latest' (using --version l).
-- If needed, --op-sets refers to predefined sets of operators, as defined in the files `aba/templates/operator-set-*`. Create your own if needed.
+- If needed, --op-sets refers to predefined sets of operators, as defined in the files `aba/templates/operator-set-*`. Create your own operator set file, if needed.
 - If needed, add individual operators after "--ops".
 - *If known*, set values --domain, --machine-network, --dns and --ntp (otherwise, these must be set in `aba.conf` after unpacking the bundle in the air-gapped env.).
 - Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
-- Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_* | tee CHECKSUM.txt`.  It is important to verify the files after copying them into the air-gapped environment!
+- Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_* | tee CHECKSUM.txt`.  It is important to use these checksum values to verify the files after copying them into the air-gapped environment!
 - Warning: --force will overwrite any existing image-set files under aba/mirror/save!
 - See `aba bundle --help` for more.
 
-Copy the files to your RHEL 8 or 9 bastion within the disconnected environment.
+Copy the 10GB and the CHECKSUM.txt files to your RHEL 8 or 9 bastion within the disconnected environment.
 
 Verify the integrity of the files by comparing their checksums with the originals:
 
@@ -630,7 +630,7 @@ Verify the integrity of the files by comparing their checksums with the original
 cksum ocp_mycluster_4.17.16_*
 ```
 
-Extract the install bundle:
+If the files are valid, extract the install bundle:
 
 ```
 cat /path/to/ocp_mycluster_4.17.16_* | tar xvf -
@@ -644,7 +644,7 @@ Note: You will find the large image-set tar file under `aba/mirror/save`.
 You can now install the _Mirror Registry for Red Hat OpenShift_ (Quay) to localhost and then load it with images using the following command (run: aba -d mirror load --help or see below for more details):
 
 ```
-aba -d mirror mirror -H registry.example.com load --retry 3
+aba -d mirror -H registry.example.com load --retry 3
 ```
 
 To install OpenShift run the following command and follow the instructions:
@@ -666,16 +666,16 @@ Run: `aba cluster --help` or see the [Installing OpenShift](#installing-openshif
 
 | Config file                       | Description |
 | :----------                       | :---------- |
-| `aba/aba.conf`                    | Global configuration file, sets the channel and version of OpenShift, your domain name, internal network address, DNS IP etc |
+| `aba/aba.conf`                    | Global configuration file, sets the channel and version of OpenShift, your base domain name, internal network address, DNS IP etc |
 | `aba/mirror/mirror.conf`          | Describes your _internal mirror registry_ (either existing or to-be-installed)  |
-| `aba/`cluster-name`/cluster.conf` | Describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, bonding etc |
+| `aba/`cluster-name`/cluster.conf` | Describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, network interface bonding etc |
 | `aba/vmware.conf`                 | Optional vCenter/ESXi access configuration using `govc` CLI (optional) |
 
 ### Customizing Configuration files
 
 If you modify the automatically generated Agent-based configuration files — `install-config.yaml` and `agent-config.yaml` - you take ownership of them, and Aba will no longer modify them.
 
-Once a cluster configuration directory (e.g. `mycluster`) has been created and the Agent-based configuration initialized, you can modify the configuration files — `install-config.yaml` and `agent-config.yaml` — if needed.  You can then rerun `aba` to generate the ISO (and VMs, if using `platform=vmw`).  Aba automatically detects and preserves these configuration file changes for future runs.  Common updates such as changing IP or MAC addresses, updating default routes, or adding disk hints all work fine.
+Once a cluster configuration directory (e.g. `mycluster`) has been created and the Agent-based configuration files generated, you can modify the configuration files — `install-config.yaml` and `agent-config.yaml` — if needed.  You can then rerun `aba` to generate the ISO (and VMs, if using `platform=vmw`).  Aba automatically detects and preserves these configuration file changes for future runs.  Common updates such as changing IP or MAC addresses, updating default routes, or adding disk hints all work fine.
 
 <!--
 Once a cluster config directory has been created (e.g. `mycluster`) and Agent-based configuration has been created, changes can be made to the Agent-based configuration: `install-config.yaml` and `agent-config.yaml` files if needed. `aba` can be run again to re-create the ISO and the VMs etc (if required).  Aba should detect the changes and preserve them for future use.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.
@@ -683,8 +683,10 @@ Once a cluster config directory has been created (e.g. `mycluster`) and Agent-ba
 
 The workflow might look like this:
 ```
-aba cluster --name mycluser --step agentconf       # Create the cluster dir & generate the initial agent config files.
-cd mycluster
+# Create the cluster dir & generate the initial agent config files
+aba cluster --name mycluser --type compact --starting-ip 10.0.1.100 --step agentconf
+
+cd mycluster   # Change into the cluster configuration directory
 ```
 
 Now manually edit the generated `install-config.yaml` and `agent-config.yaml` files as needed (for example, to add or change the bare-metal MAC addresses), then proceed with the cluster installation workflow:
@@ -701,7 +703,7 @@ As an example, you could edit `agent-config.yaml` to include the following to di
 ```
 
 The following optional command can be used to extract cluster configuration details from the `agent-config.yaml` files.  
-You can run this command to verify that the correct information can be retrieved and used to create the VMs (if required).
+You can run this command to verify that the correct information can be retrieved and used to create the VMs (if using platform=vmw in aba.conf).
 
 Example:
 
@@ -945,7 +947,7 @@ In a partially disconnected environment, the following can be done:
   - In the arm64 container:
     - Aba can connect to an existing remote registry as long as the aba/mirror/regcreds/ directory is populated with the pull secret and the root CA credentials. 
       - cannot install a registry to a remote host from inside the container.  The Quay `mirror-registry` installer does not have a build for arm64. Error: 'rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2'. 
-    - Can access public registries over the Internet (directly or through a proxy).
+    - Can access public registries over the Internet (directly or via a proxy).
     - Generate an `arm64` ISO image suitable for OpenShift installation on `arm64` systems.
 
   - Tested Use Case:
@@ -1018,9 +1020,9 @@ bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubuserc
   - The _bastion_ must be able to install required RPM packages from an appropriate repository.
   - If RPMs cannot be installed using `sudo dnf install ...`, ensure they are pre-installed (for example, from a DVD during RHEL installation).
   - If RPMs are not available in your disconnected environment, you can use `aba -d rpms download` to download the required packages on the _connected workstation_.   Copy them to the bastion and install using `dnf localinstall rpms/*.rpm`.  
-    **Note:** This works only if your connected workstation and internal bastion are running the **exact same version of RHEL** (based on out test results).
+    **Note:** This works only if your connected workstation and internal bastion are running the **exact same version of RHEL** (based on our test results).
 
-If you do not have those RPM packages installed, aba attempts to install them using dnf. If dnf is not configured in your disconnected environment, you’ll need to install the packages manually (e.g., from a DVD or another source). 
+If you do not have those RPM packages installed, aba attempts to install them using dnf. If dnf is not configured in your disconnected environment, you’ll need to install the packages manually (e.g., from a DVD or other source). 
 
 
 
@@ -1079,7 +1081,7 @@ We need help!  Here are some ideas for new features and enhancements.
 
 ### oc-mirror cache location
 
-By default, aba sets the oc-mirror cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by `data_dir` in the configuration file `aba/mirror/mirror.conf` (default value is $HOME). You can explicitly override these locations by changing `data_dir` or exporting the environment variables. 
+By default, aba sets the oc-mirror cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by `data_dir` in the configuration file `aba/mirror/mirror.conf` (default value is $HOME). You can explicitly override these locations by changing `data_dir` or exporting the above environment variables. 
 
 - To change oc-mirror's default cache location (~/.oc-mirror/.cache), change the value `data_dir` in `aba/mirror/mirror.conf`. 
   - Example: Set `data_dir=/mnt/large/disk` and the cache will be located at `/mnt/large/disk/.oc-mirror/.cache` and the temporary directory at `/mnt/large/disk/.oc-mirror/.tmp`.
