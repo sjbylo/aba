@@ -70,7 +70,7 @@ if $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet
 	days_diff=$((seconds_diff / 86400))
 
 	aba_info "Certificate expiration date of cluster: $cluster_id: $cluster_exp_date"
-	echo_yellow "The cluster certificate will expire in $days_diff days."
+	echo_yellow "[ABA] The cluster certificate will expire in $days_diff days."
 	aba_info "Start the cluster beforehand to ensure the cluster's CA certificate renews automatically."
 
 else

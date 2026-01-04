@@ -1,9 +1,9 @@
 #!/bin/bash 
 
+source scripts/include_all.sh 
+
 # Prep execution on one node. Copy script to node and execute it there.
 if [ ! "$1" = "--exec" ]; then
-	source scripts/include_all.sh 
-
 	aba_debug "Starting: $0 $*"
 
 	source <(normalize-cluster-conf) 
@@ -20,8 +20,11 @@ if [ ! "$1" = "--exec" ]; then
 
 	ip=$(cat $ASSETS_DIR/rendezvousIP)
 
-	scp -i $ssh_key_file $0 core@$ip:
-	ssh -i $ssh_key_file    core@$ip -- sudo bash $(basename $0) --exec
+        ssh -i $ssh_key_file core@$ip mkdir -p scripts
+        scp -i $ssh_key_file scripts/include_all.sh core@$ip:scripts
+        scp -i $ssh_key_file $0 core@$ip:
+        ssh -i $ssh_key_file core@$ip -- sudo bash $(basename $0) --exec
+
 
 	exit $?
 fi
