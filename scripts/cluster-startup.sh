@@ -8,6 +8,7 @@ aba_debug "Starting: $0 $*"
 [ ! -d iso-agent-based ] && aba_abort "Cluster not installed!  Try running 'aba clean; aba' to install this cluster!"
 
 unset KUBECONFIG
+# Use the actual kubeconfig used after the cluster was installed, in case it was overwritten
 cp iso-agent-based/auth.backup/kubeconfig iso-agent-based/auth/kubeconfig
 
 server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)

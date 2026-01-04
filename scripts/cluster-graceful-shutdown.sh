@@ -30,6 +30,7 @@ aba_info "Attempting to access the cluster ... "
 
 # Refresh kubeconfig
 unset KUBECONFIG
+# Use the actual kubeconfig used after the cluster was installed, in case it was overwritten
 cp iso-agent-based/auth.backup/kubeconfig  iso-agent-based/auth/kubeconfig
 OC="oc --kubeconfig=iso-agent-based/auth/kubeconfig"
 
