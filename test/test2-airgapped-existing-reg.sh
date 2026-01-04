@@ -81,7 +81,7 @@ if [ ! "$1" ]; then
 	[ "$(which aba)" ] && sudo rm -f $(which aba)
 	test-cmd -m "Installing aba" ./install
 	#test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
-	mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
+	mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 	test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
@@ -187,7 +187,7 @@ source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
 # Tests for setting OC_MIRROR_CACHE
-test-cmd -m "Create dir: $HOME/.some_other_cache_dir" mkdir -p $HOME/.some_other_cache_dir
+test-cmd -m "Create dir: $HOME/.some_other_cache_dir" mkdir -v -p $HOME/.some_other_cache_dir
 mylog "Running: export OC_MIRROR_CACHE=$HOME/.some_other_cache_dir to ensure alternative location is used"
 export OC_MIRROR_CACHE=$HOME/.some_other_cache_dir
 
@@ -199,7 +199,7 @@ test-cmd -m "Checking cache dir was created!" test -d $OC_MIRROR_CACHE/.oc-mirro
 test-cmd -m "Checking existance of file mirror/save/mirror_*000000.tar" "ls -lh mirror/save/mirror_*\.tar"
 
 mylog "Use 'aba tar' and copy (ssh) files over to internal bastion @ $TEST_USER@$int_bastion_hostname"
-test-cmd -m "Create 'subdir' on host $int_bastion_hostname" "ssh $TEST_USER@$int_bastion_hostname -- mkdir -p $subdir"
+test-cmd -m "Create 'subdir' on host $int_bastion_hostname" "ssh $TEST_USER@$int_bastion_hostname -- mkdir -v -p $subdir"
 test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname" "aba -d mirror tar --out - | ssh $TEST_USER@$int_bastion_hostname -- tar -C $subdir -xvf -"
 
 test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
@@ -315,6 +315,7 @@ do
 	# Test node0 is accessible
 	test-cmd -m "Pausing ..." "read -t 60 yn || true"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
+	test-cmd -m "Pausing" sleep 60
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep 'ens160: .*state UP '"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
@@ -341,6 +342,7 @@ do
 	# Test node0 is accessible
 	test-cmd -m "Pausing ..." "read -t 60 yn || true"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
+	test-cmd -m "Pausing" sleep 60
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 10 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep 'bond0: .* state UP '"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
@@ -377,6 +379,7 @@ do
 	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
 	###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep '\.10'"
+	###test-cmd -m "Pausing" sleep 60
 	###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'| grep 'bond0: .* state UP '"
 	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$cname ssh --cmd "chronyc sources | grep $ntp_ip_grep"
 
@@ -463,7 +466,7 @@ test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh
 
 #mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_*.tar' file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
 
-#test-cmd -m "Create tmp dir" mkdir -p ~/tmp
+#test-cmd -m "Create tmp dir" mkdir -v -p ~/tmp
 #test-cmd -m "Delete any old tar file (if any)" rm -fv ~/tmp/file.tar
 #test-cmd -m "Create the tar file.  Should only contain (more-or-less) the 'image set' archive file" aba --dir mirror inc out=~/tmp/file.tar
 #test-cmd -m "Check size of tar file" "ls -l ~/tmp/file.tar"

@@ -85,7 +85,7 @@ test-cmd -m "Testing update of aba script, grep aba version" "grep ^ABA_VERSION=
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
 #echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
-#####mv cli cli.m && mkdir cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
+#####mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
 ### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
 #aba clean
@@ -187,7 +187,7 @@ which yq || (
 
 for cname in sno compact standard
 do
-	mkdir -p test/$cname
+	mkdir -v -p test/$cname
 
         mylog "Agent-config file generation test for cluster type '$cname'"
 
