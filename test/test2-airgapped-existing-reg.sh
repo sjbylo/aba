@@ -186,7 +186,15 @@ test-cmd -m "Reset the mirror config to localhost and remove the key" aba -d mir
 source <(cd mirror; normalize-mirror-conf)
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
+# Tests for setting OC_MIRROR_CACHE
+test-cmd -m "Create dir: $HOME/.some_other_cache_dir" mkdir -p $HOME/.some_other_cache_dir
+mylog "Running: export OC_MIRROR_CACHE=$HOME/.some_other_cache_dir to ensure alternative location is used"
+export OC_MIRROR_CACHE=$HOME/.some_other_cache_dir
+
 test-cmd -r 15 1 -m "Saving images to local disk on `hostname`" aba -d mirror save --retry
+
+# See OC_MIRROR_CACHE tests above
+test-cmd -m "Checking cache dir was created!" test -d $OC_MIRROR_CACHE/.oc-mirror/.cache/docker
 
 test-cmd -m "Checking existance of file mirror/save/mirror_*000000.tar" "ls -lh mirror/save/mirror_*\.tar"
 
