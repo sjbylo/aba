@@ -12,15 +12,23 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-
-
 umask 077
 
 source <(normalize-aba-conf)
+source <(normalize-cluster-conf)  # used to check int_connection value
 source <(normalize-mirror-conf)
 
 verify-aba-conf || exit 1
+verify-cluster-conf || exit 1
 verify-mirror-conf || exit 1
+
+# Stop processing (CatalogSources and Signatires etc) if this cluster is a connected cluster!
+if [ "$int_connection" ]; then
+	aba_info "Your cluster is a 'connected cluster' since the value 'int_connection' is set to $int_connection in $PWD/cluster.conf"
+	aba_info "There is nothing for 'aba day2' to do and there is no need to run: aba day2-osus also."
+
+	exit 0
+fi
 
 aba_info "Accessing the cluster ..."
 
@@ -51,7 +59,7 @@ aba_info_ok For disconnected environments, disabling online public catalog sourc
 
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
 if [ ! "$int_connection" ]; then
-	aba_info "Running: oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'"
+	aba_info "Running: oc patch OperatorHub cluster --type json -p '[{\"op\": \"add\", \"path\": \"/spec/disableAllDefaultSources\", \"value\": true}]'"
 	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
        		aba_info "Patched OperatorHub, disabled Red Hat default catalog sources"
 else
@@ -101,6 +109,7 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 else	
 	aba_info "Registry trust bundle already added (cm registry-config -n openshift-config). Assuming workaround has already been applied or not necessary."
 fi
+
 
 ####################################
 # Only oc-mirror v2 is supported now
