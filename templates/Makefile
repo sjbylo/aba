@@ -58,7 +58,7 @@ help: ## Help
 
 # aba.conf should never be missing!
 ../aba.conf:
-	@echo "aba/aba.conf file missing! Please read the README.md on how to get started!"
+	@echo [ABA] "aba/aba.conf file missing! Please read the README.md on how to get started!"
 	@exit 1
 
 init: .init
@@ -70,17 +70,17 @@ init: .init
 	@ln -fs ../aba.conf
 	@make -sC ../cli
 	@touch .init
-	@echo Initialized cluster directory `pwd` successfully
+	@echo [ABA] Initialized cluster directory `pwd` successfully
 
 mirror.conf: .init ## Set up the aba/mirror/mirror.conf file.
 	@ln -fs mirror/mirror.conf
 	@touch mirror.conf
-	@echo Using `pwd`/mirror.conf file 
+	@echo [ABA] Using `pwd`/mirror.conf file 
 
 vmware.conf: .init ## Use VMware vCenter or ESXi to create cluster.
 	@make -sC ../cli govc
 	@make -sC .. vmw
-	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo vmware.conf initialized || true
+	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo [ABA] vmware.conf initialized || true
 
 cluster.conf: .init mirror.conf  ## Initialize the OpenShift cluster.conf file.
 	$(SCRIPTS)/create-cluster-conf.sh name=$(name) type=$(type) int_connection=$(int_connection) master_mem=$(master_mem) master_cpu_count=$(master_cpu_count) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem)  worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip) ingress_vip=$(ingress_vip)

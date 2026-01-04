@@ -66,17 +66,17 @@ tarrepo:  ## Archive the full repo *excluding* the aba/mirror/mirror_*.tar files
 
 .PHONY: download
 download:  ## Download all required CLI install files without installing. 
-	@echo "Run either one of:"
-	@echo "  aba -d cli $@"
-	@echo "  cd cli && aba $@"
+	@echo [ABA] "Run either one of:"
+	@echo [ABA] "  aba -d cli $@"
+	@echo [ABA] "  cd cli && aba $@"
 
 #.PHONY: save load sync verify
 #save load sync verify:
 .PHONY: $(MIRROR_CMDS)
 $(MIRROR_CMDS):
-	@echo "Run either one of:"
-	@echo "  aba -d mirror $@"
-	@echo "  cd mirror && aba $@"
+	@echo [ABA] "Run either one of:"
+	@echo [ABA] "  aba -d mirror $@"
+	@echo [ABA] "  cd mirror && aba $@"
 
 #.PHONY: load
 #load:
@@ -104,7 +104,7 @@ cluster:  aba.conf  ## Initialize install dir and install OpenShift with your op
 .PHONY: ask
 ask: # Automatically accept the default answer to all prompts. Set 'ask' in aba.conf to 'true'.
 	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
-	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=true/g" aba.conf && echo value ask has been set to true in aba.conf.
+	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=true/g" aba.conf && echo [ABA] value ask has been set to true in aba.conf.
 #.PHONY: setask
 #setask: ask
 
@@ -112,7 +112,7 @@ ask: # Automatically accept the default answer to all prompts. Set 'ask' in aba.
 .PHONY: noask
 noask:  # Always prompt.  Set 'ask' in aba.conf to 'false'
 	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
-	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf && echo value ask has been set to false in aba.conf.
+	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf && echo [ABA] value ask has been set to false in aba.conf.
 #.PHONY: setnoask
 #setnoask: noask
 
