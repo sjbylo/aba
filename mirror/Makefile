@@ -2,8 +2,8 @@ ifndef DEBUG_ABA
 .SILENT:
 endif
 
-TEMPLATES = ../templates
-SCRIPTS   = ../scripts
+TEMPLATES := ../templates
+SCRIPTS   := ../scripts
 ##debug   ?=
 force     ?= no
 bg        ?=
@@ -66,18 +66,10 @@ sync/imageset-config-sync.yaml: ../aba.conf catalog
 save/imageset-config-save.yaml: ../aba.conf catalog
 	$(SCRIPTS)/reg-create-imageset-config-save.sh
 
-## If vmware.conf does not exist, then create it
-#../vmware.conf:
-#	@make -sC .. vmware.conf
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
-#sync: .init .rpmsint ~/.pull-secret.json install ../vmware.conf    ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf')
-sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror              install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
-	###
-	### Upload images to the mirror registry from the Internet (mirror-to-mirror)
-	###
-#	$(SCRIPTS)/reg-sync.sh $(debug) $(retry)
+sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
 
 ~/.pull-secret.json:
@@ -85,24 +77,17 @@ sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror              instal
 
 # oc-mirror is idempotent so no need for 'dot' flag files here
 .PHONY: save
-# Note that for a connected laptop or bastion there is no need to install all the required packages (i.e. only 'rpmsext') 
+# Note that for a connected workstation or bastion there is no need to install all the required packages, only 'rpmsext' is needed.
 # mirror-registry-amd64.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
+# Same with docker-reg-image.tgz (via download-registries)
+# download-registries is executed last in case docker.io is inaccessible 
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
-#save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror mirror-registry-amd64.tar.gz save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
-save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror download-registries          save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
-	###
-	### Save images from the Internet to local disk (mirror-to-disk)
-	###
-#	$(SCRIPTS)/reg-save.sh $(debug) $(retry)
+save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror save/imageset-config-save.yaml download-registries  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
 load: .init cli-oc-mirror .rpmsint install verify  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
-	###
-	### Load images from local disk to mirror registry (disk-to-mirror)
-	###
-#	$(SCRIPTS)/reg-load.sh $(debug) $(retry)
 	$(SCRIPTS)/reg-load.sh          $(retry)
 
 .PHONY: testload
@@ -131,31 +116,41 @@ mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball (note: no 
 	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
 	tar tzf mirror-registry-amd64.tar.gz >/dev/null && echo "File valid"
 
-# Store the docker registry image so it can be used in air-gapped env.
-REG_IMAGE = docker.io/library/registry:latest
-REG_FILE  = docker-reg-image.tgz
-###.PHONY: docker-reg-image.tgz
-docker-reg-image.tgz:  ## Download the docker registry image as an alternative to Quay registry
-	echo "Downloading fallback registry to $(REG_FILE) ..."
-	@podman pull $(REG_IMAGE)
-	@podman save $(REG_IMAGE) | gzip > $(REG_FILE)
-	@podman rmi $(REG_IMAGE)
+#DOCKER_REG_IMAGE := docker.io/library/registry:latest
+#DOCKER_REG_FILE  := docker-reg-image.tgz
+#docker-reg-image.tgz:  ## Download the docker registry image as an alternative to Quay registry
+#	echo "Downloading fallback registry to $(DOCKER_REG_FILE) ..."
+#	@podman pull $(DOCKER_REG_IMAGE) || true
+#	@podman save $(DOCKER_REG_IMAGE) | gzip > $(DOCKER_REG_FILE) || true
+#	@podman rmi $(DOCKER_REG_IMAGE) || true
+
+# Store the docker registry image so it can be used in air-gapped env. (if docker.io reachable)
+# Ignore any errors, since docker.io may not be whitelisted
+DOCKER_REG_IMAGE := docker.io/library/registry:latest
+DOCKER_REG_FILE  := docker-reg-image.tgz
+$(DOCKER_REG_FILE):
+	@echo "Checking availability of $(DOCKER_REG_IMAGE)..."
+	@if podman pull $(DOCKER_REG_IMAGE); then \
+		echo "Pull successful. Saving to $(DOCKER_REG_FILE)..."; \
+		podman save $(DOCKER_REG_IMAGE) | gzip > $(DOCKER_REG_FILE) && \
+		podman rmi $(DOCKER_REG_IMAGE); \
+	else \
+		echo "Could not reach $(DOCKER_REG_IMAGE). Skipping fallback creation."; \
+		rm -f $(DOCKER_REG_FILE); \
+	fi
 
 .PHONY: install-docker-registry
 install-docker-registry: docker-reg-image.tgz
-	@podman load -i $(REG_FILE)
+	@podman load -i $(DOCKER_REG_FILE)
 	@$(SCRIPTS)/reg-docker-install.sh
 
 uninstall-docker-registry: 
 	@$(SCRIPTS)/reg-docker-uninstall.sh
 
-# mirror.conf depends on aba.conf for the 'domain aalue
-#mirror.conf:                                 ../aba.conf   ## Configure the mirror.conf file.
-#mirror.conf: .init                     ../aba.conf   ## Configure the mirror.conf file.
-mirror.conf: ../aba.conf .init                        ## Configure the mirror.conf file.
+# mirror.conf depends on aba.conf for the 'domain' value
+mirror.conf: ../aba.conf .init                        ## Create the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh -f $(force)
 
-#mirror: install
 install: .installed
 .installed: .init .rpmsext mirror.conf mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 	@rm -f .uninstalled 
@@ -190,6 +185,7 @@ tar:   ## Create a full tar backup of ~/aba & ~/bin, ready to be transported to 
 tarrepo:   ## Same as 'make tar' but excludes all 'mirror_000*.tar' files under aba/mirror/save/.
 	@make -sC .. tarrepo $(out)
 
+# This will be depricated!
 .PHONY: inc
 inc:   ## Same as 'make tar' except a timestamp file is used to only backup files that have changed since the last 'make inc' was run.
 	@make -sC .. inc $(out)
@@ -213,8 +209,7 @@ catalog: init               ## Download and render all the latest Operators into
 	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-marketplace
 	$(SCRIPTS)/download-operator-index.sh $(bg) community-operator
 
-#uninstall: .init mirror.conf mirror-registry .uninstalled ## Uninstall any previously installed registry  
-uninstall: .init             mirror-registry .uninstalled     ## Uninstall any previously installed registry  
+uninstall: .init mirror-registry .uninstalled     ## Uninstall any previously installed registry  
 .uninstalled: 
 	$(SCRIPTS)/reg-uninstall.sh
 	@rm -f .installed
@@ -244,11 +239,12 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 .PHONY: clean
 clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
 	@[ -f .installed ] && echo "Important: to uninstall the registry, run 'aba -d mirror uninstall'!" || true
-	rm -rf *.tar mirror-registry 
+	rm -rf *.tar mirror-registry
 	rm -f templates scripts
 	rm -f aba.conf  # remove link only
 	rm -f .init 
 	rm -rf .index
+	rm -f imageset-config-*.yaml
 	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh # Only clean up the created scripts, not the script needed to uninstall the reg.
 	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 
@@ -267,6 +263,7 @@ reset:                # Clean up all files. Only use if you know what you're doi
 	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo aba/mirror/mirror.conf backed up to mirror.conf.bk || true
 	@#rm -rf *.tar.gz oc-mirror-workspace   # Leave this so the mirror can be uninstalled with reg-uninstall.sh 
 	rm -rf          oc-mirror-workspace 
+	rm -rf mirror-registry-amd64.tar.gz $(DOCKER_REG_FILE)
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
