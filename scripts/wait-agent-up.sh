@@ -38,7 +38,7 @@ if [ ! -f .install-complete ]; then
 
 		# If return code is 4xx, then stop
 		if [[ $code =~ ^4..$ ]]; then
-			aba_info_ok Agent detected
+			aba_info_ok "Agent alive!"
 			sleep 8
 			exit 0
 		fi

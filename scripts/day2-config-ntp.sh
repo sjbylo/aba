@@ -138,3 +138,17 @@ oc apply -f 99-worker-chrony-conf-override.yaml
 echo
 aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
 echo
+
+NTP_IP=$(echo $ntp_servers | awk '{print $1}')
+aba_yellow "[ABA] Waiting for all nodes to be synchonized with NTP $NTP_IP ... Hit Ctrl-C to stop."
+
+nodesIPs=$(oc get nodes -owide --no-headers| awk '{print $7}')
+ips=($nodesIPs)
+ip_cnt=${#ips[@]}
+until [ $(for host in $nodesIPs; do ssh -q core@$host 'chronyc sources' | grep -c "^\^\* $NTP_IP"; done | grep -c "1") -eq $ip_cnt ]
+do
+        #echo "Waiting for all nodes to sync to $NTP_IP ... ($(date +%H:%M:%S))"
+        sleep 5
+done
+aba_info "All nodes are now synchronized!"
+
