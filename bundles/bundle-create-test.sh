@@ -4,6 +4,7 @@
 #TEST_HOST=mirror.example.com  # Adjust this as needed
 #BASE_DOM=example.com
 BASE_DOM=$(hostname -d)
+NTP_IP=10.0.1.8
 TEST_HOST=$(hostname -s).$BASE_DOM  # Adjust this as needed
 PS_FILE='~/.pull-secret.json'
 # Change these two paths where there's a lot of space!
@@ -188,7 +189,7 @@ aba --pull-secret $PS_FILE --platform bm --channel stable --version $VER $OP --b
 aba -d cli oc-mirror
 sleep 2
 ls -l ~/bin/oc-mirror 
-~/bin/oc-mirror  --help > /dev/null 2>&1
+~/bin/oc-mirror  --help > /dev/null 2>&1 && echo "oc-mirror is valid!"
 sleep 5
 set -x
 sleep 10 # wait for "download-operator"
@@ -333,7 +334,7 @@ sed -i "s/platform=bm/platform=vmw/g" aba.conf
 ./install
 aba
 aba -A
-aba --machine-network 10.0.0.0/20 --ntp 10.0.1.8 --default-route 10.0.1.1  # Just to be sure, needed on dual-homed bastion
+aba --machine-network 10.0.0.0/20 --ntp $NTP_IP --default-route 10.0.1.1  # Just to be sure, needed on dual-homed bastion
 
 echo_step Install Quay and load the images ...
 
@@ -368,7 +369,23 @@ echo "All images loaded (disk2mirror) into Quay: ok" >> $WORK_TEST_LOG
 echo_step "Be sure to delete the cached agent ISO, otherwise we may mistakenly use the cached ISO instead of a possibly bad one from the release payload! (like with v4.19.18!)"
 rm -rf ~/.cache/agent 
 echo_step Create the cluster ...
-aba cluster --name bundle --type sno --starting-ip 10.0.1.209 --mmem 20 --mcpu 10 --step install
+#aba cluster --name bundle --type sno --starting-ip 10.0.1.209 --mmem 20 --mcpu 10 --step install
+aba cluster --name bundle-compact --type compact --starting-ip 10.0.1.75 --vip-api 10.0.1.223 --vip-ingress 10.0.1.233 --mmem 32 --mcpu 12 --step install
+
+# Configure NTP on all nodes
+aba day2-ntp
+# Wait for NTP to be in sync
+sleep 60
+nodesIPs=$(oc get nodes -owide --no-headers| awk '{print $7}')
+ips=($nodesIPs)
+ip_cnt=${#ips[@]}
+until [ $(for host in $nodesIPs; do ssh -q core@$host 'chronyc sources' | grep -c "^\^\* $NTP_IP"; done | grep -c "1") -eq $ip_cnt ]
+do
+	echo "Waiting for all nodes to sync to $NTP_IP ... ($(date +%H:%M:%S))"
+	sleep 5
+done
+echo "All nodes are now synchronized!"
+
 
 echo_step Test this cluster type: $NAME ...
 
