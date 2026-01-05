@@ -45,7 +45,7 @@ init: .init
 
 # If aba.conf does not exist, must abort!
 ../aba.conf:
-	echo "aba/aba.conf file missing! Please read the README.md on how to get started!"
+	echo [ABA] "aba/aba.conf file missing! Please read the README.md on how to get started!"
 	@exit 1
 
 .PHONY: cli-download
@@ -105,21 +105,22 @@ rpmsclean:
 	@rm -f .rpms*
 
 mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry binary 
+	@echo [ABA] Extracting mirror-registry-amd64.tar.gz
 	tar xmvzf mirror-registry-amd64.tar.gz
 
 .PHONY: download-registries
 download-registries: mirror-registry-amd64.tar.gz docker-reg-image.tgz
 
 mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball (note: no arm64 version available as of Dec 25)
-	echo "Downloading https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz ..."
+	echo [ABA] "Downloading https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz ..."
 	curl $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
 	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
-	tar tzf mirror-registry-amd64.tar.gz >/dev/null && echo "File valid"
+	tar tzf mirror-registry-amd64.tar.gz >/dev/null && echo [ABA] "File $@ is valid"
 
 #DOCKER_REG_IMAGE := docker.io/library/registry:latest
 #DOCKER_REG_FILE  := docker-reg-image.tgz
 #docker-reg-image.tgz:  ## Download the docker registry image as an alternative to Quay registry
-#	echo "Downloading fallback registry to $(DOCKER_REG_FILE) ..."
+#	echo [ABA] "Downloading fallback registry to $(DOCKER_REG_FILE) ..."
 #	@podman pull $(DOCKER_REG_IMAGE) || true
 #	@podman save $(DOCKER_REG_IMAGE) | gzip > $(DOCKER_REG_FILE) || true
 #	@podman rmi $(DOCKER_REG_IMAGE) || true
@@ -129,13 +130,13 @@ mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball (note: no 
 DOCKER_REG_IMAGE := docker.io/library/registry:latest
 DOCKER_REG_FILE  := docker-reg-image.tgz
 $(DOCKER_REG_FILE):
-	@echo "Checking availability of $(DOCKER_REG_IMAGE)..."
+	@echo [ABA] "Checking availability of $(DOCKER_REG_IMAGE)..."
 	@if podman pull $(DOCKER_REG_IMAGE); then \
-		echo "Pull successful. Saving to $(DOCKER_REG_FILE)..."; \
+		echo [ABA] "Pull successful. Saving to $(DOCKER_REG_FILE)..."; \
 		podman save $(DOCKER_REG_IMAGE) | gzip > $(DOCKER_REG_FILE) && \
 		podman rmi $(DOCKER_REG_IMAGE); \
 	else \
-		echo "Could not reach $(DOCKER_REG_IMAGE). Skipping fallback creation."; \
+		echo [ABA] "Could not reach $(DOCKER_REG_IMAGE). Skipping fallback creation."; \
 		rm -f $(DOCKER_REG_FILE); \
 	fi
 
@@ -221,7 +222,7 @@ checkversion: init
 
 .PHONY: cluster
 cluster:
-	@echo "Run: 'aba cluster ...' from Aba's top-level directory" >&2
+	@echo [ABA] "Run: 'aba cluster ...' from Aba's top-level directory" >&2
 
 .PHONY: tidy
 tidy:    # Tidy up so that this repo can be (re-)used to install/configure a registry again (assuming aba bundle repo on USB stick).
@@ -238,7 +239,7 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
 clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
-	@[ -f .installed ] && echo "Important: to uninstall the registry, run 'aba -d mirror uninstall'!" || true
+	@[ -f .installed ] && echo [ABA] "Important: to uninstall the registry, run 'aba -d mirror uninstall'!" || true
 	rm -rf *.tar mirror-registry
 	rm -f templates scripts
 	rm -f aba.conf  # remove link only
@@ -257,10 +258,10 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 # Backup regcreds/ and anything that should not be lost
 .PHONY: reset
 reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
-	@[ -f .installed ] && echo "Important: to uninstall the registry, you must run 'aba -d mirror uninstall' first!" || true
+	@[ -f .installed ] && echo [ABA] "Important: to uninstall the registry, you must run 'aba -d mirror uninstall' first!" || true
 	make clean
-	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && echo aba/mirror/regcreds backed up to regcreds.bk || true
-	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo aba/mirror/mirror.conf backed up to mirror.conf.bk || true
+	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && echo [ABA] aba/mirror/regcreds backed up to regcreds.bk || true
+	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo [ABA] aba/mirror/mirror.conf backed up to mirror.conf.bk || true
 	@#rm -rf *.tar.gz oc-mirror-workspace   # Leave this so the mirror can be uninstalled with reg-uninstall.sh 
 	rm -rf          oc-mirror-workspace 
 	rm -rf mirror-registry-amd64.tar.gz $(DOCKER_REG_FILE)
