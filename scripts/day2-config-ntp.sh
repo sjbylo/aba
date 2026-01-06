@@ -139,16 +139,76 @@ echo
 aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
 echo
 
-NTP_IP=$(echo $ntp_servers | awk '{print $1}')
-echo_yellow "[ABA] Waiting for all nodes to be synchonized with NTP $NTP_IP ... Hit Ctrl-C to stop."
+#######################
+# Check config in cluster!
+# 1. PRE-PROCESS TARGETS (Resolve DNS once & Deduplicate)
+raw_targets=($ntp_servers)
+ntp_targets=()
 
-nodesIPs=$(oc get nodes -owide --no-headers| awk '{print $7}')
-ips=($nodesIPs)
-ip_cnt=${#ips[@]}
-until [ $(for host in $nodesIPs; do ssh -q core@$host 'chronyc sources' | grep -c "^\^\* $NTP_IP"; done | grep -c "1") -eq $ip_cnt ]
-do
-        #echo "Waiting for all nodes to sync to $NTP_IP ... ($(date +%H:%M:%S))"
-        sleep 5
+# Temporary array to hold all resolved IPs
+temp_ips=()
+
+for t in "${raw_targets[@]}"; do
+	# Simple regex to check if it's already an IP
+	if [[ $t =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+		temp_ips+=("$t")
+	else
+		# Resolve hostname to IP
+		resolved_ip=$(getent hosts "$t" | awk '{print $1}' | head -n 1)
+		if [ -n "$resolved_ip" ]; then
+			temp_ips+=("$resolved_ip")
+			aba_debug "Resolved $t to $resolved_ip"
+		else
+			echo_red "Warning: Could not resolve NTP target $t"
+		fi
+	fi
 done
-aba_info "All nodes are now synchronized!"
 
+# Deduplicate the array (sort unique)
+IFS=$'\n' ntp_targets=($(sort -u <<<"${temp_ips[*]}"))
+unset IFS
+
+echo_yellow "[ABA] Verifying all nodes have the following NTP sources configured: ${ntp_targets[*]} ... Hit Ctrl-C to stop."
+
+# 2. Get list of Node IPs
+nodesIPs=$(oc get nodes -owide --no-headers | awk '{print $6}')
+
+# 3. Loop indefinitely until verification passes
+while true; do
+	all_nodes_compliant=true
+
+	for host in $nodesIPs; do
+		aba_debug "Checking NTP config in host: $host"
+
+		# Fetch the chronyc sources output (IPs only) ONCE per host
+		# Added Timeout and HostKey flags so script doesn't hang
+		node_sources=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -q core@$host 'chronyc sources -n' 2>&1)
+
+		aba_debug "Node: $host config:"
+		aba_debug "\n$node_sources"
+
+		# Check for EACH target IP inside the node's source list
+		for target_ip in "${ntp_targets[@]}"; do
+			
+			aba_debug "Checking IP $target_ip in chrony config"
+
+			# Use grep -F (fixed string) to match IP.
+			if ! echo "$node_sources" | grep -Fq "$target_ip"; then
+				# If ANY IP is missing, mark this run as failed
+				all_nodes_compliant=false
+				break 2 # Break out of both loops to wait/sleep
+			fi
+			aba_debug "target_ip $target_ip found!"
+		done
+	done
+
+	# If the flag is still true, all nodes have all IPs
+	if [ "$all_nodes_compliant" = true ]; then
+		break
+	fi
+
+	# Wait before retrying
+	sleep 5
+done
+
+aba_info "All nodes are synchronized!"
