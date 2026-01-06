@@ -193,7 +193,7 @@ while true; do
 			aba_debug "Checking IP $target_ip in chrony config"
 
 			# Use grep -F (fixed string) to match IP.
-			if ! echo "$node_sources" | grep -Fq "$target_ip"; then
+			if ! echo "$node_sources" | grep -Fq " $target_ip "; then
 				# If ANY IP is missing, mark this run as failed
 				all_nodes_compliant=false
 				break 2 # Break out of both loops to wait/sleep
