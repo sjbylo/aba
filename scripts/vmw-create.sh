@@ -179,7 +179,10 @@ create_node "worker" "$WORKER_NAMES" WKR_MAC_ADDRS_ARRAY "$worker_cpu_count" "$w
 
 echo
 if [ -n "${START_VM:-}" ]; then
-	aba_info_ok "Starting installation at $(date '+%b %e %H:%M')"
+	#aba_info_ok "Starting installation at $(date '+%b %e %H:%M')"
+	tmp=($CP_NAMES); cp_cnt=${#tmp[*]}
+	tmp=($WORKER_NAMES); wkr_cnt=${#tmp[*]}
+	calculate_completion $cp_cnt $wkr_cnt
 else
 	aba_info_ok "To start the VMs and monitor the installation, run: aba start mon"
 fi

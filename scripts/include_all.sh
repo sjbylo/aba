@@ -1176,3 +1176,38 @@ is_valid_dns_label() {
 	fi
 }
 
+calculate_completion() {
+    local num_masters=$1
+    local num_workers=$2
+    
+    # 1. Validation: Check if a number was provided
+    if [[ -z "$num_masters" || -z "$num_workers" ]]; then
+        echo "Error: Please provide the number of masters and workers."
+        echo "Usage: calculate_completion <number_of_masters> <number_of_workers>"
+        return 1
+    fi
+
+    # 2. Math: 40 mins base + (5 mins * nodes)
+    local base_mins=35
+    local master_node_mins=5
+    local worker_node_mins=2
+    local total_duration=$(( base_mins + (master_node_mins * num_masters) + ( worker_node_mins * num_workers)))
+
+    # 3. Date Formatting
+    # %b = Abbreviated month (e.g., Jan)
+    # %e = Day of month, space padded (e.g.,  6)
+    # %H:%M = 24-hour time
+    local time_format="+%b %e %H:%M"
+
+    # Get current time
+    local start_time=$(date "$time_format")
+
+    # Calculate future time (Linux GNU date syntax)
+    # We use -d to describe the time offset
+    local end_time=$(date -d "+${total_duration} minutes" "$time_format")
+
+    # 4. Output
+    aba_info_ok "Starting installation at ${start_time}, estimated completion time is ${end_time}."
+    aba_info_ok "(Total estimated duration: ${total_duration} minutes)"
+}
+
