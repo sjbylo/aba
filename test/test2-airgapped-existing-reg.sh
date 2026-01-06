@@ -342,7 +342,7 @@ do
 	# Test node0 is accessible
 	test-cmd -m "Pausing ..." "read -t 60 yn || true"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 0 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
-	test-cmd -m "Pausing" sleep 60
+	test-cmd -m "Pausing" sleep 80
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 10 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep 'bond0: .* state UP '"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
