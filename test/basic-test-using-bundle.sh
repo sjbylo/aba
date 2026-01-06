@@ -3,15 +3,16 @@
 
 [ "$1" ] && SPLIT="--split"   		# Test with *split* bundle with any arg.
 
+MY_HOST=$(hostname -f)    # This must be FQDN with A record pointing to IP address of this host
 CLUSTER_NAME=sno3
 STARTING_IP=10.0.1.203
 TEST_DIR_CONN=~/tmp/connected
 TEST_DIR_DISCO=~/tmp/disco
-mkdir -p $TEST_DIR_CONN
-mkdir -p $TEST_DIR_DISCO
+mkdir -p $TEST_DIR_CONN $TEST_DIR_DISCO
 
 # Clean up after last test
 cd $TEST_DIR_DISCO/aba 2>/dev/null && ./aba -d mirror uninstall -y && sudo rm -rf ~/quay-install || true  # Delete any existing mirror reg.
+! curl -f -SkIL https://$MY_HOST:8443/ || { echo Registry detected at https://$MY_HOST/; exit 1; }   # Sanity check
 sudo rm -fv $(which aba)
 rm -rf ~/.oc-mirror/.cache
 rm -fv ~/bin/{oc-mirror,oc,openshift-install}
@@ -57,7 +58,7 @@ cd aba
 [ "$SPLIT" ] && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
 rm -rf $TEST_DIR_CONN/aba   # Not needed anymore
 aba     # Show the bundle instructions
-aba -d mirror load -H registry4.example.com -r -y
+aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME
 aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s install -y
 aba -d $CLUSTER_NAME day2 
