@@ -144,6 +144,8 @@ if [ "$latest_working_dir" ]; then
 			"This usually means that Aba has not yet pushed any operator images to your mirror registry." \
 			"If your mirror registry was populated with images separately, you will need to apply the CatalogSources manually."
 
+	wait_for_cs=
+
 	for f in $cs_file_list
 	do
 		if [ ! -s "$f" ]; then
@@ -191,7 +193,7 @@ if [ "$latest_working_dir" ]; then
 			#aba_info "Waiting for CatalogSource $cs_name to become 'ready' ... (note that a state of 'TRANSIENT_FAILURE' usually resolves itself within a few moments!)"
 			aba_info "Waiting for CatalogSource $cs_name to become 'ready' ... "
 
-			for _ in {1..80}; do
+			for _ in {1..99}; do
 				state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
 
 				if [ "$state" = "READY" ]; then
@@ -204,12 +206,16 @@ if [ "$latest_working_dir" ]; then
 				sleep 5
 			done
 
-			aba_abort "catalog source $cs_name failed to become 'ready'.  Ensure the cluster is stable and try again."
+			# It's ok to abort from this background process 
+			aba_abort "catalog source $cs_name failed to become 'ready' in time.  Ensure the cluster is stable and try again."
 		) &
 	done
 
 	# Wait for all sub-processes
 	[ "$wait_for_cs" ] && wait
+
+	echo_info "Showing status of all CatalogSource resources:"
+	oc get CatalogSource -A
 
 	sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
 	if [ -s $sig_file ]; then
