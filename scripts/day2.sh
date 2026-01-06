@@ -214,7 +214,7 @@ if [ "$latest_working_dir" ]; then
 	# Wait for all sub-processes
 	[ "$wait_for_cs" ] && wait
 
-	echo_info "Showing status of all CatalogSource resources:"
+	aba_info "Showing status of all CatalogSource resources:"
 	oc get CatalogSource -A
 
 	sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
