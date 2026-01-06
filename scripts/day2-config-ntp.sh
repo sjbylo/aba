@@ -140,7 +140,7 @@ aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be re
 echo
 
 NTP_IP=$(echo $ntp_servers | awk '{print $1}')
-aba_yellow "[ABA] Waiting for all nodes to be synchonized with NTP $NTP_IP ... Hit Ctrl-C to stop."
+echo_yellow "[ABA] Waiting for all nodes to be synchonized with NTP $NTP_IP ... Hit Ctrl-C to stop."
 
 nodesIPs=$(oc get nodes -owide --no-headers| awk '{print $7}')
 ips=($nodesIPs)
