@@ -58,6 +58,7 @@ cd aba
 [ "$SPLIT" ] && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
 rm -rf $TEST_DIR_CONN/aba   # Not needed anymore
 aba     # Show the bundle instructions
+uname -m | grep arm64 && aba -d mirror install-docker-registry   # Preempt mirror installation and use arm64 version.
 aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME
 aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s install -y
