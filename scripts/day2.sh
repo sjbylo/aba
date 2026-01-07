@@ -197,11 +197,21 @@ if [ "$latest_working_dir" ]; then
 				state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
 
 				if [ "$state" = "READY" ]; then
-					aba_info "CatalogSource $cs_name is ready!"
+					aba_info_ok "CatalogSource $cs_name is ready!"
 
 					exit 0  # exit the process
 				fi
-				[ "$state" ] && aba_info "$cs_name state: $state (working on it!)"
+
+				#[ "$state" ] && aba_info "$cs_name state: $state (working on it!)"
+				if [ "$state" = "IDLE" ]; then
+					echo -n "-"
+				elif [ "$state" = "CONNECTING" ]; then
+					echo -n "*"
+				elif [ "$state" = "TRANSIENT_FAILURE" ]; then
+					echo -n "#"
+				elif [ "$state" ]; then
+					echo -n "[$state]"
+				fi
 
 				sleep 5
 			done
