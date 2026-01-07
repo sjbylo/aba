@@ -515,7 +515,7 @@ If you want to create the agent-based config files, e.g. to make changes to `ins
 ```
 cd mycluster
 aba agentconf
-# then, if needed,  manually edit the 'agent-config.yaml' file to set the appropriate mac addresses matching your bare-metal nodes, change drive and net interface hints etc.
+# then, in most cases, you must manually edit the 'agent-config.yaml' file to set the appropriate mac addresses matching your bare-metal nodes.  You can optionally change root device hints and net interface names etc.
 ```
 
 If you want to create the agent-based iso file, e.g. to boot bare-metal nodes, use:
@@ -675,10 +675,10 @@ Run: `aba cluster --help` or see the [Installing OpenShift](#installing-openshif
 
 If you modify the automatically generated Agent-based configuration files — `install-config.yaml` and `agent-config.yaml` - you take ownership of them, and Aba will no longer modify them.
 
-Once a cluster configuration directory (e.g. `mycluster`) has been created and the Agent-based configuration files generated, you can modify the configuration files — `install-config.yaml` and `agent-config.yaml` — if needed.  You can then rerun `aba` to generate the ISO (and VMs, if using `platform=vmw`).  Aba automatically detects and preserves these configuration file changes for future runs.  Common updates such as changing IP or MAC addresses, updating default routes, or adding disk hints all work fine.
+Once a cluster configuration directory (e.g. `mycluster`) has been created and the Agent-based configuration files generated, you can modify the configuration files — `install-config.yaml` and `agent-config.yaml` — if needed.  You can then rerun `aba` to generate the ISO (and VMs, if using `platform=vmw`).  Aba automatically detects and preserves these configuration file changes for future runs.  Common updates such as changing IP or MAC addresses, updating default routes, or adding root device hints all work fine.
 
 <!--
-Once a cluster config directory has been created (e.g. `mycluster`) and Agent-based configuration has been created, changes can be made to the Agent-based configuration: `install-config.yaml` and `agent-config.yaml` files if needed. `aba` can be run again to re-create the ISO and the VMs etc (if required).  Aba should detect the changes and preserve them for future use.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding disk hints etc work fine.
+Once a cluster config directory has been created (e.g. `mycluster`) and Agent-based configuration has been created, changes can be made to the Agent-based configuration: `install-config.yaml` and `agent-config.yaml` files if needed. `aba` can be run again to re-create the ISO and the VMs etc (if required).  Aba should detect the changes and preserve them for future use.  Simple changes to the files, e.g. IP/Mac address changes, default route changes, adding root device hints etc work fine.
 -->
 
 The workflow might look like this:
