@@ -59,7 +59,7 @@ cd aba
 rm -rf $TEST_DIR_CONN/aba   # Not needed anymore
 aba     # Show the bundle instructions
 #uname -m | grep -e arm64 -e aarch64 && aba -d mirror install-docker-registry   # Preempt mirror installation and use arm64 version.
-aba -d mirror install-docker-registry   # Preempt mirror installation and use arm64 version.
+aba -d mirror -H $MY_HOST install-docker-registry   # Preempt mirror installation and use arm64 version.
 aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME
 #uname -m | grep -e arm64 -e aarch64 && { aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s iso -y; exit 0; }   # This is as far as can get without arm64 test host
