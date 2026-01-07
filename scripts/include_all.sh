@@ -119,6 +119,7 @@ aba_info() {
 	fi
 }
 
+# Same as aba_info, but green
 aba_info_ok() {
 	if [ "$1" = "-n" ]; then
 		shift

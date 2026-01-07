@@ -337,7 +337,7 @@ init_bastion() {
 		systemctl start chronyd
 		sleep 1
 		chronyc sources -v
-		chronyc add server 10.0.1.8 iburst || true
+		chronyc add server 10.0.1.8 iburst || true  # True needed in case this IP is already applied
 		timedatectl set-timezone Asia/Singapore
 		chronyc -a makestep
 		sleep 8
