@@ -18,6 +18,8 @@ source <(normalize-mirror-conf)
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
+[ ! "$data_dir" ] && data_dir=$HOME
+
 DOCKER=podman 
 ####cd $(dirname $0)
 
