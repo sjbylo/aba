@@ -221,8 +221,8 @@ $(openshift_install_file):  ## Download openshift-install tarball
 ########################################
 oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 ~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz
-	@echo [ABA] $(os_ver) | grep -q "^9\." && echo [ABA] Extracting oc-mirror.rhel9.tar.gz to ~/bin/oc-mirror	|| echo [ABA] Extracting oc-mirror.tar.gz to ~/bin/oc-mirror
-	@echo [ABA] $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror		|| tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
+	@echo $(os_ver) | grep -q "^9\." && echo [ABA] Extracting oc-mirror.rhel9.tar.gz to ~/bin/oc-mirror	|| echo [ABA] Extracting oc-mirror.tar.gz to ~/bin/oc-mirror
+	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror		|| tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
 	chmod +x ~/bin/oc-mirror
 	~/bin/oc-mirror --help >/dev/null 2>&1 || { echo [ABA] "Error: ~/bin/oc-mirror failed to execute"; exit 1; }
 
