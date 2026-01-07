@@ -113,9 +113,9 @@ make -C cli download	# Downlaod required CLIs install files.
 if [ "$split_bundle" ]; then
 	# User wants to create a *split* bundle...
 
-	echo_magenta "[ABA] A *split* install bundle will be created (the image-set archive file will be kept separate from the install bundle)."
-	#echo_magenta "[ABA] This is because the bundle file and the image-set archive are on the same filesystem."
-	#echo_magenta "[ABA] TO GENERATE A *FULL* INSTALL BUNDLE, WRITE IT DIRECTLY TO EXTERNAL MEDIA OR TO A SEPARATE FILESYSTEM."
+	echo_magenta "[ABA] A *split* install bundle will be created."
+	echo_magenta "[ABA] Image-set archive file(s) will NOT be included in the bundle and must be transferred separately"
+	echo_magenta "[ABA] to the disconnected environment, then manually added to the extracted install bundle."
 
 	# Create split bundle with "aba tarrepo..."
 	aba_info "Pulling images ..."
@@ -128,19 +128,17 @@ else
 	if files_on_same_device mirror $bundle_dest_file; then
 		# FIXME: Do rough calculation of available vs required disk space ... and check ...
 		aba_warning \
-			"Make sure you have enough free disk space under: $PWD" \
-			"The image-set archive created by oc-mirror will first be written to" \
-			"aba/mirror/save/mirror_000001.tar, and then a full copy of the repository will be written" \
-			"to the file you specified: $bundle_dest_file" \
-			"Because both files reside on the same filesystem, you may temporarily" \
-			"need roughly double (or more with the cache) the required space. " \
-			"Please ensure sufficient disk space is available." \
-			"IMPORTANT:" \
-			"If disk space is limited, consider using the '--split' flag. This option" \
-			"excludes the large image-set archive files from the final install bundle." \
-			"It is useful in restricted environments where you cannot store or move" \
-			"large archive files onto portable media—for example, when running on an" \
-			"AWS EC2 instance or a restricted laptop without access to external storage." 
+			"Make sure there is enough free disk space under: $PWD" \
+			"The image-set archive file(s) created by oc-mirror will first be written to" \
+			"aba/mirror/save/mirror_000001.tar, and then a full copy of the Aba repository will be written" \
+			"to the bundle file you specified: $bundle_dest_file" \
+			"Because both files *reside on the same filesystem*, you may temporarily" \
+			"need roughly double the required space (or more if you consider the oc-mirror cache). " \
+			">> IMPORTANT: <<" \
+			"If disk space is limited, consider using the '--split' option." \
+			"It excludes the large image-set archive file(s) from the final install bundle." \
+			"This is also useful in restricted environments where large archives cannot be stored or" \
+			"moved via portable media (for example, Cloud instances or locked-down laptops)."
 
 		ask "Continue anyway" || exit 1
 	fi

@@ -197,6 +197,7 @@ if [ "$latest_working_dir" ]; then
 				state=$(oc -n "$ns" get catalogsource "$cs_name" -o jsonpath='{.status.connectionState.lastObservedState}')
 
 				if [ "$state" = "READY" ]; then
+					echo
 					aba_info_ok "CatalogSource $cs_name is ready!"
 
 					exit 0  # exit the process

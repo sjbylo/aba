@@ -266,7 +266,7 @@ show_error() {
 
 # Set the trap to call the show_error function on ERR signal
 # If no first argument is provided, set a trap for errors
-[ -z "${1-}" ] && trap 'show_error' ERR && [ "$ABA_DEBUG" ] && echo Error trap set 2>&1
+[ -z "${1-}" ] && trap 'show_error' ERR && [ "$DEBUG_ABA" ] && echo Error trap set 2>&1
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
