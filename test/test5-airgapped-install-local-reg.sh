@@ -819,7 +819,7 @@ test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Monitoring $cluster_name
 (
 	test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m "Showing cluster nodes" "cd $subdir/aba/$cluster_name && . <(aba shell) && oc get nodes && aba ls"
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Cluster creation failed? Restarting all worker nodes" "aba --dir $subdir/aba/$cluster_name stop --wait --workers start"
-	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Wait for cluster install to complete ..." "aba --dir $subdir/aba/$cluster_name mon"
+	test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 15 2 -m "Wait for cluster install to complete ..." "aba --dir $subdir/aba/$cluster_name mon"
 )
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Log into cluster" ". <(aba --dir $subdir/aba/$cluster_name login)"
