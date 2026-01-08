@@ -11,9 +11,9 @@ hosts:
     interfaces:
       - name: ens160
         macAddress: 88:88:88:88:88:01
-    networkConfig:
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"
+    networkConfig:
       interfaces:
         - name: ens160
           description: Access mode port ens160
@@ -41,9 +41,9 @@ hosts:
     interfaces:
       - name: ens160
         macAddress: 88:88:88:88:88:02
-    networkConfig:
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"
+    networkConfig:
       interfaces:
         - name: ens160
           description: Access mode port ens160
@@ -71,9 +71,9 @@ hosts:
     interfaces:
       - name: ens160
         macAddress: 88:88:88:88:88:03
-    networkConfig:
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"
+    networkConfig:
       interfaces:
         - name: ens160
           description: Access mode port ens160
