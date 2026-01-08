@@ -239,21 +239,11 @@ do
 
 	# Run only once
         test-cmd -r 0 0 -m "Comparing test/$cname/install-config.yaml with test/$cname/install-config.yaml.example" diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example | tee -a test/$cname/install-config.yaml.diff
-        #if ! test-cmd -r 0 0 -m "Comparing test/$cname/install-config.yaml with test/$cname/install-config.yaml.example" diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example | tee -a test/$cname/install-config.yaml.diff; then
-		#cp test/$cname/install-config.yaml test/$cname/install-config.yaml.failed
-		#cat test/$cname/install-config.yaml.diff
-		#mylog "Config mismatch! See file test/$cname/install-config.yaml.failed and test/$cname/install-config.yaml.diff"
-        #fi
 
 	mylog "Checking test/$cname/agent-config.yaml"
 
 	# Run only once
         test-cmd -r 0 0 -m "Comparing test/$cname/agent-config.yaml with test/$cname/agent-config.yaml.example" diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example | tee -a test/$cname/agent-config.yaml.diff
-        #if ! test-cmd -r 0 0 -m "Comparing test/$cname/agent-config.yaml with test/$cname/agent-config.yaml.example" diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example | tee -a test/$cname/agent-config.yaml.diff; then
-		#cp test/$cname/agent-config.yaml test/$cname/agent-config.yaml.failed
-		#cat test/$cname/agent-config.yaml.diff
-		#mylog "Config mismatch! See file test/$cname/agent-config.yaml.failed and test/$cname/agent-config.yaml.diff"
-        #fi
 
         test-cmd -m "Generate iso file for cluster type '$cname'" "aba --dir $cname iso"
 done
