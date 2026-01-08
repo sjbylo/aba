@@ -21,7 +21,6 @@ DOCKER=podman
 ####cd $(dirname $0)
 
 set -e
-#set -euo pipefail
 
 #REGISTRY_DOMAIN="${1:-registry.example.com}"
 #[ "$reg_host" ] && REGISTRY_DOMAIN=$reg_host   # Overrride if set
@@ -35,8 +34,8 @@ REGISTRY_NAME="registry"
 #INTERNAL_PORT=5000
 #EXTERNAL_PORT="${EXTERNAL_PORT:-8443}"
 REGISTRY_DATA_DIR="$data_dir/docker-reg/data"
-REGISTRY_CERTS_DIR=.docker-certs  # Is mounted into container
-REGISTRY_AUTH_DIR=.docker-auth
+REGISTRY_CERTS_DIR=$REGISTRY_DATA_DIR/.docker-certs  # Is mounted into container
+REGISTRY_AUTH_DIR=$REGISTRY_DATA_DIR/.docker-auth
 
 if $DOCKER ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
     echo_yellow "Stopping and removing old registry container..."
@@ -45,5 +44,6 @@ fi
 
 # FIXME: should ask for permission?
 sudo rm -rf $(dirname $REGISTRY_DATA_DIR) $REGISTRY_CERTS_DIR $REGISTRY_AUTH_DIR
+rm -rf regcreds
 
 exit 0
