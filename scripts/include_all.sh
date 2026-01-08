@@ -1177,7 +1177,7 @@ is_valid_dns_label() {
 	fi
 }
 
-calculate_completion() {
+calculate_and_show_completion() {
     local num_masters=$1
     local num_workers=$2
     
@@ -1188,10 +1188,10 @@ calculate_completion() {
         return 1
     fi
 
-    # 2. Math: 40 mins base + (5 mins * nodes)
-    local base_mins=35
-    local master_node_mins=5
-    local worker_node_mins=2
+    # 2. Rough math: 36 mins base + (4 mins * nodes) + (1 min per worker)
+    local base_mins=36
+    local master_node_mins=4
+    local worker_node_mins=1
     local total_duration=$(( base_mins + (master_node_mins * num_masters) + ( worker_node_mins * num_workers)))
 
     # 3. Date Formatting

@@ -167,7 +167,6 @@ create_node() {
 		fi
 
 		let i=$i+1
-		#(( i++ ))  # For some reason was not working!
 	done
 }
 
@@ -179,10 +178,11 @@ create_node "worker" "$WORKER_NAMES" WKR_MAC_ADDRS_ARRAY "$worker_cpu_count" "$w
 
 echo
 if [ -n "${START_VM:-}" ]; then
-	#aba_info_ok "Starting installation at $(date '+%b %e %H:%M')"
-	tmp=($CP_NAMES); cp_cnt=${#tmp[*]}
-	tmp=($WORKER_NAMES); wkr_cnt=${#tmp[*]}
-	calculate_completion $cp_cnt $wkr_cnt
+	cp_arr=($CP_NAMES);		cp_cnt=${#cp_arr[*]}
+	wkr_arr=($WORKER_NAMES);	wkr_cnt=${#wkr_arr[*]}
+
+	# Output VM start time and estimated end time
+	calculate_and_show_completion $cp_cnt $wkr_cnt
 else
 	aba_info_ok "To start the VMs and monitor the installation, run: aba start mon"
 fi
