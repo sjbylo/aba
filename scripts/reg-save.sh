@@ -70,6 +70,7 @@ do
 		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 	fi
 
+	echo
 	aba_info -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && aba_info " Set number of retries with 'aba -d mirror save --retry <count>'" || echo
 	aba_info "Running:"

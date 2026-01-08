@@ -86,6 +86,7 @@ do
 		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	fi
 
+	echo
 	aba_info -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror sync --retry <count>'" || echo
 	aba_info "Running:"
