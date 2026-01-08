@@ -144,9 +144,13 @@ $(DOCKER_REG_FILE):
 install-docker-registry: docker-reg-image.tgz
 	@podman load -i $(DOCKER_REG_FILE)
 	@$(SCRIPTS)/reg-docker-install.sh
+	@rm -f .uninstalled 
+	@touch .installed
 
 uninstall-docker-registry: 
 	@$(SCRIPTS)/reg-docker-uninstall.sh
+	@touch .uninstalled
+	@rm -f .installed 
 
 # mirror.conf depends on aba.conf for the 'domain' value
 mirror.conf: ../aba.conf .init                        ## Create the mirror.conf file.
@@ -154,9 +158,9 @@ mirror.conf: ../aba.conf .init                        ## Create the mirror.conf 
 
 install: .installed
 .installed: .init .rpmsext mirror.conf mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
-	@rm -f .uninstalled 
 	$(SCRIPTS)/reg-install.sh
 	$(SCRIPTS)/reg-verify.sh
+	@rm -f .uninstalled 
 	@touch .installed
 
 .PHONY: installclean
@@ -174,9 +178,9 @@ verify: .init ## Using the credential files in 'aba/mirror/regcreds' dir and the
 	@rm -f .uninstalled 
 	@touch .installed
 
-.PHONY: uninstallclean
-uninstallclean:
-	@rm -f .uninstalled
+#.PHONY: uninstallclean
+#uninstallclean:
+#	@rm -f .uninstalled
 
 .PHONY: tar
 tar:   ## Create a full tar backup of ~/aba & ~/bin, ready to be transported to your private network.
