@@ -8,17 +8,21 @@ Content of this OpenShift install bundle:
 - The imageset-config.yaml file shows the image sets contained in this bundle (see below).
 - CLI Install files:
   - <CLIS>
-- Installation file for Quay Mirror Registry: mirror-registry.tar.gz
+- Installation file for Quay Mirror Registry: mirror/mirror-registry.tar.gz
+- Installation file for Docker Registry: mirror/docker-reg-image.tgz
 - Scripts to install/configure mirror reg. and install OpenShift.
 
 
 This install bundle has been tested. 
 See the files in the build folder for all test results, full log
-of the bundle build and this install bundle's test script.
+of the bundle build/test and this install bundle's test script.
+
 
 # How to use this install bundle
 
-## After every copy, verify the files with:
+Download and transfer all bundle files to a RHEL 8 or 9 bastion host in the *disconnected environment*.
+
+## Verify integrity of all archive files:
 
 ./VERIFY.sh
 
@@ -43,7 +47,7 @@ aba                                                               # Follow the i
 
 aba load --retry 8 -H registry.example.com                        # Replace with your registry's FQDN which
                                                                   # normally points to the default local IP address.
-aba load --retry 8 -H registry.example.com -k ~/.ssh/id_rsa       # Install Quay on a remote host using your ssh key.
+aba load --retry 8 -H registry.example.com -k ~/.ssh/id_rsa       # Install Quay on a *remote* host using your ssh key.
 
 aba load -h                                                       # See more options.
 
