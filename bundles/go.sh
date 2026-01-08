@@ -41,14 +41,14 @@ which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
 echo Starting $0 at $(date)
 
 # Define the operator sets and subsets 
-arr_op_set=();				arr_name=()
-arr_op_set+=(" ");			arr_name+=(base)
-arr_op_set+=("ocp");			arr_name+=(ocp)
-arr_op_set+=("ocp mesh3");		arr_name+=(mesh3)
-arr_op_set+=("ocp odf sec acm");	arr_name+=(opp)
-arr_op_set+=("ocp odf ocpv");		arr_name+=(ocpv)
-arr_op_set+=("ocp sec");		arr_name+=(sec)
-arr_op_set+=("ocp gpu ai"); 		arr_name+=(ai)
+arr_op_sets=();				arr_name=();		arr_tests=();
+arr_op_sets+=(" ");			arr_name+=(base); 	arr_tests+=();
+arr_op_sets+=("ocp");			arr_name+=(ocp);	arr_tests+=(ocp);
+arr_op_sets+=("ocp mesh3");		arr_name+=(mesh3);	arr_tests+=(ocp mesh3);
+arr_op_sets+=("ocp odf sec acm");	arr_name+=(opp);	arr_tests+=(odf acm acs);
+arr_op_sets+=("ocp odf ocpv");		arr_name+=(ocpv);	arr_tests+=(odf virt);
+arr_op_sets+=("ocp sec");		arr_name+=(sec);	arr_tests+=(acs);
+arr_op_sets+=("ocp gpu ai"); 		arr_name+=(ai);		arr_tests+=(ai);
 
 export OC_MIRROR_CACHE=$HOME  # Set this so that multiple oc-mirror invocations can use the cache and we save time & bandwidth.
 # Can also delete $OC_MIRROR_CACHE/.oc-mirror dir
@@ -84,7 +84,7 @@ for ver in ${versions[@]}
 do
 	for i in ${!arr_name[@]}
 	do
-		op_sets=${arr_op_set[$i]}
+		op_sets=${arr_op_sets[$i]}
 		name=${arr_name[$i]}
 		bundle_name="${ver}-$name"
 

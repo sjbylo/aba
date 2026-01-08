@@ -46,22 +46,19 @@ _color_echo() {
 	fi
 }
 
-# Standard 8 colors
-#echo_black()   { set +x; _color_echo 0 "$@"; set -x; }
-#echo_red()     { set +x; _color_echo 1 "$@"; set -x; }
-#echo_green()   { set +x; _color_echo 2 "$@"; set -x; }
-#echo_yellow()  { set +x; _color_echo 3 "$@"; set -x; }
-#echo_blue()    { set +x; _color_echo 4 "$@"; set -x; }
-#echo_magenta() { set +x; _color_echo 5 "$@"; set -x; }
-#echo_cyan()    { set +x; _color_echo 6 "$@"; set -x; }
-#echo_white()   { set +x; _color_echo 7 "$@"; set -x; }
-
 echo_step() {
 	set +x
 	echo
         echo "##################################################################################################"
         echo $@
         echo "##################################################################################################"
+	set -x
+}
+
+mypause() {
+	set +x
+	echo "Pausing ${1} seconds ... Hit Enter to skip"
+	read -t $1 yn || true
 	set -x
 }
 
@@ -91,7 +88,7 @@ WORK_BUNDLE_DIR_BUILD=$WORK_DIR/$BUNDLE_NAME/build
 CLOUD_DIR_BUNDLE=$CLOUD_DIR/$BUNDLE_NAME
 
 # Check this here, so we keep any files around for troubleshooting
-BUNDLE_UPLOADING=INSTALL-BUNDLE-UPLOADING.txt
+BUNDLE_UPLOADING=INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt
 if [ -d $CLOUD_DIR_BUNDLE -a ! -f $CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING ]; then
 	echo Install bundle dir already exists: $CLOUD_DIR_BUNDLE >&2
 
@@ -151,7 +148,7 @@ cd $WORK_DIR
 
 # If the install bundle already exists AND is complete (i.e. not uploading), do nothing and exit
 echo_step "Processing: $CLOUD_DIR_BUNDLE"
-sleep 1
+mypause 2
 
 # If the dir exists, then it must be incomplete ... remove it. Assume this script is only run once every 24 hours
 # i.e. don't want to delete a bundle that is still being created!
@@ -187,21 +184,21 @@ OP=
 aba --pull-secret $PS_FILE --platform bm --channel stable --version $VER $OP --base-domain $BASE_DOM
 
 aba -d cli oc-mirror
-sleep 2
+mypause 2
 ls -l ~/bin/oc-mirror 
 ~/bin/oc-mirror  --help > /dev/null 2>&1 && echo "oc-mirror is valid!"
-sleep 5
+mypause 5
 set -x
-sleep 10 # wait for "download-operator"
+mypause 10 # wait for "download-operator"
 ps -ef | grep download-operator
-sleep 60 # Give some time ... # Hack: must wait for oc-mirror to d/l in the background b4 running "aba catalog" again! Otherwise the download happens in parallel causing trouble
+mypause 60 # Give some time ... # Hack: must wait for oc-mirror to d/l in the background b4 running "aba catalog" again! Otherwise the download happens in parallel causing trouble
 while ps -ef | grep -v grep | grep download-operator
 do
 	echo -n .
-	sleep 10
+	mypause 10
 done
 ls -l ~/bin/oc-mirror 
-##timeout 120 bash -c 'until [ -f ~/bin/oc-mirror ]; do sleep 1; done'; echo ~/bin/oc-mirror installed
+##timeout 120 bash -c 'until [ -f ~/bin/oc-mirror ]; do mypause 1; done'; echo ~/bin/oc-mirror installed
 ps -ef | grep download 
 
 echo_step Create image set config file ...
@@ -370,50 +367,41 @@ echo_step "Be sure to delete the cached agent ISO, otherwise we may mistakenly u
 rm -rf ~/.cache/agent 
 echo_step Create the cluster ...
 #aba cluster --name bundle --type sno --starting-ip 10.0.1.209 --mmem 20 --mcpu 10 --step install
-aba cluster --name bundle-compact --type compact --starting-ip 10.0.1.75 --vip-api 10.0.1.223 --vip-ingress 10.0.1.233 --mmem 32 --mcpu 12 --step install
-
-# Configure NTP on all nodes
-aba day2-ntp
-# Wait for NTP to be in sync
-sleep 60
-nodesIPs=$(oc get nodes -owide --no-headers| awk '{print $7}')
-ips=($nodesIPs)
-ip_cnt=${#ips[@]}
-until [ $(for host in $nodesIPs; do ssh -q core@$host 'chronyc sources' | grep -c "^\^\* $NTP_IP"; done | grep -c "1") -eq $ip_cnt ]
-do
-	echo "Waiting for all nodes to sync to $NTP_IP ... ($(date +%H:%M:%S))"
-	sleep 5
-done
-echo "All nodes are now synchronized!"
-
-
-echo_step Test this cluster type: $NAME ...
-
-echo "Cluster installation test: ok" >> $WORK_TEST_LOG
+aba cluster --name bundle-compact --type compact --starting-ip 10.0.1.75 --api-vip  10.0.1.223 --ingress-vip 10.0.1.233 --mmem 32 --mcpu 12 --step install
 
 # Test integrations ...
 (
-	set -x
-	cd bundle
+	# Configure NTP on all nodes
+	cd bundle-compact
+
+	. <(aba shell)
+	oc whoami
+	. <(aba login)   # Access cluster
+	oc whoami
+
+	aba day2-ntp  # This will wait for completion
+
+	echo_step Test this cluster type: $NAME ...
+
+	echo "Cluster installation test: ok" >> $WORK_TEST_LOG
 
 	# Verify at least one operator is available (base has none) and integrate OSUS
 	if [ "$NAME" != "base" ]; then
 		echo Pausing 100s ...
-		sleep 100
+		mypause 100
 
 		echo Integrating OperatorHub ...
 		aba day2  # Connect OperatorHub to reg.
 
-		. <(aba login)   # Access cluster
-		. <(aba shell)   # Access cluster
+		until oc get packagemanifests | grep cincinnati-operator; do echo -n .; mypause 10; done # cincinnati-operator should always be available for non-base bundles
+		echo "OperatorHub integration test: ok" >> $WORK_TEST_LOG
+
+		mypause 10
 
 		echo List of packagemanifests:
 		oc get packagemanifests
 
-		until oc get packagemanifests | grep cincinnati-operator; do echo -n .; sleep 10; done # cincinnati-operator should always be available for non-base bundles
-		echo "OperatorHub integration test: ok" >> $WORK_TEST_LOG
-
-		sleep 60  # Otherwise get "missing cincinnati-operator" error
+		mypause 60  # Otherwise get "missing cincinnati-operator" error
 
 		aba day2-osus
 		echo "OpenShift Update Service (OSUS) integration test: ok" >> $WORK_TEST_LOG
@@ -430,6 +418,7 @@ echo "Cluster installation test: ok" >> $WORK_TEST_LOG
 	fi
 
 	aba kill  # Poweroff VMs
+	set +x
 ) 
 
 echo "All tests: passed" >> $WORK_TEST_LOG
@@ -455,8 +444,14 @@ echo_step Create the install bundle dir and copy the files ...
 mkdir -p $CLOUD_DIR_BUNDLE
 
 # Mark it as incomplete
-echo "This archive is incomplete or it's still uploading.  Please wait for it to complete!" > $CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING
-sleep 60  # Give the dir and file time to sync into cloud
+{
+	echo "========================================================================================" 
+	echo
+	echo "THIS ARCHIVE IS INCOMPLETE OR IT'S STILL UPLOADING.  PLEASE WAIT FOR UPLOAD TO COMPLETE!" 
+	echo
+	echo "========================================================================================" 
+} > $CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING
+mypause 60  # Give the dir and file time to sync into cloud
 
 # Generate and adjust the README with the bundle version and the list of install files etc
 # Fetch list of available cli files
