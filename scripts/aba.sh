@@ -232,8 +232,8 @@ do
 		export INFO_ABA=1
 		shift 
 	elif [ "$1" = "--split" ]; then
-		export split_bundle=1  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
-		BUILD_COMMAND="$BUILD_COMMAND split=split"  # FIXME: Should only allow force=1 after the appropriate target
+		export opt_split="--split"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
+		#BUILD_COMMAND="$BUILD_COMMAND split=split"  # FIXME: Should only allow force=1 after the appropriate target
 		shift
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
@@ -256,12 +256,14 @@ do
 		shift
 		if [ "$1" = "-" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND out=-"  # FIXME: This only works if command=bundle
+			opt_out="--out -"
 		else
 			echo "$1" | grep -q "^-" && aba_abort "in parsing --out path argument"
 			[ "$1" ] && [ ! -d $(dirname $1) ] && aba_abort "directory: [$(dirname $1)] incorrect or missing!"
 			[ -f "$1.tar" ] && aba_abort "install bundle file [$1.tar] already exists!"
 
 			BUILD_COMMAND="$BUILD_COMMAND out='$1'"
+			opt_out="--out '$1'"
 		fi
 		shift
 	elif [ "$1" = "--channel" -o "$1" = "-c" ]; then
@@ -720,6 +722,7 @@ do
 		fi
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
 		shift
+		opt_force="--force"
 		BUILD_COMMAND="$BUILD_COMMAND force=force"  # FIXME: Should only allow force=1 after the appropriate target
 	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
 		shift
@@ -859,7 +862,7 @@ do
 			cur_target=$1
 
 			case $cur_target in
-				ssh|run)
+				ssh|run|bundle)
 					# FIXME: Add more here: day2 day2-ntp day2-osus shell login etc  (all items without any deps)
 					:
 					;;
@@ -885,6 +888,12 @@ if [ "$cur_target" ]; then
 		run)
 			trap - ERR  # No need for this anymore
 			$ABA_ROOT/scripts/oc-command.sh "$cmd"
+			exit 
+		;;
+		bundle)
+			trap - ERR  # No need for this anymore
+			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_split
+			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_split
 			exit 
 		;;
 	esac

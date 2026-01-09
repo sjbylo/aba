@@ -5,12 +5,37 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-while [ "$*" ]
-do
-	[ "$1" = "-o" ] && bundle_dest_file=$2 && shift 2
-	[ "$1" = "force" ] && force=1 && shift
-	[ "$1" = "split" ] && split_bundle=1 && shift
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --out)
+	bundle_dest_file=$2
+	shift 2
+	;;
+    --force)
+      force=1
+      shift
+      ;;
+    --split)
+      split_bundle=1
+      shift
+      ;;
+    *)
+	bundle_dest_file="$1"
+      shift
+      ;;
+  esac
 done
+#while [ "$*" ]
+#do
+#	[ "$1" = "-o" ] && bundle_dest_file=$2 && shift 2
+#	[ "$1" = "force" ] && force=1 && shift
+#	[ "$1" = "split" ] && split_bundle=1 && shift
+#done
+
+aba_debug bundle_dest_file=$bundle_dest_file force=$force split_bundle=$split_bundle
+
+#[ ! "$bundle_dest_file" ] && aba_abort "missing install bundle filename! Example: --out /mnt/usb-media/my-bundle"
+[ ! "$bundle_dest_file" ] && bundle_dest_file=/tmp
 
 aba_debug aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
 
@@ -20,8 +45,6 @@ install_rpms $(cat templates/rpms-external.txt) || exit 1
 source <(normalize-aba-conf)
 
 verify-aba-conf || exit 1
-
-[ ! "$bundle_dest_file" ] && aba_abort "missing install bundle filename! Example: --out /mnt/usb-media/my-bundle"
 
 if [ "$bundle_dest_file" = "-" ]; then
 	aba_info "An install bundle will be generated and written to *standard output* (stdout) using the following parameters:" >&2
