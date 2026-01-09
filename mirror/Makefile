@@ -48,14 +48,14 @@ init: .init
 	echo [ABA] "aba/aba.conf file missing! Please read the README.md on how to get started!"
 	@exit 1
 
-.PHONY: cli-download
-cli-download:
-	@make -sC ../cli download 
+#.PHONY: cli-download
+#cli-download:
+#	@make -sC ../cli download 
 
-# Only needed for 'make load'. 
-.PHONY: cli-oc-mirror
-cli-oc-mirror:
-	@make -sC ../cli ~/bin/oc-mirror
+## Only needed for 'make load'. 
+#.PHONY: cli-oc-mirror
+#cli-oc-mirror:
+#	@make -sC ../cli ~/bin/oc-mirror
 
 imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the intial image set config file with all provided values and operators
 isconf: imagesetconf ## Same as imagesetconf
@@ -69,25 +69,25 @@ save/imageset-config-save.yaml: ../aba.conf catalog
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
-sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
+#sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
+sync: .init .rpmsint ~/.pull-secret.json index               install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
 
 ~/.pull-secret.json:
 	$(SCRIPTS)/install-pull-secret.sh
 
-# oc-mirror is idempotent so no need for 'dot' flag files here
 .PHONY: save
 # Note that for a connected workstation or bastion there is no need to install all the required packages, only 'rpmsext' is needed.
 # mirror-registry-amd64.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
 # Same with docker-reg-image.tgz (via download-registries)
 # download-registries is executed last in case docker.io is inaccessible 
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
-save: .init .rpmsext ~/.pull-secret.json index cli-download cli-oc-mirror save/imageset-config-save.yaml download-registries  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
+save: .init .rpmsext ~/.pull-secret.json              download-registries index               save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: .init cli-oc-mirror .rpmsint install verify  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
+load: .init               .rpmsint install verify  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-load.sh          $(retry)
 
 .PHONY: testload
@@ -117,15 +117,7 @@ mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball (note: no 
 	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
 	tar tzf mirror-registry-amd64.tar.gz >/dev/null && echo [ABA] "File $@ is valid"
 
-#DOCKER_REG_IMAGE := docker.io/library/registry:latest
-#DOCKER_REG_FILE  := docker-reg-image.tgz
-#docker-reg-image.tgz:  ## Download the docker registry image as an alternative to Quay registry
-#	echo [ABA] "Downloading fallback registry to $(DOCKER_REG_FILE) ..."
-#	@podman pull $(DOCKER_REG_IMAGE) || true
-#	@podman save $(DOCKER_REG_IMAGE) | gzip > $(DOCKER_REG_FILE) || true
-#	@podman rmi $(DOCKER_REG_IMAGE) || true
-
-# Store the docker registry image so it can be used in air-gapped env. (if docker.io reachable)
+# Store the docker registry image so it can be used in air-gapped env. (if docker.io reachable) Note: Docker available as arm64 image!
 # Ignore any errors, since docker.io may not be whitelisted
 DOCKER_REG_IMAGE := docker.io/library/registry:latest
 DOCKER_REG_FILE  := docker-reg-image.tgz
@@ -198,7 +190,6 @@ inc:   ## Same as 'make tar' except a timestamp file is used to only backup file
 .PHONY: index
 #index: init catalog
 index: init
-	@make -sC ../cli oc-mirror >/dev/null 2>&1
 	$(SCRIPTS)/download-operator-index.sh true redhat-operator
 	$(SCRIPTS)/download-operator-index.sh true certified-operator
 	$(SCRIPTS)/download-operator-index.sh true redhat-marketplace
@@ -208,7 +199,6 @@ index: init
 .PHONY: catalog
 # Note that this runs in the background (called by aba) and output is sent to /dev/null
 catalog: init               ## Download and render all the latest Operators into a file which can be used in an imageset config file. 
-	@make -sC ../cli oc-mirror >/dev/null 2>&1
 	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-operator
 	$(SCRIPTS)/download-operator-index.sh $(bg) certified-operator
 	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-marketplace
