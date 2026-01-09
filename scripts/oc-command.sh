@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash -e
 
 [ ! -f scripts/include_all.sh ] && echo "Error: Cluster directory $PWD not yet initialized!  See: aba cluster --help" >&2 && exit 1
 source scripts/include_all.sh
