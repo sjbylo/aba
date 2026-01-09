@@ -46,7 +46,7 @@ vmw:
 .PHONY: catalog
 # -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
 catalog: ## Render all the latest Operators into a helper file which can be used in an imageset config file. 
-	@make -sC cli oc-mirror >/dev/null 2>&1
+#	@make -sC cli oc-mirror >/dev/null 2>&1
 	@make -C mirror catalog bg=$(bg)
 
 # These are the targets needed to create the 'bundle' archive
@@ -61,7 +61,7 @@ tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Defa
 
 # Note, the '@' is required for valid tar format output!
 .PHONY: tarrepo
-tarrepo:  ## Archive the full repo *excluding* the aba/mirror/mirror_*.tar files. Works in the same way as 'aba tar'.
+tarrepo:  ## Archive the repo *excluding* the aba/mirror/mirror_*.tar files. Works in the same way as 'aba tar'.
 	@$(SCRIPTS)/backup.sh --repo $(out)
 
 .PHONY: download
