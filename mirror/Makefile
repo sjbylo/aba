@@ -125,12 +125,13 @@ $(DOCKER_REG_FILE):
 	@echo [ABA] "Checking availability of $(DOCKER_REG_IMAGE)..."
 	@if podman pull $(DOCKER_REG_IMAGE); then \
 		echo [ABA] "Pull successful. Saving to $(DOCKER_REG_FILE)..."; \
-		podman save $(DOCKER_REG_IMAGE) | gzip > $(DOCKER_REG_FILE) && \
-		podman rmi $(DOCKER_REG_IMAGE); \
+		podman save $(DOCKER_REG_IMAGE) | gzip > $(DOCKER_REG_FILE) \
 	else \
 		echo [ABA] "Could not reach $(DOCKER_REG_IMAGE). Skipping fallback creation."; \
 		rm -f $(DOCKER_REG_FILE); \
 	fi
+
+#		podman rmi $(DOCKER_REG_IMAGE); \
 
 .PHONY: install-docker-registry
 install-docker-registry: docker-reg-image.tgz
