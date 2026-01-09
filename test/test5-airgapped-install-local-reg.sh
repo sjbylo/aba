@@ -250,7 +250,7 @@ test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests'"
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
-test-cmd -m "Pause, so the operator will show up" read -t 60 yn || true
+test-cmd -m "Pause, so the operator will show up" "read -t 60 yn || true"
 for op in web-terminal yaks vault-secrets-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests' | grep -i $op"
@@ -489,7 +489,7 @@ test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests'"
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
-test-cmd -m "Pause, so the operator will show up" read -t 60 yn || true
+test-cmd -m "Pause, so the operator will show up" "read -t 60 yn || true"
 for op in servicemeshoperator3 #web-terminal yaks vault-secrets-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests' | grep -i $op"
@@ -497,7 +497,7 @@ done
 
 # Test for operators: web-terminal yaks vault-secrets-operator flux
 #for op in web-terminal yaks vault-secrets-operator flux
-test-cmd -m "Pause, so the operator will show up" read -t 60 yn || true
+test-cmd -m "Pause, so the operator will show up" "read -t 60 yn || true"
 for op in              yaks vault-secrets-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests' | grep -i $op"
