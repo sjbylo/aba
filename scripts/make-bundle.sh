@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash -e
 # Create a install bundle which can be used to install OpenShift in an air-gapped env.
 
 source scripts/include_all.sh
