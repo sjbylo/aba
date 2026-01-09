@@ -17,6 +17,9 @@ source <(normalize-mirror-conf)
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
+# Be sure a download has started ..
+run_once    -i oc-mirror-install make -sC ../cli oc-mirror
+
 # This is a pull secret for RH registry
 pull_secret_mirror_file=pull-secret-mirror.json
 
@@ -82,6 +85,8 @@ do
 		cmd="oc-mirror --v1 --config=imageset-config-sync.yaml docker://$reg_host:$reg_port$reg_path"
 		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	else
+		# Wait for oc-mirror to be available!
+		run_once -w -i oc-mirror-install make -sC ../cli oc-mirror 
 		cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	fi

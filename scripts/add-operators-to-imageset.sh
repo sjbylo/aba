@@ -56,8 +56,10 @@ add_op() {
 # If operators are given, ensure the catalogs are available!
 if [ "$ops" -o "$op_sets" ]; then
 	#aba_debug Final chance to fetch all operator catalog index files ... running: make catalog from $PWD
-	make catalog bg=1  # Trigger download in background. Returns immediatelly. 
-	make catalog 2>/dev/null	   # Wait for all catlogs to download
+	#make catalog bg=1  # Trigger download in background. Returns immediatelly. 
+	#make catalog 2>/dev/null	   # Wait for all catlogs to download
+	run_once    -i download_catalog_indexes make catalog bg=1
+	run_once -w -i download_catalog_indexes
 
 	catalog_file_errors=
 	for catalog in redhat-operator certified-operator redhat-marketplace community-operator

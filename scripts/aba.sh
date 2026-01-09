@@ -317,7 +317,8 @@ do
 		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 		aba_debug Downloading operator index for version $ver 
 
-		( make -s -C $ABA_ROOT catalog bg=true & ) & 
+		#( make -s -C $ABA_ROOT catalog bg=true & ) & 
+		run_once -i download_catalog_indexes make -s -C $ABA_ROOT catalog bg=true
 
 		shift 2
 		ocp_version=$ver
@@ -963,12 +964,11 @@ if [ -f .bundle ]; then
 		{
 			echo
 			aba_warning -p "IMPORANT" \
-				"The Image-set archive files (ISA) are missing!" \
-				"This install bundle has been created *without an image payload*." \
-				"The ISA files were left out of the install bundle during its creation using 'aba bundle' or 'aba -d mirror save'"  \
-				"The ISA files MUST BE moved or copied into the install bundle under the aba/mirror/save' directory before continuing!"
+				"The Image-set archive file(s) (ISA image payload) are not included in this install bundle." \
+				"The ISA file(s) were left out of the install bundle during its creation and *must be*" \
+				"moved or copied into the install bundle under the aba/mirror/save directory before continuing!"
 			echo
-			echo_white "Example (copy from portable media):" 
+			echo_white "Example (copy ISA from portable media):" 
 			echo_white "  cp /path/to/portable/media/mirror_*.tar aba/mirror/save/" 
 			echo_white "Run aba again for further instructions." 
 		} >&2
@@ -1020,39 +1020,49 @@ fi
 
 [ "$ocp_channel" = "eus" ] && ocp_channel=stable  # btw .../ocp/eus/release.txt does not exist!
 
-# FIXME: download in background needed?
-#( 
-#	fetch_latest_version stable &
-#	fetch_previous_version stable &
-#	fetch_latest_version fast &
-#	fetch_previous_version fast &
-#) >/dev/null 2>&1 & 
-
-if [ "$ocp_channel" ]; then
-	#echo_white "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
-	echo_white "OpenShift update channel is set to '$ocp_channel' in aba.conf."
-else
+#if [ "$ocp_channel" ]; then
+#	#echo_white "OpenShift update channel is defined in aba.conf as '$ocp_channel'."
+#	echo_white "OpenShift update channel is set to '$ocp_channel' in aba.conf."
+#else
 
 	echo_white -n "Checking Internet connectivity ..."
 	if ! release_text=$(curl -f --connect-timeout 20 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/stable/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
 		aba_abort \
 			"Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." \
-			"To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." 
+			"To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." \
+			"" \
+			"Required sites:" \
+			"	api.openshift.com" \
+			"	registry.redhat.io" \
+			"	mirror.openshift.com" 
 	fi
 
-	#aba_debug Attempt to download oc-mirror in the background ...
-	# Start to download this asap....
-	### FIXME: need general backgound command fn() ### ( _install_oc_mirror $ABA_ROOT >/dev/null 2>&1 & ) & 
+	aba_debug "Fetching OpenShift version data in background ..."
+	run_once -i latest_stable_version		fetch_latest_version stable &
+	run_once -i latest_stable_version_previous	fetch_previous_version stable &
+	run_once -i latest_fast_version			fetch_latest_version fast &
+	run_once -i latest_fast_version_previous	fetch_previous_version fast &
+	run_once -i latest_candidate_version		fetch_latest_version candidate &
+	run_once -i latest_candidate_version_previous	fetch_previous_version candidate &
+
+	aba_debug "Downloading oc-mirror in the background ..."
+	run_once -i oc-mirror-install			make -sC cli oc-mirror &
+
+	wait
 
 	[ "$TERM" ] && tput el1 && tput cr
 
+	[ "$ocp_channel" ] && ch_def=${ocp_channel:0:1} || ch_def=s  # Set the default 
+
 	while true; do
-		echo_white -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [s]: "
+		echo_white -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [$ch_def]: "
 		read -r ans
 
+		[ ! "$ans" ] && ans=$ch_def
+
 		case "$ans" in
-			""|"s"|"S")
+			"s"|"S")
 			        ocp_channel="stable"
 				break
 			;;
@@ -1072,22 +1082,31 @@ else
 
 	replace-value-conf -q -n ocp_channel -v $ocp_channel -f aba.conf
 	echo_white "'ocp_channel' set to '$ocp_channel' in aba.conf"
-fi
 
-#sleep 0.3
-
+#fi
 
 ##############################################################################################################################
 # Determine OpenShift version 
 
-if [ "$ocp_version" ]; then
-	#echo_white "OpenShift version is defined in aba.conf as '$ocp_version'."
-	echo_white "OpenShift version is set to '$ocp_version' in aba.conf."
-else
+#if [ "$ocp_version" ]; then
+#	#echo_white "OpenShift version is defined in aba.conf as '$ocp_version'."
+#	echo_white "OpenShift version is set to '$ocp_version' in aba.conf."
+#else
 	##############################################################################################################################
 	# Fetch release.txt
 
-	echo_white -n "Fetching available versions (please wait!) ..."
+	echo_white -n "Fetching available versions ..."
+	# Wait for only the data we need ...
+	if [ "$ocp_channel" = "stable" ]; then
+		run_once -w -i latest_stable_version
+		run_once -w -i latest_stable_version_previous
+	elif [ "$ocp_channel" = "fast" ]; then
+		run_once -w -i latest_fast_version
+		run_once -w -i latest_fast_version_previous
+	elif [ "$ocp_channel" = "candidate" ]; then
+		run_once -w -i latest_candidate_version
+		run_once -w -i latest_candidate_version_previous
+	fi
 
 	aba_debug "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt"
 
@@ -1106,6 +1125,7 @@ else
 
 	# Determine any already installed tool versions
 	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
+	[ "$ocp_version" ] && cur_ver=$ocp_version  # prioritize the current version as defined in aba.conf
 
 	# If openshift-install is already installed, then offer that version also
 	[ "$cur_ver" ] && or_ret="or [current version] " && default_ver=$cur_ver
@@ -1148,11 +1168,11 @@ else
 	# Update the conf file
 	replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
 	echo_white "'ocp_version' set to '$target_ver' in aba.conf"
+#fi
 
-	#sleep 0.3
-fi
-
-#sleep 0.3
+# Trigger download of all CLI binaries
+# Note: Ths only other place this is done is in "scripts/reg-save.sh"
+PLAIN_OUTPUT=1 run_once -i download_all_cli make -sC cli download
 
 # Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
 # FIXME: Any better way to do this?! .. or just keep this check in 'aba -d mirror sync' and 'aba -d mirror save' (i.e. before we d/l the images
@@ -1187,8 +1207,6 @@ if [ ! "$editor" ]; then
 
 	replace-value-conf -n editor -v "$new_editor" -f aba.conf
 	export editor=$new_editor
-
-	#sleep 0.3
 fi
 
 ##############################################################################################################################
@@ -1208,7 +1226,8 @@ fi
 scripts/install-rpms.sh external 
 
 # Now we have the required ocp version, we can fetch the operator indexes (in the background to save time).
-( make -s catalog bg=true & ) & 
+#( make -s catalog bg=true & ) & 
+run_once -i download_catalog_indexes make -s -C $ABA_ROOT catalog bg=true
 
 ##############################################################################################################################
 # Determine pull secret
@@ -1216,8 +1235,6 @@ scripts/install-rpms.sh external
 if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 	if jq empty $pull_secret_file; then
 		echo_white "Pull secret found at '$pull_secret_file'."
-
-		#sleep 0.3
 	else
 		aba_abort "pull secret file sytax error: $pull_secret_file!" 
 	fi

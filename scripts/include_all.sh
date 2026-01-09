@@ -266,7 +266,7 @@ show_error() {
 
 # Set the trap to call the show_error function on ERR signal
 # If no first argument is provided, set a trap for errors
-[ -z "${1-}" ] && trap 'show_error' ERR && [ "$DEBUG_ABA" ] && echo Error trap set 2>&1
+[ -z "${1-}" ] && trap 'show_error' ERR && [ "$DEBUG_ABA" ] && echo Error trap set >&2
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
@@ -1213,3 +1213,99 @@ calculate_and_show_completion() {
     aba_info_ok "(Total estimated duration: ${total_duration} minutes)"
 }
 
+
+# Run long-running tasks in the backhground.
+
+run_once() {
+    local mode="start"
+    local timeout_val=0
+    local work_id=""
+    local purge=false
+    local OPTIND=1
+
+    WORK_DIR=~/.aba/runner
+    mkdir -p "$WORK_DIR"
+
+    while getopts "swi:t:cp" opt; do
+        case "$opt" in
+            s) mode="start" ;;
+            w) mode="wait" ;;
+            i) work_id=$OPTARG ;;
+            t) timeout_val=$OPTARG ;;
+            c) purge=true ;;     # Cleanup after wait
+            p) mode="peek" ;;    # Just check if running
+            *) return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    local command=("$@")
+
+    if [[ -z "$work_id" ]]; then
+        echo "Error: Work ID (-i) is required." >&2
+        return 1
+    fi
+
+    local lock_file="$WORK_DIR/${work_id}.lock"
+    local exit_file="$WORK_DIR/${work_id}.exit"
+    local log_file="$WORK_DIR/${work_id}.log"
+
+    case "$mode" in
+        start)
+            exec 9>>"$lock_file"
+            if flock -n 9; then
+                # Clear old exit/log files if restarting a fresh task
+                > "$log_file"
+                rm -f "$exit_file"
+                
+                (
+                    # Everything inside here is logged
+                    {
+                        "${command[@]}"
+                        echo $? > "$exit_file"
+                    } > "$log_file" 2>&1
+                ) &
+                exec 9>&-
+                return 0
+            else
+                exec 9>&-
+                return 0 # Already running
+            fi
+            ;;
+
+        peek)
+            # Non-blocking check to see if the process is still active
+            exec 9>>"$lock_file"
+            if flock -n 9; then
+                exec 9>&-
+                [[ -f "$exit_file" ]] && echo "Finished" || echo "Not Started"
+                return 0
+            else
+                exec 9>&-
+                echo "Running"
+                return 0
+            fi
+            ;;
+
+        wait)
+            if [[ ! -f "$lock_file" ]]; then
+                echo "Error: Task '$work_id' not found." >&2
+                return 1
+            fi
+
+            # Wait logic
+            if [[ "$timeout_val" -gt 0 ]]; then
+                flock -x -w "$timeout_val" "$lock_file" -c "true" || return 124
+            else
+                flock -x "$lock_file" -c "true"
+            fi
+
+            local exit_code=$(cat "$exit_file" 2>/dev/null || echo 1)
+            
+            if [ "$purge" = true ]; then
+                rm -f "$lock_file" "$exit_file" "$log_file"
+            fi
+            
+            return "$exit_code"
+            ;;
+    esac
+}
