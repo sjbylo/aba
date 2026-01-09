@@ -9,7 +9,7 @@ TEMPLATES = templates
 SCRIPTS   = scripts
 name     ?= standard	# def. cluster name
 type     ?= standard	# def. cluster type
-split    ?=		# by def. do not split the install bundle
+#split    ?=		# by def. do not split the install bundle
 MIRROR_CMDS := save load sync verify
 
 #debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
@@ -50,10 +50,10 @@ catalog: ## Render all the latest Operators into a helper file which can be used
 	@make -C mirror catalog bg=$(bg)
 
 # These are the targets needed to create the 'bundle' archive
-.PHONY: bundle
+#.PHONY: bundle
 # Note: '@' used to ensure tar format is not corrupted when using out=-
-bundle:  ## Create an install bundle to be tranferred into the air-gapped env. Example: aba bundle --out /path/to/archive/bundle or -
-	@$(SCRIPTS)/make-bundle.sh -o $(out) $(split) $(force)
+#bundle:  ## Create an install bundle to be tranferred into the air-gapped env. Example: aba bundle --out /path/to/archive/bundle or -
+#	@$(SCRIPTS)/make-bundle.sh -o $(out) $(split) $(force)
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use --out - to send tar output to stdout. Used by aba bundle.
