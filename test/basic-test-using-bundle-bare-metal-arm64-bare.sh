@@ -18,6 +18,8 @@ export https_proxy=http://10.0.1.8:3128
 
 # Clean up after last test
 ##cd $TEST_DIR_DISCO/aba 2>/dev/null && ./aba -d mirror uninstall -y && sudo rm -rf ~/quay-install || true  # Delete any existing mirror reg.
+# Checks if 'registry' is running, and stops it only if true
+#[ "$(podman inspect -f '{{.State.Running}}' registry 2>/dev/null)" == "true" ] && podman stop registry
 aba -d mirror uninstall-docker-registry
 ! curl -f -SkIL https://$MY_HOST:8443/ 2>/dev/null|| { echo Registry detected at https://$MY_HOST/; exit 1; }   # Sanity check
 sudo rm -fv $(which aba)
