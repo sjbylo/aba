@@ -100,6 +100,8 @@ fi
 
 source $ABA_ROOT/scripts/include_all.sh
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
+aba_runtime_install_traps  # Used to clean up runner bg tasks
+run_once -G
 
 aba_debug DEBUG_ABA=$DEBUG_ABA
 
@@ -320,7 +322,7 @@ do
 		aba_debug Downloading operator index for version $ver 
 
 		#( make -s -C $ABA_ROOT catalog bg=true & ) & 
-		run_once -i download_catalog_indexes make -s -C $ABA_ROOT catalog bg=true
+		run_once -i download_catalog_indexes -- make -s -C $ABA_ROOT catalog bg=true
 
 		shift 2
 		ocp_version=$ver
@@ -1048,15 +1050,16 @@ fi
 	fi
 
 	aba_debug "Fetching OpenShift version data in background ..."
-	run_once -i latest_stable_version		fetch_latest_version stable &
-	run_once -i latest_stable_version_previous	fetch_previous_version stable &
-	run_once -i latest_fast_version			fetch_latest_version fast &
-	run_once -i latest_fast_version_previous	fetch_previous_version fast &
-	run_once -i latest_candidate_version		fetch_latest_version candidate &
-	run_once -i latest_candidate_version_previous	fetch_previous_version candidate &
+	# Download openshift version data in the background.  'bash -lc ...' used here 'cos can't setsid a function.
+	run_once -i latest_stable_version		-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	stable'
+	run_once -i latest_stable_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	stable'
+	run_once -i latest_fast_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	fast'
+	run_once -i latest_fast_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	fast'
+	run_once -i latest_candidate_version		-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	candidate'
+	run_once -i latest_candidate_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
 
 	aba_debug "Downloading oc-mirror in the background ..."
-	run_once -i oc-mirror-install			make -sC cli oc-mirror &
+	run_once -i oc-mirror-install			-- make -sC cli oc-mirror &
 
 	wait
 
@@ -1181,7 +1184,7 @@ fi
 
 # Trigger download of all CLI binaries
 # Note: Ths only other place this is done is in "scripts/reg-save.sh"
-PLAIN_OUTPUT=1 run_once -i download_all_cli make -sC cli download
+PLAIN_OUTPUT=1 run_once -i download_all_cli -- make -sC cli download
 
 # Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
 # FIXME: Any better way to do this?! .. or just keep this check in 'aba -d mirror sync' and 'aba -d mirror save' (i.e. before we d/l the images
@@ -1236,7 +1239,7 @@ scripts/install-rpms.sh external
 
 # Now we have the required ocp version, we can fetch the operator indexes (in the background to save time).
 #( make -s catalog bg=true & ) & 
-run_once -i download_catalog_indexes make -s -C $ABA_ROOT catalog bg=true
+run_once -i download_catalog_indexes -- make -s -C $ABA_ROOT catalog bg=true
 
 ##############################################################################################################################
 # Determine pull secret

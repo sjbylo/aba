@@ -1216,96 +1216,198 @@ calculate_and_show_completion() {
 
 # Run long-running tasks in the backhground.
 
+#!/usr/bin/env bash
+# TAB-indented runner (no timeout option)
+
 run_once() {
-    local mode="start"
-    local timeout_val=0
-    local work_id=""
-    local purge=false
-    local OPTIND=1
+	local mode="start"
+	local work_id=""
+	local purge=false
+	local reset=false
+	local global_clean=false
+	local OPTIND=1
 
-    WORK_DIR=~/.aba/runner
-    mkdir -p "$WORK_DIR"
+	# Allow override for tests
+	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
+	mkdir -p "$WORK_DIR"
 
-    while getopts "swi:t:cp" opt; do
-        case "$opt" in
-            s) mode="start" ;;
-            w) mode="wait" ;;
-            i) work_id=$OPTARG ;;
-            t) timeout_val=$OPTARG ;;
-            c) purge=true ;;     # Cleanup after wait
-            p) mode="peek" ;;    # Just check if running
-            *) return 1 ;;
-        esac
-    done
-    shift $((OPTIND-1))
-    local command=("$@")
+	while getopts "swi:cprG" opt; do
+		case "$opt" in
+			s) mode="start" ;;
+			w) mode="wait" ;;
+			i) work_id=$OPTARG ;;
+			c) purge=true ;;
+			p) mode="peek" ;;
+			r) reset=true ;;
+			G) global_clean=true ;;
+			*) return 1 ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local command=("$@")
 
-    if [[ -z "$work_id" ]]; then
-        echo "Error: Work ID (-i) is required." >&2
-        return 1
-    fi
+	_kill_id() {
+		local id="$1"
+		local pid_file="$WORK_DIR/${id}.pid"
+		local lock_file="$WORK_DIR/${id}.lock"
+		local exit_file="$WORK_DIR/${id}.exit"
+		local log_file="$WORK_DIR/${id}.log"
 
-    local lock_file="$WORK_DIR/${work_id}.lock"
-    local exit_file="$WORK_DIR/${work_id}.exit"
-    local log_file="$WORK_DIR/${work_id}.log"
+		if [[ -f "$pid_file" ]]; then
+			local old_pid
+			old_pid="$(cat "$pid_file" 2>/dev/null || true)"
+			if [[ -n "$old_pid" ]]; then
+				# We run the job under setsid, so PGID==PID; kill the whole group.
+				kill -TERM -"$old_pid" 2>/dev/null || true
+				sleep 0.2
+				kill -KILL -"$old_pid" 2>/dev/null || true
 
-    case "$mode" in
-        start)
-            exec 9>>"$lock_file"
-            if flock -n 9; then
-                # Clear old exit/log files if restarting a fresh task
-                > "$log_file"
-                rm -f "$exit_file"
-                
-                (
-                    # Everything inside here is logged
-                    {
-                        "${command[@]}"
-                        echo $? > "$exit_file"
-                    } > "$log_file" 2>&1
-                ) &
-                exec 9>&-
-                return 0
-            else
-                exec 9>&-
-                return 0 # Already running
-            fi
-            ;;
+				# Last-resort: also try PID itself
+				kill -KILL "$old_pid" 2>/dev/null || true
+			fi
+		fi
 
-        peek)
-            # Non-blocking check to see if the process is still active
-            exec 9>>"$lock_file"
-            if flock -n 9; then
-                exec 9>&-
-                [[ -f "$exit_file" ]] && echo "Finished" || echo "Not Started"
-                return 0
-            else
-                exec 9>&-
-                echo "Running"
-                return 0
-            fi
-            ;;
+		rm -f "$lock_file" "$exit_file" "$log_file" "$pid_file"
+	}
 
-        wait)
-            if [[ ! -f "$lock_file" ]]; then
-                echo "Error: Task '$work_id' not found." >&2
-                return 1
-            fi
+	# --- GLOBAL CLEAN ---
+	if [[ "$global_clean" == true ]]; then
+		local f id
+		shopt -s nullglob
+		for f in "$WORK_DIR"/*.lock; do
+			id="$(basename "$f" .lock)"
+			_kill_id "$id"
+		done
+		for f in "$WORK_DIR"/*.pid; do
+			id="$(basename "$f" .pid)"
+			_kill_id "$id"
+		done
+		shopt -u nullglob
+		rm -rf "$WORK_DIR"/* 2>/dev/null || true
+		return 0
+	fi
 
-            # Wait logic
-            if [[ "$timeout_val" -gt 0 ]]; then
-                flock -x -w "$timeout_val" "$lock_file" -c "true" || return 124
-            else
-                flock -x "$lock_file" -c "true"
-            fi
+	if [[ -z "$work_id" ]]; then
+		echo "Error: Work ID (-i) is required." >&2
+		return 1
+	fi
 
-            local exit_code=$(cat "$exit_file" 2>/dev/null || echo 1)
-            
-            if [ "$purge" = true ]; then
-                rm -f "$lock_file" "$exit_file" "$log_file"
-            fi
-            
-            return "$exit_code"
-            ;;
-    esac
+	local lock_file="$WORK_DIR/${work_id}.lock"
+	local exit_file="$WORK_DIR/${work_id}.exit"
+	local log_file="$WORK_DIR/${work_id}.log"
+	local pid_file="$WORK_DIR/${work_id}.pid"
+
+	# --- RESET/KILL ---
+	if [[ "$reset" == true ]]; then
+		_kill_id "$work_id"
+		return 0
+	fi
+
+	# --- PEEK ---
+	if [[ "$mode" == "peek" ]]; then
+		[[ -f "$exit_file" ]] && return 0 || return 1
+	fi
+
+	_start_task() {
+		local is_fg="$1"
+
+		# Acquire lock via FD 9; lock remains held while subshell keeps FD open
+		exec 9>>"$lock_file"
+		if ! flock -n 9; then
+			exec 9>&-
+			return 0
+		fi
+
+		: >"$log_file"
+		rm -f "$exit_file"
+
+		(
+			# Keep FD 9 open in this subshell so lock remains held until it exits.
+			# Use setsid to create a new session/process group (PGID==PID we capture).
+			local rc=0
+
+			if [[ "$is_fg" == "true" ]]; then
+				# Foreground-ish: stream + log
+				setsid "${command[@]}" 2>&1 | tee "$log_file"
+				rc="${PIPESTATUS[0]}"
+				echo "$rc" >"$exit_file"
+				exit "$rc"
+			fi
+
+			# Background: log only, but capture pid + wait so we can write exit code reliably
+			setsid "${command[@]}" >>"$log_file" 2>&1 &
+			echo $! >"$pid_file"
+			wait $!
+			rc=$?
+			echo "$rc" >"$exit_file"
+			exit "$rc"
+		) &
+
+		# Parent closes FD; background subshell retains the lock
+		exec 9>&-
+		return 0
+	}
+
+	# --- start mode ---
+	if [[ "$mode" == "start" ]]; then
+		if [[ ${#command[@]} -eq 0 ]]; then
+			echo "Error: start mode requires a command." >&2
+			return 1
+		fi
+		_start_task "false"
+		return 0
+	fi
+
+	# --- wait mode ---
+	if [[ "$mode" == "wait" ]]; then
+		if [[ ! -f "$exit_file" ]]; then
+			exec 9>>"$lock_file"
+			if flock -n 9; then
+				# Lock is free => not running => implicitly start (requires command)
+				exec 9>&-
+				if [[ ${#command[@]} -eq 0 ]]; then
+					echo "Error: Task not started and no command provided." >&2
+					return 1
+				fi
+				_start_task "true"
+				wait $!
+			else
+				# Running elsewhere => block until lock released
+				exec 9>&-
+				flock -x "$lock_file" -c "true"
+			fi
+		fi
+
+		local exit_code
+		exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+
+		if [[ "$purge" == true ]]; then
+			rm -f "$lock_file" "$exit_file" "$log_file" "$pid_file"
+		fi
+		return "$exit_code"
+	fi
+
+	echo "Error: Unknown mode." >&2
+	return 1
 }
+
+# --- Aba-facing cleanup ---
+
+aba_runtime_cleanup() {
+	local rc=$?
+
+	# Prevent recursion / re-entrancy
+	trap - EXIT INT TERM
+
+	# Kill anything still owned by runner
+	run_once -G >/dev/null 2>&1 || true
+
+	return "$rc"
+}
+
+aba_runtime_install_traps() {
+	# Call once at Aba startup
+	#trap aba_runtime_cleanup EXIT INT TERM
+	trap aba_runtime_cleanup      INT TERM
+}
+
