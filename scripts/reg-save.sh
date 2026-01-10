@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash -e
 # Save images from RH reg. to disk 
 
 source scripts/include_all.sh
@@ -22,11 +22,18 @@ source <(normalize-aba-conf)
 
 verify-aba-conf || exit 1
 
-# Be sure a download has started ..
-run_once    -i oc-mirror-install make -sC ../cli oc-mirror
-PLAIN_OUTPUT=1 run_once    -i download_all_cli make -sC ../cli download  
+# Still downloading?
+export PLAIN_OUTPUT=1
+aba_info "Downloading CLI installation binaries"
+run_once -w -i download_all_cli -- make -sC ../cli download || aba_abort "Downloading CLI binaries failed.  Please try again!"
+####PLAIN_OUTPUT=1 run_once -i download_all_cli -- make -sC cli download
+
+aba_info_ok "CLI Installation binaries downloaded successfully!"
+
+aba_info "Checking for oc-mirror binary."
+run_once -w -i oc-mirror-install -- make -sC ../cli oc-mirror || aba_abort "Downloading oc-mirror binary failed.  Please try again!"
 # Wait for all cli downloaded
-PLAIN_OUTPUT=1 run_once -w -i download_all_cli
+
 
 # Ensure the RH pull secret files are located in the right places
 scripts/create-containers-auth.sh
@@ -73,7 +80,7 @@ do
 		# --since string Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored (only m2d)
 		#cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01                     --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 		# Wait for oc-mirror to be available!
-		run_once -w -i oc-mirror-install make -sC ../cli oc-mirror 
+		run_once -w -i oc-mirror-install -- make -sC ../cli oc-mirror 
 		cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01  --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
 	fi
