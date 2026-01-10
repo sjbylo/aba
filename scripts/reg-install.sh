@@ -244,7 +244,8 @@ if [ "$reg_ssh_key" ]; then
 	### use verify ### #podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url 
 	### use verify ### podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url 
 
-	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "touch $reg_root/registry-installed-from-"$(hostname)$(pwd | tr / -)
+	#echo Registry installed from $(hostname)$(pwd | tr / -) | \
+	#	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "cat > $reg_root/.install_location"
 else
 	aba_debug "Starting to install Quay to local host"
 
@@ -397,7 +398,8 @@ else
 	# Inputs: enc_password, reg_host and reg_port 
 	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
 
-	touch $reg_root/registry-installed-from$(pwd | tr / -)
+	#touch $reg_root/registry-installed-from$(pwd | tr / -)
+	eval "echo Registry installed from $PWD > $reg_root/.install_location"
 fi
 
 echo
