@@ -236,6 +236,7 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
 	@[ -f .installed ] && echo [ABA] "Important: to uninstall the registry, run 'aba -d mirror uninstall'!" || true
 	rm -rf *.tar mirror-registry
+#	These need resetting FIXME
 	rm -f templates scripts
 	rm -f aba.conf  # remove link only
 	rm -f .init 
@@ -259,7 +260,10 @@ reset:                # Clean up all files. Only use if you know what you're doi
 	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo [ABA] aba/mirror/mirror.conf backed up to mirror.conf.bk || true
 	@#rm -rf *.tar.gz oc-mirror-workspace   # Leave this so the mirror can be uninstalled with reg-uninstall.sh 
 	rm -rf          oc-mirror-workspace 
-	rm -rf mirror-registry-amd64.tar.gz $(DOCKER_REG_FILE)
+#	These need resetting FIXME
+	rm -f $(DOCKER_REG_FILE)
+#	These need resetting FIXME
+	rm -rf mirror-registry-amd64.tar.gz
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh

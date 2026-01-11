@@ -1066,7 +1066,7 @@ fi
 	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
 
 	aba_debug "Downloading oc-mirror in the background ..."
-	run_once -i mirror:install:oc-mirror			-- make -sC cli oc-mirror &
+	run_once -i cli:install:oc-mirror			-- make -sC cli oc-mirror &
 
 	wait
 
@@ -1191,7 +1191,8 @@ fi
 
 # Trigger download of all CLI binaries
 # Note: Ths only other place this is done is in "scripts/reg-save.sh"
-PLAIN_OUTPUT=1 run_once -i download_all_cli -- make -sC cli download
+scripts/cli-download-all.sh
+#PLAIN_OUTPUT=1 run_once -i download_all_cli -- make -sC cli download
 
 # Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
 # FIXME: Any better way to do this?! .. or just keep this check in 'aba -d mirror sync' and 'aba -d mirror save' (i.e. before we d/l the images
