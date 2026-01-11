@@ -5,6 +5,8 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+aba_debug ABA_ROOT=$ABA_ROOT
+
 ro_opt=
 out=Downloading
 [ "$1" = "--wait" ] && ro_opt=-w && out=Waiting
@@ -12,7 +14,7 @@ out=Downloading
 
 export PLAIN_OUTPUT=1
 
-for item in $(make -sC $ABA_ROOT/cli out-download-all)
+for item in $(make --no-print-directory -sC $ABA_ROOT/cli out-download-all)
 do
 	aba_debug $out: item=$item
 	aba_debug "run_once $ro_opt -i "cli:download:$item" -- make -sC $ABA_ROOT/cli $item"
