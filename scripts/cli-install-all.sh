@@ -5,6 +5,8 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+aba_debug ABA_ROOT=$ABA_ROOT
+
 ro_opt=
 out=Downloading
 [ "$1" = "--wait" ] && ro_opt=-w && out=Waiting
