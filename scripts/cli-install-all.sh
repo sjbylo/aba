@@ -14,7 +14,7 @@ out=Downloading
 
 export PLAIN_OUTPUT=1
 
-for item in $(make -sC $ABA_ROOT/cli out-install-all)
+for item in $(make --no-print-directory -sC $ABA_ROOT/cli out-install-all)
 do
 	aba_debug $out: item=$item
 	aba_debug "run_once $ro_opt -i "cli:install:$item" -- make -sC $ABA_ROOT/cli $item"
