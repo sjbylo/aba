@@ -18,7 +18,7 @@ verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
 # Be sure a download has started ..
-run_once    -i oc-mirror-install -- make -sC ../cli oc-mirror
+run_once    -i mirror:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror
 
 export reg_url=https://$reg_host:$reg_port
 
@@ -69,7 +69,7 @@ while [ $try -le $try_tot ]
 do
 	# Set up the command in a script which can be run manually if needed.
 	# Wait for oc-mirror to be available!
-	run_once -w -i oc-mirror-install -- make -sC ../cli oc-mirror 
+	run_once -w -i mirror:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror 
 	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 	echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 

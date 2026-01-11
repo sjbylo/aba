@@ -209,6 +209,9 @@ if [ "$reg_ssh_key" ]; then
 	aba_info "Installing mirror registry with command:"
 	aba_info "$cmd --initPassword <hidden>"
 
+	aba_info "Waiting for download of mirror-install"
+	run_once -w -i mirror:reg:download -- make -s -C $ABA_ROOT/mirror download-registries
+
 	eval echo $cmd --initPassword "'$reg_pw'"
 	eval $cmd --initPassword "'$reg_pw'"
 
@@ -244,8 +247,8 @@ if [ "$reg_ssh_key" ]; then
 	### use verify ### #podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url 
 	### use verify ### podman login $tls_verify_opts -u $reg_user -p $reg_pw $reg_url 
 
-	#echo Registry installed from $(hostname)$(pwd | tr / -) | \
-	#	ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "cat > $reg_root/.install_location"
+	echo Registry installed from $(hostname):$PWD | \
+		ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "cat > $reg_root/.install.source"
 else
 	aba_debug "Starting to install Quay to local host"
 
@@ -366,6 +369,9 @@ else
 	aba_info "Installing mirror registry with command:"
 	aba_info "$cmd --initPassword <hidden>"
 
+	aba_info "Waiting for download of mirror-install"
+	run_once -w -i mirror:reg:download -- make -s -C $ABA_ROOT/mirror download-registries
+
 	eval $cmd --initPassword $reg_pw   # eval needed for "~"
 
 	if [ -d regcreds ]; then
@@ -399,7 +405,7 @@ else
 	scripts/j2 ./templates/pull-secret-mirror.json.j2 > ./regcreds/pull-secret-mirror.json
 
 	#touch $reg_root/registry-installed-from$(pwd | tr / -)
-	eval "echo Registry installed from $PWD > $reg_root/.install_location"
+	eval "echo Registry installed from $(hostname -f):$PWD > $reg_root/.install.source"
 fi
 
 echo

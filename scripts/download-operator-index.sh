@@ -171,9 +171,9 @@ aba_info "Downloading Operator $catalog_name index v$ocp_ver_major to $index_fil
 # Cannot be run concurrently!  This is now done from the aba/Makefile:catalog
 ###make -sC ../cli ~/bin/oc-mirror 
 
-# Wait for oc-mirror to be available!
-###run_once    -i oc-mirror-install -- make -sC ../cli oc-mirror 
-run_once -w -i oc-mirror-install -- make -sC ../cli oc-mirror 
+# Wait for oc-mirror binary to be downloaded and available!
+run_once -w -i mirror:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror 
+
 # Fetch latest operator catalog and default channels
 aba_info "Running: oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major" >&2
 oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major > $index_file
