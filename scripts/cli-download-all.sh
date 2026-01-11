@@ -17,7 +17,7 @@ export PLAIN_OUTPUT=1
 for item in $(make --no-print-directory -sC $ABA_ROOT/cli out-download-all)
 do
 	aba_debug $out: item=$item
-	aba_debug "run_once $ro_opt -i "cli:download:$item" -- make -sC $ABA_ROOT/cli $item"
+	aba_debug "run_once $ro_opt -i "cli:download:$item" -- make  -sC $ABA_ROOT/cli $item"
 	run_once $ro_opt -i "cli:download:$item" -- make -sC $ABA_ROOT/cli $item  # This is non-blocking
 done
 

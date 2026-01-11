@@ -3,6 +3,7 @@
 # Make! Be silent, unless in debug mode
 ifndef DEBUG_ABA
 .SILENT:
+MAKEFLAGS += --no-print-directory
 endif
 
 TEMPLATES = templates
