@@ -20,6 +20,16 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 WORK_DIR=$PWD # Remember so can change config file here 
 
+## install will check if aba needs to be updated, if so it will return 3 ... so we re-execute it!
+if [ ! "$ABA_DO_NOT_UPDATE" ]; then
+	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
+	if [ $? -eq 2 ]; then
+		export ABA_DO_NOT_UPDATE=1
+		$0 "$@"  # This means aba was updated and needs to be called again
+		exit
+	fi
+fi
+
 # Need to catch these option, esp. if they are at the start
 while [ "$1" = "-D" -o "$1" = "--debug" -o "$1" = "--dir" -o "$1" = "-d" ] 
 do
@@ -91,14 +101,14 @@ fi
 ##cd $ABA_ROOT
 
 ## install will check if aba needs to be updated, if so it will return 3 ... so we re-execute it!
-if [ ! "$ABA_DO_NOT_UPDATE" ]; then
-	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
-	if [ $? -eq 2 ]; then
-		export ABA_DO_NOT_UPDATE=1
-		$0 "$@"  # This means aba was updated and needs to be called again
-		exit
-	fi
-fi
+# TESTING if [ ! "$ABA_DO_NOT_UPDATE" ]; then
+# TESTING 	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
+# TESTING 	if [ $? -eq 2 ]; then
+# TESTING 		export ABA_DO_NOT_UPDATE=1
+# TESTING 		$0 "$@"  # This means aba was updated and needs to be called again
+# TESTING 		exit
+# TESTING 	fi
+# TESTING fi
 
 source $ABA_ROOT/scripts/include_all.sh
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
