@@ -1066,7 +1066,7 @@ fi
 	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
 
 	aba_debug "Downloading oc-mirror in the background ..."
-	run_once -i cli:install:oc-mirror			-- make -sC cli oc-mirror &
+	PLAIN_OUTPUT=1 run_once -i cli:install:oc-mirror			-- make -sC cli oc-mirror &
 
 	wait
 

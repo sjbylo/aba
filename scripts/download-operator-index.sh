@@ -70,6 +70,7 @@ if [ "$bg" ]; then
 	exec 2>> $log_file
 fi
 
+# See if the index is already downloaded
 if [[ -s $index_file && -f $done_file ]]; then
 	aba_info "Operator index: $catalog_name v$ocp_ver_major already downloaded to file mirror/$index_file" >&2
 
@@ -88,7 +89,6 @@ if ! curl --connect-timeout 15 --retry 8 -IL http://registry.redhat.io/v2 >/dev/
 	aba_abort "cannot access the registry: https://registry.redhat.io/.  Aborting." 
 fi
 
-# See if the index is already downloaded
 [ ! -f $index_file ] && touch $index_file
 
 # See if the index is currently downloading (using 'ln' to get a lock)
@@ -104,22 +104,12 @@ if ! ln $index_file $lock_file >/dev/null 2>&1; then
 		exit 0
 	fi
 
-# May want to download catalogs even if operators not defined
-#	# No need to wait if operator vars are not defined in aba.conf!
-#	if [ ! "$op_sets" -a ! "$ops" ]; then
-#		aba_debug "No operators defined ... exiting"
-#
-#		exit 0
-#	fi
-# May want to download catalogs even if operators not defined
-
 	# Check to be sure the command with the expected pid is running
 
 	# If the bg process is no longer running, then reset and try to download again
 	if [ -f $pid_file ]; then
 		aba_debug "PID file $pid_file found ..." >&2
 		bg_pid=$(cat $pid_file)
-		#if ! pgrep -u $(whoami) -f download-operator-index.sh | grep -q "^$bg_pid$"; then
 		if ! ps -p $bg_pid >/dev/null; then
 			aba_debug "Background process with pid [$bg_pid] not running." >&2
 			rm -f $lock_file $pid_file
@@ -168,9 +158,6 @@ rm -f $done_file  # Just to be sure
 
 aba_info "Downloading Operator $catalog_name index v$ocp_ver_major to $index_file, please wait a few minutes ..."
 
-# Cannot be run concurrently!  This is now done from the aba/Makefile:catalog
-###make -sC ../cli ~/bin/oc-mirror 
-
 # Wait for oc-mirror binary to be downloaded and available!
 run_once -w -i cli:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror 
 
@@ -187,9 +174,6 @@ touch $done_file   # This marks successful completion of download!
 rm -f $lock_file 
 rm -f $pid_file
 
-# FIXME:???
-# If the catalog is downloaded ok, we leave the lock file so there's no risk of it being overwritten. 
-
 aba_info_ok "Downloaded $index_file operator list successfully"
 
 # Generate a handy yaml file with operators which can be manually copied into image set config if needed.
@@ -202,9 +186,6 @@ do
 done > imageset-config-$catalog_name-catalog-v${ocp_ver_major}.yaml
 
 aba_info "Generated mirror/imageset-config-$catalog_name-catalog-v${ocp_ver_major}.yaml file for easy reference when editing your image set config file."
-
-# Keep the lock file since we assume the catalog was downloaded ok
-##rm -f $lock_file $pid_file
 
 # Adding this to log file since it will run in the background
 aba_info_ok "Downloaded $catalog_name index for v$ocp_ver_major successfully"

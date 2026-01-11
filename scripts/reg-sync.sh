@@ -18,7 +18,8 @@ verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
 # Be sure a download has started ..
-run_once    -i cli:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror
+aba_info "Checking for oc-mirror binary."
+PLAIN_OUTPUT=1 run_once -w -i cli:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror || aba_abort "Downloading oc-mirror binary failed.  Please try again!"
 
 # This is a pull secret for RH registry
 pull_secret_mirror_file=pull-secret-mirror.json
