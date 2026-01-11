@@ -43,14 +43,16 @@ do
 done
 
 export INFO_ABA=1
+export ABA_ROOT
 interactive_mode=1
+
 
 # Check the repo location
 # Need to be sure location of the top of the repo in order to find the important files
 # FIXME: Place the files (scripts and templates etc) into a well known location, e.g. /opt/aba/...
 if [ -s Makefile ] && grep -q "Top level Makefile" Makefile; then
-	#ABA_ROOT=$PWD
-	ABA_ROOT='.'
+	ABA_ROOT=$PWD
+	#ABA_ROOT='.'
 	###interactive_mode=1
 elif [ -s ../Makefile ] && grep -q "Top level Makefile" ../Makefile; then
 	ABA_ROOT=$(realpath "..")
@@ -88,7 +90,7 @@ fi
 # Do not do this.  CWD must be the user proivided dir
 ##cd $ABA_ROOT
 
-## install will check if aba needs to be updated, if so it will return 2 ... so we re-execute it!
+## install will check if aba needs to be updated, if so it will return 3 ... so we re-execute it!
 if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
 	if [ $? -eq 2 ]; then
@@ -101,7 +103,8 @@ fi
 source $ABA_ROOT/scripts/include_all.sh
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
 aba_runtime_install_traps  # Used to clean up runner bg tasks
-run_once -G
+[ ! "$RUN_ONCE_CLEANED" ] && run_once -F # Clean out only the previously failed tasks
+export RUN_ONCE_CLEANED=1 # Be sure it's only run once!
 
 aba_debug DEBUG_ABA=$DEBUG_ABA
 
@@ -1043,23 +1046,27 @@ fi
 			"Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." \
 			"To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." \
 			"" \
-			"Required sites:" \
-			"	api.openshift.com" \
-			"	registry.redhat.io" \
-			"	mirror.openshift.com" 
+			"Required sites:                                Other sites:"		\
+			"   mirror.openshift.com                           docker.io"		\
+			"   api.openshift.com                              docker.com"		\
+			"   registry.redhat.io                             hub.docker.com"	\
+			"   quay.io and *.quay.io                          index.docker.io"	\
+			"   console.redhat.com"		\
+			"   registry.access.redhat.com"	\
+
 	fi
 
 	aba_debug "Fetching OpenShift version data in background ..."
 	# Download openshift version data in the background.  'bash -lc ...' used here 'cos can't setsid a function.
-	run_once -i latest_stable_version		-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	stable'
-	run_once -i latest_stable_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	stable'
-	run_once -i latest_fast_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	fast'
-	run_once -i latest_fast_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	fast'
-	run_once -i latest_candidate_version		-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	candidate'
-	run_once -i latest_candidate_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
+	run_once -i ocp:stable:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	stable'
+	run_once -i ocp:stable:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	stable'
+	run_once -i ocp:fast:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	fast'
+	run_once -i ocp:fast:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	fast'
+	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	candidate'
+	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
 
 	aba_debug "Downloading oc-mirror in the background ..."
-	run_once -i oc-mirror-install			-- make -sC cli oc-mirror &
+	run_once -i mirror:install:oc-mirror			-- make -sC cli oc-mirror &
 
 	wait
 
@@ -1110,14 +1117,14 @@ fi
 	echo_white -n "Fetching available versions ..."
 	# Wait for only the data we need ...
 	if [ "$ocp_channel" = "stable" ]; then
-		run_once -w -i latest_stable_version
-		run_once -w -i latest_stable_version_previous
+		run_once -w -i ocp:stable:latest_version
+		run_once -w -i ocp:stable:latest_version_previous
 	elif [ "$ocp_channel" = "fast" ]; then
-		run_once -w -i latest_fast_version
-		run_once -w -i latest_fast_version_previous
+		run_once -w -i ocp:fast:latest_version
+		run_once -w -i ocp:fast:latest_version_previous
 	elif [ "$ocp_channel" = "candidate" ]; then
-		run_once -w -i latest_candidate_version
-		run_once -w -i latest_candidate_version_previous
+		run_once -w -i ocp:candidate:latest_version
+		run_once -w -i ocp:candidate:latest_version_previous
 	fi
 
 	aba_debug "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt"
@@ -1238,8 +1245,10 @@ fi
 scripts/install-rpms.sh external 
 
 # Now we have the required ocp version, we can fetch the operator indexes (in the background to save time).
-#( make -s catalog bg=true & ) & 
 run_once -i download_catalog_indexes -- make -s -C $ABA_ROOT catalog bg=true
+
+# Initiate download of mirror-install and docker-reg image
+run_once -i mirror:reg:download -- make -s -C $ABA_ROOT/mirror download-registries
 
 ##############################################################################################################################
 # Determine pull secret

@@ -1225,13 +1225,14 @@ run_once() {
 	local purge=false
 	local reset=false
 	local global_clean=false
+	local global_failed_clean=false
 	local OPTIND=1
 
 	# Allow override for tests
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprG" opt; do
+	while getopts "swi:cprGF" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1240,6 +1241,7 @@ run_once() {
 			p) mode="peek" ;;
 			r) reset=true ;;
 			G) global_clean=true ;;
+			F) global_failed_clean=true ;;
 			*) return 1 ;;
 		esac
 	done
@@ -1284,6 +1286,21 @@ run_once() {
 		done
 		shopt -u nullglob
 		rm -rf "$WORK_DIR"/* 2>/dev/null || true
+		return 0
+	fi
+
+	# --- GLOBAL FAILED-ONLY CLEAN ---
+	if [[ "$global_failed_clean" == true ]]; then
+		local exitf id rc
+		shopt -s nullglob
+		for exitf in "$WORK_DIR"/*.exit; do
+			id="$(basename "$exitf" .exit)"
+			rc="$(cat "$exitf" 2>/dev/null || echo 1)"
+			if [[ "$rc" -ne 0 ]]; then
+				_kill_id "$id"
+			fi
+		done
+		shopt -u nullglob
 		return 0
 	fi
 
