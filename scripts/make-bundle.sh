@@ -73,9 +73,12 @@ if [ "$force" ]; then
 
 	# Ensure files are refreshed 
 	aba_info "Deleting unwanted CLI install files under $PWD/cli ..."
-	ls -1 cli/*tar.gz 2>/dev/null | grep -v -e "-$ocp_version.tar.gz" -e "oc-mirror.*.tar.gz" -e "govc_Linux" | xargs rm -f || true  # ignore any errors
-	run_once -r -i "mirror:install:oc-mirror"  # If we clean up files, we must *reset* the task tracker/runner
-	run_once -r -i "download_all_cli"  	   # If we clean up files, we must *reset* the task tracker/runner
+	###ls -1 cli/*tar.gz 2>/dev/null | grep -v -e "-$ocp_version.tar.gz" -e "oc-mirror.*.tar.gz" -e "govc_Linux" | xargs rm -f || true  # ignore any errors
+	make -sC cli clean
+	run_once -r -i "cli:install:oc-mirror"  # If we clean up files, we must *reset* the task tracker/runner
+
+	#run_once -r -i "download_all_cli"  	   # If we clean up files, we must *reset* the task tracker/runner
+	###scripts/cli-download-all.sh --reset
 fi
 
 # Check if the repo is alreay in use, e.g. we don't want mirror.conf in the bundle

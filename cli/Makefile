@@ -87,9 +87,17 @@ endif
 
 # Targets
 
+# govc is optional, depends on platform != bm
 install: oc openshift-install oc-mirror butane $(govc_bin)
 
-installall: oc openshift-install oc-mirror butane govc
+# Force d/l of govc too
+install-all: oc openshift-install oc-mirror butane govc
+
+out-install:
+	echo oc openshift-install oc-mirror butane $(govc_bin)
+
+out-install-all:
+	echo oc openshift-install oc-mirror butane govc
 
 # For "reset" and "oc-mirror" and "govc" targets we DO NOT need to check for the target ocp version
 # If 'reset' found in $MAKECMDGOALS, i.e. no reset target provided
@@ -110,6 +118,7 @@ help: ## Help
 # Keep this like it is, otherwise the deps don't work!
 .init:
 	mkdir -p ~/bin
+	ln -fs ../scripts
 	touch .init
 
 # aba.conf should never be missing!
@@ -117,7 +126,7 @@ help: ## Help
 	@echo "[ABA] aba/aba.conf missing! Run 'aba' for interactive mode or read the README.md file on how to get started!"
 	@exit 1
 
-# The preference to download the oc CLI tar files is: rhel9, then rhel8 and then the generic tar file.
+# The preference to download the oc CLI tar files is: rhel9, then rhel8 
 
 # See:
 # https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.9/ 
@@ -128,12 +137,13 @@ help: ## Help
 #openshift-client-linux-arm64-rhel8-4.18.9.tar.gz
 #openshift-client-linux-arm64-rhel9-4.18.9.tar.gz
 
-full_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-$(rhel_ver)-$(ocp_version).tar.gz
-full_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(full_oc_tar_file)
+# This is the tarball that's needed for this local host OS
+loacl_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-$(rhel_ver)-$(ocp_version).tar.gz
+#full_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(loacl_oc_tar_file)
 
 # Generic oc binary 
-gen_oc_tar_file		:= openshift-client-$(os)-$(ocp_version).tar.gz
-gen_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
+#gen_oc_tar_file		:= openshift-client-$(os)-$(ocp_version).tar.gz
+#gen_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
 
 rhel9_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-rhel9-$(ocp_version).tar.gz
 rhel9_oc_url      	:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
@@ -141,63 +151,57 @@ rhel9_oc_url      	:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clie
 rhel8_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-rhel8-$(ocp_version).tar.gz
 rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
 
+
 openshift_install_file	:= openshift-install-$(os)-$(ocp_version).tar.gz
+# 	Example:
+# 	openshift-install-linux-4.20.8.tar.gz   #amd64
+# 	openshift-install-linux-arm64-4.20.8.tar.gz
 
-# Download *all* the tar files that might be use in the disconnected env, both rhel9 and rhel8.
-download: .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download $(gen_oc_tar_file) $(openshift_install_file) oc-mirror.tar.gz oc-mirror.rhel9.tar.gz $(butane_binary_file) $(govc_tar_target)
-
+# Download *all* the install files that might be use in the disconnected env, both rhel9 and rhel8.
+download = $(rhel9_oc_tar_file) $(rhel8_oc_tar_file) $(openshift_install_file) oc-mirror.tar.gz oc-mirror.rhel9.tar.gz $(butane_binary_file) $(govc_tar_target)
 # This is the same as download but with govc added 
-downloadall: download $(govc_tar_file)
+download_all = $(download) $(govc_tar_file)
+
+download: $(download)
+
+download-all: $(download_all)
+
+out-download:
+	echo $(download)
+
+out-download-all:
+	echo $(download_all)
 
 
 ########################################
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
 oc: ~/bin/oc  ## Install oc into ~/bin
-~/bin/oc: .init $(full_oc_tar_file)
-	file $(full_oc_tar_file) | grep -q "gzip compressed data"
-	@echo [ABA] Extracting $(full_oc_tar_file) to ~/bin/oc
-	tar -C ~/bin -xmzf $(full_oc_tar_file) oc kubectl || { echo [ABA] Extracting $(gen_oc_tar_file) instead to ~/bin/oc; tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl; } || { echo [ABA] Error: Invalid files: $(full_oc_tar_file) or $(gen_oc_tar_file); exit 1; }
+~/bin/oc: .init $(loacl_oc_tar_file)
+	file $(loacl_oc_tar_file) | grep -q "gzip compressed data"
+	@echo [ABA] Extracting $(loacl_oc_tar_file) to ~/bin/oc
+	tar -C ~/bin -xmzf $(loacl_oc_tar_file) oc kubectl || { echo [ABA] Extracting $(gen_oc_tar_file) instead to ~/bin/oc; tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl; } || { echo [ABA] Error: Invalid files: $(loacl_oc_tar_file) or $(gen_oc_tar_file); exit 1; }
 	~/bin/oc --help >/dev/null 2>&1
 
 # Download just the oc tar files
-octars: $(gen_oc_tar_file) .$(rhel9_oc_tar_file)-download .$(rhel8_oc_tar_file)-download
+octars: $(rhel9_oc_tar_file) $(rhel8_oc_tar_file)
 
-# Download
-$(full_oc_tar_file):  ## Downlaod oc tarball for this hosts rhel version, otherwise download the fallback tarball.
-	@curl -sfkLI $(full_oc_url) >/dev/null
-	echo [ABA] Downloading $(full_oc_url)
-	curl -f $(CURL_PROGRESS) -O -L $(full_oc_url) || make -s $(gen_oc_tar_file)
-	tar tzvf $(full_oc_tar_file) >/dev/null || { rm -f $(full_oc_tar_file); exit 1; }
-	echo [ABA] "File $(full_oc_tar_file) checksum valid!"  # Be sure it's valid
-	touch $(full_oc_tar_file)
-
-# Download
-$(gen_oc_tar_file):  ## Downlaod fallback oc tarball, if available
-	@curl -sfkLI $(gen_oc_url) >/dev/null 
-	echo [ABA] Downloading $(gen_oc_url)
-	curl -f $(CURL_PROGRESS) -O -L $(gen_oc_url) || { echo [ABA] $(gen_oc_tar_file) failed download; > $(gen_oc_tar_file); }
-	[ -s $(gen_oc_tar_file) ]
-	tar tvzf $(gen_oc_tar_file) >/dev/null || { rm -f $(gen_oc_tar_file); exit 1; }  # Validate tar file!
-	echo [ABA] "File $(gen_oc_tar_file) checksum valid!"  # Be sure it's valid
+openshift_install_url := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)
 
 # Ensure all possible tarballs are downloaded
-.$(rhel9_oc_tar_file)-download:  ## Downlaod oc tarball for rhel9, if available
+$(rhel9_oc_tar_file):  ## Downlaod oc tarball for rhel9, if available
 	curl -sfkLI $(rhel9_oc_url) >/dev/null # Check connection only
 	echo [ABA] Downloading $(rhel9_oc_url)
 	curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || { echo [ABA] $(rhel9_oc_tar_file) failed download; > $(rhel9_oc_tar_file); }
-	tar tvzf $(rhel9_oc_tar_file) >/dev/null || { rm -f $(rhel9_oc_tar_file); exit 1; }  # Validate tar file!
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-client-rhel9-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" openshift-client-rhel9-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
 	echo [ABA] "File $(rhel9_oc_tar_file) checksum valid!"  # Be sure it's valid
-	touch .$(rhel9_oc_tar_file)-download
 
 # Ensure all possible tarballs are downloaded
-.$(rhel8_oc_tar_file)-download:  ## Downlaod oc tarball for rhel8, if available
-#	@curl -sfkLI $(rhel8_oc_url) >/dev/null && echo [ABA] Downloading $(rhel8_oc_url) ... && curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || (echo [ABA] $(rhel8_oc_tar_file) failed download; > $(rhel8_oc_tar_file))
+$(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
 	curl -sfkLI $(rhel8_oc_url) >/dev/null # Check connection only
 	echo [ABA] Downloading $(rhel8_oc_url)
 	curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || { echo [ABA] $(rhel8_oc_tar_file) failed download; > $(rhel8_oc_tar_file); }
-	tar tvzf $(rhel8_oc_tar_file) >/dev/null || { rm -f $(rhel8_oc_tar_file); exit 1; }  # Validate tar file!
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-client-rhel8-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=$$(sha256sum $@) && grep -q "$$cs" openshift-client-rhel8-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
 	echo [ABA] "File $(rhel8_oc_tar_file) checksum valid!"  # Be sure it's valid
-	touch .$(rhel8_oc_tar_file)-download 
 
 
 ########################################
@@ -208,8 +212,6 @@ openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/b
 	@echo [ABA] Extracting  $(openshift_install_file) to $@
 	tar -C ~/bin -xmzf $(openshift_install_file) openshift-install
 	$@ --help >/dev/null || { echo [ABA] "Error: file $@ invalid!"; exit 1; }
-
-openshift_install_url := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)
 
 $(openshift_install_file):  ## Download openshift-install tarball
 	@echo [ABA] Downloading $(openshift_install_url)/$@
@@ -291,8 +293,13 @@ $(butane_binary_file): ## Download butane binary
 .PHONY: clean 
 clean: ## Clean up installed binaries
 	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} .*installed *sha256sum.txt
+	scripts/cli-install-all.sh --reset
+#	This should be just: run_once -r -i "cli:install" # to reset all downloads in cli dir
 
 .PHONY: reset
 reset: clean # Clean up everything. Only use if you know what you are doing!
-	rm -f *.tar.gz .init butane* .*-download
+	rm -f *.tar.gz .init butane* #.*-download
+#	bash -lc 'source ../scripts/include_all.sh; run_once -r -i "download_all_cli"'
+	scripts/cli-download-all.sh --reset
+#	This should be just: run_once -r -i "cli:download" # to reset all downloads in cli dir
 
