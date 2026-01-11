@@ -17,6 +17,9 @@ source <(normalize-mirror-conf)
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
+aba_info "Downloading CLI installation binaries"
+scripts/cli-install-all.sh --wait  # FIXME: should only be for oc / openshift-install?
+
 out=$(openshift-install version)
 release_sha=$(echo "$out" | grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
 release_ver=$(echo "$out" | grep "^openshift-install" | cut -d" " -f2)

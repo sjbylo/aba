@@ -206,7 +206,6 @@ $(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
 
 
 ########################################
-# Be sure that the correct version is installed by creating .*installed flag file
 
 openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/bin
 ~/bin/openshift-install: .init $(openshift_install_file)
@@ -293,7 +292,7 @@ $(butane_binary_file): ## Download butane binary
 ########################################
 .PHONY: clean 
 clean: ## Clean up installed binaries
-	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} .*installed *sha256sum.txt
+	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} *sha256sum.txt
 	scripts/cli-install-all.sh --reset
 #	This should be just: run_once -r -i "cli:install" # to reset all downloads in cli dir
 
