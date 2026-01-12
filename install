@@ -119,6 +119,9 @@ fi
 # Sanity check ...
 [ ! -x scripts/aba.sh ] && echo "Abort: Incomplete aba repo! aba script not found in $PWD/scripts/aba.sh" >&2 && exit 1
 
+mkdir -p ~/.aba
+rm -rf ~/.aba/*  # Just to be sure!
+
 source scripts/include_all.sh
 install_rpms $(cat templates/rpms-external.txt)
 
@@ -161,7 +164,7 @@ do
 			if [ ! "$quiet" ]; then
 				echo aba has been $action to $d/aba >&2
 				if [ -n "$msg" ]; then
-					source scripts/include_all.sh
+					###source scripts/include_all.sh
 					echo_yellow "$msg" >&2
 				fi
 			fi
