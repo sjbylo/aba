@@ -594,7 +594,7 @@ ask() {
 	timer=
 	[ ! "$ret_default" ] && [ "$1" == "-t" ] && timer="-t $2" && shift 2
 
-	echo
+	#echo
  	echo_yellow -n "[ABA] $@? $yn_opts: "
 	[ "$ret_default" ] && echo_white "<default answer provided due to '$ret_default'>" && return 0
 	read $timer yn
@@ -708,218 +708,232 @@ files_on_same_device() {
 	[ "$DEV1" == "$DEV2" ] && return 0 || return 1
 }
 
+
 # Cincinnati API endpoint
 ABA_GRAPH_API="https://api.openshift.com/api/upgrades_info/v1/graph"
 
 # Architecture: default is amd64
 ARCH="${ARCH:-amd64}"
+[[ "$ARCH" == "x86_64" ]] && ARCH="amd64"
 
 # Cache settings
-ABA_CACHE_DIR="$HOME/.aba/cache"
-ABA_CACHE_TTL="${ABA_CACHE_TTL:-600}"  # 10 minutes
+ABA_CACHE_DIR="${ABA_CACHE_DIR:-$HOME/.aba/cache}"
+ABA_CACHE_TTL="${ABA_CACHE_TTL:-6000}"	# seconds
+mkdir -p "$ABA_CACHE_DIR"
 
-mkdir -p "${ABA_CACHE_DIR}"
+############################################
+# Helpers (best-effort, no error output)
+############################################
 
+_now() {
+	date +%s
+}
 
-# Determine latest stable channel, such as: stable-4.20 
+_cache_fresh() {
+	local file="$1" ttl="$2"
+	[[ -s "$file" ]] || return 1
+	local age
+	age=$(( $(_now) - $(stat -c %Y "$file" 2>/dev/null || echo 0) ))
+	(( age < ttl ))
+}
+
+# safe fetch:
+# - only replaces cache on successful fetch + optional validator
+# - never prints errors; returns 0 if cache exists (fresh or stale), 1 only if nothing usable
+_fetch_cached() {
+	local url="$1" cache_file="$2" ttl="$3" validator_fn="${4:-}"
+
+	if _cache_fresh "$cache_file" "$ttl"; then
+		return 0
+	fi
+
+	local tmp
+	tmp="$(mktemp "${cache_file}.XXXXXX")" || true
+
+	if [[ -n "$tmp" ]] && curl -f -sS "$url" > "$tmp" 2>/dev/null; then
+		if [[ -n "$validator_fn" ]]; then
+			if "$validator_fn" "$tmp"; then
+				mv -f "$tmp" "$cache_file"
+			else
+				rm -f "$tmp"
+			fi
+		else
+			mv -f "$tmp" "$cache_file"
+		fi
+	else
+		rm -f "$tmp" 2>/dev/null || true
+	fi
+
+	[[ -s "$cache_file" ]]
+}
+
+_validate_json_file() {
+	jq -c '.' "$1" >/dev/null 2>&1
+}
+
+_is_ga_version() {
+	[[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+# decrement minor: "4.21" -> "4.20" ; "4.0" -> "" (no prev)
+_prev_minor() {
+	local minor="$1"
+	local x y
+	x="${minor%%.*}"
+	y="${minor#*.}"
+	[[ "$y" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
+	(( y > 0 )) || { echo ""; return 0; }
+	echo "${x}.$((y - 1))"
+}
+
+# return 0 if v contains prerelease suffix (has '-') else 1
+_is_prerelease() {
+	[[ "$1" == *-* ]]
+}
+
+############################################
+# Fetch latest minor (GA-aware)
+# Returns MAJOR.MINOR (e.g. 4.20)
+# If mirror reports prerelease (e.g. 4.21.0-rc.1), returns previous minor (e.g. 4.20)
+############################################
 fetch_latest_minor_version() {
 	local channel="${1:-stable}"
 	local url="https://mirror.openshift.com/pub/openshift-v4/${ARCH}/clients/ocp/${channel}/release.txt"
 	local cache_file="${ABA_CACHE_DIR}/release_${channel}_${ARCH}.txt"
-	local latest_ver
+	local latest_ver minor prev
 
-	# Determine if cache needs refresh
-	cache_age=$(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) ))
+	_fetch_cached "$url" "$cache_file" "$ABA_CACHE_TTL" "" || { echo ""; return 0; }
 
-	if [[ ! -s "$cache_file" || cache_age -gt ABA_CACHE_TTL ]]; then
-		# Use valid cache if available
-		tmp_file="$(mktemp "${ABA_CACHE_DIR}/release_${channel}_${ARCH}.XXXXXX.txt")" || return 1
+	latest_ver="$(grep -Eo 'Version: +[0-9]+\.[0-9]+\..+' "$cache_file" 2>/dev/null | awk '{print $2}' | head -n1)"
+	[[ -n "$latest_ver" ]] || { echo ""; return 0; }
 
-		aba_debug "curl -f -sS \"$url\" > \"$tmp_file\"" 
+	minor="$(echo "$latest_ver" | cut -d. -f1,2)"
 
-		if ! curl -f -sS "$url" > "$tmp_file"; then
-			echo "ERROR: Failed to fetch release information for channel $channel arch:$ARCH" >&2
-			rm -f "$tmp_file"
-			return 1
-		fi
-
-		# Move validated JSON to cache
-		mv "$tmp_file" "$cache_file"
+	# If the "latest" is prerelease, ignore that minor until GA exists
+	if _is_prerelease "$latest_ver"; then
+		prev="$(_prev_minor "$minor")"
+		[[ -n "$prev" ]] && { echo "$prev"; return 0; }
 	fi
 
-	{ aba_debug "fetch_latest_minor_version(): $cache_file"; } >&2
-
-	if ! latest_ver=$(cat "$cache_file" | grep -E -o "Version: +[0-9]+\.[0-9]+\..+" | awk '{print $2}'); then
-		echo "Failed to fetch latest version using channel $channel"
-		return 1
-	fi
-
-	# Extract MAJOR.MINOR
-	#local major_minor
-	#major_minor=$(echo "$latest_ver" | cut -d. -f1,2)
-
-	#echo "${channel}-${major_minor}"
-	#echo "${major_minor}"
-	echo $(echo "$latest_ver" | cut -d. -f1,2)
+	echo "$minor"
 }
 
-
 ############################################
-# Internal: Fetch + cache Cincinnati graph
+# Internal: Fetch + cache Cincinnati graph JSON for channel-minor
 # Args:
-#	$1 = channel (e.g. stable-4.20)
+#	$1 = channel base (e.g. stable)
+#	$2 = minor (e.g. 4.20) [optional]
 # Output:
-#	JSON graph (cached)
+#	Prints JSON (cached)
 ############################################
 _fetch_graph_cached() {
 	local channel="${1:-stable}"
 	local minor="$2"
-	local tmp_file
+	local chann_minor url cache_file
 
-	[ "$ARCH" = "x86_64" ] && ARCH=amd64
+	[[ -n "$minor" ]] || minor="$(fetch_latest_minor_version "$channel")"
+	[[ -n "$minor" ]] || return 0
 
-	aba_debug "_fetch_graph_cached(): channel=$channel minor=$minor"
-	if [ ! "$minor" ]; then
-		minor=$(fetch_latest_minor_version $channel) || return 1
-	fi
-	aba_debug "_fetch_graph_cached(): channel=$channel minor=$minor"
-	chann_minor=$channel-$minor
+	chann_minor="${channel}-${minor}"
+	cache_file="${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.json"
+	url="${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}"
 
-	local cache_file="${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.json"
-
-	# Use valid cache if available
-	if [[ -s "$cache_file" ]]; then
-		local age=$(( $(date +%s) - $(stat -c %Y "$cache_file") ))
-		if (( age < ABA_CACHE_TTL )); then
-			cat "$cache_file"
-			return 0
-		fi
-	fi
-
-	# Temporary file to avoid overwriting cache on failure
-	tmp_file="$(mktemp "${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.XXXXXX.json")" || return 1
-
-	{ aba_debug "_fetch_graph_cached(): curl -f -sS \"${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}\" > \"$tmp_file\""; } >&2
-
-	# Fetch fresh data
-	if ! curl -f -sS -H "Accept: application/json" "${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}" > "$tmp_file"; then
-		echo "ERROR: Failed to fetch Cincinnati graph for channel $chann_minor arch:$ARCH" >&2
-		rm -f "$tmp_file"
-		aba_debug "_fetch_graph_cached() curl failed"
-		return 1
-	fi
-
-	# Validate JSON
-	if ! jq -c '.' "$tmp_file" >/dev/null 2>&1; then
-		echo "ERROR: Invalid JSON received from Cincinnati API for channel: $chann_minor arch:$ARCH" >&2
-		rm -f "$tmp_file"
-		aba_debug "_fetch_graph_cached() jq failed"
-		return 1
-	fi
-
-	# Move validated JSON to cache
-	mv "$tmp_file" "$cache_file"
-
-	# Output cached graph
+	_fetch_cached "$url" "$cache_file" "$ABA_CACHE_TTL" _validate_json_file || return 0
 	cat "$cache_file"
-
-	return 
 }
 
 ############################################
-# Fetch all versions in channel (sorted)
+# Fetch GA versions in channel-minor (sorted)
+# Args:
+#	$1 = channel base (e.g. stable)
+#	$2 = minor (e.g. 4.20) [optional]
 ############################################
 fetch_all_versions() {
 	local channel="${1:-stable}"
 	local minor="$2"
 
-	aba_debug "fetch_all_versions(): channel=$channel minor=$minor"
-
 	set -o pipefail
 	_fetch_graph_cached "$channel" "$minor" \
-		| jq -r '.nodes[].version' \
+		| jq -r '.nodes[].version' 2>/dev/null \
+		| grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
 		| sort -V
-
-	return
 }
 
-
 ############################################
-# Fetch latest version in channel
+# Fetch latest GA version (best-effort fallback)
+# Strategy:
+#	1) latest minor (GA-aware) -> latest z
+#	2) if no GA nodes found, try previous minor
 ############################################
 fetch_latest_version() {
 	local channel="${1:-stable}"
+	local minor v prev
 
-	aba_debug "fetch_latest_version(): channel=$channel"
-	fetch_all_versions "$channel" | tail -n1
+	minor="$(fetch_latest_minor_version "$channel")"
+	[[ -n "$minor" ]] || { echo ""; return 0; }
 
-	return 
+	v="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
+	if [[ -n "$v" ]]; then
+		echo "$v"
+		return 0
+	fi
+
+	prev="$(_prev_minor "$minor")"
+	[[ -n "$prev" ]] || { echo ""; return 0; }
+
+	v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
+	[[ -n "$v" ]] && echo "$v"
+	return 0
 }
 
-
 ############################################
-# Extract version from text
-############################################
-_extract_version() {
-	echo "$1" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' || true
-}
-
-
-############################################
-# Fetch latest z-stream within a minor
+# Fetch latest GA z-stream within a minor (best-effort fallback)
 # Args:
-#	$1 = channel (e.g. stable-4.20)
-#	$2 = minor prefix (4.20)
+#	$1 = channel base (e.g. stable)
+#	$2 = minor (e.g. 4.20) [optional]
+# If requested minor has no GA, fall back to previous minor.
 ############################################
 fetch_latest_z_version() {
 	local channel="${1:-stable}"
 	local minor="$2"
+	local v prev
 
-	aba_debug "fetch_latest_z_version(): channel=$channel minor=$minor"
-	if [ ! "$minor" ]; then
-		minor=$(fetch_latest_minor_version $channel) || return 1
+	[[ -n "$minor" ]] || minor="$(fetch_latest_minor_version "$channel")"
+	[[ -n "$minor" ]] || { echo ""; return 0; }
+
+	v="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
+	if [[ -n "$v" ]]; then
+		echo "$v"
+		return 0
 	fi
-	aba_debug "fetch_latest_z_version(): channel=$channel minor=$minor"
 
-	fetch_all_versions "$channel" "$minor" \
-		| tail -n1
+	prev="$(_prev_minor "$minor")"
+	[[ -n "$prev" ]] || { echo ""; return 0; }
+
+	v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
+	[[ -n "$v" ]] && echo "$v"
+	return 0
 }
-
 
 ############################################
 # Fetch latest version of previous minor
-# Example:
-#	If latest is 4.20.x → return latest 4.19.x
+# Example: if latest minor is 4.20 -> return latest 4.19.z
 ############################################
 fetch_previous_version() {
 	local channel="${1:-stable}"
+	local minor prev v
 
-	aba_debug "fetch_previous_version(): channel=$channel minor=$minor"
-	if [ ! "$minor" ]; then
-		minor=$(fetch_latest_minor_version $channel) || return 1
-	fi
-	aba_debug "fetch_previous_version(): channel=$channel minor=$minor"
+	minor="$(fetch_latest_minor_version "$channel")"
+	[[ -n "$minor" ]] || { echo ""; return 0; }
 
-	#local major minor
-	x="$(echo "$minor" | cut -d. -f1)"
-	y="$(echo "$minor" | cut -d. -f2)"
+	prev="$(_prev_minor "$minor")"
+	[[ -n "$prev" ]] || { echo ""; return 0; }
 
-	aba_debug "fetch_previous_version(): x=$x y=$y"
-
-	if (( y == 0 )); then
-		echo "ERROR: No previous minor exists." >&2
-		return 1
-	fi
-
-	local prev_minor="${x}.$((y - 1))"
-
-	aba_debug "fetch_previous_version(): prev_minor=$prev_minor "
-
-	aba_debug "fetch_latest_z_version \"$channel\" \"$prev_minor\""
-	fetch_latest_z_version "$channel" "$prev_minor"
+	v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
+	[[ -n "$v" ]] && echo "$v"
+	return 0
 }
 
-#######
 
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {

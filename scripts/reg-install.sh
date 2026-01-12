@@ -272,9 +272,9 @@ else
 		##exit 1  # We will leave this only as a warning, not an error since sometimes there is a NAT/LB (ip is external) in use which is difficult to check
 	fi
 
-	# On the off-chance that ssh does work out-of-the-box to this host using the default key, let's check it's NOT a remote host!
-	# It's expected that this may fail since there may not be any default ssh key configured. But, if it is and sh reaches a remote host, then we
-	# can catch that early here show a warning. 
+	# On the off-chance that ssh does work out-of-the-box to this host using the default key, let's check $reg_host is NOT a remote host!
+	# It's expected that this may fail since there may not be any default ssh key configured. But, if it is and ssh reaches a remote host, then we
+	# can catch that early here and show a warning. 
 	if h=$(ssh -F $ssh_conf_file                  $reg_host touch $flag_file; hostname) >/dev/null 2>&1; then
 		if [ ! -f $flag_file ]; then
 
@@ -302,7 +302,7 @@ else
 
 			sleep 2
 		else
-			aba_info "Creating test ssh key: $temp_aba_key" 
+			aba_debug "Creating test ssh key: $temp_aba_key" 
 			# Create key for testing ssh
 			ssh-keygen -t rsa -f $temp_aba_key -N '' >/dev/null 
 			chmod 600 $temp_aba_key $temp_aba_pub_key
@@ -312,7 +312,6 @@ else
 	fi
 
 	if [ -s $temp_aba_key ]; then
-		#if ! ssh -F $ssh_conf_file $reg_host touch $flag_file >/dev/null 2>&1; then
 		# Try to ssh to *localhost* since the installer will do the same.
 		if ! ssh -F $ssh_conf_file -i $temp_aba_key $reg_host touch $flag_file >/dev/null     ; then
 			# This must work for the Quay installer
@@ -321,8 +320,6 @@ else
 				"Failed command: ssh -i $temp_aba_key $reg_host" 
 		fi
 	fi
-
-
 
 	ask "Install Quay mirror registry appliance to localhost ($(hostname -s)), accessable via $reg_hostport" || exit 1
 	aba_info "Installing Quay registry on localhost ..."

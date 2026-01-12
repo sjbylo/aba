@@ -252,6 +252,7 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rf save || true  # Delete only if not edited
 	@[ -d sync ] && [ sync/.created -nt sync/imageset-config*yaml ] && rm -rf sync || true  # Delete only if not edited
 	rm -f .cmd.out
+	rm -f *sha256sum.txt
 
 
 # Note that reg-uninstall.sh script will delete registry and regcreds/ dir.
