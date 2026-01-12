@@ -137,9 +137,9 @@ aba_info_ok -n "Images loaded successfully!"
 [ $try_tot -gt 1 -a $try -gt 1 ] && echo_white " (after $try attempts!)" || echo   # Show if more than 1 attempt
 
 echo 
-aba_info_ok "OpenShift can now be installed. cd to aba's top-level directory and use the command:"
+aba_info_ok "OpenShift can now be installed. From aba's top-level directory, run the command:"
 aba_info_ok "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
-aba_info_ok "Use 'aba cluster --help' for more information about installing clusters."
+aba_info_ok "Run 'aba cluster --help' for more information about installing clusters."
 
 echo
 if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then

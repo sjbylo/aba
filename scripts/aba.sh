@@ -886,15 +886,19 @@ if [ -f .bundle ]; then
 	output_table 3 "$to_output"
 
 	echo
-	echo_white "Set up the mirror registry and load it with the necessary container images from disk."
-	echo_white "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
-	echo_white "Aba can also install the docker registry as an alternative. See the README.md FAQ for instructions."
+	echo_white "Next steps:"
+	echo_white "Set up a mirror registry and load it with the required container images from this install bundle."
+	echo_white "Aba can deploy the 'Mirror Registry for Red Hat OpenShift' (Quay) or use an existing container registry."
+	echo_white "As an alternative, Aba can also install a Docker registry. See the README.md FAQ for instructions."
+
+	[ ! "$domain" ] && domain=example.com  # Just in case
 	echo
-	echo_white "To install the registry on the local machine, accessible via registry.example.com, run:"
-	echo_white "  aba -d mirror load -H registry.example.com --retry 8"
+	echo_white "Examples:"
+	echo_white "To install the registry on the local machine, accessible via $(hostname -s).$domain, run:"
+	echo_white "  aba -d mirror load -H $(hostname -s).$domain --retry 8"
 	echo
 	echo_white "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
-	echo_white "  aba -d mirror load -H registry.example.com -k '~/.ssh/id_rsa' -U user --retry"
+	echo_white "  aba -d mirror load -H remote-registry.$domain -k '~/.ssh/id_rsa' -U user --retry"
 	echo
 	echo_white "If unsure, run:"
 	echo_white "  aba -d mirror install                 # to configure and/or install Quay."
@@ -920,6 +924,19 @@ fi
 #	echo_white "OpenShift update channel is set to '$ocp_channel' in aba.conf."
 #else
 
+	aba_debug "Fetching OpenShift version data in background ..."
+	# Download openshift version data in the background.  'bash -lc ...' used here 'cos can't setsid a function.
+	run_once -i ocp:stable:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	stable'
+	run_once -i ocp:stable:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	stable'
+	run_once -i ocp:fast:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	fast'
+	run_once -i ocp:fast:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	fast'
+	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	candidate'
+	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
+
+	aba_debug "Downloading oc-mirror in the background ..."
+	PLAIN_OUTPUT=1 run_once -i cli:install:oc-mirror			-- make -sC cli oc-mirror &
+
+
 	echo_white -n "Checking Internet connectivity ..."
 	if ! release_text=$(curl -f --connect-timeout 20 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/stable/release.txt); then
 		[ "$TERM" ] && tput el1 && tput cr
@@ -936,20 +953,6 @@ fi
 			"   registry.access.redhat.com"	\
 
 	fi
-
-	aba_debug "Fetching OpenShift version data in background ..."
-	# Download openshift version data in the background.  'bash -lc ...' used here 'cos can't setsid a function.
-	run_once -i ocp:stable:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	stable'
-	run_once -i ocp:stable:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	stable'
-	run_once -i ocp:fast:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	fast'
-	run_once -i ocp:fast:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	fast'
-	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	candidate'
-	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
-
-	aba_debug "Downloading oc-mirror in the background ..."
-	PLAIN_OUTPUT=1 run_once -i cli:install:oc-mirror			-- make -sC cli oc-mirror &
-
-	wait
 
 	[ "$TERM" ] && tput el1 && tput cr
 
@@ -992,8 +995,6 @@ fi
 #	#echo_white "OpenShift version is defined in aba.conf as '$ocp_version'."
 #	echo_white "OpenShift version is set to '$ocp_version' in aba.conf."
 #else
-	##############################################################################################################################
-	# Fetch release.txt
 
 	echo_white -n "Fetching available versions ..."
 	# Wait for only the data we need ...
@@ -1008,15 +1009,20 @@ fi
 		run_once -w -i ocp:candidate:latest_version_previous
 	fi
 
-	aba_debug "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt"
+	##############################################################################################################################
+	# Fetch release.txt
 
-	if ! release_text=$(curl -f --connect-timeout 30 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt); then
-		[ "$TERM" ] && tput el1 && tput cr
-		aba_abort "failed to access https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt" 
-	fi
+#	aba_debug "Looking up release at https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt"
+
+#	if ! release_text=$(curl -f --connect-timeout 30 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt); then
+#		[ "$TERM" ] && tput el1 && tput cr
+#		aba_abort "failed to access https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$ocp_channel/release.txt" 
+#	fi
 
 	## Get the latest stable OpenShift version number, e.g. 4.14.6
-	channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+	#channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+	aba_debug "Looking up latest version using fetch_latst_version() $ocp_channel"
+	channel_ver=$(fetch_latest_version "$ocp_channel")
 	default_ver=$channel_ver
 
 	aba_debug "Looking up previous version using fetch_previous_version() $ocp_channel"
@@ -1070,10 +1076,20 @@ fi
 	echo_white "'ocp_version' set to '$target_ver' in aba.conf"
 #fi
 
+# Now we know the desired openshift version...
+
+# Fetch the operator indexes (in the background to save time).
+run_once -i download_catalog_indexes -- make -s -C $ABA_ROOT catalog bg=true
+
 # Trigger download of all CLI binaries
 # Note: Ths only other place this is done is in "scripts/reg-save.sh"
 scripts/cli-download-all.sh
-#PLAIN_OUTPUT=1 run_once -i download_all_cli -- make -sC cli download
+
+# Initiate download of mirror-install and docker-reg image
+run_once -i mirror:reg:download -- make -s -C $ABA_ROOT/mirror download-registries
+
+# make & jq are needed below and in the next steps 
+scripts/install-rpms.sh external 
 
 # Just in case, check the target ocp version in aba.conf matches any existing versions defined in oc-mirror imageset config files. 
 # FIXME: Any better way to do this?! .. or just keep this check in 'aba -d mirror sync' and 'aba -d mirror save' (i.e. before we d/l the images
@@ -1114,7 +1130,7 @@ fi
 # Allow edit of aba.conf
 
 if [ ! -f .aba.conf.seen ]; then
-	if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform, pull secret, default base domain & net address, dns & ntp etc (if known)"; then
+	if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform type, pull secret, base domain & net address, dns & ntp etc (if known)"; then
 		# If edited/seen, no need to ask again.
 		touch .aba.conf.seen
 	else
@@ -1122,15 +1138,6 @@ if [ ! -f .aba.conf.seen ]; then
 		exit 0
 	fi
 fi
-
-# make & jq are needed below and in the next steps 
-scripts/install-rpms.sh external 
-
-# Now we have the required ocp version, we can fetch the operator indexes (in the background to save time).
-run_once -i download_catalog_indexes -- make -s -C $ABA_ROOT catalog bg=true
-
-# Initiate download of mirror-install and docker-reg image
-run_once -i mirror:reg:download -- make -s -C $ABA_ROOT/mirror download-registries
 
 ##############################################################################################################################
 # Determine pull secret
@@ -1188,9 +1195,7 @@ if ask "Install OpenShift from a mirror registry that is synchonized directly fr
 
 	echo 
 	echo_yellow "Instructions for synchronizing images directly from the Internet to a mirror registry"
-	echo 
 	echo_white "Set up the mirror registry and sync it with the necessary container images."
-	echo
 	echo_white "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
 	echo
 	echo_white "Run:"
