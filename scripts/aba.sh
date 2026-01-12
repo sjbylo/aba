@@ -296,13 +296,14 @@ do
 		arg=$2
 		ver=$arg
 		[ ! "$chan" ] && chan=$ocp_channel  # Prioritize the $chan var (from above) or fetch from aba.conf file
+		tmp_out=
 		case "$arg" in
 			latest | l)
-				tmp_out=latest
+				tmp_out="latest "
 				ver=$(fetch_latest_version "$chan")
 			;;
 			previous | p)
-				tmp_out=previous
+				tmp_out="previous "
 				ver=$(fetch_previous_version "$chan")
 			;;
 		esac
@@ -314,7 +315,7 @@ do
 		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
 
 		# As far as possible, always ensure there is a valid value in aba.conf
-		[ ! "$ver" ] && aba_abort "failed to look up the $tmp_out version for channel [$chan] after option [$opt $arg]" 
+		[ ! "$ver" ] && aba_abort "failed to look up the$tmp_out version for channel [$chan] after option [$opt $arg]" 
 
 		# ver should now be x.y.z format
 		! echo $ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+$" && aba_abort "incorrect version format: [$ver] for channel [$chan] after option [$opt $arg]" 
