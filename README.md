@@ -60,7 +60,8 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
   - [Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do)
   - [Q: Is there a discussion forum?](#q-is-there-a-discussion-forum)
   - [Q: I accidentally uninstalled my mirror registry, how can I recover?](#q-i-accidentally-uninstalled-my-mirror-registry-how-can-i-recover)
-  - [Q: I see the error `load pubkey "/home/joe/.ssh/quay_installer": Invalid key length` when installing Quay/loading images, what can I do?](#q-i-see-the-error-load-pubkey-homejoesshquay_installer-invalid-key-length-when-installing-quayloading-images-what-can-i-do)
+  - [Q: I see the error _load pubkey "/home/joe/.ssh/quay\_installer": Invalid key length_ when installing Quay/loading images, what can I do?](#q-i-see-the-error-load-pubkey-homejoesshquay_installer-invalid-key-length-when-installing-quayloading-images-what-can-i-do)
+  - [Q: Can ABA be used to manage the full lifecycle of the oc-mirror image configuration (image-config.yaml)?](#q-can-aba-be-used-to-manage-the-full-lifecycle-of-the-oc-mirror-image-configuration-image-configyaml)
 - [License](#license)
 
 
@@ -1301,7 +1302,7 @@ Next:
 This SHOULD set up OperatorHub again.
 
 
-## Q: I see the error `load pubkey "/home/joe/.ssh/quay_installer": Invalid key length` when installing Quay/loading images, what can I do?
+## Q: I see the error _load pubkey "/home/joe/.ssh/quay_installer": Invalid key length_ when installing Quay/loading images, what can I do?
 
 The key file created by the Quay installer is too weak for your system policy.  
 Delete the key files and re-create them with:
@@ -1311,6 +1312,14 @@ rm -f $HOME/.ssh/quay_installer*
 ssh-keygen -t ed25519 -f $HOME/.ssh/quay_installer -N ''           # Generate the key pair
 cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys    # Append public key so ssh works
 ```
+
+## Q: Can ABA be used to manage the full lifecycle of the oc-mirror image configuration (image-config.yaml)?
+
+ABA helps you generate an initial oc-mirror image configuration to get an OpenShift cluster installed quickly, focusing on day-zero requirements such as release and operator images.
+
+However, there are other tools intended to fully manage the lifecycle of image-config.yaml. For ongoing updates and long-term maintenance, you could try the oc-mirror Web App:
+
+👉 https://github.com/yakovbeder/oc-mirror-web-app/
 
 
 [Back to top](#who-should-use-aba)
