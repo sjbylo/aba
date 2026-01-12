@@ -56,7 +56,7 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
   - [Q: Can I install Operators from community catalogs?](#q-can-i-install-operators-from-community-catalogs)
   - [Q: Where are cluster types (SNO, compact, standard) configured?](#q-where-are-cluster-types-sno-compact-standard-configured)
   - [Q: How to configure passwordless sudo?](#q-how-to-configure-passwordless-sudo)
-  - [Q: Can I use ABA to install user provisioned infrastructure (UPI)?](#q-can-i-use-aba-to-install-user-provisioned-infrastructure-upi)
+  - [Q: Can I use ABA to install OpenShift on User Provisioned Infrastructure (UPI)?](#q-can-i-use-aba-to-install-openshift-on-user-provisioned-infrastructure-upi)
   - [Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do)
   - [Q: Is there a discussion forum?](#q-is-there-a-discussion-forum)
   - [Q: I accidentally uninstalled my mirror registry, how can I recover?](#q-i-accidentally-uninstalled-my-mirror-registry-how-can-i-recover)
@@ -1247,7 +1247,7 @@ Or, as root, write the following to a file under /etc.  Replace `username` with 
 echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 ```
 
-## Q: Can I use ABA to install user provisioned infrastructure (UPI)?
+## Q: Can I use ABA to install OpenShift on User Provisioned Infrastructure (UPI)?
 
 **Partially, yes!** ABA can be used to set up the registry and generate the `install-config.yaml` file which can be used to install OpenShift for UPI.  With some juggling, the day2 operations (OperatorHub, OSUS, Shutdown, Startup and NTP) can be used for UPI too. 
 
