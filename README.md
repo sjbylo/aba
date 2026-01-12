@@ -1,6 +1,6 @@
 # ABA makes it easier to install OpenShift in a disconnected (air-gapped) environment. <!-- omit in toc -->
 
->> **A bug has been fixed in the `aba bundle` command causing the error: `directory ... aba/tar does not exist!`**
+<!-- >> **A bug has been fixed in the `aba bundle` command causing the error: `directory ... aba/tar does not exist!`** -->
 
 Quickly install an OpenShift cluster into a fully or partially disconnected environment, either onto bare-metal or VMware (vSphere/ESXi).
 ABA integrates several standard Red Hat tools into a single workflow, simplifying image mirroring for disconnected environments and providing the essential Day-2 capabilities needed to make an air-gapped OpenShift environment fully usable.

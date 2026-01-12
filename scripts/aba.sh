@@ -20,7 +20,7 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 WORK_DIR=$PWD # Remember so can change config file here 
 
-## install will check if aba needs to be updated, if so it will return 3 ... so we re-execute it!
+## install will check if aba needs to be updated, if so it will return 2 ... so we re-execute it!
 if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
 	if [ $? -eq 2 ]; then
@@ -100,6 +100,7 @@ fi
 # Do not do this.  CWD must be the user proivided dir
 ##cd $ABA_ROOT
 
+# MOVED UP
 ## install will check if aba needs to be updated, if so it will return 3 ... so we re-execute it!
 # TESTING if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 # TESTING 	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
@@ -109,6 +110,7 @@ fi
 # TESTING 		exit
 # TESTING 	fi
 # TESTING fi
+# MOVED UP
 
 source $ABA_ROOT/scripts/include_all.sh
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
@@ -632,16 +634,6 @@ do
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
-#	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
-#		[[ "$2" =~ ^- || -z "$2" ]] && echo_red "Error: Missing argument after option $1" >&2 && exit 1
-#		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-#			BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'"  # FIXME: This is confusing and prone to error
-#		else
-#			aba_abort "argument invalid [$2] after option $1" 
-#		fi
-#		shift 2
-#
-#
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
@@ -757,119 +749,6 @@ do
 		shift 
 		echo "$1" | grep -q "^-" || cmd="$1"
 		[ "$cmd" ] && shift || cmd="get co" # Set default command here
-
-		#if [ "$cur_target" = "ssh" ]; then
-		#	scripts/ssh-rendezvous.sh "$cmd"
-		#	shift
-		#fi
-			
-		#if [[ "$BUILD_COMMAND" =~ "ssh" ]]; then
-		#	BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
-		#	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
-		#elif [[ "$BUILD_COMMAND" =~ "run" ]]; then
-	#	if [[ "$cur_target" = "run" ]]; then
-	#		#BUILD_COMMAND="$BUILD_COMMAND cmd='$cmd'"
-	#		#aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
-	#	else
-	#		# Assume it's a kube command by default
-	#		BUILD_COMMAND="$BUILD_COMMAND cmd cmd='$cmd'"
-	#		aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
-	#	fi
-	#elif [ "$1" = "create" ]; then # Ignore this arg
-	#	shift
-#	elif [ "$1" = "clux" ]; then  #FIXME: THIS IS EXPERIMENTAL ONLY! Change to 'cluster' once tested.
-#		[ ! "$1" ] && aba_abort "Missing options after '$1'" 
-#		shift
-#		while [ "$*" ] 
-#		do
-#			if [ "$1" = "--name" -o "$1" = "-n" ]; then
-#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Missing argument after option $1" 
-#
-#				name="$2"
-#				is_valid_dns_label $name
-#				shift 2
-#			elif [[ "$1" == "--type" || "$1" == "-t" ]]; then
-#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Missing argument after option $1" 
-#
-#				case "$2" in
-#					sno|compact|standard)
-#						type=$2
-#					;;
-#					*)
-#						aba_abort "Invalid type '$2'. Expected one of: sno, compact, standard." 
-#					;;
-#				esac
-#				shift 2
-#			elif [[ "$1" == "--starting-ip" || "$1" == "-i" ]]; then
-#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Missing argument after option $1" 
-#				starting_ip="$2"
-#				shift 2
-#			elif [[ "$1" == "--step" || "$1" == "-s" ]]; then
-#				[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "Missing argument after option $1" 
-#				step="$2"
-#				shift 2
-#			elif [[ "$1" == "--ports" || "$1" == "-p" ]]; then
-#				shift
-#				ports_vals=
-#				# While there is a valid arg (not an opt)...
-#				while [[ ! (-z "$1" || "$1" =~ ^-) ]]
-#				do
-#					[ "$ports_vals" ] && ports_vals="$ports_vals,$1" || ports_vals="$1"
-#					aba_debug ports_vals=$ports_vals
-#					shift	
-#				done
-#			elif [[ "$1" == "--int-connection" || "$1" == "-I" ]]; then
-#				# Optional argument: connection method (proxy|direct)
-#				int_connection=
-#
-#				# Check if next arg exists and is not another option (starting with '-')
-#				if [[ -n "$2" && "$2" != -* ]]; then
-#					case "$2" in
-#						proxy|p)
-#							int_connection="proxy"
-#							;;
-#						direct|d)
-#							int_connection="direct"
-#							;;
-#						*)
-#							aba_abort "Invalid argument [$2] after option '$1'. Expected one of: proxy, direct." 
-#							;;
-#					esac
-#					shift
-#				else
-#					# No argument provided — clear existing value in cluster.conf
-#					int_connection=""
-#				fi
-#				shift
-#			elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
-#				[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Missing argument after option $1" 
-#				if echo "$2" | grep -q -E '^[0-9]+$'; then
-#					master_mem=$2
-#				else
-#					aba_abort "$(basename $0): Error: no such option after 'clux': $1" 
-#				fi
-#				shift 2
-#			elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
-#				[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "Missing argument after option $1" 
-#				if echo "$2" | grep -q -E '^[0-9]+$'; then
-#					master_cpu_count=$2
-#				else
-#					aba_abort "$(basename $0): Error: no such option after 'clux': $1" 
-#				fi
-#				shift 2
-#			fi
-#		done
-#
-#		## Process "clux" command args ##
-#
-#		if [ "$name" ]; then
-#			# Create cluster dir and cluster.conf
-#			aba_debug scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
-#			scripts/setup-cluster.sh name=$name type=$type target=$target starting_ip=$starting_ip ports=$ports_vals ingress_vip=$ingress_vip int_connection=$int_connection master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip step=$step
-#		else
-#			aba_abort "Must provide at least --name after 'clux'" 
-#			exit 1
-#		fi
 	else
 		if echo "$1" | grep -q "^-"; then
 			aba_abort "$(basename $0): Error: no such option $1" 
@@ -879,6 +758,7 @@ do
 			case $cur_target in
 				ssh|run|bundle)
 					# FIXME: Add more here: day2 day2-ntp day2-osus shell login etc  (all items without any deps)
+					# These are now all processed once, in code below
 					:
 					;;
 				*)
@@ -980,6 +860,9 @@ if [ -f .bundle ]; then
 
 	# make & jq are needed below and in the next steps. Best to install all at once.
 	scripts/install-rpms.sh internal
+
+	# May as well install the CLI binaries from aba/cli/ now
+	scripts/cli-install-all.sh >/dev/null
 
 	echo_yellow "Aba install bundle detected for OpenShift v$ocp_version."
 
