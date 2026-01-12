@@ -112,10 +112,13 @@ mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry bin
 .PHONY: download-registries
 download-registries: mirror-registry-amd64.tar.gz docker-reg-image.tgz
 
+mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/latest
+
 mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball (note: no arm64 version available as of Dec 25)
-	echo [ABA] "Downloading https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz ..."
-	curl $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
+	echo [ABA] "Downloading $(mirror_registry_url)/mirror-registry-amd64.tar.gz ..."
+	curl $(CURL_PROGRESS) -OL $(mirror_registry_url)/mirror-registry-amd64.tar.gz
 	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o mirror-registry-sha256sum.txt $(mirror_registry_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" mirror-registry-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
 	tar tzf mirror-registry-amd64.tar.gz >/dev/null && echo [ABA] "File $@ is valid"
 
 # Store the docker registry image so it can be used in air-gapped env. (if docker.io reachable) Note: Docker available as arm64 image!

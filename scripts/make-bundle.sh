@@ -41,6 +41,7 @@ source <(normalize-aba-conf)
 verify-aba-conf || exit 1
 
 if [ "$bundle_dest_file" = "-" ]; then
+	# Be sure the standard standard output of this command is ONLY tar output and nothing else!
 	aba_info "An install bundle will be generated and written to *standard output* (stdout) using the following parameters:" >&2
 else
 	[ -d $bundle_dest_file ] && bundle_dest_file=$bundle_dest_file/ocp-bundle	# Correct the output location as it needs to be a file
@@ -61,6 +62,7 @@ echo >&2
 
 # User requires to clean out any existing files under mirror/save
 if [ "$force" ]; then
+{
 	if [ -d mirror/save -a "$(ls mirror/save 2>/dev/null)" ]; then
 		aba_warning "Deleteing all files under aba/mirror/save! (--force set)" >&2
 		rm -rf mirror/save
@@ -72,13 +74,14 @@ if [ "$force" ]; then
 	fi
 
 	# Ensure files are refreshed 
-	aba_info "Deleting unwanted CLI install files under $PWD/cli ..."
+	aba_info "Deleting unwanted CLI install files under $PWD/cli ..." >&2
 	###ls -1 cli/*tar.gz 2>/dev/null | grep -v -e "-$ocp_version.tar.gz" -e "oc-mirror.*.tar.gz" -e "govc_Linux" | xargs rm -f || true  # ignore any errors
-	make -sC cli clean
+	make -sC cli clean >&2
 	##run_once -r -i "cli:install:oc-mirror"  # If we clean up files, we must *reset* the task tracker/runner
 
 	#run_once -r -i "download_all_cli"  	   # If we clean up files, we must *reset* the task tracker/runner
 	###scripts/cli-download-all.sh --reset
+} >&2
 fi
 
 # Check if the repo is alreay in use, e.g. we don't want mirror.conf in the bundle
