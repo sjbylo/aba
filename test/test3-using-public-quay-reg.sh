@@ -132,7 +132,7 @@ test-cmd -m "Unset the proxy env vars" source ~/.proxy-unset.sh
 
 # Note, this is NOT the same as "aba cluster -n sno -t sno --starting-ip 10.0.1.201" command
 # aba cluster -n sno -t sno --starting-ip 10.0.1.201 will overwrite the cluster.conf file, but the other will not.
-test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." "aba -d sno bootstrap"
+test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." "aba -d sno install"
 
 test-cmd -m "Checking cluster operators" "aba --dir sno run"
 
