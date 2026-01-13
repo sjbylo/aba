@@ -110,38 +110,37 @@ test-cmd -m "Removing sno dir" rm -rf sno
 
 test-cmd -m "Remove CLIs" aba -d cli reset -f
 
-test-cmd -m "Testing direct Internet config" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf -I direct
+test-cmd -m "Testing direct internet config" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf -I direct
 test-cmd -m "Creating agentconf" aba -d sno agentconf
-test-cmd -m "Verifying direct Internet config - 'registry.redhat.io' exists" 		"grep registry.redhat.io	sno/install-config.yaml"
-test-cmd -m "Verifying direct Internet config - 'cloud.openshift.com' exists" 		"grep cloud.openshift.com	sno/install-config.yaml"
-test-cmd -m "Verifying direct Internet config - 'sshKey:' exists" 			"grep sshKey:			sno/install-config.yaml"
-test-cmd -m "Verifying direct Internet config - ^proxy does not exist"			"! grep ^proxy			sno/install-config.yaml"
-test-cmd -m "Verifying direct Internet config - httpProxy does not exist" 		"! grep httpProxy		sno/install-config.yaml"
-test-cmd -m "Verifying direct Internet config - 'BEGIN CERTIFICATE' does not exist"	"! grep 'BEGIN CERTIFICATE'	sno/install-config.yaml"
-test-cmd -m "Verifying direct Internet config - 'ImageDigestSources' does not exist" 	"! grep ImageDigestSources	sno/install-config.yaml"
-test-cmd -m "Verifying direct Internet config - 'mirrors:' does not exist" 		"! grep mirrors:		sno/install-config.yaml"
-#test-cmd -m "Creating iso for 'int_connection=direct' SNO cluster" aba -d sno iso
-test-cmd -m "Installing (bootstrap) SNO cluster from public registry for 'int_connection=direct' SNO cluster" aba -d sno bootstrap
+test-cmd -m "Verifying direct internet config - 'registry.redhat.io' exists" 		"grep registry.redhat.io	sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - 'cloud.openshift.com' exists" 		"grep cloud.openshift.com	sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - 'sshKey:' exists" 			"grep sshKey:			sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - ^proxy does not exist"			"! grep ^proxy			sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - httpProxy does not exist" 		"! grep httpProxy		sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - 'BEGIN CERTIFICATE' does not exist"	"! grep 'BEGIN CERTIFICATE'	sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - 'ImageDigestSources' does not exist" 	"! grep ImageDigestSources	sno/install-config.yaml"
+test-cmd -m "Verifying direct internet config - 'mirrors:' does not exist" 		"! grep mirrors:		sno/install-config.yaml"
+test-cmd -m "Creating iso for 'int_connection=direct' SNO cluster" aba -d sno iso
 
 test-cmd -m "Removing sno dir" rm -rf sno
 
 test-cmd -m "Remove CLIs" aba -d cli reset -f
 
-test-cmd -m "Set the proxy env vars" source~/.proxy-set.sh
-test-cmd -m "Testing proxy Internet config: Creating sno/cluster.conf." aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf -I proxy
+test-cmd -m "Set the proxy env vars" source ~/.proxy-set.sh
+test-cmd -m "Creating sno/cluster.conf." aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf -I proxy
 test-cmd -m "Unset the proxy env vars" source ~/.proxy-unset.sh
 
 # Note, this is NOT the same as "aba cluster -n sno -t sno --starting-ip 10.0.1.201" command
 # aba cluster -n sno -t sno --starting-ip 10.0.1.201 will overwrite the cluster.conf file, but the other will not.
-test-cmd -m "Installing (bootstrap) SNO cluster from public registry, since no mirror registry available." "aba -d sno bootstrap"  
+test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." "aba -d sno bootstrap"
 
-### (no sno install??) test-cmd -m "Checking cluster operators" "aba --dir sno run"
-test-cmd -m "Deleting sno cluster" aba --dir sno delete
+test-cmd -m "Checking cluster operators" "aba --dir sno run"
 
+# keep it #test-cmd -m "Deleting sno cluster" aba --dir sno delete
 ###test-cmd -m "Stopping sno cluster" "yes|aba --dir sno shutdown"
 #test-cmd -m "If cluster up, stopping cluster" ". <(aba --dir sno shell) && . <(aba --dir sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
 
-#   test-cmd -m "If cluster up, stopping cluster" "                                                      yes|aba --dir sno shutdown --wait"
+test-cmd -m "If cluster up, stopping cluster" "                                                      yes|aba --dir sno shutdown --wait"
 
 #test-cmd "aba reset --force"
 #aba --dir ~/aba reset --force
