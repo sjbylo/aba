@@ -1562,7 +1562,6 @@ aba_runtime_cleanup() {
 
 aba_runtime_install_traps() {
 	# Call once at Aba startup
-	#trap aba_runtime_cleanup EXIT INT TERM
-	trap aba_runtime_cleanup      INT TERM
+	trap aba_runtime_cleanup INT TERM
 }
 
