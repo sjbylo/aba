@@ -4,10 +4,6 @@ ocp_channel=		# OpenShift release channel ('stable', 'fast', 'candidate', or 'eu
 ocp_version=		# Target OpenShift version. See https://console.redhat.com/openshift/releases for available versions.
 
 platform=bm			# Deployment platform: 'vmw' (vCenter/ESXi) or 'bm' (bare-metal, skips VM creation). 
-pull_secret_file=~/.pull-secret.json	# File path for your Red Hat pull secret, used for image downloads only.
-					# Get it from: https://console.redhat.com/openshift/downloads -> Tokens -> Pull-secret.
-editor=			# Text editor to use, such as: nano, vi, emacs. Set to 'none' for manual config editing.
-ask=true			# Ask for confirmation before major actions (install, delete, etc.).
 
 # Set the following values only if they are known.
 
@@ -19,15 +15,22 @@ op_sets=			# Optional: Comma-separated operator sets, such as: op_sets=odf,ocpv,
 ops=				# Optional: Comma-separated individual operator names such as: ops=web-terminal,devworkspace-operator
 				# If needed, fetch operator names from the files: mirror/imageset-config-*.yaml, generate by: aba catalog
 
-# Set the following important values for your disconnected network, if known
+# *If you know then*, set the following important values for your disconnected network.
 # When a cluster is created, these values will be included - and can be overridden - in the cluster’s cluster.conf file.
 
-domain={{ domain }}		# Base domain for your OpenShift cluster.
+domain={{ domain }}		# Base domain for your disconnected OpenShift cluster.
 machine_network={{ machine_network }}	# Network segment (CIDR format) where OpenShift will be installed.
 dns_servers={{ dns_servers }}		# DNS server IPs (comma-separated).
 next_hop_address={{ next_hop_address }}	# Default gateway IP for your private network.
 ntp_servers={{ ntp_servers }}		# Important: NTP servers or hostnames (comma-separated). Needed if server clocks aren't synced.
-				# Note: Above 5 values can be overridden later in 'cluster.conf'.
+				# Note: The above 5 values can be overridden later in 'cluster.conf'.
+
+# Other settings
+
+pull_secret_file=~/.pull-secret.json	# File path for your Red Hat pull secret, used for image downloads only.
+					# Get it from: https://console.redhat.com/openshift/downloads -> Tokens -> Pull-secret.
+editor=			# Text editor to use, such as: nano, vi, emacs. Set to 'none' for manual config editing.
+ask=true			# Ask for confirmation before major actions (install, delete, etc.).
 
 #######################################################################################
 # ADVANCED SETTINGS — CHANGE ONLY IF REQUIRED
