@@ -194,7 +194,6 @@ do
         rm -rf $cname
 
 	test-cmd -m "Adding 10.0.2.8 to ntp servers" "aba --dns 10.0.1.8 10.0.2.8"
-	#test-cmd -m "Creating cluster.conf for '$cname' cluster" "aba $cname --step cluster.conf"
 
 	[ "$cname" = "sno" ] && starting_ip=10.0.1.201
 	[ "$cname" = "compact" ] && starting_ip=10.0.1.71
@@ -204,7 +203,8 @@ do
 #../test/standard/agent-config.yaml.example:rendezvousIP: 10.0.1.81
 
 
-	test-cmd -m "Creating cluster.conf for '$cname' cluster" "aba cluster -n $cname -t $cname -i $starting_ip --step cluster.conf"
+	test-cmd -m "Creating cluster.conf for '$cname' cluster" "aba cluster -n $cname -t $cname -i $starting_ip --machine-network 10.0.0.0/20 --gateway-ip 10.0.1.1 --step cluster.conf"
+	#test-cmd -m "Update machine net and router" sed -e "s/^machine_network=.*/machine_network=10.0.0.0/20" -e "^next_hop_address=.*/next_hop_address=10.0.1.1" $cname/cluster.conf
         sed -i "s#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g" $cname/cluster.conf   # Make sure all mac addr are the same, not random
         test-cmd -m "Creating install-config.yaml for $cname cluster" "aba --dir $cname install-config.yaml"
         test-cmd -m "Creating agent-config.yaml for $cname cluster" "aba --dir $cname agent-config.yaml"

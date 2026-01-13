@@ -421,17 +421,17 @@ do
 		done
 		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
-	elif [ "$1" = "--default-route" -o "$1" = "-R" ]; then
+	elif [ "$1" = "--gateway-ip" -o "$1" = "-g" ]; then
 		# If arg missing remove from aba.conf
 		shift 
-		def_route_ip=
+		gw_ip=
 		if [[ -n $1 && $1 != -* && $1 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-			def_route_ip=$1
+			gw_ip=$1
 		fi
 	#	if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
-	#		def_route_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+	#		gw_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
 	#	fi
-		replace-value-conf -n next_hop_address -v "$def_route_ip" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-XXXXXX" ]; then # FIXME: opt?
 		# If arg ip addr then replace value in cluster.conf
