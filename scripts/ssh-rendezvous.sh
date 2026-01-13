@@ -19,9 +19,9 @@ ip=$(cat iso-agent-based/rendezvousIP)
 
 if [ "$*" ]; then
 	aba_info "Running: ssh -i $ssh_key_file core@$ip -- $*"
-	ssh -i $ssh_key_file core@$ip -- $*
+	ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip -- $*
 else
 	aba_info "Running: ssh -i $ssh_key_file core@$ip"
-	ssh -i $ssh_key_file core@$ip
+	ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip
 fi
 
