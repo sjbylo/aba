@@ -1073,96 +1073,220 @@ aba-track() {
 #	[ ! "$ABA_TESTING" ] && ( curl --retry 20 --fail -s https://abacus.jasoncameron.dev/hit/bylo.de-aba/installed >/dev/null 2>&1 & disown ) & disown
 #}
 
-# =========================================================
-# Deduce reasonable defaults for OpenShift cluster config
-# =========================================================
+# ===========================================================
+# Deduce reasonable defaults for OpenShift cluster net config
+# ===========================================================
 
-# -------------------------
-# Functions
-# -------------------------
+# Pick the "install interface" for best-guess defaults:
+# 1) ABA_INSTALL_IFACE if set and usable (exists + UP + has IPv4)
+# 2) otherwise first "real" UP interface with IPv4 (exclude container/virtual)
+_pick_install_iface() {
+	local ifc=
+
+	# Helper: is interface "usable" (exists, UP, has IPv4)
+	_is_usable_iface() {
+		local i="$1"
+		ip link show dev "$i" >/dev/null 2>&1 || return 1
+		ip link show dev "$i" 2>/dev/null | grep -q "state UP" || return 1
+		ip -o -4 addr show dev "$i" 2>/dev/null | grep -q "inet " || return 1
+		return 0
+	}
+
+	# 1) User override
+	if [[ -n "${ABA_INSTALL_IFACE:-}" ]]; then
+		if _is_usable_iface "$ABA_INSTALL_IFACE"; then
+			echo "$ABA_INSTALL_IFACE"
+			return 0
+		fi
+	fi
+
+	# 2) First "real" UP iface with IPv4 (exclude common virtual/container interfaces)
+	# Note: keep this filter conservative; better to return nothing than a wrong veth/bridge.
+	while read -r ifc; do
+		# Exclude obvious virtual/container patterns
+		echo "$ifc" | grep -Eq '^(lo|docker|podman|cni|virbr|br-|veth|tun|tap|zt|wg|flannel|cilium|kube|ovs|vnet|vmnet|dummy|sit|ip6tnl|gre)' && continue
+		if _is_usable_iface "$ifc"; then
+			echo "$ifc"
+			return 0
+		fi
+	done < <(ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | cut -d@ -f1)
+
+	return 1
+}
 
 # Get base domain
 get_domain() {
-    # hostname -d gives the domain part of the FQDN
-    local d
-    d=$(hostname -d 2>/dev/null || true)
-    # fallback default
-    echo "${d:-example.com}"
+	local d fqdn
+
+	# 1) domain from hostname -d
+	d=$(hostname -d 2>/dev/null || true)
+
+	# 2) derive from FQDN if empty
+	if [[ -z "${d:-}" ]]; then
+		fqdn=$(hostname -f 2>/dev/null || true)
+		if echo "$fqdn" | grep -q '\.'; then
+			d="${fqdn#*.}"
+		fi
+	fi
+
+	# 3) resolv.conf search/domain as fallback
+	if [[ -z "${d:-}" ]] && [[ -r /etc/resolv.conf ]]; then
+		d=$(awk '
+			$1=="search" && NF>=2 {print $2; exit}
+			$1=="domain" && NF>=2 {print $2; exit}
+		' /etc/resolv.conf 2>/dev/null || true)
+	fi
+
+	echo "${d:-example.com}"
 }
 
-# Get the default gateway / next hop
+# Get the default gateway / next hop (best guess for install interface, not system default)
 get_next_hop() {
-    local gw
-    # extract the "via" IP from the default route
-    gw=$(ip route show default 2>/dev/null \
-         | awk '/default/ {for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
+	local gw ifc cidr ip prefix net first_three
 
-    # Double check it's an IP addr
-    echo $gw | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || gw=
+	ifc=$(_pick_install_iface 2>/dev/null || true)
 
-    # fallback
-    echo "${gw:-10.0.0.1}"
+	# 1) If this iface has a default route, use its gateway
+	if [[ -n "${ifc:-}" ]]; then
+		gw=$(ip route show default dev "$ifc" 2>/dev/null \
+			| awk '/default/ {for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
+	fi
+
+	# 2) If no default route for that iface, guess .1 from the iface subnet (weak heuristic)
+	if [[ -z "${gw:-}" ]] && [[ -n "${ifc:-}" ]]; then
+		cidr=$(ip -o -4 addr show dev "$ifc" 2>/dev/null | awk '{print $4; exit}')
+		ip=${cidr%/*}
+		prefix=${cidr#*/}
+
+		# If it's an RFC1918-ish address, guess x.x.x.1 (common gateway convention)
+		if echo "$ip" | grep -q -E '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)'; then
+			first_three=$(echo "$ip" | awk -F. '{print $1"."$2"."$3}')
+			gw="${first_three}.1"
+		fi
+	fi
+
+	# Validate IPv4
+	echo "${gw:-}" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || gw=
+
+	echo "${gw:-10.0.0.1}"
 }
 
-# Get machine network (CIDR of the main interface)
+# Get machine network (CIDR of the chosen install interface)
+# Get machine network (CIDR of the chosen install interface)
 get_machine_network() {
-    local def_if net
-    # find default network interface
-    def_if=$(ip route show default 2>/dev/null \
-             | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+	local ifc cidr net ip prefix
 
-    # Try to get subnet CIDR of the default interface
-    net=$(ip -o -4 route list dev "${def_if:-}" proto kernel scope link 2>/dev/null \
-          | awk '$1 ~ "/" {print $1; exit}')
+	ifc=$(_pick_install_iface 2>/dev/null || true)
 
-    # fallback: first RFC1918 route not associated with container/VM bridges
-    if [[ -z "${net:-}" ]]; then
-        net=$(ip -o -4 route list proto kernel scope link 2>/dev/null \
-              | awk '$1 ~ "/" && $0 !~ /(docker|podman|cni|virbr|br-|veth|tun|tap)/ {print $1}' \
-              | awk '/^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/ {print; exit}')
-    fi
+	# 1) Best: ask the kernel for the connected (scope link) route on that iface
+	if [[ -n "${ifc:-}" ]]; then
+		net=$(ip -o -4 route list dev "$ifc" proto kernel scope link 2>/dev/null \
+			| awk '$1 ~ "/" {print $1; exit}')
+	fi
 
-    # Double check it's a CIDR
-    echo $net | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$' || net=
+	# 2) Fallback: derive from iface IPv4/prefix (if route output not present)
+	if [[ -z "${net:-}" ]] && [[ -n "${ifc:-}" ]]; then
+		cidr=$(ip -o -4 addr show dev "$ifc" 2>/dev/null | awk '{print $4; exit}')
+		ip=${cidr%/*}
+		prefix=${cidr#*/}
 
-    # final fallback
-    echo "${net:-10.0.0.0/20}"
+		# If python3 exists, use it for portable CIDR math
+		if command -v python3 >/dev/null 2>&1; then
+			net=$(python3 - <<-PY 2>/dev/null
+				import ipaddress
+				ip="${ip}"
+				pfx=int("${prefix}")
+				print(str(ipaddress.ip_network(f"{ip}/{pfx}", strict=False)))
+			PY
+			)
+		fi
+	fi
+
+	# 3) Fallback: first RFC1918 connected route not associated with container/VM bridges
+	if [[ -z "${net:-}" ]]; then
+		net=$(ip -o -4 route list proto kernel scope link 2>/dev/null \
+			| awk '$1 ~ "/" && $0 !~ /(docker|podman|cni|virbr|br-|veth|tun|tap)/ {print $1}' \
+			| awk '/^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/ {print; exit}')
+	fi
+
+	# Validate CIDR
+	echo "${net:-}" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$' || net=
+
+	echo "${net:-10.0.0.0/20}"
 }
 
-# Get DNS servers
+
+# Get DNS servers (comma-separated)
 get_dns_servers() {
-    local dns
-    # Try resolvectl first (Fedora / systemd-resolved)
-    if command -v resolvectl >/dev/null 2>&1; then
-        dns=$(resolvectl status \
-              | awk '/DNS Servers/ {for(i=3;i<=NF;i++) printf "%s%s",$i,(i<NF?"," : "\n")}')
-    fi
+	local dns= ifc=
 
-    # Fallback to /etc/resolv.conf if nothing found
-    if [[ -z "${dns:-}" ]]; then
-        dns=$(awk '/^nameserver/ {print $2}' /etc/resolv.conf | paste -sd,)
-    fi
+	ifc=$(_pick_install_iface 2>/dev/null || true)
 
-    # Double check it's a list of IP addr
-    echo $dns | grep -q -E '^([0-9]{1,3}(\.[0-9]{1,3}){3})(,([0-9]{1,3}(\.[0-9]{1,3}){3}))*$' || dns=
+	# 1) NetworkManager per-interface (RHEL / most accurate)
+	if [[ -n "${ifc:-}" ]] && command -v nmcli >/dev/null 2>&1; then
+		dns=$(nmcli -t -f IP4.DNS dev show "$ifc" 2>/dev/null \
+			| cut -d: -f2 \
+			| grep -E '^[0-9.]+' \
+			| sort -u \
+			| paste -sd,)
+	fi
 
-    # Final fallback
-    echo "${dns:-8.8.8.8,1.1.1.1}"
+	# 2) NetworkManager global (fallback)
+	if [[ -z "${dns:-}" ]] && command -v nmcli >/dev/null 2>&1; then
+		dns=$(nmcli -t -f IP4.DNS dev show 2>/dev/null \
+			| cut -d: -f2 \
+			| grep -E '^[0-9.]+' \
+			| sort -u \
+			| paste -sd,)
+	fi
+
+	# 3) systemd-resolved only if active (Fedora/Ubuntu)
+	if [[ -z "${dns:-}" ]] && command -v resolvectl >/dev/null 2>&1; then
+		if systemctl is-active systemd-resolved >/dev/null 2>&1; then
+			dns=$(resolvectl dns 2>/dev/null \
+				| awk '{print $2}' \
+				| grep -E '^[0-9.]+' \
+				| sort -u \
+				| paste -sd,)
+		fi
+	fi
+
+	# 4) resolv.conf fallback
+	if [[ -z "${dns:-}" ]] && [[ -r /etc/resolv.conf ]]; then
+		dns=$(awk '/^nameserver/ {print $2}' /etc/resolv.conf 2>/dev/null \
+			| grep -E '^[0-9.]+' \
+			| sort -u \
+			| paste -sd,)
+	fi
+
+	# Validate IPv4 list
+	echo "${dns:-}" | grep -q -E '^([0-9]{1,3}(\.[0-9]{1,3}){3})(,([0-9]{1,3}(\.[0-9]{1,3}){3}))*$' || dns=
+
+	echo "${dns:-8.8.8.8,1.1.1.1}"
 }
 
-# Get NTP servers
+# Get NTP servers (comma-separated)
 get_ntp_servers() {
-    local ntp
-    # Read server lines from chrony.conf, join with commas
-    ntp=$(awk '/^server / {print $2}' /etc/chrony.conf 2>/dev/null | paste -sd,)
+	local ntp=
 
-    # Double check it's a list of IP and/or domain names
-    echo $ntp | grep -q -E '^(([0-9]{1,3}(\.[0-9]{1,3}){3})|([A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*))(,(([0-9]{1,3}(\.[0-9]{1,3}){3})|([A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)))*$' || ntp=
+	# chrony configs can be in /etc/chrony.conf and /etc/chrony.d/*.conf
+	ntp=$(awk '
+		$1=="server" && NF>=2 {print $2}
+		$1=="pool"   && NF>=2 {print $2}
+	' /etc/chrony.conf /etc/chrony.d/*.conf 2>/dev/null \
+		| grep -v '^\s*#' \
+		| sort -u \
+		| paste -sd,)
 
-    # fallback
-    #echo "${ntp:-pool.ntp.org}"
-    echo "$ntp"
+	# Validate list of IPv4 and/or domain names
+	echo "${ntp:-}" | grep -q -E '^(([0-9]{1,3}(\.[0-9]{1,3}){3})|([A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*))(,(([0-9]{1,3}(\.[0-9]{1,3}){3})|([A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*)))*$' || ntp=
+
+	# No forced public fallback: many environments require internal NTP.
+	# If you really want a fallback, uncomment:
+	#echo "${ntp:-pool.ntp.org}"
+	echo "${ntp:-}"
 }
+
 
 trust_root_ca() {
 	if [ -s $1 ]; then
