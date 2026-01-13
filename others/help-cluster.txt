@@ -22,7 +22,9 @@ Options:
                                           # See steps (targets) with "aba --dir mycluster help".
     -i, --starting-ip <ip>                # IP address for the first cluster node (rendezvous/node0).
         --api-vip <ip>                    # IP address for cluster's API.
-        --ingress-vip <ip>                # IP address for application ingress.
+        --ingress-vip <ip>                # IP address for cluster application ingress.
+    -M, --machine-network <cidr>          # CIDR of node machine network, such as 10.0.0.0/20.
+    -g, --gateway-ip <ip>                 # Gateway IP or next hop address.
     -I, --int-connection [proxy|direct]   # Install from the public registry or set empty to use mirror.
         --ports [<string> ...]            # Space-separated list of network port names or empty to remove.
                                           # ports in <cluster name>/cluster.conf.
