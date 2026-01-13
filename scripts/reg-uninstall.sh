@@ -49,14 +49,12 @@ reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" 
 export ASK_OVERRIDE=
 export ask=1
 
-if [ "$reg_ssh_key" ] && ssh $reg_ssh_user@$reg_host podman ps | grep -q registry; then
+if [ "$reg_ssh_key" ] && ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host podman ps | grep -q registry; then
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
 		cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
 		aba_info "Running command: $cmd"
 		[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk
 		$cmd || exit 1
-
-		#[ "$reg_root" ] && ssh $reg_ssh_user@$reg_host rm -rf $reg_root || ssh $reg_ssh_user@$reg_host rm -rf ~/quay-install
 	else
 		exit 1
 	fi

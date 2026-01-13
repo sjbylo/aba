@@ -185,7 +185,7 @@ while true; do
 
 		# Fetch the chronyc sources output (IPs only) ONCE per host
 		# Added Timeout and HostKey flags so script doesn't hang
-		node_sources=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -q core@$host 'chronyc sources -n' 2>&1)
+		node_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources -n' 2>&1)
 
 		aba_debug "Node: $host config:"
 		aba_debug "\n$node_sources"

@@ -20,10 +20,10 @@ if [ ! "$1" = "--exec" ]; then
 
 	ip=$(cat $ASSETS_DIR/rendezvousIP)
 
-        ssh -i $ssh_key_file core@$ip mkdir -p scripts
+        ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip mkdir -p scripts
         scp -i $ssh_key_file scripts/include_all.sh core@$ip:scripts
         scp -i $ssh_key_file $0 core@$ip:
-        ssh -i $ssh_key_file core@$ip -- sudo bash $(basename $0) --exec
+        ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip -- sudo bash $(basename $0) --exec
 
 
 	exit $?

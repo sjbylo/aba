@@ -92,14 +92,15 @@ fi
 mkdir -p ~/.aba
 ssh_conf_file=~/.aba/ssh.conf
 
-cat > $ssh_conf_file <<END
-StrictHostKeyChecking no
-UserKnownHostsFile=/dev/null
-ConnectTimeout=15
-PreferredAuthentications=publickey
-PasswordAuthentication=no
-LogLevel=ERROR
-END
+# Now added in ./install script
+#cat > $ssh_conf_file <<END
+#StrictHostKeyChecking no
+#UserKnownHostsFile=/dev/null
+#ConnectTimeout=15
+#PreferredAuthentications=publickey
+#PasswordAuthentication=no
+#LogLevel=ERROR
+#END
 
 flag_file=/tmp/.$(whoami).$RANDOM
 rm -f $flag_file
