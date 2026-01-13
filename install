@@ -1,7 +1,7 @@
 #!/bin/bash
 # Simple Aba installer.  Copy aba command somewhere into the $PATH
 
-uname -o | grep -q "^Darwin$" && echo "Install aba on RHEL, Centos Stream or Fedora.  Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
+uname -o | grep -q "^Darwin$" && echo "Install ABA on RHEL, Centos Stream or Fedora.  Most tested is RHEL 8 or 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 # We need git, which, id, diff commands (not always available in a container) ... 
 # the other rpm packages are copied from templates/rpms-external.txt which isn't available yet!
@@ -43,16 +43,16 @@ if [ "$(id -u)" != "0" ]; then
 	if [ "$SUDO" ]; then
 		# If sudo does not lead to root without using a password prompt (-n)
 		if [ "$($SUDO -n whoami)" != "root" ]; then
-			echo "aba requires root access, directly or via sudo." >&2
+			echo "ABA requires root access, directly or via sudo." >&2
 			# If there is no passwordless access
 			if ! $SUDO -ln 2>/dev/null | grep -q NOPASSWD; then
 				echo "Passwordless sudo access is recommended." >&2
 			fi
-			echo -n "You must enter your password to install and use aba: " >&2
-			[ "$($SUDO -p "Enter %p's password: " id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+			echo -n "You must enter your password to install and use ABA: " >&2
+			[ "$($SUDO -p "Enter %p's password: " id -run)" != "root" ] && echo "Configure passwordless sudo OR run ABA as root, then try again!" >&2 && exit 1
 		fi
 	else
-		echo "Warning: sudo command is not available and aba is not running as root!" >&2
+		echo "Warning: sudo command is not available and ABA is not running as root!" >&2
 	fi
 fi
 
@@ -89,7 +89,7 @@ download_repo() {
 	fi
 
 	if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
-		echo Cloning aba with: "git clone --depth 1 -b $branch https://github.com/${repo}.git" >&2
+		echo Cloning ABA with: "git clone --depth 1 -b $branch https://github.com/${repo}.git" >&2
 		if ! git clone --depth 1 -b $branch https://github.com/${repo}.git; then
 			echo "Error fetching git repo from https://github.com/${repo}.git (branch: $branch)" >&2
 
@@ -97,7 +97,7 @@ download_repo() {
 		fi
 
 		echo
-		[ "$PWD" = "/" ] && echo "Cloned aba branch $branch into /aba" >&2 || echo "Cloned aba branch $branch into $PWD/aba" >&2
+		[ "$PWD" = "/" ] && echo "Cloned ABA branch $branch into /aba" >&2 || echo "Cloned ABA branch $branch into $PWD/aba" >&2
 		cd aba
 	fi
 }
@@ -117,7 +117,7 @@ if ! is_repo_available; then
 fi
 
 # Sanity check ...
-[ ! -x scripts/aba.sh ] && echo "Abort: Incomplete aba repo! aba script not found in $PWD/scripts/aba.sh" >&2 && exit 1
+[ ! -x scripts/aba.sh ] && echo "Abort: Incomplete ABA repo! aba script not found in $PWD/scripts/aba.sh" >&2 && exit 1
 
 mkdir -p ~/.aba
 rm -rf ~/.aba/*  # Just to be sure!
@@ -155,7 +155,7 @@ do
 							# Note: Only aba.sh calls this script with -q flag
 			else
 				# Nothing to do
-				[ ! "$quiet" ] && echo aba is already up-to-date >&2
+				[ ! "$quiet" ] && echo ABA is already up-to-date >&2
 
 				exit 0
 			fi
@@ -172,7 +172,7 @@ do
 		if $SUDO cp -p scripts/aba.sh $d/aba; then
 			$SUDO chmod +x $d/aba
 			if [ ! "$quiet" ]; then
-				echo aba has been $action to $d/aba >&2
+				echo ABA has been $action to $d/aba >&2
 				if [ -n "$msg" ]; then
 					###source scripts/include_all.sh
 					echo_yellow "$msg" >&2

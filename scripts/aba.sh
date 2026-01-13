@@ -1112,7 +1112,7 @@ if [ ! "$editor" ]; then
 	def_editor="${EDITOR:-${VISUAL:-vi}}"
 
 	echo    "Aba uses an editor to aid in the workflow."
-	echo_yellow -n "Enter your preferred editor or set to 'none' if you prefer to do this manually! ('vi', 'emacs', 'nano' etc or 'none')? [$def_editor]: "
+	echo_yellow -n "Enter your preferred editor or set to 'none' if you prefer to edit manually! ('vi', 'emacs', 'nano' etc or 'none')? [$def_editor]: "
 	read new_editor
 
 	[ ! "$new_editor" ] && new_editor=$def_editor  # default
@@ -1131,7 +1131,7 @@ fi
 # Allow edit of aba.conf
 
 if [ ! -f .aba.conf.seen ]; then
-	if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform type, pull secret, base domain & net address, dns & ntp etc (if known)"; then
+	if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform type, base domain & net addresses, dns & ntp etc (if known)"; then
 		# If edited/seen, no need to ask again.
 		touch .aba.conf.seen
 	else
@@ -1154,7 +1154,7 @@ else
 	echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
 	echo_white "To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!" >&2
 	echo_white "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
-	echo_white "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'." >&2
+	##echo_white "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'." >&2
 	echo
 
 	exit 1
