@@ -1,0 +1,3 @@
+# Python requirements for Textual-based ABA TUI
+textual>=0.47.0
+
