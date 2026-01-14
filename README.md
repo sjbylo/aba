@@ -7,7 +7,7 @@ ABA integrates several standard Red Hat tools into a single workflow, simplifyin
 
 Because ABA is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP.
 
->> **Download curated, ready-made, up-to-date, and tested ABA install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy (requires Google account)**
+>> **Download curated, ready-made, up-to-date, and tested ABA install bundles — including all images required to install OpenShift for specific use-cases — from: https://red.ht/disco-easy (requires Google account)**
 
 # Who should use ABA?<!-- omit in toc -->
 
@@ -217,7 +217,11 @@ ABA also works in connected environments without a _mirror registry_, e.g. by ac
 # Downloading an Install Bundle
 <!-- this is a perma-link from ABA blog, Oct 2025 --> 
 
-The `Install Bundle` is a single archive that contains everything you need for a specific use case. It includes the install images, all matching CLI install files, the registry setup, and the automation needed to generate the configuration files required to install OpenShift in an air-gapped environment (tested, repeatable, and ready to go).
+<!--An ABA `Install Bundle` is a single archive that contains everything you need to install OpenShift in an air-gapped environment for a specific use case. It includes the platform and operator images, all matching CLI install files, the registry setup for both Quay and Docker registries, and the automation to configure a mirror registry and generate the configuration files required to install OpenShift (tested, repeatable, and ready to go).
+-->
+
+An ABA `Install Bundle` is a single archive containing everything required to install OpenShift in an air-gapped environment for a specific use case. 
+It includes platform and operator images, matching OpenShift CLI installation tools, registry configuration for Quay and Docker, and automation to set up a mirror registry and generate the configuration files needed for installation—tested, repeatable, and ready to use.
 
 You can download the latest Install Bundles from: https://red.ht/disco-easy  
 
@@ -351,7 +355,7 @@ Now continue with [Installing OpenShift](#installing-openshift) below.
 
 **Please note that it is recommended to use the `aba bundle` [command](#creating-a-custom-install-bundle) to create an _install bundle_ to start a fully air-gapped installation, which will automatically complete the below steps (`aba -d mirror save` and `aba tar`) for you.  If, for any reason, you can't use the `aba bundle` command, use the steps below instead.**
 
->> **Download curated, ready-made, up-to-date, and tested ABA install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy (requires Google account)**
+>> **Download curated, ready-made, up-to-date, and tested ABA install bundles — including all images required to install OpenShift for specific use-cases — from: https://red.ht/disco-easy (requires Google account)**
 
 ### Prerequisites
 
@@ -569,7 +573,7 @@ Commands for VMs (vCenter or ESXi)
 
 You can create an install bundle with everything you need to install OpenShift in a fully disconnected (air-gapped) environment
 
->> **Download curated, ready-made, up-to-date, and tested ABA install bundles — including all images required for fixed use-cases — from: https://red.ht/disco-easy (requires Google account)**
+>> **Download curated, ready-made, up-to-date, and tested ABA install bundles — including all images required to install OpenShift for specific use-cases — from: https://red.ht/disco-easy (requires Google account)**
 
 Do you need to download the necessary images and CLI tools to install OpenShift in a fully disconnected environment for a particular use-case?
 

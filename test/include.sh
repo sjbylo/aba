@@ -280,6 +280,9 @@ init_bastion() {
 		rm -f  $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
 		rm -rf $HOME/.oc-mirror/.cache   # Ensure all cache gone
 		rm -rf $HOME/*/.oc-mirror/.cache
+
+		# Ensure test VMs are located together
+		[ -s ~/.vmware.conf ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" ~/.vmware.conf
 	END
 
 	mylog "VM Update and reboot..."
@@ -349,6 +352,9 @@ init_bastion() {
 		mkdir -p ~/subdir
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bashrc
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bash_profile
+
+		# Ensure test VMs are located together
+		[ -s ~/.vmware.conf ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" ~/.vmware.conf
 
 		####################################
 		#### Tidy up network config      ###

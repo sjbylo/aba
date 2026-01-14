@@ -935,7 +935,7 @@ fi
 	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
 
 	aba_debug "Downloading oc-mirror in the background ..."
-	PLAIN_OUTPUT=1 run_once -i cli:install:oc-mirror			-- make -sC cli oc-mirror &
+	PLAIN_OUTPUT=1 run_once -i cli:install:oc-mirror			-- make -sC cli oc-mirror
 
 
 	echo_white -n "Checking Internet connectivity ..."
@@ -999,16 +999,18 @@ fi
 
 	echo_white -n "Fetching available versions ..."
 	# Wait for only the data we need ...
-	if [ "$ocp_channel" = "stable" ]; then
-		run_once -w -i ocp:stable:latest_version
-		run_once -w -i ocp:stable:latest_version_previous
-	elif [ "$ocp_channel" = "fast" ]; then
-		run_once -w -i ocp:fast:latest_version
-		run_once -w -i ocp:fast:latest_version_previous
-	elif [ "$ocp_channel" = "candidate" ]; then
-		run_once -w -i ocp:candidate:latest_version
-		run_once -w -i ocp:candidate:latest_version_previous
-	fi
+	run_once -w -i ocp:$ocp_channel:latest_version
+	run_once -w -i ocp:$ocp_channel:latest_version_previous
+#	if [ "$ocp_channel" = "stable" ]; then
+#		run_once -w -i ocp:stable:latest_version
+#		run_once -w -i ocp:stable:latest_version_previous
+#	elif [ "$ocp_channel" = "fast" ]; then
+#		run_once -w -i ocp:fast:latest_version
+#		run_once -w -i ocp:fast:latest_version_previous
+#	elif [ "$ocp_channel" = "candidate" ]; then
+#		run_once -w -i ocp:candidate:latest_version
+#		run_once -w -i ocp:candidate:latest_version_previous
+#	fi
 
 	##############################################################################################################################
 	# Fetch release.txt
@@ -1061,7 +1063,8 @@ fi
 		[ "$channel_ver" ] && or_s="or $channel_ver (l)atest "
 		[ "$channel_ver_prev" ] && or_p="or $channel_ver_prev (p)revious "
 
-		echo_white -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
+		#echo_white -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
+		echo_white -n "Enter x.y.z or x.y version $or_s$or_p(<version>/l/p/Enter) [$default_ver]: "
 		read target_ver
 
 		[ ! "$target_ver" ] && target_ver=$default_ver          # use default
