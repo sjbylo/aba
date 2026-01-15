@@ -1565,3 +1565,163 @@ aba_runtime_install_traps() {
 	trap aba_runtime_cleanup INT TERM
 }
 
+# -----------------------------------------------------------------------------
+# Validation Functions for TUI inputs
+# -----------------------------------------------------------------------------
+
+# Validate IPv4 address
+# Usage: validate_ip "192.168.1.1" && echo "valid"
+# Returns: 0 if valid, 1 if invalid
+validate_ip() {
+	local ip="$1"
+	local IFS='.'
+	local -a octets
+	
+	# Empty is invalid
+	[[ -z "$ip" ]] && return 1
+	
+	# Split into octets
+	read -ra octets <<< "$ip"
+	
+	# Must have exactly 4 octets
+	[[ ${#octets[@]} -ne 4 ]] && return 1
+	
+	# Each octet must be 0-255
+	for octet in "${octets[@]}"; do
+		# Must be numeric
+		[[ ! "$octet" =~ ^[0-9]+$ ]] && return 1
+		# Must be in range 0-255
+		[[ $octet -lt 0 || $octet -gt 255 ]] && return 1
+		# No leading zeros (except "0" itself)
+		[[ ${#octet} -gt 1 && ${octet:0:1} == "0" ]] && return 1
+	done
+	
+	return 0
+}
+
+# Validate comma-separated IP list
+# Usage: validate_ip_list "8.8.8.8,1.1.1.1" && echo "valid"
+# Returns: 0 if valid, 1 if invalid
+validate_ip_list() {
+	local ip_list="$1"
+	local IFS=','
+	local -a ips
+	
+	# Empty is invalid
+	[[ -z "$ip_list" ]] && return 1
+	
+	# Split by comma
+	read -ra ips <<< "$ip_list"
+	
+	# Validate each IP
+	for ip in "${ips[@]}"; do
+		# Trim whitespace
+		ip="${ip##[[:space:]]}"
+		ip="${ip%%[[:space:]]}"
+		
+		# Validate this IP
+		validate_ip "$ip" || return 1
+	done
+	
+	return 0
+}
+
+# Validate CIDR notation (IPv4 only)
+# Usage: validate_cidr "10.0.0.0/24" && echo "valid"
+# Returns: 0 if valid, 1 if invalid
+validate_cidr() {
+	local cidr="$1"
+	local ip prefix
+	
+	# Empty is invalid
+	[[ -z "$cidr" ]] && return 1
+	
+	# Must contain exactly one slash
+	[[ ! "$cidr" =~ ^[^/]+/[^/]+$ ]] && return 1
+	
+	# Split into IP and prefix
+	ip="${cidr%/*}"
+	prefix="${cidr#*/}"
+	
+	# Validate IP part
+	validate_ip "$ip" || return 1
+	
+	# Validate prefix part (must be numeric 0-32)
+	[[ ! "$prefix" =~ ^[0-9]+$ ]] && return 1
+	[[ $prefix -lt 0 || $prefix -gt 32 ]] && return 1
+	
+	return 0
+}
+
+# Validate domain name (basic validation)
+# Usage: validate_domain "example.com" && echo "valid"
+# Returns: 0 if valid, 1 if invalid
+validate_domain() {
+	local domain="$1"
+	
+	# Empty is invalid
+	[[ -z "$domain" ]] && return 1
+	
+	# Must not start or end with dot or hyphen
+	[[ "$domain" =~ ^[.-] || "$domain" =~ [.-]$ ]] && return 1
+	
+	# Must contain only valid characters (alphanumeric, dots, hyphens)
+	[[ ! "$domain" =~ ^[a-zA-Z0-9.-]+$ ]] && return 1
+	
+	# Must not contain consecutive dots
+	[[ "$domain" =~ \.\. ]] && return 1
+	
+	# Length check (1-253 chars for full domain)
+	[[ ${#domain} -gt 253 ]] && return 1
+	
+	# Each label (part between dots) must be 1-63 chars and not start/end with hyphen
+	local IFS='.'
+	local -a labels
+	read -ra labels <<< "$domain"
+	
+	for label in "${labels[@]}"; do
+		# Length check
+		[[ ${#label} -eq 0 || ${#label} -gt 63 ]] && return 1
+		# Must not start or end with hyphen
+		[[ "$label" =~ ^- || "$label" =~ -$ ]] && return 1
+		# Must contain only alphanumeric and hyphens
+		[[ ! "$label" =~ ^[a-zA-Z0-9-]+$ ]] && return 1
+	done
+	
+	return 0
+}
+
+# Validate comma-separated list of NTP servers (IPs or hostnames)
+# Usage: validate_ntp_servers "pool.ntp.org,time.google.com,192.168.1.1" && echo "valid"
+# Returns: 0 if valid, 1 if invalid
+validate_ntp_servers() {
+	local server_list="$1"
+	local IFS=','
+	local -a servers
+	
+	# Empty is invalid
+	[[ -z "$server_list" ]] && return 1
+	
+	# Split by comma
+	read -ra servers <<< "$server_list"
+	
+	# Validate each server (must be valid IP OR valid domain/hostname)
+	for server in "${servers[@]}"; do
+		# Trim whitespace
+		server="${server##[[:space:]]}"
+		server="${server%%[[:space:]]}"
+		
+		# Try to validate as IP first, then as domain/hostname
+		if ! validate_ip "$server" && ! validate_domain "$server"; then
+			# Special case: single-label hostnames without dots are OK
+			# (e.g., "ntp", "timeserver", "localhost")
+			if [[ "$server" =~ ^[a-zA-Z0-9-]+$ ]] && [[ ! "$server" =~ ^- ]] && [[ ! "$server" =~ -$ ]] && [[ ${#server} -le 63 ]]; then
+				continue  # Valid single-label hostname
+			fi
+			return 1  # Invalid
+		fi
+	done
+	
+	return 0
+}
+

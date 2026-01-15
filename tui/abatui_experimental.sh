@@ -7,6 +7,95 @@
 set -eo pipefail
 
 # -----------------------------------------------------------------------------
+# Validation Functions (implementations to be added to include_all.sh)
+# -----------------------------------------------------------------------------
+# These are placeholder functions - user will paste implementations into include_all.sh
+
+# Validate CIDR notation (e.g., 10.0.0.0/24)
+validate_cidr() {
+	local cidr="$1"
+	# TODO: Add to include_all.sh - validate CIDR format
+	# For now, just check it's not empty
+	[[ -n "$cidr" ]]
+}
+
+# Validate IP address (e.g., 192.168.1.1)
+validate_ip() {
+	local ip="$1"
+	# TODO: Add to include_all.sh - validate IP format
+	# For now, just check it's not empty
+	[[ -n "$ip" ]]
+}
+
+# Validate domain name (e.g., example.com)
+validate_domain() {
+	local domain="$1"
+	# TODO: Add to include_all.sh - validate domain format
+	# For now, just check it's not empty and has a dot
+	[[ "$domain" =~ \. ]]
+}
+
+# Validate comma-separated IPs (e.g., 8.8.8.8,1.1.1.1)
+validate_ip_list() {
+	local ip_list="$1"
+	# TODO: Add to include_all.sh - validate each IP in comma-separated list
+	# For now, just check it's not empty
+	[[ -n "$ip_list" ]]
+}
+
+# Validate comma-separated NTP servers (IPs or hostnames)
+validate_ntp_servers() {
+	local server_list="$1"
+	# TODO: Add to include_all.sh - validate each server as IP or hostname
+	# For now, just check it's not empty
+	[[ -n "$server_list" ]]
+}
+
+# -----------------------------------------------------------------------------
+# Confirmation dialog for quitting
+# -----------------------------------------------------------------------------
+confirm_quit() {
+	log "User attempting to quit, showing confirmation"
+	set +e
+	dialog --backtitle "ABA TUI" --title "Confirm Exit" \
+		--help-button \
+		--yes-label "Exit" \
+		--no-label "Continue" \
+		--yesno "Exit ABA TUI?\n\nProgress will not be saved unless you complete the wizard." 0 0
+	rc=$?
+	set -e
+	
+	case "$rc" in
+		0)
+			log "User confirmed quit"
+			return 0  # Quit confirmed
+			;;
+		1|255)
+			log "User cancelled quit"
+			return 1  # Don't quit
+			;;
+		2)
+			# Help button
+			dialog --backtitle "ABA TUI" --msgbox \
+"Exiting the TUI:
+
+• Press ESC at any time to quit (with confirmation)
+• Click 'Exit' to confirm and quit
+• Click 'Continue' to return to the wizard
+
+Note: Configuration is only saved when you
+complete the wizard and apply to aba.conf
+
+Log file: $LOG_FILE" 0 0 || true
+			confirm_quit  # Recursive - show again after help
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+# -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------
 LOG_FILE="${TMPDIR:-/tmp}/aba-tui-$$.log"
@@ -213,6 +302,7 @@ ui_header() {
 	
 	local rc
 	while :; do
+		set +e  # Disable exit on error for dialog
 		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "ABA – OpenShift Installer" \
 			--help-button --help-label "Help" \
 			--ok-label "Continue" \
@@ -226,13 +316,10 @@ Follow the instructions below or see the README.md file
 for more information.
 
 Press <Continue> to start configuration.
-Press <Help> for more information." 0 0 || {
-			rc=$?
-			log "ERROR: Header dialog failed with rc=$rc"
-			exit 1
-		}
-		
+Press <Help> for more information." 0 0
 		rc=$?
+		set -e  # Re-enable exit on error
+		
 		log "Header dialog returned: $rc"
 		
 		case "$rc" in
@@ -262,10 +349,20 @@ For full documentation, see:
 For help, run: aba --help" 0 0 || true
 				# Continue loop to show header again
 				;;
+			255)
+				# ESC - confirm quit
+				if confirm_quit; then
+					log "User quit from header"
+					exit 0
+				else
+					log "User cancelled quit, staying on header"
+					continue
+				fi
+				;;
 			*)
-				# ESC or other - exit
-				log "User cancelled header (rc=$rc)"
-				exit 0
+				# Unexpected return code
+				log "ERROR: Unexpected header dialog return code: $rc"
+				exit 1
 				;;
 		esac
 	done
@@ -276,6 +373,24 @@ For help, run: aba --help" 0 0 || true
 # -----------------------------------------------------------------------------
 resume_from_conf() {
 	log "Resuming from aba.conf"
+	
+	# If aba.conf doesn't exist, create from template using j2
+	if [[ ! -f aba.conf ]]; then
+		log "No aba.conf found, creating from template"
+		if [[ -f "$ABA_ROOT/templates/aba.conf.j2" ]]; then
+			# Detect domain from local system (like aba.sh does)
+			export domain=$(get_domain)
+			log "Detected domain: $domain"
+			
+			# Set other variables to empty (will be filled by TUI)
+			machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
+				scripts/j2 templates/aba.conf.j2 > aba.conf
+			log "Created aba.conf from templates/aba.conf.j2"
+		else
+			log "WARNING: No template found at $ABA_ROOT/templates/aba.conf.j2"
+		fi
+	fi
+	
 	# Load existing config if present
 	if [[ -f aba.conf ]]; then
 		log "Found aba.conf, sourcing..."
@@ -345,17 +460,9 @@ select_ocp_channel() {
 	DIALOG_RC=""
 	log "Entering select_ocp_channel"
 
-	# Prefetch versions for ALL channels (aba.sh style)
-	log "Starting background version fetches"
-	run_once -i "ocp:stable:latest_version"             -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version stable'
-	run_once -i "ocp:stable:latest_version_previous"    -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable'
-
-	run_once -i "ocp:fast:latest_version"               -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast'
-	run_once -i "ocp:fast:latest_version_previous"      -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version fast'
-
-	run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate'
-	run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate'
-
+	# Version fetches already started in main flow (after internet check)
+	# Just use the cached results here
+	
 	# Preselect based on resumed value
 	local c_state="off" f_state="off" s_state="off"
 	case "${OCP_CHANNEL:-stable}" in
@@ -441,23 +548,87 @@ select_ocp_version() {
 	# Ensure we have a channel
 	[[ -z "${OCP_CHANNEL:-}" ]] && OCP_CHANNEL="stable"
 
-	dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… preparing version list for channel '$OCP_CHANNEL'" 5 80
-	log "Waiting for version data for channel: $OCP_CHANNEL"
-	run_once -w -i "ocp:${OCP_CHANNEL}:latest_version"
-	run_once -w -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+	# Peek first to see if we need to wait
+	log "Checking if version data is ready for channel: $OCP_CHANNEL"
+	local need_wait=0
+	if ! run_once -p -i "ocp:${OCP_CHANNEL}:latest_version"; then
+		log "Latest version not ready"
+		need_wait=1
+	fi
+	if ! run_once -p -i "ocp:${OCP_CHANNEL}:latest_version_previous"; then
+		log "Previous version not ready"
+		need_wait=1
+	fi
+	
+	# Only show wait dialog if actually waiting
+	if [[ $need_wait -eq 1 ]]; then
+		log "Version data not ready, showing wait dialog"
+		dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… preparing version list for channel '$OCP_CHANNEL'" 5 80
+		run_once -w -i "ocp:${OCP_CHANNEL}:latest_version"
+		run_once -w -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+	else
+		log "Version data already available, no wait needed"
+	fi
 
 	latest=$(fetch_latest_version "$OCP_CHANNEL")
 	previous=$(fetch_previous_version "$OCP_CHANNEL")
 	log "Versions: latest=$latest previous=$previous"
 
+	# Check if current version is different from latest/previous AND exists in this channel
+	local show_current=0
+	local default_item="l"  # Default to latest
+	
+	if [[ -n "$OCP_VERSION" ]]; then
+		if [[ "$OCP_VERSION" == "$latest" ]]; then
+			default_item="l"
+		elif [[ "$OCP_VERSION" == "$previous" ]]; then
+			default_item="p"
+		else
+			# Current version is different - but does it exist in this channel?
+			log "Checking if current version $OCP_VERSION exists in channel $OCP_CHANNEL"
+			
+			# Validate that the version exists in this channel by checking Cincinnati API
+			# Use the same logic as aba uses: check if version is available
+			local version_exists=0
+			if "$ABA_ROOT/scripts/ocp-version-validate" "$OCP_CHANNEL" "$OCP_VERSION" >/dev/null 2>&1; then
+				version_exists=1
+				log "Version $OCP_VERSION exists in channel $OCP_CHANNEL"
+			else
+				log "Version $OCP_VERSION does NOT exist in channel $OCP_CHANNEL - will not show in menu"
+			fi
+			
+			if [[ $version_exists -eq 1 ]]; then
+				# Show current version - it's valid for this channel
+				show_current=1
+				default_item="c"
+			else
+				# Don't show current version - it doesn't exist in this channel
+				# Default to latest instead
+				show_current=0
+				default_item="l"
+			fi
+		fi
+		log "Current version: $OCP_VERSION, show_current=$show_current, default selection: $default_item"
+	fi
+
+	# Build menu items dynamically
+	local menu_items=()
+	menu_items+=("l" "Latest   ($latest)")
+	menu_items+=("p" "Previous ($previous)")
+	
+	if [[ $show_current -eq 1 ]]; then
+		menu_items+=("c" "Current  ($OCP_VERSION)")
+	fi
+	
+	menu_items+=("m" "Manual entry (x.y or x.y.z)")
+
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "OpenShift Version" \
 		--extra-button --extra-label "<< Back" \
 		--help-button \
 		--ok-label "Next >>" \
+		--default-item "$default_item" \
 		--menu "Choose the OpenShift version to install:" 0 0 7 \
-		l "Latest   ($latest)" \
-		p "Previous ($previous)" \
-		m "Manual entry (x.y or x.y.z)" \
+		"${menu_items[@]}" \
 		2>"$TMP"
 
 	rc=$?
@@ -471,25 +642,44 @@ select_ocp_version() {
 		2)
 			# Help button
 			log "Help button pressed in version selection"
-			dialog --backtitle "$(ui_backtitle)" --msgbox \
-"OpenShift Version Selection:
+			local help_text="OpenShift Version Selection:
 
 • Latest: Most recent release in the channel
-• Previous: Previous stable release
+• Previous: Previous stable release"
+			
+			if [[ $show_current -eq 1 ]]; then
+				help_text="${help_text}
+• Current: Version from aba.conf ($OCP_VERSION)"
+			fi
+			
+			help_text="${help_text}
 • Manual: Enter specific version (x.y or x.y.z)
 
 Example versions: 4.18.10 or 4.18
 
 The installer will validate and download the
-selected version." 0 0 || true
+selected version."
+			
+			dialog --backtitle "$(ui_backtitle)" --msgbox "$help_text" 0 0 || true
 			DIALOG_RC="repeat"
 			return
 			;;
-		3|1|255)
-			# Back/Cancel/ESC
+		3|1)
+			# Back/Cancel
 			DIALOG_RC="back"
 			log "User went back from version (rc=$rc)"
 			return
+			;;
+		255)
+			# ESC - confirm quit
+			if confirm_quit; then
+				log "User confirmed quit from version screen"
+				exit 0
+			else
+				log "User cancelled quit, staying on version screen"
+				DIALOG_RC="repeat"
+				return
+			fi
 			;;
 		*)
 			DIALOG_RC="back"
@@ -501,6 +691,10 @@ selected version." 0 0 || true
 	case "$choice" in
 		l|"") OCP_VERSION="$latest" ;;
 		p) OCP_VERSION="$previous" ;;
+		c) 
+			# Keep current version (already in OCP_VERSION)
+			log "User selected current version: $OCP_VERSION"
+			;;
 		m)
 			dialog --backtitle "$(ui_backtitle)" --inputbox "Enter OpenShift version (x.y or x.y.z):" 12 70 "$latest" 2>"$TMP" || { DIALOG_RC="back"; return; }
 			OCP_VERSION=$(<"$TMP")
@@ -526,17 +720,25 @@ selected version." 0 0 || true
 	
 	# Write minimal aba.conf immediately so background tasks can read it
 	# (make catalog reads from aba.conf)
-	log "Writing minimal aba.conf for background tasks"
+	log "Ensuring aba.conf exists for background tasks"
 	
-	# Create aba.conf with minimal content if it doesn't exist
-	# (replace-value-conf requires non-empty file)
-	if [[ ! -s "$ABA_ROOT/aba.conf" ]]; then
-		cat > "$ABA_ROOT/aba.conf" <<-'EOF'
-			# ABA Configuration (generated by TUI)
-			ocp_channel=
-			ocp_version=
-			platform=
-		EOF
+	# If aba.conf doesn't exist, create from template using j2
+	if [[ ! -f "$ABA_ROOT/aba.conf" ]]; then
+		log "aba.conf not found, creating from template"
+		if [[ -f "$ABA_ROOT/templates/aba.conf.j2" ]]; then
+			# Detect domain from local system (other network values auto-detected later in disconnected env)
+			export domain=$(get_domain)
+			log "Detected domain: $domain"
+			
+			# Other network values left empty (will be auto-detected in disconnected env)
+			machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
+				scripts/j2 templates/aba.conf.j2 > "$ABA_ROOT/aba.conf"
+			log "Created aba.conf from templates/aba.conf.j2"
+		else
+			log "ERROR: Template not found at $ABA_ROOT/templates/aba.conf.j2"
+			dialog --backtitle "$(ui_backtitle)" --msgbox "ERROR: Template file templates/aba.conf.j2 not found!" 0 0
+			return 1
+		fi
 	fi
 	
 	# Use replace-value-conf to set values (use -q for quiet mode)
@@ -561,10 +763,11 @@ selected version." 0 0 || true
 	log "Starting catalog download tasks for OCP ${OCP_VERSION} (${version_short})"
 	
 	# Start all 4 catalog downloads in parallel using run_once
-	run_once -i "catalog:${version_short}:redhat-operator" -- bash -lc "cd '$ABA_ROOT' && source scripts/include_all.sh && cd mirror && ../scripts/download-operator-index.sh redhat-operator"
-	run_once -i "catalog:${version_short}:certified-operator" -- bash -lc "cd '$ABA_ROOT' && source scripts/include_all.sh && cd mirror && ../scripts/download-operator-index.sh certified-operator"
-	run_once -i "catalog:${version_short}:redhat-marketplace" -- bash -lc "cd '$ABA_ROOT' && source scripts/include_all.sh && cd mirror && ../scripts/download-operator-index.sh redhat-marketplace"
-	run_once -i "catalog:${version_short}:community-operator" -- bash -lc "cd '$ABA_ROOT' && source scripts/include_all.sh && cd mirror && ../scripts/download-operator-index.sh community-operator"
+	# Note: download-operator-index.sh sources include_all.sh internally, and expects to be run from $ABA_ROOT
+	run_once -i "catalog:${version_short}:redhat-operator" -- bash -lc "cd '$ABA_ROOT' && scripts/download-operator-index.sh redhat-operator"
+	run_once -i "catalog:${version_short}:certified-operator" -- bash -lc "cd '$ABA_ROOT' && scripts/download-operator-index.sh certified-operator"
+	run_once -i "catalog:${version_short}:redhat-marketplace" -- bash -lc "cd '$ABA_ROOT' && scripts/download-operator-index.sh redhat-marketplace"
+	run_once -i "catalog:${version_short}:community-operator" -- bash -lc "cd '$ABA_ROOT' && scripts/download-operator-index.sh community-operator"
 	
 	set +e
 	dialog --backtitle "$(ui_backtitle)" --title "Confirm Selection" \
@@ -680,11 +883,16 @@ Please paste a valid pull secret."
 		rm -f "$empty_file"
 		log "Pull secret editbox returned: $rc"
 		
-		# Handle ESC or dialog errors
+		# Handle ESC - confirm quit
 		if [[ $rc -eq 255 ]]; then
-			log "User pressed ESC or dialog error, treating as Back"
-			DIALOG_RC="back"
-			return
+			log "User pressed ESC"
+			if confirm_quit; then
+				log "User confirmed quit from pull secret screen"
+				exit 0
+			else
+				log "User cancelled quit, staying on pull secret screen"
+				continue
+			fi
 		fi
 		
 		case "$rc" in
@@ -815,19 +1023,19 @@ select_platform_network() {
 		
 		# Use explicit arguments (no array expansion issues)
 		set +e  # Temporarily disable exit on error
-		dialog --clear --backtitle "$(ui_backtitle)" --title "Platform & Network" \
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Platform & Network" \
 			--extra-button --extra-label "Accept & Next >>" \
 			--help-button \
 			--ok-label "Select" \
 			--cancel-label "<< Back" \
 			--menu "Configure platform and network:" $dlg_h $dlg_w 8 \
-			1 "Platform: ${PLATFORM:-bm}" \
-			2 "Base Domain: ${DOMAIN:-example.com}" \
-			3 "Machine Network: ${MACHINE_NETWORK:-(auto-detect)}" \
-			4 "DNS Servers: ${DNS_SERVERS:-(auto-detect)}" \
-			5 "Default Route: ${NEXT_HOP_ADDRESS:-(auto-detect)}" \
-			6 "NTP Servers: ${NTP_SERVERS:-(auto-detect)}" \
-			7 "Accept" \
+			1 "\ZbAccept\Zn" \
+			2 "Platform: ${PLATFORM:-bm}" \
+			3 "Base Domain: ${DOMAIN:-example.com}" \
+			4 "Machine Network: ${MACHINE_NETWORK:-(auto-detect)}" \
+			5 "DNS Servers: ${DNS_SERVERS:-(auto-detect)}" \
+			6 "Default Route: ${NEXT_HOP_ADDRESS:-(auto-detect)}" \
+			7 "NTP Servers: ${NTP_SERVERS:-(auto-detect)}" \
 			2>"$TMP"
 		rc=$?
 		set -e  # Re-enable exit on error
@@ -840,11 +1048,21 @@ select_platform_network() {
 				action=$(<"$TMP")
 				log "Platform menu action selected: $action"
 				;;
-			1|255)
-				# Cancel button (Back) or ESC
+			1)
+				# Cancel button (Back)
 				DIALOG_RC="back"
 				log "User went back from platform (rc=$rc)"
 				return
+				;;
+			255)
+				# ESC - confirm quit
+				if confirm_quit; then
+					log "User confirmed quit from platform screen"
+					exit 0
+				else
+					log "User cancelled quit, staying on platform screen"
+					continue
+				fi
 				;;
 			2)
 				# Help button
@@ -879,6 +1097,12 @@ Leave blank to use auto-detected values." 0 0 || true
 		log "Platform menu action selected: $action"
 		case "$action" in
 		1)
+			# Accept - move to next
+			DIALOG_RC="next"
+			log "User selected Accept, moving to next"
+			return
+			;;
+		2)
 			log "Showing platform selection menu"
 			dialog --backtitle "$(ui_backtitle)" --title "Target Platform" \
 				--default-item "${PLATFORM:-bm}" \
@@ -889,49 +1113,94 @@ Leave blank to use auto-detected values." 0 0 || true
 			PLATFORM=$(<"$TMP")
 			log "Platform set to: $PLATFORM"
 			;;
-			2)
-				log "Showing domain inputbox"
-				dialog --backtitle "$(ui_backtitle)" --inputbox "Base Domain (e.g., example.com):" 10 70 "$DOMAIN" 2>"$TMP" || { log "Domain input cancelled"; continue; }
-				DOMAIN=$(<"$TMP")
-				DOMAIN=${DOMAIN##[[:space:]]}
-				DOMAIN=${DOMAIN%%[[:space:]]}
-				log "Domain set to: $DOMAIN"
-				;;
 			3)
-				log "Showing machine network inputbox"
-				dialog --backtitle "$(ui_backtitle)" --inputbox "Machine Network CIDR (e.g., 10.0.0.0/24):" 10 70 "$MACHINE_NETWORK" 2>"$TMP" || { log "Machine network input cancelled"; continue; }
-				MACHINE_NETWORK=$(<"$TMP")
-				MACHINE_NETWORK=${MACHINE_NETWORK##[[:space:]]}
-				MACHINE_NETWORK=${MACHINE_NETWORK%%[[:space:]]}
-				log "Machine network set to: $MACHINE_NETWORK"
+				log "Showing domain inputbox"
+				while :; do
+					dialog --backtitle "$(ui_backtitle)" --inputbox "Base Domain (e.g., example.com):" 10 70 "$DOMAIN" 2>"$TMP" || { log "Domain input cancelled"; break; }
+					input=$(<"$TMP")
+					input=${input##[[:space:]]}
+					input=${input%%[[:space:]]}
+					
+					if [[ -n "$input" ]] && ! validate_domain "$input"; then
+						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid domain format. Please enter a valid domain name (e.g., example.com)" 0 0
+						continue
+					fi
+					DOMAIN="$input"
+					log "Domain set to: $DOMAIN"
+					break
+				done
 				;;
 			4)
-				log "Showing DNS servers inputbox"
-				dialog --backtitle "$(ui_backtitle)" --inputbox "DNS Servers (comma-separated IPs):" 10 70 "$DNS_SERVERS" 2>"$TMP" || { log "DNS input cancelled"; continue; }
-				DNS_SERVERS=$(<"$TMP")
-				DNS_SERVERS=${DNS_SERVERS##[[:space:]]}
-				DNS_SERVERS=${DNS_SERVERS%%[[:space:]]}
-				log "DNS servers set to: $DNS_SERVERS"
+				log "Showing machine network inputbox"
+				while :; do
+					dialog --backtitle "$(ui_backtitle)" --inputbox "Machine Network CIDR (e.g., 10.0.0.0/24):" 10 70 "$MACHINE_NETWORK" 2>"$TMP" || { log "Machine network input cancelled"; break; }
+					input=$(<"$TMP")
+					input=${input##[[:space:]]}
+					input=${input%%[[:space:]]}
+					
+					# Allow empty (auto-detect) or valid CIDR
+					if [[ -n "$input" ]] && ! validate_cidr "$input"; then
+						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid CIDR format. Please enter a valid CIDR (e.g., 10.0.0.0/24)" 0 0
+						continue
+					fi
+					MACHINE_NETWORK="$input"
+					log "Machine network set to: $MACHINE_NETWORK"
+					break
+				done
 				;;
 			5)
-				log "Showing default route inputbox"
-				dialog --backtitle "$(ui_backtitle)" --inputbox "Default Route (gateway IP):" 10 70 "$NEXT_HOP_ADDRESS" 2>"$TMP" || { log "Default route input cancelled"; continue; }
-				NEXT_HOP_ADDRESS=$(<"$TMP")
-				NEXT_HOP_ADDRESS=${NEXT_HOP_ADDRESS##[[:space:]]}
-				NEXT_HOP_ADDRESS=${NEXT_HOP_ADDRESS%%[[:space:]]}
-				log "Default route set to: $NEXT_HOP_ADDRESS"
+				log "Showing DNS servers inputbox"
+				while :; do
+					dialog --backtitle "$(ui_backtitle)" --inputbox "DNS Servers (comma-separated IPs):" 10 70 "$DNS_SERVERS" 2>"$TMP" || { log "DNS input cancelled"; break; }
+					input=$(<"$TMP")
+					input=${input##[[:space:]]}
+					input=${input%%[[:space:]]}
+					
+					# Allow empty (auto-detect) or valid IP list
+					if [[ -n "$input" ]] && ! validate_ip_list "$input"; then
+						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid IP address format. Please enter comma-separated IPs (e.g., 8.8.8.8,1.1.1.1)" 0 0
+						continue
+					fi
+					DNS_SERVERS="$input"
+					log "DNS servers set to: $DNS_SERVERS"
+					break
+				done
 				;;
 			6)
-				log "Showing NTP servers inputbox"
-				dialog --backtitle "$(ui_backtitle)" --inputbox "NTP Servers (comma-separated):" 10 70 "$NTP_SERVERS" 2>"$TMP" || { log "NTP input cancelled"; continue; }
-				NTP_SERVERS=$(<"$TMP")
-				NTP_SERVERS=${NTP_SERVERS##[[:space:]]}
-				NTP_SERVERS=${NTP_SERVERS%%[[:space:]]}
-				log "NTP servers set to: $NTP_SERVERS"
+				log "Showing default route inputbox"
+				while :; do
+					dialog --backtitle "$(ui_backtitle)" --inputbox "Default Route (gateway IP):" 10 70 "$NEXT_HOP_ADDRESS" 2>"$TMP" || { log "Default route input cancelled"; break; }
+					input=$(<"$TMP")
+					input=${input##[[:space:]]}
+					input=${input%%[[:space:]]}
+					
+					# Allow empty (auto-detect) or valid IP
+					if [[ -n "$input" ]] && ! validate_ip "$input"; then
+						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid IP address format. Please enter a valid IP (e.g., 192.168.1.1)" 0 0
+						continue
+					fi
+					NEXT_HOP_ADDRESS="$input"
+					log "Default route set to: $NEXT_HOP_ADDRESS"
+					break
+				done
 				;;
 			7)
-				DIALOG_RC="next"
-				return
+				log "Showing NTP servers inputbox"
+				while :; do
+					dialog --backtitle "$(ui_backtitle)" --inputbox "NTP Servers (comma-separated IPs or hostnames):" 10 70 "$NTP_SERVERS" 2>"$TMP" || { log "NTP input cancelled"; break; }
+					input=$(<"$TMP")
+					input=${input##[[:space:]]}
+					input=${input%%[[:space:]]}
+					
+					# Allow empty (auto-detect) or valid NTP server list
+					if [[ -n "$input" ]] && ! validate_ntp_servers "$input"; then
+						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid NTP server format. Please enter comma-separated IPs or hostnames (e.g., pool.ntp.org,time.google.com,192.168.1.1)" 0 0
+						continue
+					fi
+					NTP_SERVERS="$input"
+					log "NTP servers set to: $NTP_SERVERS"
+					break
+				done
 				;;
 		esac
 	done
@@ -997,41 +1266,90 @@ select_operators() {
 	
 	# WAIT for catalog indexes to download (needed for operator sets AND search)
 	local version_short="$(echo "$OCP_VERSION" | cut -d. -f1-2)"
-	log "Waiting for catalog indexes to download before showing operators menu..."
+	log "Checking if catalog indexes need to be downloaded..."
 	
-	# Show progress dialog while waiting
-	dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for operator catalog indexes to finish downloading for OpenShift ${version_short}
-
-This may take 1-2 minutes on first run..." 7 80
-	
-	# Wait for all 4 catalog downloads to complete (run_once manages them in parallel)
-	local failed=0
-	local failed_catalogs=""
-	
+	# Peek first to see if we need to wait
+	local need_wait=0
 	for catalog in redhat-operator certified-operator redhat-marketplace community-operator; do
 		local task_id="catalog:${version_short}:${catalog}"
-		log "Waiting for catalog: $catalog"
-		if ! run_once -w -i "$task_id"; then
-			log "ERROR: Failed to download $catalog catalog"
-			failed=1
-			failed_catalogs="${failed_catalogs}  - $catalog\n"
+		if ! run_once -p -i "$task_id"; then
+			log "Catalog $catalog not yet complete"
+			need_wait=1
+			break
 		fi
 	done
 	
-	if [[ $failed -eq 1 ]]; then
-		log "ERROR: One or more catalog downloads failed"
+	# Only show wait dialog if actually waiting
+	if [[ $need_wait -eq 1 ]]; then
+		log "Catalogs not ready, showing wait dialog..."
+		dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for operator catalog indexes to finish downloading for OpenShift ${version_short}
+
+This may take 1-2 minutes on first run..." 7 80
+	else
+		log "All catalogs already downloaded, proceeding immediately"
+	fi
+	
+	# Wait for all 4 catalog downloads to complete (run_once manages them in parallel)
+	# Note: redhat-operator and certified-operator are REQUIRED
+	#       redhat-marketplace and community-operator are OPTIONAL
+	local critical_failed=0
+	local optional_failed=0
+	local failed_critical=""
+	local failed_optional=""
+	
+	# Check critical catalogs (must succeed)
+	for catalog in redhat-operator certified-operator; do
+		local task_id="catalog:${version_short}:${catalog}"
+		log "Waiting for CRITICAL catalog: $catalog"
+		if ! run_once -w -i "$task_id"; then
+			log "ERROR: Failed to download CRITICAL $catalog catalog"
+			critical_failed=1
+			failed_critical="${failed_critical}  - $catalog\n"
+		fi
+	done
+	
+	# Check optional catalogs (nice to have)
+	for catalog in redhat-marketplace community-operator; do
+		local task_id="catalog:${version_short}:${catalog}"
+		log "Waiting for OPTIONAL catalog: $catalog"
+		if ! run_once -w -i "$task_id"; then
+			log "WARNING: Failed to download optional $catalog catalog"
+			optional_failed=1
+			failed_optional="${failed_optional}  - $catalog\n"
+		fi
+	done
+	
+	# Block only if critical catalogs failed
+	if [[ $critical_failed -eq 1 ]]; then
+		log "ERROR: Critical catalog downloads failed"
 		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
-"[red]ERROR: Failed to download operator catalog[/red]
+"\Z1ERROR: Failed to download critical operator catalogs\Zn
 
-Cannot proceed without operator catalog indexes.
+Cannot proceed without these required catalogs.
 
-Failed catalogs:
-$failed_catalogs
+Failed:
+$failed_critical
 Check logs in: ~/.aba/runner/catalog:${version_short}:*.log
 
 Try running: make catalog" 0 0
 		DIALOG_RC="back"
 		return
+	fi
+	
+	# Warn if optional catalogs failed, but allow to continue
+	if [[ $optional_failed -eq 1 ]]; then
+		log "WARNING: Optional catalog downloads failed, but continuing"
+		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
+"\Z3WARNING: Optional catalogs failed to download\Zn
+
+These catalogs are not critical:
+$failed_optional
+You can continue without them. These operators won't be
+available for selection:
+  - Red Hat Marketplace operators
+  - Community operators
+
+Press OK to continue." 0 0 || true
 	fi
 	
 	log "Catalog indexes ready. Starting operators menu with ${#OP_BASKET[@]} operators in basket"
@@ -1049,10 +1367,10 @@ Try running: make catalog" 0 0
 			--help-button \
 			--ok-label "Select" \
 			--cancel-label "Accept & Next >>" \
-			--menu "Select operator actions ($basket_count in basket):" 0 0 8 \
+			--menu "Select operator actions:" 0 0 8 \
 			1 "Select Operator Sets" \
 			2 "Search Operator Names" \
-			3 "View Basket ($basket_count)" \
+			3 "View/Edit Basket ($basket_count operators)" \
 			4 "Clear Basket" \
 			5 "\ZbAccept\Zn" \
 			2>"$TMP"
@@ -1068,6 +1386,37 @@ Try running: make catalog" 0 0
 				;;
 			1)
 				# Cancel button = "Accept & Next"
+				# Check if basket is empty and warn
+				if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
+					log "Empty basket - showing warning"
+					set +e
+					dialog --backtitle "$(ui_backtitle)" --title "Empty Basket" \
+						--extra-button --extra-label "<< Back" \
+						--yes-label "Continue Anyway" \
+						--no-label "Add Operators" \
+						--yesno "No operators selected. Continue with empty basket?\n\nYou can add operators later as Day-2 operations." 0 0
+					empty_rc=$?
+					set -e
+					
+					case "$empty_rc" in
+						0)
+							# Continue anyway
+							log "User chose to continue with empty basket"
+							;;
+						1|255)
+							# Go back to add operators
+							log "User chose to add operators"
+							continue
+							;;
+						3)
+							# Extra button = Back to previous screen
+							DIALOG_RC="back"
+							log "User went back from empty basket warning"
+							return
+							;;
+					esac
+				fi
+				
 				DIALOG_RC="next"
 				log "User accepted operators and moved to next (rc=$rc)"
 				return
@@ -1091,11 +1440,21 @@ Selected operators will be included in the
 image synchronization process." 16 70 || true
 				continue
 				;;
-			3|255)
-				# Back/ESC
+			3)
+				# Extra button = Back
 				DIALOG_RC="back"
 				log "User went back from operators (rc=$rc)"
 				return
+				;;
+			255)
+				# ESC - confirm quit
+				if confirm_quit; then
+					log "User confirmed quit from operators screen"
+					exit 0
+				else
+					log "User cancelled quit, staying on operators screen"
+					continue
+				fi
 				;;
 			*)
 				# Unexpected return code
@@ -1119,11 +1478,15 @@ image synchronization process." 16 70 || true
 				for f in "$ABA_ROOT"/templates/operator-set-*; do
 					[[ -f "$f" ]] || continue
 					key=${f##*/operator-set-}
-					display=$(head -n1 "$f" 2>/dev/null | sed 's/^# *//')
+					display=$(head -n1 "$f" 2>/dev/null | sed 's/^# *//' | sed 's/^Name: *//')
 					[[ -z "$display" ]] && display="$key"
 
-					# Always show as unselected - user picks what to add each time
-					items+=("$key" "$display" "off")
+					# Show as checked if already applied
+					if [[ -n "${OP_SET_ADDED[$key]:-}" ]]; then
+						items+=("$key" "$display ✓" "on")
+					else
+						items+=("$key" "$display" "off")
+					fi
 				done
 
 				[[ "${#items[@]}" -eq 0 ]] && {
@@ -1400,43 +1763,111 @@ image synchronization process." 16 70 || true
 summary_apply() {
 	log "Entering summary_apply"
 	
-	# Build comma-separated values for aba.conf
-	ops_csv=$(printf "%s\n" "${!OP_BASKET[@]}" | sort | paste -sd, -)
-	op_sets_csv=$(printf "%s
-" "${!OP_SET_ADDED[@]}" 2>/dev/null | sort | paste -sd, -)
+	# Create custom operator-set file if basket is not empty
+	local custom_set_name=""
+	if [[ ${#OP_BASKET[@]} -gt 0 ]]; then
+		# Generate sorted list of operators for comparison
+		local new_op_list=$(printf "%s\n" "${!OP_BASKET[@]}" | sort | paste -sd, -)
+		log "New operator list: $new_op_list"
+		
+		# Check if an identical custom set already exists
+		local found_duplicate=""
+		for existing_file in "$ABA_ROOT"/templates/operator-set-custom-*; do
+			[[ -f "$existing_file" ]] || continue
+			
+			# Skip the first line (comment/title) and get sorted operator list
+			local existing_op_list=$(tail -n +2 "$existing_file" | sort | paste -sd, -)
+			
+			if [[ "$new_op_list" == "$existing_op_list" ]]; then
+				# Found an identical set!
+				found_duplicate=$(basename "$existing_file")
+				found_duplicate=${found_duplicate#operator-set-}
+				log "Found duplicate custom set: $found_duplicate"
+				break
+			fi
+		done
+		
+		if [[ -n "$found_duplicate" ]]; then
+			# Reuse existing set
+			custom_set_name="$found_duplicate"
+			log "Reusing existing custom operator set: $custom_set_name"
+		else
+			# Create new set and delete old custom sets (they're outdated)
+			local timestamp=$(date +%Y%m%d-%H%M%S)
+			local readable_date=$(date '+%Y-%m-%d %H:%M')
+			custom_set_name="custom-${timestamp}"
+			local custom_set_file="$ABA_ROOT/templates/operator-set-${custom_set_name}"
+			
+			log "Creating NEW custom operator set file: $custom_set_file"
+			
+			# Delete old custom operator sets (they're outdated now)
+			local deleted_count=0
+			for old_file in "$ABA_ROOT"/templates/operator-set-custom-*; do
+				[[ -f "$old_file" ]] || continue
+				log "Deleting old custom set: $old_file"
+				rm -f "$old_file"
+				((deleted_count++))
+			done
+			[[ $deleted_count -gt 0 ]] && log "Deleted $deleted_count old custom operator sets"
+			
+			# Create the new custom operator set file with title and operators
+			{
+				echo "# Name: Custom Operator Set ${readable_date}"
+				printf "%s\n" "${!OP_BASKET[@]}" | sort
+			} > "$custom_set_file"
+			
+			log "Created NEW custom operator set with ${#OP_BASKET[@]} operators"
+		fi
+	fi
+	
+	# For aba.conf: use custom set name only, leave ops empty
+	local op_sets_value=""
+	if [[ -n "$custom_set_name" ]]; then
+		op_sets_value="$custom_set_name"
+	fi
+	
+	# Human-friendly preview list for summary dialog
+	local op_summary
+	if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
+		op_summary="(none)"
+	else
+		op_summary="${#OP_BASKET[@]} operators selected"
+		if [[ ${#OP_BASKET[@]} -le 5 ]]; then
+			# Show operator names if 5 or fewer
+			op_summary="${op_summary}: $(printf "%s\n" "${!OP_BASKET[@]}" | sort | paste -sd, -)"
+		fi
+	fi
 
-	# Human-friendly preview list
-	op_list=$(printf "%s\n" "${!OP_BASKET[@]}" | sort | head -15)
-	[[ -z "$op_list" ]] && op_list="(none)"
-	[[ ${#OP_BASKET[@]} -gt 15 ]] && op_list="$op_list
-... and $((${#OP_BASKET[@]} - 15)) more"
+	summary_text="
+═══════════════════════════════════════════════════
+               OPENSHIFT CONFIGURATION
+═══════════════════════════════════════════════════
 
-	summary_text="OpenShift Configuration:
-  • Channel:  $OCP_CHANNEL
-  • Version:  $OCP_VERSION
+Channel:         $OCP_CHANNEL
+Version:         $OCP_VERSION
 
-Platform & Network:
-  • Platform: ${PLATFORM:-bm}
-  • Domain:   ${DOMAIN:-example.com}
-  • Network:  ${MACHINE_NETWORK:-(auto-detect)}
-  • DNS:      ${DNS_SERVERS:-(auto-detect)}
-  • Gateway:  ${NEXT_HOP_ADDRESS:-(auto-detect)}
-  • NTP:      ${NTP_SERVERS:-(auto-detect)}
+Platform:        ${PLATFORM:-bm}
+Domain:          ${DOMAIN:-example.com}
 
-Operator Sets: ${op_sets_csv:-(none)}
+Network:         ${MACHINE_NETWORK:-(auto-detect)}
+DNS Servers:     ${DNS_SERVERS:-(auto-detect)}
+Default Route:   ${NEXT_HOP_ADDRESS:-(auto-detect)}
+NTP Servers:     ${NTP_SERVERS:-(auto-detect)}
 
-Operators (${#OP_BASKET[@]}):
-$op_list"
+Operator Set:    ${op_sets_value:-(none)}
+Operators:       $op_summary
+
+═══════════════════════════════════════════════════"
 
 	while :; do
 		# Show summary with action buttons
 		set +e
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Summary" \
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Configuration Summary" \
 			--extra-button --extra-label "Save Draft" \
 			--help-button \
 			--yes-label "Apply to aba.conf" \
 			--no-label "<< Back" \
-			--yesno "$summary_text\n\nReview your configuration above." 0 0
+			--yesno "$summary_text" 0 0
 		rc=$?
 		set -e
 		
@@ -1452,19 +1883,29 @@ $op_list"
 				replace-value-conf -q -n dns_servers       -v "${DNS_SERVERS}"     -f aba.conf
 				replace-value-conf -q -n next_hop_address  -v "${NEXT_HOP_ADDRESS}" -f aba.conf
 				replace-value-conf -q -n ntp_servers       -v "${NTP_SERVERS}"     -f aba.conf
-				replace-value-conf -q -n ops               -v "$ops_csv"           -f aba.conf
-				replace-value-conf -q -n op_sets           -v "$op_sets_csv"       -f aba.conf
+				replace-value-conf -q -n ops               -v ""                   -f aba.conf
+				replace-value-conf -q -n op_sets           -v "$op_sets_value"     -f aba.conf
 				log "Configuration applied successfully"
 				
-				dialog --backtitle "$(ui_backtitle)" --msgbox \
-"Configuration applied to aba.conf
+				# Build success message
+				local success_msg="Configuration applied to aba.conf"
+				if [[ -n "$custom_set_name" ]]; then
+					success_msg="${success_msg}
+
+Custom operator set created:
+  templates/operator-set-${custom_set_name}
+  (${#OP_BASKET[@]} operators)"
+				fi
+				success_msg="${success_msg}
 
 Next steps:
   1. aba -d mirror install    (setup registry)
   2. aba -d mirror sync       (download images)
   3. aba cluster --name <name> (create cluster)
 
-See: aba --help" 0 0 || true
+See: aba --help"
+				
+				dialog --backtitle "$(ui_backtitle)" --msgbox "$success_msg" 0 0 || true
 				return 0
 				;;
 			3)
@@ -1482,22 +1923,42 @@ machine_network=${MACHINE_NETWORK}
 dns_servers=${DNS_SERVERS}
 next_hop_address=${NEXT_HOP_ADDRESS}
 ntp_servers=${NTP_SERVERS}
-ops=$ops_csv
-op_sets=$op_sets_csv
+ops=
+op_sets=$op_sets_value
 EOF
-				dialog --backtitle "$(ui_backtitle)" --msgbox \
-"Draft saved to: aba.conf.draft
+				# Build draft message
+				local draft_msg="Draft saved to: aba.conf.draft"
+				if [[ -n "$custom_set_name" ]]; then
+					draft_msg="${draft_msg}
+
+Custom operator set created:
+  templates/operator-set-${custom_set_name}
+  (${#OP_BASKET[@]} operators)"
+				fi
+				draft_msg="${draft_msg}
 
 To apply later:
-  mv aba.conf.draft aba.conf" 0 0 || true
+  mv aba.conf.draft aba.conf"
+				
+				dialog --backtitle "$(ui_backtitle)" --msgbox "$draft_msg" 0 0 || true
 				
 				log "Draft saved, continuing in summary"
 				continue  # Stay in summary screen loop
 				;;
-			1|255)
-				# No or ESC = Back
+			1)
+				# No = Back
 				log "User went back from summary"
 				return 1
+				;;
+			255)
+				# ESC - confirm quit
+				if confirm_quit; then
+					log "User confirmed quit from summary screen"
+					exit 0
+				else
+					log "User cancelled quit, staying on summary screen"
+					continue
+				fi
 				;;
 			2)
 				# Help
@@ -1534,6 +1995,19 @@ log "=== STARTING TUI ==="
 # Check internet access first
 check_internet_access
 
+# Start background version fetches immediately (for all channels)
+log "Starting background OCP version fetches for all channels"
+run_once -i "ocp:stable:latest_version"             -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version stable'
+run_once -i "ocp:stable:latest_version_previous"    -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable'
+
+run_once -i "ocp:fast:latest_version"               -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast'
+run_once -i "ocp:fast:latest_version_previous"      -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version fast'
+
+run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate'
+run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate'
+
+log "Background OCP version fetches started"
+
 # Show header
 ui_header
 
@@ -1557,7 +2031,14 @@ while :; do
 			elif [[ "$DIALOG_RC" == "next" ]]; then
 				STEP="version"
 			elif [[ "$DIALOG_RC" == "back" ]]; then
-				break
+				# First screen, confirm quit
+				if confirm_quit; then
+					log "User quit from channel selection"
+					break
+				else
+					log "User cancelled quit, staying on channel"
+					continue
+				fi
 			fi
 			;;
 	version)
