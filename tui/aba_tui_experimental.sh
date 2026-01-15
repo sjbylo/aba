@@ -10,6 +10,8 @@ set -eo pipefail
 # Logging
 # -----------------------------------------------------------------------------
 LOG_FILE="${TMPDIR:-/tmp}/aba-tui-$$.log"
+# Also create a persistent log link for easier access
+LOG_LINK="${TMPDIR:-/tmp}/aba-tui-latest.log"
 export LOG_FILE
 
 log() {
@@ -19,6 +21,11 @@ log() {
 log "=========================================="
 log "ABA TUI started"
 log "=========================================="
+log "Log file: $LOG_FILE"
+
+# Create symlink to latest log for easier access
+ln -sf "$LOG_FILE" "$LOG_LINK" 2>/dev/null || true
+log "Symlink created: $LOG_LINK -> $LOG_FILE"
 
 # -----------------------------------------------------------------------------
 # Sanity checks
@@ -171,19 +178,59 @@ calc_dlg_size() {
 # -----------------------------------------------------------------------------
 # UI helpers
 # -----------------------------------------------------------------------------
+check_internet_access() {
+	log "Checking internet access to mirror.openshift.com"
+	
+	if ! curl -s --connect-timeout 5 --max-time 10 https://mirror.openshift.com >/dev/null 2>&1; then
+		log "ERROR: No internet access to mirror.openshift.com"
+		dialog --colors --clear --title "Internet Access Required" \
+			--msgbox \
+"[red]ERROR: Internet access required[/red]
+
+Cannot reach: https://mirror.openshift.com
+
+This TUI requires internet access to:
+  • Download OpenShift release information
+  • Fetch operator catalog indexes
+  • Download oc-mirror CLI tool
+
+Please ensure:
+  • You have an active internet connection
+  • Firewall allows HTTPS access
+  • Proxy settings are configured (if needed)
+
+Exiting..." 0 0
+		
+		log "Exiting due to no internet access"
+		exit 1
+	fi
+	
+	log "Internet access confirmed"
+}
+
 ui_header() {
 	log "Showing header screen"
 	
 	local rc
 	while :; do
-		calc_dlg_size 0 70
-		dialog --clear --backtitle "$(ui_backtitle)" --title "ABA – OpenShift Installer" \
+		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "ABA – OpenShift Installer" \
 			--help-button --help-label "Help" \
+			--ok-label "Continue" \
 			--msgbox \
-"Install & manage air-gapped OpenShift quickly with Aba.
+"   __   ____   __
+  / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly
+ /    \ ) _ (/    \    with the Aba utility!
+ \_/\_/(____/\_/\_/
 
-Press <OK> to continue.
-Press <Help> for more information." $DLG_H $DLG_W
+Follow the instructions below or see the README.md file
+for more information.
+
+Press <Continue> to start configuration.
+Press <Help> for more information." 0 0 || {
+			rc=$?
+			log "ERROR: Header dialog failed with rc=$rc"
+			exit 1
+		}
 		
 		rc=$?
 		log "Header dialog returned: $rc"
@@ -194,11 +241,10 @@ Press <Help> for more information." $DLG_H $DLG_W
 				log "User pressed OK on header"
 				break
 				;;
-		2)
-			# Help button pressed - show help and loop back
-			log "Help button pressed in header"
-			calc_dlg_size 0 70
-			dialog --backtitle "$(ui_backtitle)" --title "ABA Help" --msgbox \
+			2)
+				# Help button pressed - show help and loop back
+				log "Help button pressed in header"
+				dialog --backtitle "$(ui_backtitle)" --title "ABA Help" --msgbox \
 "ABA (Agent-Based Automation) helps install OpenShift in
 disconnected environments.
 
@@ -213,9 +259,9 @@ Configuration is saved to aba.conf
 For full documentation, see:
   $ABA_ROOT/README.md
   
-For help, run: aba --help" $DLG_H $DLG_W
-			# Continue loop to show header again
-			;;
+For help, run: aba --help" 0 0 || true
+				# Continue loop to show header again
+				;;
 			*)
 				# ESC or other - exit
 				log "User cancelled header (rc=$rc)"
@@ -318,14 +364,19 @@ select_ocp_channel() {
 		stable|"") s_state="on" ;;
 	esac
 
-	calc_dlg_size 3 50
-	dialog --clear --backtitle "$(ui_backtitle)" --title "OpenShift Channel" \
-		--extra-button --extra-label "<BACK>" \
+	# Set default item based on current channel
+	local default_tag="${OCP_CHANNEL:0:1}"  # First letter: s, f, or c
+	[[ -z "$default_tag" ]] && default_tag="s"
+	
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "OpenShift Channel" \
+		--extra-button --extra-label "<< Back" \
 		--help-button \
-		--radiolist "Choose the OpenShift update channel:" $DLG_H $DLG_W 7 \
-		c "candidate  – Preview" "$c_state" \
-		f "fast       – Latest GA" "$f_state" \
-		s "stable     – Recommended" "$s_state" \
+		--ok-label "Next >>" \
+		--default-item "$default_tag" \
+		--menu "Choose the OpenShift update channel:" 0 0 3 \
+		s "stable     – Recommended" \
+		f "fast       – Latest GA" \
+		c "candidate  – Preview" \
 		2>"$TMP"
 
 	rc=$?
@@ -339,7 +390,6 @@ select_ocp_channel() {
 		2)
 			# Help button
 			log "Help button pressed in channel selection"
-			calc_dlg_size 0 70
 			dialog --backtitle "$(ui_backtitle)" --msgbox \
 "OpenShift Update Channels:
 
@@ -352,7 +402,7 @@ select_ocp_channel() {
 • candidate (Preview)
   Preview/beta releases for testing
 
-See: https://docs.openshift.com/container-platform/latest/updating/understanding_updates/understanding-update-channels-release.html" $DLG_H $DLG_W
+See: https://docs.openshift.com/container-platform/latest/updating/understanding_updates/understanding-update-channels-release.html" 0 0 || true
 			DIALOG_RC="repeat"
 			return
 			;;
@@ -400,11 +450,11 @@ select_ocp_version() {
 	previous=$(fetch_previous_version "$OCP_CHANNEL")
 	log "Versions: latest=$latest previous=$previous"
 
-	calc_dlg_size 3 60
-	dialog --clear --backtitle "$(ui_backtitle)" --title "OpenShift Version" \
-		--extra-button --extra-label "<BACK>" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "OpenShift Version" \
+		--extra-button --extra-label "<< Back" \
 		--help-button \
-		--menu "Choose the OpenShift version to install:" $DLG_H $DLG_W 7 \
+		--ok-label "Next >>" \
+		--menu "Choose the OpenShift version to install:" 0 0 7 \
 		l "Latest   ($latest)" \
 		p "Previous ($previous)" \
 		m "Manual entry (x.y or x.y.z)" \
@@ -421,7 +471,6 @@ select_ocp_version() {
 		2)
 			# Help button
 			log "Help button pressed in version selection"
-			calc_dlg_size 0 70
 			dialog --backtitle "$(ui_backtitle)" --msgbox \
 "OpenShift Version Selection:
 
@@ -432,7 +481,7 @@ select_ocp_version() {
 Example versions: 4.18.10 or 4.18
 
 The installer will validate and download the
-selected version." $DLG_H $DLG_W
+selected version." 0 0 || true
 			DIALOG_RC="repeat"
 			return
 			;;
@@ -506,50 +555,300 @@ selected version." $DLG_H $DLG_W
 	
 	log "aba.conf updated successfully"
 	
-	# Start catalog download immediately in background (now that version is known)
-	# Include version in task ID so different versions get different catalogs
+	# Start catalog downloads immediately in background (now that version is known)
+	# Use run_once for each catalog - proper task management and parallelization
 	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
-	log "Starting catalog download task for OCP ${OCP_VERSION} (${version_short})"
-	run_once -i "download_catalog_indexes:${version_short}" -- make -C "$ABA_ROOT" catalog
+	log "Starting catalog download tasks for OCP ${OCP_VERSION} (${version_short})"
 	
-	calc_dlg_size 0 60
-	dialog --backtitle "$(ui_backtitle)" --msgbox "Selected:
+	# Start all 4 catalog downloads in parallel using run_once
+	run_once -i "catalog:${version_short}:redhat-operator" -- bash -lc "cd '$ABA_ROOT' && source scripts/include_all.sh && cd mirror && ../scripts/download-operator-index.sh redhat-operator"
+	run_once -i "catalog:${version_short}:certified-operator" -- bash -lc "cd '$ABA_ROOT' && source scripts/include_all.sh && cd mirror && ../scripts/download-operator-index.sh certified-operator"
+	run_once -i "catalog:${version_short}:redhat-marketplace" -- bash -lc "cd '$ABA_ROOT' && source scripts/include_all.sh && cd mirror && ../scripts/download-operator-index.sh redhat-marketplace"
+	run_once -i "catalog:${version_short}:community-operator" -- bash -lc "cd '$ABA_ROOT' && source scripts/include_all.sh && cd mirror && ../scripts/download-operator-index.sh community-operator"
+	
+	set +e
+	dialog --backtitle "$(ui_backtitle)" --title "Confirm Selection" \
+		--extra-button --extra-label "<< Back" \
+		--ok-label "Next >>" \
+		--msgbox "Selected:
 
   Channel: $OCP_CHANNEL
   Version: $OCP_VERSION
 
-Next: Configure platform and network." $DLG_H $DLG_W
-
-	DIALOG_RC="next"
+Next: Configure platform and network." 0 0
+	rc=$?
+	set -e
+	
+	case "$rc" in
+		0)
+			# OK/Next
+			DIALOG_RC="next"
+			;;
+		3|255)
+			# Back or ESC
+			DIALOG_RC="back"
+			;;
+		*)
+			# Unexpected
+			DIALOG_RC="next"
+			;;
+	esac
 }
 
 # -----------------------------------------------------------------------------
-# Step 3: Platform and Network Configuration
+# Step 3: Pull Secret Validation
+# -----------------------------------------------------------------------------
+select_pull_secret() {
+	DIALOG_RC=""
+	log "Entering select_pull_secret"
+	
+	local pull_secret_file="$HOME/.pull-secret.json"
+	local error_msg=""
+	
+	# Check if pull secret exists and is valid
+	if [[ -f "$pull_secret_file" ]]; then
+		log "Found existing pull secret at $pull_secret_file"
+		
+		# Validate JSON
+		if jq empty "$pull_secret_file" 2>/dev/null; then
+			# Check for required registry
+			if grep -q "registry.redhat.io" "$pull_secret_file"; then
+				log "Pull secret is valid, skipping screen"
+				DIALOG_RC="next"
+				return
+			else
+				log "Pull secret missing registry.redhat.io"
+				error_msg="[red]ERROR: Existing Pull Secret Invalid[/red]
+
+Found pull secret at: $pull_secret_file
+
+Problem: Missing 'registry.redhat.io' credentials
+
+Please paste a valid pull secret."
+			fi
+		else
+			log "Pull secret is not valid JSON"
+			error_msg="[red]ERROR: Existing Pull Secret Invalid[/red]
+
+Found pull secret at: $pull_secret_file
+
+Problem: Not valid JSON format
+
+Please paste a valid pull secret."
+		fi
+	else
+		log "No pull secret found at $pull_secret_file"
+	fi
+	
+	# Collect pull secret from user (simplified flow)
+	while :; do
+		# Show error message if there was a validation issue
+		if [[ -n "$error_msg" ]]; then
+			# Use dialog's auto-sizing (0 0 = auto height/width)
+			dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Validation Error" \
+				--msgbox "$error_msg" 0 0 || true
+			error_msg=""  # Clear for next iteration
+		fi
+		
+		# Show editbox for paste - BLANK, large size
+		# Use full terminal size or max reasonable size
+		local dlg_h=$((TERM_ROWS - 4))
+		local dlg_w=$((TERM_COLS - 4))
+		
+		log "Terminal size: ${TERM_ROWS}x${TERM_COLS}, calculated dialog: ${dlg_h}x${dlg_w}"
+		
+		# Enforce minimums and maximums
+		[[ $dlg_h -lt 25 ]] && dlg_h=25
+		[[ $dlg_h -gt 50 ]] && dlg_h=50
+		[[ $dlg_w -lt 80 ]] && dlg_w=80
+		[[ $dlg_w -gt 120 ]] && dlg_w=120
+		
+		log "Final dialog size: ${dlg_h}x${dlg_w}"
+		
+		# Create empty temp file for editbox
+		local empty_file=$(mktemp)
+		echo "" > "$empty_file"
+		
+		# Show editbox with empty file
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
+			--extra-button --extra-label "<< Back" \
+			--help-button \
+			--ok-label "Next >>" \
+			--editbox "$empty_file" $dlg_h $dlg_w 2>"$TMP"
+		
+		rc=$?
+		rm -f "$empty_file"
+		log "Pull secret editbox returned: $rc"
+		
+		# Handle ESC or dialog errors
+		if [[ $rc -eq 255 ]]; then
+			log "User pressed ESC or dialog error, treating as Back"
+			DIALOG_RC="back"
+			return
+		fi
+		
+		case "$rc" in
+			0)
+				# Next >> - validate and save
+				log "User clicked Next, validating pull secret"
+				local pull_secret=$(<"$TMP")
+				
+				# Check if empty
+			if [[ -z "$pull_secret" || "$pull_secret" =~ ^[[:space:]]*$ ]]; then
+				error_msg="\Z1ERROR: Pull secret is empty\Zn
+
+Please paste your pull secret and press <Next >>
+
+Get it from:
+  https://console.redhat.com/openshift/install/pull-secret
+
+Press <Help> for more information."
+				log "User didn't paste anything, showing error"
+				continue
+			fi
+				
+				# Validate the pasted content
+				if echo "$pull_secret" | jq empty 2>/dev/null; then
+					if echo "$pull_secret" | grep -q "registry.redhat.io"; then
+						# Valid! Save it
+						echo "$pull_secret" > "$pull_secret_file"
+						chmod 600 "$pull_secret_file"
+						log "Pull secret saved successfully to $pull_secret_file"
+						
+						DIALOG_RC="next"
+						return
+				else
+					log "Pull secret missing registry.redhat.io"
+					error_msg="\Z1ERROR: Invalid Pull Secret\Zn
+
+The pull secret does not contain 'registry.redhat.io'.
+
+Please ensure you copied the complete pull secret from:
+  https://console.redhat.com/openshift/install/pull-secret
+
+Press <Help> for more information."
+					continue
+				fi
+			else
+				log "Pull secret is not valid JSON"
+				error_msg="\Z1ERROR: Invalid JSON Format\Zn
+
+The pasted content is not valid JSON.
+
+Please copy the ENTIRE pull secret from the Red Hat console.
+It should start with { and end with }
+
+Press <Help> for more information."
+				continue
+			fi
+				;;
+			2)
+				# Help button
+			log "Help button pressed in pull secret"
+			dialog --colors --clear --backtitle "$(ui_backtitle)" --msgbox \
+"[bold]Red Hat Pull Secret - Instructions[/bold]
+
+[cyan]What is it?[/cyan]
+The pull secret is a JSON file containing authentication credentials
+for downloading OpenShift images from Red Hat registries.
+
+[cyan]How to get your pull secret:[/cyan]
+  1. Visit: https://console.redhat.com/openshift/install/pull-secret
+  2. Log in with your Red Hat account
+  3. Click 'Copy pull secret'
+  4. Return to this TUI and paste into the blank field
+  5. Press <Next >>
+
+[cyan]Requirements:[/cyan]
+  • Must be valid JSON format (starts with { ends with })
+  • Must contain 'registry.redhat.io' credentials
+
+[cyan]What it's used for:[/cyan]
+  • Downloading OpenShift release images
+  • Accessing Red Hat operator catalogs
+  • Pulling certified container images
+
+[cyan]Security:[/cyan]
+  • Saved to: ~/.pull-secret.json
+  • Permissions: 600 (read/write for owner only)
+
+[cyan]Tip:[/cyan]
+Copy from browser → paste directly into the blank field → Next" 0 0 || true
+			continue
+			;;
+			3|255)
+				# Back/ESC
+				DIALOG_RC="back"
+				log "User went back from pull secret (rc=$rc)"
+				return
+				;;
+			*)
+				DIALOG_RC="back"
+				return
+				;;
+		esac
+	done
+}
+
+# -----------------------------------------------------------------------------
+# Step 4: Platform and Network Configuration
 # -----------------------------------------------------------------------------
 select_platform_network() {
 	DIALOG_RC=""
 	log "Entering select_platform_network"
 
 	while :; do
-		calc_dlg_size 7 60
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Platform & Network" \
-			--extra-button --extra-label "<BACK>" \
+		# Use simpler fixed dialog size for stability
+		local dlg_h=18
+		local dlg_w=75
+		
+		log "Showing platform menu dialog..."
+		log "  DLG_H=$dlg_h DLG_W=$dlg_w"
+		log "  PLATFORM=${PLATFORM:-bm}"
+		log "  DOMAIN=${DOMAIN:-example.com}"
+		log "  MACHINE_NETWORK=${MACHINE_NETWORK:-(auto-detect)}"
+		log "  DNS_SERVERS=${DNS_SERVERS:-(auto-detect)}"
+		log "  NEXT_HOP_ADDRESS=${NEXT_HOP_ADDRESS:-(auto-detect)}"
+		log "  NTP_SERVERS=${NTP_SERVERS:-(auto-detect)}"
+		
+		log "About to show platform menu dialog..."
+		
+		# Use explicit arguments (no array expansion issues)
+		set +e  # Temporarily disable exit on error
+		dialog --clear --backtitle "$(ui_backtitle)" --title "Platform & Network" \
+			--extra-button --extra-label "Accept & Next >>" \
 			--help-button \
-			--menu "Configure platform and network:" $DLG_H $DLG_W 8 \
+			--ok-label "Select" \
+			--cancel-label "<< Back" \
+			--menu "Configure platform and network:" $dlg_h $dlg_w 8 \
 			1 "Platform: ${PLATFORM:-bm}" \
 			2 "Base Domain: ${DOMAIN:-example.com}" \
 			3 "Machine Network: ${MACHINE_NETWORK:-(auto-detect)}" \
-		4 "DNS Servers: ${DNS_SERVERS:-(auto-detect)}" \
-		5 "Default Route: ${NEXT_HOP_ADDRESS:-(auto-detect)}" \
-		6 "NTP Servers: ${NTP_SERVERS:-(auto-detect)}" \
-		7 "\ZbAccept\Zn" \
+			4 "DNS Servers: ${DNS_SERVERS:-(auto-detect)}" \
+			5 "Default Route: ${NEXT_HOP_ADDRESS:-(auto-detect)}" \
+			6 "NTP Servers: ${NTP_SERVERS:-(auto-detect)}" \
+			7 "Accept" \
 			2>"$TMP"
-
 		rc=$?
-		if [[ $rc -eq 2 ]]; then
-			# Help button
-			calc_dlg_size 0 70
-			dialog --backtitle "$(ui_backtitle)" --msgbox \
+		set -e  # Re-enable exit on error
+		
+		log "Platform menu dialog returned: $rc"
+		
+		case "$rc" in
+			0)
+				# Item selected, handle action
+				action=$(<"$TMP")
+				log "Platform menu action selected: $action"
+				;;
+			1|255)
+				# Cancel button (Back) or ESC
+				DIALOG_RC="back"
+				log "User went back from platform (rc=$rc)"
+				return
+				;;
+			2)
+				# Help button
+				dialog --backtitle "$(ui_backtitle)" --msgbox \
 "Platform & Network Configuration:
 
 • Platform: bm (bare-metal) or vmw (VMware)
@@ -559,58 +858,72 @@ select_platform_network() {
 • Default Route: Gateway IP for cluster network
 • NTP Servers: Time sync servers (IPs or hostnames)
 
-Leave blank to use auto-detected values." $DLG_H $DLG_W
-			continue
-		fi
-		
-		# Handle BACK, Cancel, ESC
-		if [[ "$rc" == 3 || "$rc" == 1 || "$rc" == 255 ]]; then
-			DIALOG_RC="back"
-			log "User went back from platform (rc=$rc)"
-			return
-		fi
-		[[ "$rc" != 0 ]] && { DIALOG_RC="back"; return; }
-
-		action=$(<"$TMP")
-		case "$action" in
-			1)
-				dialog --backtitle "$(ui_backtitle)" --radiolist "Target Platform:" $DLG_H $DLG_W 3 \
-					bm "Bare Metal" $([ "$PLATFORM" = "bm" ] && echo "on" || echo "off") \
-					vmw "VMware (vSphere/ESXi)" $([ "$PLATFORM" = "vmw" ] && echo "on" || echo "off") \
-					2>"$TMP" || continue
-				PLATFORM=$(<"$TMP")
-				log "Platform set to: $PLATFORM"
+Leave blank to use auto-detected values." 0 0 || true
+				continue
 				;;
+			3)
+				# Extra button = "Accept & Next"
+				DIALOG_RC="next"
+				log "User accepted platform config and moved to next (rc=$rc)"
+				return
+				;;
+			*)
+				# Unexpected return code
+				log "ERROR: Unexpected dialog return code: $rc"
+				DIALOG_RC="back"
+				return
+				;;
+		esac
+		
+		# If we got here, rc=0 and we have an action to handle
+		log "Platform menu action selected: $action"
+		case "$action" in
+		1)
+			log "Showing platform selection menu"
+			dialog --backtitle "$(ui_backtitle)" --title "Target Platform" \
+				--default-item "${PLATFORM:-bm}" \
+				--menu "Select target platform:" 0 0 2 \
+				bm "Bare Metal" \
+				vmw "VMware (vSphere/ESXi)" \
+				2>"$TMP" || { log "Platform menu cancelled"; continue; }
+			PLATFORM=$(<"$TMP")
+			log "Platform set to: $PLATFORM"
+			;;
 			2)
-				dialog --backtitle "$(ui_backtitle)" --inputbox "Base Domain (e.g., example.com):" 10 70 "$DOMAIN" 2>"$TMP" || continue
+				log "Showing domain inputbox"
+				dialog --backtitle "$(ui_backtitle)" --inputbox "Base Domain (e.g., example.com):" 10 70 "$DOMAIN" 2>"$TMP" || { log "Domain input cancelled"; continue; }
 				DOMAIN=$(<"$TMP")
 				DOMAIN=${DOMAIN##[[:space:]]}
 				DOMAIN=${DOMAIN%%[[:space:]]}
 				log "Domain set to: $DOMAIN"
 				;;
 			3)
-				dialog --backtitle "$(ui_backtitle)" --inputbox "Machine Network CIDR (e.g., 10.0.0.0/24):" 10 70 "$MACHINE_NETWORK" 2>"$TMP" || continue
+				log "Showing machine network inputbox"
+				dialog --backtitle "$(ui_backtitle)" --inputbox "Machine Network CIDR (e.g., 10.0.0.0/24):" 10 70 "$MACHINE_NETWORK" 2>"$TMP" || { log "Machine network input cancelled"; continue; }
 				MACHINE_NETWORK=$(<"$TMP")
 				MACHINE_NETWORK=${MACHINE_NETWORK##[[:space:]]}
 				MACHINE_NETWORK=${MACHINE_NETWORK%%[[:space:]]}
 				log "Machine network set to: $MACHINE_NETWORK"
 				;;
 			4)
-				dialog --backtitle "$(ui_backtitle)" --inputbox "DNS Servers (comma-separated IPs):" 10 70 "$DNS_SERVERS" 2>"$TMP" || continue
+				log "Showing DNS servers inputbox"
+				dialog --backtitle "$(ui_backtitle)" --inputbox "DNS Servers (comma-separated IPs):" 10 70 "$DNS_SERVERS" 2>"$TMP" || { log "DNS input cancelled"; continue; }
 				DNS_SERVERS=$(<"$TMP")
 				DNS_SERVERS=${DNS_SERVERS##[[:space:]]}
 				DNS_SERVERS=${DNS_SERVERS%%[[:space:]]}
 				log "DNS servers set to: $DNS_SERVERS"
 				;;
 			5)
-				dialog --backtitle "$(ui_backtitle)" --inputbox "Default Route (gateway IP):" 10 70 "$NEXT_HOP_ADDRESS" 2>"$TMP" || continue
+				log "Showing default route inputbox"
+				dialog --backtitle "$(ui_backtitle)" --inputbox "Default Route (gateway IP):" 10 70 "$NEXT_HOP_ADDRESS" 2>"$TMP" || { log "Default route input cancelled"; continue; }
 				NEXT_HOP_ADDRESS=$(<"$TMP")
 				NEXT_HOP_ADDRESS=${NEXT_HOP_ADDRESS##[[:space:]]}
 				NEXT_HOP_ADDRESS=${NEXT_HOP_ADDRESS%%[[:space:]]}
 				log "Default route set to: $NEXT_HOP_ADDRESS"
 				;;
 			6)
-				dialog --backtitle "$(ui_backtitle)" --inputbox "NTP Servers (comma-separated):" 10 70 "$NTP_SERVERS" 2>"$TMP" || continue
+				log "Showing NTP servers inputbox"
+				dialog --backtitle "$(ui_backtitle)" --inputbox "NTP Servers (comma-separated):" 10 70 "$NTP_SERVERS" 2>"$TMP" || { log "NTP input cancelled"; continue; }
 				NTP_SERVERS=$(<"$TMP")
 				NTP_SERVERS=${NTP_SERVERS##[[:space:]]}
 				NTP_SERVERS=${NTP_SERVERS%%[[:space:]]}
@@ -637,6 +950,9 @@ add_set_to_basket() {
 	[[ -f "$file" ]] || return 1
 
 	log "Adding operator set: $set_key from file: $file"
+	
+	local added=0
+	local filtered=0
 
 	while IFS= read -r op; do
 		[[ "$op" =~ ^# ]] && continue
@@ -647,9 +963,19 @@ add_set_to_basket() {
 		op=${op%%[[:space:]]}
 		[[ -z "$op" ]] && continue
 
-		log "Adding operator from set: $op"
-		OP_BASKET["$op"]=1
+		# Validate operator exists in catalog index (silent filtering)
+		if grep -q "^$op[[:space:]]" "$ABA_ROOT"/mirror/.index/* 2>/dev/null; then
+			log "Adding operator from set: $op (validated in catalog)"
+			OP_BASKET["$op"]=1
+			((added++))
+		else
+			log "Filtered operator from set: $op (not in catalog for OCP $OCP_VERSION)"
+			((filtered++))
+		fi
 	done <"$file"
+	
+	# Silent filtering - operator sets are "everything you might need"
+	log "Set $set_key: added $added operators, filtered $filtered (not in catalog)"
 	
 	log "Basket now has ${#OP_BASKET[@]} operators after adding set $set_key"
 	return 0
@@ -665,36 +991,86 @@ select_operators() {
 	# Start additional background tasks (catalog already started after version selection)
 	log "Starting additional background tasks for operators"
 	log "Starting registry download task"
-	run_once -i mirror:reg:download      -- make -s -C "$ABA_ROOT/mirror" download-registries
+	run_once -i mirror:reg:download -- make -s -C "$ABA_ROOT/mirror" download-registries
 	log "Starting CLI downloads"
-	"$ABA_ROOT/scripts/cli-download-all.sh" >/dev/null 2>&1 || true
+	run_once -i cli:download:all -- "$ABA_ROOT/scripts/cli-download-all.sh"
 	
-	log "Starting operators menu with ${#OP_BASKET[@]} operators in basket"
+	# WAIT for catalog indexes to download (needed for operator sets AND search)
+	local version_short="$(echo "$OCP_VERSION" | cut -d. -f1-2)"
+	log "Waiting for catalog indexes to download before showing operators menu..."
+	
+	# Show progress dialog while waiting
+	dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for operator catalog indexes to finish downloading for OpenShift ${version_short}
+
+This may take 1-2 minutes on first run..." 7 80
+	
+	# Wait for all 4 catalog downloads to complete (run_once manages them in parallel)
+	local failed=0
+	local failed_catalogs=""
+	
+	for catalog in redhat-operator certified-operator redhat-marketplace community-operator; do
+		local task_id="catalog:${version_short}:${catalog}"
+		log "Waiting for catalog: $catalog"
+		if ! run_once -w -i "$task_id"; then
+			log "ERROR: Failed to download $catalog catalog"
+			failed=1
+			failed_catalogs="${failed_catalogs}  - $catalog\n"
+		fi
+	done
+	
+	if [[ $failed -eq 1 ]]; then
+		log "ERROR: One or more catalog downloads failed"
+		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
+"[red]ERROR: Failed to download operator catalog[/red]
+
+Cannot proceed without operator catalog indexes.
+
+Failed catalogs:
+$failed_catalogs
+Check logs in: ~/.aba/runner/catalog:${version_short}:*.log
+
+Try running: make catalog" 0 0
+		DIALOG_RC="back"
+		return
+	fi
+	
+	log "Catalog indexes ready. Starting operators menu with ${#OP_BASKET[@]} operators in basket"
 
 	while :; do
 		# Count the basket items for display
 		local basket_count="${#OP_BASKET[@]}"
 		log "Menu loop: basket has $basket_count operators"
 		
-	calc_dlg_size 5 60
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Operators" \
-		--extra-button --extra-label "<BACK>" \
-		--help-button \
-		--menu "Select operator actions ($basket_count in basket):" $DLG_H $DLG_W 8 \
-		1 "Select Operator Set" \
-	2 "Search Operator Names" \
-	3 "View Basket ($basket_count)" \
-	4 "Clear Basket" \
-	5 "\ZbAccept\Zn" \
-		2>"$TMP"
-
+		log "About to show operators menu dialog..."
+		
+		set +e  # Temporarily disable exit on error
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Operators" \
+			--extra-button --extra-label "<< Back" \
+			--help-button \
+			--ok-label "Select" \
+			--cancel-label "Accept & Next >>" \
+			--menu "Select operator actions ($basket_count in basket):" 0 0 8 \
+			1 "Select Operator Sets" \
+			2 "Search Operator Names" \
+			3 "View Basket ($basket_count)" \
+			4 "Clear Basket" \
+			5 "\ZbAccept\Zn" \
+			2>"$TMP"
 		rc=$?
+		set -e  # Re-enable exit on error
+		
 		log "Operators menu dialog returned: $rc"
 		
 		case "$rc" in
 			0)
 				# OK - process the action
-				: # Continue
+				: # Continue to action handler below
+				;;
+			1)
+				# Cancel button = "Accept & Next"
+				DIALOG_RC="next"
+				log "User accepted operators and moved to next (rc=$rc)"
+				return
 				;;
 			2)
 				# Help button
@@ -712,97 +1088,79 @@ select_operators() {
 • Clear Basket: Remove all operators
 
 Selected operators will be included in the
-image synchronization process." 16 70
-			continue
-			;;
-		3|1|255)
-			# Back/Cancel/ESC
-			DIALOG_RC="back"
-			log "User went back from operators (rc=$rc)"
-			return
-			;;
+image synchronization process." 16 70 || true
+				continue
+				;;
+			3|255)
+				# Back/ESC
+				DIALOG_RC="back"
+				log "User went back from operators (rc=$rc)"
+				return
+				;;
 			*)
+				# Unexpected return code
+				log "ERROR: Unexpected operators dialog return code: $rc"
 				DIALOG_RC="back"
 				return
 				;;
 		esac
-
+		
+		# If we got here, rc=0 and user selected an action
 		action=$(<"$TMP")
+		log "Operators menu action selected: $action"
+		
 		case "$action" in
 			1)
 				# Add operator sets to basket (sets are add-only)
 				log "=== Operator Set Selection ==="
 				log "Before set selection - Basket count: ${#OP_BASKET[@]}"
 				
-			items=()
-			for f in "$ABA_ROOT"/templates/operator-set-*; do
-				[[ -f "$f" ]] || continue
-				key=${f##*/operator-set-}
-				display=$(head -n1 "$f" 2>/dev/null | sed 's/^# *//')
-				[[ -z "$display" ]] && display="$key"
+				items=()
+				for f in "$ABA_ROOT"/templates/operator-set-*; do
+					[[ -f "$f" ]] || continue
+					key=${f##*/operator-set-}
+					display=$(head -n1 "$f" 2>/dev/null | sed 's/^# *//')
+					[[ -z "$display" ]] && display="$key"
 
-				# Always show as unselected - user picks what to add each time
-				items+=("$key" "$display" "off")
-			done
+					# Always show as unselected - user picks what to add each time
+					items+=("$key" "$display" "off")
+				done
 
-			[[ "${#items[@]}" -eq 0 ]] && {
-				calc_dlg_size 0 70
-				dialog --backtitle "$(ui_backtitle)" --msgbox "No operator-set templates found under: $ABA_ROOT/templates" $DLG_H $DLG_W
-				continue
-			}
+				[[ "${#items[@]}" -eq 0 ]] && {
+					dialog --backtitle "$(ui_backtitle)" --msgbox "No operator-set templates found under: $ABA_ROOT/templates" 0 0
+					continue
+				}
 
-		# Calculate size based on number of operator sets (items has 3 elements per set)
-		local num_sets=$((${#items[@]} / 3))
-		calc_dlg_size "$num_sets" 80
-		dialog --clear --backtitle "$(ui_backtitle)" --title "Operator Sets" \
-			--checklist "Select operator sets to add to basket:" $DLG_H $DLG_W 15 \
-			"${items[@]}" 2>"$TMP" || continue
+				# Calculate size based on number of operator sets (items has 3 elements per set)
+				local num_sets=$((${#items[@]} / 3))
+				dialog --clear --backtitle "$(ui_backtitle)" --title "Operator Sets" \
+					--checklist "Select operator sets to add to basket:" 0 0 15 \
+					"${items[@]}" 2>"$TMP" || continue
 
-			newsel=$(<"$TMP")
-			log "Raw selection: [$newsel]"
-			
-			# Parse dialog output and add selected sets to basket
-			while read -r k; do
-				k=${k//\"/}
-				k=${k##[[:space:]]}
-				k=${k%%[[:space:]]}
-				[[ -z "$k" ]] && continue
+				newsel=$(<"$TMP")
+				log "Raw selection: [$newsel]"
 				
-				log "Adding operator set: [$k]"
-				OP_SET_ADDED["$k"]=1
-				add_set_to_basket "$k" || true
-			done < <(echo "$newsel" | tr ' ' '\n')
-				
+				# Parse dialog output and add selected sets to basket
+				while read -r k; do
+					k=${k//\"/}
+					k=${k##[[:space:]]}
+					k=${k%%[[:space:]]}
+					[[ -z "$k" ]] && continue
+					
+					log "Adding operator set: [$k]"
+					OP_SET_ADDED["$k"]=1
+					add_set_to_basket "$k" || true
+				done < <(echo "$newsel" | tr ' ' '\n')
+					
 				log "After set selection - Basket count: ${#OP_BASKET[@]}"
 				log "Basket contents: ${!OP_BASKET[*]}"
 				;;
 
-		2)
+			2)
 			# Search operators (needs index files)
-			log "User searching operators"
-			
-		# Always wait for catalog indexes to be ready
-		# Show informative message about what's being downloaded
-		log "Ensuring catalog indexes are ready..."
-		local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
-		dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… downloading operator catalog indexes for OpenShift ${OCP_VERSION} (${version_short})
-
-This may take 1-2 minutes on first run..." 7 80
+			log "User searching operators (catalog already loaded)"
 		
-		# Wait for download task to complete (returns immediately if already done)
-		# IMPORTANT: Use exact same task ID and command as when starting the task!
-		log "Waiting for catalog download for ${version_short}"
-		if ! run_once -w -i "download_catalog_indexes:${version_short}" -- make -C "$ABA_ROOT" catalog; then
-			log "Failed to download catalog indexes for ${version_short} (exit code: $?)"
-			log "Check runner log: ~/.aba/runner/download_catalog_indexes:${version_short}.log"
-			calc_dlg_size 0 70
-			dialog --backtitle "$(ui_backtitle)" --msgbox "Failed to download operator catalogs for ${version_short}.\n\nCheck log: ~/.aba/runner/download_catalog_indexes:${version_short}.log\n\nTry running: make catalog" $DLG_H $DLG_W
-			continue
-		fi
-		
-		log "Catalog indexes for ${version_short} ready"
-			calc_dlg_size 0 80
-		dialog --backtitle "$(ui_backtitle)" --inputbox "Search operator names (min 2 chars, multiple terms AND'ed):" $DLG_H $DLG_W 2>"$TMP" || continue
+		dialog --colors --backtitle "$(ui_backtitle)" --inputbox "Search operator names (min 2 chars, multiple terms AND'ed):" 0 0 2>"$TMP" || continue
 			query=$(<"$TMP")
 			query=${query//$'
 '/}
@@ -811,8 +1169,7 @@ This may take 1-2 minutes on first run..." 7 80
 			
 			# Require at least 2 characters
 			if [[ -z "$query" ]] || [[ ${#query} -lt 2 ]]; then
-				calc_dlg_size 0 50
-				dialog --backtitle "$(ui_backtitle)" --msgbox "Please enter at least 2 characters to search" $DLG_H $DLG_W
+				dialog --backtitle "$(ui_backtitle)" --msgbox "Please enter at least 2 characters to search" 0 0
 				continue
 			fi
 			
@@ -863,8 +1220,7 @@ This may take 1-2 minutes on first run..." 7 80
 		matches=$(echo "$matches" | sort)
 		if [[ -z "$matches" ]]; then
 			log "No matches for: $query"
-			calc_dlg_size 0 60
-			dialog --backtitle "$(ui_backtitle)" --msgbox "No matches for: $query\n\nAll search terms must match the operator name." $DLG_H $DLG_W
+			dialog --backtitle "$(ui_backtitle)" --msgbox "No matches for: $query\n\nAll search terms must match the operator name." 0 0
 			continue
 		fi
 				
@@ -893,9 +1249,8 @@ This may take 1-2 minutes on first run..." 7 80
 
 			# Calculate size based on number of matching operators
 			local num_ops=$((${#items[@]} / 3))
-			calc_dlg_size "$num_ops" 70
 			dialog --clear --backtitle "$(ui_backtitle)" --title "Select Operators" \
-				--checklist "Toggle operators (already-selected are ON):" $DLG_H $DLG_W 18 \
+				--checklist "Toggle operators (already-selected are ON):" 0 0 18 \
 					"${items[@]}" 2>"$TMP" || continue
 
 			newsel=$(<"$TMP")
@@ -987,18 +1342,16 @@ This may take 1-2 minutes on first run..." 7 80
 				
 			if [[ "${#items[@]}" -eq 0 ]]; then
 				log "Basket is empty"
-				calc_dlg_size 0 40
-				dialog --backtitle "$(ui_backtitle)" --msgbox "Basket is empty." $DLG_H $DLG_W
+				dialog --backtitle "$(ui_backtitle)" --msgbox "Basket is empty." 0 0
 				continue
 			fi
 
 			log "Displaying ${#items[@]} items in basket view"
 			# Calculate size based on number of operators in basket
 			local num_ops=$((${#items[@]} / 3))
-			calc_dlg_size "$num_ops" 70
 			dialog --clear --backtitle "$(ui_backtitle)" --title "Basket (${#OP_BASKET[@]} operators)" \
 				--checklist "Uncheck operators to remove them from the basket." \
-				$DLG_H $DLG_W 18 \
+				0 0 18 \
 					"${items[@]}" 2>"$TMP" || continue
 
 				newsel=$(<"$TMP")
@@ -1073,29 +1426,23 @@ Platform & Network:
 Operator Sets: ${op_sets_csv:-(none)}
 
 Operators (${#OP_BASKET[@]}):
-$op_list
-
-Choose action:"
-
-	# Calculate size based on summary content
-	local num_lines=$(echo "$summary_text" | wc -l)
-	local max_width=$(echo "$summary_text" | awk '{print length}' | sort -n | tail -1)
-	[[ -z "$max_width" ]] && max_width=60
-	((max_width < 60)) && max_width=60
-	calc_dlg_size "$((num_lines + 2))" "$max_width"
+$op_list"
 
 	while :; do
-		dialog --clear --backtitle "$(ui_backtitle)" --title "Summary" \
+		# Show summary with action buttons
+		set +e
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Summary" \
 			--extra-button --extra-label "Save Draft" \
 			--help-button \
 			--yes-label "Apply to aba.conf" \
-			--no-label "Back" \
-			--yesno "$summary_text" $DLG_H $DLG_W
-
+			--no-label "<< Back" \
+			--yesno "$summary_text\n\nReview your configuration above." 0 0
 		rc=$?
+		set -e
+		
 		case "$rc" in
 			0)
-				# Apply
+				# Yes = Apply to aba.conf
 				log "Applying configuration to aba.conf"
 				replace-value-conf -q -n ocp_channel       -v "$OCP_CHANNEL"       -f aba.conf
 				replace-value-conf -q -n ocp_version       -v "$OCP_VERSION"       -f aba.conf
@@ -1107,10 +1454,9 @@ Choose action:"
 				replace-value-conf -q -n ntp_servers       -v "${NTP_SERVERS}"     -f aba.conf
 				replace-value-conf -q -n ops               -v "$ops_csv"           -f aba.conf
 				replace-value-conf -q -n op_sets           -v "$op_sets_csv"       -f aba.conf
-			log "Configuration applied successfully"
-			
-			calc_dlg_size 0 70
-			dialog --backtitle "$(ui_backtitle)" --msgbox \
+				log "Configuration applied successfully"
+				
+				dialog --backtitle "$(ui_backtitle)" --msgbox \
 "Configuration applied to aba.conf
 
 Next steps:
@@ -1118,36 +1464,11 @@ Next steps:
   2. aba -d mirror sync       (download images)
   3. aba cluster --name <name> (create cluster)
 
-See: aba --help" $DLG_H $DLG_W
-			return 0
+See: aba --help" 0 0 || true
+				return 0
 				;;
-			1)
-				# Back
-				log "User went back from summary"
-				return 1
-				;;
-		2)
-			# Help
-			calc_dlg_size 0 70
-			dialog --backtitle "$(ui_backtitle)" --msgbox \
-"Summary Actions:
-
-• Apply to aba.conf
-  Writes all configuration to aba.conf
-  Ready for next steps (mirror setup, cluster install)
-  
-• Save Draft
-  Saves to aba.conf.draft for later editing
-  Does not overwrite existing aba.conf
-  
-• Back
-  Return to operators selection
-
-Log file: $LOG_FILE" $DLG_H $DLG_W
-			continue
-			;;
 			3)
-				# Save Draft (Extra button)
+				# Extra button = Save Draft
 				log "Saving draft configuration"
 				cat > aba.conf.draft <<EOF
 # ABA Configuration Draft
@@ -1164,17 +1485,42 @@ ntp_servers=${NTP_SERVERS}
 ops=$ops_csv
 op_sets=$op_sets_csv
 EOF
-			calc_dlg_size 0 50
-			dialog --backtitle "$(ui_backtitle)" --msgbox \
+				dialog --backtitle "$(ui_backtitle)" --msgbox \
 "Draft saved to: aba.conf.draft
 
 To apply later:
-  mv aba.conf.draft aba.conf" $DLG_H $DLG_W
-			return 1
-			;;
+  mv aba.conf.draft aba.conf" 0 0 || true
+				
+				log "Draft saved, continuing in summary"
+				continue  # Stay in summary screen loop
+				;;
+			1|255)
+				# No or ESC = Back
+				log "User went back from summary"
+				return 1
+				;;
+			2)
+				# Help
+				dialog --backtitle "$(ui_backtitle)" --msgbox \
+"Summary Actions:
+
+• Apply to aba.conf
+  Writes all configuration to aba.conf
+  Ready for next steps (mirror setup, cluster install)
+  
+• Save Draft
+  Saves to aba.conf.draft for later editing
+  Does not overwrite existing aba.conf
+  
+• Back
+  Return to operators selection
+
+Log file: $LOG_FILE" 0 0 || true
+				continue
+				;;
 			*)
-				clear
-				exit 1
+				log "Unexpected summary dialog return code: $rc"
+				return 1
 				;;
 		esac
 	done
@@ -1185,7 +1531,10 @@ To apply later:
 # -----------------------------------------------------------------------------
 log "=== STARTING TUI ==="
 
-# Show header first
+# Check internet access first
+check_internet_access
+
+# Show header
 ui_header
 
 # Initialize configuration and global arrays
@@ -1211,21 +1560,26 @@ while :; do
 				break
 			fi
 			;;
-		version)
-			select_ocp_version
-			if [[ "$DIALOG_RC" == "repeat" ]]; then
-				continue  # Stay on same step
-			elif [[ "$DIALOG_RC" == "next" ]]; then
-				STEP="platform"
-			elif [[ "$DIALOG_RC" == "back" ]]; then
-				STEP="channel"
-			fi
-			;;
-		platform)
-			select_platform_network
-			[[ "$DIALOG_RC" == "next" ]] && STEP="operators"
-			[[ "$DIALOG_RC" == "back" ]] && STEP="version"
-			;;
+	version)
+		select_ocp_version
+		if [[ "$DIALOG_RC" == "repeat" ]]; then
+			continue  # Stay on same step
+		elif [[ "$DIALOG_RC" == "next" ]]; then
+			STEP="pull_secret"
+		elif [[ "$DIALOG_RC" == "back" ]]; then
+			STEP="channel"
+		fi
+		;;
+	pull_secret)
+		select_pull_secret
+		[[ "$DIALOG_RC" == "next" ]] && STEP="platform"
+		[[ "$DIALOG_RC" == "back" ]] && STEP="version"
+		;;
+	platform)
+		select_platform_network
+		[[ "$DIALOG_RC" == "next" ]] && STEP="operators"
+		[[ "$DIALOG_RC" == "back" ]] && STEP="pull_secret"
+		;;
 		operators)
 			select_operators
 			[[ "$DIALOG_RC" == "next" ]] && STEP="summary"
