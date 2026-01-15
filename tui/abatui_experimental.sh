@@ -4,75 +4,32 @@
 # Wizard flow:
 #   Channel  <->  Version  <->  Operators  <->  Summary / Apply
 
-set -eo pipefail
-
-# -----------------------------------------------------------------------------
-# Validation Functions (implementations to be added to include_all.sh)
-# -----------------------------------------------------------------------------
-# These are placeholder functions - user will paste implementations into include_all.sh
-
-# Validate CIDR notation (e.g., 10.0.0.0/24)
-validate_cidr() {
-	local cidr="$1"
-	# TODO: Add to include_all.sh - validate CIDR format
-	# For now, just check it's not empty
-	[[ -n "$cidr" ]]
-}
-
-# Validate IP address (e.g., 192.168.1.1)
-validate_ip() {
-	local ip="$1"
-	# TODO: Add to include_all.sh - validate IP format
-	# For now, just check it's not empty
-	[[ -n "$ip" ]]
-}
-
-# Validate domain name (e.g., example.com)
-validate_domain() {
-	local domain="$1"
-	# TODO: Add to include_all.sh - validate domain format
-	# For now, just check it's not empty and has a dot
-	[[ "$domain" =~ \. ]]
-}
-
-# Validate comma-separated IPs (e.g., 8.8.8.8,1.1.1.1)
-validate_ip_list() {
-	local ip_list="$1"
-	# TODO: Add to include_all.sh - validate each IP in comma-separated list
-	# For now, just check it's not empty
-	[[ -n "$ip_list" ]]
-}
-
-# Validate comma-separated NTP servers (IPs or hostnames)
-validate_ntp_servers() {
-	local server_list="$1"
-	# TODO: Add to include_all.sh - validate each server as IP or hostname
-	# For now, just check it's not empty
-	[[ -n "$server_list" ]]
-}
+set -o pipefail  # Catch pipeline errors, but allow non-zero exit codes (dialog uses them)
 
 # -----------------------------------------------------------------------------
 # Confirmation dialog for quitting
 # -----------------------------------------------------------------------------
 confirm_quit() {
 	log "User attempting to quit, showing confirmation"
-	set +e
 	dialog --backtitle "ABA TUI" --title "Confirm Exit" \
 		--help-button \
 		--yes-label "Exit" \
 		--no-label "Continue" \
 		--yesno "Exit ABA TUI?\n\nProgress will not be saved unless you complete the wizard." 0 0
 	rc=$?
-	set -e
 	
 	case "$rc" in
 		0)
-			log "User confirmed quit"
+			log "User confirmed quit (clicked Exit)"
 			return 0  # Quit confirmed
 			;;
-		1|255)
-			log "User cancelled quit"
+		1)
+			log "User cancelled quit (clicked Continue)"
 			return 1  # Don't quit
+			;;
+		255)
+			log "User pressed ESC again - quitting immediately"
+			return 0  # ESC twice = quit
 			;;
 		2)
 			# Help button
@@ -80,6 +37,7 @@ confirm_quit() {
 "Exiting the TUI:
 
 • Press ESC at any time to quit (with confirmation)
+• Press ESC again on confirmation to quit immediately
 • Click 'Exit' to confirm and quit
 • Click 'Continue' to return to the wizard
 
@@ -222,48 +180,6 @@ dlg() {
 	dialog --no-shadow --colors "$@"
 }
 
-# Calculate optimal dialog dimensions based on content
-# Usage: calc_dlg_size <num_items> <max_text_width>
-#   num_items: number of menu/list items (0 for msgbox/inputbox)
-#   max_text_width: width of longest line of text
-# Returns: sets DLG_H and DLG_W variables
-calc_dlg_size() {
-	local num_items=${1:-0}
-	local text_width=${2:-50}
-	
-	# Height calculation
-	if ((num_items > 0)); then
-		# For lists/menus: base + items + chrome (title, buttons, borders)
-		# List display area (cap at 15 visible items)
-		local list_area
-		if ((num_items > 15)); then
-			list_area=15
-		else
-			list_area=$num_items
-		fi
-		DLG_H=$((8 + list_area))
-	else
-		# For msgbox/inputbox: minimal height
-		DLG_H=10
-	fi
-	
-	# Width calculation: content + padding
-	DLG_W=$((text_width + 10))
-	
-	# Apply constraints
-	# Minimum
-	if ((DLG_H < 10)); then DLG_H=10; fi
-	if ((DLG_W < 50)); then DLG_W=50; fi
-	
-	# Maximum (80% of terminal to keep some margin)
-	local max_h=$((TERM_ROWS * 80 / 100))
-	local max_w=$((TERM_COLS * 80 / 100))
-	if ((max_h < 15)); then max_h=15; fi
-	if ((max_w < 60)); then max_w=60; fi
-	if ((DLG_H > max_h)); then DLG_H=$max_h; fi
-	if ((DLG_W > max_w)); then DLG_W=$max_w; fi
-}
-
 # -----------------------------------------------------------------------------
 # UI helpers
 # -----------------------------------------------------------------------------
@@ -302,12 +218,12 @@ ui_header() {
 	
 	local rc
 	while :; do
-		set +e  # Disable exit on error for dialog
 		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "ABA – OpenShift Installer" \
 			--help-button --help-label "Help" \
 			--ok-label "Continue" \
 			--msgbox \
-"   __   ____   __
+"\
+   __   ____   __
   / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly
  /    \ ) _ (/    \    with the Aba utility!
  \_/\_/(____/\_/\_/
@@ -316,9 +232,9 @@ Follow the instructions below or see the README.md file
 for more information.
 
 Press <Continue> to start configuration.
-Press <Help> for more information." 0 0
+Press <Help> for more information.
+Press <ESC> to quit abatui." 0 0
 		rc=$?
-		set -e  # Re-enable exit on error
 		
 		log "Header dialog returned: $rc"
 		
@@ -383,12 +299,19 @@ resume_from_conf() {
 			log "Detected domain: $domain"
 			
 			# Set other variables to empty (will be filled by TUI)
-			machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
-				scripts/j2 templates/aba.conf.j2 > aba.conf
-			log "Created aba.conf from templates/aba.conf.j2"
+			log "Running: scripts/j2 templates/aba.conf.j2 > aba.conf"
+			if machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
+				scripts/j2 templates/aba.conf.j2 > aba.conf 2>>"$LOG_FILE"; then
+				log "Created aba.conf from templates/aba.conf.j2"
+				log "aba.conf size: $(wc -l < aba.conf) lines"
+			else
+				log "ERROR: Failed to create aba.conf from template (exit code: $?)"
+			fi
 		else
 			log "WARNING: No template found at $ABA_ROOT/templates/aba.conf.j2"
 		fi
+	else
+		log "aba.conf already exists, size: $(wc -l < aba.conf) lines"
 	fi
 	
 	# Load existing config if present
@@ -476,9 +399,9 @@ select_ocp_channel() {
 	[[ -z "$default_tag" ]] && default_tag="s"
 	
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "OpenShift Channel" \
-		--extra-button --extra-label "<< Back" \
+		--extra-button --extra-label "Back" \
 		--help-button \
-		--ok-label "Next >>" \
+		--ok-label "Next" \
 		--default-item "$default_tag" \
 		--menu "Choose the OpenShift update channel:" 0 0 3 \
 		s "stable     – Recommended" \
@@ -501,7 +424,7 @@ select_ocp_channel() {
 "OpenShift Update Channels:
 
 • stable (Recommended)
-  Tested and recommended for production
+  GA, tested and recommended for production
   
 • fast (Latest GA)
   Latest Generally Available release
@@ -517,11 +440,11 @@ See: https://docs.openshift.com/container-platform/latest/updating/understanding
 			# Back/Cancel/ESC
 			DIALOG_RC="back"
 			log "User went back from channel (rc=$rc)"
-			return
+			return 0
 			;;
 		*)
 			DIALOG_RC="back"
-			return
+			return 0
 			;;
 	esac
 
@@ -623,9 +546,9 @@ select_ocp_version() {
 	menu_items+=("m" "Manual entry (x.y or x.y.z)")
 
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "OpenShift Version" \
-		--extra-button --extra-label "<< Back" \
+		--extra-button --extra-label "Back" \
 		--help-button \
-		--ok-label "Next >>" \
+		--ok-label "Next" \
 		--default-item "$default_item" \
 		--menu "Choose the OpenShift version to install:" 0 0 7 \
 		"${menu_items[@]}" \
@@ -731,14 +654,23 @@ selected version."
 			log "Detected domain: $domain"
 			
 			# Other network values left empty (will be auto-detected in disconnected env)
-			machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
-				scripts/j2 templates/aba.conf.j2 > "$ABA_ROOT/aba.conf"
-			log "Created aba.conf from templates/aba.conf.j2"
+			log "Running: scripts/j2 templates/aba.conf.j2 > aba.conf"
+			if machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
+				scripts/j2 templates/aba.conf.j2 > "$ABA_ROOT/aba.conf" 2>>"$LOG_FILE"; then
+				log "Created aba.conf from templates/aba.conf.j2"
+				log "aba.conf size: $(wc -l < "$ABA_ROOT/aba.conf") lines"
+			else
+				log "ERROR: Failed to create aba.conf from template (exit code: $?)"
+				dialog --backtitle "$(ui_backtitle)" --msgbox "ERROR: Failed to create aba.conf from template!" 0 0
+				return 1
+			fi
 		else
 			log "ERROR: Template not found at $ABA_ROOT/templates/aba.conf.j2"
 			dialog --backtitle "$(ui_backtitle)" --msgbox "ERROR: Template file templates/aba.conf.j2 not found!" 0 0
 			return 1
 		fi
+	else
+		log "aba.conf already exists, size: $(wc -l < "$ABA_ROOT/aba.conf") lines"
 	fi
 	
 	# Use replace-value-conf to set values (use -q for quiet mode)
@@ -757,22 +689,9 @@ selected version."
 	
 	log "aba.conf updated successfully"
 	
-	# Start catalog downloads immediately in background (now that version is known)
-	# Use run_once for each catalog - proper task management and parallelization
-	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
-	log "Starting catalog download tasks for OCP ${OCP_VERSION} (${version_short})"
-	
-	# Start all 4 catalog downloads in parallel using run_once
-	# Note: download-operator-index.sh sources include_all.sh internally, and expects to be run from $ABA_ROOT
-	run_once -i "catalog:${version_short}:redhat-operator" -- bash -lc "cd '$ABA_ROOT' && scripts/download-operator-index.sh redhat-operator"
-	run_once -i "catalog:${version_short}:certified-operator" -- bash -lc "cd '$ABA_ROOT' && scripts/download-operator-index.sh certified-operator"
-	run_once -i "catalog:${version_short}:redhat-marketplace" -- bash -lc "cd '$ABA_ROOT' && scripts/download-operator-index.sh redhat-marketplace"
-	run_once -i "catalog:${version_short}:community-operator" -- bash -lc "cd '$ABA_ROOT' && scripts/download-operator-index.sh community-operator"
-	
-	set +e
 	dialog --backtitle "$(ui_backtitle)" --title "Confirm Selection" \
-		--extra-button --extra-label "<< Back" \
-		--ok-label "Next >>" \
+		--extra-button --extra-label "Back" \
+		--ok-label "Next" \
 		--msgbox "Selected:
 
   Channel: $OCP_CHANNEL
@@ -780,11 +699,23 @@ selected version."
 
 Next: Configure platform and network." 0 0
 	rc=$?
-	set -e
 	
 	case "$rc" in
 		0)
-			# OK/Next
+			# OK/Next - User confirmed, now start background downloads
+			log "User confirmed version selection, starting background downloads"
+			local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
+			
+			# Now that ocp_version is in aba.conf, download ALL CLIs (needs version)
+			log "Starting all CLI downloads (aba.conf now has ocp_version)"
+			run_once -i cli:download:all -- "$ABA_ROOT/scripts/cli-download-all.sh"
+			
+			# Start catalog downloads (oc-mirror already downloading from early in startup)
+			log "Starting catalog download task for OCP ${OCP_VERSION} (${version_short})"
+			# 'make index' = start 4 catalogs with bg=true (parallel) + then call 'make catalog' to wait
+			# This gives us parallel downloads AND proper blocking for run_once
+			run_once -i "catalog:${version_short}" -- make -s -C "$ABA_ROOT/mirror" index
+			
 			DIALOG_RC="next"
 			;;
 		3|255)
@@ -808,7 +739,7 @@ select_pull_secret() {
 	local pull_secret_file="$HOME/.pull-secret.json"
 	local error_msg=""
 	
-	# Check if pull secret exists and is valid
+	# Check if pull secret exists and is valid (for status display, but don't auto-skip)
 	if [[ -f "$pull_secret_file" ]]; then
 		log "Found existing pull secret at $pull_secret_file"
 		
@@ -816,9 +747,9 @@ select_pull_secret() {
 		if jq empty "$pull_secret_file" 2>/dev/null; then
 			# Check for required registry
 			if grep -q "registry.redhat.io" "$pull_secret_file"; then
-				log "Pull secret is valid, skipping screen"
-				DIALOG_RC="next"
-				return
+				log "Pull secret is valid"
+				# Don't auto-skip - show screen so user can go back if needed
+				error_msg=""  # Valid pull secret, no error
 			else
 				log "Pull secret missing registry.redhat.io"
 				error_msg="[red]ERROR: Existing Pull Secret Invalid[/red]
@@ -841,6 +772,67 @@ Please paste a valid pull secret."
 		fi
 	else
 		log "No pull secret found at $pull_secret_file"
+	fi
+	
+	# If pull secret is already valid, show confirmation screen
+	if [[ -f "$pull_secret_file" ]] && [[ -z "$error_msg" ]]; then
+		while :; do
+			log "Valid pull secret exists, showing confirmation"
+			dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
+				--extra-button --extra-label "Back" \
+				--help-button \
+				--ok-label "Next" \
+				--msgbox "\Z2✓ Valid Pull Secret Found\Zn
+
+Location: ~/.pull-secret.json
+
+Your Red Hat pull secret is valid and ready to use.
+
+Press <Next> to continue or <Back> to return." 0 0
+			rc=$?
+			
+			case "$rc" in
+				0)
+					# Next
+					DIALOG_RC="next"
+					return
+					;;
+				3)
+					# Extra button = Back
+					DIALOG_RC="back"
+					return
+					;;
+				255)
+					# ESC - confirm quit
+					if confirm_quit; then
+						log "User confirmed quit from pull secret screen"
+						exit 0
+					else
+						log "User cancelled quit, staying on pull secret screen"
+						# Re-show the confirmation screen
+						continue
+					fi
+					;;
+				2)
+					# Help
+					dialog --backtitle "$(ui_backtitle)" --msgbox \
+"Red Hat Pull Secret:
+
+Your pull secret contains credentials for accessing
+Red Hat container registries.
+
+Location: ~/.pull-secret.json
+
+To replace it, delete the file and run the TUI again,
+or manually edit it.
+
+Get pull secrets from:
+  https://console.redhat.com/openshift/install/pull-secret" 0 0 || true
+					# Re-show the confirmation screen
+					continue
+					;;
+			esac
+		done
 	fi
 	
 	# Collect pull secret from user (simplified flow)
@@ -874,9 +866,9 @@ Please paste a valid pull secret."
 		
 		# Show editbox with empty file
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
-			--extra-button --extra-label "<< Back" \
+			--extra-button --extra-label "Back" \
 			--help-button \
-			--ok-label "Next >>" \
+			--ok-label "Next" \
 			--editbox "$empty_file" $dlg_h $dlg_w 2>"$TMP"
 		
 		rc=$?
@@ -897,7 +889,7 @@ Please paste a valid pull secret."
 		
 		case "$rc" in
 			0)
-				# Next >> - validate and save
+				# Next - validate and save
 				log "User clicked Next, validating pull secret"
 				local pull_secret=$(<"$TMP")
 				
@@ -905,7 +897,7 @@ Please paste a valid pull secret."
 			if [[ -z "$pull_secret" || "$pull_secret" =~ ^[[:space:]]*$ ]]; then
 				error_msg="\Z1ERROR: Pull secret is empty\Zn
 
-Please paste your pull secret and press <Next >>
+Please paste your pull secret and press <Next>
 
 Get it from:
   https://console.redhat.com/openshift/install/pull-secret
@@ -965,7 +957,7 @@ for downloading OpenShift images from Red Hat registries.
   2. Log in with your Red Hat account
   3. Click 'Copy pull secret'
   4. Return to this TUI and paste into the blank field
-  5. Press <Next >>
+  5. Press <Next>
 
 [cyan]Requirements:[/cyan]
   • Must be valid JSON format (starts with { ends with })
@@ -1022,12 +1014,11 @@ select_platform_network() {
 		log "About to show platform menu dialog..."
 		
 		# Use explicit arguments (no array expansion issues)
-		set +e  # Temporarily disable exit on error
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Platform & Network" \
-			--extra-button --extra-label "Accept & Next >>" \
+			--extra-button --extra-label "Accept & Next>" \
 			--help-button \
 			--ok-label "Select" \
-			--cancel-label "<< Back" \
+			--cancel-label "Back" \
 			--menu "Configure platform and network:" $dlg_h $dlg_w 8 \
 			1 "\ZbAccept\Zn" \
 			2 "Platform: ${PLATFORM:-bm}" \
@@ -1038,7 +1029,6 @@ select_platform_network() {
 			7 "NTP Servers: ${NTP_SERVERS:-(auto-detect)}" \
 			2>"$TMP"
 		rc=$?
-		set -e  # Re-enable exit on error
 		
 		log "Platform menu dialog returned: $rc"
 		
@@ -1257,100 +1247,42 @@ select_operators() {
 	log "OP_BASKET contents: ${!OP_BASKET[*]}"
 	log "OP_BASKET count: ${#OP_BASKET[@]}"
 
-	# Start additional background tasks (catalog already started after version selection)
+	# Start additional background tasks (catalog and CLI downloads already started after version confirmation)
 	log "Starting additional background tasks for operators"
 	log "Starting registry download task"
 	run_once -i mirror:reg:download -- make -s -C "$ABA_ROOT/mirror" download-registries
-	log "Starting CLI downloads"
-	run_once -i cli:download:all -- "$ABA_ROOT/scripts/cli-download-all.sh"
 	
 	# WAIT for catalog indexes to download (needed for operator sets AND search)
-	local version_short="$(echo "$OCP_VERSION" | cut -d. -f1-2)"
+	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20 (must match task ID from version selection)
 	log "Checking if catalog indexes need to be downloaded..."
 	
 	# Peek first to see if we need to wait
-	local need_wait=0
-	for catalog in redhat-operator certified-operator redhat-marketplace community-operator; do
-		local task_id="catalog:${version_short}:${catalog}"
-		if ! run_once -p -i "$task_id"; then
-			log "Catalog $catalog not yet complete"
-			need_wait=1
-			break
-		fi
-	done
-	
-	# Only show wait dialog if actually waiting
-	if [[ $need_wait -eq 1 ]]; then
-		log "Catalogs not ready, showing wait dialog..."
+	local task_id="catalog:${version_short}"
+	if ! run_once -p -i "$task_id"; then
+		log "Catalogs not yet complete, showing wait dialog..."
 		dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for operator catalog indexes to finish downloading for OpenShift ${version_short}
 
 This may take 1-2 minutes on first run..." 7 80
 	else
-		log "All catalogs already downloaded, proceeding immediately"
+		log "Catalogs already downloaded, proceeding immediately"
 	fi
 	
-	# Wait for all 4 catalog downloads to complete (run_once manages them in parallel)
-	# Note: redhat-operator and certified-operator are REQUIRED
-	#       redhat-marketplace and community-operator are OPTIONAL
-	local critical_failed=0
-	local optional_failed=0
-	local failed_critical=""
-	local failed_optional=""
-	
-	# Check critical catalogs (must succeed)
-	for catalog in redhat-operator certified-operator; do
-		local task_id="catalog:${version_short}:${catalog}"
-		log "Waiting for CRITICAL catalog: $catalog"
-		if ! run_once -w -i "$task_id"; then
-			log "ERROR: Failed to download CRITICAL $catalog catalog"
-			critical_failed=1
-			failed_critical="${failed_critical}  - $catalog\n"
-		fi
-	done
-	
-	# Check optional catalogs (nice to have)
-	for catalog in redhat-marketplace community-operator; do
-		local task_id="catalog:${version_short}:${catalog}"
-		log "Waiting for OPTIONAL catalog: $catalog"
-		if ! run_once -w -i "$task_id"; then
-			log "WARNING: Failed to download optional $catalog catalog"
-			optional_failed=1
-			failed_optional="${failed_optional}  - $catalog\n"
-		fi
-	done
-	
-	# Block only if critical catalogs failed
-	if [[ $critical_failed -eq 1 ]]; then
-		log "ERROR: Critical catalog downloads failed"
+	# Wait for catalog download to complete
+	if ! run_once -w -i "$task_id"; then
+		log "ERROR: Catalog download failed"
 		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
-"\Z1ERROR: Failed to download critical operator catalogs\Zn
+"\Z1ERROR: Failed to download operator catalogs\Zn
 
-Cannot proceed without these required catalogs.
+Cannot proceed without operator catalog indexes.
 
-Failed:
-$failed_critical
-Check logs in: ~/.aba/runner/catalog:${version_short}:*.log
+Check logs in: ~/.aba/runner/catalog:${version_short}.log
 
 Try running: make catalog" 0 0
 		DIALOG_RC="back"
 		return
 	fi
 	
-	# Warn if optional catalogs failed, but allow to continue
-	if [[ $optional_failed -eq 1 ]]; then
-		log "WARNING: Optional catalog downloads failed, but continuing"
-		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
-"\Z3WARNING: Optional catalogs failed to download\Zn
-
-These catalogs are not critical:
-$failed_optional
-You can continue without them. These operators won't be
-available for selection:
-  - Red Hat Marketplace operators
-  - Community operators
-
-Press OK to continue." 0 0 || true
-	fi
+	log "Catalog downloads completed successfully"
 	
 	log "Catalog indexes ready. Starting operators menu with ${#OP_BASKET[@]} operators in basket"
 
@@ -1361,12 +1293,11 @@ Press OK to continue." 0 0 || true
 		
 		log "About to show operators menu dialog..."
 		
-		set +e  # Temporarily disable exit on error
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Operators" \
-			--extra-button --extra-label "<< Back" \
+			--extra-button --extra-label "Back" \
 			--help-button \
 			--ok-label "Select" \
-			--cancel-label "Accept & Next >>" \
+			--cancel-label "Accept & Next" \
 			--menu "Select operator actions:" 0 0 8 \
 			1 "Select Operator Sets" \
 			2 "Search Operator Names" \
@@ -1375,7 +1306,6 @@ Press OK to continue." 0 0 || true
 			5 "\ZbAccept\Zn" \
 			2>"$TMP"
 		rc=$?
-		set -e  # Re-enable exit on error
 		
 		log "Operators menu dialog returned: $rc"
 		
@@ -1389,14 +1319,12 @@ Press OK to continue." 0 0 || true
 				# Check if basket is empty and warn
 				if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
 					log "Empty basket - showing warning"
-					set +e
 					dialog --backtitle "$(ui_backtitle)" --title "Empty Basket" \
-						--extra-button --extra-label "<< Back" \
+						--extra-button --extra-label "Back" \
 						--yes-label "Continue Anyway" \
 						--no-label "Add Operators" \
 						--yesno "No operators selected. Continue with empty basket?\n\nYou can add operators later as Day-2 operations." 0 0
 					empty_rc=$?
-					set -e
 					
 					case "$empty_rc" in
 						0)
@@ -1839,9 +1767,9 @@ summary_apply() {
 	fi
 
 	summary_text="
-═══════════════════════════════════════════════════
-               OPENSHIFT CONFIGURATION
-═══════════════════════════════════════════════════
+════════════════════════════════════════════════
+          OPENSHIFT CONFIGURATION
+════════════════════════════════════════════════
 
 Channel:         $OCP_CHANNEL
 Version:         $OCP_VERSION
@@ -1857,19 +1785,17 @@ NTP Servers:     ${NTP_SERVERS:-(auto-detect)}
 Operator Set:    ${op_sets_value:-(none)}
 Operators:       $op_summary
 
-═══════════════════════════════════════════════════"
+════════════════════════════════════════════════"
 
 	while :; do
 		# Show summary with action buttons
-		set +e
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Configuration Summary" \
 			--extra-button --extra-label "Save Draft" \
 			--help-button \
 			--yes-label "Apply to aba.conf" \
-			--no-label "<< Back" \
-			--yesno "$summary_text" 0 0
+			--no-label "Back" \
+			--yesno "$summary_text" 22 60
 		rc=$?
-		set -e
 		
 		case "$rc" in
 			0)
@@ -2008,6 +1934,11 @@ run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./script
 
 log "Background OCP version fetches started"
 
+# Download oc-mirror early (needed for catalog downloads later)
+log "Starting oc-mirror download in background"
+PLAIN_OUTPUT=1 run_once -i cli:install:oc-mirror -- make -sC "$ABA_ROOT/cli" oc-mirror
+log "oc-mirror download started"
+
 # Show header
 ui_header
 
@@ -2058,8 +1989,16 @@ while :; do
 		;;
 	platform)
 		select_platform_network
-		[[ "$DIALOG_RC" == "next" ]] && STEP="operators"
-		[[ "$DIALOG_RC" == "back" ]] && STEP="pull_secret"
+		log "After select_platform_network: DIALOG_RC=$DIALOG_RC"
+		if [[ "$DIALOG_RC" == "next" ]]; then
+			STEP="operators"
+			log "Moving to operators"
+		elif [[ "$DIALOG_RC" == "back" ]]; then
+			STEP="pull_secret"
+			log "Moving back to pull_secret"
+		else
+			log "WARNING: Unexpected DIALOG_RC value: $DIALOG_RC"
+		fi
 		;;
 		operators)
 			select_operators
