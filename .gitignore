@@ -64,5 +64,7 @@ templates/operator-set-abatest
 templates/operator-set-custom-[0-9]*
 .aba.conf.seen
 mirror/docker-reg-image.tgz
-
-
+cli/butane-amd64
+*/*sha256sum.txt
+cli/scripts
+bundles/work

@@ -135,7 +135,8 @@ END
 
 
 source scripts/include_all.sh
-install_rpms $(cat templates/rpms-external.txt)
+[ -d templates ] && install_rpms $(cat templates/rpms-external.txt) # HACK - show not be needed to check
+[ -d ../templates ] && install_rpms $(cat ../templates/rpms-external.txt) # HACK - show not be needed to check
 
 # Install aba somewhere into the $PATH, in this priority order 
 for d in "$HOME/bin" /usr/local/bin /usr/local/sbin /usr/bin /usr/sbin
