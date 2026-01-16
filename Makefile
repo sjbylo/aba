@@ -44,11 +44,14 @@ vmw:
 #	@echo "  aba -d cli install"
 #	@echo "  cd cli && aba install"
 
-.PHONY: catalog
-# -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
-catalog: ## Render all the latest Operators into a helper file which can be used in an imageset config file. 
-#	@make -sC cli oc-mirror >/dev/null 2>&1
-	@make -C mirror catalog bg=$(bg)
+# DEPRECATED: catalog target replaced by download_all_catalogs() and wait_for_all_catalogs() 
+# helper functions in scripts/include_all.sh. Use those directly instead.
+#
+#.PHONY: catalog
+## -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
+#catalog: ## Render all the latest Operators into a helper file which can be used in an imageset config file. 
+##	@make -sC cli oc-mirror >/dev/null 2>&1
+#	@make -C mirror catalog bg=$(bg)
 
 # These are the targets needed to create the 'bundle' archive
 #.PHONY: bundle

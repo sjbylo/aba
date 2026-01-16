@@ -55,11 +55,10 @@ add_op() {
 
 # If operators are given, ensure the catalogs are available!
 if [ "$ops" -o "$op_sets" ]; then
-	#aba_debug Final chance to fetch all operator catalog index files ... running: make catalog from $PWD
-	#make catalog bg=1  # Trigger download in background. Returns immediatelly. 
-	#make catalog 2>/dev/null	   # Wait for all catlogs to download
-	#run_once    -i download_catalog_indexes -- make catalog bg=1
-	run_once -w -i download_catalog_indexes -- make catalog bg=1
+	# Start catalog downloads (idempotent - skips if already done) and wait
+	aba_debug "Ensuring catalog indexes for OCP $ocp_ver_major are available"
+	download_all_catalogs "$ocp_ver_major" 86400 >&2  # Start downloads (idempotent)
+	wait_for_all_catalogs "$ocp_ver_major" >&2        # Wait for completion
 
 	catalog_file_errors=
 	for catalog in redhat-operator certified-operator community-operator
@@ -197,7 +196,7 @@ do
 
 		for op in $list
 		do
-			echo $op | grep -q "^#" && echo $op | sed "s/-/ /g" && continue  # Print just the operator "heading" (a hack)
+			echo $op | grep -q "^#" && echo $op | sed "s/-/ /g" >&2 && continue  # Print just the operator "heading" (a hack)
 
 			aba_debug Adding operator: $op from catalog: $catalog_name
 			add_op $op $catalog_name

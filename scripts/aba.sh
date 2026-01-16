@@ -303,11 +303,12 @@ do
 
 		replace-value-conf -n ocp_version -v $ver -f $ABA_ROOT/aba.conf
 
-		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-		aba_debug Downloading operator index for version $ver 
+	# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
+	aba_debug Downloading operator index for version $ver 
 
-		#( make -s -C $ABA_ROOT catalog bg=true & ) & 
-		run_once -i download_catalog_indexes -- make -s -C $ABA_ROOT catalog bg=true
+	# Use new helper function for parallel catalog downloads
+	local ver_short="${ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
+	download_all_catalogs "$ver_short" 86400  # 1-day TTL
 
 		shift 2
 		ocp_version=$ver
@@ -1064,7 +1065,9 @@ fi
 # Now we know the desired openshift version...
 
 # Fetch the operator indexes (in the background to save time).
-run_once -i download_catalog_indexes -- make -s -C $ABA_ROOT catalog bg=true
+# Use new helper function for parallel catalog downloads
+ocp_ver_short="${target_ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
+download_all_catalogs "$ocp_ver_short" 86400  # 1-day TTL
 
 # Trigger download of all CLI binaries
 # Note: Ths only other place this is done is in "scripts/reg-save.sh"

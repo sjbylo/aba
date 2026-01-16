@@ -1738,9 +1738,8 @@ handle_action_bundle() {
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
-		--form "Create install bundle:" 0 0 0 \
+		--form "Create install bundle:" 0 0 1 \
 		"Output path:"           1 1 "$default_bundle"  1 20 60 0 \
-		"Auto-answer (-y):"      2 1 "yes"              2 20 5 0 \
 		2>"$TMP"
 	rc=$?
 	
@@ -1751,18 +1750,16 @@ handle_action_bundle() {
 	
 	# Parse form output
 	bundle_path=$(sed -n '1p' "$TMP")
-	local ask_y=$(sed -n '2p' "$TMP")
 	
 	[[ -z "$bundle_path" ]] && bundle_path="$default_bundle"
 	
-	# Parse -y flag
+	# Use global -y flag
 	local y_flag=""
-	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
-	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+	if [[ "$USE_Y_FLAG" == "yes" ]]; then
 		y_flag="-y"
-		log "User enabled -y flag"
+		log "Using -y flag (enabled in menu)"
 	else
-		log "User disabled -y flag"
+		log "Not using -y flag (disabled in menu)"
 	fi
 	
 	log "Bundle output path: $bundle_path, y_flag: $y_flag"
@@ -1795,13 +1792,12 @@ handle_action_local_quay() {
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Local Quay Registry" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
-		--form "Configure local Quay registry:" 0 0 0 \
+		--form "Configure local Quay registry:" 0 0 5 \
 		"Registry Host (FQDN):"  1 1 "$default_host"       1 25 40 0 \
 		"Registry Username:"     2 1 "$default_user"       2 25 40 0 \
 		"Registry Password:"     3 1 "$default_pw"         3 25 40 0 \
 		"Registry Path:"         4 1 "$default_path"       4 25 40 0 \
 		"Data Directory:"        5 1 "$default_data_dir"   5 25 40 0 \
-		"Auto-answer (-y):"      6 1 "yes"                 6 25 5 0 \
 		2>"$TMP"
 	rc=$?
 	
@@ -1816,16 +1812,14 @@ handle_action_local_quay() {
 	local reg_pw=$(sed -n '3p' "$TMP")
 	local reg_path=$(sed -n '4p' "$TMP")
 	local data_dir=$(sed -n '5p' "$TMP")
-	local ask_y=$(sed -n '6p' "$TMP")
 	
-	# Parse -y flag
+	# Use global -y flag
 	local y_flag=""
-	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
-	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+	if [[ "$USE_Y_FLAG" == "yes" ]]; then
 		y_flag="-y"
-		log "User enabled -y flag"
+		log "Using -y flag (enabled in menu)"
 	else
-		log "User disabled -y flag"
+		log "Not using -y flag (disabled in menu)"
 	fi
 	
 	log "Local Quay config: host=$reg_host, user=$reg_user, path=$reg_path, data_dir=$data_dir, y_flag=$y_flag"
@@ -1866,13 +1860,12 @@ handle_action_local_docker() {
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Local Docker Registry" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
-		--form "Configure local Docker registry:" 0 0 0 \
+		--form "Configure local Docker registry:" 0 0 5 \
 		"Registry Host (FQDN):"  1 1 "$default_host"       1 25 40 0 \
 		"Registry Username:"     2 1 "$default_user"       2 25 40 0 \
 		"Registry Password:"     3 1 "$default_pw"         3 25 40 0 \
 		"Registry Path:"         4 1 "$default_path"       4 25 40 0 \
 		"Data Directory:"        5 1 "$default_data_dir"   5 25 40 0 \
-		"Auto-answer (-y):"      6 1 "yes"                 6 25 5 0 \
 		2>"$TMP"
 	rc=$?
 	
@@ -1887,16 +1880,14 @@ handle_action_local_docker() {
 	local reg_pw=$(sed -n '3p' "$TMP")
 	local reg_path=$(sed -n '4p' "$TMP")
 	local data_dir=$(sed -n '5p' "$TMP")
-	local ask_y=$(sed -n '6p' "$TMP")
 	
-	# Parse -y flag
+	# Use global -y flag
 	local y_flag=""
-	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
-	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+	if [[ "$USE_Y_FLAG" == "yes" ]]; then
 		y_flag="-y"
-		log "User enabled -y flag"
+		log "Using -y flag (enabled in menu)"
 	else
-		log "User disabled -y flag"
+		log "Not using -y flag (disabled in menu)"
 	fi
 	
 	log "Local Docker config: host=$reg_host, user=$reg_user, path=$reg_path, data_dir=$data_dir, y_flag=$y_flag"
@@ -1939,7 +1930,7 @@ handle_action_remote_quay() {
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Remote Quay Registry (SSH)" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
-		--form "Configure remote Quay registry:" 0 0 0 \
+		--form "Configure remote Quay registry:" 0 0 7 \
 		"Remote Host (FQDN):"    1 1 "$default_host"       1 25 40 0 \
 		"SSH Username:"          2 1 "$default_ssh_user"   2 25 40 0 \
 		"SSH Key Path:"          3 1 "$default_ssh_key"    3 25 40 0 \
@@ -1947,7 +1938,6 @@ handle_action_remote_quay() {
 		"Registry Password:"     5 1 "$default_pw"         5 25 40 0 \
 		"Registry Path:"         6 1 "$default_path"       6 25 40 0 \
 		"Data Directory:"        7 1 "$default_data_dir"   7 25 40 0 \
-		"Auto-answer (-y):"      8 1 "yes"                 8 25 5 0 \
 		2>"$TMP"
 	rc=$?
 	
@@ -1964,16 +1954,14 @@ handle_action_remote_quay() {
 	local reg_pw=$(sed -n '5p' "$TMP")
 	local reg_path=$(sed -n '6p' "$TMP")
 	local data_dir=$(sed -n '7p' "$TMP")
-	local ask_y=$(sed -n '8p' "$TMP")
 	
-	# Parse -y flag
+	# Use global -y flag
 	local y_flag=""
-	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
-	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+	if [[ "$USE_Y_FLAG" == "yes" ]]; then
 		y_flag="-y"
-		log "User enabled -y flag"
+		log "Using -y flag (enabled in menu)"
 	else
-		log "User disabled -y flag"
+		log "Not using -y flag (disabled in menu)"
 	fi
 	
 	log "Remote Quay config: host=$reg_host, ssh_user=$reg_ssh_user, ssh_key=$reg_ssh_key, y_flag=$y_flag"
@@ -2000,31 +1988,13 @@ handle_action_remote_quay() {
 handle_action_save() {
 	log "Handling action: Save Images"
 	
-	# Simple form with just -y option
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Save Images" \
-		--ok-label "Next" \
-		--cancel-label "Back" \
-		--form "Save images to local archive:" 0 0 0 \
-		"Auto-answer (-y):"  1 1 "yes"  1 20 5 0 \
-		2>"$TMP"
-	rc=$?
-	
-	if [[ $rc -ne 0 ]]; then
-		log "User cancelled save form"
-		return 1
-	fi
-	
-	# Parse form output
-	local ask_y=$(sed -n '1p' "$TMP")
-	
-	# Parse -y flag
+	# Use global -y flag
 	local y_flag=""
-	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
-	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+	if [[ "$USE_Y_FLAG" == "yes" ]]; then
 		y_flag="-y"
-		log "User enabled -y flag"
+		log "Using -y flag (enabled in menu)"
 	else
-		log "User disabled -y flag"
+		log "Not using -y flag (disabled in menu)"
 	fi
 	
 	# Confirm and execute
@@ -2039,31 +2009,13 @@ handle_action_save() {
 handle_action_isconf() {
 	log "Handling action: Generate ImageSet Config"
 	
-	# Simple form with just -y option
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Generate ImageSet Config" \
-		--ok-label "Next" \
-		--cancel-label "Back" \
-		--form "Generate ImageSet configuration:" 0 0 0 \
-		"Auto-answer (-y):"  1 1 "yes"  1 20 5 0 \
-		2>"$TMP"
-	rc=$?
-	
-	if [[ $rc -ne 0 ]]; then
-		log "User cancelled isconf form"
-		return 1
-	fi
-	
-	# Parse form output
-	local ask_y=$(sed -n '1p' "$TMP")
-	
-	# Parse -y flag
+	# Use global -y flag
 	local y_flag=""
-	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
-	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+	if [[ "$USE_Y_FLAG" == "yes" ]]; then
 		y_flag="-y"
-		log "User enabled -y flag"
+		log "Using -y flag (enabled in menu)"
 	else
-		log "User disabled -y flag"
+		log "Not using -y flag (disabled in menu)"
 	fi
 	
 	# Confirm and execute
@@ -2258,13 +2210,24 @@ Press OK to continue." 0 0 || true
 	fi
 	
 	# Now show action menu - what to do next?
+	# Initialize -y flag state (global across all actions)
+	USE_Y_FLAG="${USE_Y_FLAG:-no}"
+	
 	while :; do
+		# Build toggle label based on current state
+		if [[ "$USE_Y_FLAG" == "yes" ]]; then
+			toggle_label="Toggle -y flag (currently: ON)"
+		else
+			toggle_label="Toggle -y flag (currently: OFF)"
+		fi
+		
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Choose Next Action" \
 			--extra-button --extra-label "Back" \
 			--help-button \
 			--ok-label "Select" \
 			--cancel-label "Exit" \
-			--menu "Configuration saved to aba.conf\n\nChoose what to do next:" 0 0 8 \
+			--menu "Configuration saved to aba.conf\n\nChoose what to do next:" 0 0 9 \
+			0 "$toggle_label" \
 			1 "View Generated ImageSet Config" \
 			2 "Create ABA Install Bundle (air-gapped)" \
 			3 "Install & Sync to Local Registry (Quay)" \
@@ -2283,6 +2246,18 @@ Press OK to continue." 0 0 || true
 				log "User selected action: $action"
 				
 				case "$action" in
+					0)
+						# Toggle -y flag
+						if [[ "$USE_Y_FLAG" == "yes" ]]; then
+							USE_Y_FLAG="no"
+							log "Toggled -y flag to: OFF"
+						else
+							USE_Y_FLAG="yes"
+							log "Toggled -y flag to: ON"
+						fi
+						# Redisplay menu
+						continue
+						;;
 					1)
 						# View ImageSet Config
 						handle_action_view_isconf
