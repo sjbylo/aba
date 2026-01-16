@@ -62,7 +62,7 @@ if [ "$ops" -o "$op_sets" ]; then
 	run_once -w -i download_catalog_indexes -- make catalog bg=1
 
 	catalog_file_errors=
-	for catalog in redhat-operator certified-operator redhat-marketplace community-operator
+	for catalog in redhat-operator certified-operator community-operator
 	do
 		# Check for the index file
 		if [ ! -s .index/$catalog-index-v$ocp_ver_major ]; then
@@ -105,11 +105,10 @@ fi
 
 redhat_operators=()
 certified_operators=()
-redhat_marketplace=()
 community_operator=()
 
 # Step though all the operator sets and determine which catalog they exist in,
-# with priority order: redhat-operator, certified-operator, redhat-marketplace, community-operator
+# with priority order: redhat-operator, certified-operator, community-operator
 # Operator names are selected from the catalogs in the above catalog order.
 for op_set_name in $(echo $op_sets | tr "," " ")
 do
@@ -130,9 +129,6 @@ do
 			elif grep -q "^$op " .index/certified-operator-index-v$ocp_ver_major; then
 				[ ! "${op_set_array[$op_set_name]}" ] && certified_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 				certified_operator+=("$op")
-			elif grep -q "^$op " .index/redhat-marketplace-index-v$ocp_ver_major; then
-				[ ! "${op_set_array[$op_set_name]}" ] && redhat_marketplace+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
-				redhat_marketplace+=("$op")
 			elif grep -q "^$op " .index/community-operator-index-v$ocp_ver_major; then
 				[ ! "${op_set_array[$op_set_name]}" ] && community_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 				community_operator+=("$op")
@@ -147,7 +143,7 @@ do
 done
 
 # Step though all the operators and determine which catalog they exist in,
-# with priority order: redhat-operator, certified-operator, redhat-marketplace, community-operator
+# with priority order: redhat-operator, certified-operator, community-operator
 # Operator names are selected from the catalogs in the above catalog order.
 if [ "$ops" ]; then
 	declare -A op_set_array
@@ -167,9 +163,6 @@ if [ "$ops" ]; then
 		elif grep -q "^$op " .index/certified-operator-index-v$ocp_ver_major; then
 			[ ! "${op_set_array[$op_set_name]}" ] && certified_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 			certified_operator+=("$op")
-		elif grep -q "^$op " .index/redhat-marketplace-index-v$ocp_ver_major; then
-			[ ! "${op_set_array[$op_set_name]}" ] && redhat_marketplace+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
-			redhat_marketplace+=("$op")
 		elif grep -q "^$op " .index/community-operator-index-v$ocp_ver_major; then
 			[ ! "${op_set_array[$op_set_name]}" ] && community_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 			community_operator+=("$op")
@@ -187,7 +180,7 @@ echo >&2
 # Stdout is for the image-set config output
 echo "  operators:"
 
-for catalog in redhat_operator certified_operator redhat_marketplace community_operator
+for catalog in redhat_operator certified_operator community_operator
 do
 	list=$(eval echo '${'$catalog'[@]}')   # This is a bit of a hack
 	catalog_name=$(echo $catalog | sed "s/_/-/g")
