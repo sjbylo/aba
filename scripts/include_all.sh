@@ -1401,7 +1401,7 @@ run_once() {
 			if [[ -n "$old_pid" ]]; then
 				# We run the job under setsid, so PGID==PID; kill the whole group.
 				kill -TERM -"$old_pid" 2>/dev/null || true
-				sleep 0.2
+				sleep 0.05
 				kill -KILL -"$old_pid" 2>/dev/null || true
 
 				# Last-resort: also try PID itself
@@ -1636,6 +1636,9 @@ aba_runtime_cleanup() {
 
 	# Prevent recursion / re-entrancy
 	trap - EXIT INT TERM
+
+	echo >&2
+	aba_info "Cleaning up..." >&2
 
 	# Kill anything still owned by runner
 	run_once -G >/dev/null 2>&1 || true

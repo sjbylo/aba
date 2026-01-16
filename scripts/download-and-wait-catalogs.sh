@@ -1,0 +1,29 @@
+#!/bin/bash
+# Simple wrapper to download and wait for all catalog indexes
+# Used by mirror/Makefile 'index' target
+
+set -eo pipefail
+
+# Set ABA_ROOT (helper functions need it)
+ABA_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export ABA_ROOT
+
+source "$ABA_ROOT/scripts/include_all.sh"
+
+# Get OCP version from aba.conf
+source <(normalize-aba-conf)
+verify-aba-conf || aba_abort "aba.conf validation failed"
+
+# Extract major.minor version (e.g., 4.20.8 -> 4.20)
+ocp_ver_short="${ocp_version%.*}"
+
+aba_info "Downloading operator catalogs for OCP $ocp_ver_short"
+
+# Download all catalogs in parallel (1-day TTL)
+download_all_catalogs "$ocp_ver_short" 86400
+
+# Wait for all to complete
+wait_for_all_catalogs "$ocp_ver_short"
+
+aba_info_ok "All operator catalogs ready for OCP $ocp_ver_short"
+
