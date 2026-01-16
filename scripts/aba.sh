@@ -92,14 +92,14 @@ fi
 ##cd $ABA_ROOT
 
 # install will check if aba needs to be updated, if so it will return 3 ... so we re-execute it!
-if [ ! "$ABA_DO_NOT_UPDATE" ]; then
-	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
-	if [ $? -eq 2 ]; then
-		export ABA_DO_NOT_UPDATE=1
-		$0 "$@"  # This means aba was updated and needs to be called again
-		exit
-	fi
-fi
+#if [ ! "$ABA_DO_NOT_UPDATE" ]; then
+#	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
+#	if [ $? -eq 2 ]; then
+#		export ABA_DO_NOT_UPDATE=1
+#		$0 "$@"  # This means aba was updated and needs to be called again
+#		exit
+#	fi
+#fi
 
 source $ABA_ROOT/scripts/include_all.sh
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"

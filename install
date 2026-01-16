@@ -3,7 +3,7 @@
 
 uname -o | grep -q "^Darwin$" && echo "Install ABA on RHEL, Centos Stream or Fedora.  Most tested is RHEL 8 or 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
-cd $(dirname $0)  # this install script is always called from  aba's root dir
+#cd $(dirname $0)  # this install script is always called from  aba's root dir
 
 # We need git, which, id, diff commands (not always available in a container) ... 
 # the other rpm packages are copied from templates/rpms-external.txt which isn't available yet!
