@@ -87,7 +87,7 @@ do
 		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	else
 		# Wait for oc-mirror to be available!
-		uun_once -w -i cli:install:oc-mirror -- make -sC ../cli oc-mirror 
+		run_once -w -i cli:install:oc-mirror -- make -sC ../cli oc-mirror 
 		cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	fi

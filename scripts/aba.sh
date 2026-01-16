@@ -101,7 +101,6 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 	fi
 fi
 
-
 source $ABA_ROOT/scripts/include_all.sh
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
 aba_runtime_install_traps  # Used to clean up runner bg tasks
