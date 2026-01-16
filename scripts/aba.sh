@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20260105224944
+ABA_VERSION=20260116224347
 # Sanity check
 # FIXME: Can only use 'echo' here since cann't locate the include_all.sh file yet
 echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
@@ -307,7 +307,7 @@ do
 	aba_debug Downloading operator index for version $ver 
 
 	# Use new helper function for parallel catalog downloads
-	local ver_short="${ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
+	ver_short="${ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
 	download_all_catalogs "$ver_short" 86400  # 1-day TTL
 
 		shift 2
