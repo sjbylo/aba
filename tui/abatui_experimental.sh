@@ -738,10 +738,9 @@ Next: Configure platform and network." 0 0
 			run_once -i cli:download:all -- "$ABA_ROOT/scripts/cli-download-all.sh"
 			
 			# Start catalog downloads (oc-mirror already downloading from early in startup)
-			log "Starting catalog download task for OCP ${OCP_VERSION} (${version_short})"
-			# 'make index' = start 4 catalogs with bg=true (parallel) + then call 'make catalog' to wait
-			# This gives us parallel downloads AND proper blocking for run_once
-			run_once -i "catalog:${version_short}" -- make -s -C "$ABA_ROOT/mirror" index
+			log "Starting parallel catalog downloads for OCP ${OCP_VERSION} (${version_short})"
+			# Use helper function with 1-day TTL (86400 seconds)
+			download_all_catalogs "$version_short" 86400
 			
 			DIALOG_RC="next"
 			;;
@@ -1281,61 +1280,24 @@ select_operators() {
 	
 	# WAIT for catalog indexes to download (needed for operator sets AND search)
 	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
-	log "Checking catalog indexes for version ${version_short}..."
+	log "Waiting for catalog indexes for version ${version_short}..."
 	
-	# Check if catalogs are already downloaded by looking for .done marker files
-	local index_dir="$ABA_ROOT/mirror/.index"
-	local all_done=true
+	# Show wait message
+	dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for operator catalog indexes for OpenShift ${version_short}..." 5 80
 	
-	for catalog in redhat-operator certified-operator; do
-		if [[ ! -f "$index_dir/.${catalog}-index-v${version_short}.done" ]]; then
-			all_done=false
-			break
-		fi
-	done
-	
-	if [[ "$all_done" == "false" ]]; then
-		log "Catalogs not yet downloaded, waiting..."
-		dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalog indexes for OpenShift ${version_short}...
+	# Wait for all 3 catalogs (all required)
+	if ! wait_for_all_catalogs "$version_short"; then
+		log "ERROR: Required catalog downloads failed for version ${version_short}"
+		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
+"\Z1ERROR: Failed to download required operator catalogs\Zn
 
-This may take 1-2 minutes on first run." 7 80
-		
-		# Wait for download by polling for .done files
-		local timeout=300  # 5 minutes
-		local elapsed=0
-		while [[ $elapsed -lt $timeout ]]; do
-			all_done=true
-			for catalog in redhat-operator certified-operator; do
-				if [[ ! -f "$index_dir/.${catalog}-index-v${version_short}.done" ]]; then
-					all_done=false
-					break
-				fi
-			done
-			
-			if [[ "$all_done" == "true" ]]; then
-				break
-			fi
-			
-			sleep 2
-			((elapsed += 2))
-		done
-		
-		if [[ "$all_done" == "false" ]]; then
-			log "ERROR: Catalog download timed out after ${timeout}s"
-			dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
-"\Z1ERROR: Failed to download operator catalogs\Zn
+Cannot proceed without operator catalog indexes.
 
-Timed out after ${timeout} seconds.
+Check logs in: ~/.aba/runner/
 
-Check logs in: ~/.aba/runner/catalog:${version_short}.log
-Check index files in: $index_dir/
-
-Try running: make -C mirror catalog" 0 0
-			DIALOG_RC="back"
-			return
-		fi
-	else
-		log "Catalogs already downloaded for version ${version_short}"
+Try running: cd mirror && bash ../scripts/download-catalog-index-simple.sh redhat-operator" 0 0
+		DIALOG_RC="back"
+		return
 	fi
 	
 	log "Catalog indexes ready for version ${version_short}"

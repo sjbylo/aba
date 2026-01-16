@@ -1364,13 +1364,14 @@ run_once() {
 	local reset=false
 	local global_clean=false
 	local global_failed_clean=false
+	local ttl=""
 	local OPTIND=1
 
 	# Allow override for tests
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGF" opt; do
+	while getopts "swi:cprGFt:" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1380,6 +1381,7 @@ run_once() {
 			r) reset=true ;;
 			G) global_clean=true ;;
 			F) global_failed_clean=true ;;
+			t) ttl=$OPTARG ;;
 			*) return 1 ;;
 		esac
 	done
@@ -1452,6 +1454,21 @@ run_once() {
 	local log_file="$WORK_DIR/${work_id}.log"
 	local pid_file="$WORK_DIR/${work_id}.pid"
 
+	# --- TTL CHECK ---
+	# If TTL specified and exit file exists, check if it's expired
+	if [[ -n "$ttl" && -f "$exit_file" ]]; then
+		local now=$(date +%s)
+		local exit_mtime=$(stat -c %Y "$exit_file" 2>/dev/null || stat -f %m "$exit_file" 2>/dev/null)
+		
+		if [[ -n "$exit_mtime" ]]; then
+			local age=$((now - exit_mtime))
+			if [[ $age -gt $ttl ]]; then
+				# Task output is stale, reset it
+				_kill_id "$work_id"
+			fi
+		fi
+	fi
+
 	# --- RESET/KILL ---
 	if [[ "$reset" == true ]]; then
 		_kill_id "$work_id"
@@ -1509,6 +1526,12 @@ run_once() {
 			echo "Error: start mode requires a command." >&2
 			return 1
 		fi
+		
+		# If exit file exists (task already completed), skip
+		if [[ -f "$exit_file" ]]; then
+			return 0
+		fi
+		
 		_start_task "false"
 		return 0
 	fi
@@ -1544,6 +1567,66 @@ run_once() {
 
 	echo "Error: Unknown mode." >&2
 	return 1
+}
+
+# --- Catalog Download Helpers ---
+
+# Download all 4 operator catalogs in parallel using run_once
+# Usage: download_all_catalogs <version_short> [ttl_seconds]
+# Example: download_all_catalogs "4.19" 86400
+download_all_catalogs() {
+	local version_short="${1}"
+	local ttl="${2:-86400}"  # Default: 1 day (86400 seconds)
+	
+	if [[ -z "$version_short" ]]; then
+		aba_abort "download_all_catalogs requires version (e.g., 4.19)"
+	fi
+	
+	aba_debug "Starting parallel catalog downloads for OCP $version_short (TTL: ${ttl}s)"
+	
+	# Start 3 parallel downloads (run_once backgrounds them automatically)
+	# Each download will skip if already completed within TTL
+	run_once -i "catalog:${version_short}:redhat-operator" -t "$ttl" -- \
+		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" redhat-operator
+	
+	run_once -i "catalog:${version_short}:certified-operator" -t "$ttl" -- \
+		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" certified-operator
+	
+	run_once -i "catalog:${version_short}:community-operator" -t "$ttl" -- \
+		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" community-operator
+	
+	aba_debug "Catalog download tasks started in background"
+}
+
+# Wait for all 3 catalog downloads to complete (all required)
+# Usage: wait_for_all_catalogs <version_short>
+# Example: wait_for_all_catalogs "4.19"
+wait_for_all_catalogs() {
+	local version_short="${1}"
+	
+	if [[ -z "$version_short" ]]; then
+		aba_abort "wait_for_all_catalogs requires version (e.g., 4.19)"
+	fi
+	
+	aba_debug "Waiting for catalog downloads to complete for OCP $version_short"
+	
+	# All 3 catalogs are required and treated equally
+	if ! run_once -w -i "catalog:${version_short}:redhat-operator"; then
+		aba_abort "Failed to download redhat-operator catalog for OCP $version_short"
+	fi
+	aba_debug "redhat-operator catalog ready"
+	
+	if ! run_once -w -i "catalog:${version_short}:certified-operator"; then
+		aba_abort "Failed to download certified-operator catalog for OCP $version_short"
+	fi
+	aba_debug "certified-operator catalog ready"
+	
+	if ! run_once -w -i "catalog:${version_short}:community-operator"; then
+		aba_abort "Failed to download community-operator catalog for OCP $version_short"
+	fi
+	aba_debug "community-operator catalog ready"
+	
+	aba_info_ok "All catalog downloads completed for OCP $version_short"
 }
 
 # --- Aba-facing cleanup ---
