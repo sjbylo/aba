@@ -1046,7 +1046,7 @@ We need help!  Here are some ideas for new features and enhancements.
 
 - ~~Enable any number of ports for interface bonding, using `ports` value instead of `port0` and `port1` values in `cluster.conf`.~~
 
-- ~~Support all four operator catalogs (indexes), e.g. "certified-operator", "redhat-marketplace" & "community-operator" and not just "redhat-operator".~~
+- ~~Support three operator catalogs (indexes), e.g. "certified-operator" & "community-operator" and not just "redhat-operator".~~
 
 - ~~Allow to specify the path to a large data volume (and not only the top dir of the Quay registry). Store all large files/cache there.~~
 
@@ -1222,7 +1222,7 @@ Running out of disk space is the most likely problem you will encounter when con
 
 ## Q: Can I install Operators from community catalogs?
 
-**Yes!** ABA currently supports all four of Red Hat’s official catalogs (redhat-operator, certified-operator, redhat-marketplace and community-operator) via `oc-mirror`. 
+**Yes!** ABA currently supports three of Red Hat's official catalogs (redhat-operator, certified-operator, and community-operator) via `oc-mirror`. 
 
 [Back to top](#who-should-use-aba)
 
