@@ -22,26 +22,26 @@ WORK_DIR=$PWD # Remember so can change config file here
 
 
 # Need to catch these option, esp. if they are at the start
-while [ "$1" = "-D" -o "$1" = "--debug" -o "$1" = "--dir" -o "$1" = "-d" ] 
-do
-	## Change dir if asked
-	# Keep these lines, ready for the below lines of code #FIXME: Use well-known loaction for static files, e.g. /opt/aba
-	if [ "$1" = "--dir" -o "$1" = "-d" ]; then
-		[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
-		[ ! -e "$2" ] && echo "Error: directory $2 does not exist!" >&2 && exit 1
-		[ ! -d "$2" ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
-
-		[ "$DEBUG_ABA" ] && echo "Changing dir to: $2" # Keep the $DEBUG_ABA as have not sourced the include file yet!
-
-		cd "$2"
-		shift 2
-
-		WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
-	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
-		export DEBUG_ABA=1
-		shift
-	fi
-done
+# TRY WITHOUT while [ "$1" = "-D" -o "$1" = "--debug" -o "$1" = "--dir" -o "$1" = "-d" ] 
+# TRY WITHOUT do
+# TRY WITHOUT	## Change dir if asked
+# TRY WITHOUT	# Keep these lines, ready for the below lines of code #FIXME: Use well-known loaction for static files, e.g. /opt/aba
+# TRY WITHOUT	if [ "$1" = "--dir" -o "$1" = "-d" ]; then
+# TRY WITHOUT		[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
+# TRY WITHOUT		[ ! -e "$2" ] && echo "Error: directory $2 does not exist!" >&2 && exit 1
+# TRY WITHOUT		[ ! -d "$2" ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
+# TRY WITHOUT
+# TRY WITHOUT		[ "$DEBUG_ABA" ] && echo "Changing dir to: $2" # Keep the $DEBUG_ABA as have not sourced the include file yet!
+# TRY WITHOUT
+# TRY WITHOUT		cd "$2"
+# TRY WITHOUT		shift 2
+# TRY WITHOUT
+# TRY WITHOUT		WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
+# TRY WITHOUT	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
+# TRY WITHOUT		export DEBUG_ABA=1
+# TRY WITHOUT		shift
+# TRY WITHOUT	fi
+# TRY WITHOUTdone
 
 export INFO_ABA=1
 export ABA_ROOT
@@ -92,14 +92,14 @@ fi
 ##cd $ABA_ROOT
 
 # install will check if aba needs to be updated, if so it will return 3 ... so we re-execute it!
-#if [ ! "$ABA_DO_NOT_UPDATE" ]; then
-#	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
-#	if [ $? -eq 2 ]; then
-#		export ABA_DO_NOT_UPDATE=1
-#		$0 "$@"  # This means aba was updated and needs to be called again
-#		exit
-#	fi
-#fi
+if [ ! "$ABA_DO_NOT_UPDATE" ]; then
+	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
+	if [ $? -eq 2 ]; then
+		export ABA_DO_NOT_UPDATE=1
+		$0 "$@"  # This means aba was updated and needs to be called again
+		exit
+	fi
+fi
 
 source $ABA_ROOT/scripts/include_all.sh
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
@@ -191,21 +191,6 @@ do
 		# Simplify option/arg processing
 		[ "$BUILD_COMMAND" ] && aba_abort "option $1 not allowed after a command: [$BUILD_COMMAND]"
 
-		# FIXME: change this
-		#if [ "$BUILD_COMMAND" ]; then
-		#	if [ "$DEBUG_ABA" ]; then
-		#		aba_debug "In folder $PWD: Running make $BUILD_COMMAND" 
-		#		read -t 3 || true
-		#		eval make $BUILD_COMMAND
-		#	else
-		#		# Eval used here as some variable may need evaluation from bash
-		#		eval make -s $BUILD_COMMAND
-		#	fi
-		#
-		#	# Remove already executed targets 
-		#	BUILD_COMMAND=
-		#fi
-
 		# If no directory path provided, assume it's ".", i.e. $ABA_ROOT/.
 		# If dir path arg privided, then shift
 		[[ "$2" =~ ^- || -z "$2" ]] && provided_dir=. || shift  # If no arg provided, use CWD
@@ -220,10 +205,7 @@ do
 		[ ! -e "$provided_dir" ] && aba_abort "directory: $provided_dir does not exist!"
 		[ ! -d "$provided_dir" ] && aba_abort "cannot change to $provided_dir: not a directory!"
 
-		# FIXME:
-		#WORK_DIR="$ABA_ROOT/$provided_dir"  # dir should always be relative from Aba repo's root dir
-		#aba_debug "changing to \"$WORK_DIR\"" 
-		#cd "$WORK_DIR" 
+		cd "$provided_dir"
 		shift
 	elif [ "$1" = "--quiet" -o "$1" = "-q" ]; then
 		export INFO_ABA=
