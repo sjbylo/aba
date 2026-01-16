@@ -49,7 +49,7 @@ add_op() {
 			END
 		fi
 	else
-		aba_warning "Operator '$op' not found in index file mirror/.index/$catalog-index-v$ocp_ver_major"
+		aba_warning "Operator '$op' not found in index file .index/$catalog-index-v$ocp_ver_major"
 	fi
 }
 
@@ -57,30 +57,9 @@ add_op() {
 if [ "$ops" -o "$op_sets" ]; then
 	# Start catalog downloads (idempotent - skips if already done) and wait
 	aba_debug "Ensuring catalog indexes for OCP $ocp_ver_major are available"
-	download_all_catalogs "$ocp_ver_major" 86400 >&2  # Start downloads (idempotent)
-	wait_for_all_catalogs "$ocp_ver_major" >&2        # Wait for completion
-
-	catalog_file_errors=
-	for catalog in redhat-operator certified-operator community-operator
-	do
-		# Check for the index file
-		if [ ! -s .index/$catalog-index-v$ocp_ver_major ]; then
-			catalog_file_errors=1
-			aba_warning "Missing operator catalog file: $PWD/.index/$catalog-index-v$ocp_ver_major" >&2
-		fi
-	done
-
-    	if [ "$catalog_file_errors" ]; then
-		aba_abort \
-			"Cannot add required operators to the image-set config file!" \
-			"Your options are:" \
-			"- Refresh any existing catalog files by running: 'cd $PWD; rm -f .index/redhat-operator-index-v${ocp_ver_major}*' and try again." \
-			"- run 'cd mirror; aba catalog' to try to download the catalog file again." \
-			"- Check that the following command is working:" \
-			"    oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major" \
-			"- Check access to registry is working: 'curl -IL http://registry.redhat.io/v2'" 
-		# We want to ensure the user gets what they expect, i.e. operators downloaded! So we abort.
-	fi
+	download_all_catalogs "$ocp_ver_major" 86400  >&2 # Start downloads (idempotent)
+	wait_for_all_catalogs "$ocp_ver_major"  >&2       # Wait for completion
+	# If wait succeeds, the catalog files are guaranteed to exist
 else
 	aba_info "No operators to add to the image-set config file since values ops or op_sets not defined in aba.conf or mirror.conf." >&2
 

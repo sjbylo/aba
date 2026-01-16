@@ -78,7 +78,7 @@ run_once -w -i cli:install:oc-mirror -- make -sC "$ABA_ROOT/cli" oc-mirror
 catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
 aba_info "Running: oc-mirror list operators --catalog $catalog_url"
 
-if ! oc-mirror list operators --catalog "$catalog_url" > "$index_file" 2>&1; then
+if ! oc-mirror list operators --catalog "$catalog_url" > "$index_file"; then
 	ret=$?
 	aba_abort "oc-mirror failed with exit code $ret for catalog $catalog_name"
 fi
