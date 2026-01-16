@@ -1611,17 +1611,21 @@ wait_for_all_catalogs() {
 	aba_debug "Waiting for catalog downloads to complete for OCP $version_short"
 	
 	# All 3 catalogs are required and treated equally
-	if ! run_once -w -i "catalog:${version_short}:redhat-operator"; then
+	# Provide the command so run_once can start the task if it hasn't been started yet
+	if ! run_once -w -i "catalog:${version_short}:redhat-operator" -- \
+		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" redhat-operator; then
 		aba_abort "Failed to download redhat-operator catalog for OCP $version_short"
 	fi
 	aba_debug "redhat-operator catalog ready"
 	
-	if ! run_once -w -i "catalog:${version_short}:certified-operator"; then
+	if ! run_once -w -i "catalog:${version_short}:certified-operator" -- \
+		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" certified-operator; then
 		aba_abort "Failed to download certified-operator catalog for OCP $version_short"
 	fi
 	aba_debug "certified-operator catalog ready"
 	
-	if ! run_once -w -i "catalog:${version_short}:community-operator"; then
+	if ! run_once -w -i "catalog:${version_short}:community-operator" -- \
+		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" community-operator; then
 		aba_abort "Failed to download community-operator catalog for OCP $version_short"
 	fi
 	aba_debug "community-operator catalog ready"
