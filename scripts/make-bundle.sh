@@ -34,7 +34,7 @@ aba_debug "Setting install bundle output destination to /tmp"
 aba_debug Config: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
 
 # This will have been completed behand, but just in case!
-install_rpms $(cat templates/rpms-external.txt) || exit 1
+install_rpms $(cat $ABA_ROOT/templates/rpms-external.txt) || exit 1
 
 
 source <(normalize-aba-conf)

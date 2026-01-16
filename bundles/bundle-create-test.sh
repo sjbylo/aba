@@ -331,7 +331,7 @@ sed -i "s/platform=bm/platform=vmw/g" aba.conf
 ./install
 aba
 aba -A
-aba --machine-network 10.0.0.0/20 --ntp $NTP_IP --default-route 10.0.1.1  # Just to be sure, needed on dual-homed bastion
+aba --machine-network 10.0.0.0/20 --ntp $NTP_IP --gateway-ip 10.0.1.1  # Just to be sure, needed on dual-homed bastion
 
 echo_step Install Quay and load the images ...
 

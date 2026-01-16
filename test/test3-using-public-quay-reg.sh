@@ -126,16 +126,16 @@ test-cmd -m "Removing sno dir" rm -rf sno
 
 test-cmd -m "Remove CLIs" aba -d cli reset -f
 
-test-cmd -m "Set the proxy env vars" source ~/.proxy-set.sh
-source ~/.proxy-set.sh # Leave this here!
+test-cmd -m "Set the proxy env vars" source ~steve/.proxy-set.sh
+source ~steve/.proxy-set.sh # Leave this here!  Needed by both users steve and root.
 test-cmd -m "Creating sno/cluster.conf." aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf -I proxy
 
 # Note, this is NOT the same as "aba cluster -n sno -t sno --starting-ip 10.0.1.201" command
 # aba cluster -n sno -t sno --starting-ip 10.0.1.201 will overwrite the cluster.conf file, but the other will not.
 test-cmd -m "Installing SNO cluster from public registry, since no mirror registry available." "aba -d sno install"
 
-test-cmd -m "Unset the proxy env vars" source ~/.proxy-unset.sh
-source ~/.proxy-unset.sh # Leave this here!
+test-cmd -m "Unset the proxy env vars" source ~steve/.proxy-unset.sh
+source ~steve/.proxy-unset.sh # Leave this here!  Needed by both users steve and root.
 
 test-cmd -m "Checking cluster operators" "aba --dir sno run"
 

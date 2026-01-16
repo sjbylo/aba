@@ -365,14 +365,41 @@ resume_from_conf() {
 		log "Restoring op_sets from aba.conf: $op_sets"
 		IFS=',' read -r -a _set_arr <<<"$op_sets"
 		for s in "${_set_arr[@]}"; do
-			s=${s##[[:space:]]}
-			s=${s%%[[:space:]]}
+			s=${s##[[:space:]]}  # Remove leading whitespace
+			s=${s%%[[:space:]]}  # Remove trailing whitespace
 			if [[ -n "$s" ]]; then
 				OP_SET_ADDED["$s"]=1
 				log "Restored operator set: $s"
+				
+				# Load operators from this set file into basket
+				local set_file="$ABA_ROOT/templates/operator-set-$s"
+				if [[ -f "$set_file" ]]; then
+					log "Loading operators from $set_file"
+					local op_count=0
+					while IFS= read -r line; do
+						# Skip comments and empty lines
+						[[ "$line" =~ ^[[:space:]]*# ]] && continue
+						[[ -z "$line" ]] && continue
+						
+						# Extract operator name (trim whitespace)
+						line=${line##[[:space:]]}  # Remove leading whitespace
+						line=${line%%[[:space:]]}  # Remove trailing whitespace
+						
+						if [[ -n "$line" ]]; then
+							OP_BASKET["$line"]=1
+							((op_count++))
+							log "  Added operator from set: $line"
+						fi
+					done < "$set_file"
+					log "Loaded $op_count operators from set '$s'"
+				else
+					log "WARNING: Operator set file not found: $set_file"
+				fi
 			fi
 		done
 	fi
+	
+	log "Final basket has ${#OP_BASKET[@]} operators after loading from op_sets"
 }
 
 
@@ -1253,36 +1280,65 @@ select_operators() {
 	run_once -i mirror:reg:download -- make -s -C "$ABA_ROOT/mirror" download-registries
 	
 	# WAIT for catalog indexes to download (needed for operator sets AND search)
-	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20 (must match task ID from version selection)
-	log "Checking if catalog indexes need to be downloaded..."
+	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
+	log "Checking catalog indexes for version ${version_short}..."
 	
-	# Peek first to see if we need to wait
-	local task_id="catalog:${version_short}"
-	if ! run_once -p -i "$task_id"; then
-		log "Catalogs not yet complete, showing wait dialog..."
-		dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for operator catalog indexes to finish downloading for OpenShift ${version_short}
+	# Check if catalogs are already downloaded by looking for .done marker files
+	local index_dir="$ABA_ROOT/mirror/.index"
+	local all_done=true
+	
+	for catalog in redhat-operator certified-operator; do
+		if [[ ! -f "$index_dir/.${catalog}-index-v${version_short}.done" ]]; then
+			all_done=false
+			break
+		fi
+	done
+	
+	if [[ "$all_done" == "false" ]]; then
+		log "Catalogs not yet downloaded, waiting..."
+		dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalog indexes for OpenShift ${version_short}...
 
-This may take 1-2 minutes on first run..." 7 80
-	else
-		log "Catalogs already downloaded, proceeding immediately"
-	fi
-	
-	# Wait for catalog download to complete
-	if ! run_once -w -i "$task_id"; then
-		log "ERROR: Catalog download failed"
-		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
+This may take 1-2 minutes on first run." 7 80
+		
+		# Wait for download by polling for .done files
+		local timeout=300  # 5 minutes
+		local elapsed=0
+		while [[ $elapsed -lt $timeout ]]; do
+			all_done=true
+			for catalog in redhat-operator certified-operator; do
+				if [[ ! -f "$index_dir/.${catalog}-index-v${version_short}.done" ]]; then
+					all_done=false
+					break
+				fi
+			done
+			
+			if [[ "$all_done" == "true" ]]; then
+				break
+			fi
+			
+			sleep 2
+			((elapsed += 2))
+		done
+		
+		if [[ "$all_done" == "false" ]]; then
+			log "ERROR: Catalog download timed out after ${timeout}s"
+			dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
 "\Z1ERROR: Failed to download operator catalogs\Zn
 
-Cannot proceed without operator catalog indexes.
+Timed out after ${timeout} seconds.
 
 Check logs in: ~/.aba/runner/catalog:${version_short}.log
+Check index files in: $index_dir/
 
-Try running: make catalog" 0 0
-		DIALOG_RC="back"
-		return
+Try running: make -C mirror catalog" 0 0
+			DIALOG_RC="back"
+			return
+		fi
+	else
+		log "Catalogs already downloaded for version ${version_short}"
 	fi
 	
-	log "Catalog downloads completed successfully"
+	log "Catalog indexes ready for version ${version_short}"
 	
 	log "Catalog indexes ready. Starting operators menu with ${#OP_BASKET[@]} operators in basket"
 
@@ -1686,6 +1742,439 @@ image synchronization process." 16 70 || true
 }
 
 # -----------------------------------------------------------------------------
+# Action Handlers
+# -----------------------------------------------------------------------------
+handle_action_view_isconf() {
+	log "Handling action: View ImageSet Config"
+	
+	# Check if file exists
+	local isconf_file="$ABA_ROOT/mirror/save/imageset-config-save.yaml"
+	if [[ ! -f "$isconf_file" ]]; then
+		dialog --backtitle "$(ui_backtitle)" --msgbox \
+"ImageSet configuration file not found.
+
+File: $isconf_file
+
+This file is generated after saving configuration." 0 0 || true
+		return 0
+	fi
+	
+	# Show file in scrollable textbox
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
+		--ok-label "Back" \
+		--textbox "$isconf_file" 0 0
+	
+	return 0
+}
+
+handle_action_bundle() {
+	log "Handling action: Create Bundle"
+	
+	# Get output path from user
+	local default_bundle="/tmp/aba-bundle-$(date +%Y%m%d-%H%M%S).tar"
+	
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
+		--ok-label "Next" \
+		--cancel-label "Back" \
+		--form "Create install bundle:" 0 0 0 \
+		"Output path:"           1 1 "$default_bundle"  1 20 60 0 \
+		"Auto-answer (-y):"      2 1 "yes"              2 20 5 0 \
+		2>"$TMP"
+	rc=$?
+	
+	if [[ $rc -ne 0 ]]; then
+		log "User cancelled bundle form"
+		return 1
+	fi
+	
+	# Parse form output
+	bundle_path=$(sed -n '1p' "$TMP")
+	local ask_y=$(sed -n '2p' "$TMP")
+	
+	[[ -z "$bundle_path" ]] && bundle_path="$default_bundle"
+	
+	# Parse -y flag
+	local y_flag=""
+	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
+	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+		y_flag="-y"
+		log "User enabled -y flag"
+	else
+		log "User disabled -y flag"
+	fi
+	
+	log "Bundle output path: $bundle_path, y_flag: $y_flag"
+	
+	# Show command and confirm
+	local cmd="aba bundle -o '$bundle_path' $y_flag"
+	if ! confirm_and_execute "$cmd"; then
+		return 1
+	fi
+	
+	return 0
+}
+
+handle_action_local_quay() {
+	log "Handling action: Local Quay Registry"
+	
+	# Load existing values from mirror.conf
+	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+		source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
+	fi
+	
+	# Set defaults (prefer existing config, fall back to sensible defaults)
+	local default_host="${reg_host:-$(hostname -f 2>/dev/null || hostname)}"
+	local default_user="${reg_user:-init}"
+	local default_pw="${reg_pw:-p4ssw0rd}"
+	local default_path="${reg_path:-ocp4/openshift4}"
+	local default_data_dir="${data_dir:-~}"
+	
+	# Collect inputs using form
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Local Quay Registry" \
+		--ok-label "Next" \
+		--cancel-label "Back" \
+		--form "Configure local Quay registry:" 0 0 0 \
+		"Registry Host (FQDN):"  1 1 "$default_host"       1 25 40 0 \
+		"Registry Username:"     2 1 "$default_user"       2 25 40 0 \
+		"Registry Password:"     3 1 "$default_pw"         3 25 40 0 \
+		"Registry Path:"         4 1 "$default_path"       4 25 40 0 \
+		"Data Directory:"        5 1 "$default_data_dir"   5 25 40 0 \
+		"Auto-answer (-y):"      6 1 "yes"                 6 25 5 0 \
+		2>"$TMP"
+	rc=$?
+	
+	if [[ $rc -ne 0 ]]; then
+		log "User cancelled local Quay form"
+		return 1
+	fi
+	
+	# Parse form output
+	local reg_host=$(sed -n '1p' "$TMP")
+	local reg_user=$(sed -n '2p' "$TMP")
+	local reg_pw=$(sed -n '3p' "$TMP")
+	local reg_path=$(sed -n '4p' "$TMP")
+	local data_dir=$(sed -n '5p' "$TMP")
+	local ask_y=$(sed -n '6p' "$TMP")
+	
+	# Parse -y flag
+	local y_flag=""
+	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
+	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+		y_flag="-y"
+		log "User enabled -y flag"
+	else
+		log "User disabled -y flag"
+	fi
+	
+	log "Local Quay config: host=$reg_host, user=$reg_user, path=$reg_path, data_dir=$data_dir, y_flag=$y_flag"
+	
+	# Save to mirror.conf
+	replace-value-conf -q -n reg_host -v "$reg_host" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_port -v "8443" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_user -v "$reg_user" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_pw -v "$reg_pw" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_path -v "$reg_path" -f mirror/mirror.conf
+	replace-value-conf -q -n data_dir -v "$data_dir" -f mirror/mirror.conf
+	
+	# Build command
+	local cmd="aba -d mirror sync -H '$reg_host' $y_flag"
+	if ! confirm_and_execute "$cmd"; then
+		return 1
+	fi
+	
+	return 0
+}
+
+handle_action_local_docker() {
+	log "Handling action: Local Docker Registry"
+	
+	# Load existing values from mirror.conf
+	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+		source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
+	fi
+	
+	# Set defaults (prefer existing config, fall back to sensible defaults)
+	local default_host="${reg_host:-$(hostname -f 2>/dev/null || hostname)}"
+	local default_user="${reg_user:-init}"
+	local default_pw="${reg_pw:-p4ssw0rd}"
+	local default_path="${reg_path:-ocp4/openshift4}"
+	local default_data_dir="${data_dir:-~}"
+	
+	# Collect inputs using form
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Local Docker Registry" \
+		--ok-label "Next" \
+		--cancel-label "Back" \
+		--form "Configure local Docker registry:" 0 0 0 \
+		"Registry Host (FQDN):"  1 1 "$default_host"       1 25 40 0 \
+		"Registry Username:"     2 1 "$default_user"       2 25 40 0 \
+		"Registry Password:"     3 1 "$default_pw"         3 25 40 0 \
+		"Registry Path:"         4 1 "$default_path"       4 25 40 0 \
+		"Data Directory:"        5 1 "$default_data_dir"   5 25 40 0 \
+		"Auto-answer (-y):"      6 1 "yes"                 6 25 5 0 \
+		2>"$TMP"
+	rc=$?
+	
+	if [[ $rc -ne 0 ]]; then
+		log "User cancelled local Docker form"
+		return 1
+	fi
+	
+	# Parse form output
+	local reg_host=$(sed -n '1p' "$TMP")
+	local reg_user=$(sed -n '2p' "$TMP")
+	local reg_pw=$(sed -n '3p' "$TMP")
+	local reg_path=$(sed -n '4p' "$TMP")
+	local data_dir=$(sed -n '5p' "$TMP")
+	local ask_y=$(sed -n '6p' "$TMP")
+	
+	# Parse -y flag
+	local y_flag=""
+	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
+	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+		y_flag="-y"
+		log "User enabled -y flag"
+	else
+		log "User disabled -y flag"
+	fi
+	
+	log "Local Docker config: host=$reg_host, user=$reg_user, path=$reg_path, data_dir=$data_dir, y_flag=$y_flag"
+	
+	# Save to mirror.conf
+	replace-value-conf -q -n reg_host -v "$reg_host" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_port -v "8443" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_user -v "$reg_user" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_pw -v "$reg_pw" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_path -v "$reg_path" -f mirror/mirror.conf
+	replace-value-conf -q -n data_dir -v "$data_dir" -f mirror/mirror.conf
+	
+	# Build command (install-docker-registry + sync in one)
+	local cmd="aba -d mirror install-docker-registry -H '$reg_host' sync $y_flag"
+	if ! confirm_and_execute "$cmd"; then
+		return 1
+	fi
+	
+	return 0
+}
+
+handle_action_remote_quay() {
+	log "Handling action: Remote Quay Registry"
+	
+	# Load existing values from mirror.conf
+	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+		source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
+	fi
+	
+	# Set defaults (prefer existing config, fall back to sensible defaults)
+	local default_host="${reg_host:-}"
+	local default_ssh_user="${reg_ssh_user:-root}"
+	local default_ssh_key="${reg_ssh_key:-$HOME/.ssh/id_rsa}"
+	local default_user="${reg_user:-init}"
+	local default_pw="${reg_pw:-p4ssw0rd}"
+	local default_path="${reg_path:-ocp4/openshift4}"
+	local default_data_dir="${data_dir:-~}"
+	
+	# Collect inputs using form
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Remote Quay Registry (SSH)" \
+		--ok-label "Next" \
+		--cancel-label "Back" \
+		--form "Configure remote Quay registry:" 0 0 0 \
+		"Remote Host (FQDN):"    1 1 "$default_host"       1 25 40 0 \
+		"SSH Username:"          2 1 "$default_ssh_user"   2 25 40 0 \
+		"SSH Key Path:"          3 1 "$default_ssh_key"    3 25 40 0 \
+		"Registry Username:"     4 1 "$default_user"       4 25 40 0 \
+		"Registry Password:"     5 1 "$default_pw"         5 25 40 0 \
+		"Registry Path:"         6 1 "$default_path"       6 25 40 0 \
+		"Data Directory:"        7 1 "$default_data_dir"   7 25 40 0 \
+		"Auto-answer (-y):"      8 1 "yes"                 8 25 5 0 \
+		2>"$TMP"
+	rc=$?
+	
+	if [[ $rc -ne 0 ]]; then
+		log "User cancelled remote Quay form"
+		return 1
+	fi
+	
+	# Parse form output
+	local reg_host=$(sed -n '1p' "$TMP")
+	local reg_ssh_user=$(sed -n '2p' "$TMP")
+	local reg_ssh_key=$(sed -n '3p' "$TMP")
+	local reg_user=$(sed -n '4p' "$TMP")
+	local reg_pw=$(sed -n '5p' "$TMP")
+	local reg_path=$(sed -n '6p' "$TMP")
+	local data_dir=$(sed -n '7p' "$TMP")
+	local ask_y=$(sed -n '8p' "$TMP")
+	
+	# Parse -y flag
+	local y_flag=""
+	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
+	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+		y_flag="-y"
+		log "User enabled -y flag"
+	else
+		log "User disabled -y flag"
+	fi
+	
+	log "Remote Quay config: host=$reg_host, ssh_user=$reg_ssh_user, ssh_key=$reg_ssh_key, y_flag=$y_flag"
+	
+	# Save to mirror.conf
+	replace-value-conf -q -n reg_host -v "$reg_host" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_port -v "8443" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_user -v "$reg_user" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_pw -v "$reg_pw" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_path -v "$reg_path" -f mirror/mirror.conf
+	replace-value-conf -q -n data_dir -v "$data_dir" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_ssh_key -v "$reg_ssh_key" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_ssh_user -v "$reg_ssh_user" -f mirror/mirror.conf
+	
+	# Build command
+	local cmd="aba -d mirror sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
+	if ! confirm_and_execute "$cmd"; then
+		return 1
+	fi
+	
+	return 0
+}
+
+handle_action_save() {
+	log "Handling action: Save Images"
+	
+	# Simple form with just -y option
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Save Images" \
+		--ok-label "Next" \
+		--cancel-label "Back" \
+		--form "Save images to local archive:" 0 0 0 \
+		"Auto-answer (-y):"  1 1 "yes"  1 20 5 0 \
+		2>"$TMP"
+	rc=$?
+	
+	if [[ $rc -ne 0 ]]; then
+		log "User cancelled save form"
+		return 1
+	fi
+	
+	# Parse form output
+	local ask_y=$(sed -n '1p' "$TMP")
+	
+	# Parse -y flag
+	local y_flag=""
+	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
+	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+		y_flag="-y"
+		log "User enabled -y flag"
+	else
+		log "User disabled -y flag"
+	fi
+	
+	# Confirm and execute
+	local cmd="aba -d mirror save $y_flag"
+	if ! confirm_and_execute "$cmd"; then
+		return 1
+	fi
+	
+	return 0
+}
+
+handle_action_isconf() {
+	log "Handling action: Generate ImageSet Config"
+	
+	# Simple form with just -y option
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Generate ImageSet Config" \
+		--ok-label "Next" \
+		--cancel-label "Back" \
+		--form "Generate ImageSet configuration:" 0 0 0 \
+		"Auto-answer (-y):"  1 1 "yes"  1 20 5 0 \
+		2>"$TMP"
+	rc=$?
+	
+	if [[ $rc -ne 0 ]]; then
+		log "User cancelled isconf form"
+		return 1
+	fi
+	
+	# Parse form output
+	local ask_y=$(sed -n '1p' "$TMP")
+	
+	# Parse -y flag
+	local y_flag=""
+	ask_y=$(echo "$ask_y" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
+	if [[ "$ask_y" == "yes" || "$ask_y" == "y" ]]; then
+		y_flag="-y"
+		log "User enabled -y flag"
+	else
+		log "User disabled -y flag"
+	fi
+	
+	# Confirm and execute
+	local cmd="aba -d mirror isconf $y_flag"
+	if ! confirm_and_execute "$cmd"; then
+		return 1
+	fi
+	
+	# After generating isconf, show info and exit
+	dialog --backtitle "$(ui_backtitle)" --msgbox \
+"ImageSet configuration files generated successfully.
+
+You can now:
+  1. Review/edit: mirror/imageset-config-*.yaml
+  2. Run: aba -d mirror save
+  3. Run: aba tar (or aba tarprep + aba tarreq)
+
+See: aba --help" 0 0 || true
+	
+	clear
+	return 0
+}
+
+confirm_and_execute() {
+	local cmd="$1"
+	log "Confirming command: $cmd"
+	
+	while :; do
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Confirm Execution" \
+			--extra-button --extra-label "Back" \
+			--yes-label "Execute" \
+			--no-label "Cancel" \
+			--yesno "Ready to execute:\n\n\Zb$cmd\Zn\n\nThis will run the ABA command and hand off control to the CLI." 0 0
+		rc=$?
+		
+		case "$rc" in
+			0)
+				# Yes = Execute
+				log "Executing command: $cmd"
+				clear
+				echo "════════════════════════════════════════════════"
+				echo "Executing: $cmd"
+				echo "════════════════════════════════════════════════"
+				echo ""
+				
+				# Execute the command by handing off to the shell
+				cd "$ABA_ROOT"
+				exec bash -c "$cmd"
+				;;
+			1)
+				# No = Cancel
+				log "User cancelled execution"
+				return 1
+				;;
+			3)
+				# Extra button = Back
+				log "User went back from confirmation"
+				return 1
+				;;
+			255)
+				# ESC = Back
+				log "User pressed ESC in confirmation"
+				return 1
+				;;
+			*)
+				log "ERROR: Unexpected confirmation dialog return code: $rc"
+				return 1
+				;;
+		esac
+	done
+}
+
+# -----------------------------------------------------------------------------
 # Step 5: Summary / Apply
 # -----------------------------------------------------------------------------
 summary_apply() {
@@ -1766,148 +2255,169 @@ summary_apply() {
 		fi
 	fi
 
-	summary_text="
-════════════════════════════════════════════════
-          OPENSHIFT CONFIGURATION
-════════════════════════════════════════════════
+	# First, save configuration to aba.conf automatically
+	log "Auto-saving configuration to aba.conf"
+	replace-value-conf -q -n ocp_channel       -v "$OCP_CHANNEL"       -f aba.conf
+	replace-value-conf -q -n ocp_version       -v "$OCP_VERSION"       -f aba.conf
+	replace-value-conf -q -n platform          -v "${PLATFORM:-bm}"    -f aba.conf
+	replace-value-conf -q -n domain            -v "${DOMAIN}"          -f aba.conf
+	replace-value-conf -q -n machine_network   -v "${MACHINE_NETWORK}" -f aba.conf
+	replace-value-conf -q -n dns_servers       -v "${DNS_SERVERS}"     -f aba.conf
+	replace-value-conf -q -n next_hop_address  -v "${NEXT_HOP_ADDRESS}" -f aba.conf
+	replace-value-conf -q -n ntp_servers       -v "${NTP_SERVERS}"     -f aba.conf
+	replace-value-conf -q -n ops               -v ""                   -f aba.conf
+	replace-value-conf -q -n op_sets           -v "$op_sets_value"     -f aba.conf
+	log "Configuration saved to aba.conf"
+	
+	# Pre-generate ImageSet config for viewing (only if basket is not empty)
+	# Note: Catalogs are already downloaded by this point (waited in select_operators)
+	if [[ ${#OP_BASKET[@]} -gt 0 ]]; then
+		log "Pre-generating ImageSet configuration for OCP $OCP_VERSION"
+		cd "$ABA_ROOT"
+		
+		# Remove old ImageSet config files to force regeneration with current version
+		rm -f "$ABA_ROOT/mirror/save/imageset-config-save.yaml" 2>/dev/null || true
+		
+		if ! aba -d mirror isconf >/dev/null 2>&1; then
+			log "Warning: ImageSet config generation failed"
+			# Show error to user but allow them to continue
+			dialog --backtitle "$(ui_backtitle)" --msgbox \
+"Warning: Failed to pre-generate ImageSet configuration.
 
-Channel:         $OCP_CHANNEL
-Version:         $OCP_VERSION
+Check logs for details. You can generate it later using:
+  aba -d mirror isconf
 
-Platform:        ${PLATFORM:-bm}
-Domain:          ${DOMAIN:-example.com}
-
-Network:         ${MACHINE_NETWORK:-(auto-detect)}
-DNS Servers:     ${DNS_SERVERS:-(auto-detect)}
-Default Route:   ${NEXT_HOP_ADDRESS:-(auto-detect)}
-NTP Servers:     ${NTP_SERVERS:-(auto-detect)}
-
-Operator Set:    ${op_sets_value:-(none)}
-Operators:       $op_summary
-
-════════════════════════════════════════════════"
-
+Press OK to continue." 0 0 || true
+		else
+			log "ImageSet config pre-generated successfully for OCP $OCP_VERSION"
+		fi
+	else
+		log "Skipping ImageSet config generation (no operators selected)"
+	fi
+	
+	# Now show action menu - what to do next?
 	while :; do
-		# Show summary with action buttons
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Configuration Summary" \
-			--extra-button --extra-label "Save Draft" \
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Choose Next Action" \
+			--extra-button --extra-label "Back" \
 			--help-button \
-			--yes-label "Apply to aba.conf" \
-			--no-label "Back" \
-			--yesno "$summary_text" 22 60
+			--ok-label "Select" \
+			--cancel-label "Exit" \
+			--menu "Configuration saved to aba.conf\n\nChoose what to do next:" 0 0 8 \
+			1 "View Generated ImageSet Config" \
+			2 "Create ABA Install Bundle (air-gapped)" \
+			3 "Install & Sync to Local Registry (Quay)" \
+			4 "Install & Sync to Local Registry (Docker)" \
+			5 "Install & Sync to Remote Registry via SSH (Quay)" \
+			6 "Save Images to Local Archive" \
+			7 "Generate ImageSet Config & Exit" \
+			8 "Exit (run commands manually)" \
+			2>"$TMP"
 		rc=$?
 		
 		case "$rc" in
 			0)
-				# Yes = Apply to aba.conf
-				log "Applying configuration to aba.conf"
-				replace-value-conf -q -n ocp_channel       -v "$OCP_CHANNEL"       -f aba.conf
-				replace-value-conf -q -n ocp_version       -v "$OCP_VERSION"       -f aba.conf
-				replace-value-conf -q -n platform          -v "${PLATFORM:-bm}"    -f aba.conf
-				replace-value-conf -q -n domain            -v "${DOMAIN}"          -f aba.conf
-				replace-value-conf -q -n machine_network   -v "${MACHINE_NETWORK}" -f aba.conf
-				replace-value-conf -q -n dns_servers       -v "${DNS_SERVERS}"     -f aba.conf
-				replace-value-conf -q -n next_hop_address  -v "${NEXT_HOP_ADDRESS}" -f aba.conf
-				replace-value-conf -q -n ntp_servers       -v "${NTP_SERVERS}"     -f aba.conf
-				replace-value-conf -q -n ops               -v ""                   -f aba.conf
-				replace-value-conf -q -n op_sets           -v "$op_sets_value"     -f aba.conf
-				log "Configuration applied successfully"
+				# OK - process the selected action
+				action=$(<"$TMP")
+				log "User selected action: $action"
 				
-				# Build success message
-				local success_msg="Configuration applied to aba.conf"
-				if [[ -n "$custom_set_name" ]]; then
-					success_msg="${success_msg}
-
-Custom operator set created:
-  templates/operator-set-${custom_set_name}
-  (${#OP_BASKET[@]} operators)"
-				fi
-				success_msg="${success_msg}
-
-Next steps:
-  1. aba -d mirror install    (setup registry)
-  2. aba -d mirror sync       (download images)
-  3. aba cluster --name <name> (create cluster)
-
-See: aba --help"
-				
-				dialog --backtitle "$(ui_backtitle)" --msgbox "$success_msg" 0 0 || true
+				case "$action" in
+					1)
+						# View ImageSet Config
+						handle_action_view_isconf
+						# Stay in menu after viewing
+						continue
+						;;
+					2)
+						# Create Bundle
+						handle_action_bundle
+						return $?
+						;;
+					3)
+						# Local Quay
+						handle_action_local_quay
+						return $?
+						;;
+					4)
+						# Local Docker
+						handle_action_local_docker
+						return $?
+						;;
+					5)
+						# Remote Quay
+						handle_action_remote_quay
+						return $?
+						;;
+					6)
+						# Save Images
+						handle_action_save
+						return $?
+						;;
+					7)
+						# Generate ISConf
+						handle_action_isconf
+						return $?
+						;;
+					8)
+						# Exit manually
+						log "User chose to exit and run commands manually"
+						clear
+						echo "Configuration saved to: $ABA_ROOT/aba.conf"
+						if [[ -n "$custom_set_name" ]]; then
+							echo "Custom operator set: templates/operator-set-${custom_set_name}"
+						fi
+						echo ""
+						echo "Run 'aba --help' to see available commands"
+						return 0
+						;;
+				esac
+				;;
+			1)
+				# Cancel = Exit
+				log "User cancelled from action menu"
+				clear
+				echo "Configuration saved to: $ABA_ROOT/aba.conf"
 				return 0
 				;;
 			3)
-				# Extra button = Save Draft
-				log "Saving draft configuration"
-				cat > aba.conf.draft <<EOF
-# ABA Configuration Draft
-# Generated by ABA TUI on $(date)
-
-ocp_channel=$OCP_CHANNEL
-ocp_version=$OCP_VERSION
-platform=${PLATFORM:-bm}
-domain=${DOMAIN}
-machine_network=${MACHINE_NETWORK}
-dns_servers=${DNS_SERVERS}
-next_hop_address=${NEXT_HOP_ADDRESS}
-ntp_servers=${NTP_SERVERS}
-ops=
-op_sets=$op_sets_value
-EOF
-				# Build draft message
-				local draft_msg="Draft saved to: aba.conf.draft"
-				if [[ -n "$custom_set_name" ]]; then
-					draft_msg="${draft_msg}
-
-Custom operator set created:
-  templates/operator-set-${custom_set_name}
-  (${#OP_BASKET[@]} operators)"
-				fi
-				draft_msg="${draft_msg}
-
-To apply later:
-  mv aba.conf.draft aba.conf"
-				
-				dialog --backtitle "$(ui_backtitle)" --msgbox "$draft_msg" 0 0 || true
-				
-				log "Draft saved, continuing in summary"
-				continue  # Stay in summary screen loop
-				;;
-			1)
-				# No = Back
-				log "User went back from summary"
+				# Extra button = Back to operators
+				log "User went back from action menu to operators"
 				return 1
-				;;
-			255)
-				# ESC - confirm quit
-				if confirm_quit; then
-					log "User confirmed quit from summary screen"
-					exit 0
-				else
-					log "User cancelled quit, staying on summary screen"
-					continue
-				fi
 				;;
 			2)
 				# Help
+				log "Help button pressed in action menu"
 				dialog --backtitle "$(ui_backtitle)" --msgbox \
-"Summary Actions:
+"Next Actions:
 
-• Apply to aba.conf
-  Writes all configuration to aba.conf
-  Ready for next steps (mirror setup, cluster install)
-  
-• Save Draft
-  Saves to aba.conf.draft for later editing
-  Does not overwrite existing aba.conf
-  
-• Back
-  Return to operators selection
+1. View ImageSet Config - View generated YAML configuration
+2. Bundle - Create portable archive for air-gapped install
+3. Local Quay - Install Quay registry locally and sync images
+4. Local Docker - Install Docker registry locally and sync images
+5. Remote Quay - Install Quay on remote host via SSH and sync
+6. Save - Save images to local ImageSet archive file
+7. ISConf - Generate ImageSet config files only
+8. Exit - Exit TUI, run commands manually
+
+After selecting an action, you'll be prompted for any
+required inputs, then the command will be executed.
 
 Log file: $LOG_FILE" 0 0 || true
 				continue
 				;;
+			255)
+				# ESC - confirm quit
+				if confirm_quit; then
+					log "User confirmed quit from action menu"
+					exit 0
+				else
+					log "User cancelled quit, staying on action menu"
+					continue
+				fi
+				;;
 			*)
-				log "Unexpected summary dialog return code: $rc"
-				return 1
+				log "ERROR: Unexpected action menu return code: $rc"
+				clear
+				exit 1
 				;;
 		esac
 	done
