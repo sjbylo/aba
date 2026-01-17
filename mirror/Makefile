@@ -40,6 +40,7 @@ init: .init
 	ln -fs $(TEMPLATES) 
 	ln -fs $(SCRIPTS) 
 	ln -fs ../aba.conf 
+	ln -fs ../cli
 	mkdir -p regcreds
 	touch regcreds/.dummy  # Needed only so tar includes the *empty* regcreds dir
 	touch .init
@@ -248,7 +249,7 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 	@[ -f .installed ] && echo [ABA] "Important: to uninstall the registry, run 'aba -d mirror uninstall'!" || true
 	rm -rf *.tar mirror-registry
 #	These need resetting FIXME
-	rm -f templates scripts
+	rm -f templates scripts cli
 	rm -f aba.conf  # remove link only
 	rm -f .init 
 	rm -rf .index

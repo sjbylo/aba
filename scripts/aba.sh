@@ -21,27 +21,57 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 WORK_DIR=$PWD # Remember so can change config file here 
 
 
-# Need to catch these option, esp. if they are at the start
-# TRY WITHOUT while [ "$1" = "-D" -o "$1" = "--debug" -o "$1" = "--dir" -o "$1" = "-d" ] 
-# TRY WITHOUT do
-# TRY WITHOUT	## Change dir if asked
-# TRY WITHOUT	# Keep these lines, ready for the below lines of code #FIXME: Use well-known loaction for static files, e.g. /opt/aba
-# TRY WITHOUT	if [ "$1" = "--dir" -o "$1" = "-d" ]; then
-# TRY WITHOUT		[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
-# TRY WITHOUT		[ ! -e "$2" ] && echo "Error: directory $2 does not exist!" >&2 && exit 1
-# TRY WITHOUT		[ ! -d "$2" ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
-# TRY WITHOUT
-# TRY WITHOUT		[ "$DEBUG_ABA" ] && echo "Changing dir to: $2" # Keep the $DEBUG_ABA as have not sourced the include file yet!
-# TRY WITHOUT
-# TRY WITHOUT		cd "$2"
-# TRY WITHOUT		shift 2
-# TRY WITHOUT
-# TRY WITHOUT		WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
-# TRY WITHOUT	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
-# TRY WITHOUT		export DEBUG_ABA=1
-# TRY WITHOUT		shift
-# TRY WITHOUT	fi
-# TRY WITHOUTdone
+# Pre-process ALL arguments to extract --dir/-d (first only) and --debug/-D (anywhere)
+# This scans through all arguments and filters out these special options
+new_args=()           # Array to collect arguments we want to keep
+dir_already_set=false # Only process first --dir/-d
+i=1
+
+while [ $i -le $# ]; do
+	arg="${!i}"  # Get the i-th argument (indirect expansion: if i=1, get $1)
+
+	case "$arg" in
+		--dir|-d)
+			if [ "$dir_already_set" = false ]; then
+				dir_already_set=true
+				i=$((i + 1))  # Move to next arg (the directory value)
+				target_dir="${!i}"
+
+				# Validate directory argument
+				[ -z "$target_dir" ] && echo "Error: directory path expected after option $arg" >&2 && exit 1
+				target_dir=$(eval echo "$target_dir")  # Expand ~ in path
+				[ ! -e "$target_dir" ] && echo "Error: directory $target_dir does not exist!" >&2 && exit 1
+				[ ! -d "$target_dir" ] && echo "Error: cannot change to $target_dir: not a directory!" >&2 && exit 1
+
+				[ "$DEBUG_ABA" ] && echo "Changing dir to: $target_dir"
+
+				if ! cd "$target_dir" 2>/dev/null; then
+					echo "Error: cannot change to directory $target_dir (permission denied)" >&2
+					exit 1
+				fi
+
+				WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
+			else
+				# Skip subsequent --dir/-d and their values
+				i=$((i + 1))
+			fi
+			;;
+
+		--debug|-D)
+			export DEBUG_ABA=1
+			;;
+
+		*)
+			# Keep all other arguments
+			new_args+=("$arg")
+			;;
+	esac
+
+	i=$((i + 1))
+done
+
+# Replace $1, $2, etc. with filtered arguments
+set -- "${new_args[@]}"
 
 export INFO_ABA=1
 export ABA_ROOT
@@ -184,28 +214,6 @@ do
 		# If the user explicitly wants interactive mode, then ensure we make it interactive with "ask=true"
 		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
 		export ask=1
-		shift
-	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
-		# If there are commands/targets to execute in the CWD, do it...
-		BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
-		# Simplify option/arg processing
-		[ "$BUILD_COMMAND" ] && aba_abort "option $1 not allowed after a command: [$BUILD_COMMAND]"
-
-		# If no directory path provided, assume it's ".", i.e. $ABA_ROOT/.
-		# If dir path arg privided, then shift
-		[[ "$2" =~ ^- || -z "$2" ]] && provided_dir=. || shift  # If no arg provided, use CWD
-		[[ ! "$1" ]] && provided_dir=.  # FIXME: this is the same
-
-		provided_dir=$(eval echo $1)  # Resolve any ~
-
-		[[ "$provided_dir" != /* ]] && provided_dir="$ABA_ROOT/$provided_dir"  # If not an absolute path ...
-
-		# FIXME: Simplify this!  Put all static files into well-known location?
-		#[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
-		[ ! -e "$provided_dir" ] && aba_abort "directory: $provided_dir does not exist!"
-		[ ! -d "$provided_dir" ] && aba_abort "cannot change to $provided_dir: not a directory!"
-
-		cd "$provided_dir"
 		shift
 	elif [ "$1" = "--quiet" -o "$1" = "-q" ]; then
 		export INFO_ABA=
@@ -1074,7 +1082,7 @@ download_all_catalogs "$ocp_ver_short" 86400  # 1-day TTL
 scripts/cli-download-all.sh
 
 # Initiate download of mirror-install and docker-reg image
-run_once -i mirror:reg:download -- make -s -C $ABA_ROOT/mirror download-registries
+run_once -i mirror:reg:download -- make -s -C mirror download-registries
 
 # make & jq are needed below and in the next steps 
 scripts/install-rpms.sh external 
