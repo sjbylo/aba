@@ -211,7 +211,7 @@ if [ "$reg_ssh_key" ]; then
 	aba_info "$cmd --initPassword <hidden>"
 
 	aba_info "Waiting for download of mirror-install"
-	run_once -w -i mirror:reg:download -- make -s -C mirror download-registries
+	run_once -w -i mirror:reg:download -- make -s -C . download-registries
 
 	eval echo $cmd --initPassword "'$reg_pw'"
 	eval $cmd --initPassword "'$reg_pw'"
@@ -368,7 +368,7 @@ else
 	aba_info "$cmd --initPassword <hidden>"
 
 	aba_info "Waiting for download of mirror-install"
-	run_once -w -i mirror:reg:download -- make -s -C mirror download-registries
+	run_once -w -i mirror:reg:download -- make -s -C . download-registries
 
 	eval $cmd --initPassword $reg_pw   # eval needed for "~"
 

@@ -570,8 +570,8 @@ select_ocp_version() {
 	if [[ $need_wait -eq 1 ]]; then
 		log "Version data not ready, showing wait dialog"
 		dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… preparing version list for channel '$OCP_CHANNEL'" 5 80
-		run_once -w -i "ocp:${OCP_CHANNEL}:latest_version"
-		run_once -w -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+		run_once -w -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
+		run_once -w -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
 	else
 		log "Version data already available, no wait needed"
 	fi
