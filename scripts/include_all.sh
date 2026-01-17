@@ -1390,10 +1390,11 @@ run_once() {
 
 	_kill_id() {
 		local id="$1"
-		local pid_file="$WORK_DIR/${id}.pid"
-		local lock_file="$WORK_DIR/${id}.lock"
-		local exit_file="$WORK_DIR/${id}.exit"
-		local log_file="$WORK_DIR/${id}.log"
+		local id_dir="$WORK_DIR/${id}"
+		local pid_file="$id_dir/pid"
+		local lock_file="$id_dir/lock"
+		local exit_file="$id_dir/exit"
+		local log_file="$id_dir/log"
 
 		if [[ -f "$pid_file" ]]; then
 			local old_pid
@@ -1401,7 +1402,7 @@ run_once() {
 			if [[ -n "$old_pid" ]]; then
 				# We run the job under setsid, so PGID==PID; kill the whole group.
 				kill -TERM -"$old_pid" 2>/dev/null || true
-				sleep 0.05
+				sleep 0.2
 				kill -KILL -"$old_pid" 2>/dev/null || true
 
 				# Last-resort: also try PID itself
@@ -1409,19 +1410,15 @@ run_once() {
 			fi
 		fi
 
-		rm -f "$lock_file" "$exit_file" "$log_file" "$pid_file"
+		rm -rf "$id_dir"
 	}
 
 	# --- GLOBAL CLEAN ---
 	if [[ "$global_clean" == true ]]; then
-		local f id
+		local d id
 		shopt -s nullglob
-		for f in "$WORK_DIR"/*.lock; do
-			id="$(basename "$f" .lock)"
-			_kill_id "$id"
-		done
-		for f in "$WORK_DIR"/*.pid; do
-			id="$(basename "$f" .pid)"
+		for d in "$WORK_DIR"/*/; do
+			id="$(basename "$d")"
 			_kill_id "$id"
 		done
 		shopt -u nullglob
@@ -1431,13 +1428,16 @@ run_once() {
 
 	# --- GLOBAL FAILED-ONLY CLEAN ---
 	if [[ "$global_failed_clean" == true ]]; then
-		local exitf id rc
+		local d id exitf rc
 		shopt -s nullglob
-		for exitf in "$WORK_DIR"/*.exit; do
-			id="$(basename "$exitf" .exit)"
-			rc="$(cat "$exitf" 2>/dev/null || echo 1)"
-			if [[ "$rc" -ne 0 ]]; then
-				_kill_id "$id"
+		for d in "$WORK_DIR"/*/; do
+			id="$(basename "$d")"
+			exitf="$d/exit"
+			if [[ -f "$exitf" ]]; then
+				rc="$(cat "$exitf" 2>/dev/null || echo 1)"
+				if [[ "$rc" -ne 0 ]]; then
+					_kill_id "$id"
+				fi
 			fi
 		done
 		shopt -u nullglob
@@ -1449,10 +1449,14 @@ run_once() {
 		return 1
 	fi
 
-	local lock_file="$WORK_DIR/${work_id}.lock"
-	local exit_file="$WORK_DIR/${work_id}.exit"
-	local log_file="$WORK_DIR/${work_id}.log"
-	local pid_file="$WORK_DIR/${work_id}.pid"
+	local id_dir="$WORK_DIR/${work_id}"
+	local lock_file="$id_dir/lock"
+	local exit_file="$id_dir/exit"
+	local log_file="$id_dir/log"
+	local pid_file="$id_dir/pid"
+
+	# Create the task directory
+	mkdir -p "$id_dir"
 
 	# --- TTL CHECK ---
 	# If TTL specified and exit file exists, check if it's expired
@@ -1611,21 +1615,17 @@ wait_for_all_catalogs() {
 	aba_debug "Waiting for catalog downloads to complete for OCP $version_short"
 	
 	# All 3 catalogs are required and treated equally
-	# Provide the command so run_once can start the task if it hasn't been started yet
-	if ! run_once -w -i "catalog:${version_short}:redhat-operator" -- \
-		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" redhat-operator; then
+	if ! run_once -w -i "catalog:${version_short}:redhat-operator"; then
 		aba_abort "Failed to download redhat-operator catalog for OCP $version_short"
 	fi
 	aba_debug "redhat-operator catalog ready"
 	
-	if ! run_once -w -i "catalog:${version_short}:certified-operator" -- \
-		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" certified-operator; then
+	if ! run_once -w -i "catalog:${version_short}:certified-operator"; then
 		aba_abort "Failed to download certified-operator catalog for OCP $version_short"
 	fi
 	aba_debug "certified-operator catalog ready"
 	
-	if ! run_once -w -i "catalog:${version_short}:community-operator" -- \
-		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" community-operator; then
+	if ! run_once -w -i "catalog:${version_short}:community-operator"; then
 		aba_abort "Failed to download community-operator catalog for OCP $version_short"
 	fi
 	aba_debug "community-operator catalog ready"
@@ -1640,9 +1640,6 @@ aba_runtime_cleanup() {
 
 	# Prevent recursion / re-entrancy
 	trap - EXIT INT TERM
-
-	echo >&2
-	aba_info "Cleaning up..." >&2
 
 	# Kill anything still owned by runner
 	run_once -G >/dev/null 2>&1 || true
