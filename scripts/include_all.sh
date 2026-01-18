@@ -750,7 +750,8 @@ _fetch_cached() {
 	local tmp
 	tmp="$(mktemp "${cache_file}.XXXXXX")" || true
 
-	if [[ -n "$tmp" ]] && curl -f -sS "$url" > "$tmp" 2>/dev/null; then
+	# Let curl errors show (don't suppress stderr)
+	if [[ -n "$tmp" ]] && curl -f -sS "$url" > "$tmp"; then
 		if [[ -n "$validator_fn" ]]; then
 			if "$validator_fn" "$tmp"; then
 				mv -f "$tmp" "$cache_file"
@@ -854,7 +855,7 @@ fetch_all_versions() {
 
 	set -o pipefail
 	_fetch_graph_cached "$channel" "$minor" \
-		| jq -r '.nodes[].version' 2>/dev/null \
+		| jq -r '.nodes[].version' \
 		| grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
 		| sort -V
 }
@@ -1347,8 +1348,7 @@ calculate_and_show_completion() {
     local end_time=$(date -d "+${total_duration} minutes" "$time_format")
 
     # 4. Output
-    aba_info_ok "Starting installation at ${start_time}, estimated completion time is ${end_time}."
-    aba_info_ok "(Total estimated duration: ${total_duration} minutes)"
+    aba_info_ok "Installation started at ${start_time} — estimated completion: ${end_time} (${total_duration} minutes)"
 }
 
 
@@ -1371,7 +1371,7 @@ run_once() {
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:" opt; do
+	while getopts "swi:cprGFt:e" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1382,6 +1382,7 @@ run_once() {
 			G) global_clean=true ;;
 			F) global_failed_clean=true ;;
 			t) ttl=$OPTARG ;;
+			e) mode="get_error" ;;
 			*) return 1 ;;
 		esac
 	done
@@ -1394,7 +1395,9 @@ run_once() {
 		local pid_file="$id_dir/pid"
 		local lock_file="$id_dir/lock"
 		local exit_file="$id_dir/exit"
-		local log_file="$id_dir/log"
+		local log_out_file="$id_dir/log.out"
+		local log_err_file="$id_dir/log.err"
+		local cmd_file="$id_dir/cmd"
 
 		if [[ -f "$pid_file" ]]; then
 			local old_pid
@@ -1452,11 +1455,19 @@ run_once() {
 	local id_dir="$WORK_DIR/${work_id}"
 	local lock_file="$id_dir/lock"
 	local exit_file="$id_dir/exit"
-	local log_file="$id_dir/log"
+	local log_out_file="$id_dir/log.out"
+	local log_err_file="$id_dir/log.err"
+	local cmd_file="$id_dir/cmd"
 	local pid_file="$id_dir/pid"
 
 	# Create the task directory
 	mkdir -p "$id_dir"
+	
+	# --- GET ERROR MODE ---
+	if [[ "$mode" == "get_error" ]]; then
+		[[ -f "$log_err_file" ]] && cat "$log_err_file"
+		return 0
+	fi
 
 	# --- TTL CHECK ---
 	# If TTL specified and exit file exists, check if it's expired
@@ -1495,8 +1506,16 @@ run_once() {
 			return 0
 		fi
 
-		: >"$log_file"
+		# Initialize log files
+		: >"$log_out_file"
+		: >"$log_err_file"
 		rm -f "$exit_file"
+		
+		# Save command for troubleshooting (each arg on separate line for clarity)
+		printf '%s\n' "${command[@]}" > "$cmd_file"
+		
+		# Backward compatibility: create symlink for old scripts that reference 'log'
+		ln -sf log.out "$id_dir/log" 2>/dev/null || true
 
 		(
 			# Keep FD 9 open in this subshell so lock remains held until it exits.
@@ -1505,14 +1524,15 @@ run_once() {
 
 			if [[ "$is_fg" == "true" ]]; then
 				# Foreground-ish: stream + log
-				setsid "${command[@]}" 2>&1 | tee "$log_file"
+				# Capture stderr separately, combined to stdout for display
+				setsid "${command[@]}" 2> >(tee -a "$log_err_file" >&2) | tee -a "$log_out_file"
 				rc="${PIPESTATUS[0]}"
 				echo "$rc" >"$exit_file"
 				exit "$rc"
 			fi
 
-			# Background: log only, but capture pid + wait so we can write exit code reliably
-			setsid "${command[@]}" >>"$log_file" 2>&1 &
+			# Background: log.out gets stdout+stderr, log.err gets only stderr
+			setsid "${command[@]}" 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
 			echo $! >"$pid_file"
 			wait $!
 			rc=$?
@@ -1599,7 +1619,8 @@ download_all_catalogs() {
 	local ttl="${2:-86400}"  # Default: 1 day (86400 seconds)
 	
 	if [[ -z "$version_short" ]]; then
-		aba_abort "download_all_catalogs requires version (e.g., 4.19)"
+		echo_red "[ABA] Error: download_all_catalogs requires version (e.g., 4.19)" >&2
+		return 1
 	fi
 	
 	aba_debug "Starting parallel catalog downloads for OCP $version_short (TTL: ${ttl}s)"
@@ -1625,24 +1646,28 @@ wait_for_all_catalogs() {
 	local version_short="${1}"
 	
 	if [[ -z "$version_short" ]]; then
-		aba_abort "wait_for_all_catalogs requires version (e.g., 4.19)"
+		echo_red "[ABA] Error: wait_for_all_catalogs requires version (e.g., 4.19)" >&2
+		return 1
 	fi
 	
 	aba_debug "Waiting for catalog downloads to complete for OCP $version_short"
 	
 	# All 3 catalogs are required and treated equally
 	if ! run_once -w -i "catalog:${version_short}:redhat-operator"; then
-		aba_abort "Failed to download redhat-operator catalog for OCP $version_short"
+		echo_red "[ABA] Error: Failed to download redhat-operator catalog for OCP $version_short" >&2
+		return 1
 	fi
 	aba_debug "redhat-operator catalog ready"
 	
 	if ! run_once -w -i "catalog:${version_short}:certified-operator"; then
-		aba_abort "Failed to download certified-operator catalog for OCP $version_short"
+		echo_red "[ABA] Error: Failed to download certified-operator catalog for OCP $version_short" >&2
+		return 1
 	fi
 	aba_debug "certified-operator catalog ready"
 	
 	if ! run_once -w -i "catalog:${version_short}:community-operator"; then
-		aba_abort "Failed to download community-operator catalog for OCP $version_short"
+		echo_red "[ABA] Error: Failed to download community-operator catalog for OCP $version_short" >&2
+		return 1
 	fi
 	aba_debug "community-operator catalog ready"
 	
@@ -1754,6 +1779,50 @@ validate_cidr() {
 	[[ $prefix -lt 0 || $prefix -gt 32 ]] && return 1
 	
 	return 0
+}
+
+# Validate pull secret by testing authentication with registry.redhat.io
+# Usage: validate_pull_secret "/path/to/pull-secret.json" && echo "valid"
+# Returns: 0 if valid, 1 if invalid
+validate_pull_secret() {
+	local pull_secret_file="$1"
+	
+	if [[ ! -f "$pull_secret_file" ]]; then
+		echo_red "[ABA] Error: Pull secret file not found: $pull_secret_file" >&2
+		return 1
+	fi
+	
+	# Check that pull secret contains registry.redhat.io
+	if ! jq -e '.auths["registry.redhat.io"]' "$pull_secret_file" >/dev/null 2>&1; then
+		echo_red "[ABA] Error: No registry.redhat.io entry in pull secret" >&2
+		return 1
+	fi
+	
+	aba_debug "Validating pull secret by testing authentication with registry.redhat.io"
+	
+	# Use skopeo login --get-login to quickly test credentials (much faster than inspect)
+	# This returns the username if auth succeeds, non-zero if auth fails
+	local error_output
+	
+	error_output=$(skopeo login --authfile "$pull_secret_file" --get-login registry.redhat.io 2>&1)
+	local rc=$?
+	
+	if [[ $rc -eq 0 ]]; then
+		aba_info_ok "Pull secret validated successfully"
+		return 0
+	else
+		echo_red "[ABA] Error: Pull secret validation failed" >&2
+		echo_red "[ABA]        Could not authenticate with registry.redhat.io" >&2
+		
+		# Parse common error messages
+		if echo "$error_output" | grep -qi "unauthorized\|authentication\|credentials\|invalid"; then
+			echo_red "[ABA]        Invalid credentials or expired token" >&2
+		elif echo "$error_output" | grep -qi "no such host\|network\|connection"; then
+			echo_red "[ABA]        Network/DNS issue (not a pull secret problem)" >&2
+		fi
+		
+		return 1
+	fi
 }
 
 # Validate domain name (basic validation)
