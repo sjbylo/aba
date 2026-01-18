@@ -3,8 +3,22 @@
 #
 # Wizard flow:
 #   Channel  <->  Version  <->  Operators  <->  Summary / Apply
+#
+# Note: We intentionally do NOT use 'set -e' because dialog commands return
+# non-zero codes (1=Cancel, 2=Help, 3=Extra) by design. We handle all cases
+# explicitly with case statements and if-checks.
 
-set -o pipefail  # Catch pipeline errors, but allow non-zero exit codes (dialog uses them)
+set -o pipefail  # Catch pipeline errors
+
+# Setup log directory
+LOG_DIR="${HOME}/.aba/logs"
+mkdir -p "$LOG_DIR"
+
+# Keep only last 5 log files, delete older ones
+ls -t "$LOG_DIR"/aba-tui-*.log 2>/dev/null | tail -n +6 | xargs -r rm -f
+
+# Create current log file
+LOG_FILE="$LOG_DIR/aba-tui-$$.log"
 
 # -----------------------------------------------------------------------------
 # Confirmation dialog for quitting
@@ -56,9 +70,9 @@ Log file: $LOG_FILE" 0 0 || true
 # -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------
-LOG_FILE="${TMPDIR:-/tmp}/aba-tui-$$.log"
+# LOG_FILE already set at top of script
 # Also create a persistent log link for easier access
-LOG_LINK="${TMPDIR:-/tmp}/aba-tui-latest.log"
+LOG_LINK="$LOG_DIR/aba-tui-latest.log"
 export LOG_FILE
 
 log() {
@@ -180,6 +194,44 @@ dlg() {
 	dialog --no-shadow --colors "$@"
 }
 
+# Show error from run_once task log with helpful context
+# Usage: show_run_once_error "task:id" "User-friendly title"
+show_run_once_error() {
+	local task_id="$1"
+	local title="${2:-Operation Failed}"
+	local RUNNER_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
+	local log_file="$RUNNER_DIR/$task_id/log"
+	
+	if [[ ! -f "$log_file" ]]; then
+		dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1$title\Zn
+
+No log file found for task: $task_id
+
+This usually means the task never started.
+Check: $RUNNER_DIR/$task_id/" 0 0
+		return
+	fi
+	
+	# Extract last meaningful errors
+	local error_lines=$(tail -30 "$log_file" | grep -iE 'error|fail|fatal|unable|cannot|denied' | tail -8)
+	
+	# Fallback: just show last few lines if no errors matched
+	if [[ -z "$error_lines" ]]; then
+		error_lines=$(tail -8 "$log_file")
+	fi
+	
+	dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1$title\Zn
+
+Recent output:
+─────────────────────────────────────────
+$error_lines
+─────────────────────────────────────────
+
+Full log: $log_file
+
+Press OK to return" 0 0
+}
+
 # -----------------------------------------------------------------------------
 # UI helpers
 # -----------------------------------------------------------------------------
@@ -205,9 +257,8 @@ check_internet_access() {
 	
 	if ! run_once -w -i "tui:check:api.openshift.com"; then
 		failed_sites="api.openshift.com"
-		local err_msg=$(grep -E '^curl:' "$RUNNER_DIR/tui:check:api.openshift.com/log" 2>/dev/null | head -1)
-		[[ -z "$err_msg" ]] && err_msg=$(tail -3 "$RUNNER_DIR/tui:check:api.openshift.com/log" 2>/dev/null | grep -v '^$' | tail -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed (exit code: $(cat "$RUNNER_DIR/tui:check:api.openshift.com/exit" 2>/dev/null || echo "?"))"
+		local err_msg=$(run_once -e -i "tui:check:api.openshift.com" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
 		error_details=$'api.openshift.com:\n  '"$err_msg"
 		log "ERROR: Cannot access api.openshift.com: $err_msg"
 	fi
@@ -215,9 +266,8 @@ check_internet_access() {
 	if ! run_once -w -i "tui:check:mirror.openshift.com"; then
 		[[ -n "$failed_sites" ]] && failed_sites="$failed_sites, "
 		failed_sites="${failed_sites}mirror.openshift.com"
-		local err_msg=$(grep -E '^curl:' "$RUNNER_DIR/tui:check:mirror.openshift.com/log" 2>/dev/null | head -1)
-		[[ -z "$err_msg" ]] && err_msg=$(tail -3 "$RUNNER_DIR/tui:check:mirror.openshift.com/log" 2>/dev/null | grep -v '^$' | tail -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed (exit code: $(cat "$RUNNER_DIR/tui:check:mirror.openshift.com/exit" 2>/dev/null || echo "?"))"
+		local err_msg=$(run_once -e -i "tui:check:mirror.openshift.com" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
 		[[ -n "$error_details" ]] && error_details+=$'\n\n'
 		error_details+=$'mirror.openshift.com:\n  '"$err_msg"
 		log "ERROR: Cannot access mirror.openshift.com: $err_msg"
@@ -226,9 +276,8 @@ check_internet_access() {
 	if ! run_once -w -i "tui:check:registry.redhat.io"; then
 		[[ -n "$failed_sites" ]] && failed_sites="$failed_sites, "
 		failed_sites="${failed_sites}registry.redhat.io"
-		local err_msg=$(grep -E '^curl:' "$RUNNER_DIR/tui:check:registry.redhat.io/log" 2>/dev/null | head -1)
-		[[ -z "$err_msg" ]] && err_msg=$(tail -3 "$RUNNER_DIR/tui:check:registry.redhat.io/log" 2>/dev/null | grep -v '^$' | tail -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed (exit code: $(cat "$RUNNER_DIR/tui:check:registry.redhat.io/exit" 2>/dev/null || echo "?"))"
+		local err_msg=$(run_once -e -i "tui:check:registry.redhat.io" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
 		[[ -n "$error_details" ]] && error_details+=$'\n\n'
 		error_details+=$'registry.redhat.io:\n  '"$err_msg"
 		log "ERROR: Cannot access registry.redhat.io: $err_msg"
@@ -554,6 +603,34 @@ select_ocp_version() {
 	# Ensure we have a channel
 	[[ -z "${OCP_CHANNEL:-}" ]] && OCP_CHANNEL="stable"
 
+	# Check if cached version tasks exist and if they FAILED (non-zero exit code)
+	# If so, reset them and retry automatically
+	local latest_exit_file="${RUN_ONCE_DIR:-$HOME/.aba/runner}/ocp:${OCP_CHANNEL}:latest_version/exit"
+	local prev_exit_file="${RUN_ONCE_DIR:-$HOME/.aba/runner}/ocp:${OCP_CHANNEL}:latest_version_previous/exit"
+	local need_reset=0
+	
+	if [[ -f "$latest_exit_file" ]]; then
+		local exit_code=$(cat "$latest_exit_file")
+		if [[ "$exit_code" != "0" ]]; then
+			log "Cached task ocp:${OCP_CHANNEL}:latest_version has failed (exit $exit_code) - will reset and retry"
+			need_reset=1
+		fi
+	fi
+	if [[ -f "$prev_exit_file" ]]; then
+		local exit_code=$(cat "$prev_exit_file")
+		if [[ "$exit_code" != "0" ]]; then
+			log "Cached task ocp:${OCP_CHANNEL}:latest_version_previous has failed (exit $exit_code) - will reset and retry"
+			need_reset=1
+		fi
+	fi
+	
+	# Reset failed caches
+	if [[ $need_reset -eq 1 ]]; then
+		log "Resetting failed version fetch caches for channel $OCP_CHANNEL"
+		run_once -r -i "ocp:${OCP_CHANNEL}:latest_version"
+		run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+	fi
+
 	# Peek first to see if we need to wait
 	log "Checking if version data is ready for channel: $OCP_CHANNEL"
 	local need_wait=0
@@ -576,9 +653,85 @@ select_ocp_version() {
 		log "Version data already available, no wait needed"
 	fi
 
+	# Capture ONLY stderr to temp file, discard stdout
+	# Note: fetch functions read from run_once cache, so don't redirect their stderr
 	latest=$(fetch_latest_version "$OCP_CHANNEL")
 	previous=$(fetch_previous_version "$OCP_CHANNEL")
 	log "Versions: latest=$latest previous=$previous"
+	
+	# Check if version fetch failed
+	if [[ -z "$latest" || -z "$previous" ]]; then
+		log "ERROR: Failed to fetch version data for channel $OCP_CHANNEL"
+		
+		# Extract error from run_once stderr (clean interface via -e flag)
+		local error_detail=""
+		error_detail=$(run_once -e -i "ocp:${OCP_CHANNEL}:latest_version" | head -1)
+		if [[ -z "$error_detail" ]]; then
+			error_detail=$(run_once -e -i "ocp:${OCP_CHANNEL}:latest_version_previous" | head -1)
+		fi
+		
+		# Log what we found
+		if [[ -n "$error_detail" ]]; then
+			log "Error details: $error_detail"
+		else
+			log "No specific error details found"
+		fi
+		
+		# Build error message
+		local error_msg="\Z1Failed to fetch OpenShift version data!\Zn
+
+Channel: $OCP_CHANNEL"
+		
+		if [[ -n "$error_detail" ]]; then
+			error_msg+="
+
+Error:
+  $error_detail"
+		fi
+		
+		error_msg+="
+
+This may mean:
+• Graph API is unreachable
+• Network connectivity issue
+• Invalid channel
+
+Check log file for details:
+  $LOG_FILE
+
+What would you like to do?"
+		
+		dialog --colors --backtitle "$(ui_backtitle)" --title "Version Fetch Failed" \
+			--yes-label "Retry" \
+			--no-label "Back" \
+			--yesno "$error_msg" 0 0
+		rc=$?
+		
+		case $rc in
+			0)
+				# Retry - clear cache, re-run, and try again
+				log "User chose to retry version fetch"
+				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version"
+				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+				
+				# Show wait dialog and re-run the fetches
+				dialog --backtitle "$(ui_backtitle)" --infobox "Retrying... fetching version data for channel '$OCP_CHANNEL'" 5 80
+				run_once -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
+				run_once -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+				run_once -w -i "ocp:${OCP_CHANNEL}:latest_version"
+				run_once -w -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+				
+				DIALOG_RC="repeat"
+				return
+				;;
+			*)
+				# Back
+				log "User chose to go back after version fetch failure"
+				DIALOG_RC="back"
+				return
+				;;
+		esac
+	fi
 
 	# Check if current version is different from latest/previous AND exists in this channel
 	local show_current=0
@@ -772,7 +925,6 @@ selected version."
 	
 	log "aba.conf updated successfully"
 	
-	set +e  # Don't exit on error
 	dialog --backtitle "$(ui_backtitle)" --title "Confirm Selection" \
 		--yes-label "Next" \
 		--no-label "Back" \
@@ -783,22 +935,22 @@ selected version."
 
 Next: Configure platform and network." 0 0
 	rc=$?
-	set -e  # Re-enable exit on error
 	
 	case "$rc" in
 		0)
-			# Yes/Next - User confirmed, now start background downloads
-			log "User confirmed version selection, starting background downloads"
-			local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
-			
-			# Now that ocp_version is in aba.conf, download ALL CLIs (needs version)
-			log "Starting all CLI downloads (aba.conf now has ocp_version)"
-			run_once -i cli:download:all -- "$ABA_ROOT/scripts/cli-download-all.sh"
-			
-			# Start catalog downloads (oc-mirror already downloading from early in startup)
-			log "Starting parallel catalog downloads for OCP ${OCP_VERSION} (${version_short})"
-			# Use helper function with 1-day TTL (86400 seconds)
-			download_all_catalogs "$version_short" 86400 >/dev/null 2>&1
+		# Yes/Next - User confirmed, now start background downloads
+		log "User confirmed version selection, starting background downloads"
+		local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
+		
+		# Now that ocp_version is in aba.conf, download ALL CLIs (needs version)
+		log "Starting all CLI downloads (aba.conf now has ocp_version)"
+		"$ABA_ROOT/scripts/cli-download-all.sh" >>"$LOG_FILE" 2>&1
+		
+		# Start catalog downloads (oc-mirror already downloading from early in startup)
+		log "Starting parallel catalog downloads for OCP ${OCP_VERSION} (${version_short})"
+		# Use helper function with 1-day TTL (86400 seconds)
+		# Suppress stdout/stderr to prevent flash (errors go to log file)
+		download_all_catalogs "$version_short" 86400 >>"$LOG_FILE" 2>&1
 			
 			DIALOG_RC="next"
 			;;
@@ -869,7 +1021,6 @@ Please paste a valid pull secret."
 	# If valid but not auto-skipping (came from Back), show info and allow Back
 	if [[ -f "$pull_secret_file" ]] && [[ -z "$error_msg" ]]; then
 		log "Valid pull secret exists, showing info (user can go back)"
-		set +e  # Don't exit on error
 		dialog --colors --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
 			--yes-label "Next" \
 			--no-label "Back" \
@@ -881,7 +1032,6 @@ Your Red Hat pull secret is valid and ready to use.
 
 Press <Next> to continue or <Back> to return." 0 0
 		rc=$?
-		set -e  # Re-enable exit on error
 		
 		case "$rc" in
 			0)
@@ -934,7 +1084,7 @@ Press <Next> to continue or <Back> to return." 0 0
 		# Show editbox with empty file
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
 			--extra-button --extra-label "Back" \
-			--help-button \
+			--help-button --help-label "Clear" \
 			--ok-label "Next" \
 			--editbox "$empty_file" $dlg_h $dlg_w 2>"$TMP"
 		
@@ -977,13 +1127,63 @@ Press <Help> for more information."
 				# Validate the pasted content
 				if echo "$pull_secret" | jq empty 2>/dev/null; then
 					if echo "$pull_secret" | grep -q "registry.redhat.io"; then
-						# Valid! Save it
+						# Valid JSON with registry.redhat.io! Save it
 						echo "$pull_secret" > "$pull_secret_file"
 						chmod 600 "$pull_secret_file"
 						log "Pull secret saved successfully to $pull_secret_file"
 						
-						DIALOG_RC="next"
-						return
+				# Validate pull secret by testing authentication
+				dialog --backtitle "$(ui_backtitle)" --infobox "Validating pull secret...\n\nTesting authentication with registry.redhat.io\n\nPlease wait..." 7 60
+				
+				# Capture only stderr (errors), discard stdout (success messages)
+				local validation_error
+				validation_error=$(validate_pull_secret "$pull_secret_file" 2>&1 >/dev/null)
+				local validation_rc=$?
+				
+				if [[ $validation_rc -eq 0 ]]; then
+					log "Pull secret validation successful"
+					# Show success message briefly before proceeding
+					dialog --backtitle "$(ui_backtitle)" --infobox "\Z2Pull secret validated successfully!\Zn\n\nAuthentication with registry.redhat.io succeeded.\n\nProceeding..." 7 60
+					sleep 1
+					DIALOG_RC="next"
+					return
+				else
+					log "Pull secret validation failed: $validation_error"
+					
+					dialog --colors --backtitle "$(ui_backtitle)" --title "Pull Secret Validation Failed" \
+						--yes-label "Try Again" \
+						--no-label "Continue Anyway" \
+						--yesno "\Z1Pull secret authentication failed!\Zn
+
+The pull secret was saved but could not authenticate with:
+  registry.redhat.io
+
+Error:
+$validation_error
+
+This may mean:
+• Pull secret is expired (download new from console.redhat.com)
+• Invalid credentials  
+• Network/DNS issue
+
+\ZbWhat would you like to do?\Zn" 0 0
+					rc=$?
+					
+					case $rc in
+						0)
+							# Try again - stay in loop
+							log "User chose to re-enter pull secret"
+							rm -f "$pull_secret_file"
+							continue
+							;;
+						1)
+							# Continue anyway
+							log "User chose to continue with unvalidated pull secret"
+							DIALOG_RC="next"
+							return
+							;;
+					esac
+				fi
 				else
 					log "Pull secret missing registry.redhat.io"
 					error_msg="\Z1ERROR: Invalid Pull Secret\Zn
@@ -1006,46 +1206,18 @@ Please copy the ENTIRE pull secret from the Red Hat console.
 It should start with { and end with }
 
 Press <Help> for more information."
-				continue
-			fi
-				;;
-			2)
-				# Help button
-			log "Help button pressed in pull secret"
-			dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --msgbox \
-"\ZbRed Hat Pull Secret - Instructions\Zn
-
-\Z6What is it?\Zn
-The pull secret is a JSON file containing authentication credentials
-for downloading OpenShift images from Red Hat registries.
-
-\Z6How to get your pull secret:\Zn
-  1. Visit: https://console.redhat.com/openshift/install/pull-secret
-  2. Log in with your Red Hat account
-  3. Click 'Copy pull secret'
-  4. Return to this TUI and paste into the blank field
-  5. Press <Next>
-
-\Z6Requirements:\Zn
-  • Must be valid JSON format (starts with { ends with })
-  • Must contain 'registry.redhat.io' credentials
-
-\Z6What it's used for:\Zn
-  • Downloading OpenShift release images
-  • Accessing Red Hat operator catalogs
-  • Pulling certified container images
-
-\Z6Security:\Zn
-  • Saved to: ~/.pull-secret.json
-  • Permissions: 600 (read/write for owner only)
-
-\Z6Tip:\Zn
-Copy from browser → paste directly into the blank field → Next" 0 0 || true
+			continue
+		fi
+			;;
+		2)
+			# Clear button - just loop back to show empty editbox again
+			log "Clear button pressed, restarting pull secret entry"
+			error_msg=""  # Clear any error messages
 			continue
 			;;
-			3|255)
-				# Back/ESC
-				DIALOG_RC="back"
+		3|255)
+			# Back/ESC
+			DIALOG_RC="back"
 				log "User went back from pull secret (rc=$rc)"
 				return
 				;;
@@ -1079,7 +1251,6 @@ select_platform_network() {
 		log "TMP file: $TMP"
 		
 		# Use explicit arguments (no array expansion issues)
-		set +e  # Don't exit on error
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Platform & Network" \
 			--cancel-label "Back" \
 			--help-button \
@@ -1095,7 +1266,6 @@ select_platform_network() {
 			7 "NTP Servers: ${NTP_SERVERS:-(auto-detect)}" \
 			2>"$TMP"
 		rc=$?
-		set -e  # Re-enable exit on error
 		
 		log "Platform menu dialog COMPLETED, rc=$rc"
 		
@@ -1341,9 +1511,23 @@ select_operators() {
 	fi
 	
 	# Wait for all 3 catalogs - returns immediately if already done
-	if ! wait_for_all_catalogs "$version_short" >/dev/null 2>&1; then
+	if ! wait_for_all_catalogs "$version_short"; then
 		log "ERROR: Required catalog downloads failed for version ${version_short}"
-		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
+		
+		# Show which catalog failed with error details
+		local failed_catalog=""
+		if ! run_once -p -i "catalog:${version_short}:redhat-operator"; then
+			failed_catalog="redhat-operator"
+		elif ! run_once -p -i "catalog:${version_short}:certified-operator"; then
+			failed_catalog="certified-operator"
+		elif ! run_once -p -i "catalog:${version_short}:community-operator"; then
+			failed_catalog="community-operator"
+		fi
+		
+		if [[ -n "$failed_catalog" ]]; then
+			show_run_once_error "catalog:${version_short}:${failed_catalog}" "Catalog Download Failed"
+		else
+			dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
 "\Z1ERROR: Failed to download required operator catalogs\Zn
 
 Cannot proceed without operator catalog indexes.
@@ -1351,6 +1535,7 @@ Cannot proceed without operator catalog indexes.
 Check logs in: ~/.aba/runner/
 
 Try running: cd mirror && bash ../scripts/download-catalog-index-simple.sh redhat-operator" 0 0
+		fi
 		DIALOG_RC="back"
 		return
 	fi
@@ -1366,7 +1551,6 @@ Try running: cd mirror && bash ../scripts/download-catalog-index-simple.sh redha
 		
 		log "About to show operators menu dialog..."
 		
-		set +e  # Don't exit on error
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Operators" \
 			--cancel-label "Back" \
 			--help-button \
@@ -1380,7 +1564,6 @@ Try running: cd mirror && bash ../scripts/download-catalog-index-simple.sh redha
 			5 "\ZbAccept\Zn" \
 			2>"$TMP"
 		rc=$?
-		set -e  # Re-enable exit on error
 		
 		log "Operators menu dialog returned: $rc"
 		log "TMP file contents: $(cat "$TMP" 2>/dev/null || echo '(empty)')"
@@ -2157,10 +2340,24 @@ confirm_and_execute() {
 				local output_file=$(mktemp)
 				
 				# Run command with progressbox showing live output
-				# progressbox reads from stdin and displays line by line
-				bash -c "$cmd" 2>&1 | tee "$output_file" | \
-					dialog --colors --backtitle "$(ui_backtitle)" --title "Executing: $cmd" \
-						--progressbox 30 120
+			# progressbox reads from stdin and displays line by line
+		# Get terminal dimensions for full-screen progressbox
+		local term_height=$(tput lines)
+		local term_width=$(tput cols)
+		# Leave margins for dialog borders (6 chars on each side = 12 total)
+		local box_height=$((term_height - 6))
+		local box_width=$((term_width - 12))
+		
+		# Ensure minimum sizes
+		[[ $box_height -lt 10 ]] && box_height=10
+		[[ $box_width -lt 60 ]] && box_width=60
+		
+		# Strip ANSI color codes (sed -u for unbuffered/line-by-line output) before showing in dialog
+		# This prevents control characters from displaying literally
+		bash -c "$cmd" 2>&1 | tee "$output_file" | \
+			sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
+			dialog --backtitle "$(ui_backtitle)" --title "Executing: $cmd" \
+				--progressbox $box_height $box_width
 				
 				# Get exit code from the command (via PIPESTATUS before pipe)
 				local exit_code=${PIPESTATUS[0]}
@@ -2178,8 +2375,14 @@ Press OK to exit TUI." 0 0 || true
 					exit 0
 				else
 					# Show final output in scrollable programbox for review
-					dialog --colors --backtitle "$(ui_backtitle)" --title "Command Output (Failed): $cmd" \
-						--programbox 30 120 < "$output_file"
+				# Show full output in scrollable programbox (full screen)
+				local term_height=$(tput lines)
+				local term_width=$(tput cols)
+				local box_height=$((term_height - 4))
+				local box_width=$((term_width - 4))
+				
+				dialog --colors --backtitle "$(ui_backtitle)" --title "Command Output (Failed): $cmd" \
+					--programbox $box_height $box_width < "$output_file"
 					
 					# Show error dialog with retry option
 					dialog --colors --backtitle "$(ui_backtitle)" --title "Command Failed" \
@@ -2344,7 +2547,13 @@ summary_apply() {
 		
 		# Wait for oc-mirror to be installed (needed for isconf generation)
 		log "Ensuring oc-mirror is installed before generating ImageSet config"
-		run_once -w -i cli:install:oc-mirror -- make -sC "$ABA_ROOT/cli" oc-mirror >/dev/null 2>&1
+		# Let errors flow to logs, suppress stdout (informational messages only)
+		if ! run_once -w -i cli:install:oc-mirror -- make -sC "$ABA_ROOT/cli" oc-mirror >/dev/null; then
+			log "ERROR: Failed to install oc-mirror"
+			show_run_once_error "cli:install:oc-mirror" "Failed to Install oc-mirror"
+			DIALOG_RC="back"
+			return
+		fi
 		
 		# Remove old ImageSet config files to force regeneration with current version
 	rm -f "$ABA_ROOT/mirror/save/imageset-config-save.yaml" 2>/dev/null || true
@@ -2624,13 +2833,14 @@ check_internet_access
 # Start background version fetches for fast and candidate channels
 # (stable:latest already fetched in check_internet_access)
 log "Starting background OCP version fetches for remaining channels"
-run_once -i "ocp:stable:latest_version_previous"    -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable' >/dev/null 2>&1
+# Let errors flow to logs (stderr), suppress stdout (version output)
+run_once -i "ocp:stable:latest_version_previous"    -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable' >/dev/null
 
-run_once -i "ocp:fast:latest_version"               -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast' >/dev/null 2>&1
-run_once -i "ocp:fast:latest_version_previous"      -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version fast' >/dev/null 2>&1
+run_once -i "ocp:fast:latest_version"               -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast' >/dev/null
+run_once -i "ocp:fast:latest_version_previous"      -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version fast' >/dev/null
 
-run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate' >/dev/null 2>&1
-run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate' >/dev/null 2>&1
+run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate' >/dev/null
+run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate' >/dev/null
 
 log "Background OCP version fetches started"
 
