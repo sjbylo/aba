@@ -1469,6 +1469,7 @@ run_once() {
 			if [[ $age -gt $ttl ]]; then
 				# Task output is stale, reset it
 				_kill_id "$work_id"
+				mkdir -p "$id_dir"
 			fi
 		fi
 	fi
@@ -1542,6 +1543,21 @@ run_once() {
 
 	# --- wait mode ---
 	if [[ "$mode" == "wait" ]]; then
+		# Check if exit file exists and if task was killed by signal
+		if [[ -f "$exit_file" ]]; then
+			local exit_code
+			exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+			
+			# Exit codes 128-165 indicate termination by signal (kill, Ctrl-C, etc.)
+			# These are interruptions, not legitimate failures, so treat as crash and retry
+			if [[ $exit_code -ge 128 && $exit_code -le 165 ]]; then
+				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
+				rm -rf "$id_dir"
+				mkdir -p "$id_dir"
+				# Fall through to restart logic below
+			fi
+		fi
+		
 		if [[ ! -f "$exit_file" ]]; then
 			exec 9>>"$lock_file"
 			if flock -n 9; then
@@ -1564,7 +1580,7 @@ run_once() {
 		exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
 
 		if [[ "$purge" == true ]]; then
-			rm -f "$lock_file" "$exit_file" "$log_file" "$pid_file"
+			rm -rf "$id_dir"
 		fi
 		return "$exit_code"
 	fi
