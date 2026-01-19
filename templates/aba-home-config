@@ -1,0 +1,12 @@
+# ABA User Configuration
+# This file is copied to ~/.aba/config during installation
+# Settings here affect ABA behavior system-wide for this user
+
+# Catalog download timeout in MINUTES (default: 20)
+# Large operator catalog indexes can take time to download on slow networks
+CATALOG_DOWNLOAD_TIMEOUT_MINS=20
+
+# Catalog cache TTL in SECONDS (default: 86400 = 24 hours)
+# How long to cache downloaded catalog indexes before re-downloading
+CATALOG_CACHE_TTL_SECS=86400
+
