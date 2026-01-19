@@ -1372,7 +1372,7 @@ run_once() {
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:e:W:" opt; do
+	while getopts "swi:cprGFt:eW:" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
