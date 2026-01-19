@@ -86,15 +86,19 @@ log "=========================================="
 log "Log file: $LOG_FILE"
 
 # -----------------------------------------------------------------------------
-# Sanity checks
+# Sanity checks & auto-install dependencies
 # -----------------------------------------------------------------------------
-if ! command -v dialog >/dev/null 2>&1; then
-	echo "ERROR: dialog is required (dnf install dialog)" >&2
-	log "ERROR: dialog not found"
-	exit 1
+# Derive ABA_ROOT early (needed for install-rpms.sh)
+if [[ -z "${ABA_ROOT:-}" ]]; then
+	SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+	ABA_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+	export ABA_ROOT
 fi
 
-log "dialog found: $(command -v dialog)"
+# Auto-install required packages (dialog, jq, make, etc.) if missing
+"$ABA_ROOT/scripts/install-rpms.sh" external
+
+log "Dependencies installed/verified"
 
 # -----------------------------------------------------------------------------
 # Dialog appearance configuration (nmtui-like styling)
