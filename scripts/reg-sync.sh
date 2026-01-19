@@ -19,7 +19,10 @@ verify-mirror-conf || exit 1
 
 # Be sure a download has started ..
 aba_info "Checking for oc-mirror binary."
-PLAIN_OUTPUT=1 run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror || aba_abort "Downloading oc-mirror binary failed.  Please try again!"
+if ! PLAIN_OUTPUT=1 run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
+	error_msg=$(run_once -e -i cli:install:oc-mirror)
+	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
+fi
 
 # This is a pull secret for RH registry
 pull_secret_mirror_file=pull-secret-mirror.json
@@ -87,7 +90,10 @@ do
 		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	else
 		# Wait for oc-mirror to be available!
-		run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
+		if ! run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
+			error_msg=$(run_once -e -i cli:install:oc-mirror)
+			aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
+		fi
 		cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
 	fi

@@ -1365,13 +1365,14 @@ run_once() {
 	local global_clean=false
 	local global_failed_clean=false
 	local ttl=""
+	local wait_timeout=""
 	local OPTIND=1
 
 	# Allow override for tests
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:e" opt; do
+	while getopts "swi:cprGFt:e:W:" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1383,6 +1384,7 @@ run_once() {
 			F) global_failed_clean=true ;;
 			t) ttl=$OPTARG ;;
 			e) mode="get_error" ;;
+			W) wait_timeout=$OPTARG ;;
 			*) return 1 ;;
 		esac
 	done
@@ -1437,9 +1439,9 @@ run_once() {
 			id="$(basename "$d")"
 			exitf="$d/exit"
 			if [[ -f "$exitf" ]]; then
-				rc="$(cat "$exitf" 2>/dev/null || echo 1)"
-				if [[ "$rc" -ne 0 ]]; then
-					_kill_id "$id"
+			rc="$(cat "$exitf" 2>/dev/null || echo 1)"
+			if [[ "$rc" -ne 0 ]]; then
+				_kill_id "$id"
 				fi
 			fi
 		done
@@ -1592,7 +1594,16 @@ run_once() {
 			else
 				# Running elsewhere => block until lock released
 				exec 9>&-
-				flock -x "$lock_file" -c "true"
+				if [[ -n "$wait_timeout" ]]; then
+					# Wait with timeout
+					if ! flock -w "$wait_timeout" -x "$lock_file" -c "true"; then
+						echo "Error: Timeout waiting for task $work_id after ${wait_timeout}s" >&2
+						return 124  # Standard timeout exit code
+					fi
+				else
+					# Wait indefinitely
+					flock -x "$lock_file" -c "true"
+				fi
 			fi
 		fi
 
@@ -1640,8 +1651,12 @@ download_all_catalogs() {
 }
 
 # Wait for all 3 catalog downloads to complete (all required)
+# Wait for all catalog downloads to complete
 # Usage: wait_for_all_catalogs <version_short>
 # Example: wait_for_all_catalogs "4.19"
+#
+# NOTE: This function is called from add-operators-to-imageset.sh where stdout
+#       is redirected to YAML file. ALL user messages MUST use >&2 (stderr)!
 wait_for_all_catalogs() {
 	local version_short="${1}"
 	
@@ -1650,48 +1665,46 @@ wait_for_all_catalogs() {
 		return 1
 	fi
 	
-	aba_debug "Waiting for catalog downloads to complete for OCP $version_short"
+	# Read timeout from user config (default: 20 minutes)
+	local timeout_mins=20
+	if [[ -f "$HOME/.aba/config" ]]; then
+		source "$HOME/.aba/config"
+		timeout_mins="${CATALOG_DOWNLOAD_TIMEOUT_MINS:-20}"
+	fi
+	local timeout_secs=$((timeout_mins * 60))
 	
-	# All 3 catalogs are required and treated equally
-	if ! run_once -w -i "catalog:${version_short}:redhat-operator"; then
+	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_mins} minutes)"
+	
+	# Show waiting message (must use stderr since stdout may be redirected to YAML file)
+	aba_info "Waiting for operator catalogs to finish downloading..." >&2
+	
+	aba_debug "wait_for_all_catalogs: About to call run_once -w for redhat-operator"
+	
+	if ! run_once -w -W "$timeout_secs" -i "catalog:${version_short}:redhat-operator"; then
 		echo_red "[ABA] Error: Failed to download redhat-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "redhat-operator catalog ready"
 	
-	if ! run_once -w -i "catalog:${version_short}:certified-operator"; then
+	if ! run_once -w -W "$timeout_secs" -i "catalog:${version_short}:certified-operator"; then
 		echo_red "[ABA] Error: Failed to download certified-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "certified-operator catalog ready"
 	
-	if ! run_once -w -i "catalog:${version_short}:community-operator"; then
+	if ! run_once -w -W "$timeout_secs" -i "catalog:${version_short}:community-operator"; then
 		echo_red "[ABA] Error: Failed to download community-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "community-operator catalog ready"
 	
-	aba_info_ok "All catalog downloads completed for OCP $version_short"
+	# Must use stderr since stdout may be redirected to YAML file
+	aba_info_ok "All catalog downloads completed for OCP $version_short" >&2
 }
 
 # --- Aba-facing cleanup ---
-
-aba_runtime_cleanup() {
-	local rc=$?
-
-	# Prevent recursion / re-entrancy
-	trap - EXIT INT TERM
-
-	# Kill anything still owned by runner
-	run_once -G >/dev/null 2>&1 || true
-
-	return "$rc"
-}
-
-aba_runtime_install_traps() {
-	# Call once at Aba startup
-	trap aba_runtime_cleanup INT TERM
-}
+# Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
+# Use 'aba reset' to explicitly kill all background tasks and clean up.
 
 # -----------------------------------------------------------------------------
 # Validation Functions for TUI inputs

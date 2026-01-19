@@ -12,13 +12,20 @@ set -o pipefail  # Catch pipeline errors
 
 # Setup log directory
 LOG_DIR="${HOME}/.aba/logs"
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR" 2>/dev/null || true
 
-# Keep only last 5 log files, delete older ones
-ls -t "$LOG_DIR"/aba-tui-*.log 2>/dev/null | tail -n +6 | xargs -r rm -f
+# Single log file - overwrite each time
+LOG_FILE="$LOG_DIR/aba-tui.log"
 
-# Create current log file
-LOG_FILE="$LOG_DIR/aba-tui-$$.log"
+# Define log function early (before any function that uses it)
+log() {
+	# Ensure log file and directory exist before writing
+	if [[ -n "${LOG_FILE:-}" ]]; then
+		local log_dir=$(dirname "$LOG_FILE")
+		[[ ! -d "$log_dir" ]] && mkdir -p "$log_dir" 2>/dev/null
+		echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE" 2>/dev/null || true
+	fi
+}
 
 # -----------------------------------------------------------------------------
 # Confirmation dialog for quitting
@@ -71,22 +78,12 @@ Log file: $LOG_FILE" 0 0 || true
 # Logging
 # -----------------------------------------------------------------------------
 # LOG_FILE already set at top of script
-# Also create a persistent log link for easier access
-LOG_LINK="$LOG_DIR/aba-tui-latest.log"
 export LOG_FILE
-
-log() {
-	echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
-}
 
 log "=========================================="
 log "ABA TUI started"
 log "=========================================="
 log "Log file: $LOG_FILE"
-
-# Create symlink to latest log for easier access
-ln -sf "$LOG_FILE" "$LOG_LINK" 2>/dev/null || true
-log "Symlink created: $LOG_LINK -> $LOG_FILE"
 
 # -----------------------------------------------------------------------------
 # Sanity checks
@@ -185,8 +182,33 @@ log "Temp file: $TMP"
 # Get terminal size
 read -r TERM_ROWS TERM_COLS < <(stty size 2>/dev/null || echo "24 80")
 
+# -----------------------------------------------------------------------------
+# TUI global state variables
+# -----------------------------------------------------------------------------
+# Retry count for transient failures (applies to save/sync/bundle)
+RETRY_COUNT="3"  # Values: "off", "3", "8"
+
+# Registry type selection
+ABA_REGISTRY_TYPE="Auto"  # Values: "Auto", "Quay", "Docker"
+
 ui_backtitle() {
 	echo "ABA TUI  |  channel: ${OCP_CHANNEL:-?}  version: ${OCP_VERSION:-?}"
+}
+
+# Resolve actual registry type based on Auto selection and architecture
+get_actual_registry_type() {
+	local registry_type="${ABA_REGISTRY_TYPE:-Auto}"
+	
+	if [[ "$registry_type" == "Auto" ]]; then
+		local arch=$(uname -m)
+		if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
+			echo "Docker"
+		else
+			echo "Quay"
+		fi
+	else
+		echo "$registry_type"
+	fi
 }
 
 # Wrapper for dialog with consistent styling
@@ -236,20 +258,20 @@ Press OK to return" 0 0
 # UI helpers
 # -----------------------------------------------------------------------------
 check_internet_access() {
-	log "Checking internet access to required sites"
-	
-	# Reset all connectivity checks (we want fresh results each TUI run)
-	run_once -r -i "tui:check:api.openshift.com"
-	run_once -r -i "tui:check:mirror.openshift.com"
-	run_once -r -i "tui:check:registry.redhat.io"
+	# Only log if we're actually going to check (not cached)
+	if ! run_once -p -i "tui:check:api.openshift.com" >/dev/null 2>&1 || \
+	   ! run_once -p -i "tui:check:mirror.openshift.com" >/dev/null 2>&1 || \
+	   ! run_once -p -i "tui:check:registry.redhat.io" >/dev/null 2>&1; then
+		log "Checking internet access to required sites"
+	fi
 	
 	# Get the runner directory
 	local RUNNER_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	
-	# Start all three checks in parallel (simple curl HEAD requests)
-	run_once -i "tui:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
-	run_once -i "tui:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
-	run_once -i "tui:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
+	# Start all three checks in parallel (simple curl HEAD requests, 10-min TTL)
+	run_once -t 600 -i "tui:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
+	run_once -t 600 -i "tui:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
+	run_once -t 600 -i "tui:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
 	
 	# Now wait for all three and check results
 	local failed_sites=""
@@ -1986,15 +2008,38 @@ image synchronization process." 0 0 || true
 handle_action_view_isconf() {
 	log "Handling action: View ImageSet Config"
 	
-	# Check if file exists
 	local isconf_file="$ABA_ROOT/mirror/save/imageset-config-save.yaml"
+	
+	# Wait for background isconf generation to complete AND file to exist
+	if ! run_once -p -i "tui:isconf:generate"; then
+		log "Waiting for ImageSet config generation to complete"
+		dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for ImageSet configuration...\n\nPlease wait..." 6 50
+		
+		if ! run_once -w -i "tui:isconf:generate"; then
+			log "ERROR: ImageSet config generation failed"
+			show_run_once_error "tui:isconf:generate" "ImageSet Config Generation Failed"
+			return 0
+		fi
+		
+		# Wait for file to actually exist (task might have just finished)
+		local wait_count=0
+		while [[ ! -f "$isconf_file" ]] && [[ $wait_count -lt 10 ]]; do
+			log "Waiting for file to be written... ($wait_count)"
+			sleep 0.5
+			wait_count=$((wait_count + 1))
+		done
+	else
+		log "ImageSet config is ready (cached)"
+	fi
+	
+	# Check if file exists
 	if [[ ! -f "$isconf_file" ]]; then
 		dialog --backtitle "$(ui_backtitle)" --msgbox \
 "ImageSet configuration file not found.
 
 File: $isconf_file
 
-This file is generated after saving configuration." 0 0 || true
+This file should have been generated automatically." 0 0 || true
 		return 0
 	fi
 	
@@ -2015,20 +2060,45 @@ handle_action_bundle() {
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
-		--form "Create install bundle:" 0 0 0 \
-		"Output path:"  1 1 "$default_bundle"  1 20 60 0 \
+		--inputbox "Enter output path for install bundle:" 10 70 "$default_bundle" \
 		2>"$TMP"
 	rc=$?
 	
 	if [[ $rc -ne 0 ]]; then
-		log "User cancelled bundle form"
+		log "User cancelled bundle path input"
 		return 1
 	fi
 	
-	# Parse form output
-	bundle_path=$(sed -n '1p' "$TMP")
-	
+	# Parse output
+	bundle_path=$(<"$TMP")
 	[[ -z "$bundle_path" ]] && bundle_path="$default_bundle"
+	
+	# Ask about split option
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
+		--yes-label "Yes" \
+		--no-label "No" \
+		--yesno "Enable split bundle option?\n\n(Only works when output is on same filesystem as mirror/save/)\n\nBundle output: $bundle_path" 12 70
+	rc=$?
+	
+	local split_flag=""
+	if [[ $rc -eq 0 ]]; then
+		# User selected Yes - validate filesystem
+		local output_dir=$(dirname "$bundle_path")
+		local output_fs=$(stat -f -c '%T' "$output_dir" 2>/dev/null || stat -f "$output_dir" 2>/dev/null | awk '/Type:/ {print $2}')
+		local mirror_fs=$(stat -f -c '%T' "$ABA_ROOT/mirror/save" 2>/dev/null || stat -f "$ABA_ROOT/mirror/save" 2>/dev/null | awk '/Type:/ {print $2}')
+		
+		if [[ "$output_fs" != "$mirror_fs" ]]; then
+			dialog --colors --backtitle "$(ui_backtitle)" --title "Error" \
+				--msgbox "\Z1ERROR: --split requires output file on same filesystem as mirror/save/\Zn\n\nOutput filesystem: $output_fs\nMirror filesystem: $mirror_fs\n\nContinuing without --split flag." 12 70
+			split_flag=""
+			log "Split option disabled due to filesystem mismatch"
+		else
+			split_flag="--split"
+			log "Split option enabled and filesystem validated"
+		fi
+	else
+		log "Split option disabled by user"
+	fi
 	
 	# Use global auto-answer setting
 	local y_flag=""
@@ -2039,10 +2109,17 @@ handle_action_bundle() {
 		log "Using global auto-answer: -y flag disabled"
 	fi
 	
-	log "Bundle output path: $bundle_path, y_flag: $y_flag"
+	# Use global retry count
+	local retry_flag=""
+	if [[ "$RETRY_COUNT" != "off" ]]; then
+		retry_flag="--retry $RETRY_COUNT"
+		log "Using retry count: $RETRY_COUNT"
+	fi
+	
+	log "Bundle output path: $bundle_path, split: $split_flag, y_flag: $y_flag, retry: $RETRY_COUNT"
 	
 	# Show command and confirm
-	local cmd="aba bundle -o '$bundle_path' $y_flag"
+	local cmd="aba bundle -o '$bundle_path' $split_flag $retry_flag $y_flag"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -2099,7 +2176,14 @@ handle_action_local_quay() {
 		log "Using global auto-answer: -y flag disabled"
 	fi
 	
-	log "Local Quay config: host=$reg_host, user=$reg_user, path=$reg_path, data_dir=$data_dir, y_flag=$y_flag"
+	# Use global retry count
+	local retry_flag=""
+	if [[ "$RETRY_COUNT" != "off" ]]; then
+		retry_flag="--retry $RETRY_COUNT"
+		log "Using retry count: $RETRY_COUNT"
+	fi
+	
+	log "Local Quay config: host=$reg_host, user=$reg_user, path=$reg_path, data_dir=$data_dir, y_flag=$y_flag, retry=$RETRY_COUNT"
 	
 	# Save to mirror.conf
 	replace-value-conf -q -n reg_host -v "$reg_host" -f mirror/mirror.conf
@@ -2109,8 +2193,19 @@ handle_action_local_quay() {
 	replace-value-conf -q -n reg_path -v "$reg_path" -f mirror/mirror.conf
 	replace-value-conf -q -n data_dir -v "$data_dir" -f mirror/mirror.conf
 	
-	# Build command
-	local cmd="aba -d mirror sync -H '$reg_host' $y_flag"
+	# Determine actual registry type and build appropriate command
+	local actual_type=$(get_actual_registry_type)
+	log "Actual registry type: $actual_type"
+	
+	local cmd
+	if [[ "$actual_type" == "Docker" ]]; then
+		# Docker: install-docker-registry + sync in one command
+		cmd="aba -d mirror install-docker-registry $retry_flag sync -H '$reg_host' $y_flag"
+	else
+		# Quay: just sync (install is make dependency)
+		cmd="aba -d mirror $retry_flag sync -H '$reg_host' $y_flag"
+	fi
+	
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -2241,7 +2336,14 @@ handle_action_remote_quay() {
 		log "Using global auto-answer: -y flag disabled"
 	fi
 	
-	log "Remote Quay config: host=$reg_host, ssh_user=$reg_ssh_user, ssh_key=$reg_ssh_key, y_flag=$y_flag"
+	# Use global retry count
+	local retry_flag=""
+	if [[ "$RETRY_COUNT" != "off" ]]; then
+		retry_flag="--retry $RETRY_COUNT"
+		log "Using retry count: $RETRY_COUNT"
+	fi
+	
+	log "Remote Quay config: host=$reg_host, ssh_user=$reg_ssh_user, ssh_key=$reg_ssh_key, y_flag=$y_flag, retry=$RETRY_COUNT"
 	
 	# Save to mirror.conf
 	replace-value-conf -q -n reg_host -v "$reg_host" -f mirror/mirror.conf
@@ -2253,8 +2355,19 @@ handle_action_remote_quay() {
 	replace-value-conf -q -n reg_ssh_key -v "$reg_ssh_key" -f mirror/mirror.conf
 	replace-value-conf -q -n reg_ssh_user -v "$reg_ssh_user" -f mirror/mirror.conf
 	
-	# Build command
-	local cmd="aba -d mirror sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
+	# Determine actual registry type and build appropriate command
+	local actual_type=$(get_actual_registry_type)
+	log "Actual registry type: $actual_type"
+	
+	local cmd
+	if [[ "$actual_type" == "Docker" ]]; then
+		# Docker: install-docker-registry + sync in one command
+		cmd="aba -d mirror install-docker-registry $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
+	else
+		# Quay: just sync (install is make dependency)
+		cmd="aba -d mirror $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
+	fi
+	
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -2274,8 +2387,15 @@ handle_action_save() {
 		log "Using global auto-answer: -y flag disabled"
 	fi
 	
+	# Use global retry count
+	local retry_flag=""
+	if [[ "$RETRY_COUNT" != "off" ]]; then
+		retry_flag="--retry $RETRY_COUNT"
+		log "Using retry count: $RETRY_COUNT"
+	fi
+	
 	# Confirm and execute
-	local cmd="aba -d mirror save $y_flag"
+	local cmd="aba -d mirror $retry_flag save $y_flag"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -2341,16 +2461,12 @@ confirm_and_execute() {
 				
 				# Run command with progressbox showing live output
 			# progressbox reads from stdin and displays line by line
-		# Get terminal dimensions for full-screen progressbox
+		# Get terminal dimensions and use maximum available space
 		local term_height=$(tput lines)
 		local term_width=$(tput cols)
-		# Leave margins for dialog borders (6 chars on each side = 12 total)
-		local box_height=$((term_height - 6))
-		local box_width=$((term_width - 12))
-		
-		# Ensure minimum sizes
-		[[ $box_height -lt 10 ]] && box_height=10
-		[[ $box_width -lt 60 ]] && box_width=60
+		# Minimal margins - just 1 char on each side for dialog borders
+		local box_height=$((term_height - 2))
+		local box_width=$((term_width - 2))
 		
 		# Strip ANSI color codes (sed -u for unbuffered/line-by-line output) before showing in dialog
 		# This prevents control characters from displaying literally
@@ -2449,6 +2565,8 @@ What would you like to do?" 0 0
 # -----------------------------------------------------------------------------
 summary_apply() {
 	log "Entering summary_apply"
+	# DEBUG: Write directly to file to bypass log() function
+	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] Entering summary_apply, LOG_FILE=$LOG_FILE" >> /tmp/aba-tui-debug.log
 	
 	# Create custom operator-set file if basket is not empty
 	local custom_set_name=""
@@ -2539,53 +2657,37 @@ summary_apply() {
 	replace-value-conf -q -n op_sets           -v "$op_sets_value"     -f aba.conf
 	log "Configuration saved to aba.conf"
 	
-	# Pre-generate ImageSet config for viewing (only if basket is not empty)
-	# Note: Catalogs are already downloaded by this point (waited in select_operators)
-	if [[ ${#OP_BASKET[@]} -gt 0 ]]; then
-		log "Pre-generating ImageSet configuration for OCP $OCP_VERSION"
-		cd "$ABA_ROOT"
-		
-		# Wait for oc-mirror to be installed (needed for isconf generation)
-		log "Ensuring oc-mirror is installed before generating ImageSet config"
-		# Let errors flow to logs, suppress stdout (informational messages only)
-		if ! run_once -w -i cli:install:oc-mirror -- make -sC "$ABA_ROOT/cli" oc-mirror >/dev/null; then
-			log "ERROR: Failed to install oc-mirror"
-			show_run_once_error "cli:install:oc-mirror" "Failed to Install oc-mirror"
-			DIALOG_RC="back"
-			return
-		fi
-		
-		# Remove old ImageSet config files to force regeneration with current version
+	# ALWAYS pre-generate ImageSet config in background before showing action menu
+	# This ensures it's ready for any action (with or without operators)
+	log "Pre-generating ImageSet configuration for OCP $OCP_VERSION"
+	cd "$ABA_ROOT"
+	
+	# Wait for oc-mirror to be installed (needed for isconf generation)
+	log "Ensuring oc-mirror is installed before generating ImageSet config"
+	# Let errors flow to logs, suppress stdout (informational messages only)
+	if ! run_once -w -i cli:install:oc-mirror -- make -sC "$ABA_ROOT/cli" oc-mirror >/dev/null; then
+		log "ERROR: Failed to install oc-mirror"
+		show_run_once_error "cli:install:oc-mirror" "Failed to Install oc-mirror"
+		DIALOG_RC="back"
+		return
+	fi
+	
+	# Remove old ImageSet config files to force regeneration with current version
 	rm -f "$ABA_ROOT/mirror/save/imageset-config-save.yaml" 2>/dev/null || true
 	
-	# Show "Please wait..." dialog while generating config
-	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nPlease wait..." 6 50
-	
-	# Capture stderr to show errors to user
-	local error_file=$(mktemp)
-	if ! aba -d mirror isconf >/dev/null 2>"$error_file"; then
-		local error_msg=$(cat "$error_file")
-		rm -f "$error_file"
-		
-		log "Warning: ImageSet config generation failed: $error_msg"
-		# Show error to user but allow them to continue
-		dialog --colors --no-collapse --backtitle "$(ui_backtitle)" --msgbox \
-"\Z1Warning: Failed to pre-generate ImageSet configuration.\Zn
-
-Error output:
-$error_msg
-
-You can generate it later using:
-  aba -d mirror isconf
-
-Press OK to continue." 0 0 || true
-	else
-		rm -f "$error_file"
-			log "ImageSet config pre-generated successfully for OCP $OCP_VERSION"
-		fi
-	else
-		log "Skipping ImageSet config generation (no operators selected)"
-	fi
+	# Reset and start isconf generation in background (non-blocking)
+	# Reset ensures regeneration if user changes operators and comes back
+	log "Resetting and starting background task: aba -d mirror isconf"
+	# DEBUG: Write directly to file
+	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to reset isconf task" >> /tmp/aba-tui-debug.log
+	run_once -r -i "tui:isconf:generate"
+	# Small delay to ensure reset completes
+	sleep 0.2
+	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to start isconf task" >> /tmp/aba-tui-debug.log
+	run_once -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" >/dev/null 2>&1
+	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] isconf task started, checking directory..." >> /tmp/aba-tui-debug.log
+	ls -la ~/.aba/runner/tui:isconf:generate/ >> /tmp/aba-tui-debug.log 2>&1
+	log "ImageSet config generation started in background"
 	
 	# Now show action menu - what to do next?
 	# Initialize auto-answer setting if not set
@@ -2618,22 +2720,36 @@ Press OK to continue." 0 0 || true
 				;;
 		esac
 		
+		local toggle_retry_display
+		case "$RETRY_COUNT" in
+			off)
+				toggle_retry_display="Toggle Retry Count: \Z1OFF\Zn"
+				;;
+			3)
+				toggle_retry_display="Toggle Retry Count: \Z23\Zn"
+				;;
+			8)
+				toggle_retry_display="Toggle Retry Count: \Z38\Zn"
+				;;
+		esac
+		
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Choose Next Action" \
 			--cancel-label "Exit" \
 			--help-button \
 			--ok-label "Select" \
 			--extra-button --extra-label "Back" \
 			--default-item "$default_item" \
-			--menu "Configuration saved to aba.conf\n\nChoose what to do next:" 0 0 9 \
+			--menu "Configuration saved to aba.conf\n\nChoose what to do next:" 0 0 10 \
 			0 "$toggle_answer_display" \
 			1 "$toggle_registry_display" \
-			2 "View Generated ImageSet Config" \
-			3 "Create ABA Install Bundle (air-gapped)" \
-			4 "Install & Sync to Local Registry" \
-			5 "Install & Sync to Remote Registry via SSH" \
-			6 "Save Images to Local Archive" \
-			7 "Generate ImageSet Config & Exit" \
-			8 "Exit (run commands manually)" \
+			2 "$toggle_retry_display" \
+			3 "View Generated ImageSet Config" \
+			4 "Create ABA Install Bundle (air-gapped)" \
+			5 "Install & Sync to Local Registry" \
+			6 "Install & Sync to Remote Registry via SSH" \
+			7 "Save Images to Local Archive" \
+			8 "Generate ImageSet Config & Exit" \
+			9 "Exit (run commands manually)" \
 			2>"$TMP"
 		rc=$?
 		
@@ -2678,12 +2794,32 @@ Press OK to continue." 0 0 || true
 						continue
 						;;
 					2)
+						# Toggle retry count
+						case "$RETRY_COUNT" in
+							off)
+								RETRY_COUNT="3"
+								log "Retry count toggled to 3"
+								;;
+							3)
+								RETRY_COUNT="8"
+								log "Retry count toggled to 8"
+								;;
+							8)
+								RETRY_COUNT="off"
+								log "Retry count toggled to OFF"
+								;;
+						esac
+						# Keep focus on item 2
+						default_item="2"
+						continue
+						;;
+					3)
 						# View ImageSet Config
 						handle_action_view_isconf
 						# Stay in menu after viewing
 						continue
 						;;
-					3)
+					4)
 						# Create Bundle
 						if handle_action_bundle; then
 							return 0
@@ -2692,7 +2828,7 @@ Press OK to continue." 0 0 || true
 							continue
 						fi
 						;;
-					4)
+					5)
 						# Local Registry (Auto/Quay/Docker based on setting)
 						case "$ABA_REGISTRY_TYPE" in
 							Auto)
@@ -2729,7 +2865,7 @@ Press OK to continue." 0 0 || true
 								;;
 						esac
 						;;
-					5)
+					6)
 						# Remote Registry
 						if handle_action_remote_quay; then
 							return 0
@@ -2738,7 +2874,7 @@ Press OK to continue." 0 0 || true
 							continue
 						fi
 						;;
-					6)
+					7)
 						# Save Images
 						if handle_action_save; then
 							return 0
@@ -2747,7 +2883,7 @@ Press OK to continue." 0 0 || true
 							continue
 						fi
 						;;
-					7)
+					8)
 						# Generate ISConf
 						if handle_action_isconf; then
 							return 0
@@ -2756,7 +2892,7 @@ Press OK to continue." 0 0 || true
 							continue
 						fi
 						;;
-					8)
+					9)
 						# Exit manually
 						log "User chose to exit and run commands manually"
 						clear
