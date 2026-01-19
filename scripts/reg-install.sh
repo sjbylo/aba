@@ -211,7 +211,10 @@ if [ "$reg_ssh_key" ]; then
 	aba_info "$cmd --initPassword <hidden>"
 
 	aba_info "Waiting for download of mirror-install"
-	run_once -w -i mirror:reg:download -- make -s -C . download-registries
+	if ! run_once -w -i mirror:reg:download -- make -s -C . download-registries; then
+		error_msg=$(run_once -e -i mirror:reg:download)
+		aba_abort "Failed to download mirror-install:\n$error_msg\n\nPlease check network and try again."
+	fi
 
 	eval echo $cmd --initPassword "'$reg_pw'"
 	eval $cmd --initPassword "'$reg_pw'"
@@ -368,7 +371,10 @@ else
 	aba_info "$cmd --initPassword <hidden>"
 
 	aba_info "Waiting for download of mirror-install"
-	run_once -w -i mirror:reg:download -- make -s -C . download-registries
+	if ! run_once -w -i mirror:reg:download -- make -s -C . download-registries; then
+		error_msg=$(run_once -e -i mirror:reg:download)
+		aba_abort "Failed to download mirror-install:\n$error_msg\n\nPlease check network and try again."
+	fi
 
 	eval $cmd --initPassword $reg_pw   # eval needed for "~"
 

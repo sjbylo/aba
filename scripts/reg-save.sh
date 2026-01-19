@@ -34,7 +34,10 @@ scripts/cli-download-all.sh --wait
 aba_info_ok "CLI Installation binaries downloaded successfully!"
 
 aba_info "Checking for oc-mirror binary."
-run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror || aba_abort "Downloading oc-mirror binary failed.  Please try again!"
+if ! run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
+	error_msg=$(run_once -e -i cli:install:oc-mirror)
+	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
+fi
 
 
 # Ensure the RH pull secret files are located in the right places

@@ -1,6 +1,8 @@
 #!/bin/bash -ex
 # Basic test script to show how to create a custom bundle (*split* or normal) and then install OpenShift disonnected
 
+cp aba $(which aba) -v || exit 1
+
 [ "$1" ] && SPLIT="--split"   		# Test with *split* bundle with any arg.
 
 MY_HOST=$(hostname -f)    # This must be FQDN with A record pointing to IP address of this host

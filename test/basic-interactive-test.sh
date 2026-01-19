@@ -4,6 +4,7 @@
 #cd $(dirname $0)
 
 ./install
+cp aba $(which aba) -v || exit 1
 
 aba reset -f
 

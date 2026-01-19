@@ -131,11 +131,13 @@ clean: ## Clean up all temporary files.
 .PHONY: reset
 reset: # Clean up *everything*.  Only use if you know what you are doing! Note that this does not run 'aba uninstall' to uninstall the mirror.
 	$(SCRIPTS)/reset-gate.sh $(force)
+	$(SCRIPTS)/cleanup-runner.sh
 	make clean
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
 	make -sC cli reset
 	make -sC mirror reset 
-	rm -rf ~/.aba/cache ~/.aba/tmp
+	rm -rf ~/.aba/cache ~/.aba/tmp ~/.aba/logs
+	rm -rf ~/.aba/runner || sleep 1 && rm -rf ~/.aba/runner || true
 	rm -f aba.conf ~/.aba.conf*
 

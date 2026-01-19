@@ -133,7 +133,7 @@ fi
 
 source $ABA_ROOT/scripts/include_all.sh
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
-aba_runtime_install_traps  # Used to clean up runner bg tasks
+# Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
 [ ! "$RUN_ONCE_CLEANED" ] && run_once -F # Clean out only the previously failed tasks
 export RUN_ONCE_CLEANED=1 # Be sure it's only run once!
 
@@ -927,30 +927,77 @@ fi
 	aba_debug "Downloading oc-mirror in the background ..."
 	PLAIN_OUTPUT=1 run_once -i cli:install:oc-mirror			-- make -sC cli oc-mirror
 
-
-	echo_white -n "Checking Internet connectivity ..."
-	if ! release_text=$(curl -f --connect-timeout 20 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/stable/release.txt); then
-		[ "$TERM" ] && tput el1 && tput cr
+	# Check Internet connectivity to required sites (parallel, cached checks with 10-min TTL)
+	# Only show messages if we're actually going to check (not cached)
+	checking_connectivity=false
+	if ! run_once -p -i "cli:check:api.openshift.com" >/dev/null 2>&1 || \
+	   ! run_once -p -i "cli:check:mirror.openshift.com" >/dev/null 2>&1 || \
+	   ! run_once -p -i "cli:check:registry.redhat.io" >/dev/null 2>&1; then
+		checking_connectivity=true
+		aba_info "Checking Internet connectivity to required sites..."
+	fi
+	
+	# Start all three checks in parallel (lightweight curl HEAD requests, 10-min TTL)
+	run_once -t 600 -i "cli:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
+	run_once -t 600 -i "cli:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
+	run_once -t 600 -i "cli:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
+	
+	# Now wait for all three and check results
+	failed_sites=""
+	error_details=""
+	
+	if ! run_once -w -i "cli:check:api.openshift.com"; then
+		failed_sites="api.openshift.com"
+		err_msg=$(run_once -e -i "cli:check:api.openshift.com" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
+		error_details="api.openshift.com: $err_msg"
+	fi
+	
+	if ! run_once -w -i "cli:check:mirror.openshift.com"; then
+		[[ -n "$failed_sites" ]] && failed_sites="$failed_sites, "
+		failed_sites="${failed_sites}mirror.openshift.com"
+		err_msg=$(run_once -e -i "cli:check:mirror.openshift.com" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
+		[[ -n "$error_details" ]] && error_details="$error_details"$'\n'"  "
+		error_details="${error_details}mirror.openshift.com: $err_msg"
+	fi
+	
+	if ! run_once -w -i "cli:check:registry.redhat.io"; then
+		[[ -n "$failed_sites" ]] && failed_sites="$failed_sites, "
+		failed_sites="${failed_sites}registry.redhat.io"
+		err_msg=$(run_once -e -i "cli:check:registry.redhat.io" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
+		[[ -n "$error_details" ]] && error_details="$error_details"$'\n'"  "
+		error_details="${error_details}registry.redhat.io: $err_msg"
+	fi
+	
+	# If any site failed, show error and exit
+	if [[ -n "$failed_sites" ]]; then
 		aba_abort \
-			"Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." \
+			"Cannot access required sites: $failed_sites" \
+			"" \
+			"Error details:" \
+			"  $error_details" \
+			"" \
+			"Ensure you have Internet access to download the required images." \
 			"To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." \
 			"" \
-			"Required sites:                                Other sites:"		\
-			"   mirror.openshift.com                           docker.io"		\
-			"   api.openshift.com                              docker.com"		\
-			"   registry.redhat.io                             hub.docker.com"	\
-			"   quay.io and *.quay.io                          index.docker.io"	\
-			"   console.redhat.com"		\
-			"   registry.access.redhat.com"	\
-
+			"Required sites:                                Other sites:" \
+			"   mirror.openshift.com                           docker.io" \
+			"   api.openshift.com                              docker.com" \
+			"   registry.redhat.io                             hub.docker.com" \
+			"   quay.io and *.quay.io                          index.docker.io" \
+			"   console.redhat.com" \
+			"   registry.access.redhat.com"
 	fi
-
-	[ "$TERM" ] && tput el1 && tput cr
+	
+	# Only show success message if we actually checked (not from cache)
+	[[ "$checking_connectivity" == "true" ]] && aba_info "  ✓ All required sites accessible"
 
 	[ "$ocp_channel" ] && ch_def=${ocp_channel:0:1} || ch_def=s  # Set the default 
 
 	while true; do
-		echo_white -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [$ch_def]: "
+		aba_info -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [$ch_def]: "
 		read -r ans
 
 		[ ! "$ans" ] && ans=$ch_def
@@ -975,7 +1022,7 @@ fi
 	done
 
 	replace-value-conf -q -n ocp_channel -v $ocp_channel -f aba.conf
-	echo_white "'ocp_channel' set to '$ocp_channel' in aba.conf"
+	aba_info "'ocp_channel' set to '$ocp_channel' in aba.conf"
 
 #fi
 
@@ -989,8 +1036,15 @@ fi
 
 	echo_white -n "Fetching available versions ..."
 	# Wait for only the data we need ...
-	run_once -w -i ocp:$ocp_channel:latest_version
-	run_once -w -i ocp:$ocp_channel:latest_version_previous
+	if ! run_once -w -i ocp:$ocp_channel:latest_version; then
+		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version)
+		aba_abort "Failed to fetch latest OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
+	fi
+	
+	if ! run_once -w -i ocp:$ocp_channel:latest_version_previous; then
+		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version_previous)
+		aba_abort "Failed to fetch previous OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
+	fi
 #	if [ "$ocp_channel" = "stable" ]; then
 #		run_once -w -i ocp:stable:latest_version
 #		run_once -w -i ocp:stable:latest_version_previous
@@ -1031,7 +1085,7 @@ fi
 
 	[ "$TERM" ] && tput el1 && tput cr
 
-	echo "Which version of OpenShift do you want to install?"
+	aba_info "Which version of OpenShift do you want to install?"
 
 	target_ver=
 	while true
@@ -1053,8 +1107,8 @@ fi
 		[ "$channel_ver" ] && or_s="or $channel_ver (l)atest "
 		[ "$channel_ver_prev" ] && or_p="or $channel_ver_prev (p)revious "
 
-		#echo_white -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
-		echo_white -n "Enter x.y.z or x.y version $or_s$or_p(<version>/l/p/Enter) [$default_ver]: "
+		#aba_info -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
+		aba_info -n "Enter x.y.z or x.y version $or_s$or_p(<version>/l/p/Enter) [$default_ver]: "
 		read target_ver
 
 		[ ! "$target_ver" ] && target_ver=$default_ver          # use default
@@ -1067,15 +1121,17 @@ fi
 
 	# Update the conf file
 	replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
-	echo_white "'ocp_version' set to '$target_ver' in aba.conf"
+	aba_info "'ocp_version' set to '$target_ver' in aba.conf"
 #fi
 
 # Now we know the desired openshift version...
 
 # Fetch the operator indexes (in the background to save time).
-# Use new helper function for parallel catalog downloads
+# Use new helper function for parallel catalog downloads (runs in background)
 ocp_ver_short="${target_ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
 download_all_catalogs "$ocp_ver_short" 86400  # 1-day TTL
+# Note: Catalogs wait/check happens in scripts that actually need them
+# (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
 
 # Trigger download of all CLI binaries
 # Note: Ths only other place this is done is in "scripts/reg-save.sh"
@@ -1140,19 +1196,35 @@ fi
 
 if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 	if jq empty $pull_secret_file; then
-		echo_white "Pull secret found at '$pull_secret_file'."
+		aba_info "Pull secret found at '$pull_secret_file'."
+		
+		# Validate pull secret by testing authentication with registry.redhat.io
+		aba_info -n "Validating pull secret authentication..."
+		if validate_pull_secret "$pull_secret_file" >/dev/null 2>&1; then
+			aba_info " ✓ Authentication successful"
+		else
+			echo
+			# validate_pull_secret already outputs detailed error with [ABA] prefix
+			validate_pull_secret "$pull_secret_file" >/dev/null || true  # Show stderr, ignore exit code
+			echo >&2
+			aba_info "This may mean:" >&2
+			aba_info "  • Pull secret is expired (download new from console.redhat.com)" >&2
+			aba_info "  • Invalid credentials" >&2
+			aba_info "  • Network/DNS issue" >&2
+			echo >&2
+			aba_info "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret" >&2
+			echo >&2
+			aba_abort "Pull secret validation failed. Please fix and try again."
+		fi
 	else
-		aba_abort "pull secret file sytax error: $pull_secret_file!" 
+		aba_abort "pull secret file syntax error: $pull_secret_file!" 
 	fi
 else
-	echo
-	echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
-	echo_white "To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!" >&2
-	echo_white "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
-	##echo_white "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'." >&2
-	echo
-
-	exit 1
+	aba_abort \
+		"No Red Hat pull secret file found at '$pull_secret_file'!" \
+		"" \
+		"To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!" \
+		"Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)"
 fi
 
 ##############################################################################################################################
