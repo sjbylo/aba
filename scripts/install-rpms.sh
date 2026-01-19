@@ -1,5 +1,8 @@
 #!/bin/bash -e
 
+# Ensure we're in aba root (script is in scripts/ subdirectory)
+cd "$(dirname "$0")/.." || exit 1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
@@ -7,7 +10,7 @@ aba_debug "Starting: $0 $*"
 # Note, rpms required for "internal" bastion
 # rpms required for "external" bastion (or laptop) are fewer.
 
-[ "$1" = "internal" ] && rpms=$(cat $ABA_ROOT/templates/rpms-internal.txt) || rpms=$(cat $ABA_ROOT/templates/rpms-external.txt)
+[ "$1" = "internal" ] && rpms=$(cat templates/rpms-internal.txt) || rpms=$(cat templates/rpms-external.txt)
 
 rpms_to_install=
 

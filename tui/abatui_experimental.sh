@@ -178,6 +178,11 @@ source scripts/include_all.sh
 
 log "Sourced include_all.sh"
 
+# Clean up any previously failed run_once tasks to give user a fresh start
+# This prevents cached failures (e.g., temporary network issues) from blocking the TUI
+run_once -F 2>/dev/null || true
+log "Cleaned up previously failed tasks"
+
 TMP=$(mktemp)
 trap 'rm -f "$TMP"; log "ABA TUI exited"' EXIT
 
@@ -2474,7 +2479,8 @@ confirm_and_execute() {
 		
 		# Strip ANSI color codes (sed -u for unbuffered/line-by-line output) before showing in dialog
 		# This prevents control characters from displaying literally
-		bash -c "$cmd" 2>&1 | tee "$output_file" | \
+		# Set ASK_OVERRIDE=1 to skip interactive prompts (TUI is non-interactive)
+		ASK_OVERRIDE=1 bash -c "$cmd" 2>&1 | tee "$output_file" | \
 			sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
 			dialog --backtitle "$(ui_backtitle)" --title "Executing: $cmd" \
 				--progressbox $box_height $box_width
@@ -2699,8 +2705,8 @@ summary_apply() {
 	# Initialize registry type setting if not set
 	: "${ABA_REGISTRY_TYPE:=Auto}"
 	
-	# Track which item has focus
-	local default_item="2"
+	# Track which item has focus (start at item 3 for first display)
+	local default_item="3"
 	
 	while :; do
 		# Determine toggle displays
@@ -2817,85 +2823,94 @@ summary_apply() {
 						default_item="2"
 						continue
 						;;
-					3)
-						# View ImageSet Config
-						handle_action_view_isconf
-						# Stay in menu after viewing
+				3)
+					# View ImageSet Config
+					handle_action_view_isconf
+					# Stay in menu after viewing, keep focus on item 3
+					default_item="3"
+					continue
+					;;
+				4)
+					# Create Bundle
+					if handle_action_bundle; then
+						return 0
+					else
+						# User cancelled, stay in menu, keep focus on item 4
+						default_item="4"
 						continue
-						;;
-					4)
-						# Create Bundle
-						if handle_action_bundle; then
-							return 0
-						else
-							# User cancelled, stay in menu
-							continue
-						fi
-						;;
-					5)
-						# Local Registry (Auto/Quay/Docker based on setting)
-						case "$ABA_REGISTRY_TYPE" in
-							Auto)
-								# Auto-detect: Docker for ARM64, Quay otherwise
-								if [[ "$(uname -m)" == "aarch64" ]] || [[ "$(uname -m)" == "arm64" ]]; then
-									log "Auto-selected Docker for ARM64 architecture"
-									if handle_action_local_docker; then
-										return 0
-									else
-										continue
-									fi
-								else
-									log "Auto-selected Quay for non-ARM64 architecture"
-									if handle_action_local_quay; then
-										return 0
-									else
-										continue
-									fi
-								fi
-								;;
-							Quay)
-								if handle_action_local_quay; then
-									return 0
-								else
-									continue
-								fi
-								;;
-							Docker)
+					fi
+					;;
+				5)
+					# Local Registry (Auto/Quay/Docker based on setting)
+					case "$ABA_REGISTRY_TYPE" in
+						Auto)
+							# Auto-detect: Docker for ARM64, Quay otherwise
+							if [[ "$(uname -m)" == "aarch64" ]] || [[ "$(uname -m)" == "arm64" ]]; then
+								log "Auto-selected Docker for ARM64 architecture"
 								if handle_action_local_docker; then
 									return 0
 								else
+									default_item="5"
 									continue
 								fi
-								;;
-						esac
-						;;
-					6)
-						# Remote Registry
-						if handle_action_remote_quay; then
-							return 0
-						else
-							# User cancelled, stay in menu
-							continue
-						fi
-						;;
-					7)
-						# Save Images
-						if handle_action_save; then
-							return 0
-						else
-							# User cancelled, stay in menu
-							continue
-						fi
-						;;
-					8)
-						# Generate ISConf
-						if handle_action_isconf; then
-							return 0
-						else
-							# User cancelled, stay in menu
-							continue
-						fi
-						;;
+							else
+								log "Auto-selected Quay for non-ARM64 architecture"
+								if handle_action_local_quay; then
+									return 0
+								else
+									default_item="5"
+									continue
+								fi
+							fi
+							;;
+						Quay)
+							if handle_action_local_quay; then
+								return 0
+							else
+								default_item="5"
+								continue
+							fi
+							;;
+						Docker)
+							if handle_action_local_docker; then
+								return 0
+							else
+								default_item="5"
+								continue
+							fi
+							;;
+					esac
+					;;
+				6)
+					# Remote Registry
+					if handle_action_remote_quay; then
+						return 0
+					else
+						# User cancelled, stay in menu, keep focus on item 6
+						default_item="6"
+						continue
+					fi
+					;;
+				7)
+					# Save Images
+					if handle_action_save; then
+						return 0
+					else
+						# User cancelled, stay in menu, keep focus on item 7
+						default_item="7"
+						continue
+					fi
+					;;
+				8)
+					# Generate ISConf
+					if handle_action_isconf; then
+						return 0
+					else
+						# User cancelled, stay in menu, keep focus on item 8
+						default_item="8"
+						continue
+					fi
+					;;
 					9)
 						# Exit manually
 						log "User chose to exit and run commands manually"

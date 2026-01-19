@@ -1638,14 +1638,15 @@ download_all_catalogs() {
 	
 	# Start 3 parallel downloads (run_once backgrounds them automatically)
 	# Each download will skip if already completed within TTL
+	# Note: aba.sh changes to $ABA_ROOT before calling this function, so relative paths work
 	run_once -i "catalog:${version_short}:redhat-operator" -t "$ttl" -- \
-		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" redhat-operator
+		scripts/download-catalog-index-simple.sh redhat-operator
 	
 	run_once -i "catalog:${version_short}:certified-operator" -t "$ttl" -- \
-		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" certified-operator
+		scripts/download-catalog-index-simple.sh certified-operator
 	
 	run_once -i "catalog:${version_short}:community-operator" -t "$ttl" -- \
-		"$ABA_ROOT/scripts/download-catalog-index-simple.sh" community-operator
+		scripts/download-catalog-index-simple.sh community-operator
 	
 	aba_debug "Catalog download tasks started in background"
 }

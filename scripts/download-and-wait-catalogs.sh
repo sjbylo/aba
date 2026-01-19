@@ -4,11 +4,10 @@
 
 set -eo pipefail
 
-# Set ABA_ROOT (helper functions need it)
-ABA_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-export ABA_ROOT
+# Derive aba root from script location (this script is in scripts/)
+cd "$(dirname "$0")/.." || exit 1
 
-source "$ABA_ROOT/scripts/include_all.sh"
+source scripts/include_all.sh
 
 # Get OCP version from aba.conf
 source <(normalize-aba-conf)

@@ -4,11 +4,10 @@
 
 set -eo pipefail
 
-# Set ABA_ROOT
-ABA_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-export ABA_ROOT
+# Derive aba root from script location (this script is in scripts/)
+cd "$(dirname "$0")/.." || exit 1
 
-source "$ABA_ROOT/scripts/include_all.sh"
+source scripts/include_all.sh
 
 # Get OCP version from aba.conf
 source <(normalize-aba-conf)
@@ -19,7 +18,7 @@ ocp_ver_short="${ocp_version%.*}"
 
 # Wait for each catalog individually and show detailed status
 for catalog in redhat-operator certified-operator community-operator; do
-	index_file="$ABA_ROOT/mirror/.index/${catalog}-index-v${ocp_ver_short}"
+	index_file="mirror/.index/${catalog}-index-v${ocp_ver_short}"
 	
 	# Check if already downloaded
 	if [[ -f "$index_file" && -s "$index_file" ]]; then

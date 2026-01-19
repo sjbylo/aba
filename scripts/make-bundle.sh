@@ -1,6 +1,9 @@
 #!/bin/bash -e
 # Create a install bundle which can be used to install OpenShift in an air-gapped env.
 
+# Derive aba root from script location (this script is in scripts/)
+cd "$(dirname "$0")/.." || exit 1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
@@ -34,7 +37,7 @@ aba_debug "Setting install bundle output destination to /tmp"
 aba_debug Config: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
 
 # This will have been completed behand, but just in case!
-install_rpms $(cat $ABA_ROOT/templates/rpms-external.txt) || exit 1
+install_rpms $(cat templates/rpms-external.txt) || exit 1
 
 
 source <(normalize-aba-conf)

@@ -40,7 +40,6 @@ init: .init
 	ln -fs $(TEMPLATES) 
 	ln -fs $(SCRIPTS) 
 	ln -fs ../aba.conf 
-	ln -fs ../cli
 	mkdir -p regcreds
 	touch regcreds/.dummy  # Needed only so tar includes the *empty* regcreds dir
 	touch .init
@@ -62,19 +61,17 @@ init: .init
 imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the intial image set config file with all provided values and operators
 isconf: imagesetconf ## Same as imagesetconf
 
-# Note: Depends on catalogs-download (non-blocking) - scripts will wait if needed
-sync/imageset-config-sync.yaml: ../aba.conf catalogs-download
+sync/imageset-config-sync.yaml: ../aba.conf catalogs-download catalogs-wait
 	$(SCRIPTS)/reg-create-imageset-config-sync.sh
 
-save/imageset-config-save.yaml: ../aba.conf catalogs-download
+save/imageset-config-save.yaml: ../aba.conf catalogs-download catalogs-wait
 	$(SCRIPTS)/reg-create-imageset-config-save.sh
 
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
 #sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
-# Note: catalogs-wait ensures all catalogs are ready before syncing
-sync: .init .rpmsint ~/.pull-secret.json catalogs-wait       install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
+sync: .init .rpmsint ~/.pull-secret.json                     install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
 
 ~/.pull-secret.json:
@@ -86,8 +83,8 @@ sync: .init .rpmsint ~/.pull-secret.json catalogs-wait       install verify sync
 # Same with docker-reg-image.tgz (via download-registries)
 # download-registries is executed last in case docker.io is inaccessible 
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
-# Note: catalogs-wait ensures all catalogs are ready before saving
-save: .init .rpmsext ~/.pull-secret.json              download-registries catalogs-wait       save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
+# Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
+save: .init .rpmsext ~/.pull-secret.json              download-registries                     save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
 # oc-mirror is idempotent so no need for 'dot' flag files
@@ -196,26 +193,23 @@ tarrepo:   ## Same as 'make tar' but excludes all 'mirror_000*.tar' files under 
 inc:   ## Same as 'make tar' except a timestamp file is used to only backup files that have changed since the last 'make inc' was run.
 	@make -sC .. inc $(out)
 
-# Non-blocking: Start catalog downloads in background
+# Catalog download targets (new run_once-based mechanism)
 .PHONY: catalogs-download
-catalogs-download: init
-	@$(SCRIPTS)/download-catalogs-start.sh
+catalogs-download: init     ## Start operator catalog downloads in background (non-blocking)
+	$(SCRIPTS)/download-catalogs-start.sh
 
-# Blocking: Wait for catalog downloads to complete
 .PHONY: catalogs-wait
-catalogs-wait: catalogs-download
-	@$(SCRIPTS)/download-catalogs-wait.sh
+catalogs-wait:              ## Wait for operator catalog downloads to complete (blocking)
+	$(SCRIPTS)/download-catalogs-wait.sh
 
-# Alias for backward compatibility
+# Legacy index target for backward compatibility (downloads and waits)
 .PHONY: index
-index: catalogs-wait
+index: init catalogs-download catalogs-wait
 
-# DEPRECATED: Old catalog target - use catalogs-download or catalogs-wait instead
-#.PHONY: catalog
-#catalog: init               ## Download and render all the latest Operators into a file which can be used in an imageset config file. 
-#	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-operator
-#	$(SCRIPTS)/download-operator-index.sh $(bg) certified-operator
-#	$(SCRIPTS)/download-operator-index.sh $(bg) community-operator
+# Deprecated: Use catalogs-download instead
+.PHONY: catalog
+catalog: catalogs-download
+	@echo "[ABA] Warning: 'make catalog' is deprecated, use 'make catalogs-download' instead" >&2
 
 uninstall: .init mirror-registry .uninstalled     ## Uninstall any previously installed registry  
 .uninstalled: 
@@ -249,7 +243,7 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 	@[ -f .installed ] && echo [ABA] "Important: to uninstall the registry, run 'aba -d mirror uninstall'!" || true
 	rm -rf *.tar mirror-registry
 #	These need resetting FIXME
-	rm -f templates scripts cli
+	rm -f templates scripts
 	rm -f aba.conf  # remove link only
 	rm -f .init 
 	rm -rf .index
