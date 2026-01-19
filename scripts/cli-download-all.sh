@@ -1,11 +1,12 @@
 #!/bin/bash
 # Download all CLI install tarballs in parallel and in the background
 
+# Ensure we're in aba root (script is in scripts/ subdirectory)
+cd "$(dirname "$0")/.." || exit 1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
-
-aba_debug ABA_ROOT=$ABA_ROOT
 
 ro_opt=
 out=Downloading
@@ -14,10 +15,10 @@ out=Downloading
 
 export PLAIN_OUTPUT=1
 
-for item in $(make --no-print-directory -sC $ABA_ROOT/cli out-download-all)
+for item in $(make --no-print-directory -sC cli out-download-all)
 do
 	aba_debug $out: item=$item
-	aba_debug "run_once $ro_opt -i "cli:download:$item" -- make  -sC $ABA_ROOT/cli $item"
-	run_once $ro_opt -i "cli:download:$item" -- make -sC $ABA_ROOT/cli $item  # This is non-blocking
+	aba_debug "run_once $ro_opt -i \"cli:download:$item\" -- make -sC cli $item"
+	run_once $ro_opt -i "cli:download:$item" -- make -sC cli $item  # This is non-blocking
 done
 

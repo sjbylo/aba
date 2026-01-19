@@ -2,6 +2,9 @@
 # Convenience script to download the latest operator catalog and add what's required into the imageset file. 
 # The script is complicated becasue it can do the downloading in the background to save time!
 
+# Ensure we're in aba root (script is in scripts/ subdirectory)
+cd "$(dirname "$0")/.." || exit 1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
@@ -50,12 +53,12 @@ scripts/create-containers-auth.sh >/dev/null  # Ensure only errors are output
 
 #catalog_name=redhat-operator
 
-mkdir -p .index
-index_file=.index/$catalog_name-index-v$ocp_ver_major
-lock_file=.index/.$catalog_name-index-v$ocp_ver_major.lock
-log_file=.index/.$catalog_name-index-v$ocp_ver_major.log
-pid_file=.index/.$catalog_name-index-v$ocp_ver_major.pid
-done_file=.index/.$catalog_name-index-v$ocp_ver_major.done
+mkdir -p mirror/.index
+index_file=mirror/.index/$catalog_name-index-v$ocp_ver_major
+lock_file=mirror/.index/.$catalog_name-index-v$ocp_ver_major.lock
+log_file=mirror/.index/.$catalog_name-index-v$ocp_ver_major.log
+pid_file=mirror/.index/.$catalog_name-index-v$ocp_ver_major.pid
+done_file=mirror/.index/.$catalog_name-index-v$ocp_ver_major.done
 
 # Clean up on INT
 handle_interupt() { echo_red "Aborting catalog download." >&2; [ ! -f $done_file ] && rm -f $index_file; rm -f $lock_file $pid_file; exit 0; }

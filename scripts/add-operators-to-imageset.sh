@@ -81,21 +81,11 @@ add_op() {
 	fi
 }
 
-# If operators are given, ensure the catalogs are available!
+# If operators are given, the catalogs must be available
+# Note: Makefile has explicit 'catalogs-wait' dependency to ensure catalogs are ready
 if [ "$ops" -o "$op_sets" ]; then
-	aba_debug "add-operators-to-imageset.sh: ops='$ops' op_sets='$op_sets' - calling wait_for_all_catalogs for OCP $ocp_ver_major"
-	# Wait for all catalogs to complete (Makefile dependency should have started them)
-	# Note: Makefile has 'catalog' as dependency, so downloads should already be in progress
-	if ! wait_for_all_catalogs "$ocp_ver_major"; then
-		aba_abort \
-			"Catalog downloads failed or timed out for OCP $ocp_ver_major" \
-			"Your options are:" \
-			"- Check network connectivity" \
-			"- Increase timeout in ~/.aba/config (CATALOG_DOWNLOAD_TIMEOUT_MINS)" \
-			"- Run './install' to clear cache and retry" \
-			"- Check that the following command works:" \
-			"    oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major"
-	fi
+	aba_debug "add-operators-to-imageset.sh: ops='$ops' op_sets='$op_sets' - using catalogs for OCP $ocp_ver_major"
+	# Catalogs are guaranteed ready by Makefile dependency (catalogs-download + catalogs-wait)
 
 	# Verify catalog files exist (only check the 3 main catalogs we download)
 	catalog_file_errors=

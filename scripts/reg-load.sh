@@ -77,7 +77,7 @@ do
 	# Wait for oc-mirror to be available!
 	#run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
 	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-	echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
+	echo "cd mirror/save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 
 	echo
 	aba_info -n "Attempt ($try/$try_tot)."
