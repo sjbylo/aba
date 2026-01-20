@@ -35,8 +35,7 @@ scripts/cli-download-all.sh --wait
 
 aba_info_ok "CLI Installation binaries downloaded successfully!"
 
-aba_info "Checking for oc-mirror binary."
-if ! run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
+if ! run_once -w -m "Waiting for oc-mirror binary download" -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
 	error_msg=$(run_once -e -i cli:install:oc-mirror)
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
