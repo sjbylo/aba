@@ -1,8 +1,8 @@
 #!/bin/bash -e
 # Save images from RH reg. to disk 
 
-# Ensure we're in aba root (script is in scripts/ subdirectory)
-cd "$(dirname "$0")/.." || exit 1
+# Ensure we're in mirror/ directory (script is called from mirror/Makefile)
+cd "$(dirname "$0")/../mirror" || exit 1
 
 source scripts/include_all.sh
 
@@ -82,14 +82,14 @@ do
 	# Set up script to help for re-sync
 	# --continue-on-error : do not use this option. In testing the registry became unusable! 
 	cmd="oc-mirror --v1 --config=imageset-config-save.yaml file://."
-	echo "cd mirror/save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
+	echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
 	else
 	# --since string Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored (only m2d)
 	#cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01                     --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 	# Wait for oc-mirror to be available!
 	##run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
 	cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01  --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-	echo "cd mirror/save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
+	echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
 	fi
 
 	echo

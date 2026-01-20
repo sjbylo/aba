@@ -68,4 +68,3 @@ cli/butane-amd64
 */*sha256sum.txt
 cli/scripts
 bundles/work
-mirror/cli

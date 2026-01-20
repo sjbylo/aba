@@ -1,6 +1,9 @@
 #!/bin/bash 
 # Copy images from RH reg. into the registry.
 
+# Ensure we're in mirror/ directory (script is called from mirror/Makefile)
+cd "$(dirname "$0")/../mirror" || exit 1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
@@ -87,7 +90,7 @@ do
 		# Set up script to help for manual re-sync
 	# --continue-on-error : do not use this option. In testing the registry became unusable! 
 	cmd="oc-mirror --v1 --config=imageset-config-sync.yaml docker://$reg_host:$reg_port$reg_path"
-	echo "cd mirror/sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
+	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
 	else
 		# Wait for oc-mirror to be available!
 		if ! run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
@@ -95,7 +98,7 @@ do
 			aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 	fi
 	cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-	echo "cd mirror/sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
+	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
 	fi
 
 	echo
