@@ -161,7 +161,7 @@ if [ ! -s $ABA_ROOT/aba.conf ]; then
 	aba_debug next_hop_address:	$next_hop_address
 	aba_debug ntp_servers:		$ntp_servers
 
-	scripts/j2 templates/aba.conf.j2 > $ABA_ROOT/aba.conf
+	$ABA_ROOT/scripts/j2 $ABA_ROOT/templates/aba.conf.j2 > $ABA_ROOT/aba.conf
 else
 	# If the repo has empty network values in aba.conf, add defaults - as now is the best time (on internal network).
 	# For pre-created bundles, aba.conf will exist but these values will be empty ... so attempt to fill them in. 
