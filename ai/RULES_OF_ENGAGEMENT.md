@@ -45,6 +45,130 @@ Cursor (on registry4)
 
 **If uncertain, ASK!**
 
+### Pre-Commit Checklist (AI Assistant Workflow)
+
+**Use the automated pre-commit script:**
+
+```bash
+# For code commits (updates VERSION):
+build/pre-commit-checks.sh
+
+# For docs-only commits (skip VERSION update):
+build/pre-commit-checks.sh --skip-version
+```
+
+**The script automatically:**
+1. ✅ Updates `ABA_VERSION` timestamp in `scripts/aba.sh` (unless `--skip-version`)
+2. ✅ Checks syntax of all shell scripts (96+ files)
+3. ✅ Verifies we're on `dev` branch
+4. ✅ Pulls latest changes with `git pull --rebase`
+
+**After running the script:**
+
+5. **Stage and show** for approval:
+   ```bash
+   git add <files>
+   git status --short
+   # Show user: "Ready to commit: <msg>. Files: <list>. Proceed?"
+   # WAIT for explicit "ok, commit" approval
+   ```
+
+6. **Commit and push** (only after approval):
+   ```bash
+   git commit -m "type: description"
+   git push origin dev
+   ```
+
+**Important Notes:**
+- Use `build/pre-commit-checks.sh` for code changes (updates BUILD timestamp)
+- Use `build/pre-commit-checks.sh --skip-version` for docs-only commits
+- Infrastructure/build scripts go in `build/`, not in application code directories
+
+### Versioning System
+
+**Aba uses Semantic Versioning (SemVer): `MAJOR.MINOR.PATCH`**
+
+- **MAJOR**: Breaking changes (CLI changes, workflow changes)
+- **MINOR**: New features (backward compatible)
+- **PATCH**: Bug fixes
+
+**Files:**
+- `VERSION`: Contains current version (e.g., "0.9.0")
+- `CHANGELOG.md`: Human-readable changes (distilled bullet points)
+- `scripts/aba.sh`: Reads VERSION at runtime, contains ABA_BUILD timestamp
+
+**Version Display:**
+```bash
+# Show version:
+aba --aba-version
+# Output: aba version 0.9.0 (build 20260120220637)
+#         Git: dev @ 0da6892
+
+# Banner shows version automatically:
+aba
+#   __   ____   __  
+#  / _\ (  _ \ / _\     Aba v0.9.0 - Install & manage air-gapped OpenShift quickly!
+# /    \ ) _ (/    \    Follow the instructions below or see the README.md file for more.
+# \_/\_/(____/\_/\_/
+```
+
+**Release Workflow:**
+
+For periodic releases (~monthly), use the automated release script:
+
+```bash
+# Create a new release (e.g., 0.9.1):
+build/release.sh 0.9.1 "Bug fixes and improvements"
+
+# This script automatically:
+# 1. Validates version format
+# 2. Updates VERSION file
+# 3. Embeds version in scripts/aba.sh
+# 4. Moves [Unreleased] CHANGELOG items to new release section
+# 5. Runs pre-commit checks (syntax + build timestamp)
+# 6. Commits changes
+# 7. Creates git tag v0.9.1
+# 8. Shows next steps
+
+# Then push:
+git push origin dev
+git push origin v0.9.1
+
+# Create GitHub release (optional, via web interface):
+# Visit: https://github.com/sjbylo/aba/releases/new?tag=v0.9.1
+# - Select tag v0.9.1
+# - Copy release notes from CHANGELOG.md
+# - Click "Publish release"
+
+# (Optional) Automated alternative (requires 'gh' CLI):
+# build/create-github-release.sh v0.9.1
+
+# (Optional) Merge to main for stable releases:
+git checkout main
+git merge --no-ff dev -m "Merge release v0.9.1"
+git push origin main
+git checkout dev
+```
+
+**Full workflow documentation**: See `build/RELEASE_WORKFLOW.md` for:
+- Branch management (dev/main/hotfix)
+- Tag management
+- GitHub release creation (web interface + optional automation)
+- Rollback procedures
+- Best practices
+
+**Note:** GitHub releases are optional. Git tags alone are sufficient for versioning.
+
+**CHANGELOG.md Guidelines:**
+- AI assistant adds distilled bullet points to `[Unreleased]` section
+- User reviews before release/merge
+- `build/release.sh` moves items from `[Unreleased]` to new release automatically
+- Keep entries concise and user-focused
+
+**Version vs Build:**
+- `ABA_VERSION`: Semantic version from VERSION file (manually updated for releases)
+- `ABA_BUILD`: Timestamp updated automatically by `build/pre-commit-checks.sh` on every commit
+
 ## File Modification Permissions
 
 ### ✅ CAN MODIFY (without explicit permission):

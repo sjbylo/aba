@@ -1,16 +1,30 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20260116224347
-# Sanity check
-# FIXME: Can only use 'echo' here since cann't locate the include_all.sh file yet
-echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
+# Semantic version (updated by build/release.sh at release time)
+ABA_VERSION="0.9.0"
+
+# Build timestamp (updated by build/pre-commit-checks.sh)
+ABA_BUILD=20260120221537
+
+# Sanity check build timestamp
+# FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
+echo -n $ABA_BUILD | grep -qE "^[0-9]{14}$" || { echo "ABA_BUILD in $0 is incorrect [$ABA_BUILD]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
 ARCH=$(uname -m)
 [ "$ARCH" = "aarch64" ] && export ARCH=arm64  # ARM
 [ "$ARCH" = "x86_64" ] && export ARCH=amd64   # Intel
 
 uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a Centos-Stream container. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
+
+# Handle --aba-version early (before sudo check)
+if [ "$1" = "--aba-version" ]; then
+	echo "aba version $ABA_VERSION (build $ABA_BUILD)"
+	git_branch=$(git branch --show-current 2>/dev/null)
+	git_commit=$(git rev-parse --short HEAD 2>/dev/null)
+	[ "$git_branch" -a "$git_commit" ] && echo "Git: $git_branch @ $git_commit"
+	exit 0
+fi
 
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
@@ -829,7 +843,7 @@ export ASK_ALWAYS=1   # Force to always ask, no matter the $ask or $ASK_OVERRIDE
 
 #verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_version or channel defined
 
-cat others/message.txt
+sed "s/VERSION/v$ABA_VERSION/" others/message.txt
 
 ##############################################################################################################################
 # Determine if this is an "aba bundle" or just a clone from GitHub

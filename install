@@ -117,7 +117,7 @@ aba_is_installed() {
 }
 
 get_repo_ver() {
-	grep "^ABA_VERSION=" ./scripts/aba.sh | cut -d= -f2 | grep -oE "^[0-9]{14}$"
+	grep "^ABA_BUILD=" ./scripts/aba.sh | cut -d= -f2 | grep -oE "^[0-9]{14}$"
 }
 
 if ! is_repo_available; then
@@ -177,7 +177,7 @@ do
 		ret=0 # default return value
 		if [ -s "$d/aba" -a -x "$d/aba" ]; then
 			repo_ver=$(get_repo_ver)
-			INSTALLED_VER=$(grep "^ABA_VERSION=[0-9]" $d/aba | cut -d= -f2)
+			INSTALLED_VER=$(grep "^ABA_BUILD=[0-9]" $d/aba | cut -d= -f2)
 			#[ "$DEBUG_ABA" ] && echo INSTALLED_VER=$INSTALLED_VER and repo_ver=$repo_ver >&2
 			[ -n "${DEBUG_ABA-}" ] && echo "INSTALLED_VER=${INSTALLED_VER-} and repo_ver=${repo_ver-}" >&2
 			if [ "$INSTALLED_VER" -a "$repo_ver" ] && [ $INSTALLED_VER -lt $repo_ver ]; then
