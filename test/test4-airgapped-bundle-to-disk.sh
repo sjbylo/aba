@@ -54,10 +54,9 @@ rm -f ~/.ssh/quay_installer*
 
 which make || sudo dnf install make -y
 
-test-cmd -m "Installing aba" ./install 
-#test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
-
 test-cmd -m "Cleaning up - aba reset --force" aba reset -f
+
+test-cmd -m "Installing aba" ./install 
 
 ####mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
