@@ -140,7 +140,8 @@ $(DOCKER_REG_FILE):
 #		podman rmi $(DOCKER_REG_IMAGE); \
 
 .PHONY: install-docker-registry
-install-docker-registry: docker-reg-image.tgz
+install-docker-registry:
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for Docker registry image download" -i mirror:download:docker-reg-image.tgz -- make -sC . docker-reg-image.tgz
 	@podman load -i $(DOCKER_REG_FILE)
 	@$(SCRIPTS)/reg-docker-install.sh
 	@rm -f .uninstalled 
@@ -156,7 +157,8 @@ mirror.conf: ../aba.conf .init                        ## Create the mirror.conf 
 	$(SCRIPTS)/create-mirror-conf.sh -f $(force)
 
 install: .installed
-.installed: .init .rpmsext mirror.conf mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
+.installed: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for mirror-registry download" -i mirror:install:mirror-registry -- make -sC . mirror-registry
 	$(SCRIPTS)/reg-install.sh
 	$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 
