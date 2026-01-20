@@ -1485,11 +1485,11 @@ run_once() {
 		if [[ -n "$exit_mtime" ]]; then
 			local age=$((now - exit_mtime))
 			if [[ $age -gt $ttl ]]; then
-		# Task output is stale, reset it
-		_kill_id "$work_id"
-		mkdir -p "$id_dir"
+				# Task output is stale, reset it
+				_kill_id "$work_id"
+				mkdir -p "$id_dir"
 		chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
-		fi
+			fi
 		fi
 	fi
 
@@ -1539,14 +1539,14 @@ run_once() {
 				exit "$rc"
 			fi
 
-		# Background: log.out gets stdout+stderr, log.err gets only stderr
-		setsid "${command[@]}" 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
-		echo $! >"$pid_file"
+			# Background: log.out gets stdout+stderr, log.err gets only stderr
+			setsid "${command[@]}" 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
+			echo $! >"$pid_file"
 		chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
-		wait $!
-		rc=$?
-		echo "$rc" >"$exit_file"
-		exit "$rc"
+			wait $!
+			rc=$?
+			echo "$rc" >"$exit_file"
+			exit "$rc"
 		) &
 
 		# Parent closes FD; background subshell retains the lock
@@ -1580,11 +1580,11 @@ run_once() {
 			# Exit codes 128-165 indicate termination by signal (kill, Ctrl-C, etc.)
 			# These are interruptions, not legitimate failures, so treat as crash and retry
 			if [[ $exit_code -ge 128 && $exit_code -le 165 ]]; then
-		aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
-		rm -rf "$id_dir"
-		mkdir -p "$id_dir"
+				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
+				rm -rf "$id_dir"
+				mkdir -p "$id_dir"
 		chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
-		# Fall through to restart logic below
+				# Fall through to restart logic below
 			fi
 		fi
 		
@@ -1600,8 +1600,8 @@ run_once() {
 				_start_task "true"
 				wait $!
 			else
-			# Running elsewhere => block until lock released
-			exec 9>&-
+				# Running elsewhere => block until lock released
+				exec 9>&-
 			
 			# Build and display waiting message (unless quiet mode)
 			if [[ "$quiet_wait" != true ]]; then
