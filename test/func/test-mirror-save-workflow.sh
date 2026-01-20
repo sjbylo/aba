@@ -36,7 +36,7 @@ echo ""
 echo "Test 1: Install oc-mirror"
 echo "-------------------------"
 
-if ! make -sC cli oc-mirror; then
+if ! run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
 	aba_abort "Test 1 FAILED: oc-mirror installation failed"
 fi
 

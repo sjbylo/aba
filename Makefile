@@ -35,7 +35,7 @@ init: aba .init
 ###vmware.conf:
 .PHONY: vmw
 vmw:
-	@make -sC cli govc
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc CLI tool" -i cli:install:govc -- make -sC cli govc
 	@$(SCRIPTS)/install-vmware.conf.sh #  $(debug)
 
 #.PHONY: cli
