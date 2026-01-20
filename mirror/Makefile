@@ -39,6 +39,7 @@ init: .init
 .init: ../aba.conf
 	ln -fs $(TEMPLATES) 
 	ln -fs $(SCRIPTS) 
+	ln -fs ../cli
 	ln -fs ../aba.conf 
 	mkdir -p regcreds
 	touch regcreds/.dummy  # Needed only so tar includes the *empty* regcreds dir
