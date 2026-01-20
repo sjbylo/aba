@@ -54,6 +54,7 @@ rm -rf ~/.oc-mirror/.cache
 rm -vf ~/bin/{oc-mirror,oc,openshift-install}
 
 cd $TEST_DIR_DISCO
+rm -rf $TEST_DIR_CONN/aba   # Save disk space, not needed anymore
 rm -rf aba
 tar xvf test-bundle-delete-me*tar
 rm -vf test-bundle-delete-me*tar   # Save space
@@ -61,12 +62,10 @@ cd aba
 ./install
 # If "split" bundle, show the bundle instructions and move the ISC archive into place
 [ "$SPLIT" ] && aba && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
-rm -rf $TEST_DIR_CONN/aba   # Save disk space, not needed anymore
 aba     # Show the bundle instructions again
 aba -d mirror -H $MY_HOST install-docker-registry   # Preempt mirror installation and use docker (works on arm64)
-aba -d mirror load -H $MY_HOST -r -y  # leave -H $MY_HOST in place!
+aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME
-mkdir -p $CLUSTER_NAME
 # Start bare-metal install ...
 echo $MAC > $CLUSTER_NAME/macs.conf   				# Create the macs.conf file
 aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s iso -y	# Create the iso

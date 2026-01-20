@@ -1,6 +1,9 @@
 #!/bin/bash 
 # Load the registry with images from the local disk
 
+# Ensure we're in mirror/ directory (script is called from mirror/Makefile)
+cd "$(dirname "$0")/../mirror" || exit 1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
@@ -77,7 +80,7 @@ do
 	# Wait for oc-mirror to be available!
 	#run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
 	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-	echo "cd mirror/save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
+	echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 
 	echo
 	aba_info -n "Attempt ($try/$try_tot)."
