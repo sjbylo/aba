@@ -1,7 +1,7 @@
 #!/bin/bash -ex
-# Basic test script to show how to create a custom bundle (*split* or normal) and then install OpenShift disonnected
+# Basic test script to show how to create a custom bundle (*light* or normal) and then install OpenShift disonnected
 
-[ "$1" ] && SPLIT="--split"   		# Test with *split* bundle with any arg.
+[ "$1" ] && LIGHT="--light"   		# Test with *light* bundle with any arg.
 
 MY_HOST=$(hostname -f)    # This must be FQDN with A record pointing to IP address of this host
 CLUSTER_NAME=sno3
@@ -35,7 +35,7 @@ echo cincinnati-operator > templates/operator-set-abatest   # Create a test "ope
 aba -y bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel fast --version p \
 	--op-sets abatest --ops yaks vault-secrets-operator flux --base-domain example.com \
 	--machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp 10.0.1.8  ntp.example.com --out $TEST_DIR_DISCO/delete-me \
-	$SPLIT
+	$LIGHT
 
 # Keep empty line above!
 echo "aba bundle returned: $?"
@@ -54,8 +54,8 @@ tar xvf delete-me*tar
 rm -vf delete-me*tar
 cd aba
 ./install
-[ "$SPLIT" ] && aba   # Show the bundle instructions
-[ "$SPLIT" ] && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
+[ "$LIGHT" ] && aba   # Show the bundle instructions
+[ "$LIGHT" ] && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
 rm -rf $TEST_DIR_CONN/aba   # Not needed anymore
 aba     # Show the bundle instructions
 aba -d mirror load -H $MY_HOST -r -y

@@ -10,7 +10,7 @@ TEMPLATES = templates
 SCRIPTS   = scripts
 name     ?= standard	# def. cluster name
 type     ?= standard	# def. cluster type
-#split    ?=		# by def. do not split the install bundle
+#light    ?=		# by def. do not create light install bundle
 MIRROR_CMDS := save load sync verify
 
 #debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
@@ -57,7 +57,7 @@ vmw:
 #.PHONY: bundle
 # Note: '@' used to ensure tar format is not corrupted when using out=-
 #bundle:  ## Create an install bundle to be tranferred into the air-gapped env. Example: aba bundle --out /path/to/archive/bundle or -
-#	@$(SCRIPTS)/make-bundle.sh -o $(out) $(split) $(force)
+#	@$(SCRIPTS)/make-bundle.sh -o $(out) $(light) $(force)
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use --out - to send tar output to stdout. Used by aba bundle.

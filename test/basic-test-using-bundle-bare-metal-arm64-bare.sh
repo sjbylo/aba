@@ -1,7 +1,7 @@
 #!/bin/bash -ex
-# Basic test script to show how to create a custom bundle (*split* or normal) and then install OpenShift disonnected
+# Basic test script to show how to create a custom bundle (*light* or normal) and then install OpenShift disonnected
 
-[ "$1" ] && SPLIT="--split"   		# Test with *split* bundle with any arg.
+[ "$1" ] && LIGHT="--light"   		# Test with *light* bundle with any arg.
 
 MY_HOST=$(hostname -f)    # This must be FQDN with A record pointing to IP address of this host
 CLUSTER_NAME=sno3
@@ -40,7 +40,7 @@ echo group-sync-operator > templates/operator-set-abatest   # Create a test "ope
 aba -y bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel fast --version p \
 	--op-sets abatest --ops --base-domain example.com \
 	--machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp 10.0.1.8  ntp.example.com --out $TEST_DIR_DISCO/test-bundle-delete-me \
-	$SPLIT
+	$LIGHT
 
 # Keep empty line above!
 echo "aba bundle returned: $?"
@@ -60,8 +60,8 @@ tar xvf test-bundle-delete-me*tar
 rm -vf test-bundle-delete-me*tar   # Save space
 cd aba
 ./install
-# If "split" bundle, show the bundle instructions and move the ISC archive into place
-[ "$SPLIT" ] && aba && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
+# If "light" bundle, show the bundle instructions and move the ISC archive into place
+[ "$LIGHT" ] && aba && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
 aba     # Show the bundle instructions again
 aba -d mirror -H $MY_HOST install-docker-registry   # Preempt mirror installation and use docker (works on arm64)
 aba -d mirror load -H $MY_HOST -r -y

@@ -992,7 +992,7 @@ aba
 
 After this, proceed with loading the images into your registry using `aba -d mirror load`.  Continue to follow the instructions in the [Fully Disconnected (Air-Gapped) Scenario](#fully-disconnected-air-gapped) section.
 
-When using the `bundle` command, use the `--split` option in `aba bundle --split ...` to create a `split install bundle` instead of a `full install bundle`.  See `aba bundle --help` for more.
+When using the `bundle` command, use the `--light` option in `aba bundle --light ...` to create a `light install bundle` instead of a `full install bundle`.  See `aba bundle --help` for more.
 
 
 ## To install aba from the dev branch run the following:
