@@ -166,6 +166,8 @@ mylog ============================================================
 mylog "Test to integrate with existing reg. on $int_bastion_hostname and then sync and save/load images."
 mylog
 
+test-cmd -m "Installing aba" ./install
+
 rm -rf ~/.cache/agent/*
 
 rm -rf $HOME/*/.oc-mirror/.cache
