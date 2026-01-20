@@ -223,12 +223,12 @@ do
 		shift 
 	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
 		export DEBUG_ABA=1
-		export INFO_ABA=1
-		shift 
-	elif [ "$1" = "--split" ]; then
-		export opt_split="--split"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
-		#BUILD_COMMAND="$BUILD_COMMAND split=split"  # FIXME: Should only allow force=1 after the appropriate target
-		shift
+	export INFO_ABA=1
+	shift 
+elif [ "$1" = "--light" ]; then
+	export opt_light="--light"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
+	#BUILD_COMMAND="$BUILD_COMMAND light=light"  # FIXME: Should only allow force=1 after the appropriate target
+	shift
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
 		echo_yellow "Available OpenShift versions:"
@@ -764,12 +764,12 @@ if [ "$cur_target" ]; then
 			$ABA_ROOT/scripts/oc-command.sh "$cmd"
 			exit 
 		;;
-		bundle)
-			trap - ERR  # No need for this anymore
-			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_split
-			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_split
-			exit 
-		;;
+	bundle)
+		trap - ERR  # No need for this anymore
+		aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
+		eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
+		exit 
+	;;
 	esac
 fi
 

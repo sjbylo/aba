@@ -2082,14 +2082,14 @@ handle_action_bundle() {
 	bundle_path=$(<"$TMP")
 	[[ -z "$bundle_path" ]] && bundle_path="$default_bundle"
 	
-	# Ask about split option
+	# Ask about light option
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
 		--yes-label "Yes" \
 		--no-label "No" \
-		--yesno "Enable split bundle option?\n\n(Only works when output is on same filesystem as mirror/save/)\n\nBundle output: $bundle_path" 12 70
+		--yesno "Enable light bundle option?\n\n(Only works when output is on same filesystem as mirror/save/)\n\nBundle output: $bundle_path" 12 70
 	rc=$?
 	
-	local split_flag=""
+	local light_flag=""
 	if [[ $rc -eq 0 ]]; then
 		# User selected Yes - validate filesystem
 		local output_dir=$(dirname "$bundle_path")
@@ -2098,15 +2098,15 @@ handle_action_bundle() {
 		
 		if [[ "$output_fs" != "$mirror_fs" ]]; then
 			dialog --colors --backtitle "$(ui_backtitle)" --title "Error" \
-				--msgbox "\Z1ERROR: --split requires output file on same filesystem as mirror/save/\Zn\n\nOutput filesystem: $output_fs\nMirror filesystem: $mirror_fs\n\nContinuing without --split flag." 12 70
-			split_flag=""
-			log "Split option disabled due to filesystem mismatch"
+				--msgbox "\Z1ERROR: --light requires output file on same filesystem as mirror/save/\Zn\n\nOutput filesystem: $output_fs\nMirror filesystem: $mirror_fs\n\nContinuing without --light flag." 12 70
+			light_flag=""
+			log "Light option disabled due to filesystem mismatch"
 		else
-			split_flag="--split"
-			log "Split option enabled and filesystem validated"
+			light_flag="--light"
+			log "Light option enabled and filesystem validated"
 		fi
 	else
-		log "Split option disabled by user"
+		log "Light option disabled by user"
 	fi
 	
 	# Use global auto-answer setting
@@ -2125,10 +2125,10 @@ handle_action_bundle() {
 		log "Using retry count: $RETRY_COUNT"
 	fi
 	
-	log "Bundle output path: $bundle_path, split: $split_flag, y_flag: $y_flag, retry: $RETRY_COUNT"
+	log "Bundle output path: $bundle_path, light: $light_flag, y_flag: $y_flag, retry: $RETRY_COUNT"
 	
 	# Show command and confirm
-	local cmd="aba bundle -o '$bundle_path' $split_flag $retry_flag $y_flag"
+	local cmd="aba bundle -o '$bundle_path' $light_flag $retry_flag $y_flag"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi

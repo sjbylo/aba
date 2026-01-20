@@ -18,8 +18,8 @@ while [[ $# -gt 0 ]]; do
       force=1
       shift
       ;;
-    --split)
-      split_bundle=1
+    --light)
+      light_bundle=1
       shift
       ;;
     *)
@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-aba_debug "Options: bundle_dest_file=$bundle_dest_file force=$force split_bundle=$split_bundle"
+aba_debug "Options: bundle_dest_file=$bundle_dest_file force=$force light_bundle=$light_bundle"
 
 [ ! "$bundle_dest_file" ] && bundle_dest_file=/tmp
 aba_debug "Setting install bundle output destination to /tmp"
@@ -132,18 +132,18 @@ fi
 ### FIXME - Is this needed since make save will do this - make -C cli download	# Downlaod required CLIs install files.
 
 
-# Split bundle flag give?
-if [ "$split_bundle" ]; then
-	# User wants to create a *split* bundle...
+# Light bundle flag give?
+if [ "$light_bundle" ]; then
+	# User wants to create a *light* bundle...
 
-	echo_magenta "[ABA] A *split* install bundle will be created."
+	echo_magenta "[ABA] A *light* install bundle will be created."
 	echo_magenta "[ABA] Image-set archive file(s) will NOT be included in the bundle and must be transferred separately"
 	echo_magenta "[ABA] to the disconnected environment, then manually added to the extracted install bundle."
 
-	# Create split bundle with "aba tarrepo..."
+	# Create light bundle with "aba tarrepo..."
 	aba_info "Pulling images ..."
 	make -C mirror save retry=7				# Pull required release (and possibly operator) images.  Retry on failure. 
-	aba_info "Creating *split* install bundle archive ..."
+	aba_info "Creating *light* install bundle archive ..."
 	rm -f $bundle_dest_file
 	make tarrepo out="$bundle_dest_file"			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
 else
@@ -155,13 +155,13 @@ else
 			"The image-set archive file(s) created by oc-mirror will first be written to" \
 			"aba/mirror/save/mirror_000001.tar, and then a full copy of the Aba repository will be written" \
 			"to the bundle file you specified: $bundle_dest_file" \
-			"Because both files *reside on the same filesystem*, you may temporarily" \
-			"need roughly double the required space (or more if you consider the oc-mirror cache). " \
-			">> IMPORTANT: <<" \
-			"If disk space is limited, consider using the '--split' option." \
-			"It excludes the large image-set archive file(s) from the final install bundle." \
-			"This is also useful in restricted environments where large archives cannot be stored or" \
-			"moved via portable media (for example, Cloud instances or locked-down laptops)."
+		"Because both files *reside on the same filesystem*, you may temporarily" \
+		"need roughly double the required space (or more if you consider the oc-mirror cache). " \
+		">> IMPORTANT: <<" \
+		"If disk space is limited, consider using the '--light' option." \
+		"It excludes the large image-set archive file(s) from the final install bundle." \
+		"This is also useful in restricted environments where large archives cannot be stored or" \
+		"moved via portable media (for example, Cloud instances or locked-down laptops)."
 
 		ask "Continue anyway" || exit 1
 	fi

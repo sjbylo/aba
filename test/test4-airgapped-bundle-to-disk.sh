@@ -188,7 +188,7 @@ reg_ssh_user=$TEST_USER
 ### CREATE BUNDLE & COPY TO BASTION ###
 
 test-cmd mkdir -v -p ~/tmp
-# Test split install bundle 
+# Test light install bundle 
 test-cmd rm -fv ~/tmp/delete-me*tar
 
 test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and save to disk" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks vault-secrets-operator flux --base-domain example.com -o ~/tmp/delete-me -y"
