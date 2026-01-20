@@ -249,11 +249,11 @@ If you run `aba` (interactive mode), you will make use of this workflow.
 
 # Install ABA
 
-## Method 1: Single command
-
 >> Note that ABA requires root access, either directly or via passwordless sudo. 
 
-Download and install ABA in one command (preferred):
+## Method 1: Single command
+
+Download and install ABA in one command:
 ```
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
 ```
@@ -265,16 +265,39 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 
 ## Method 2: Git clone
 
-Install ABA using `git clone`:
+**For production use, install from a specific release version:**
+
+```bash
+# Download and install a stable release (recommended)
+wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.0.tar.gz
+tar xzf v0.9.0.tar.gz
+cd aba-0.9.0
+./install
+aba
 ```
+
+Or clone a specific release tag:
+```bash
+git clone --branch v0.9.0 https://github.com/sjbylo/aba.git
+cd aba
+./install
+aba
+```
+
+**For development or testing, install from the main branch:**
+
+```bash
 git clone https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba          # Let ABA guide you through the OpenShift installation workflow (interactive mode)
 ```
-- clones the Github repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your base domain name, machine network CIDR etc (if known).
+
+- See all available releases at: https://github.com/sjbylo/aba/releases
+- Check your installed version: `aba --aba-version`
+- The install script clones the Github repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your base domain name, machine network CIDR etc (if known).
 - If needed, add any required operators to the `aba.conf` file by setting the `op_sets=` and/or `ops=` values.
-- helps you decide the method of deployment and how you should proceed.  For more, see the [ABA OpenShift Installation Workflow Diagram](#aba-openshift-installation-workflow-diagram). 
+- The tool helps you decide the method of deployment and how you should proceed. For more, see the [ABA OpenShift Installation Workflow Diagram](#aba-openshift-installation-workflow-diagram). 
 
 Note that 'aba' will create the `aba.conf` file which contains some values that you *should change* as soon as you can, such as your _preferred platform_, your _base domain name_, your _network address_ and any _operators_ you will require etc (if known).
 
