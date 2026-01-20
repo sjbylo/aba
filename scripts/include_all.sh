@@ -1366,13 +1366,14 @@ run_once() {
 	local global_failed_clean=false
 	local ttl=""
 	local wait_timeout=""
+	local waiting_message=""
 	local OPTIND=1
 
 	# Allow override for tests
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:eW:" opt; do
+	while getopts "swi:cprGFt:eW:m:" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1385,6 +1386,7 @@ run_once() {
 			t) ttl=$OPTARG ;;
 			e) mode="get_error" ;;
 			W) wait_timeout=$OPTARG ;;
+			m) waiting_message=$OPTARG ;;
 			*) return 1 ;;
 		esac
 	done
@@ -1594,6 +1596,22 @@ run_once() {
 			else
 				# Running elsewhere => block until lock released
 				exec 9>&-
+				
+				# Display waiting message if provided
+				if [[ -n "$waiting_message" ]]; then
+					# Optionally include PID if available
+					if [[ -f "$pid_file" ]]; then
+						local pid=$(<"$pid_file" 2>/dev/null || echo "")
+						if [[ -n "$pid" ]]; then
+							aba_info "$waiting_message (PID: $pid)"
+						else
+							aba_info "$waiting_message"
+						fi
+					else
+						aba_info "$waiting_message"
+					fi
+				fi
+				
 				if [[ -n "$wait_timeout" ]]; then
 					# Wait with timeout
 					if ! flock -w "$wait_timeout" -x "$lock_file" -c "true"; then
