@@ -21,8 +21,7 @@ verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
 # Be sure a download has started ..
-aba_info "Checking for oc-mirror binary."
-if ! PLAIN_OUTPUT=1 run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
+if ! PLAIN_OUTPUT=1 run_once -w -m "Waiting for oc-mirror binary download" -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
 	error_msg=$(run_once -e -i cli:install:oc-mirror)
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
@@ -93,7 +92,7 @@ do
 	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
 	else
 		# Wait for oc-mirror to be available!
-		if ! run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
+		if ! run_once -w -m "Waiting for oc-mirror binary download" -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
 			error_msg=$(run_once -e -i cli:install:oc-mirror)
 			aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 	fi

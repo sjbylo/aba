@@ -1694,24 +1694,21 @@ wait_for_all_catalogs() {
 	
 	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_mins} minutes)"
 	
-	# Show waiting message (must use stderr since stdout may be redirected to YAML file)
-	aba_info "Waiting for operator catalogs to finish downloading..." >&2
-	
 	aba_debug "wait_for_all_catalogs: About to call run_once -w for redhat-operator"
 	
-	if ! run_once -w -W "$timeout_secs" -i "catalog:${version_short}:redhat-operator"; then
+	if ! run_once -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
 		echo_red "[ABA] Error: Failed to download redhat-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "redhat-operator catalog ready"
 	
-	if ! run_once -w -W "$timeout_secs" -i "catalog:${version_short}:certified-operator"; then
+	if ! run_once -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
 		echo_red "[ABA] Error: Failed to download certified-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "certified-operator catalog ready"
 	
-	if ! run_once -w -W "$timeout_secs" -i "catalog:${version_short}:community-operator"; then
+	if ! run_once -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
 		echo_red "[ABA] Error: Failed to download community-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
