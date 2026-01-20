@@ -1,6 +1,9 @@
 #!/bin/bash 
 # Copy images from RH reg. into the registry.
 
+# Scripts called from mirror/Makefile should cd to mirror/
+cd "$(dirname "$0")/../mirror" || exit 1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"

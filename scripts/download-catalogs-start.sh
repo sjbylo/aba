@@ -4,8 +4,8 @@
 
 set -eo pipefail
 
-# Derive aba root from script location (this script is in scripts/)
-cd "$(dirname "$0")/.." || exit 1
+# Scripts called from mirror/Makefile should cd to mirror/
+cd "$(dirname "$0")/../mirror" || exit 1
 
 source scripts/include_all.sh
 
