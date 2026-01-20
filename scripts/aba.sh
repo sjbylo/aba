@@ -942,18 +942,18 @@ fi
 	run_once -t 600 -i "cli:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
 	run_once -t 600 -i "cli:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
 	
-	# Now wait for all three and check results
+	# Now wait for all three and check results (quietly, no waiting messages)
 	failed_sites=""
 	error_details=""
 	
-	if ! run_once -w -i "cli:check:api.openshift.com"; then
+	if ! run_once -w -q -i "cli:check:api.openshift.com"; then
 		failed_sites="api.openshift.com"
 		err_msg=$(run_once -e -i "cli:check:api.openshift.com" | head -1)
 		[[ -z "$err_msg" ]] && err_msg="Connection failed"
 		error_details="api.openshift.com: $err_msg"
 	fi
 	
-	if ! run_once -w -i "cli:check:mirror.openshift.com"; then
+	if ! run_once -w -q -i "cli:check:mirror.openshift.com"; then
 		[[ -n "$failed_sites" ]] && failed_sites="$failed_sites, "
 		failed_sites="${failed_sites}mirror.openshift.com"
 		err_msg=$(run_once -e -i "cli:check:mirror.openshift.com" | head -1)
@@ -962,7 +962,7 @@ fi
 		error_details="${error_details}mirror.openshift.com: $err_msg"
 	fi
 	
-	if ! run_once -w -i "cli:check:registry.redhat.io"; then
+	if ! run_once -w -q -i "cli:check:registry.redhat.io"; then
 		[[ -n "$failed_sites" ]] && failed_sites="$failed_sites, "
 		failed_sites="${failed_sites}registry.redhat.io"
 		err_msg=$(run_once -e -i "cli:check:registry.redhat.io" | head -1)
@@ -1035,13 +1035,13 @@ fi
 #else
 
 	echo_white -n "Fetching available versions ..."
-	# Wait for only the data we need ...
-	if ! run_once -w -i ocp:$ocp_channel:latest_version; then
+	# Wait for only the data we need (quietly - message already shown above)
+	if ! run_once -w -q -i ocp:$ocp_channel:latest_version; then
 		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version)
 		aba_abort "Failed to fetch latest OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
 	fi
 	
-	if ! run_once -w -i ocp:$ocp_channel:latest_version_previous; then
+	if ! run_once -w -q -i ocp:$ocp_channel:latest_version_previous; then
 		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version_previous)
 		aba_abort "Failed to fetch previous OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
 	fi

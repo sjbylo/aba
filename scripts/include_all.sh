@@ -1367,13 +1367,14 @@ run_once() {
 	local ttl=""
 	local wait_timeout=""
 	local waiting_message=""
+	local quiet_wait=false
 	local OPTIND=1
 
 	# Allow override for tests
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:eW:m:" opt; do
+	while getopts "swi:cprGFt:eW:m:q" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1387,6 +1388,7 @@ run_once() {
 			e) mode="get_error" ;;
 			W) wait_timeout=$OPTARG ;;
 			m) waiting_message=$OPTARG ;;
+			q) quiet_wait=true ;;
 			*) return 1 ;;
 		esac
 	done
@@ -1598,27 +1600,29 @@ run_once() {
 				_start_task "true"
 				wait $!
 			else
-				# Running elsewhere => block until lock released
-				exec 9>&-
-				
-			# Build waiting message
-			local msg=""
-			if [[ -n "$waiting_message" ]]; then
-				msg="$waiting_message"
-			else
-				msg="Waiting for task: $work_id"
-			fi
+			# Running elsewhere => block until lock released
+			exec 9>&-
 			
-			# Add PID if available
-			if [[ -f "$pid_file" ]]; then
-				local pid=$(<"$pid_file")
-				if [[ -n "$pid" ]]; then
-					msg="$msg (PID: $pid)"
+			# Build and display waiting message (unless quiet mode)
+			if [[ "$quiet_wait" != true ]]; then
+				local msg=""
+				if [[ -n "$waiting_message" ]]; then
+					msg="$waiting_message"
+				else
+					msg="Waiting for task: $work_id"
 				fi
+				
+				# Add PID if available
+				if [[ -f "$pid_file" ]]; then
+					local pid=$(<"$pid_file")
+					if [[ -n "$pid" ]]; then
+						msg="$msg (PID: $pid)"
+					fi
+				fi
+				
+				# Display message
+				aba_info "$msg"
 			fi
-			
-			# Display message
-			aba_info "$msg"
 				
 				if [[ -n "$wait_timeout" ]]; then
 					# Wait with timeout
