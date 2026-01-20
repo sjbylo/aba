@@ -4,7 +4,9 @@
 # All orchestration handled by run_once
 
 # Derive aba root from script location (this script is in scripts/)
-cd "$(dirname "$0")/.." || exit 1
+# Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+cd "$SCRIPT_DIR/.." || exit 1
 
 source scripts/include_all.sh
 

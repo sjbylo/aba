@@ -1,6 +1,10 @@
 #!/bin/bash 
 # Either connect to an existing registry or install a fresh one.
 
+# Enable INFO messages by default when called directly from make
+# (unless explicitly disabled by parent process via --quiet)
+[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"

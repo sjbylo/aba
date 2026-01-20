@@ -1466,6 +1466,7 @@ run_once() {
 
 	# Create the task directory
 	mkdir -p "$id_dir"
+	chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
 	
 	# --- GET ERROR MODE ---
 	if [[ "$mode" == "get_error" ]]; then
@@ -1482,10 +1483,11 @@ run_once() {
 		if [[ -n "$exit_mtime" ]]; then
 			local age=$((now - exit_mtime))
 			if [[ $age -gt $ttl ]]; then
-				# Task output is stale, reset it
-				_kill_id "$work_id"
-				mkdir -p "$id_dir"
-			fi
+		# Task output is stale, reset it
+		_kill_id "$work_id"
+		mkdir -p "$id_dir"
+		chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+		fi
 		fi
 	fi
 
@@ -1535,13 +1537,14 @@ run_once() {
 				exit "$rc"
 			fi
 
-			# Background: log.out gets stdout+stderr, log.err gets only stderr
-			setsid "${command[@]}" 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
-			echo $! >"$pid_file"
-			wait $!
-			rc=$?
-			echo "$rc" >"$exit_file"
-			exit "$rc"
+		# Background: log.out gets stdout+stderr, log.err gets only stderr
+		setsid "${command[@]}" 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
+		echo $! >"$pid_file"
+		chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
+		wait $!
+		rc=$?
+		echo "$rc" >"$exit_file"
+		exit "$rc"
 		) &
 
 		# Parent closes FD; background subshell retains the lock
@@ -1575,10 +1578,11 @@ run_once() {
 			# Exit codes 128-165 indicate termination by signal (kill, Ctrl-C, etc.)
 			# These are interruptions, not legitimate failures, so treat as crash and retry
 			if [[ $exit_code -ge 128 && $exit_code -le 165 ]]; then
-				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
-				rm -rf "$id_dir"
-				mkdir -p "$id_dir"
-				# Fall through to restart logic below
+		aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
+		rm -rf "$id_dir"
+		mkdir -p "$id_dir"
+		chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+		# Fall through to restart logic below
 			fi
 		fi
 		
@@ -1597,20 +1601,24 @@ run_once() {
 				# Running elsewhere => block until lock released
 				exec 9>&-
 				
-				# Display waiting message if provided
-				if [[ -n "$waiting_message" ]]; then
-					# Optionally include PID if available
-					if [[ -f "$pid_file" ]]; then
-						local pid=$(<"$pid_file" 2>/dev/null || echo "")
-						if [[ -n "$pid" ]]; then
-							aba_info "$waiting_message (PID: $pid)"
-						else
-							aba_info "$waiting_message"
-						fi
-					else
-						aba_info "$waiting_message"
-					fi
+			# Build waiting message
+			local msg=""
+			if [[ -n "$waiting_message" ]]; then
+				msg="$waiting_message"
+			else
+				msg="Waiting for task: $work_id"
+			fi
+			
+			# Add PID if available
+			if [[ -f "$pid_file" ]]; then
+				local pid=$(<"$pid_file")
+				if [[ -n "$pid" ]]; then
+					msg="$msg (PID: $pid)"
 				fi
+			fi
+			
+			# Display message
+			aba_info "$msg"
 				
 				if [[ -n "$wait_timeout" ]]; then
 					# Wait with timeout
@@ -1656,7 +1664,7 @@ download_all_catalogs() {
 	
 	# Start 3 parallel downloads (run_once backgrounds them automatically)
 	# Each download will skip if already completed within TTL
-	# Note: aba.sh changes to $ABA_ROOT before calling this function, so relative paths work
+	# Note: Scripts use pwd -P to resolve symlinks and find real aba root
 	run_once -i "catalog:${version_short}:redhat-operator" -t "$ttl" -- \
 		scripts/download-catalog-index-simple.sh redhat-operator
 	

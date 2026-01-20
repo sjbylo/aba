@@ -2,7 +2,13 @@
 # Copy images from RH reg. into the registry.
 
 # Scripts called from mirror/Makefile should cd to mirror/
-cd "$(dirname "$0")/../mirror" || exit 1
+# Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+cd "$SCRIPT_DIR/../mirror" || exit 1
+
+# Enable INFO messages by default when called directly from make
+# (unless explicitly disabled by parent process via --quiet)
+[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
 source scripts/include_all.sh
 
