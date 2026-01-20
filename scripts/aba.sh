@@ -5,7 +5,7 @@
 ABA_VERSION="0.9.0"
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260120221537
+ABA_BUILD=20260121003703
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -200,6 +200,15 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 
 # Interactive mode is used when no args are suplied
 [ "$*" ] && interactive_mode= && have_args=1
+
+# For non-interactive mode (aba bundle, aba -d mirror save, etc.):
+# Start CLI downloads early to maximize parallel download time
+# For interactive mode: Wait until after user input (line ~1152) to avoid
+# bandwidth contention that could slow down reaching the user prompts
+if [ ! "$interactive_mode" ]; then
+	aba_debug "Non-interactive mode detected - starting CLI downloads early"
+	scripts/cli-download-all.sh
+fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
 
@@ -1147,8 +1156,9 @@ download_all_catalogs "$ocp_ver_short" 86400  # 1-day TTL
 # Note: Catalogs wait/check happens in scripts that actually need them
 # (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
 
-# Trigger download of all CLI binaries
-# Note: Ths only other place this is done is in "scripts/reg-save.sh"
+# Trigger download of all CLI binaries (for interactive mode only)
+# Note: Non-interactive mode already started these at line ~205
+# Note: Another place this is checked is in "scripts/reg-save.sh"
 scripts/cli-download-all.sh
 
 # Initiate download of mirror-install and docker-reg image
