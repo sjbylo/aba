@@ -33,14 +33,14 @@ verify-aba-conf || exit 1
 
 # Still downloading?
 export PLAIN_OUTPUT=1
-aba_info "Downloading CLI installation binaries"
+aba_info "Ensuring CLI installation binaries are downloading"
 #pwd
 sleep 1
 #run_once -w -i download_all_cli -- make -sC ../cli download #|| aba_abort "Downloading CLI binaries failed.  Please try again!"
-scripts/cli-download-all.sh --wait
+# Start downloads if not already running (non-blocking, parallel)
+scripts/cli-download-all.sh
 
-aba_info_ok "CLI Installation binaries downloaded successfully!"
-
+# Wait for oc-mirror specifically (needed immediately below)
 if ! run_once -w -m "Waiting for oc-mirror binary download" -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
 	error_msg=$(run_once -e -i cli:install:oc-mirror)
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."

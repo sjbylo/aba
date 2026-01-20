@@ -200,6 +200,12 @@ if [ "$light_bundle" ]; then
 	make -C mirror save retry=7				# Pull required release (and possibly operator) images.  Retry on failure. 
 	aba_debug "Mirror save completed"
 	
+	# Ensure all CLI tarballs are downloaded before creating bundle tar file
+	aba_info "Ensuring all CLI installation files are downloaded..."
+	aba_debug "Waiting for all CLI tarball downloads to complete"
+	scripts/cli-download-all.sh --wait
+	aba_debug "All CLI tarballs downloaded"
+	
 	aba_info "Creating *light* install bundle archive ..."
 	rm -f $bundle_dest_file
 	aba_debug "Calling: make tarrepo out=$bundle_dest_file"
@@ -236,6 +242,12 @@ else
 	aba_debug "Calling: make -C mirror save retry=7"
 	make -C mirror save retry=7		    		# Pull reuqired release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
+	
+	# Ensure all CLI tarballs are downloaded before creating bundle tar file
+	aba_info "Ensuring all CLI installation files are downloaded..."
+	aba_debug "Waiting for all CLI tarball downloads to complete"
+	scripts/cli-download-all.sh --wait
+	aba_debug "All CLI tarballs downloaded"
 	
 	aba_info "Creating install bundle archive ..."
 	rm -f $bundle_dest_file
