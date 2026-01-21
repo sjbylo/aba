@@ -84,6 +84,8 @@ test-cmd -m "Testing update of aba script, update build timestamp" sed -i "s/^AB
 test-cmd -m "Testing update of aba script, run (and update) aba" "aba -h | head -8"  # This will trigger an update of aba
 test-cmd -m "Testing update of aba script, grep aba build timestamp" "grep ^ABA_BUILD=$new_v `which aba`"
 
+test-cmd -m "Basic interactive test" test/basic-interactive-test.sh
+
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3
 #echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
