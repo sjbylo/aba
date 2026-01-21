@@ -282,6 +282,31 @@ fi
 - `aba_abort` - Fatal errors (red text, exits script) - **Scripts only!**
 - `aba_debug` - Debug messages (magenta, only if DEBUG_ABA=1)
 
+### TUI Dialog Colors and Sizing
+
+**CRITICAL**: Always use `--colors` flag with `dialog` to enable color codes in TUI:
+
+```bash
+# ✅ CORRECT - Colors will render properly
+dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1Error!\Zn
+
+Message text here" 0 0
+
+# ❌ WRONG - Color codes display as literal text
+dialog --backtitle "$(ui_backtitle)" --msgbox "\Z1Error!\Zn
+
+Message text here" 0 0
+```
+
+**Color Codes** (only work with `--colors` flag):
+- `\Z1` - Red text (errors)
+- `\Z2` - Green text (success)
+- `\Zn` - Reset to normal color
+
+**Dialog Sizing**:
+- ✅ **Use `0 0`** for auto-sizing (recommended)
+- ❌ **Avoid hardcoded sizes** like `12 60` - text may overflow on different terminals
+
 ### Bash Quirks and Pitfalls
 
 #### The `$(<"file" 2>/dev/null)` Bug
@@ -713,6 +738,49 @@ git commit -m "Fix XYZ"
 - Check log files in `~/.aba/runner/` for background tasks
 - Use `run_once` logs for task debugging
 - Debug output goes to stderr by default
+
+### Bundle Creation with `--light`
+
+**Purpose**: The `--light` flag avoids temporary disk space duplication when creating bundles.
+
+**What it does:**
+- Excludes large image-set archives (`mirror/save/mirror_*.tar`) from the bundle
+- Reduces bundle from ~25GB to ~5GB (repo only)
+- User must transfer image archives separately
+
+**What it does NOT do:**
+- ❌ Does NOT reduce total transfer size (still need to copy both files)
+- ❌ Does NOT use hard links (tar archives can't preserve external hard links)
+
+**When to use:**
+- ✅ Bundle output on **same filesystem** as `mirror/save/`
+- ✅ Limited disk space (avoids 2x temporary usage)
+- ✅ Need to split transfer across different media
+
+**When NOT to use:**
+- ❌ Bundle output on **different filesystem** (no benefit)
+- ❌ Plenty of disk space available
+- ❌ Want single all-in-one bundle file
+
+**Detection in TUI:**
+- TUI uses `stat -c %d` to check device numbers (more reliable than filesystem type)
+- Only offers `--light` when bundle and mirror are on same device
+- Warns about disk space if full bundle chosen on same device
+
+**Example workflow:**
+```bash
+# Create light bundle (same filesystem)
+aba bundle --light -o /home/user/bundle.tar
+
+# Result: bundle.tar (5GB) + mirror/save/mirror_*.tar (20GB) on disk = 25GB
+# Must copy BOTH files to air-gapped environment
+
+# On internal bastion:
+tar xvf bundle.tar
+mv mirror_*.tar aba/mirror/save/
+cd aba
+./install
+```
 
 ## Testing Strategy
 

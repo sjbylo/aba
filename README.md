@@ -301,6 +301,12 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 
 Note that 'aba' will create the `aba.conf` file which contains some values that you *should change* as soon as you can, such as your _preferred platform_, your _base domain name_, your _network address_ and any _operators_ you will require etc (if known).
 
+**Experimental TUI (Text User Interface):** For a guided wizard experience to prepare a disconnected OpenShift installation, try:
+```bash
+tui/abatui_experimental.sh    # Interactive wizard to configure and prepare your environment
+```
+Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI walks you through selecting OpenShift version, operators, and creating install bundles or syncing to registries.
+
 Now, continue with either [Partially Disconnected Scenario](#partially-disconnected-scenario) or [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario) below.
 
 <!--

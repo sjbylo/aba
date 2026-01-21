@@ -5,7 +5,7 @@
 ABA_VERSION="0.9.0"
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260121003703
+ABA_BUILD=20260121185055
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1015,7 +1015,12 @@ fi
 	fi
 	
 	# Only show success message if we actually checked (not from cache)
-	[[ "$checking_connectivity" == "true" ]] && aba_info "  ✓ All required sites accessible"
+	if [[ "$checking_connectivity" == "true" ]]; then
+		aba_debug "Connectivity check passed - all sites accessible"
+		aba_info "  ✓ All required sites accessible"
+	else
+		aba_debug "Connectivity check skipped - using cached results"
+	fi
 
 	[ "$ocp_channel" ] && ch_def=${ocp_channel:0:1} || ch_def=s  # Set the default 
 
@@ -1115,15 +1120,47 @@ fi
 	do
 		# Exit loop if release version exists
 		if [ "$target_ver" ]; then
+			aba_debug "Validating user input: target_ver=[$target_ver]"
 			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+$"; then
-				url="https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$target_ver/release.txt"
-				if curl -f --connect-timeout 60 --retry 8 -sSL -o /dev/null -w "%{http_code}\n" $url| grep -q ^200$; then
-					break
+				# Validate x.y.z using Cincinnati graph (cached)
+				minor="${target_ver%.*}"  # 4.18.10 → 4.18
+				aba_debug "Detected x.y.z format, extracting minor: $minor"
+				
+				# Fetch all versions for this channel-minor (may fail if minor doesn't exist)
+				aba_debug "Fetching all versions for $ocp_channel/$minor"
+				if all_versions=$(fetch_all_versions "$ocp_channel" "$minor" 2>/dev/null) && [ -n "$all_versions" ]; then
+					aba_debug "Successfully fetched version list ($(echo "$all_versions" | wc -l) versions)"
+					if echo "$all_versions" | grep -qx "$target_ver"; then
+						aba_debug "Version $target_ver validated successfully"
+						break
+					else
+						aba_debug "Version $target_ver not found in version list"
+						echo_red "Version $target_ver not found in $ocp_channel channel" >&2
+						echo_red "" >&2
+						echo_red "This version is either invalid or has reached End-of-Life." >&2
+						echo_red "" >&2
+						echo_red "Try:" >&2
+						[ -n "$channel_ver" ] && echo_red "  • Latest: $channel_ver (press 'l')" >&2
+						[ -n "$channel_ver_prev" ] && echo_red "  • Previous: $channel_ver_prev (press 'p')" >&2
+						echo_red "  • List all: aba ocp-versions" >&2
+						target_ver=""  # Reset to loop again
+					fi
 				else
-					echo_red "Error: Failed to fetch release.txt file from $url" >&2
+					aba_debug "Failed to fetch versions for $ocp_channel/$minor (minor doesn't exist)"
+					echo_red "Version $target_ver not found in $ocp_channel channel" >&2
+					echo_red "" >&2
+					echo_red "OpenShift $minor does not exist or has reached End-of-Life." >&2
+					echo_red "" >&2
+					echo_red "Try:" >&2
+					[ -n "$channel_ver" ] && echo_red "  • Latest: $channel_ver (press 'l')" >&2
+					[ -n "$channel_ver_prev" ] && echo_red "  • Previous: $channel_ver_prev (press 'p')" >&2
+					echo_red "  • List all: aba ocp-versions" >&2
+					target_ver=""  # Reset to loop again
 				fi
 			else
-				echo_red "Invalid input. Enter a valid OpenShift version (e.g., 4.18.10 or 4.17)." >&2
+				aba_debug "Invalid format: $target_ver (not x.y or x.y.z)"
+				echo_red "Invalid input. Enter a valid OpenShift version (e.g., 4.18.10 or 4.18)." >&2
+				target_ver=""  # Reset to loop again
 			fi
 		fi
 
@@ -1134,15 +1171,34 @@ fi
 		aba_info -n "Enter x.y.z or x.y version $or_s$or_p(<version>/l/p/Enter) [$default_ver]: "
 		read target_ver
 
-		[ ! "$target_ver" ] && target_ver=$default_ver          # use default
-		[ "$target_ver" = "l" -a "$channel_ver" ] && target_ver=$channel_ver       # latest
-		[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev  # previous latest
+		[ ! "$target_ver" ] && target_ver=$default_ver && aba_debug "Using default: $default_ver"
+		[ "$target_ver" = "l" -a "$channel_ver" ] && target_ver=$channel_ver && aba_debug "User selected latest: $channel_ver"
+		[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev && aba_debug "User selected previous: $channel_ver_prev"
 
 		# If user enters just a point version, x.y, fetch the latest .z value for that point version of OpenShift
-		echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver")
+		if echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$"; then
+			aba_debug "Detected x.y format, resolving to latest z-stream: $target_ver"
+			resolved_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver")
+			if [ -n "$resolved_ver" ]; then
+				aba_debug "Resolved $target_ver -> $resolved_ver"
+				target_ver="$resolved_ver"
+			else
+				aba_debug "Failed to resolve $target_ver (minor doesn't exist)"
+				echo_red "Version $target_ver not found in $ocp_channel channel" >&2
+				echo_red "" >&2
+				echo_red "This version is either invalid or has reached End-of-Life." >&2
+				echo_red "" >&2
+				echo_red "Try:" >&2
+				[ -n "$channel_ver" ] && echo_red "  • Latest: $channel_ver (press 'l')" >&2
+				[ -n "$channel_ver_prev" ] && echo_red "  • Previous: $channel_ver_prev (press 'p')" >&2
+				echo_red "  • List all: aba ocp-versions" >&2
+				target_ver=""  # Reset to loop again
+			fi
+		fi
 	done
 
 	# Update the conf file
+	aba_debug "Updating aba.conf with validated version: $target_ver"
 	replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
 	aba_info "'ocp_version' set to '$target_ver' in aba.conf"
 #fi

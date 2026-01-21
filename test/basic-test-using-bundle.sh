@@ -20,9 +20,10 @@ rm -rf $TEST_DIR_CONN/aba
 rm -f ~/.aba/.first_cluster_success
 
 # Go online
-export no_proxy=.lan,.example.com
-export http_proxy=http://10.0.1.8:3128
-export https_proxy=http://10.0.1.8:3128
+sudo nmcli con up ens224
+#export no_proxy=.lan,.example.com
+#export http_proxy=http://10.0.1.8:3128
+#export https_proxy=http://10.0.1.8:3128
 
 # Install aba
 cd $TEST_DIR_CONN
@@ -41,7 +42,8 @@ aba -y bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel fast 
 echo "aba bundle returned: $?"
 
 # Go offline
-unset http_proxy https_proxy no_proxy # Go offline
+#sudo nmcli con down ens224
+#unset http_proxy https_proxy no_proxy # Go offline
 
 # Clean up
 sudo rm -vf $(which aba)
