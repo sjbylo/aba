@@ -719,7 +719,7 @@ ARCH="${ARCH:-amd64}"
 # Cache settings
 ABA_CACHE_DIR="${ABA_CACHE_DIR:-$HOME/.aba/cache}"
 ABA_CACHE_TTL="${ABA_CACHE_TTL:-6000}"	# seconds
-mkdir -p "$ABA_CACHE_DIR"
+# Note: Cache directory is created lazily when first needed
 
 ############################################
 # Helpers (best-effort, no error output)
@@ -746,6 +746,9 @@ _fetch_cached() {
 	if _cache_fresh "$cache_file" "$ttl"; then
 		return 0
 	fi
+
+	# Lazy creation: ensure cache directory exists before creating temp files
+	mkdir -p "$(dirname "$cache_file")" 2>/dev/null || true
 
 	local tmp
 	tmp="$(mktemp "${cache_file}.XXXXXX")" || true

@@ -133,7 +133,10 @@ mkdir -p ~/.aba
 # Reset ~/.aba state on manual install only
 # When -q flag is used (automatic update check from 'aba' command), preserve user state
 if [ ! "$quiet" ]; then
-	rm -rf ~/.aba/*  # Clean slate: remove logs, runner cache, config
+	if [ -d ~/.aba/runner ] || [ -d ~/.aba/cache ]; then
+		rm -rf ~/.aba/runner ~/.aba/cache
+		echo Cache deleted
+	fi
 fi
 
 # Create ssh.conf if needed
