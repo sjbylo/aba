@@ -8,7 +8,10 @@
 # non-zero codes (1=Cancel, 2=Help, 3=Extra) by design. We handle all cases
 # explicitly with case statements and if-checks.
 
+echo Initializing ...
+
 set -o pipefail  # Catch pipeline errors
+set +m            # Disable job control monitoring for faster exit
 
 # Setup log directory
 LOG_DIR="${HOME}/.aba/logs"
@@ -339,16 +342,26 @@ Required sites:                    Other sites:
   registry.access.redhat.com
 
 Exiting..." 0 0
-		
-		log "Exiting due to no internet access"
-		exit 1
-	fi
+	
+	log "Exiting due to no internet access"
+	clear
+	exit 1
+fi
 	
 	log "Internet access verified to all required sites"
 }
 
 ui_header() {
 	log "Showing header screen"
+	
+	# Get version from environment or VERSION file
+	local aba_version="${ABA_VERSION:-unknown}"
+	if [[ -f "$ABA_ROOT/VERSION" ]]; then
+		aba_version=$(<"$ABA_ROOT/VERSION")
+		aba_version=${aba_version//$'\n'/}  # Remove newlines
+		aba_version=${aba_version##[[:space:]]}  # Trim leading whitespace
+		aba_version=${aba_version%%[[:space:]]}  # Trim trailing whitespace
+	fi
 	
 	local rc
 	while :; do
@@ -357,17 +370,19 @@ ui_header() {
 			--ok-label "Continue" \
 			--msgbox \
 "\
-   __   ____   __
-  / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly
- /    \ ) _ (/    \    with the Aba utility!
- \_/\_/(____/\_/\_/
+  __   ____   __
+ / _\ (  _ \ / _\     Aba v${aba_version}
+/    \ ) _ (/    \    Install & configure 
+\_/\_/(____/\_/\_/    air-gapped OpenShift quickly!
 
-Follow the instructions below or see the README.md file
-for more information.
+Follow the setup wizard or see the README.md file for more.
+Get help: https://github.com/sjbylo/aba/discussions
+
+IMPORTANT: You must have Internet access before you continue!
 
 Press <Continue> to start configuration.
 Press <Help> for more information.
-Press <Tab> and <Corsor keys> to navigate.
+Press <Tab> and <Cursor keys> to navigate.
 Press <ESC> to quit abatui.
 " 0 0
 		rc=$?
@@ -387,36 +402,47 @@ Press <ESC> to quit abatui.
 "ABA (Agent-Based Automation) helps install OpenShift in
 disconnected environments.
 
-This wizard configures:
-  • OpenShift channel and version
-  • Operators to include
-  • Platform settings
-  • Network configuration
+This wizard guides you through:
+  1. OpenShift channel selection (stable/fast/candidate)
+  2. OpenShift version selection
+  3. Red Hat pull secret validation
+  4. Platform configuration (bare-metal/VMware)
+  5. Network settings (domain, IPs, DNS, NTP)
+  6. Operator selection (optional)
+  7. ABA command selection (bundle, mirror, sync, save, etc.)
 
-Configuration is saved to aba.conf
+Configuration is saved to:
+  $ABA_ROOT/aba.conf
+  $ABA_ROOT/mirror/mirror.conf
 
-For full documentation, see:
+After completing this wizard:
+  • The TUI will guide you through next steps
+  • Run 'aba --help' for more commands
+
+For full documentation:
   $ABA_ROOT/README.md
-  
-For help, run: aba --help" 0 0 || true
+  https://github.com/sjbylo/aba/blob/main/README.md
+  https://github.com/sjbylo/aba/discussions" 0 0 || true
 				# Continue loop to show header again
 				;;
 			255)
 				# ESC - confirm quit
-				if confirm_quit; then
-					log "User quit from header"
-					exit 0
+			if confirm_quit; then
+				log "User quit from header"
+				clear
+				exit 0
 				else
 					log "User cancelled quit, staying on header"
 					continue
 				fi
 				;;
-			*)
-				# Unexpected return code
-				log "ERROR: Unexpected header dialog return code: $rc"
-				exit 1
-				;;
-		esac
+		*)
+			# Unexpected return code
+			log "ERROR: Unexpected header dialog return code: $rc"
+			clear
+			exit 1
+			;;
+	esac
 	done
 }
 
@@ -677,9 +703,9 @@ select_ocp_version() {
 	# Only show wait dialog if actually waiting
 	if [[ $need_wait -eq 1 ]]; then
 		log "Version data not ready, showing wait dialog"
-		dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… preparing version list for channel '$OCP_CHANNEL'" 5 80
-		run_once -w -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
-		run_once -w -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+		dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… fetching version data for channel '$OCP_CHANNEL'" 5 80
+		run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
+		run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
 	else
 		log "Version data already available, no wait needed"
 	fi
@@ -745,12 +771,12 @@ What would you like to do?"
 				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version"
 				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_previous"
 				
-				# Show wait dialog and re-run the fetches
-				dialog --backtitle "$(ui_backtitle)" --infobox "Retrying... fetching version data for channel '$OCP_CHANNEL'" 5 80
-				run_once -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
-				run_once -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
-				run_once -w -i "ocp:${OCP_CHANNEL}:latest_version"
-				run_once -w -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+			# Show wait dialog and re-run the fetches
+			dialog --backtitle "$(ui_backtitle)" --infobox "Retrying... fetching version data for channel '$OCP_CHANNEL'" 5 80
+			run_once -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
+			run_once -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+			run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version"
+			run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version_previous"
 				
 				DIALOG_RC="repeat"
 				return
@@ -847,8 +873,7 @@ What would you like to do?"
 
 Example versions: 4.18.10 or 4.18
 
-The installer will validate and download the
-selected version."
+The installer will validate the selected version."
 			
 			dialog --backtitle "$(ui_backtitle)" --msgbox "$help_text" 0 0 || true
 			DIALOG_RC="repeat"
@@ -864,6 +889,7 @@ selected version."
 			# ESC - confirm quit
 			if confirm_quit; then
 				log "User confirmed quit from version screen"
+				clear
 				exit 0
 			else
 				log "User cancelled quit, staying on version screen"
@@ -886,21 +912,104 @@ selected version."
 			log "User selected current version: $OCP_VERSION"
 			;;
 		m)
-			dialog --backtitle "$(ui_backtitle)" --inputbox "Enter OpenShift version (x.y or x.y.z):" 12 70 "$latest" 2>"$TMP" || { DIALOG_RC="back"; return; }
-			OCP_VERSION=$(<"$TMP")
-			OCP_VERSION=${OCP_VERSION//$'
+			# Loop until valid version is entered
+			while true; do
+				dialog --backtitle "$(ui_backtitle)" --inputbox "Enter OpenShift version (x.y or x.y.z):" 12 70 "$latest" 2>"$TMP" || { DIALOG_RC="back"; return; }
+				OCP_VERSION=$(<"$TMP")
+				OCP_VERSION=${OCP_VERSION//$'
 '/}
-			OCP_VERSION=${OCP_VERSION##[[:space:]]}
-			OCP_VERSION=${OCP_VERSION%%[[:space:]]}
+				OCP_VERSION=${OCP_VERSION##[[:space:]]}
+				OCP_VERSION=${OCP_VERSION%%[[:space:]]}
 
-			if [[ "$OCP_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
-				# Resolve x.y -> latest x.y.z (background + wait just like aba.sh)
-				run_once -i "ocp:${OCP_CHANNEL}:${OCP_VERSION}:latest_z" -- \
+				if [[ "$OCP_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
+					# x.y format - resolve to latest z-stream (validates existence)
+					local input_minor="$OCP_VERSION"
+					log "Detected x.y format, resolving: $OCP_VERSION"
+					run_once -i "ocp:${OCP_CHANNEL}:${OCP_VERSION}:latest_z" -- \
 					bash -lc 'source ./scripts/include_all.sh; fetch_latest_z_version "'$OCP_CHANNEL'" "'$OCP_VERSION'"'
 				dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… resolving $OCP_VERSION to latest z-stream" 5 80
-				run_once -w -i "ocp:${OCP_CHANNEL}:${OCP_VERSION}:latest_z"
+				run_once -q -w -i "ocp:${OCP_CHANNEL}:${OCP_VERSION}:latest_z"
 				OCP_VERSION=$(fetch_latest_z_version "$OCP_CHANNEL" "$OCP_VERSION")
-			fi
+					
+					if [[ -n "$OCP_VERSION" ]]; then
+						log "Resolved to full version: $OCP_VERSION"
+						break
+					else
+						# Minor version doesn't exist
+						dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1Version not found!\Zn
+
+Version: $input_minor
+Channel: $OCP_CHANNEL
+
+This version is either invalid or does not exist.
+
+Try:
+  • Latest: $latest
+  • Previous: $previous
+  • Or enter a different version" 0 0 || true
+						# Loop continues
+					fi
+				elif [[ "$OCP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+					# x.y.z format - validate using Cincinnati graph (cached)
+					local minor="${OCP_VERSION%.*}"  # 4.18.10 → 4.18
+					log "Detected x.y.z format, validating: $OCP_VERSION (minor: $minor)"
+					dialog --backtitle "$(ui_backtitle)" --infobox "Verifying version $OCP_VERSION exists..." 5 80
+					
+					# Fetch all versions for this channel-minor (may fail if minor doesn't exist)
+					local all_versions
+					if all_versions=$(fetch_all_versions "$OCP_CHANNEL" "$minor" 2>/dev/null) && [[ -n "$all_versions" ]]; then
+						log "Fetched $(echo "$all_versions" | wc -l) versions for $OCP_CHANNEL/$minor"
+						if echo "$all_versions" | grep -qx "$OCP_VERSION"; then
+							# Version exists - validated successfully
+							log "User entered valid full version: $OCP_VERSION"
+							break
+						else
+							# Version not found in the version list
+							log "Version $OCP_VERSION not found in version list"
+							dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1Version not found!\Zn
+
+Version: $OCP_VERSION
+Channel: $OCP_CHANNEL
+
+This version is either invalid or does not exist.
+
+Try:
+  • Latest: $latest
+  • Previous: $previous
+  • Or enter a different version" 0 0 || true
+							# Loop continues
+						fi
+					else
+						# Minor version doesn't exist or fetch failed
+						log "Failed to fetch versions for $OCP_CHANNEL/$minor (minor doesn't exist)"
+						dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1Version not found!\Zn
+
+Version: $OCP_VERSION
+Channel: $OCP_CHANNEL
+
+OpenShift $minor does not exist or does not exist.
+
+Try:
+  • Latest: $latest
+  • Previous: $previous
+  • Or enter a different version" 0 0 || true
+						# Loop continues
+					fi
+				else
+					# Invalid format
+					log "Invalid format entered: $OCP_VERSION"
+					dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1Invalid version format!\Zn
+
+Entered: $OCP_VERSION
+
+Please enter:
+  • x.y format (e.g., 4.18)
+  • x.y.z format (e.g., 4.18.10)
+
+Try again." 0 0 || true
+					# Loop continues
+				fi
+			done
 			;;
 		*) OCP_VERSION="$latest" ;;
 	esac
@@ -1128,6 +1237,7 @@ Press <Next> to continue or <Back> to return." 0 0
 			log "User pressed ESC"
 			if confirm_quit; then
 				log "User confirmed quit from pull secret screen"
+				clear
 				exit 0
 			else
 				log "User cancelled quit, staying on pull secret screen"
@@ -1172,10 +1282,10 @@ Press <Help> for more information."
 				local validation_rc=$?
 				
 				if [[ $validation_rc -eq 0 ]]; then
-					log "Pull secret validation successful"
-					# Show success message briefly before proceeding
-					dialog --backtitle "$(ui_backtitle)" --infobox "\Z2Pull secret validated successfully!\Zn\n\nAuthentication with registry.redhat.io succeeded.\n\nProceeding..." 7 60
-					sleep 1
+				log "Pull secret validation successful"
+				# Show success message briefly before proceeding
+				dialog --colors --backtitle "$(ui_backtitle)" --infobox "\Z2Pull secret validated successfully!\Zn\n\nAuthentication with registry.redhat.io succeeded.\n\nProceeding..." 7 60
+				sleep 1
 					DIALOG_RC="next"
 					return
 				else
@@ -1267,6 +1377,9 @@ select_platform_network() {
 	DIALOG_RC=""
 	log "Entering select_platform_network"
 
+	# Track cursor position for menu navigation
+	local default_item="${1:-1}"  # Start at option 1 or use passed value
+
 	while :; do
 		# Use auto-sizing for better fit
 		log "Showing platform menu dialog..."
@@ -1277,16 +1390,18 @@ select_platform_network() {
 		log "  DNS_SERVERS=${DNS_SERVERS:-(auto-detect)}"
 		log "  NEXT_HOP_ADDRESS=${NEXT_HOP_ADDRESS:-(auto-detect)}"
 		log "  NTP_SERVERS=${NTP_SERVERS:-(auto-detect)}"
+		log "  default_item=$default_item"
 		
 		log "About to show platform menu dialog..."
 		log "TMP file: $TMP"
 		
 		# Use explicit arguments (no array expansion issues)
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Platform & Network" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "Platform & Network" \
 			--cancel-label "Back" \
 			--help-button \
 			--ok-label "Select" \
 			--extra-button --extra-label "Next" \
+			--default-item "$default_item" \
 			--menu "Configure platform and network:" 0 0 7 \
 			1 "\ZbAccept\Zn" \
 			2 "Platform: ${PLATFORM:-bm}" \
@@ -1319,6 +1434,7 @@ select_platform_network() {
 				# ESC - confirm quit
 				if confirm_quit; then
 					log "User confirmed quit from platform screen"
+					clear
 					exit 0
 				else
 					log "User cancelled quit, staying on platform screen"
@@ -1364,15 +1480,19 @@ Leave blank to use auto-detected values." 0 0 || true
 			return
 			;;
 		2)
-			log "Showing platform selection menu"
-			dialog --backtitle "$(ui_backtitle)" --title "Target Platform" \
-				--default-item "${PLATFORM:-bm}" \
-				--menu "Select target platform:" 0 0 2 \
-				bm "Bare Metal" \
-				vmw "VMware (vSphere/ESXi)" \
-				2>"$TMP" || { log "Platform menu cancelled"; continue; }
-			PLATFORM=$(<"$TMP")
-			log "Platform set to: $PLATFORM"
+			# Toggle platform between bm and vmw
+			log "Toggling platform"
+			case "${PLATFORM:-bm}" in
+				bm)
+					PLATFORM="vmw"
+					log "Platform toggled to vmw"
+					;;
+				vmw)
+					PLATFORM="bm"
+					log "Platform toggled to bm"
+					;;
+			esac
+			default_item="$action"  # Keep cursor on Platform
 			;;
 			3)
 				log "Showing domain inputbox"
@@ -1390,6 +1510,7 @@ Leave blank to use auto-detected values." 0 0 || true
 					log "Domain set to: $DOMAIN"
 					break
 				done
+				default_item="$action"  # Keep cursor on Base Domain
 				;;
 			4)
 				log "Showing machine network inputbox"
@@ -1408,6 +1529,7 @@ Leave blank to use auto-detected values." 0 0 || true
 					log "Machine network set to: $MACHINE_NETWORK"
 					break
 				done
+				default_item="$action"  # Keep cursor on Machine Network
 				;;
 			5)
 				log "Showing DNS servers inputbox"
@@ -1426,6 +1548,7 @@ Leave blank to use auto-detected values." 0 0 || true
 					log "DNS servers set to: $DNS_SERVERS"
 					break
 				done
+				default_item="$action"  # Keep cursor on DNS Servers
 				;;
 			6)
 				log "Showing default route inputbox"
@@ -1444,6 +1567,7 @@ Leave blank to use auto-detected values." 0 0 || true
 					log "Default route set to: $NEXT_HOP_ADDRESS"
 					break
 				done
+				default_item="$action"  # Keep cursor on Default Route
 				;;
 			7)
 				log "Showing NTP servers inputbox"
@@ -1462,6 +1586,7 @@ Leave blank to use auto-detected values." 0 0 || true
 					log "NTP servers set to: $NTP_SERVERS"
 					break
 				done
+				default_item="$action"  # Keep cursor on NTP Servers
 				;;
 		esac
 	done
@@ -1542,31 +1667,54 @@ select_operators() {
 	fi
 	
 	# Wait for all 3 catalogs - returns immediately if already done
-	if ! wait_for_all_catalogs "$version_short"; then
-		log "ERROR: Required catalog downloads failed for version ${version_short}"
+	run_once -q -w -i "catalog:${version_short}:redhat-operator"
+	run_once -q -w -i "catalog:${version_short}:certified-operator"
+	run_once -q -w -i "catalog:${version_short}:community-operator"
+	
+	# Check exit codes to identify failures
+	local RUNNER_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
+	local failed_catalogs=()
+	
+	for catalog in redhat-operator certified-operator community-operator; do
+		local exit_file="$RUNNER_DIR/catalog:${version_short}:${catalog}/exit"
+		if [[ -f "$exit_file" ]]; then
+			local exit_code=$(cat "$exit_file" 2>/dev/null || echo "1")
+			if [[ "$exit_code" != "0" ]]; then
+				log "ERROR: Catalog download failed: $catalog (exit code: $exit_code)"
+				failed_catalogs+=("$catalog")
+			fi
+		else
+			log "ERROR: Catalog task missing exit file: $catalog"
+			failed_catalogs+=("$catalog")
+		fi
+	done
+	
+	# If any catalogs failed, show error with actual details
+	if [[ ${#failed_catalogs[@]} -gt 0 ]]; then
+		log "ERROR: ${#failed_catalogs[@]} catalog(s) failed: ${failed_catalogs[*]}"
 		
-		# Show which catalog failed with error details
-		local failed_catalog=""
-		if ! run_once -p -i "catalog:${version_short}:redhat-operator"; then
-			failed_catalog="redhat-operator"
-		elif ! run_once -p -i "catalog:${version_short}:certified-operator"; then
-			failed_catalog="certified-operator"
-		elif ! run_once -p -i "catalog:${version_short}:community-operator"; then
-			failed_catalog="community-operator"
+		# Show error for the first failed catalog
+		local first_failed="${failed_catalogs[0]}"
+		local error_msg=$(run_once -e -i "catalog:${version_short}:${first_failed}" 2>/dev/null | head -5)
+		
+		if [[ -z "$error_msg" ]]; then
+			error_msg="No error details available. Check logs in ~/.aba/runner/"
 		fi
 		
-		if [[ -n "$failed_catalog" ]]; then
-			show_run_once_error "catalog:${version_short}:${failed_catalog}" "Catalog Download Failed"
-		else
-			dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
+		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
 "\Z1ERROR: Failed to download required operator catalogs\Zn
+
+Failed catalog(s): ${failed_catalogs[*]}
+
+Error details:
+─────────────────────────────────────────
+$error_msg
+─────────────────────────────────────────
 
 Cannot proceed without operator catalog indexes.
 
-Check logs in: ~/.aba/runner/
-
-Try running: cd mirror && bash ../scripts/download-catalog-index-simple.sh redhat-operator" 0 0
-		fi
+Check full logs: ~/.aba/runner/catalog:${version_short}:${first_failed}/log" 0 0
+		
 		DIALOG_RC="back"
 		return
 	fi
@@ -1575,18 +1723,23 @@ Try running: cd mirror && bash ../scripts/download-catalog-index-simple.sh redha
 	
 	log "Catalog indexes ready. Starting operators menu with ${#OP_BASKET[@]} operators in basket"
 
+	# Track cursor position for menu navigation
+	local default_item="${1:-1}"  # Start at option 1 or use passed value
+
 	while :; do
 		# Count the basket items for display
 		local basket_count="${#OP_BASKET[@]}"
 		log "Menu loop: basket has $basket_count operators"
+		log "  default_item=$default_item"
 		
 		log "About to show operators menu dialog..."
 		
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Operators" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "Operators" \
 			--cancel-label "Back" \
 			--help-button \
 			--ok-label "Select" \
 			--extra-button --extra-label "Next" \
+			--default-item "$default_item" \
 			--menu "Select operator actions:" 0 0 5 \
 			1 "Select Operator Sets" \
 			2 "Search Operator Names" \
@@ -1674,6 +1827,7 @@ image synchronization process." 0 0 || true
 				# ESC - confirm quit
 				if confirm_quit; then
 					log "User confirmed quit from operators screen"
+					clear
 					exit 0
 				else
 					log "User cancelled quit, staying on operators screen"
@@ -1771,6 +1925,7 @@ image synchronization process." 0 0 || true
 				log "After set selection - Basket count: ${#OP_BASKET[@]}"
 				log "Basket contents: ${!OP_BASKET[*]}"
 				log "Active sets: ${!OP_SET_ADDED[*]}"
+				default_item="$action"  # Keep cursor on Select Operator Sets
 				;;
 
 			2)
@@ -1943,6 +2098,7 @@ image synchronization process." 0 0 || true
 				
 				log "After search update, basket has ${#OP_BASKET[@]} operators"
 				log "Basket contents: ${!OP_BASKET[*]}"
+				default_item="$action"  # Keep cursor on Search Operator Names
 				;;
 
 			3)
@@ -1993,6 +2149,7 @@ image synchronization process." 0 0 || true
 				done
 				
 				log "After view basket - count: ${#OP_BASKET[@]}"
+				default_item="$action"  # Keep cursor on View/Edit Basket
 				;;
 
 			4)
@@ -2001,6 +2158,7 @@ image synchronization process." 0 0 || true
 				OP_BASKET=()
 				OP_SET_ADDED=()
 			}
+				default_item="$action"  # Keep cursor on Clear Basket
 				;;
 
 			5)
@@ -2021,10 +2179,10 @@ handle_action_view_isconf() {
 	
 	# Wait for background isconf generation to complete AND file to exist
 	if ! run_once -p -i "tui:isconf:generate"; then
-		log "Waiting for ImageSet config generation to complete"
-		dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for ImageSet configuration...\n\nPlease wait..." 6 50
-		
-		if ! run_once -w -i "tui:isconf:generate"; then
+	log "Waiting for ImageSet config generation to complete"
+	dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for ImageSet configuration...\n\nPlease wait..." 6 50
+	
+	if ! run_once -q -w -i "tui:isconf:generate"; then
 			log "ERROR: ImageSet config generation failed"
 			show_run_once_error "tui:isconf:generate" "ImageSet Config Generation Failed"
 			return 0
@@ -2054,7 +2212,7 @@ This file should have been generated automatically." 0 0 || true
 	
 	# Show file in scrollable textbox
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
-		--ok-label "Back" \
+		--exit-label "OK" \
 		--textbox "$isconf_file" 0 0
 	
 	return 0
@@ -2064,12 +2222,12 @@ handle_action_bundle() {
 	log "Handling action: Create Bundle"
 	
 	# Get output path from user
-	local default_bundle="/tmp/aba-bundle-$(date +%Y%m%d-%H%M%S).tar"
+	local default_bundle="/tmp/ocp-bundle"
 	
 	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
-		--inputbox "Enter output path for install bundle:" 10 70 "$default_bundle" \
+		--inputbox "Enter output path for install bundle:\n\n(Version suffix will be added automatically)" 10 70 "$default_bundle" \
 		2>"$TMP"
 	rc=$?
 	
@@ -2082,31 +2240,75 @@ handle_action_bundle() {
 	bundle_path=$(<"$TMP")
 	[[ -z "$bundle_path" ]] && bundle_path="$default_bundle"
 	
-	# Ask about light option
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
-		--yes-label "Yes" \
-		--no-label "No" \
-		--yesno "Enable light bundle option?\n\n(Only works when output is on same filesystem as mirror/save/)\n\nBundle output: $bundle_path" 12 70
-	rc=$?
+	# If directory, append default filename (like aba.sh does)
+	if [[ -d "$bundle_path" ]]; then
+		log "Path is directory, appending default filename"
+		bundle_path="$bundle_path/ocp-bundle"
+	fi
+	
+	# Always append version suffix (like aba.sh does)
+	bundle_path="$bundle_path-${OCP_VERSION}.tar"
+	log "Final bundle path with version: $bundle_path"
+	
+	# Check filesystem compatibility using device numbers (more reliable than filesystem type)
+	local output_dir=$(dirname "$bundle_path")
+	
+	# Ensure output directory exists for stat to work
+	mkdir -p "$output_dir" 2>/dev/null
+	
+	# Get device numbers (like files_on_same_device() in include_all.sh)
+	local output_dev=$(stat -c %d "$output_dir" 2>/dev/null)
+	local mirror_dev=$(stat -c %d "$ABA_ROOT/mirror/save" 2>/dev/null)
+	
+	log "Device check: output=[$output_dev], mirror=[$mirror_dev]"
 	
 	local light_flag=""
-	if [[ $rc -eq 0 ]]; then
-		# User selected Yes - validate filesystem
-		local output_dir=$(dirname "$bundle_path")
-		local output_fs=$(stat -f -c '%T' "$output_dir" 2>/dev/null || stat -f "$output_dir" 2>/dev/null | awk '/Type:/ {print $2}')
-		local mirror_fs=$(stat -f -c '%T' "$ABA_ROOT/mirror/save" 2>/dev/null || stat -f "$ABA_ROOT/mirror/save" 2>/dev/null | awk '/Type:/ {print $2}')
+	local same_device=false
+	
+	# Check if on same device
+	if [[ -n "$output_dev" && -n "$mirror_dev" && "$output_dev" == "$mirror_dev" ]]; then
+		same_device=true
+		log "Output and mirror on same device"
 		
-		if [[ "$output_fs" != "$mirror_fs" ]]; then
-			dialog --colors --backtitle "$(ui_backtitle)" --title "Error" \
-				--msgbox "\Z1ERROR: --light requires output file on same filesystem as mirror/save/\Zn\n\nOutput filesystem: $output_fs\nMirror filesystem: $mirror_fs\n\nContinuing without --light flag." 12 70
-			light_flag=""
-			log "Light option disabled due to filesystem mismatch"
-		else
+		# Ask user if they want --light option
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
+			--yes-label "Yes" \
+			--no-label "No" \
+			--yesno "Enable light bundle option?\n\n(Excludes large image-set archives from bundle to save disk space)\n\nBundle output: $bundle_path" 0 0
+		rc=$?
+		
+		if [[ $rc -eq 0 ]]; then
 			light_flag="--light"
-			log "Light option enabled and filesystem validated"
+			log "Light option enabled by user"
+		else
+			log "Light option disabled by user - will create full bundle"
+			
+			# Warn about disk space (like aba.sh does for full bundles on same device)
+			dialog --colors --backtitle "$(ui_backtitle)" --title "Disk Space Warning" \
+				--yes-label "Continue" \
+				--no-label "Cancel" \
+				--yesno "\Z3Disk Space Consideration\Zn
+
+Bundle and mirror are on the same filesystem.
+
+Creating a full bundle requires:
+  • Mirror image-set archives written to mirror/save/
+  • Complete bundle copy written to: $bundle_path
+
+You may temporarily need roughly \Zbdouble the space\Zn.
+
+\ZbRecommendation:\Zn Use --light option to avoid this.
+
+Continue with full bundle anyway?" 0 0
+			rc=$?
+			if [[ $rc -ne 0 ]]; then
+				log "User cancelled due to disk space concern"
+				return 1
+			fi
 		fi
 	else
-		log "Light option disabled by user"
+		# Different devices - no light option available
+		log "Light option not available (different devices: output=$output_dev, mirror=$mirror_dev)"
 	fi
 	
 	# Use global auto-answer setting
@@ -2430,18 +2632,8 @@ handle_action_isconf() {
 		return 1
 	fi
 	
-	# After generating isconf, show info and exit
-	dialog --backtitle "$(ui_backtitle)" --msgbox \
-"ImageSet configuration files generated successfully.
-
-You can now:
-  1. Review/edit: mirror/imageset-config-*.yaml
-  2. Run: aba -d mirror save
-  3. Run: aba tar (or aba tarprep + aba tarreq)
-
-See: aba --help" 0 0 || true
-	
-	clear
+	# Success - user either exited or chose to go back to menu
+	# (handled by confirm_and_execute's success dialog)
 	return 0
 }
 
@@ -2485,67 +2677,70 @@ confirm_and_execute() {
 			dialog --backtitle "$(ui_backtitle)" --title "Executing: $cmd" \
 				--progressbox $box_height $box_width
 				
-				# Get exit code from the command (via PIPESTATUS before pipe)
-				local exit_code=${PIPESTATUS[0]}
-				
-				if [[ $exit_code -eq 0 ]]; then
-					# Show success dialog
-					dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
-"\Z2Command completed successfully!\Zn
-
-Command: $cmd
-
-Press OK to exit TUI." 0 0 || true
-					rm -f "$output_file"
+			# Get exit code from the command (via PIPESTATUS before pipe)
+			local exit_code=${PIPESTATUS[0]}
+			
+		# Always show full output in scrollable textbox for review (success or failure)
+		# textbox provides full scrolling support (arrows, page up/down, home/end)
+		
+		if [[ $exit_code -eq 0 ]]; then
+			# Success - show output with success indicator and choice buttons
+			dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2Command Output (Success)\Zn: $cmd" \
+				--ok-label "Back to Menu" \
+				--extra-button --extra-label "Exit TUI" \
+				--textbox "$output_file" 0 0
+			local choice=$?
+			
+			rm -f "$output_file"
+			
+			case $choice in
+				0)
+					# OK = Back to menu
+					log "User chose to return to menu after successful command"
+					return 1
+					;;
+				3)
+					# Extra button = Exit TUI
+					log "User chose to exit TUI after successful command"
 					clear
 					exit 0
-				else
-					# Show final output in scrollable programbox for review
-				# Show full output in scrollable programbox (full screen)
-				local term_height=$(tput lines)
-				local term_width=$(tput cols)
-				local box_height=$((term_height - 4))
-				local box_width=$((term_width - 4))
-				
-				dialog --colors --backtitle "$(ui_backtitle)" --title "Command Output (Failed): $cmd" \
-					--programbox $box_height $box_width < "$output_file"
-					
-					# Show error dialog with retry option
-					dialog --colors --backtitle "$(ui_backtitle)" --title "Command Failed" \
-						--extra-button --extra-label "Back to Menu" \
-						--yes-label "Retry" \
-						--no-label "Exit TUI" \
-						--yesno "\Z1Command failed with exit code: $exit_code\Zn
-
-Command: $cmd
-
-The full output was shown in the previous dialog.
-
-What would you like to do?" 0 0
-					local choice=$?
-					
-					rm -f "$output_file"
-					
-					case $choice in
-						0)
-							# Retry - loop back to confirmation
-							continue
-							;;
-						1)
-							# Exit TUI
-							clear
-							exit $exit_code
-							;;
-						3)
-							# Back to menu
-							return 1
-							;;
-						*)
-							# ESC or other - back to menu
-							return 1
-							;;
-					esac
-				fi
+					;;
+				255)
+					# ESC = Back to menu
+					log "User pressed ESC, returning to menu"
+					return 1
+					;;
+			esac
+		else
+			# Failure - show output with error indicator and action buttons
+			dialog --colors --backtitle "$(ui_backtitle)" --title "\Z1Command Output (Failed - exit code: $exit_code)\Zn: $cmd" \
+				--ok-label "Retry" \
+				--cancel-label "Back to Menu" \
+				--extra-button --extra-label "Exit TUI" \
+				--textbox "$output_file" 0 0
+			local choice=$?
+			
+			rm -f "$output_file"
+			
+			case $choice in
+				0)
+					# OK = Retry - loop back to confirmation
+					log "User chose to retry after failed command"
+					continue
+					;;
+				1|255)
+					# Cancel/ESC = Back to menu
+					log "User chose to return to menu after failed command"
+					return 1
+					;;
+				3)
+					# Extra button = Exit TUI
+					log "User chose to exit TUI after failed command"
+					clear
+					exit $exit_code
+					;;
+			esac
+		fi
 				;;
 			1)
 				# No = Cancel
@@ -2743,35 +2938,43 @@ summary_apply() {
 				;;
 		esac
 		
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Choose Next Action" \
-			--cancel-label "Exit" \
-			--help-button \
-			--ok-label "Select" \
-			--extra-button --extra-label "Back" \
-			--default-item "$default_item" \
-			--menu "Configuration saved to aba.conf\n\nChoose what to do next:" 0 0 10 \
-			0 "$toggle_answer_display" \
-			1 "$toggle_registry_display" \
-			2 "$toggle_retry_display" \
-			3 "View Generated ImageSet Config" \
-			4 "Create ABA Install Bundle (air-gapped)" \
-			5 "Install & Sync to Local Registry" \
-			6 "Install & Sync to Remote Registry via SSH" \
-			7 "Save Images to Local Archive" \
-			8 "Generate ImageSet Config & Exit" \
-			9 "Exit (run commands manually)" \
-			2>"$TMP"
+		dialog --colors --backtitle "$(ui_backtitle)" --title "Choose Next Action" \
+		--cancel-label "Exit" \
+		--help-button \
+		--ok-label "Select" \
+		--extra-button --extra-label "Back" \
+		--default-item "$default_item" \
+		--menu "Configuration saved to aba.conf\n\nChoose what to do next:" 0 0 13 \
+		0 "$toggle_answer_display" \
+		1 "$toggle_registry_display" \
+		2 "$toggle_retry_display" \
+		3 "View Generated ImageSet Config" \
+		"" "━━━ Air-Gapped (Fully Disconnected) ━━━" \
+		4 "Create ABA Install Bundle (air-gapped)" \
+		7 "Save Images to Local Archive" \
+		"" "━━━ Connected/Partially Connected ━━━" \
+		5 "Install & Sync to Local Registry" \
+		6 "Install & Sync to Remote Registry via SSH" \
+		"" "━━━━━━━━━━━━━ Advanced ━━━━━━━━━━━━━" \
+		8 "Generate ImageSet Config & Exit" \
+		9 "Exit (run commands manually)" \
+		2>"$TMP"
 		rc=$?
 		
 		case "$rc" in
 			0)
-				# OK - process the selected action
-				action=$(<"$TMP")
-				log "User selected action: $action"
-				
-				case "$action" in
-					0)
-						# Toggle auto-answer
+			# OK - process the selected action
+			action=$(<"$TMP")
+			log "User selected action: $action"
+			
+			case "$action" in
+				"")
+					# Separator selected - redisplay menu
+					log "Separator selected, redisplaying menu"
+					continue
+					;;
+				0)
+					# Toggle auto-answer
 						if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
 							ABA_AUTO_ANSWER="no"
 							log "Auto-answer toggled OFF"
@@ -2938,22 +3141,35 @@ summary_apply() {
 				return 1
 				;;
 			2)
-				# Help
-				log "Help button pressed in action menu"
-				dialog --backtitle "$(ui_backtitle)" --msgbox \
+			# Help
+			log "Help button pressed in action menu"
+			dialog --backtitle "$(ui_backtitle)" --msgbox \
 "Next Actions:
 
-1. View ImageSet Config - View generated YAML configuration
-2. Bundle - Create portable archive for air-gapped install
-3. Local Quay - Install Quay registry locally and sync images
-4. Local Docker - Install Docker registry locally and sync images
-5. Remote Quay - Install Quay on remote host via SSH and sync
-6. Save - Save images to local ImageSet archive file
-7. ISConf - Generate ImageSet config files only
-8. Exit - Exit TUI, run commands manually
+CONFIGURATION TOGGLES:
+• Auto-answer (-y) - Skip confirmation prompts
+• Registry Type - Switch between Quay/Docker registry
+• Retry Count - Number of oc-mirror retry attempts
 
-After selecting an action, you'll be prompted for any
-required inputs, then the command will be executed.
+REVIEW:
+• View ImageSet Config - View generated YAML configuration
+
+AIR-GAPPED (Fully Disconnected):
+• Bundle - Create complete install bundle (includes images, binaries, configs)
+           Transfer this bundle to air-gapped environment
+• Save - Save images to ImageSet archive file under aba/mirror/save
+
+CONNECTED/PARTIALLY CONNECTED:
+• Local Mirror - Install registry locally and sync images directly
+• Remote Mirror - Install registry on remote host via SSH and sync
+
+ADVANCED:
+• ISConf - Generate ImageSet config YAML file only (no downloads)
+           For manual oc-mirror operations
+• Exit - Exit TUI to run 'aba' commands manually
+
+After selecting an action, you'll be prompted for any required
+inputs, then the corresponding ABA command will be executed.
 
 Log file: $LOG_FILE" 0 0 || true
 				continue
@@ -2962,6 +3178,7 @@ Log file: $LOG_FILE" 0 0 || true
 				# ESC - confirm quit
 				if confirm_quit; then
 					log "User confirmed quit from action menu"
+					clear
 					exit 0
 				else
 					log "User cancelled quit, staying on action menu"
@@ -3028,9 +3245,10 @@ while :; do
 				STEP="version"
 			elif [[ "$DIALOG_RC" == "back" ]]; then
 				# First screen, confirm quit
-				if confirm_quit; then
-					log "User quit from channel selection"
-					break
+			if confirm_quit; then
+				log "User quit from channel selection"
+				clear
+				break
 				else
 					log "User cancelled quit, staying on channel"
 					continue
@@ -3074,9 +3292,16 @@ while :; do
 			STEP="operators"
 			log "Moving to operators"
 		elif [[ "$DIALOG_RC" == "back" ]]; then
-			CAME_FROM_BACK="1"
-			STEP="pull_secret"
-			log "Moving back to pull_secret"
+			# Check if pull secret is valid - if so, skip directly to version
+			if [[ -f ~/.pull-secret.json ]] && validate_pull_secret ~/.pull-secret.json >/dev/null 2>&1; then
+				STEP="version"
+				log "Moving back to version (skipping pull secret - already valid)"
+			else
+				# Pull secret missing or invalid - go to entry screen
+				CAME_FROM_BACK="1"
+				STEP="pull_secret"
+				log "Moving back to pull_secret (needs entry/fix)"
+			fi
 		else
 			log "WARNING: Unexpected DIALOG_RC value: $DIALOG_RC"
 		fi
@@ -3098,11 +3323,13 @@ done
 
 clear
 log "TUI completed successfully"
-echo "TUI complete. Configuration saved to aba.conf"
+echo "TUI complete."
+echo
+echo "Configuration saved to:"
+echo "  $ABA_ROOT/aba.conf"
+echo "  $ABA_ROOT/mirror/mirror.conf"
 echo
 echo "Log file: $LOG_FILE"
 echo
-echo "Next steps:"
-echo "  1. aba -d mirror install    # Setup registry"
-echo "  2. aba -d mirror sync       # Download images"
-echo "  3. aba cluster --name <name> # Create cluster"
+echo "Run 'aba --help' for available commands."
+echo "See the README.md for more."
