@@ -863,9 +863,11 @@ if [ -f .bundle ]; then
 	# make & jq are needed below and in the next steps. Best to install all at once.
 	scripts/install-rpms.sh internal
 
-	# Extract all CLI binaries from aba/cli/ in parallel (tarballs already in bundle)
-	scripts/cli-install-all.sh             # Start all extractions in parallel (background)
-	scripts/cli-install-all.sh --wait      # Wait for all to complete
+	# Start extracting all CLI binaries and mirror-registry in parallel (tarballs already in bundle)
+	# These run in background and will be ready when user runs commands that need them
+	
+	scripts/cli-install-all.sh                                    # Start CLI extractions (background)
+	run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry  # Start mirror-registry extraction (background)
 
 	echo_yellow "Aba install bundle detected for OpenShift v$ocp_version."
 
@@ -1219,7 +1221,7 @@ download_all_catalogs "$ocp_ver_short" 86400  # 1-day TTL
 scripts/cli-download-all.sh
 
 # Initiate download of mirror-install and docker-reg image
-run_once -i mirror:reg:download -- make -s -C mirror download-registries
+run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- make -s -C mirror download-registries
 
 # make & jq are needed below and in the next steps 
 scripts/install-rpms.sh external 

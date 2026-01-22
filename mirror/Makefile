@@ -108,7 +108,7 @@ rpmsclean:
 	@rm -f .rpms*
 
 mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry binary 
-	@echo [ABA] Extracting mirror-registry-amd64.tar.gz
+	@echo [ABA] Extracting mirror-registry-amd64.tar.gz into $$PWD
 	tar xmvzf mirror-registry-amd64.tar.gz
 
 .PHONY: download-registries
@@ -120,8 +120,9 @@ mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball (note: no 
 	echo [ABA] "Downloading $(mirror_registry_url)/mirror-registry-amd64.tar.gz ..."
 	curl $(CURL_PROGRESS) -OL $(mirror_registry_url)/mirror-registry-amd64.tar.gz
 	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o mirror-registry-sha256sum.txt $(mirror_registry_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" mirror-registry-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
-	tar tzf mirror-registry-amd64.tar.gz >/dev/null && echo [ABA] "File $@ is valid"
+	@echo -n "[ABA] Verifying checksum for $(@): "
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o mirror-registry-sha256sum.txt $(mirror_registry_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" mirror-registry-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
+	echo "valid!"
 
 # Store the docker registry image so it can be used in air-gapped env. (if docker.io reachable) Note: Docker available as arm64 image!
 # Ignore any errors, since docker.io may not be whitelisted
@@ -158,8 +159,8 @@ mirror.conf: ../aba.conf .init                        ## Create the mirror.conf 
 
 install: .installed
 .installed: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
-	@$(SCRIPTS)/ensure-cli.sh mirror-registry
-	@make -sC . mirror-registry
+	@$(SCRIPTS)/ensure-cli.sh quay-registry
+	@bash -c 'source $(SCRIPTS)/include_all.sh && $(SCRIPTS)/run-once.sh -w -q -i $$TASK_QUAY_REG -- make -sC . mirror-registry'
 	$(SCRIPTS)/reg-install.sh
 	$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Wrapper to call ensure_* functions from Makefiles
-# Usage: ensure-cli.sh {oc-mirror|oc|openshift-install|govc|butane|mirror-registry}
+# Usage: ensure-cli.sh {oc-mirror|oc|openshift-install|govc|butane|quay-registry}
 
 cd "$(dirname "$0")/.." || exit 1
 source scripts/include_all.sh
@@ -23,12 +23,12 @@ case "$tool" in
     butane)
         ensure_butane
         ;;
-    mirror-registry)
-        ensure_mirror_registry
+    quay-registry)
+        ensure_quay_registry
         ;;
     *)
         echo "Error: Unknown tool: $tool" >&2
-        echo "Usage: $0 {oc-mirror|oc|openshift-install|govc|butane|mirror-registry}" >&2
+        echo "Usage: $0 {oc-mirror|oc|openshift-install|govc|butane|quay-registry}" >&2
         exit 1
         ;;
 esac

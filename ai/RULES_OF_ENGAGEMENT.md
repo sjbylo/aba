@@ -551,7 +551,7 @@ readonly TASK_OC="cli:install:oc"
 readonly TASK_OPENSHIFT_INSTALL="cli:install:openshift-install"
 readonly TASK_GOVC="cli:install:govc"
 readonly TASK_BUTANE="cli:install:butane"
-readonly TASK_MIRROR_REG="mirror:reg:download"
+readonly TASK_QUAY_REG="mirror:reg:install"
 
 # Download all CLI tarballs (background, non-blocking)
 start_all_cli_downloads()              # Starts downloads in background
@@ -563,7 +563,7 @@ ensure_oc()                            # Ensures oc in ~/bin
 ensure_openshift_install()             # Ensures openshift-install in ~/bin
 ensure_govc()                          # Ensures govc in ~/bin
 ensure_butane()                        # Ensures butane in ~/bin
-ensure_mirror_registry()               # Ensures mirror-registry is downloaded
+ensure_quay_registry()                 # Ensures mirror-registry (Quay) is installed
 
 # Get error output from failed task
 get_task_error "$TASK_ID"              # Returns stderr from failed task
@@ -627,8 +627,8 @@ case "$tool" in
     butane)
         ensure_butane
         ;;
-    mirror-registry)
-        ensure_mirror_registry
+    quay-registry)
+        ensure_quay_registry
         ;;
     *)
         echo "Error: Unknown tool: $tool" >&2
