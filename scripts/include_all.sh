@@ -1958,7 +1958,8 @@ readonly TASK_OC="cli:install:oc"
 readonly TASK_OPENSHIFT_INSTALL="cli:install:openshift-install"
 readonly TASK_GOVC="cli:install:govc"
 readonly TASK_BUTANE="cli:install:butane"
-readonly TASK_MIRROR_REG="mirror:reg:download"
+readonly TASK_QUAY_REG="cli:install:quay-registry"
+readonly TASK_DOCKER_REG="cli:download:docker-reg-image"
 
 # Start all CLI tarball downloads (parallel, non-blocking)
 start_all_cli_downloads() {
@@ -2000,9 +2001,16 @@ ensure_butane() {
 	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
 }
 
-# Ensure mirror-registry is downloaded
-ensure_mirror_registry() {
-	run_once -w -m "Waiting for mirror-registry download" -i "$TASK_MIRROR_REG" -- make -sC mirror download-registries
+# Ensure Quay mirror-registry is installed in ~/bin
+ensure_quay_registry() {
+	wait_all_cli_downloads
+	run_once -w -m "Installing mirror-registry to ~/bin" -i "$TASK_QUAY_REG" -- make -sC cli quay-registry
+}
+
+# Ensure docker-registry image is downloaded
+ensure_docker_registry() {
+	wait_all_cli_downloads
+	run_once -w -m "Downloading docker registry image" -i "$TASK_DOCKER_REG" -- make -sC cli docker-registry
 }
 
 # Get error output from a task (helper for error messages)

@@ -1216,10 +1216,8 @@ download_all_catalogs "$ocp_ver_short" 86400  # 1-day TTL
 # Trigger download of all CLI binaries (for interactive mode only)
 # Note: Non-interactive mode already started these at line ~205
 # Note: Another place this is checked is in "scripts/reg-save.sh"
+# Note: Registry downloads (quay-registry, docker-registry) are managed in cli/
 scripts/cli-download-all.sh
-
-# Initiate download of mirror-install and docker-reg image
-run_once -i mirror:reg:download -- make -s -C mirror download-registries
 
 # make & jq are needed below and in the next steps 
 scripts/install-rpms.sh external 
