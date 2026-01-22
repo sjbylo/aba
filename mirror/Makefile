@@ -160,7 +160,6 @@ mirror.conf: ../aba.conf .init                        ## Create the mirror.conf 
 install: .installed
 .installed: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
 	@$(SCRIPTS)/ensure-cli.sh quay-registry
-	@bash -c 'source $(SCRIPTS)/include_all.sh && $(SCRIPTS)/run-once.sh -w -q -i $$TASK_QUAY_REG -- make -sC . mirror-registry'
 	$(SCRIPTS)/reg-install.sh
 	$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 
