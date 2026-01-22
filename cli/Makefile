@@ -98,7 +98,7 @@ out-install:
 	echo oc openshift-install oc-mirror butane $(govc_bin)
 
 out-install-all:
-	echo oc openshift-install oc-mirror butane govc
+	echo oc openshift-install oc-mirror butane govc quay-registry
 
 # For "reset" and "oc-mirror" and "govc" targets we DO NOT need to check for the target ocp version
 # If 'reset' found in $MAKECMDGOALS, i.e. no reset target provided
@@ -171,7 +171,7 @@ out-download:
 	echo $(download)
 
 out-download-all:
-	echo $(download_all)
+	echo $(download_all) mirror-registry-amd64.tar.gz docker-reg-image.tgz
 
 
 ########################################
@@ -289,17 +289,65 @@ $(butane_binary_file): ## Download butane binary
 	echo [ABA] "File $@ checksum valid!"
 
 
+###########################################
+# Registry Installation Artifacts
+###########################################
+
+# Quay Mirror Registry for Red Hat OpenShift
+MIRROR_REGISTRY_FILE := mirror-registry-amd64.tar.gz
+MIRROR_REGISTRY_URL := https://mirror.openshift.com/pub/cgw/mirror-registry/latest
+
+# Download target (tarball)
+$(MIRROR_REGISTRY_FILE):
+	echo [ABA] "Downloading $(MIRROR_REGISTRY_URL)/$(MIRROR_REGISTRY_FILE) ..."
+	curl $(CURL_PROGRESS) -OL $(MIRROR_REGISTRY_URL)/$(MIRROR_REGISTRY_FILE)
+	file $(MIRROR_REGISTRY_FILE) | grep -q "gzip compressed data"
+	curl -f --retry 8 -sL -o mirror-registry-sha256sum.txt $(MIRROR_REGISTRY_URL)/sha256sum.txt
+	cs=`sha256sum $(MIRROR_REGISTRY_FILE)` && grep -q "$$cs" mirror-registry-sha256sum.txt
+	tar tzf $(MIRROR_REGISTRY_FILE) >/dev/null && echo [ABA] "File $(MIRROR_REGISTRY_FILE) is valid"
+
+# Install target (extract to ~/bin)
+~/bin/mirror-registry: $(MIRROR_REGISTRY_FILE)
+	tar xzf $(MIRROR_REGISTRY_FILE) -C ~/bin mirror-registry
+	chmod +x ~/bin/mirror-registry
+	touch ~/bin/mirror-registry
+
+# Alias target (download + install)
+quay-registry: ~/bin/mirror-registry
+
+# Docker Registry (container image)
+DOCKER_REG_FILE := docker-reg-image.tgz
+DOCKER_REG_IMAGE := docker.io/library/registry:latest
+
+$(DOCKER_REG_FILE):
+	@echo [ABA] "Checking availability of $(DOCKER_REG_IMAGE)..."
+	@if podman pull $(DOCKER_REG_IMAGE); then \
+		echo [ABA] "Pull successful. Saving to $(DOCKER_REG_FILE)..."; \
+		podman save -o $(DOCKER_REG_FILE) $(DOCKER_REG_IMAGE); \
+		echo [ABA] "Docker registry image saved to $(DOCKER_REG_FILE)"; \
+	else \
+		echo [ABA] "Warning: Could not pull $(DOCKER_REG_IMAGE) (docker.io may be blocked). Skipping."; \
+		touch $(DOCKER_REG_FILE); \
+	fi
+
+# Alias target for docker registry
+docker-registry: $(DOCKER_REG_FILE)
+
+# Combined download target (for background downloads)
+.PHONY: download-registries
+download-registries: $(MIRROR_REGISTRY_FILE) $(DOCKER_REG_FILE)
+
 ########################################
 .PHONY: clean 
 clean: ## Clean up installed binaries
 	@../scripts/cli-install-all.sh --reset
-	@rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} *sha256sum.txt
+	@rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,mirror-registry} *sha256sum.txt
 #	This should be just: run_once -r -i "cli:install" # to reset all downloads in cli dir
 
 .PHONY: reset
 reset: clean # Clean up everything. Only use if you know what you are doing!
 	@../scripts/cli-download-all.sh --reset
-	@rm -f *.tar.gz .init butane* #.*-download
+	@rm -f *.tar.gz *.tgz .init butane* #.*-download
 #	bash -lc 'source ../scripts/include_all.sh; run_once -r -i "download_all_cli"'
 #	This should be just: run_once -r -i "cli:download" # to reset all downloads in cli dir
 

@@ -1645,8 +1645,7 @@ select_operators() {
 
 	# Start additional background tasks (catalog and CLI downloads already started after version confirmation)
 	log "Starting additional background tasks for operators"
-	log "Starting registry download task"
-	run_once -i mirror:reg:download -- make -s -C "$ABA_ROOT/mirror" download-registries
+	log "Registry downloads managed by cli-download-all.sh"
 	
 	# WAIT for catalog indexes to download (needed for operator sets AND search)
 	# Catalogs were started in background after version selection

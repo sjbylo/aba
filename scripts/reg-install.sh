@@ -203,19 +203,19 @@ if [ "$reg_ssh_key" ]; then
 	#	cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys
 
 	# Generate the script to be used to delete this registry
-	uninstall_cmd="eval ./mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts --autoApprove -v"
+	uninstall_cmd="eval mirror-registry uninstall --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts --autoApprove -v"
 
 	echo "reg_delete() { echo [ABA] Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	aba_info "Created Quay uninstall script at $PWD/reg-uninstall.sh"
 
-	cmd="./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts"
+	cmd="mirror-registry install -v --initUser $reg_user --quayHostname $reg_host --targetUsername $reg_ssh_user --targetHostname $reg_host -k $reg_ssh_key $reg_root_opts"
 
 	aba_info "Installing mirror registry with command:"
 	aba_info "$cmd --initPassword <hidden>"
 
-	if ! ensure_mirror_registry; then
-		error_msg=$(get_task_error "$TASK_MIRROR_REG")
+	if ! ensure_quay_registry; then
+		error_msg=$(get_task_error "$TASK_QUAY_REG")
 		aba_abort "Failed to download mirror-install:\n$error_msg\n\nPlease check network and try again."
 	fi
 
@@ -357,7 +357,7 @@ else
 	fi
 
 	# Generate the script to be used to delete this registry
-	uninstall_cmd="eval ./mirror-registry uninstall --autoApprove $reg_root_opts -v"
+	uninstall_cmd="eval mirror-registry uninstall --autoApprove $reg_root_opts -v"
 	echo "reg_delete() { echo [ABA] Running command: \"$uninstall_cmd\"; $uninstall_cmd;}" > ./reg-uninstall.sh
 	echo reg_host_to_del=$reg_host >> ./reg-uninstall.sh
 	aba_info "Created Quay uninstall script at $PWD/reg-uninstall.sh"
@@ -368,13 +368,13 @@ else
 		ssh-keygen -t ed25519 -f $HOME/.ssh/quay_installer -N '' >/dev/null && \
 		cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys
 
-	cmd="./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host $reg_root_opts"
+	cmd="mirror-registry install -v --initUser $reg_user --quayHostname $reg_host $reg_root_opts"
 
 	aba_info "Installing mirror registry with command:"
 	aba_info "$cmd --initPassword <hidden>"
 
-	if ! ensure_mirror_registry; then
-		error_msg=$(get_task_error "$TASK_MIRROR_REG")
+	if ! ensure_quay_registry; then
+		error_msg=$(get_task_error "$TASK_QUAY_REG")
 		aba_abort "Failed to download mirror-install:\n$error_msg\n\nPlease check network and try again."
 	fi
 
