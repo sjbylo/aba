@@ -158,7 +158,8 @@ mirror.conf: ../aba.conf .init                        ## Create the mirror.conf 
 
 install: .installed
 .installed: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
-	@$(SCRIPTS)/run-once.sh -w -m "Waiting for mirror-registry download" -i mirror:install:mirror-registry -- make -sC . mirror-registry
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for mirror-registry download" -i mirror:reg:download
+	@make -sC . mirror-registry
 	$(SCRIPTS)/reg-install.sh
 	$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 
