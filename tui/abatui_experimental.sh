@@ -270,64 +270,20 @@ Press OK to return" 0 0
 # UI helpers
 # -----------------------------------------------------------------------------
 check_internet_access() {
-	# Only log if we're actually going to check (not cached)
-	if ! run_once -p -i "tui:check:api.openshift.com" >/dev/null 2>&1 || \
-	   ! run_once -p -i "tui:check:mirror.openshift.com" >/dev/null 2>&1 || \
-	   ! run_once -p -i "tui:check:registry.redhat.io" >/dev/null 2>&1; then
-		log "Checking internet access to required sites"
-	fi
+	log "Checking internet access to required sites"
 	
-	# Get the runner directory
-	local RUNNER_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
-	
-	# Start all three checks in parallel (simple curl HEAD requests, 10-min TTL)
-	run_once -t 600 -i "tui:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
-	run_once -t 600 -i "tui:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
-	run_once -t 600 -i "tui:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
-	
-	# Now wait for all three and check results
-	local failed_sites=""
-	local error_details=""
-	
-	if ! run_once -w -i "tui:check:api.openshift.com"; then
-		failed_sites="api.openshift.com"
-		local err_msg=$(run_once -e -i "tui:check:api.openshift.com" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		error_details=$'api.openshift.com:\n  '"$err_msg"
-		log "ERROR: Cannot access api.openshift.com: $err_msg"
-	fi
-	
-	if ! run_once -w -i "tui:check:mirror.openshift.com"; then
-		[[ -n "$failed_sites" ]] && failed_sites="$failed_sites, "
-		failed_sites="${failed_sites}mirror.openshift.com"
-		local err_msg=$(run_once -e -i "tui:check:mirror.openshift.com" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$error_details" ]] && error_details+=$'\n\n'
-		error_details+=$'mirror.openshift.com:\n  '"$err_msg"
-		log "ERROR: Cannot access mirror.openshift.com: $err_msg"
-	fi
-	
-	if ! run_once -w -i "tui:check:registry.redhat.io"; then
-		[[ -n "$failed_sites" ]] && failed_sites="$failed_sites, "
-		failed_sites="${failed_sites}registry.redhat.io"
-		local err_msg=$(run_once -e -i "tui:check:registry.redhat.io" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$error_details" ]] && error_details+=$'\n\n'
-		error_details+=$'registry.redhat.io:\n  '"$err_msg"
-		log "ERROR: Cannot access registry.redhat.io: $err_msg"
-	fi
-	
-	# If any site failed, show error and exit
-	if [[ -n "$failed_sites" ]]; then
-		log "ERROR: No internet access to: $failed_sites"
+	# Use shared connectivity check function
+	if ! check_internet_connectivity "tui"; then
+		# Function sets FAILED_SITES and ERROR_DETAILS
+		log "ERROR: No internet access to: $FAILED_SITES"
 		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
 			--msgbox \
 "\Z1ERROR: Internet access required\Zn
 
-Cannot access: $failed_sites
+Cannot access: $FAILED_SITES
 
 Error details:
-$error_details
+$ERROR_DETAILS
 
 Ensure you have Internet access to download the required images.
 To get started with Aba run it on a connected workstation/laptop
@@ -343,10 +299,10 @@ Required sites:                    Other sites:
 
 Exiting..." 0 0
 	
-	log "Exiting due to no internet access"
-	clear
-	exit 1
-fi
+		log "Exiting due to no internet access"
+		clear
+		exit 1
+	fi
 	
 	log "Internet access verified to all required sites"
 }
@@ -2870,9 +2826,9 @@ summary_apply() {
 	# Wait for oc-mirror to be installed (needed for isconf generation)
 	log "Ensuring oc-mirror is installed before generating ImageSet config"
 	# Let errors flow to logs, suppress stdout (informational messages only)
-	if ! run_once -w -i cli:install:oc-mirror -- make -sC "$ABA_ROOT/cli" oc-mirror >/dev/null; then
+	if ! run_once -w -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror >/dev/null; then
 		log "ERROR: Failed to install oc-mirror"
-		show_run_once_error "cli:install:oc-mirror" "Failed to Install oc-mirror"
+		show_run_once_error "$TASK_OC_MIRROR" "Failed to Install oc-mirror"
 		DIALOG_RC="back"
 		return
 	fi
@@ -3218,7 +3174,7 @@ log "Background OCP version fetches started"
 
 # Download oc-mirror early (needed for catalog downloads later)
 log "Starting oc-mirror download in background"
-PLAIN_OUTPUT=1 run_once -i cli:install:oc-mirror -- make -sC "$ABA_ROOT/cli" oc-mirror
+PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror
 log "oc-mirror download started"
 
 # Show header

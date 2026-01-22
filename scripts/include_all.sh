@@ -2012,3 +2012,59 @@ get_task_error() {
 	local task_id="$1"
 	run_once -e -i "$task_id"
 }
+
+# Check internet connectivity to required sites
+# Usage: check_internet_connectivity <prefix> [quiet]
+#   prefix: Task ID prefix (e.g., "cli" or "tui")
+#   quiet:  If "true", suppress checking message (default: false)
+# Returns: 0 if all sites accessible, 1 if any failed
+# Sets global variables: FAILED_SITES, ERROR_DETAILS (for caller to handle)
+check_internet_connectivity() {
+	local prefix="$1"
+	local quiet="${2:-false}"
+	
+	# Check if we need to run the checks (not cached)
+	local need_check=false
+	if ! run_once -p -i "${prefix}:check:api.openshift.com" >/dev/null 2>&1 || \
+	   ! run_once -p -i "${prefix}:check:mirror.openshift.com" >/dev/null 2>&1 || \
+	   ! run_once -p -i "${prefix}:check:registry.redhat.io" >/dev/null 2>&1; then
+		need_check=true
+	fi
+	
+	# Start all three checks in parallel (lightweight curl HEAD requests, 10-min TTL)
+	run_once -t 600 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
+	run_once -t 600 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
+	run_once -t 600 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
+	
+	# Now wait for all three and check results (quietly, no waiting messages)
+	FAILED_SITES=""
+	ERROR_DETAILS=""
+	
+	if ! run_once -w -q -i "${prefix}:check:api.openshift.com"; then
+		FAILED_SITES="api.openshift.com"
+		local err_msg=$(run_once -e -i "${prefix}:check:api.openshift.com" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
+		ERROR_DETAILS="api.openshift.com: $err_msg"
+	fi
+	
+	if ! run_once -w -q -i "${prefix}:check:mirror.openshift.com"; then
+		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
+		FAILED_SITES="${FAILED_SITES}mirror.openshift.com"
+		local err_msg=$(run_once -e -i "${prefix}:check:mirror.openshift.com" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
+		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'"  "
+		ERROR_DETAILS="${ERROR_DETAILS}mirror.openshift.com: $err_msg"
+	fi
+	
+	if ! run_once -w -q -i "${prefix}:check:registry.redhat.io"; then
+		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
+		FAILED_SITES="${FAILED_SITES}registry.redhat.io"
+		local err_msg=$(run_once -e -i "${prefix}:check:registry.redhat.io" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
+		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'"  "
+		ERROR_DETAILS="${ERROR_DETAILS}registry.redhat.io: $err_msg"
+	fi
+	
+	# Return status
+	[[ -z "$FAILED_SITES" ]] && return 0 || return 1
+}

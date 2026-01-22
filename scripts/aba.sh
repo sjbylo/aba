@@ -951,59 +951,17 @@ fi
 	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
 
 	aba_debug "Downloading oc-mirror in the background ..."
-	PLAIN_OUTPUT=1 run_once -i cli:install:oc-mirror			-- make -sC cli oc-mirror
+	PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR"			-- make -sC cli oc-mirror
 
-	# Check Internet connectivity to required sites (parallel, cached checks with 10-min TTL)
-	# Only show messages if we're actually going to check (not cached)
-	checking_connectivity=false
-	if ! run_once -p -i "cli:check:api.openshift.com" >/dev/null 2>&1 || \
-	   ! run_once -p -i "cli:check:mirror.openshift.com" >/dev/null 2>&1 || \
-	   ! run_once -p -i "cli:check:registry.redhat.io" >/dev/null 2>&1; then
-		checking_connectivity=true
-		aba_info "Checking Internet connectivity to required sites..."
-	fi
+	# Check Internet connectivity to required sites (using shared function)
+	aba_info "Checking Internet connectivity to required sites..."
 	
-	# Start all three checks in parallel (lightweight curl HEAD requests, 10-min TTL)
-	run_once -t 600 -i "cli:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
-	run_once -t 600 -i "cli:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
-	run_once -t 600 -i "cli:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
-	
-	# Now wait for all three and check results (quietly, no waiting messages)
-	failed_sites=""
-	error_details=""
-	
-	if ! run_once -w -q -i "cli:check:api.openshift.com"; then
-		failed_sites="api.openshift.com"
-		err_msg=$(run_once -e -i "cli:check:api.openshift.com" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		error_details="api.openshift.com: $err_msg"
-	fi
-	
-	if ! run_once -w -q -i "cli:check:mirror.openshift.com"; then
-		[[ -n "$failed_sites" ]] && failed_sites="$failed_sites, "
-		failed_sites="${failed_sites}mirror.openshift.com"
-		err_msg=$(run_once -e -i "cli:check:mirror.openshift.com" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$error_details" ]] && error_details="$error_details"$'\n'"  "
-		error_details="${error_details}mirror.openshift.com: $err_msg"
-	fi
-	
-	if ! run_once -w -q -i "cli:check:registry.redhat.io"; then
-		[[ -n "$failed_sites" ]] && failed_sites="$failed_sites, "
-		failed_sites="${failed_sites}registry.redhat.io"
-		err_msg=$(run_once -e -i "cli:check:registry.redhat.io" | head -1)
-		[[ -z "$err_msg" ]] && err_msg="Connection failed"
-		[[ -n "$error_details" ]] && error_details="$error_details"$'\n'"  "
-		error_details="${error_details}registry.redhat.io: $err_msg"
-	fi
-	
-	# If any site failed, show error and exit
-	if [[ -n "$failed_sites" ]]; then
+	if ! check_internet_connectivity "cli"; then
 		aba_abort \
-			"Cannot access required sites: $failed_sites" \
+			"Cannot access required sites: $FAILED_SITES" \
 			"" \
 			"Error details:" \
-			"  $error_details" \
+			"  $ERROR_DETAILS" \
 			"" \
 			"Ensure you have Internet access to download the required images." \
 			"To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." \
