@@ -84,14 +84,14 @@ ensure_oc_mirror
 catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
 aba_info "Running: oc-mirror list operators --catalog $catalog_url"
 
-if ! oc-mirror list operators --catalog "$catalog_url" > "$index_file" 2>&1; then
-	ret=$?
-	aba_abort "oc-mirror failed with exit code $ret for catalog $catalog_name"
-fi
+oc-mirror list operators --catalog "$catalog_url" > "$index_file" 2>&1
+ret=$?
 
-# Verify we got data
-if [ ! -s "$index_file" ]; then
-	aba_abort "Downloaded index file is empty for $catalog_name"
+# Check both exit code AND output file (oc-mirror v2 sometimes returns 0 even on failure)
+if [ $ret -ne 0 ]; then
+	aba_abort "oc-mirror list operators failed with exit code $ret for catalog $catalog_name"
+elif [ ! -s "$index_file" ]; then
+	aba_abort "oc-mirror returned success (exit 0) but output file is empty for $catalog_name"
 fi
 
 # Mark completion
