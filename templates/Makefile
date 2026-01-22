@@ -66,6 +66,7 @@ init: .init
 .init:
 	@ln -fs $(TEMPLATES)
 	@ln -fs $(SCRIPTS)
+	@ln -fs ../cli
 	@ln -fs ../mirror
 	@ln -fs ../mirror/regcreds 
 	@ln -fs ../aba.conf
