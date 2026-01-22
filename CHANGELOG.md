@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Bug Fixes
+- Fixed "Task not started and no command provided" error when running `aba -d mirror load` directly
+- Fixed `oc-mirror list operators` incorrectly reporting success (exit code 0) when catalog download fails
+
 ---
 
 ## [0.9.0] - 2026-01-21
