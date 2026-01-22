@@ -43,6 +43,18 @@ Cursor (on registry4)
 - "ok, commit to dev branch"
 - Any explicit instruction to commit/push
 
+**Default Workflow: Commit AND Push Together**
+
+Unless explicitly told "commit only" or "don't push yet":
+1. ✅ Commit the changes
+2. ✅ Immediately push to origin/dev
+
+**Why This Matters:**
+- Bundles contain snapshots of code from the remote repo
+- Testing disconnected bundles requires latest code on remote
+- User's workflow depends on remote being current
+- Provides immediate backup of work
+
 **If uncertain, ASK!**
 
 ### Pre-Commit Checklist (AI Assistant Workflow)
@@ -76,7 +88,7 @@ build/pre-commit-checks.sh --skip-version
 6. **Commit and push** (only after approval):
    ```bash
    git commit -m "type: description"
-   git push origin dev
+   git push origin dev              # ALWAYS push after commit (unless explicitly told "commit only")
    ```
 
 **Important Notes:**
@@ -525,6 +537,144 @@ scripts/cli-install-all.sh --wait
 - ✅ Caching prevents redundant downloads
 - ✅ Clear namespace separation (`cli:` vs `mirror:`)
 
+#### Centralized CLI Tool Management Functions
+
+**Purpose**: Single source of truth for CLI tool installation, preventing accidental task ID changes and ensuring consistency.
+
+**Location**: `scripts/include_all.sh`
+
+**Available Functions:**
+```bash
+# Task IDs (constants - NEVER change these!)
+readonly TASK_OC_MIRROR="cli:install:oc-mirror"
+readonly TASK_OC="cli:install:oc"
+readonly TASK_OPENSHIFT_INSTALL="cli:install:openshift-install"
+readonly TASK_GOVC="cli:install:govc"
+readonly TASK_BUTANE="cli:install:butane"
+readonly TASK_MIRROR_REG="mirror:reg:download"
+
+# Download all CLI tarballs (background, non-blocking)
+start_all_cli_downloads()              # Starts downloads in background
+wait_all_cli_downloads()               # Waits for all downloads to complete
+
+# Ensure tools are installed (waits for download + installs)
+ensure_oc_mirror()                     # Ensures oc-mirror in ~/bin
+ensure_oc()                            # Ensures oc in ~/bin
+ensure_openshift_install()             # Ensures openshift-install in ~/bin
+ensure_govc()                          # Ensures govc in ~/bin
+ensure_butane()                        # Ensures butane in ~/bin
+ensure_mirror_registry()               # Ensures mirror-registry is downloaded
+
+# Get error output from failed task
+get_task_error "$TASK_ID"              # Returns stderr from failed task
+```
+
+**Usage in Scripts:**
+```bash
+#!/bin/bash
+source scripts/include_all.sh
+
+# Ensure tool is available (waits if needed, starts download if not running)
+if ! ensure_oc_mirror; then
+	error_msg=$(get_task_error "$TASK_OC_MIRROR")
+	aba_abort "Failed to install oc-mirror" "$error_msg"
+fi
+
+# Now use the tool
+oc-mirror list operators ...
+```
+
+**Usage in Makefiles** (via wrapper script):
+```makefile
+# Use scripts/ensure-cli.sh wrapper
+install-tool:
+	@$(SCRIPTS)/ensure-cli.sh oc-mirror        # Ensures oc-mirror
+	@$(SCRIPTS)/ensure-cli.sh mirror-registry  # Ensures mirror-registry
+	@$(SCRIPTS)/ensure-cli.sh govc             # Ensures govc
+	# ... rest of target
+```
+
+**The ensure-cli.sh Wrapper:**
+
+**Location**: `scripts/ensure-cli.sh`
+
+**Purpose**: Allows Makefiles to call `ensure_*()` functions without sourcing `include_all.sh`
+
+**Implementation:**
+```bash
+#!/bin/bash
+# Wrapper to call ensure_* functions from Makefiles
+# Usage: ensure-cli.sh {oc-mirror|oc|openshift-install|govc|butane|mirror-registry}
+
+cd "$(dirname "$0")/.." || exit 1
+source scripts/include_all.sh
+
+tool="$1"
+
+case "$tool" in
+    oc-mirror)
+        ensure_oc_mirror
+        ;;
+    oc)
+        ensure_oc
+        ;;
+    openshift-install)
+        ensure_openshift_install
+        ;;
+    govc)
+        ensure_govc
+        ;;
+    butane)
+        ensure_butane
+        ;;
+    mirror-registry)
+        ensure_mirror_registry
+        ;;
+    *)
+        echo "Error: Unknown tool: $tool" >&2
+        echo "Usage: $0 {oc-mirror|oc|openshift-install|govc|butane|mirror-registry}" >&2
+        exit 1
+        ;;
+esac
+```
+
+**Example from mirror/Makefile:**
+```makefile
+.installed: .init .rpmsext mirror.conf
+	@$(SCRIPTS)/ensure-cli.sh mirror-registry  # Waits/starts download, shows message
+	@make -sC . mirror-registry                 # Extracts tarball
+	$(SCRIPTS)/reg-install.sh                   # Installs registry
+	...
+```
+
+**Benefits:**
+- ✅ **Single source of truth** - Task IDs defined once in `include_all.sh`
+- ✅ **No accidental changes** - Task IDs are constants, hard to change by accident
+- ✅ **Consistent behavior** - All scripts use same functions
+- ✅ **Simple Makefile usage** - Just call `ensure-cli.sh <tool-name>`
+- ✅ **Automatic error handling** - Functions handle download + install + errors
+- ✅ **Prevents race conditions** - Properly waits for downloads before extraction
+
+**Migration Pattern:**
+
+**Before (problematic):**
+```bash
+# In scripts - error prone, task IDs can drift
+run_once -w -m "Waiting for oc-mirror" -i cli:install:oc-mirror -- make -sC cli oc-mirror
+
+# In Makefiles - can fail if task not started
+@$(SCRIPTS)/run-once.sh -w -i mirror:reg:download  # ERROR if not started!
+```
+
+**After (correct):**
+```bash
+# In scripts - use centralized function
+ensure_oc_mirror
+
+# In Makefiles - use wrapper
+@$(SCRIPTS)/ensure-cli.sh mirror-registry
+```
+
 ### 2. Avoid `$ABA_ROOT` in Scripts
 **Current State**: `$ABA_ROOT` is used in 146 places (needs cleanup!)
 
@@ -948,6 +1098,6 @@ make -C mirror clean       # Mirror state
 
 ---
 
-**Last Updated**: January 20, 2026  
+**Last Updated**: January 22, 2026  
 **Purpose**: Keep this document updated as rules evolve
 

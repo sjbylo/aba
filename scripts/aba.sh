@@ -863,8 +863,9 @@ if [ -f .bundle ]; then
 	# make & jq are needed below and in the next steps. Best to install all at once.
 	scripts/install-rpms.sh internal
 
-	# May as well install the CLI binaries from aba/cli/ now
-	scripts/cli-install-all.sh >/dev/null
+	# Extract all CLI binaries from aba/cli/ in parallel (tarballs already in bundle)
+	scripts/cli-install-all.sh             # Start all extractions in parallel (background)
+	scripts/cli-install-all.sh --wait      # Wait for all to complete
 
 	echo_yellow "Aba install bundle detected for OpenShift v$ocp_version."
 
