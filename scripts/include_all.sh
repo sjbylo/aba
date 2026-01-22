@@ -1527,8 +1527,13 @@ run_once() {
 		: >"$log_err_file"
 		rm -f "$exit_file"
 		
-		# Save command for troubleshooting (each arg on separate line for clarity)
-		printf '%s\n' "${command[@]}" > "$cmd_file"
+		# Save command in two formats:
+		# 1. cmd.sh - Machine-readable (declare -p) for reliable re-execution
+		#    Preserves exact array structure including spaces, quotes, special chars
+		# 2. cmd - Human-readable (one line) for debugging/troubleshooting
+		declare -p command > "$id_dir/cmd.sh"
+		printf '%s ' "${command[@]}" > "$cmd_file"
+		echo >> "$cmd_file"  # trailing newline
 		
 		# Backward compatibility: create symlink for old scripts that reference 'log'
 		ln -sf log.out "$id_dir/log" 2>/dev/null || true
@@ -1645,13 +1650,44 @@ run_once() {
 			fi
 		fi
 
-		local exit_code
-		exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+	local exit_code
+	exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
 
-		if [[ "$purge" == true ]]; then
-			rm -rf "$id_dir"
+	# --- SELF-HEALING VALIDATION ---
+	# If no command provided but task previously succeeded, load saved command
+	# This allows validation even when wait is called without explicit command
+	if [[ $exit_code -eq 0 && ${#command[@]} -eq 0 && -f "$id_dir/cmd.sh" ]]; then
+		source "$id_dir/cmd.sh"  # Reconstructs command array via declare -p
+		aba_debug "Loaded saved command for validation: ${command[*]}"
+	fi
+
+	# Self-healing: re-run successful tasks to verify outputs still exist
+	# Tasks are idempotent - they check their artifacts and exit quickly if valid
+	# If artifacts missing (e.g. user deleted files), task recreates them automatically
+	# This prevents "file not found" errors from stale cached success states
+	if [[ $exit_code -eq 0 && ${#command[@]} -gt 0 ]]; then
+		# Check if task is currently running (lock held)
+		exec 9>>"$lock_file"
+		if flock -n 9; then
+			# Lock acquired - safe to validate
+			exec 9>&-
+			aba_debug "Task $work_id completed successfully, running validation..."
+			rm -f "$exit_file"  # Clear exit so task can run
+			_start_task "true"  # Run in foreground (synchronous)
+			wait $!
+			# Get new exit code from validation run
+			exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+		else
+			# Lock held - another process is running this task, skip validation
+			exec 9>&-
+			aba_debug "Task $work_id is currently running, skipping validation"
 		fi
-		return "$exit_code"
+	fi
+
+	if [[ "$purge" == true ]]; then
+		rm -rf "$id_dir"
+	fi
+	return "$exit_code"
 	fi
 
 	echo "Error: Unknown mode." >&2
