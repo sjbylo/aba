@@ -70,3 +70,4 @@ cli/butane-amd64
 cli/scripts
 bundles/work
 .vscode*
+.bundle
