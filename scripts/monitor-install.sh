@@ -24,7 +24,7 @@ opts=
 [ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"
 
 # Ensure openshift-install is available (wait for background download/install)
-run_once -w -m "Waiting for openshift-install binary" -i cli:install:openshift-install -- make -sC cli openshift-install >/dev/null
+ensure_openshift_install >/dev/null
 
 echo_yellow "[ABA] Running: openshift-install agent wait-for install-complete --dir $ASSETS_DIR"
 

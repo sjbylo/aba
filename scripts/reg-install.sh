@@ -214,8 +214,8 @@ if [ "$reg_ssh_key" ]; then
 	aba_info "Installing mirror registry with command:"
 	aba_info "$cmd --initPassword <hidden>"
 
-	if ! run_once -w -m "Waiting for mirror-registry download to complete" -i mirror:reg:download -- make -s -C . download-registries; then
-		error_msg=$(run_once -e -i mirror:reg:download)
+	if ! ensure_mirror_registry; then
+		error_msg=$(get_task_error "$TASK_MIRROR_REG")
 		aba_abort "Failed to download mirror-install:\n$error_msg\n\nPlease check network and try again."
 	fi
 
@@ -373,8 +373,8 @@ else
 	aba_info "Installing mirror registry with command:"
 	aba_info "$cmd --initPassword <hidden>"
 
-	if ! run_once -w -m "Waiting for mirror-registry download to complete" -i mirror:reg:download -- make -s -C . download-registries; then
-		error_msg=$(run_once -e -i mirror:reg:download)
+	if ! ensure_mirror_registry; then
+		error_msg=$(get_task_error "$TASK_MIRROR_REG")
 		aba_abort "Failed to download mirror-install:\n$error_msg\n\nPlease check network and try again."
 	fi
 

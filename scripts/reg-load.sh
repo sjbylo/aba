@@ -28,8 +28,8 @@ verify-mirror-conf || exit 1
 
 # Be sure a download has started ..
 #PLAIN_OUTPUT=1 run_once    -i cli:install:oc-mirror -- make -sC cli oc-mirror
-if ! run_once -w -m "Waiting for oc-mirror binary download" -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
-	error_msg=$(run_once -e -i cli:install:oc-mirror)
+if ! ensure_oc_mirror; then
+	error_msg=$(get_task_error "$TASK_OC_MIRROR")
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
 
