@@ -162,7 +162,7 @@ rm -f $done_file  # Just to be sure
 aba_info "Downloading Operator $catalog_name index v$ocp_ver_major to $index_file, please wait a few minutes ..."
 
 # Wait for oc-mirror binary to be downloaded and available!
-run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
+ensure_oc_mirror 
 
 # Fetch latest operator catalog and default channels
 aba_info "Running: oc-mirror list operators --catalog registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major" >&2

@@ -41,8 +41,8 @@ sleep 1
 scripts/cli-download-all.sh
 
 # Wait for oc-mirror specifically (needed immediately below)
-if ! run_once -w -m "Waiting for oc-mirror binary download" -i cli:install:oc-mirror -- make -sC cli oc-mirror; then
-	error_msg=$(run_once -e -i cli:install:oc-mirror)
+if ! ensure_oc_mirror; then
+	error_msg=$(get_task_error "$TASK_OC_MIRROR")
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
 
