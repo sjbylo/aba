@@ -1941,3 +1941,67 @@ validate_ntp_servers() {
 	return 0
 }
 
+
+# ============================================
+# CLI Tool Management Functions
+# Centralized task IDs and installation logic
+# ============================================
+
+# Task IDs (single source of truth)
+readonly TASK_OC_MIRROR="cli:install:oc-mirror"
+readonly TASK_OC="cli:install:oc"
+readonly TASK_OPENSHIFT_INSTALL="cli:install:openshift-install"
+readonly TASK_GOVC="cli:install:govc"
+readonly TASK_BUTANE="cli:install:butane"
+readonly TASK_MIRROR_REG="mirror:reg:download"
+
+# Start all CLI tarball downloads (parallel, non-blocking)
+start_all_cli_downloads() {
+	scripts/cli-download-all.sh
+}
+
+# Wait for all CLI tarball downloads to complete
+wait_all_cli_downloads() {
+	scripts/cli-download-all.sh --wait
+}
+
+# Ensure oc-mirror is installed in ~/bin
+ensure_oc_mirror() {
+	wait_all_cli_downloads
+	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
+}
+
+# Ensure oc CLI is installed in ~/bin
+ensure_oc() {
+	wait_all_cli_downloads
+	run_once -w -m "Installing oc to ~/bin" -i "$TASK_OC" -- make -sC cli oc
+}
+
+# Ensure openshift-install is installed in ~/bin
+ensure_openshift_install() {
+	wait_all_cli_downloads
+	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL" -- make -sC cli openshift-install
+}
+
+# Ensure govc is installed in ~/bin
+ensure_govc() {
+	wait_all_cli_downloads
+	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
+}
+
+# Ensure butane is installed in ~/bin
+ensure_butane() {
+	wait_all_cli_downloads
+	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
+}
+
+# Ensure mirror-registry is downloaded
+ensure_mirror_registry() {
+	run_once -w -m "Waiting for mirror-registry download" -i "$TASK_MIRROR_REG" -- make -sC mirror download-registries
+}
+
+# Get error output from a task (helper for error messages)
+get_task_error() {
+	local task_id="$1"
+	run_once -e -i "$task_id"
+}
