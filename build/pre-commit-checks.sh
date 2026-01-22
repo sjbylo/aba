@@ -3,10 +3,11 @@
 # Usage: build/pre-commit-checks.sh [--skip-version]
 #
 # This script:
-# 1. Updates ABA_VERSION timestamp in scripts/aba.sh (unless --skip-version)
-# 2. Checks syntax of all shell scripts
-# 3. Verifies we're on dev branch
-# 4. Pulls latest changes
+# 1. Updates ABA_BUILD timestamp in scripts/aba.sh (unless --skip-version)
+# 2. Syncs RPM list in install script with templates/rpms-external.txt
+# 3. Checks syntax of all shell scripts
+# 4. Verifies we're on dev branch
+# 5. Pulls latest changes
 #
 # Exit codes:
 #   0 = All checks passed
@@ -35,16 +36,28 @@ fi
 
 # 1. Update ABA_BUILD timestamp
 if [[ "$SKIP_VERSION" == false ]]; then
-    echo -e "${YELLOW}[1/4] Updating ABA_BUILD timestamp...${NC}"
+    echo -e "${YELLOW}[1/5] Updating ABA_BUILD timestamp...${NC}"
     new_build=$(date +%Y%m%d%H%M%S)
     sed -i "s/^ABA_BUILD=.*/ABA_BUILD=$new_build/g" scripts/aba.sh
     echo -e "${GREEN}      ✓ ABA_BUILD = $new_build${NC}\n"
 else
-    echo -e "${YELLOW}[1/4] Skipping BUILD timestamp update${NC}\n"
+    echo -e "${YELLOW}[1/5] Skipping BUILD timestamp update${NC}\n"
 fi
 
-# 2. Check syntax of all shell scripts
-echo -e "${YELLOW}[2/4] Checking shell script syntax...${NC}"
+# 2. Sync install script RPM list with templates/rpms-external.txt
+echo -e "${YELLOW}[2/5] Syncing RPM list in install script...${NC}"
+if [ -f templates/rpms-external.txt ]; then
+    rpm_list=$(cat templates/rpms-external.txt)
+    # Update line 17: required_pkgs+=(...)
+    sed -i "s|^required_pkgs+=([^)]*).*|required_pkgs+=($rpm_list)  # Synced from templates/rpms-external.txt|" install
+    echo -e "${GREEN}      ✓ Synced: $rpm_list${NC}\n"
+else
+    echo -e "${RED}      ✗ templates/rpms-external.txt not found${NC}\n"
+    exit 1
+fi
+
+# 3. Check syntax of all shell scripts
+echo -e "${YELLOW}[3/5] Checking shell script syntax...${NC}"
 failed=0
 checked=0
 
@@ -68,8 +81,8 @@ fi
 
 echo -e "${GREEN}      ✓ All $checked shell scripts have valid syntax${NC}\n"
 
-# 3. Verify we're on dev branch
-echo -e "${YELLOW}[3/4] Verifying git branch...${NC}"
+# 4. Verify we're on dev branch
+echo -e "${YELLOW}[4/5] Verifying git branch...${NC}"
 current_branch=$(git branch --show-current)
 if [[ "$current_branch" != "dev" ]]; then
     echo -e "${RED}      ✗ Not on dev branch (current: $current_branch)${NC}\n"
@@ -77,8 +90,8 @@ if [[ "$current_branch" != "dev" ]]; then
 fi
 echo -e "${GREEN}      ✓ On dev branch${NC}\n"
 
-# 4. Pull latest changes
-echo -e "${YELLOW}[4/4] Pulling latest changes...${NC}"
+# 5. Pull latest changes
+echo -e "${YELLOW}[5/5] Pulling latest changes...${NC}"
 if git pull --rebase 2>&1 | grep -q "Already up to date"; then
     echo -e "${GREEN}      ✓ Already up to date${NC}\n"
 else
