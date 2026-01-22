@@ -1535,6 +1535,10 @@ run_once() {
 		printf '%s ' "${command[@]}" > "$cmd_file"
 		echo >> "$cmd_file"  # trailing newline
 		
+		# Save current working directory for re-execution (self-healing validation)
+		# Commands with relative paths need the same CWD to work correctly
+		pwd > "$id_dir/cwd"
+		
 		# Backward compatibility: create symlink for old scripts that reference 'log'
 		ln -sf log.out "$id_dir/log" 2>/dev/null || true
 
@@ -1672,9 +1676,22 @@ run_once() {
 			# Lock acquired - safe to validate
 			exec 9>&-
 			aba_debug "Task $work_id completed successfully, running validation..."
+			
+			# Restore original CWD if saved (needed for relative paths in commands)
+			local saved_cwd original_cwd
+			original_cwd="$(pwd)"
+			if [[ -f "$id_dir/cwd" ]]; then
+				saved_cwd="$(cat "$id_dir/cwd")"
+				cd "$saved_cwd" || aba_debug "Warning: Could not restore CWD to $saved_cwd"
+			fi
+			
 			rm -f "$exit_file"  # Clear exit so task can run
-			_start_task "true"  # Run in foreground (synchronous)
-			wait $!
+			_start_task "false"  # Run in background mode (logs to files, no terminal output)
+			wait $!  # Wait for validation task to complete
+			
+			# Restore current CWD
+			cd "$original_cwd" || true
+			
 			# Get new exit code from validation run
 			exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
 		else
@@ -1989,13 +2006,16 @@ validate_ntp_servers() {
 # ============================================
 
 # Task IDs (single source of truth)
-readonly TASK_OC_MIRROR="cli:install:oc-mirror"
-readonly TASK_OC="cli:install:oc"
-readonly TASK_OPENSHIFT_INSTALL="cli:install:openshift-install"
-readonly TASK_GOVC="cli:install:govc"
-readonly TASK_BUTANE="cli:install:butane"
-readonly TASK_QUAY_REG_DOWNLOAD="mirror:reg:download"
-readonly TASK_QUAY_REG="mirror:reg:install"
+# Guard against re-declaration when include_all.sh is sourced multiple times
+if [[ -z "${TASK_OC_MIRROR+x}" ]]; then
+	readonly TASK_OC_MIRROR="cli:install:oc-mirror"
+	readonly TASK_OC="cli:install:oc"
+	readonly TASK_OPENSHIFT_INSTALL="cli:install:openshift-install"
+	readonly TASK_GOVC="cli:install:govc"
+	readonly TASK_BUTANE="cli:install:butane"
+	readonly TASK_QUAY_REG_DOWNLOAD="mirror:reg:download"
+	readonly TASK_QUAY_REG="mirror:reg:install"
+fi
 
 # Start all CLI tarball downloads (parallel, non-blocking)
 start_all_cli_downloads() {
@@ -2040,6 +2060,7 @@ ensure_butane() {
 # Ensure mirror-registry (Quay) is installed (extracted)
 ensure_quay_registry() {
 	# Note: Download should already be started (like CLI tools)
+	# Called via ensure-cli.sh which cds to ABA_ROOT, so use -C mirror
 	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
 }
 
