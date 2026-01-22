@@ -2031,10 +2031,10 @@ check_internet_connectivity() {
 		need_check=true
 	fi
 	
-	# Start all three checks in parallel (lightweight curl HEAD requests, 10-min TTL)
-	run_once -t 600 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
-	run_once -t 600 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
-	run_once -t 600 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
+	# Start all three checks in parallel (lightweight curl HEAD requests, 30-sec TTL)
+	run_once -t 30 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
+	run_once -t 30 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
+	run_once -t 30 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
 	
 	# Now wait for all three and check results (quietly, no waiting messages)
 	FAILED_SITES=""

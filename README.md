@@ -284,10 +284,10 @@ cd aba
 aba
 ```
 
-**For development or testing, install from the main branch:**
+**For development or testing, install from the main or dev branch:**
 
 ```bash
-git clone https://github.com/sjbylo/aba.git
+git clone -b main https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba          # Let ABA guide you through the OpenShift installation workflow (interactive mode)
@@ -306,6 +306,7 @@ Note that 'aba' will create the `aba.conf` file which contains some values that 
 tui/abatui_experimental.sh    # Interactive wizard to configure and prepare your environment
 ```
 Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI walks you through selecting OpenShift version, operators, and creating install bundles or syncing to registries.
+
 
 Now, continue with either [Partially Disconnected Scenario](#partially-disconnected-scenario) or [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario) below.
 
