@@ -2360,6 +2360,11 @@ handle_action_local_quay() {
 	replace-value-conf -q -n reg_path -v "$reg_path" -f mirror/mirror.conf
 	replace-value-conf -q -n data_dir -v "$data_dir" -f mirror/mirror.conf
 	
+	# Clear SSH parameters for local installation (empty = localhost)
+	replace-value-conf -q -n reg_ssh_user -v "" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_ssh_key -v "" -f mirror/mirror.conf
+	log "Cleared SSH parameters for local registry installation"
+	
 	# Determine actual registry type and build appropriate command
 	local actual_type=$(get_actual_registry_type)
 	log "Actual registry type: $actual_type"
@@ -2438,6 +2443,11 @@ handle_action_local_docker() {
 	replace-value-conf -q -n reg_pw -v "$reg_pw" -f mirror/mirror.conf
 	replace-value-conf -q -n reg_path -v "$reg_path" -f mirror/mirror.conf
 	replace-value-conf -q -n data_dir -v "$data_dir" -f mirror/mirror.conf
+	
+	# Clear SSH parameters for local installation (empty = localhost)
+	replace-value-conf -q -n reg_ssh_user -v "" -f mirror/mirror.conf
+	replace-value-conf -q -n reg_ssh_key -v "" -f mirror/mirror.conf
+	log "Cleared SSH parameters for local registry installation"
 	
 	# Build command (install-docker-registry + sync in one)
 	local cmd="aba -d mirror install-docker-registry -H '$reg_host' sync $y_flag"
@@ -2599,16 +2609,32 @@ confirm_and_execute() {
 	
 	while :; do
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Confirm Execution" \
-			--extra-button --extra-label "Back" \
-			--yes-label "Execute" \
-			--no-label "Cancel" \
-			--yesno "Ready to execute:\n\n\Zb$cmd\Zn\n\nOutput will be shown live in a scrollable dialog box." 0 0
+			--cancel-label "Back" \
+			--ok-label "Select" \
+			--menu "Ready to execute:\n\n\Zb$cmd\Zn\n\nChoose execution mode:" 0 0 0 \
+			"1" "Run in TUI (auto-answer, dialog output)" \
+			"2" "Run in Terminal (interactive, full colors)" \
+			"3" "Help (explain options)" \
+			2>"$TMP"
 		rc=$?
 		
-		case "$rc" in
-			0)
-				# Yes = Execute
-				log "Executing command: $cmd"
+		if [[ $rc -ne 0 ]]; then
+			# Cancel/Back
+			log "User cancelled execution"
+			return 1
+		fi
+		
+		choice=$(<"$TMP")
+		
+		case "$choice" in
+			1)
+				# Run in TUI
+				# ALWAYS force -y for TUI execution (non-interactive)
+				local tui_cmd="$cmd"
+				if [[ ! "$tui_cmd" =~ -y ]]; then
+					tui_cmd="$tui_cmd -y"
+				fi
+				log "Executing command in TUI (with -y): $tui_cmd"
 				
 				# Execute command and show live output in progressbox
 				cd "$ABA_ROOT"
@@ -2628,9 +2654,9 @@ confirm_and_execute() {
 		# Strip ANSI color codes (sed -u for unbuffered/line-by-line output) before showing in dialog
 		# This prevents control characters from displaying literally
 		# Set ASK_OVERRIDE=1 to skip interactive prompts (TUI is non-interactive)
-		ASK_OVERRIDE=1 bash -c "$cmd" 2>&1 | tee "$output_file" | \
+		ASK_OVERRIDE=1 bash -c "$tui_cmd" 2>&1 | tee "$output_file" | \
 			sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
-			dialog --backtitle "$(ui_backtitle)" --title "Executing: $cmd" \
+			dialog --backtitle "$(ui_backtitle)" --title "Executing: $tui_cmd" \
 				--progressbox $box_height $box_width
 				
 			# Get exit code from the command (via PIPESTATUS before pipe)
@@ -2641,7 +2667,7 @@ confirm_and_execute() {
 		
 		if [[ $exit_code -eq 0 ]]; then
 			# Success - show output with success indicator and choice buttons
-			dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2Command Output (Success)\Zn: $cmd" \
+			dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2Command Output (Success)\Zn: $tui_cmd" \
 				--ok-label "Back to Menu" \
 				--extra-button --extra-label "Exit TUI" \
 				--textbox "$output_file" 0 0
@@ -2669,7 +2695,7 @@ confirm_and_execute() {
 			esac
 		else
 			# Failure - show output with error indicator and action buttons
-			dialog --colors --backtitle "$(ui_backtitle)" --title "\Z1Command Output (Failed - exit code: $exit_code)\Zn: $cmd" \
+			dialog --colors --backtitle "$(ui_backtitle)" --title "\Z1Command Output (Failed - exit code: $exit_code)\Zn: $tui_cmd" \
 				--ok-label "Retry" \
 				--cancel-label "Back to Menu" \
 				--extra-button --extra-label "Exit TUI" \
@@ -2698,23 +2724,74 @@ confirm_and_execute() {
 			esac
 		fi
 				;;
-			1)
-				# No = Cancel
-				log "User cancelled execution"
-				return 1
+			2)
+				# Run in Terminal
+				log "User chose to execute in terminal: $cmd"
+				
+				# For terminal execution, respect user's auto-answer setting from action menu
+				local terminal_cmd="$cmd"
+				# First remove any existing -y flag
+				terminal_cmd="${terminal_cmd// -y/}"
+				terminal_cmd="${terminal_cmd//  / }"  # Clean up any double spaces
+				
+				# Then add -y back if user has auto-answer enabled
+				if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
+					terminal_cmd="$terminal_cmd -y"
+					log "Terminal execution with auto-answer enabled (-y)"
+				else
+					log "Terminal execution with auto-answer disabled (interactive)"
+				fi
+				
+				clear
+				echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+				echo "Executing command in terminal:"
+				echo "  $terminal_cmd"
+				echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+				echo ""
+				
+				cd "$ABA_ROOT"
+				bash -c "$terminal_cmd"
+				local exit_code=$?
+				
+				echo ""
+				echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+				echo "Command completed with exit code: $exit_code"
+				echo ""
+				read -p "Press ENTER to return to TUI menu... " 
+				
+				# If command succeeded, return success (don't loop back to confirmation)
+				if [[ $exit_code -eq 0 ]]; then
+					log "Terminal execution succeeded, returning to menu"
+					return 0
+				else
+					log "Terminal execution failed with exit code $exit_code, returning to menu"
+					return 1
+				fi
 				;;
 			3)
-				# Extra button = Back
-				log "User went back from confirmation"
-				return 1
-				;;
-			255)
-				# ESC = Back
-				log "User pressed ESC in confirmation"
-				return 1
+				# Help - Show execution help
+				log "Help selected in confirm execution"
+				dialog --backtitle "$(ui_backtitle)" --msgbox \
+"Execution Options:
+
+• Run in TUI
+  - Command runs inside dialog interface
+  - Auto-answer (-y) is ALWAYS enabled (non-interactive)
+  - Output shown live in progressbox
+  - Scrollable output review after completion
+
+• Run in Terminal  
+  - Command runs in real terminal (exits dialog temporarily)
+  - Respects your Auto-answer toggle setting from action menu
+  - Full interactive mode (can answer prompts, see colors)
+  - Press ENTER to return to TUI after completion
+
+For most operations, 'Run in TUI' is recommended.
+Use 'Run in Terminal' if you need to see prompts or interact with the command." 0 0 || true
+				continue
 				;;
 			*)
-				log "ERROR: Unexpected confirmation dialog return code: $rc"
+				log "ERROR: Unexpected menu choice: $choice"
 				return 1
 				;;
 		esac
@@ -2907,13 +2984,15 @@ summary_apply() {
 		3 "View Generated ImageSet Config" \
 		"" "━━━ Air-Gapped (Fully Disconnected) ━━━" \
 		4 "Create ABA Install Bundle (air-gapped)" \
-		7 "Save Images to Local Archive" \
+		5 "Save Images to Local Archive" \
 		"" "━━━ Connected/Partially Connected ━━━" \
-		5 "Install & Sync to Local Registry" \
-		6 "Install & Sync to Remote Registry via SSH" \
+		6 "Install & Sync to Local Registry" \
+		7 "Install & Sync to Remote Registry via SSH" \
 		"" "━━━━━━━━━━━━━ Advanced ━━━━━━━━━━━━━" \
 		8 "Generate ImageSet Config & Exit" \
-		9 "Exit (run commands manually)" \
+		9 "Delete Registry (Quay)" \
+		10 "Delete Registry (Docker)" \
+		11 "Exit (run commands manually)" \
 		2>"$TMP"
 		rc=$?
 		
@@ -3000,6 +3079,16 @@ summary_apply() {
 					fi
 					;;
 				5)
+					# Save Images
+					if handle_action_save; then
+						return 0
+					else
+						# User cancelled, stay in menu, keep focus on item 5
+						default_item="5"
+						continue
+					fi
+					;;
+				6)
 					# Local Registry (Auto/Quay/Docker based on setting)
 					case "$ABA_REGISTRY_TYPE" in
 						Auto)
@@ -3009,7 +3098,7 @@ summary_apply() {
 								if handle_action_local_docker; then
 									return 0
 								else
-									default_item="5"
+									default_item="6"
 									continue
 								fi
 							else
@@ -3017,7 +3106,7 @@ summary_apply() {
 								if handle_action_local_quay; then
 									return 0
 								else
-									default_item="5"
+									default_item="6"
 									continue
 								fi
 							fi
@@ -3026,7 +3115,7 @@ summary_apply() {
 							if handle_action_local_quay; then
 								return 0
 							else
-								default_item="5"
+								default_item="6"
 								continue
 							fi
 							;;
@@ -3034,25 +3123,15 @@ summary_apply() {
 							if handle_action_local_docker; then
 								return 0
 							else
-								default_item="5"
+								default_item="6"
 								continue
 							fi
 							;;
 					esac
 					;;
-				6)
+				7)
 					# Remote Registry
 					if handle_action_remote_quay; then
-						return 0
-					else
-						# User cancelled, stay in menu, keep focus on item 6
-						default_item="6"
-						continue
-					fi
-					;;
-				7)
-					# Save Images
-					if handle_action_save; then
 						return 0
 					else
 						# User cancelled, stay in menu, keep focus on item 7
@@ -3070,19 +3149,53 @@ summary_apply() {
 						continue
 					fi
 					;;
-					9)
-						# Exit manually
-						log "User chose to exit and run commands manually"
-						clear
-						echo "Configuration saved to: $ABA_ROOT/aba.conf"
-						if [[ -n "$custom_set_name" ]]; then
-							echo "Custom operator set: templates/operator-set-${custom_set_name}"
-						fi
-						echo ""
-						echo "Run 'aba --help' to see available commands"
-						return 0
-						;;
-				esac
+				9)
+					# Delete Registry (Quay)
+					log "User chose to delete Quay registry"
+					
+					# Check if mirror.conf exists
+					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+						dialog --colors --title "Error" --msgbox \
+							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 10 60
+						default_item="9"
+						continue
+					fi
+					
+					if ! confirm_and_execute "aba -d mirror uninstall -y"; then
+						default_item="9"
+						continue
+					fi
+					;;
+				10)
+					# Delete Registry (Docker)
+					log "User chose to delete Docker registry"
+					
+					# Check if mirror.conf exists
+					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+						dialog --colors --title "Error" --msgbox \
+							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 10 60
+						default_item="10"
+						continue
+					fi
+					
+					if ! confirm_and_execute "aba -d mirror uninstall-docker-registry -y"; then
+						default_item="10"
+						continue
+					fi
+					;;
+				11)
+					# Exit manually
+					log "User chose to exit and run commands manually"
+					clear
+					echo "Configuration saved to: $ABA_ROOT/aba.conf"
+					if [[ -n "$custom_set_name" ]]; then
+						echo "Custom operator set: templates/operator-set-${custom_set_name}"
+					fi
+					echo ""
+					echo "Run 'aba --help' to see available commands"
+					return 0
+					;;
+			esac
 				;;
 			1)
 				# Cancel = Exit
@@ -3122,6 +3235,8 @@ CONNECTED/PARTIALLY CONNECTED:
 ADVANCED:
 • ISConf - Generate ImageSet config YAML file only (no downloads)
            For manual oc-mirror operations
+• Delete Registry (Quay) - Uninstall the Quay registry
+• Delete Registry (Docker) - Uninstall the Docker registry
 • Exit - Exit TUI to run 'aba' commands manually
 
 After selecting an action, you'll be prompted for any required

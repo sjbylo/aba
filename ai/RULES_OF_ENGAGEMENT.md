@@ -319,6 +319,47 @@ Message text here" 0 0
 - ✅ **Use `0 0`** for auto-sizing (recommended)
 - ❌ **Avoid hardcoded sizes** like `12 60` - text may overflow on different terminals
 
+### TUI Peek-Then-Wait Pattern
+
+**CRITICAL**: For optimal UX, always check if background tasks are done BEFORE showing a "Please wait..." dialog.
+
+**The Pattern**:
+1. Use `run_once -p` (peek) to check if task is complete
+2. Only show `--infobox` if we actually need to wait
+3. Use `run_once -q -w` (quiet wait) to prevent output from overwriting the infobox
+
+```bash
+# ✅ CORRECT - Peek first, then conditionally wait
+local need_wait=0
+if ! run_once -p -i "task:id"; then
+    need_wait=1
+fi
+
+if [[ $need_wait -eq 1 ]]; then
+    # Show infobox ONLY if we need to wait
+    dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… fetching data" 5 80
+    # Use -q flag to prevent run_once from overwriting the infobox
+    run_once -q -w -i "task:id" -- command args
+else
+    log "Data already available, no wait needed"
+fi
+
+# Now use the cached result
+result=$(get_cached_data)
+```
+
+```bash
+# ❌ WRONG - Always shows wait dialog, even when data is ready
+dialog --infobox "Please wait..." 5 80
+run_once -w -i "task:id"
+result=$(get_cached_data)
+```
+
+**Benefits**:
+- First time: Shows wait dialog (background task still running)
+- Subsequent times: Instant display (data cached, no unnecessary wait dialog)
+- Better UX: No flashing dialogs when data is already available
+
 ### Bash Quirks and Pitfalls
 
 #### The `$(<"file" 2>/dev/null)` Bug
