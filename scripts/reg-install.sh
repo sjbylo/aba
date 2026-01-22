@@ -214,9 +214,9 @@ if [ "$reg_ssh_key" ]; then
 	aba_info "Installing mirror registry with command:"
 	aba_info "$cmd --initPassword <hidden>"
 
-	if ! ensure_mirror_registry; then
-		error_msg=$(get_task_error "$TASK_MIRROR_REG")
-		aba_abort "Failed to download mirror-install:\n$error_msg\n\nPlease check network and try again."
+	if ! ensure_quay_registry; then
+		error_msg=$(get_task_error "$TASK_QUAY_REG")
+		aba_abort "Failed to extract mirror-registry:\n$error_msg"
 	fi
 
 	eval echo $cmd --initPassword "'$reg_pw'"
@@ -373,9 +373,9 @@ else
 	aba_info "Installing mirror registry with command:"
 	aba_info "$cmd --initPassword <hidden>"
 
-	if ! ensure_mirror_registry; then
-		error_msg=$(get_task_error "$TASK_MIRROR_REG")
-		aba_abort "Failed to download mirror-install:\n$error_msg\n\nPlease check network and try again."
+	if ! ensure_quay_registry; then
+		error_msg=$(get_task_error "$TASK_QUAY_REG")
+		aba_abort "Failed to extract mirror-registry:\n$error_msg"
 	fi
 
 	eval $cmd --initPassword $reg_pw   # eval needed for "~"
