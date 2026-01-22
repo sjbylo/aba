@@ -989,11 +989,14 @@ replace-value-conf() {
 
 		aba_debug "Replacing config value [$name] with [$value] in file: $f" >&2
 
-		# Check if the value is already in the file along with the expected chars after the value, e.g. space/tab/# or EOL
+		# If value already in file (along with the optional, expected chars after the value, e.g. space/tab/# or EOL), then
+		# ... change nothing!
 		if grep -q -E "^$name=$value[[:space:]]*(#.*)?$" $f; then
-			if [ ! "$quiet" ]; then
-				[ "$value" ] && aba_info_ok "Value ${name}=${value} already exists in file $f" >&2 || aba_info_ok "Value ${name} is already undefined in file $f" >&2
-			fi
+			#if [ ! "$quiet" ]; then
+				#[ "$value" ] && aba_info_ok "Value ${name}=${value} already exists in file $f" >&2 || aba_info_ok "Value ${name} is already undefined in file $f" >&2
+			[ "$value" ] && aba_debug "Value ${name}=${value} already exists in file $f" || aba_debug "Value ${name} is already undefined in file $f"
+			# Only need to send to debug output 
+			#fi
 
 			return 0
 		else
@@ -1001,6 +1004,8 @@ replace-value-conf() {
 
 			if [ ! "$quiet" ]; then
 				[ "$value" ] && aba_info_ok "Added value ${name}=${value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
+			else
+				[ "$value" ] && aba_debug "Added value ${name}=${value} to file $f"     || aba_debug "Undefining value ${name} in file $f"
 			fi
 
 			return 0
