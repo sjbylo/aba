@@ -223,13 +223,13 @@ else
 			"The image-set archive file(s) created by oc-mirror will first be written to" \
 			"aba/mirror/save/mirror_000001.tar, and then a full copy of the Aba repository will be written" \
 			"to the bundle file you specified: $bundle_dest_file" \
-		"Because both files *reside on the same filesystem*, you may temporarily" \
-		"need roughly double the required space (or more if you consider the oc-mirror cache). " \
-		">> IMPORTANT: <<" \
-		"If disk space is limited, consider using the '--light' option." \
-		"It excludes the large image-set archive file(s) from the final install bundle." \
-		"This is also useful in restricted environments where large archives cannot be stored or" \
-		"moved via portable media (for example, Cloud instances or locked-down laptops)."
+			"Because both files *reside on the same filesystem*, you may temporarily" \
+			"need roughly double the required space (or more if you consider the oc-mirror cache). " \
+			">> IMPORTANT: <<" \
+			"If disk space is limited, consider using the '--light' option." \
+			"It excludes the large image-set archive file(s) from the final install bundle." \
+			"This is also useful in restricted environments where large archives cannot be stored or" \
+			"moved via portable media (for example, Cloud instances or locked-down laptops)."
 
 		ask "Continue anyway" || exit 1
 		aba_debug "User confirmed to continue with full bundle on same filesystem"
