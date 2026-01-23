@@ -80,7 +80,7 @@ mirror.conf: .init ## Set up the aba/mirror/mirror.conf file.
 	@echo [ABA] Using `pwd`/mirror.conf file 
 
 vmware.conf: .init ## Use VMware vCenter or ESXi to create cluster.
-	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc CLI tool" -i cli:install:govc -- make -sC ../cli govc
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc CLI tool" -i cli:install:govc -- make -sC cli govc
 	@make -sC .. vmw
 	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo [ABA] vmware.conf initialized || true
 

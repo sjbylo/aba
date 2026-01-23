@@ -2,7 +2,9 @@
 # Create a install bundle which can be used to install OpenShift in an air-gapped env.
 
 # Derive aba root from script location (this script is in scripts/)
-cd "$(dirname "$0")/.." || exit 1
+# Use pwd -P to resolve symlinks (important when called via cluster-dir/scripts/ symlink)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+cd "$SCRIPT_DIR/.." || exit 1
 
 source scripts/include_all.sh
 

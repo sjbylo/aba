@@ -2,7 +2,9 @@
 # Wrapper to call ensure_* functions from Makefiles
 # Usage: ensure-cli.sh {oc-mirror|oc|openshift-install|govc|butane|quay-registry}
 
-cd "$(dirname "$0")/.." || exit 1
+# Use pwd -P to resolve symlinks (important when called via cluster-dir/scripts/ symlink)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+cd "$SCRIPT_DIR/.." || exit 1
 source scripts/include_all.sh
 
 tool="$1"
