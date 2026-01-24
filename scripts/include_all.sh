@@ -1813,10 +1813,11 @@ probe_host() {
 	
 	aba_debug "Probing $desc"
 	
+	# -s: silent (no progress bar)
+	# -S: show errors even when silent
 	# -f: fail on HTTP errors (4xx, 5xx)
-	# Errors naturally displayed to stderr - no hiding!
-	# NOTE: No -s flag - we WANT to see errors!
-	if curl -f \
+	# Result: Errors shown, but no progress bars!
+	if curl -sSf \
 		--connect-timeout 5 \
 		--max-time 15 \
 		--retry 2 \
