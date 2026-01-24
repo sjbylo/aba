@@ -2215,9 +2215,9 @@ handle_action_bundle() {
 		bundle_path="$bundle_path/ocp-bundle"
 	fi
 	
-	# Always append version suffix (like aba.sh does)
-	bundle_path="$bundle_path-${OCP_VERSION}.tar"
-	log "Final bundle path with version: $bundle_path"
+	# Strip .tar extension if present - make-bundle.sh will add version and .tar
+	bundle_path="${bundle_path%.tar}"
+	log "Bundle path (version will be added by make-bundle.sh): $bundle_path"
 	
 	# Check filesystem compatibility using device numbers (more reliable than filesystem type)
 	local output_dir=$(dirname "$bundle_path")
