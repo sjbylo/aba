@@ -242,7 +242,11 @@ show_run_once_error() {
 No log file found for task: $task_id
 
 This usually means the task never started.
-Check: $RUNNER_DIR/$task_id/" 0 0
+Check: $RUNNER_DIR/$task_id/
+
+\Z1If errors persist:\Zn
+Clear the cache by running: \Zbcd aba && ./install\ZB
+Or manually: \Zbrm -rf ~/.aba/runner\ZB" 0 0
 		return
 	fi
 	
@@ -262,6 +266,9 @@ $error_lines
 ─────────────────────────────────────────
 
 Full log: $log_file
+
+\Z1If errors persist:\Zn
+Clear the cache: \Zbcd aba && ./install\ZB
 
 Press OK to return" 0 0
 }

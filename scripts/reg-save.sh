@@ -53,6 +53,24 @@ fi
 # Ensure the RH pull secret files are located in the right places
 scripts/create-containers-auth.sh
 
+# Check disk space before downloading images
+mkdir -p save
+avail=$(df -m save | awk '{print $4}' | tail -1)
+
+# Minimum 20GB for base platform
+if [ $avail -lt 20500 ]; then
+	aba_abort "Not enough disk space available under $PWD/save (only $avail MB)" \
+		"At least 20GB is required for the base OpenShift platform alone" \
+		"Operators require additional 40-400GB of space"
+fi
+
+# Warning for operators (if less than 50GB available)
+if [ $avail -lt 51250 ]; then
+	aba_warning "Less than 50GB of space available under $PWD/save (only $avail MB)" >&2
+	aba_warning "Operator images require between ~40 to ~400GB of disk space!" >&2
+	echo >&2
+fi
+
 aba_info "Now saving (mirror2disk) images from external network to mirror/save/ directory."
 
 aba_warning \
