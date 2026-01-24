@@ -1815,11 +1815,12 @@ probe_host() {
 	
 	# -f: fail on HTTP errors (4xx, 5xx)
 	# Errors naturally displayed to stderr - no hiding!
+	# NOTE: No -s flag - we WANT to see errors!
 	if curl -f \
 		--connect-timeout 5 \
 		--max-time 15 \
 		--retry 2 \
-		-ILsk \
+		-ILk \
 		"$url" >/dev/null; then
 		return 0
 	fi

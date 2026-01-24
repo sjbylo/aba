@@ -40,12 +40,20 @@ export reg_url=https://$reg_host:$reg_port
 [ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host"
 
 # Can the registry mirror already be reached?
-aba_info "Probing mirror registry at $reg_url/health/instance"
+# Support both Quay and Docker registries with different health endpoints
+aba_info "Probing mirror registry at $reg_url"
 
-if ! probe_host "$reg_url/health/instance" "mirror registry"; then
-	aba_abort "Cannot reach mirror registry at $reg_url/health/instance" \
+if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
+	aba_debug "Quay registry detected and accessible"
+elif probe_host "$reg_url/v2/" "Docker registry API"; then
+	aba_debug "Docker registry detected and accessible"
+elif probe_host "$reg_url/" "registry root"; then
+	aba_debug "Generic registry detected and accessible"
+else
+	aba_abort "Cannot reach mirror registry at $reg_url" \
 		"Registry must be accessible before loading images" \
-		"Check curl error above for details"
+		"Tried: /health/instance (Quay), /v2/ (Docker), / (generic)" \
+		"Check curl errors above for details"
 fi
 
 scripts/create-containers-auth.sh --load   # --load option indicates that the public pull secret is NOT needed.
