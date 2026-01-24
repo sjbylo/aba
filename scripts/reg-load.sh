@@ -36,6 +36,18 @@ fi
 
 export reg_url=https://$reg_host:$reg_port
 
+# Adjust no_proxy if proxy is configured (duplicates are harmless for temporary export)
+[ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host"
+
+# Can the registry mirror already be reached?
+aba_info "Probing mirror registry at $reg_url/health/instance"
+
+if ! probe_host "$reg_url/health/instance" "mirror registry"; then
+	aba_abort "Cannot reach mirror registry at $reg_url/health/instance" \
+		"Registry must be accessible before loading images" \
+		"Check curl error above for details"
+fi
+
 scripts/create-containers-auth.sh --load   # --load option indicates that the public pull secret is NOT needed.
 
 # Check if the cert needs to be updated

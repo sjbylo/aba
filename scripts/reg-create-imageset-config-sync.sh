@@ -24,9 +24,17 @@ verify-mirror-conf || exit 1
 
 export reg_url=https://$reg_host:$reg_port
 
-# Can the registry mirror already be reached?
-[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
-reg_code=$(curl --connect-timeout 10 --retry 8 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
+# FIXME: PROBE NOT NEEDED HERE?!
+## Can the registry mirror already be reached?
+#[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
+#aba_info "Probing mirror registry at $reg_url/health/instance"
+#
+#if ! probe_host "$reg_url/health/instance" "mirror registry"; then
+#	aba_abort "Cannot reach mirror registry at $reg_url/health/instance" \
+#		"Registry must be accessible before creating ImageSet config" \
+#		"Check curl error above for details"
+#fi
+# FIXME: PROBE NOT NEEDED HERE?!
 
 # Note that any existing sync/* files will not be deleted
 mkdir -p sync 
