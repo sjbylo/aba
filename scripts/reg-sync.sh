@@ -46,16 +46,27 @@ else
 fi
 
 # Check internet connection...
-##aba_info -n "Checking access to https://api.openshift.com/: "
-if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
-	aba_abort "Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry." 
+aba_info "Checking Internet access to https://api.openshift.com/"
+
+if ! probe_host "https://api.openshift.com/" "OpenShift API"; then
+	aba_abort "Cannot access https://api.openshift.com/" \
+		"Access to the Internet is required to sync images to your registry." \
+		"Check curl error above for details."
 fi
 
 export reg_url=https://$reg_host:$reg_port
 
+# Adjust no_proxy if proxy is configured (duplicates are harmless for temporary export)
+[ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host"
+
 # Can the registry mirror already be reached?
-[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
-reg_code=$(curl --connect-timeout 10 --retry 8 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
+aba_info "Probing mirror registry at $reg_url/health/instance"
+
+if ! probe_host "$reg_url/health/instance" "mirror registry"; then
+	aba_abort "Cannot reach mirror registry at $reg_url/health/instance" \
+		"Registry must be accessible before syncing images" \
+		"Check curl error above for details"
+fi
 
 # This is needed since sometimes an existing registry may already be available
 scripts/create-containers-auth.sh

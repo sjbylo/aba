@@ -15,9 +15,12 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
 # Check internet connection...
-##aba_info -n "Checking access to https://api.openshift.com/: "
-if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
-	aba_abort "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk." 
+aba_info "Checking Internet access to https://api.openshift.com/"
+
+if ! probe_host "https://api.openshift.com/" "OpenShift API"; then
+	aba_abort "Cannot access https://api.openshift.com/" \
+		"Access to the Internet is required to save images to disk." \
+		"Check curl error above for details."
 fi
 
 # Script called with args "debug" and/or "retry"

@@ -50,15 +50,13 @@ fi
 
 # Detect any existing mirror registry?
 
+# Adjust no_proxy if proxy is configured (duplicates are harmless for temporary export)
+[ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host"
+
 # Check for Quay...
-[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
-aba_info Probing $reg_url/health/instance
+aba_info "Probing $reg_url/health/instance"
 
-probe_cmd='curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/health/instance'
-aba_debug Probe command: $probe_cmd
-reg_code=$(eval $probe_cmd || true)
-
-if [ "$reg_code" = "200" ]; then
+if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
 	aba_abort \
 		"Existing Quay registry found at $reg_url/health/instance" \
 		"To use this registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." \
@@ -69,13 +67,9 @@ if [ "$reg_code" = "200" ]; then
 fi
 
 # Check for any endpoint ...
-aba_info Probing $reg_url/
+aba_info "Probing $reg_url/"
 
-probe_cmd='curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/'
-aba_debug Probe command: $probe_cmd
-reg_code=$(eval $probe_cmd || true)
-
-if [ "$reg_code" = "200" ]; then
+if probe_host "$reg_url/" "registry root endpoint"; then
 	aba_abort \
 		"Endpoint found at $reg_url/" \
 		"If this is your existing registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." \

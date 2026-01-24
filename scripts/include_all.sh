@@ -1796,6 +1796,38 @@ wait_for_all_catalogs() {
 # Use 'aba reset' to explicitly kill all background tasks and clean up.
 
 # -----------------------------------------------------------------------------
+# HTTP/HTTPS Probing
+# -----------------------------------------------------------------------------
+
+# Probe HTTP/HTTPS endpoint with sensible timeouts
+# Usage: probe_host <url> [description]
+# Returns: 0 if reachable, 1 if not
+# Errors shown naturally by curl to stderr
+#
+# Examples:
+#   probe_host "https://api.openshift.com/"
+#   probe_host "https://registry:8443/health/instance" "Quay registry"
+probe_host() {
+	local url="$1"
+	local desc="${2:-$url}"
+	
+	aba_debug "Probing $desc"
+	
+	# -f: fail on HTTP errors (4xx, 5xx)
+	# Errors naturally displayed to stderr - no hiding!
+	if curl -f \
+		--connect-timeout 5 \
+		--max-time 15 \
+		--retry 2 \
+		-ILsk \
+		"$url" >/dev/null; then
+		return 0
+	fi
+	
+	return 1
+}
+
+# -----------------------------------------------------------------------------
 # Validation Functions for TUI inputs
 # -----------------------------------------------------------------------------
 

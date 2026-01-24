@@ -1,14 +1,9 @@
 #!/bin/bash 
 # Output the oc cluster login command
 
-# Ensure we're in cluster directory (script is in scripts/ subdirectory)
-# Use pwd -P to resolve symlinks (important when called via cluster-dir/scripts/ symlink)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-cd "$SCRIPT_DIR/.." || exit 1
-
 source scripts/include_all.sh
 
-[ ! -d iso-agent-based ] && aba_abort "Cluster not installed.  Run 'aba install' to install the cluster or 'aba iso' to create the iso boot image." 
+[ ! -d iso-agent-based ] && aba_abort "Cluster not installed.  Run 'aba install' to install the cluster or 'aba iso' to create the iso boot image."
 
 aba_info "Downloading CLI installation binaries"
 scripts/cli-install-all.sh --wait  # FIXME: should only be for oc?

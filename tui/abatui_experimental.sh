@@ -355,8 +355,14 @@ Press <ESC> to quit abatui.
 				# Help button pressed - show help and loop back
 				log "Help button pressed in header"
 				dialog --backtitle "$(ui_backtitle)" --title "ABA Help" --msgbox \
-"ABA (Agent-Based Automation) helps install OpenShift in
-disconnected environments.
+"ABA (Agent-Based Automation) helps install OpenShift in disconnected environments.
+
+The ABA TUI helps you with the following:
+  1. Create Agent-based ImageSet configuration YAML
+  2. Create a custom ABA install bundle for air-gapped installations (aba bundle)
+  3. Download OpenShift images from the Internet to disk (aba -d mirror save)
+  4. Install a mirror registry on the local or a remote host (aba -d mirror install)
+  5. Load and push images to a mirror registry (aba -d mirror load/sync)
 
 This wizard guides you through:
   1. OpenShift channel selection (stable/fast/candidate)

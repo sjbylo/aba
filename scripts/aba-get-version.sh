@@ -57,7 +57,7 @@ target_ver=
 #do
 	# Exit loop if release version exists
 	if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+"; then
-		if curl --connect-timeout 10 --retry 8 -sL -o /dev/null -w "%{http_code}\n" https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$target_ver/release.txt | grep -q ^200$; then
+		if probe_host "https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$target_ver/release.txt" "release version $target_ver"; then
 			break
 		else
 			echo "Error: Failed to find release $target_ver"
