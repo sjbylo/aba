@@ -2063,31 +2063,26 @@ wait_all_cli_downloads() {
 
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
-	wait_all_cli_downloads
 	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
 }
 
 # Ensure oc CLI is installed in ~/bin
 ensure_oc() {
-	wait_all_cli_downloads
 	run_once -w -m "Installing oc to ~/bin" -i "$TASK_OC" -- make -sC cli oc
 }
 
 # Ensure openshift-install is installed in ~/bin
 ensure_openshift_install() {
-	wait_all_cli_downloads
 	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL" -- make -sC cli openshift-install
 }
 
 # Ensure govc is installed in ~/bin
 ensure_govc() {
-	wait_all_cli_downloads
 	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
 }
 
 # Ensure butane is installed in ~/bin
 ensure_butane() {
-	wait_all_cli_downloads
 	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
 }
 
