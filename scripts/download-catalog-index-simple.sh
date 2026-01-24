@@ -84,7 +84,8 @@ ensure_oc_mirror
 catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
 aba_info "Running: oc-mirror list operators --catalog $catalog_url"
 
-oc-mirror list operators --catalog "$catalog_url" > "$index_file" 2>&1
+# awk '/^NAME/{flag=1; next} flag'  => only used to skip over any unwanted header message
+oc-mirror list operators --catalog "$catalog_url" | awk '/^NAME/{flag=1; next} flag'  > "$index_file"
 ret=$?
 
 # Check both exit code AND output file (oc-mirror v2 sometimes returns 0 even on failure)
@@ -102,7 +103,8 @@ aba_info_ok "Downloaded $catalog_name index v$ocp_ver_major successfully"
 yaml_file="mirror/imageset-config-${catalog_name}-catalog-v${ocp_ver_major}.yaml"
 aba_debug "Generating helper YAML: $yaml_file"
 
-tail -n +3 "$index_file" | awk '{print $1,$NF}' | while read op_name op_default_channel; do
+#tail -n +3 "$index_file" | awk '{print $1,$NF}' | while read op_name op_default_channel; do
+cat "$index_file" | awk '{print $1,$NF}' | while read op_name op_default_channel; do
 	echo "    - name: $op_name"
 	echo "      channels:"
 	echo "      - name: \"$op_default_channel\""
