@@ -204,7 +204,7 @@ RETRY_COUNT="3"  # Values: "off", "3", "8"
 ABA_REGISTRY_TYPE="Auto"  # Values: "Auto", "Quay", "Docker"
 
 ui_backtitle() {
-	echo "ABA TUI  |  channel: ${OCP_CHANNEL:-?}  version: ${OCP_VERSION:-?}"
+	echo "ABA TUI (Experimental)  |  channel: ${OCP_CHANNEL:-?}  version: ${OCP_VERSION:-?}"
 }
 
 # Resolve actual registry type based on Auto selection and architecture
