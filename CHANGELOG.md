@@ -1,11 +1,11 @@
-# Changelog
-
-All notable changes to the Aba project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [Unreleased]
+
+---
+
+## [0.9.0] - 2026-01-26
+
+First release
+
 
 ### Bug Fixes
 - Fixed "Task not started and no command provided" error when running `aba -d mirror load` directly
@@ -50,4 +50,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PATCH**: Bug fixes
 
 [Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
 [0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
