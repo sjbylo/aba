@@ -1,9 +1,37 @@
 #!/bin/bash
 # Script to output the operators for an image-set config file
+#
+# Usage: add-operators-to-imageset.sh --output <yaml-file>
+#
+# This script appends operator configuration to an imageset YAML file.
+# All user messages go to stderr, YAML content goes to the specified file.
 
 source scripts/include_all.sh
 
-aba_debug "Starting: $0 $*"
+# Parse command line arguments
+OUTPUT_FILE=""
+while [[ $# -gt 0 ]]; do
+	case $1 in
+		--output|-o)
+			OUTPUT_FILE="$2"
+			shift 2
+			;;
+		*)
+			echo "Error: Unknown option: $1" >&2
+			echo "Usage: $0 --output <yaml-file>" >&2
+			exit 1
+			;;
+	esac
+done
+
+# Validate output file parameter
+if [[ -z "$OUTPUT_FILE" ]]; then
+	echo "Error: --output parameter is required" >&2
+	echo "Usage: $0 --output <yaml-file>" >&2
+	exit 1
+fi
+
+aba_debug "Starting: $0 --output $OUTPUT_FILE"
 
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
@@ -36,33 +64,32 @@ add_op() {
 		added_operators["$op_name"]=1
 		op_names_arr+=("$op_name")
 
-		# Output the operator information
-		if [ "$op_default_channel" ]; then
-			cat <<-END
-			    - name: $op_name
-			      channels:
-			      - name: "$op_default_channel"
-			END
-		else
-			cat <<-END
-			    - name: $op_name
-			END
-		fi
+	# Output the operator information
+	if [ "$op_default_channel" ]; then
+		cat <<-END >> "$OUTPUT_FILE"
+		    - name: $op_name
+		      channels:
+		      - name: "$op_default_channel"
+		END
+	else
+		cat <<-END >> "$OUTPUT_FILE"
+		    - name: $op_name
+		END
+	fi
 	else
 		aba_warning "Operator '$op' not found in index file mirror/.index/$catalog-index-v$ocp_ver_major"
 	fi
 }
 
-# If operators are given, ensure the catalogs are available!
+# If operators are given, the catalogs must be available
+# Note: Makefile has explicit 'catalogs-wait' dependency to ensure catalogs are ready
 if [ "$ops" -o "$op_sets" ]; then
-	#aba_debug Final chance to fetch all operator catalog index files ... running: make catalog from $PWD
-	#make catalog bg=1  # Trigger download in background. Returns immediatelly. 
-	#make catalog 2>/dev/null	   # Wait for all catlogs to download
-	#run_once    -i download_catalog_indexes -- make catalog bg=1
-	run_once -w -i download_catalog_indexes -- make catalog bg=1
+	aba_debug "add-operators-to-imageset.sh: ops='$ops' op_sets='$op_sets' - using catalogs for OCP $ocp_ver_major"
+	# Catalogs are guaranteed ready by Makefile dependency (catalogs-download + catalogs-wait)
 
+	# Verify catalog files exist (only check the 3 main catalogs we download)
 	catalog_file_errors=
-	for catalog in redhat-operator certified-operator redhat-marketplace community-operator
+	for catalog in redhat-operator certified-operator community-operator
 	do
 		# Check for the index file
 		if [ ! -s .index/$catalog-index-v$ocp_ver_major ]; then
@@ -176,16 +203,20 @@ if [ "$ops" ]; then
 		fi
 	done
 else
-	echo >&2
-	aba_info "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image-set config file." >&2
+	if [ "$op_sets" ]; then
+		# We have op_sets but no individual ops - this is fine, don't show confusing message
+		:
+	else
+		echo >&2
+		aba_info "No 'ops' value set in aba.conf or mirror.conf. No individual operators to add to the image-set config file." >&2
+	fi
 fi
 
 
 # Only output if there are operators! 
-# Stderr is for app output
 echo >&2
-# Stdout is for the image-set config output
-echo "  operators:"
+# Write YAML to output file
+echo "  operators:" >> "$OUTPUT_FILE"
 
 for catalog in redhat_operator certified_operator redhat_marketplace community_operator
 do
@@ -195,7 +226,7 @@ do
 	if [ "$list" ]; then
 		aba_debug "Print operator 'heading' for $catalog_name-index:v$ocp_ver_major"
 
-		cat <<-END
+		cat <<-END >> "$OUTPUT_FILE"
 		  - catalog: registry.redhat.io/redhat/$catalog_name-index:v$ocp_ver_major
 		    packages:
 		END
@@ -204,7 +235,12 @@ do
 
 		for op in $list
 		do
-			echo $op | grep -q "^#" && echo $op | sed "s/-/ /g" && continue  # Print just the operator "heading" (a hack)
+			# If this is a comment marker (e.g., #-mesh3-operators), format it as a YAML comment
+			if echo $op | grep -q "^#"; then
+				# Convert #-mesh3-operators to "    # mesh3 operators" (4 spaces for YAML indentation)
+				echo "    $(echo $op | sed 's/-/ /g')" >> "$OUTPUT_FILE"
+				continue
+			fi
 
 			aba_debug Adding operator: $op from catalog: $catalog_name
 			add_op $op $catalog_name

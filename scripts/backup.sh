@@ -115,12 +115,12 @@ if [ "$repo_only" ]; then
 	#echo_magenta "           READ THE BELOW INSTRUCTIONS CAREFULLY!" >&2
 	#echo_magenta "           To avoid this in future write the full install bundle to *external media* or to a *separate drive*." >&2
 
-	echo_magenta "IMPORTANT: No image-set files are being added to this install bundle (*split bundle*)." >&2
+	echo_magenta "IMPORTANT: No image-set files are being added to this install bundle (*light bundle*)." >&2
 	echo_magenta "           The image-set archive(s) are located at: $PWD/aba/mirror/save/mirror_*.tar" >&2
 	echo_magenta "           You must copy these archive files to your internal bastion together with the install bundle ($dest)," >&2
 	echo_magenta "           and then combine them there." >&2
 	echo_magenta "           PLEASE READ THE INSTRUCTIONS BELOW CAREFULLY." >&2
-	echo_magenta "           To avoid split bundles in the future, write the full bundle to *external media* or a *separate filesystem*." >&2
+	echo_magenta "           To avoid light bundles in the future, write the full bundle to *external media* or a *separate filesystem*." >&2
 
 fi
 
@@ -128,7 +128,7 @@ fi
 if [ "$dest" != "-" ]; then
 	if [ "$repo_only" ]; then
 		echo
-		echo_cyan "Writing *split* bundle file to $dest ... (to create a full install bundle instead, write the bundle directly to external media)."
+		echo_cyan "Writing *light* bundle file to $dest ... (to create a full install bundle instead, write the bundle directly to external media)."
 		echo
 		#aba_info "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
 		aba_info "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"

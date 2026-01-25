@@ -1,6 +1,15 @@
 #!/bin/bash 
 # Load the registry with images from the local disk
 
+# Ensure we're in mirror/ directory (script is called from mirror/Makefile)
+# Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+cd "$SCRIPT_DIR/../mirror" || exit 1
+
+# Enable INFO messages by default when called directly from make
+# (unless explicitly disabled by parent process via --quiet)
+[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
@@ -18,12 +27,34 @@ verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
 # Be sure a download has started ..
-#PLAIN_OUTPUT=1 run_once    -i cli:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror
-aba_info "Checking for oc-mirror binary."
-run_once -w -i cli:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror || aba_abort "Downloading oc-mirror binary failed.  Please try again!"
+#PLAIN_OUTPUT=1 run_once    -i cli:install:oc-mirror -- make -sC cli oc-mirror
+if ! ensure_oc_mirror; then
+	error_msg=$(get_task_error "$TASK_OC_MIRROR")
+	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
+fi
 
 
 export reg_url=https://$reg_host:$reg_port
+
+# Adjust no_proxy if proxy is configured (duplicates are harmless for temporary export)
+[ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host"
+
+# Can the registry mirror already be reached?
+# Support both Quay and Docker registries with different health endpoints
+aba_info "Probing mirror registry at $reg_url"
+
+if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
+	aba_debug "Quay registry detected and accessible"
+elif probe_host "$reg_url/v2/" "Docker registry API"; then
+	aba_debug "Docker registry detected and accessible"
+elif probe_host "$reg_url/" "registry root"; then
+	aba_debug "Generic registry detected and accessible"
+else
+	aba_abort "Cannot reach mirror registry at $reg_url" \
+		"Registry must be accessible before loading images" \
+		"Tried: /health/instance (Quay), /v2/ (Docker), / (generic)" \
+		"Check curl errors above for details"
+fi
 
 scripts/create-containers-auth.sh --load   # --load option indicates that the public pull secret is NOT needed.
 
@@ -72,7 +103,7 @@ while [ $try -le $try_tot ]
 do
 	# Set up the command in a script which can be run manually if needed.
 	# Wait for oc-mirror to be available!
-	#run_once -w -i cli:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror 
+	#run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
 	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 	echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 

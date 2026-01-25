@@ -1,6 +1,10 @@
 #!/bin/bash 
 # Either connect to an existing registry or install a fresh one.
 
+# Enable INFO messages by default when called directly from make
+# (unless explicitly disabled by parent process via --quiet)
+[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
@@ -46,15 +50,13 @@ fi
 
 # Detect any existing mirror registry?
 
+# Adjust no_proxy if proxy is configured (duplicates are harmless for temporary export)
+[ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host"
+
 # Check for Quay...
-[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host		  # adjust if proxy in use
-aba_info Probing $reg_url/health/instance
+aba_info "Probing $reg_url/health/instance"
 
-probe_cmd='curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/health/instance'
-aba_debug Probe command: $probe_cmd
-reg_code=$(eval $probe_cmd || true)
-
-if [ "$reg_code" = "200" ]; then
+if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
 	aba_abort \
 		"Existing Quay registry found at $reg_url/health/instance" \
 		"To use this registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." \
@@ -65,13 +67,9 @@ if [ "$reg_code" = "200" ]; then
 fi
 
 # Check for any endpoint ...
-aba_info Probing $reg_url/
+aba_info "Probing $reg_url/"
 
-probe_cmd='curl --retry 2 --max-time 10 --connect-timeout 10 -ILsk -o /dev/null -w "%{http_code}\\n" '$reg_url'/'
-aba_debug Probe command: $probe_cmd
-reg_code=$(eval $probe_cmd || true)
-
-if [ "$reg_code" = "200" ]; then
+if probe_host "$reg_url/" "registry root endpoint"; then
 	aba_abort \
 		"Endpoint found at $reg_url/" \
 		"If this is your existing registry, copy its pull secret file and root CA file into 'aba/mirror/regcreds/' and try again." \
@@ -210,8 +208,10 @@ if [ "$reg_ssh_key" ]; then
 	aba_info "Installing mirror registry with command:"
 	aba_info "$cmd --initPassword <hidden>"
 
-	aba_info "Waiting for download of mirror-install"
-	run_once -w -i mirror:reg:download -- make -s -C $ABA_ROOT/mirror download-registries
+	if ! ensure_quay_registry; then
+		error_msg=$(get_task_error "$TASK_QUAY_REG")
+		aba_abort "Failed to extract mirror-registry:\n$error_msg"
+	fi
 
 	eval echo $cmd --initPassword "'$reg_pw'"
 	eval $cmd --initPassword "'$reg_pw'"
@@ -367,8 +367,10 @@ else
 	aba_info "Installing mirror registry with command:"
 	aba_info "$cmd --initPassword <hidden>"
 
-	aba_info "Waiting for download of mirror-install"
-	run_once -w -i mirror:reg:download -- make -s -C $ABA_ROOT/mirror download-registries
+	if ! ensure_quay_registry; then
+		error_msg=$(get_task_error "$TASK_QUAY_REG")
+		aba_abort "Failed to extract mirror-registry:\n$error_msg"
+	fi
 
 	eval $cmd --initPassword $reg_pw   # eval needed for "~"
 

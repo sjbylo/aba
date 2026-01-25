@@ -351,7 +351,7 @@ aba -d mirror -H $TEST_HOST install-docker-registry   # Use this instead of Quay
 aba -d mirror load --retry 7 -H $TEST_HOST
 
 # Be sure all CLI files can install and are executable
-make -C cli 
+scripts/cli-install-all.sh --wait
 for cmd in butane govc kubectl oc oc-mirror openshift-install
 do
 	~/bin/$cmd --help >/dev/null 2>&1 || { echo ~/bin/$cmd cannot execute!; exit 1; }

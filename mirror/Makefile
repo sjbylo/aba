@@ -39,6 +39,7 @@ init: .init
 .init: ../aba.conf
 	ln -fs $(TEMPLATES) 
 	ln -fs $(SCRIPTS) 
+	ln -fs ../cli
 	ln -fs ../aba.conf 
 	mkdir -p regcreds
 	touch regcreds/.dummy  # Needed only so tar includes the *empty* regcreds dir
@@ -61,17 +62,17 @@ init: .init
 imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the intial image set config file with all provided values and operators
 isconf: imagesetconf ## Same as imagesetconf
 
-sync/imageset-config-sync.yaml: ../aba.conf catalog
+sync/imageset-config-sync.yaml: ../aba.conf catalogs-download catalogs-wait
 	$(SCRIPTS)/reg-create-imageset-config-sync.sh
 
-save/imageset-config-save.yaml: ../aba.conf catalog
+save/imageset-config-save.yaml: ../aba.conf catalogs-download catalogs-wait
 	$(SCRIPTS)/reg-create-imageset-config-save.sh
 
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
 #sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
-sync: .init .rpmsint ~/.pull-secret.json index               install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
+sync: .init .rpmsint ~/.pull-secret.json                     install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
 
 ~/.pull-secret.json:
@@ -83,7 +84,8 @@ sync: .init .rpmsint ~/.pull-secret.json index               install verify sync
 # Same with docker-reg-image.tgz (via download-registries)
 # download-registries is executed last in case docker.io is inaccessible 
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
-save: .init .rpmsext ~/.pull-secret.json              download-registries index               save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
+# Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
+save: .init .rpmsext ~/.pull-secret.json              download-registries                     save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
 # oc-mirror is idempotent so no need for 'dot' flag files
@@ -106,7 +108,7 @@ rpmsclean:
 	@rm -f .rpms*
 
 mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry binary 
-	@echo [ABA] Extracting mirror-registry-amd64.tar.gz
+	@echo [ABA] Extracting mirror-registry-amd64.tar.gz into $$PWD
 	tar xmvzf mirror-registry-amd64.tar.gz
 
 .PHONY: download-registries
@@ -118,8 +120,9 @@ mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball (note: no 
 	echo [ABA] "Downloading $(mirror_registry_url)/mirror-registry-amd64.tar.gz ..."
 	curl $(CURL_PROGRESS) -OL $(mirror_registry_url)/mirror-registry-amd64.tar.gz
 	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o mirror-registry-sha256sum.txt $(mirror_registry_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" mirror-registry-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
-	tar tzf mirror-registry-amd64.tar.gz >/dev/null && echo [ABA] "File $@ is valid"
+	@echo -n "[ABA] Verifying checksum for $(@): "
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o mirror-registry-sha256sum.txt $(mirror_registry_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" mirror-registry-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
+	echo "valid!"
 
 # Store the docker registry image so it can be used in air-gapped env. (if docker.io reachable) Note: Docker available as arm64 image!
 # Ignore any errors, since docker.io may not be whitelisted
@@ -138,7 +141,8 @@ $(DOCKER_REG_FILE):
 #		podman rmi $(DOCKER_REG_IMAGE); \
 
 .PHONY: install-docker-registry
-install-docker-registry: docker-reg-image.tgz
+install-docker-registry:
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for Docker registry image download" -i mirror:download:docker-reg-image.tgz -- make -sC . docker-reg-image.tgz
 	@podman load -i $(DOCKER_REG_FILE)
 	@$(SCRIPTS)/reg-docker-install.sh
 	@rm -f .uninstalled 
@@ -154,7 +158,8 @@ mirror.conf: ../aba.conf .init                        ## Create the mirror.conf 
 	$(SCRIPTS)/create-mirror-conf.sh -f $(force)
 
 install: .installed
-.installed: .init .rpmsext mirror.conf mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
+.installed: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
+	@$(SCRIPTS)/ensure-cli.sh quay-registry
 	$(SCRIPTS)/reg-install.sh
 	$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 
@@ -192,22 +197,23 @@ tarrepo:   ## Same as 'make tar' but excludes all 'mirror_000*.tar' files under 
 inc:   ## Same as 'make tar' except a timestamp file is used to only backup files that have changed since the last 'make inc' was run.
 	@make -sC .. inc $(out)
 
-.PHONY: index
-#index: init catalog
-index: init
-	$(SCRIPTS)/download-operator-index.sh true redhat-operator
-	$(SCRIPTS)/download-operator-index.sh true certified-operator
-	$(SCRIPTS)/download-operator-index.sh true redhat-marketplace
-	$(SCRIPTS)/download-operator-index.sh true community-operator
-	make catalog bg=  # This will block and wait for downloads
+# Catalog download targets (new run_once-based mechanism)
+.PHONY: catalogs-download
+catalogs-download: init     ## Start operator catalog downloads in background (non-blocking)
+	$(SCRIPTS)/download-catalogs-start.sh
 
+.PHONY: catalogs-wait
+catalogs-wait:              ## Wait for operator catalog downloads to complete (blocking)
+	$(SCRIPTS)/download-catalogs-wait.sh
+
+# Legacy index target for backward compatibility (downloads and waits)
+.PHONY: index
+index: init catalogs-download catalogs-wait
+
+# Deprecated: Use catalogs-download instead
 .PHONY: catalog
-# Note that this runs in the background (called by aba) and output is sent to /dev/null
-catalog: init               ## Download and render all the latest Operators into a file which can be used in an imageset config file. 
-	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-operator
-	$(SCRIPTS)/download-operator-index.sh $(bg) certified-operator
-	$(SCRIPTS)/download-operator-index.sh $(bg) redhat-marketplace
-	$(SCRIPTS)/download-operator-index.sh $(bg) community-operator
+catalog: catalogs-download
+	@echo "[ABA] Warning: 'make catalog' is deprecated, use 'make catalogs-download' instead" >&2
 
 uninstall: .init mirror-registry .uninstalled     ## Uninstall any previously installed registry  
 .uninstalled: 

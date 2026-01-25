@@ -23,6 +23,9 @@ opts=
 [ "$no_proxy" ] && no_proxy="$(cat $ASSETS_DIR/rendezvousIP),$no_proxy"   # Needed since we're using the IP address to access
 [ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"
 
+# Ensure openshift-install is available (wait for background download/install)
+ensure_openshift_install >/dev/null
+
 echo_yellow "[ABA] Running: openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR"
 
 

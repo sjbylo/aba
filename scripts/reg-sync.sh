@@ -1,6 +1,15 @@
 #!/bin/bash 
 # Copy images from RH reg. into the registry.
 
+# Ensure we're in mirror/ directory (script is called from mirror/Makefile)
+# Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+cd "$SCRIPT_DIR/../mirror" || exit 1
+
+# Enable INFO messages by default when called directly from make
+# (unless explicitly disabled by parent process via --quiet)
+[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
@@ -18,8 +27,10 @@ verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
 # Be sure a download has started ..
-aba_info "Checking for oc-mirror binary."
-PLAIN_OUTPUT=1 run_once -w -i cli:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror || aba_abort "Downloading oc-mirror binary failed.  Please try again!"
+if ! PLAIN_OUTPUT=1 ensure_oc_mirror; then
+	error_msg=$(get_task_error "$TASK_OC_MIRROR")
+	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
+fi
 
 # This is a pull secret for RH registry
 pull_secret_mirror_file=pull-secret-mirror.json
@@ -35,16 +46,35 @@ else
 fi
 
 # Check internet connection...
-##aba_info -n "Checking access to https://api.openshift.com/: "
-if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
-	aba_abort "Cannot access https://api.openshift.com/.  Access to the Internet is required to sync the images to your registry." 
+aba_info "Checking Internet access to https://api.openshift.com/"
+
+if ! probe_host "https://api.openshift.com/" "OpenShift API"; then
+	aba_abort "Cannot access https://api.openshift.com/" \
+		"Access to the Internet is required to sync images to your registry." \
+		"Check curl error above for details."
 fi
 
 export reg_url=https://$reg_host:$reg_port
 
+# Adjust no_proxy if proxy is configured (duplicates are harmless for temporary export)
+[ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host"
+
 # Can the registry mirror already be reached?
-[ "$http_proxy" ] && echo "$no_proxy" | grep -q "\b$reg_host\b" || no_proxy=$no_proxy,$reg_host			  # adjust if proxy in use
-reg_code=$(curl --connect-timeout 10 --retry 8 -ILsk -o /dev/null -w "%{http_code}\n" $reg_url/health/instance || true)
+# Support both Quay and Docker registries with different health endpoints
+aba_info "Probing mirror registry at $reg_url"
+
+if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
+	aba_debug "Quay registry detected and accessible"
+elif probe_host "$reg_url/v2/" "Docker registry API"; then
+	aba_debug "Docker registry detected and accessible"
+elif probe_host "$reg_url/" "registry root"; then
+	aba_debug "Generic registry detected and accessible"
+else
+	aba_abort "Cannot reach mirror registry at $reg_url" \
+		"Registry must be accessible before syncing images" \
+		"Tried: /health/instance (Quay), /v2/ (Docker), / (generic)" \
+		"Check curl errors above for details"
+fi
 
 # This is needed since sometimes an existing registry may already be available
 scripts/create-containers-auth.sh
@@ -82,14 +112,17 @@ do
 	# Set up the command in a script which can be run manually if needed.
 	if [ "$oc_mirror_version" = "v1" ]; then
 		# Set up script to help for manual re-sync
-		# --continue-on-error : do not use this option. In testing the registry became unusable! 
-		cmd="oc-mirror --v1 --config=imageset-config-sync.yaml docker://$reg_host:$reg_port$reg_path"
-		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+	# --continue-on-error : do not use this option. In testing the registry became unusable! 
+	cmd="oc-mirror --v1 --config=imageset-config-sync.yaml docker://$reg_host:$reg_port$reg_path"
+	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
 	else
 		# Wait for oc-mirror to be available!
-		run_once -w -i cli:install:oc-mirror -- make -sC ../cli oc-mirror 
-		cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-		echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh 
+		if ! ensure_oc_mirror; then
+			error_msg=$(get_task_error "$TASK_OC_MIRROR")
+			aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
+	fi
+	cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
 	fi
 
 	echo

@@ -719,7 +719,7 @@ ARCH="${ARCH:-amd64}"
 # Cache settings
 ABA_CACHE_DIR="${ABA_CACHE_DIR:-$HOME/.aba/cache}"
 ABA_CACHE_TTL="${ABA_CACHE_TTL:-6000}"	# seconds
-mkdir -p "$ABA_CACHE_DIR"
+# Note: Cache directory is created lazily when first needed
 
 ############################################
 # Helpers (best-effort, no error output)
@@ -747,10 +747,14 @@ _fetch_cached() {
 		return 0
 	fi
 
+	# Lazy creation: ensure cache directory exists before creating temp files
+	mkdir -p "$(dirname "$cache_file")" 2>/dev/null || true
+
 	local tmp
 	tmp="$(mktemp "${cache_file}.XXXXXX")" || true
 
-	if [[ -n "$tmp" ]] && curl -f -sS "$url" > "$tmp" 2>/dev/null; then
+	# Let curl errors show (don't suppress stderr)
+	if [[ -n "$tmp" ]] && curl -f -sS "$url" > "$tmp"; then
 		if [[ -n "$validator_fn" ]]; then
 			if "$validator_fn" "$tmp"; then
 				mv -f "$tmp" "$cache_file"
@@ -854,7 +858,7 @@ fetch_all_versions() {
 
 	set -o pipefail
 	_fetch_graph_cached "$channel" "$minor" \
-		| jq -r '.nodes[].version' 2>/dev/null \
+		| jq -r '.nodes[].version' \
 		| grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
 		| sort -V
 }
@@ -985,11 +989,14 @@ replace-value-conf() {
 
 		aba_debug "Replacing config value [$name] with [$value] in file: $f" >&2
 
-		# Check if the value is already in the file along with the expected chars after the value, e.g. space/tab/# or EOL
+		# If value already in file (along with the optional, expected chars after the value, e.g. space/tab/# or EOL), then
+		# ... change nothing!
 		if grep -q -E "^$name=$value[[:space:]]*(#.*)?$" $f; then
-			if [ ! "$quiet" ]; then
-				[ "$value" ] && aba_info_ok "Value ${name}=${value} already exists in file $f" >&2 || aba_info_ok "Value ${name} is already undefined in file $f" >&2
-			fi
+			#if [ ! "$quiet" ]; then
+				#[ "$value" ] && aba_info_ok "Value ${name}=${value} already exists in file $f" >&2 || aba_info_ok "Value ${name} is already undefined in file $f" >&2
+			[ "$value" ] && aba_debug "Value ${name}=${value} already exists in file $f" || aba_debug "Value ${name} is already undefined in file $f"
+			# Only need to send to debug output 
+			#fi
 
 			return 0
 		else
@@ -997,6 +1004,8 @@ replace-value-conf() {
 
 			if [ ! "$quiet" ]; then
 				[ "$value" ] && aba_info_ok "Added value ${name}=${value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
+			else
+				[ "$value" ] && aba_debug "Added value ${name}=${value} to file $f"     || aba_debug "Undefining value ${name} in file $f"
 			fi
 
 			return 0
@@ -1347,8 +1356,7 @@ calculate_and_show_completion() {
     local end_time=$(date -d "+${total_duration} minutes" "$time_format")
 
     # 4. Output
-    aba_info_ok "Starting installation at ${start_time}, estimated completion time is ${end_time}."
-    aba_info_ok "(Total estimated duration: ${total_duration} minutes)"
+    aba_info_ok "Installation started at ${start_time} — estimated completion: ${end_time} (${total_duration} minutes)"
 }
 
 
@@ -1364,13 +1372,17 @@ run_once() {
 	local reset=false
 	local global_clean=false
 	local global_failed_clean=false
+	local ttl=""
+	local wait_timeout=""
+	local waiting_message=""
+	local quiet_wait=false
 	local OPTIND=1
 
 	# Allow override for tests
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGF" opt; do
+	while getopts "swi:cprGFt:eW:m:q" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1380,6 +1392,11 @@ run_once() {
 			r) reset=true ;;
 			G) global_clean=true ;;
 			F) global_failed_clean=true ;;
+			t) ttl=$OPTARG ;;
+			e) mode="get_error" ;;
+			W) wait_timeout=$OPTARG ;;
+			m) waiting_message=$OPTARG ;;
+			q) quiet_wait=true ;;
 			*) return 1 ;;
 		esac
 	done
@@ -1388,10 +1405,13 @@ run_once() {
 
 	_kill_id() {
 		local id="$1"
-		local pid_file="$WORK_DIR/${id}.pid"
-		local lock_file="$WORK_DIR/${id}.lock"
-		local exit_file="$WORK_DIR/${id}.exit"
-		local log_file="$WORK_DIR/${id}.log"
+		local id_dir="$WORK_DIR/${id}"
+		local pid_file="$id_dir/pid"
+		local lock_file="$id_dir/lock"
+		local exit_file="$id_dir/exit"
+		local log_out_file="$id_dir/log.out"
+		local log_err_file="$id_dir/log.err"
+		local cmd_file="$id_dir/cmd"
 
 		if [[ -f "$pid_file" ]]; then
 			local old_pid
@@ -1407,19 +1427,15 @@ run_once() {
 			fi
 		fi
 
-		rm -f "$lock_file" "$exit_file" "$log_file" "$pid_file"
+		rm -rf "$id_dir"
 	}
 
 	# --- GLOBAL CLEAN ---
 	if [[ "$global_clean" == true ]]; then
-		local f id
+		local d id
 		shopt -s nullglob
-		for f in "$WORK_DIR"/*.lock; do
-			id="$(basename "$f" .lock)"
-			_kill_id "$id"
-		done
-		for f in "$WORK_DIR"/*.pid; do
-			id="$(basename "$f" .pid)"
+		for d in "$WORK_DIR"/*/; do
+			id="$(basename "$d")"
 			_kill_id "$id"
 		done
 		shopt -u nullglob
@@ -1429,13 +1445,16 @@ run_once() {
 
 	# --- GLOBAL FAILED-ONLY CLEAN ---
 	if [[ "$global_failed_clean" == true ]]; then
-		local exitf id rc
+		local d id exitf rc
 		shopt -s nullglob
-		for exitf in "$WORK_DIR"/*.exit; do
-			id="$(basename "$exitf" .exit)"
+		for d in "$WORK_DIR"/*/; do
+			id="$(basename "$d")"
+			exitf="$d/exit"
+			if [[ -f "$exitf" ]]; then
 			rc="$(cat "$exitf" 2>/dev/null || echo 1)"
 			if [[ "$rc" -ne 0 ]]; then
 				_kill_id "$id"
+				fi
 			fi
 		done
 		shopt -u nullglob
@@ -1447,10 +1466,40 @@ run_once() {
 		return 1
 	fi
 
-	local lock_file="$WORK_DIR/${work_id}.lock"
-	local exit_file="$WORK_DIR/${work_id}.exit"
-	local log_file="$WORK_DIR/${work_id}.log"
-	local pid_file="$WORK_DIR/${work_id}.pid"
+	local id_dir="$WORK_DIR/${work_id}"
+	local lock_file="$id_dir/lock"
+	local exit_file="$id_dir/exit"
+	local log_out_file="$id_dir/log.out"
+	local log_err_file="$id_dir/log.err"
+	local cmd_file="$id_dir/cmd"
+	local pid_file="$id_dir/pid"
+
+	# Create the task directory
+	mkdir -p "$id_dir"
+	chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+	
+	# --- GET ERROR MODE ---
+	if [[ "$mode" == "get_error" ]]; then
+		[[ -f "$log_err_file" ]] && cat "$log_err_file"
+		return 0
+	fi
+
+	# --- TTL CHECK ---
+	# If TTL specified and exit file exists, check if it's expired
+	if [[ -n "$ttl" && -f "$exit_file" ]]; then
+		local now=$(date +%s)
+		local exit_mtime=$(stat -c %Y "$exit_file" 2>/dev/null || stat -f %m "$exit_file" 2>/dev/null)
+		
+		if [[ -n "$exit_mtime" ]]; then
+			local age=$((now - exit_mtime))
+			if [[ $age -gt $ttl ]]; then
+				# Task output is stale, reset it
+				_kill_id "$work_id"
+				mkdir -p "$id_dir"
+		chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+			fi
+		fi
+	fi
 
 	# --- RESET/KILL ---
 	if [[ "$reset" == true ]]; then
@@ -1473,8 +1522,25 @@ run_once() {
 			return 0
 		fi
 
-		: >"$log_file"
+		# Initialize log files
+		: >"$log_out_file"
+		: >"$log_err_file"
 		rm -f "$exit_file"
+		
+		# Save command in two formats:
+		# 1. cmd.sh - Machine-readable (declare -p) for reliable re-execution
+		#    Preserves exact array structure including spaces, quotes, special chars
+		# 2. cmd - Human-readable (one line) for debugging/troubleshooting
+		declare -p command > "$id_dir/cmd.sh"
+		printf '%s ' "${command[@]}" > "$cmd_file"
+		echo >> "$cmd_file"  # trailing newline
+		
+		# Save current working directory for re-execution (self-healing validation)
+		# Commands with relative paths need the same CWD to work correctly
+		pwd > "$id_dir/cwd"
+		
+		# Backward compatibility: create symlink for old scripts that reference 'log'
+		ln -sf log.out "$id_dir/log" 2>/dev/null || true
 
 		(
 			# Keep FD 9 open in this subshell so lock remains held until it exits.
@@ -1483,15 +1549,17 @@ run_once() {
 
 			if [[ "$is_fg" == "true" ]]; then
 				# Foreground-ish: stream + log
-				setsid "${command[@]}" 2>&1 | tee "$log_file"
+				# Capture stderr separately, combined to stdout for display
+				setsid "${command[@]}" 2> >(tee -a "$log_err_file" >&2) | tee -a "$log_out_file"
 				rc="${PIPESTATUS[0]}"
 				echo "$rc" >"$exit_file"
 				exit "$rc"
 			fi
 
-			# Background: log only, but capture pid + wait so we can write exit code reliably
-			setsid "${command[@]}" >>"$log_file" 2>&1 &
+			# Background: log.out gets stdout+stderr, log.err gets only stderr
+			setsid "${command[@]}" 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
 			echo $! >"$pid_file"
+		chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
 			wait $!
 			rc=$?
 			echo "$rc" >"$exit_file"
@@ -1509,12 +1577,34 @@ run_once() {
 			echo "Error: start mode requires a command." >&2
 			return 1
 		fi
+		
+		# If exit file exists (task already completed), skip
+		if [[ -f "$exit_file" ]]; then
+			return 0
+		fi
+		
 		_start_task "false"
 		return 0
 	fi
 
 	# --- wait mode ---
 	if [[ "$mode" == "wait" ]]; then
+		# Check if exit file exists and if task was killed by signal
+		if [[ -f "$exit_file" ]]; then
+			local exit_code
+			exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+			
+			# Exit codes 128-165 indicate termination by signal (kill, Ctrl-C, etc.)
+			# These are interruptions, not legitimate failures, so treat as crash and retry
+			if [[ $exit_code -ge 128 && $exit_code -le 165 ]]; then
+				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
+				rm -rf "$id_dir"
+				mkdir -p "$id_dir"
+		chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+				# Fall through to restart logic below
+			fi
+		fi
+		
 		if [[ ! -f "$exit_file" ]]; then
 			exec 9>>"$lock_file"
 			if flock -n 9; then
@@ -1529,40 +1619,214 @@ run_once() {
 			else
 				# Running elsewhere => block until lock released
 				exec 9>&-
-				flock -x "$lock_file" -c "true"
+			
+			# Build and display waiting message (unless quiet mode)
+			if [[ "$quiet_wait" != true ]]; then
+				local msg=""
+				if [[ -n "$waiting_message" ]]; then
+					msg="$waiting_message"
+				else
+					msg="Waiting for task: $work_id"
+				fi
+				
+				# Add PID if available
+				if [[ -f "$pid_file" ]]; then
+					local pid=$(<"$pid_file")
+					if [[ -n "$pid" ]]; then
+						msg="$msg (PID: $pid)"
+					fi
+				fi
+				
+				# Display message
+				aba_info "$msg"
+			fi
+				
+				if [[ -n "$wait_timeout" ]]; then
+					# Wait with timeout
+					if ! flock -w "$wait_timeout" -x "$lock_file" -c "true"; then
+						echo "Error: Timeout waiting for task $work_id after ${wait_timeout}s" >&2
+						return 124  # Standard timeout exit code
+					fi
+				else
+					# Wait indefinitely
+					flock -x "$lock_file" -c "true"
+				fi
 			fi
 		fi
 
-		local exit_code
-		exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+	local exit_code
+	exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
 
-		if [[ "$purge" == true ]]; then
-			rm -f "$lock_file" "$exit_file" "$log_file" "$pid_file"
+	# --- SELF-HEALING VALIDATION ---
+	# If no command provided but task previously succeeded, load saved command
+	# This allows validation even when wait is called without explicit command
+	if [[ $exit_code -eq 0 && ${#command[@]} -eq 0 && -f "$id_dir/cmd.sh" ]]; then
+		source "$id_dir/cmd.sh"  # Reconstructs command array via declare -p
+		aba_debug "Loaded saved command for validation: ${command[*]}"
+	fi
+
+	# Self-healing: re-run successful tasks to verify outputs still exist
+	# Tasks are idempotent - they check their artifacts and exit quickly if valid
+	# If artifacts missing (e.g. user deleted files), task recreates them automatically
+	# This prevents "file not found" errors from stale cached success states
+	if [[ $exit_code -eq 0 && ${#command[@]} -gt 0 ]]; then
+		# Check if task is currently running (lock held)
+		exec 9>>"$lock_file"
+		if flock -n 9; then
+			# Lock acquired - safe to validate
+			exec 9>&-
+			aba_debug "Task $work_id completed successfully, running validation..."
+			
+			# Restore original CWD if saved (needed for relative paths in commands)
+			local saved_cwd original_cwd
+			original_cwd="$(pwd)"
+			if [[ -f "$id_dir/cwd" ]]; then
+				saved_cwd="$(cat "$id_dir/cwd")"
+				cd "$saved_cwd" || aba_debug "Warning: Could not restore CWD to $saved_cwd"
+			fi
+			
+			rm -f "$exit_file"  # Clear exit so task can run
+			_start_task "false"  # Run in background mode (logs to files, no terminal output)
+			wait $!  # Wait for validation task to complete
+			
+			# Restore current CWD
+			cd "$original_cwd" || true
+			
+			# Get new exit code from validation run
+			exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+		else
+			# Lock held - another process is running this task, skip validation
+			exec 9>&-
+			aba_debug "Task $work_id is currently running, skipping validation"
 		fi
-		return "$exit_code"
+	fi
+
+	if [[ "$purge" == true ]]; then
+		rm -rf "$id_dir"
+	fi
+	return "$exit_code"
 	fi
 
 	echo "Error: Unknown mode." >&2
 	return 1
 }
 
-# --- Aba-facing cleanup ---
+# --- Catalog Download Helpers ---
 
-aba_runtime_cleanup() {
-	local rc=$?
-
-	# Prevent recursion / re-entrancy
-	trap - EXIT INT TERM
-
-	# Kill anything still owned by runner
-	run_once -G >/dev/null 2>&1 || true
-
-	return "$rc"
+# Download all 4 operator catalogs in parallel using run_once
+# Usage: download_all_catalogs <version_short> [ttl_seconds]
+# Example: download_all_catalogs "4.19" 86400
+download_all_catalogs() {
+	local version_short="${1}"
+	local ttl="${2:-86400}"  # Default: 1 day (86400 seconds)
+	
+	if [[ -z "$version_short" ]]; then
+		echo_red "[ABA] Error: download_all_catalogs requires version (e.g., 4.19)" >&2
+		return 1
+	fi
+	
+	aba_debug "Starting parallel catalog downloads for OCP $version_short (TTL: ${ttl}s)"
+	
+	# Start 3 parallel downloads (run_once backgrounds them automatically)
+	# Each download will skip if already completed within TTL
+	# Note: Scripts use pwd -P to resolve symlinks and find real aba root
+	run_once -i "catalog:${version_short}:redhat-operator" -t "$ttl" -- \
+		scripts/download-catalog-index-simple.sh redhat-operator
+	
+	run_once -i "catalog:${version_short}:certified-operator" -t "$ttl" -- \
+		scripts/download-catalog-index-simple.sh certified-operator
+	
+	run_once -i "catalog:${version_short}:community-operator" -t "$ttl" -- \
+		scripts/download-catalog-index-simple.sh community-operator
+	
+	aba_debug "Catalog download tasks started in background"
 }
 
-aba_runtime_install_traps() {
-	# Call once at Aba startup
-	trap aba_runtime_cleanup INT TERM
+# Wait for all 3 catalog downloads to complete (all required)
+# Wait for all catalog downloads to complete
+# Usage: wait_for_all_catalogs <version_short>
+# Example: wait_for_all_catalogs "4.19"
+#
+# NOTE: This function is called from add-operators-to-imageset.sh where stdout
+#       is redirected to YAML file. ALL user messages MUST use >&2 (stderr)!
+wait_for_all_catalogs() {
+	local version_short="${1}"
+	
+	if [[ -z "$version_short" ]]; then
+		echo_red "[ABA] Error: wait_for_all_catalogs requires version (e.g., 4.19)" >&2
+		return 1
+	fi
+	
+	# Read timeout from user config (default: 20 minutes)
+	local timeout_mins=20
+	if [[ -f "$HOME/.aba/config" ]]; then
+		source "$HOME/.aba/config"
+		timeout_mins="${CATALOG_DOWNLOAD_TIMEOUT_MINS:-20}"
+	fi
+	local timeout_secs=$((timeout_mins * 60))
+	
+	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_mins} minutes)"
+	
+	aba_debug "wait_for_all_catalogs: About to call run_once -w for redhat-operator"
+	
+	if ! run_once -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
+		echo_red "[ABA] Error: Failed to download redhat-operator catalog for OCP $version_short" >&2
+		return 1
+	fi
+	aba_debug "redhat-operator catalog ready"
+	
+	if ! run_once -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
+		echo_red "[ABA] Error: Failed to download certified-operator catalog for OCP $version_short" >&2
+		return 1
+	fi
+	aba_debug "certified-operator catalog ready"
+	
+	if ! run_once -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
+		echo_red "[ABA] Error: Failed to download community-operator catalog for OCP $version_short" >&2
+		return 1
+	fi
+	aba_debug "community-operator catalog ready"
+	
+	# Must use stderr since stdout may be redirected to YAML file
+	aba_info_ok "All catalog downloads completed for OCP $version_short" >&2
+}
+
+# --- Aba-facing cleanup ---
+# Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
+# Use 'aba reset' to explicitly kill all background tasks and clean up.
+
+# -----------------------------------------------------------------------------
+# HTTP/HTTPS Probing
+# -----------------------------------------------------------------------------
+
+# Probe HTTP/HTTPS endpoint with sensible timeouts
+# Usage: probe_host <url> [description]
+# Returns: 0 if reachable, 1 if not
+# Errors shown naturally by curl to stderr
+#
+# Examples:
+#   probe_host "https://api.openshift.com/"
+#   probe_host "https://registry:8443/health/instance" "Quay registry"
+probe_host() {
+	local url="$1"
+	local desc="${2:-$url}"
+	
+	aba_debug "Probing $desc"
+	
+	# -s: silent (no progress bar)
+	# -S: show errors even when silent
+	# -f: fail on HTTP errors (4xx, 5xx)
+	# Result: Errors shown, but no progress bars!
+	if curl -sSf \
+		--connect-timeout 5 \
+		--max-time 15 \
+		--retry 2 \
+		-ILk \
+		"$url" >/dev/null; then
+		return 0
+	fi
+	
+	return 1
 }
 
 # -----------------------------------------------------------------------------
@@ -1653,6 +1917,50 @@ validate_cidr() {
 	return 0
 }
 
+# Validate pull secret by testing authentication with registry.redhat.io
+# Usage: validate_pull_secret "/path/to/pull-secret.json" && echo "valid"
+# Returns: 0 if valid, 1 if invalid
+validate_pull_secret() {
+	local pull_secret_file="$1"
+	
+	if [[ ! -f "$pull_secret_file" ]]; then
+		echo_red "[ABA] Error: Pull secret file not found: $pull_secret_file" >&2
+		return 1
+	fi
+	
+	# Check that pull secret contains registry.redhat.io
+	if ! jq -e '.auths["registry.redhat.io"]' "$pull_secret_file" >/dev/null 2>&1; then
+		echo_red "[ABA] Error: No registry.redhat.io entry in pull secret" >&2
+		return 1
+	fi
+	
+	aba_debug "Validating pull secret by testing authentication with registry.redhat.io"
+	
+	# Use skopeo login --get-login to quickly test credentials (much faster than inspect)
+	# This returns the username if auth succeeds, non-zero if auth fails
+	local error_output
+	
+	error_output=$(skopeo login --authfile "$pull_secret_file" --get-login registry.redhat.io 2>&1)
+	local rc=$?
+	
+	if [[ $rc -eq 0 ]]; then
+		aba_info_ok "Pull secret validated successfully"
+		return 0
+	else
+		echo_red "[ABA] Error: Pull secret validation failed" >&2
+		echo_red "[ABA]        Could not authenticate with registry.redhat.io" >&2
+		
+		# Parse common error messages
+		if echo "$error_output" | grep -qi "unauthorized\|authentication\|credentials\|invalid"; then
+			echo_red "[ABA]        Invalid credentials or expired token" >&2
+		elif echo "$error_output" | grep -qi "no such host\|network\|connection"; then
+			echo_red "[ABA]        Network/DNS issue (not a pull secret problem)" >&2
+		fi
+		
+		return 1
+	fi
+}
+
 # Validate domain name (basic validation)
 # Usage: validate_domain "example.com" && echo "valid"
 # Returns: 0 if valid, 1 if invalid
@@ -1725,3 +2033,124 @@ validate_ntp_servers() {
 	return 0
 }
 
+
+# ============================================
+# CLI Tool Management Functions
+# Centralized task IDs and installation logic
+# ============================================
+
+# Task IDs (single source of truth)
+# Guard against re-declaration when include_all.sh is sourced multiple times
+if [[ -z "${TASK_OC_MIRROR+x}" ]]; then
+	readonly TASK_OC_MIRROR="cli:install:oc-mirror"
+	readonly TASK_OC="cli:install:oc"
+	readonly TASK_OPENSHIFT_INSTALL="cli:install:openshift-install"
+	readonly TASK_GOVC="cli:install:govc"
+	readonly TASK_BUTANE="cli:install:butane"
+	readonly TASK_QUAY_REG_DOWNLOAD="mirror:reg:download"
+	readonly TASK_QUAY_REG="mirror:reg:install"
+fi
+
+# Start all CLI tarball downloads (parallel, non-blocking)
+start_all_cli_downloads() {
+	scripts/cli-download-all.sh
+}
+
+# Wait for all CLI tarball downloads to complete
+wait_all_cli_downloads() {
+	scripts/cli-download-all.sh --wait
+}
+
+# Ensure oc-mirror is installed in ~/bin
+ensure_oc_mirror() {
+	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
+}
+
+# Ensure oc CLI is installed in ~/bin
+ensure_oc() {
+	run_once -w -m "Installing oc to ~/bin" -i "$TASK_OC" -- make -sC cli oc
+}
+
+# Ensure openshift-install is installed in ~/bin
+ensure_openshift_install() {
+	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL" -- make -sC cli openshift-install
+}
+
+# Ensure govc is installed in ~/bin
+ensure_govc() {
+	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
+}
+
+# Ensure butane is installed in ~/bin
+ensure_butane() {
+	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
+}
+
+# Ensure mirror-registry (Quay) is installed (extracted)
+ensure_quay_registry() {
+	# Note: Download should already be started (like CLI tools)
+	# Called via ensure-cli.sh which cds to ABA_ROOT, so use -C mirror
+	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
+}
+
+# Get error output from a task (helper for error messages)
+get_task_error() {
+	local task_id="$1"
+	run_once -e -i "$task_id"
+}
+
+# Check internet connectivity to required sites
+# Usage: check_internet_connectivity <prefix> [quiet]
+#   prefix: Task ID prefix (e.g., "cli" or "tui")
+#   quiet:  If "true", suppress checking message (default: false)
+# Returns: 0 if all sites accessible, 1 if any failed
+# Sets global variables: FAILED_SITES, ERROR_DETAILS (for caller to handle)
+check_internet_connectivity() {
+	local prefix="$1"
+	local quiet="${2:-false}"
+	
+	# Check if we need to run the checks (not cached)
+	local need_check=false
+	if ! run_once -p -i "${prefix}:check:api.openshift.com" >/dev/null 2>&1 || \
+	   ! run_once -p -i "${prefix}:check:mirror.openshift.com" >/dev/null 2>&1 || \
+	   ! run_once -p -i "${prefix}:check:registry.redhat.io" >/dev/null 2>&1; then
+		need_check=true
+	fi
+	
+	# Start all three checks in parallel (lightweight curl HEAD requests, 30-sec TTL)
+	run_once -t 30 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
+	run_once -t 30 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
+	run_once -t 30 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
+	
+	# Now wait for all three and check results (quietly, no waiting messages)
+	FAILED_SITES=""
+	ERROR_DETAILS=""
+	
+	if ! run_once -w -q -i "${prefix}:check:api.openshift.com"; then
+		FAILED_SITES="api.openshift.com"
+		local err_msg=$(run_once -e -i "${prefix}:check:api.openshift.com" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
+		ERROR_DETAILS="api.openshift.com: $err_msg"
+	fi
+	
+	if ! run_once -w -q -i "${prefix}:check:mirror.openshift.com"; then
+		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
+		FAILED_SITES="${FAILED_SITES}mirror.openshift.com"
+		local err_msg=$(run_once -e -i "${prefix}:check:mirror.openshift.com" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
+		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'"  "
+		ERROR_DETAILS="${ERROR_DETAILS}mirror.openshift.com: $err_msg"
+	fi
+	
+	if ! run_once -w -q -i "${prefix}:check:registry.redhat.io"; then
+		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
+		FAILED_SITES="${FAILED_SITES}registry.redhat.io"
+		local err_msg=$(run_once -e -i "${prefix}:check:registry.redhat.io" | head -1)
+		[[ -z "$err_msg" ]] && err_msg="Connection failed"
+		[[ -n "$ERROR_DETAILS" ]] && ERROR_DETAILS="$ERROR_DETAILS"$'\n'"  "
+		ERROR_DETAILS="${ERROR_DETAILS}registry.redhat.io: $err_msg"
+	fi
+	
+	# Return status
+	[[ -z "$FAILED_SITES" ]] && return 0 || return 1
+}

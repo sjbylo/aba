@@ -54,10 +54,9 @@ rm -f ~/.ssh/quay_installer*
 
 which make || sudo dnf install make -y
 
-test-cmd -m "Installing aba" ./install 
-#test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
-
 test-cmd -m "Cleaning up - aba reset --force" aba reset -f
+
+test-cmd -m "Installing aba" ./install 
 
 ####mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
@@ -188,7 +187,7 @@ reg_ssh_user=$TEST_USER
 ### CREATE BUNDLE & COPY TO BASTION ###
 
 test-cmd mkdir -v -p ~/tmp
-# Test split install bundle 
+# Test light install bundle 
 test-cmd rm -fv ~/tmp/delete-me*tar
 
 test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and save to disk" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks vault-secrets-operator flux --base-domain example.com -o ~/tmp/delete-me -y"

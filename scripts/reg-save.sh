@@ -1,14 +1,26 @@
-#!/bin/bash -e
+#!/bin/bash
 # Save images from RH reg. to disk 
+
+# Ensure we're in mirror/ directory (script is called from mirror/Makefile)
+# Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+cd "$SCRIPT_DIR/../mirror" || exit 1
+
+# Enable INFO messages by default when called directly from make
+# (unless explicitly disabled by parent process via --quiet)
+[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
 # Check internet connection...
-##aba_info -n "Checking access to https://api.openshift.com/: "
-if ! curl -skIL --connect-timeout 10 --retry 8 -o "/dev/null" -w "%{http_code}\n" https://api.openshift.com/ >/dev/null; then
-	aba_abort "Error: Cannot access https://api.openshift.com/.  Access to the Internet is required to save the images to disk." 
+aba_info "Checking Internet access to https://api.openshift.com/"
+
+if ! probe_host "https://api.openshift.com/" "OpenShift API"; then
+	aba_abort "Cannot access https://api.openshift.com/" \
+		"Access to the Internet is required to save images to disk." \
+		"Check curl error above for details."
 fi
 
 # Script called with args "debug" and/or "retry"
@@ -24,21 +36,40 @@ verify-aba-conf || exit 1
 
 # Still downloading?
 export PLAIN_OUTPUT=1
-aba_info "Downloading CLI installation binaries"
-#echo ABA_ROOT=$ABA_ROOT
+aba_info "Ensuring CLI installation binaries are downloading"
 #pwd
 sleep 1
 #run_once -w -i download_all_cli -- make -sC ../cli download #|| aba_abort "Downloading CLI binaries failed.  Please try again!"
-scripts/cli-download-all.sh --wait
+# Start downloads if not already running (non-blocking, parallel)
+scripts/cli-download-all.sh
 
-aba_info_ok "CLI Installation binaries downloaded successfully!"
-
-aba_info "Checking for oc-mirror binary."
-run_once -w -i cli:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror || aba_abort "Downloading oc-mirror binary failed.  Please try again!"
+# Wait for oc-mirror specifically (needed immediately below)
+if ! ensure_oc_mirror; then
+	error_msg=$(get_task_error "$TASK_OC_MIRROR")
+	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
+fi
 
 
 # Ensure the RH pull secret files are located in the right places
 scripts/create-containers-auth.sh
+
+# Check disk space before downloading images
+mkdir -p save
+avail=$(df -m save | awk '{print $4}' | tail -1)
+
+# Minimum 20GB for base platform
+if [ $avail -lt 20500 ]; then
+	aba_abort "Not enough disk space available under $PWD/save (only $avail MB)" \
+		"At least 20GB is required for the base OpenShift platform alone" \
+		"Operators require additional 40-400GB of space"
+fi
+
+# Warning for operators (if less than 50GB available)
+if [ $avail -lt 51250 ]; then
+	aba_warning "Less than 50GB of space available under $PWD/save (only $avail MB)" >&2
+	aba_warning "Operator images require between ~40 to ~400GB of disk space!" >&2
+	echo >&2
+fi
 
 aba_info "Now saving (mirror2disk) images from external network to mirror/save/ directory."
 
@@ -77,14 +108,14 @@ do
 		# Set up script to help for re-sync
 		# --continue-on-error : do not use this option. In testing the registry became unusable! 
 		cmd="oc-mirror --v1 --config=imageset-config-save.yaml file://."
-		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
+		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
 	else
 		# --since string Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored (only m2d)
 		#cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01                     --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 		# Wait for oc-mirror to be available!
-		##run_once -w -i cli:install:oc-mirror -- make -sC $ABA_ROOT/cli oc-mirror 
+		##run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
 		cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01  --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh 
+		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
 	fi
 
 	echo
