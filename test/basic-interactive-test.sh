@@ -1,11 +1,9 @@
 #!/bin/bash -e
 # Basic/primitive tests for aba interactive mode
 
-#cd $(dirname $0)
-
-./install
-
 aba reset -f
+./install
+cp aba $(which aba) -v
 
 ########################
 [ -s aba.conf ] && sed -i -e "s/^ocp_channel=.*/ocp_channel=/g" -e "s/^ocp_version=.*/ocp_version=/g" -e "s/^editor=.*/editor=/g" aba.conf

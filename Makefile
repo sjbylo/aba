@@ -10,7 +10,7 @@ TEMPLATES = templates
 SCRIPTS   = scripts
 name     ?= standard	# def. cluster name
 type     ?= standard	# def. cluster type
-#split    ?=		# by def. do not split the install bundle
+#light    ?=		# by def. do not create light install bundle
 MIRROR_CMDS := save load sync verify
 
 #debug = $(strip $(shell printf "%s" "$$DEBUG_ABA"))
@@ -35,7 +35,7 @@ init: aba .init
 ###vmware.conf:
 .PHONY: vmw
 vmw:
-	@make -sC cli govc
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc CLI tool" -i cli:install:govc -- make -sC cli govc
 	@$(SCRIPTS)/install-vmware.conf.sh #  $(debug)
 
 #.PHONY: cli
@@ -44,17 +44,20 @@ vmw:
 #	@echo "  aba -d cli install"
 #	@echo "  cd cli && aba install"
 
-.PHONY: catalog
-# -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
-catalog: ## Render all the latest Operators into a helper file which can be used in an imageset config file. 
-#	@make -sC cli oc-mirror >/dev/null 2>&1
-	@make -C mirror catalog bg=$(bg)
+# DEPRECATED: catalog target replaced by download_all_catalogs() and wait_for_all_catalogs() 
+# helper functions in scripts/include_all.sh. Use those directly instead.
+#
+#.PHONY: catalog
+## -s needed here 'cos the download runs in the background (called by aba) and we don't want any output
+#catalog: ## Render all the latest Operators into a helper file which can be used in an imageset config file. 
+##	@make -sC cli oc-mirror >/dev/null 2>&1
+#	@make -C mirror catalog bg=$(bg)
 
 # These are the targets needed to create the 'bundle' archive
 #.PHONY: bundle
 # Note: '@' used to ensure tar format is not corrupted when using out=-
 #bundle:  ## Create an install bundle to be tranferred into the air-gapped env. Example: aba bundle --out /path/to/archive/bundle or -
-#	@$(SCRIPTS)/make-bundle.sh -o $(out) $(split) $(force)
+#	@$(SCRIPTS)/make-bundle.sh -o $(out) $(light) $(force)
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use --out - to send tar output to stdout. Used by aba bundle.
@@ -128,11 +131,13 @@ clean: ## Clean up all temporary files.
 .PHONY: reset
 reset: # Clean up *everything*.  Only use if you know what you are doing! Note that this does not run 'aba uninstall' to uninstall the mirror.
 	$(SCRIPTS)/reset-gate.sh $(force)
+	$(SCRIPTS)/cleanup-runner.sh
 	make clean
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
 	make -sC cli reset
 	make -sC mirror reset 
-	rm -rf ~/.aba/cache ~/.aba/tmp
+	rm -rf ~/.aba/cache ~/.aba/tmp ~/.aba/logs
+	rm -rf ~/.aba/runner || sleep 1 && rm -rf ~/.aba/runner || true
 	rm -f aba.conf ~/.aba.conf*
 

@@ -1,7 +1,10 @@
 #!/bin/bash 
-# This script compares the OpenShift target version in aba.conf with versions defined in any existing imageset config files under mirror/sync/ or save/
+# This script compares the OpenShift target version in aba.conf with versions defined in any existing imageset config files under sync/ or save/
 # Warns if there is a mismatch that needs to be addressed.
 # Only if the ISC file has been updated by user.
+
+# Scripts called from mirror/Makefile should cd to mirror/
+cd "$(dirname "$0")/../mirror" || exit 1
 
 source scripts/include_all.sh
 
@@ -28,7 +31,7 @@ fi
 ###rpm -q --quiet python3 || rpm -q --quiet python36 || $SUDO dnf install python3 -y >> .dnf-install.log 2>&1
 #install_rpms python3-jinja2 python3-pyyaml || exit 1
 #install-rpms external || exit 1
-install_rpms $(cat $ABA_ROOT/templates/rpms-external.txt) || exit 1
+install_rpms $(cat templates/rpms-external.txt) || exit 1
 
 yaml2json()
 {
@@ -54,11 +57,11 @@ do
 
 		if is_version_greater "$om_ocp_min_ver" "$aba_ocp_ver" || is_version_greater $aba_ocp_ver "$om_ocp_max_ver" || [ "$om_ocp_channel" != "$aba_ocp_channel" ]; then
 			echo 
-			echo_red "Warning: The version of 'openshift-install' ($aba_ocp_ver) no longer matches the version defined in 'mirror/$f'." >&2
-			echo_red "         Settings in 'mirror/$f' are currently min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel" >&2
+			echo_red "Warning: The version of 'openshift-install' ($aba_ocp_ver) no longer matches the version defined in '$f'." >&2
+			echo_red "         Settings in '$f' are currently min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel" >&2
 			echo_red "         Before syncing or saving images (again), this mismatch must be corrected." >&2
 			echo_red "         Your options are:" >&2
-			echo_red "         - edit the image set config file (mirror/$f) to match the ocp version set in aba.conf ($aba_ocp_ver)" >&2
+			echo_red "         - edit the image set config file ($f) to match the ocp version set in aba.conf ($aba_ocp_ver)" >&2
 			echo_red "         - delete mirror/$f and have aba re-create it for you" >&2
 			echo_red "         - edit aba.conf to match the version set in the image set config file." >&2
 			echo_red "         Fix the mismatch and try again!" >&2 

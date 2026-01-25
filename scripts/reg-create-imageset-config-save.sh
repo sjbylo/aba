@@ -1,6 +1,15 @@
 #!/bin/bash 
 # Save images from RH reg. to disk 
 
+# Scripts called from mirror/Makefile should cd to mirror/
+# Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+cd "$SCRIPT_DIR/../mirror" || exit 1
+
+# Enable INFO messages by default when called directly from make
+# (unless explicitly disabled by parent process via --quiet)
+[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
+
 source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
@@ -22,15 +31,6 @@ scripts/create-containers-auth.sh
 if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-config-save.yaml ]; then
 	#rm -rf save/*  # Do not do this.  There may be image set archive files in thie dir which are still needed. 
 
-	# Check disk space under save/. 
-	avail=$(df -m save | awk '{print $4}' | tail -1)
-	# If this is a fresh config, then check ... if less than 20 GB, stop
-	if [ $avail -lt 20500 ]; then
-		aba_abort "Not enough disk space available under $PWD/save (only $avail MB). At least 20GB is required for the base OpenShift platform alone." 
-
-		exit 1
-	fi
-
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
 	##export ocp_ver=$ocp_version
@@ -40,10 +40,10 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 	[ ! "$excl_platform" ] && aba_info "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$ARCH' ..."
 
 	aba_debug Values: ARCH=$ARCH ocp_channel=$ocp_channel ocp_version=$ocp_version
-	scripts/j2 ./templates/imageset-config-save-$oc_mirror_version.yaml.j2 > save/imageset-config-save.yaml 
+	scripts/j2 ./templates/imageset-config-save-$oc_mirror_version.yaml.j2 > save/imageset-config-save.yaml
 	touch save/.created  # In case next line fails!
 
-	scripts/add-operators-to-imageset.sh >> save/imageset-config-save.yaml 
+	scripts/add-operators-to-imageset.sh --output save/imageset-config-save.yaml
 	touch save/.created  # In case next line fails!
 
 	# Uncomment the platform section
@@ -53,12 +53,5 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 	aba_info_ok "Image set config file created: mirror/save/imageset-config-save.yaml ($ocp_channel-$ocp_version $ARCH)"
 	aba_info    "Reminder: Edit this file to add more content, e.g. Operators, and then run 'aba -d mirror save' again to update the images."
 else
-	# Check disk space under save/. 
-	avail=$(df -m save | awk '{print $4}' | tail -1)
-	# If this is NOT a fresh config, then check ... if less than 50 GB, give a warning only
-	if [ $avail -lt 51250 ]; then
-		aba_warning "Less than 50GB of space available under $PWD/save (only $avail MB). Operator images require between ~40 to ~400GB of disk space!" >&2
-	fi
-
 	aba_info "Using existing image set config file (save/imageset-config-save.yaml)"
 fi

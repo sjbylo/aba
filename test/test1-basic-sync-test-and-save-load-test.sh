@@ -54,6 +54,8 @@ mylog ============================================================
 mylog "Test to install remote reg. on $int_bastion_hostname and then sync and save/load images.  Install sno ocp + test app."
 mylog
 
+test-cmd -m "Installing aba" ./install 
+
 rm -rf ~/.cache/agent/*
 
 rm -rf $HOME/*/.oc-mirror/.cache
@@ -78,9 +80,11 @@ test-cmd -m "Install aba (2)" '../aba/install 2>&1 | grep "already up-to-date"'
 mylog Testing update of aba script
 sleep 1
 new_v=$(date +%Y%m%d%H%M%S)
-test-cmd -m "Testing update of aba script, update version" sed -i "s/^ABA_VERSION=.*/ABA_VERSION=$new_v/g" scripts/aba.sh
+test-cmd -m "Testing update of aba script, update build timestamp" sed -i "s/^ABA_BUILD=.*/ABA_BUILD=$new_v/g" scripts/aba.sh
 test-cmd -m "Testing update of aba script, run (and update) aba" "aba -h | head -8"  # This will trigger an update of aba
-test-cmd -m "Testing update of aba script, grep aba version" "grep ^ABA_VERSION=$new_v `which aba`"
+test-cmd -m "Testing update of aba script, grep aba build timestamp" "grep ^ABA_BUILD=$new_v `which aba`"
+
+test-cmd -m "Basic interactive test" test/basic-interactive-test.sh
 
 # clean up all, assuming reg. is not running (deleted)
 v=4.16.3

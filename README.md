@@ -249,11 +249,11 @@ If you run `aba` (interactive mode), you will make use of this workflow.
 
 # Install ABA
 
-## Method 1: Single command
-
 >> Note that ABA requires root access, either directly or via passwordless sudo. 
 
-Download and install ABA in one command (preferred):
+## Method 1: Single command
+
+Download and install ABA in one command:
 ```
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
 ```
@@ -265,18 +265,48 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 
 ## Method 2: Git clone
 
-Install ABA using `git clone`:
+**For production use, install from a specific release version:**
+
+```bash
+# Download and install a stable release (recommended)
+wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.0.tar.gz
+tar xzf v0.9.0.tar.gz
+cd aba-0.9.0
+./install
+aba
 ```
-git clone https://github.com/sjbylo/aba.git
+
+Or clone a specific release tag:
+```bash
+git clone --branch v0.9.0 https://github.com/sjbylo/aba.git
+cd aba
+./install
+aba
+```
+
+**For development or testing, install from the main or dev branch:**
+
+```bash
+git clone -b main https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba          # Let ABA guide you through the OpenShift installation workflow (interactive mode)
 ```
-- clones the Github repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your base domain name, machine network CIDR etc (if known).
+
+- See all available releases at: https://github.com/sjbylo/aba/releases
+- Check your installed version: `aba --aba-version`
+- The install script clones the Github repository, installs `aba` and configures some high-level settings, e.g. OpenShift target version, your base domain name, machine network CIDR etc (if known).
 - If needed, add any required operators to the `aba.conf` file by setting the `op_sets=` and/or `ops=` values.
-- helps you decide the method of deployment and how you should proceed.  For more, see the [ABA OpenShift Installation Workflow Diagram](#aba-openshift-installation-workflow-diagram). 
+- The tool helps you decide the method of deployment and how you should proceed. For more, see the [ABA OpenShift Installation Workflow Diagram](#aba-openshift-installation-workflow-diagram). 
 
 Note that 'aba' will create the `aba.conf` file which contains some values that you *should change* as soon as you can, such as your _preferred platform_, your _base domain name_, your _network address_ and any _operators_ you will require etc (if known).
+
+**Experimental TUI (Text User Interface):** For a guided wizard experience to prepare a disconnected OpenShift installation, try:
+```bash
+tui/abatui_experimental.sh    # Interactive wizard to configure and prepare your environment
+```
+Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI walks you through selecting OpenShift version, operators, and creating install bundles or syncing to registries.
+
 
 Now, continue with either [Partially Disconnected Scenario](#partially-disconnected-scenario) or [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario) below.
 
@@ -992,7 +1022,7 @@ aba
 
 After this, proceed with loading the images into your registry using `aba -d mirror load`.  Continue to follow the instructions in the [Fully Disconnected (Air-Gapped) Scenario](#fully-disconnected-air-gapped) section.
 
-When using the `bundle` command, use the `--split` option in `aba bundle --split ...` to create a `split install bundle` instead of a `full install bundle`.  See `aba bundle --help` for more.
+When using the `bundle` command, use the `--light` option in `aba bundle --light ...` to create a `light install bundle` instead of a `full install bundle`.  See `aba bundle --help` for more.
 
 
 ## To install aba from the dev branch run the following:

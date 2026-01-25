@@ -66,10 +66,11 @@ init: .init
 .init:
 	@ln -fs $(TEMPLATES)
 	@ln -fs $(SCRIPTS)
+	@ln -fs ../cli
 	@ln -fs ../mirror
 	@ln -fs ../mirror/regcreds 
 	@ln -fs ../aba.conf
-	@make -sC ../cli
+	@$(SCRIPTS)/cli-install-all.sh --wait
 	@touch .init
 	@echo [ABA] Initialized cluster directory `pwd` successfully
 
@@ -79,7 +80,7 @@ mirror.conf: .init ## Set up the aba/mirror/mirror.conf file.
 	@echo [ABA] Using `pwd`/mirror.conf file 
 
 vmware.conf: .init ## Use VMware vCenter or ESXi to create cluster.
-	@make -sC ../cli govc
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc CLI tool" -i cli:install:govc -- make -sC cli govc
 	@make -sC .. vmw
 	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo [ABA] vmware.conf initialized || true
 
@@ -90,7 +91,7 @@ agentconf: install-config.yaml agent-config.yaml  ## Convenient step/target to o
 
 # Note that install-config.yaml can be configured with vSphere params (need 'vmware.conf')
 install-config.yaml: .init $(vmware_conf_dep) cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
-	make -sC ../cli 
+	$(SCRIPTS)/cli-install-all.sh --wait
 	$(SCRIPTS)/verify-config.sh
 	$(SCRIPTS)/create-install-config.sh
 

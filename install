@@ -1,15 +1,21 @@
 #!/bin/bash
 # Simple Aba installer.  Copy aba command somewhere into the $PATH
+#
+# Usage:
+#   ./install          - Manual install (verbose, resets ~/.aba/*, forces reinstall)
+#   ./install -q       - Quiet mode (minimal output, preserves ~/.aba/*, updates only if changed)
+#
+# The -q flag is used internally by 'aba' command for automatic update checks
 
 uname -o | grep -q "^Darwin$" && echo "Install ABA on RHEL, Centos Stream or Fedora.  Most tested is RHEL 8 or 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
-#cd $(dirname $0)  # this install script is always called from  aba's root dir
-
-# We need git, which, id, diff commands (not always available in a container) ... 
-# the other rpm packages are copied from templates/rpms-external.txt which isn't available yet!
+# We need git, which, id, diff commands to run this script (not always available in a container) ... 
+# Other rpm packages that ABA requires are copied into the below line at build time, from templates/rpms-external.txt (which isn't available yet!)
 required_pkgs=(which file hostname diffutils git make jq python3-jinja2 python3-pyyaml ncurses)
+required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which diffutils dialog podman httpd-tools skopeo)  # Synced from templates/rpms-external.txt
 missing_pkgs=()
 
+# Check which packages are missing ...
 for pkg in "${required_pkgs[@]}"; do
 	if ! rpm -q "$pkg" >/dev/null; then
 		missing_pkgs+=("$pkg")
@@ -21,13 +27,13 @@ SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
 
 if [ ${#missing_pkgs[@]} -gt 0 ]; then
-	# try our luck and to install ...
+	# try our luck to install the missing packages ...
 	echo "Installing required rpms: ${missing_pkgs[*]} (logging to .dnf-install.log). Please wait!"
 
 	if ! $SUDO dnf install ${missing_pkgs[*]} -y >.dnf-install.log 2>&1; then
 		echo
-		echo "Error installing missing required pkgs: ${missing_pkgs[*]}" >&2
-		echo "Please install the correct rpm packages (${missing_pkgs[*]}) and try again." >&2
+		echo "Error installing required packages. See: .dnf-install.log" >&2
+		echo "Install the correct rpm packages (${missing_pkgs[*]}) and try again." >&2
 
 		exit 1
 	fi
@@ -39,8 +45,8 @@ if ! which id >/dev/null 2>&1; then
 	exit 1
 fi
 
-# Check sudo or root access 
-# If user is not root
+# Now, check sudo or root access.
+# If user is not root ...
 if [ "$(id -u)" != "0" ]; then
 	if [ "$SUDO" ]; then
 		# If sudo does not lead to root without using a password prompt (-n)
@@ -54,13 +60,15 @@ if [ "$(id -u)" != "0" ]; then
 			[ "$($SUDO -p "Enter %p's password: " id -run)" != "root" ] && echo "Configure passwordless sudo OR run ABA as root, then try again!" >&2 && exit 1
 		fi
 	else
-		echo "Warning: sudo command is not available and ABA is not running as root!" >&2
+		echo "Error: sudo command is not available and ABA is not running as root!" >&2
+		exit 1  # Should never get here!
 	fi
 fi
 
 # Check options
 while echo "$1" | grep -q "^-"
 do
+	# -q: Quiet mode (suppress verbose output, preserve ~/.aba state, update aba script only if changed)
 	[ "$1" = "-q" ] && quiet=1 && shift
 	[ "$1" = "-v" ] && cur_ver=$2 && shift 2
 done
@@ -110,7 +118,7 @@ aba_is_installed() {
 }
 
 get_repo_ver() {
-	grep "^ABA_VERSION=" ./scripts/aba.sh | cut -d= -f2 | grep -oE "^[0-9]{14}$"
+	grep "^ABA_BUILD=" ./scripts/aba.sh | cut -d= -f2 | grep -oE "^[0-9]{14}$"
 }
 
 if ! is_repo_available; then
@@ -122,9 +130,10 @@ fi
 [ ! -x scripts/aba.sh ] && echo "Abort: Incomplete ABA repo! aba script not found in $PWD/scripts/aba.sh" >&2 && exit 1
 
 mkdir -p ~/.aba
-rm -rf ~/.aba/*  # Just to be sure!
 
-cat > ~/.aba/ssh.conf <<END
+# Create ssh.conf if needed
+if [ ! -f ~/.aba/ssh.conf ]; then
+	cat > ~/.aba/ssh.conf <<END
 StrictHostKeyChecking no
 UserKnownHostsFile=/dev/null
 ConnectTimeout=15
@@ -132,10 +141,39 @@ PreferredAuthentications=publickey
 PasswordAuthentication=no
 LogLevel=ERROR
 END
+fi
+
+# Create user config file if needed
+if [ ! -f ~/.aba/config ]; then
+	# Derive script directory (install script is in ABA root)
+	INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+	TEMPLATE="$INSTALL_DIR/templates/aba-home-config"
+	
+	if [ -f "$TEMPLATE" ]; then
+		cp "$TEMPLATE" ~/.aba/config
+	else
+		echo "Warning: Template not found at $TEMPLATE" >&2
+		echo "Skipping ~/.aba/config creation" >&2
+	fi
+fi
 
 
 source scripts/include_all.sh
-install_rpms $(cat templates/rpms-external.txt)
+
+# Most (or all) rpms are installed above.... but ...
+# Now double-check we have all the required rpms from the file: templates/rpms-external.txt
+[ -d templates ] && install_rpms $(cat templates/rpms-external.txt) # HACK - show not be needed to check
+[ -d ../templates ] && install_rpms $(cat ../templates/rpms-external.txt) # HACK - show not be needed to check
+
+# Reset ~/.aba state on manual install only
+# When -q flag is used (automatic update check from 'aba' command), preserve user state
+if [ ! "$quiet" ]; then
+	if [ -d ~/.aba/runner ] || [ -d ~/.aba/cache ]; then
+		rm -rf ~/.aba/runner ~/.aba/cache
+		echo Cache deleted
+	fi
+fi
+
 
 # Install aba somewhere into the $PATH, in this priority order 
 for d in "$HOME/bin" /usr/local/bin /usr/local/sbin /usr/bin /usr/sbin
@@ -147,7 +185,7 @@ do
 		ret=0 # default return value
 		if [ -s "$d/aba" -a -x "$d/aba" ]; then
 			repo_ver=$(get_repo_ver)
-			INSTALLED_VER=$(grep "^ABA_VERSION=[0-9]" $d/aba | cut -d= -f2)
+			INSTALLED_VER=$(grep "^ABA_BUILD=[0-9]" $d/aba | cut -d= -f2)
 			#[ "$DEBUG_ABA" ] && echo INSTALLED_VER=$INSTALLED_VER and repo_ver=$repo_ver >&2
 			[ -n "${DEBUG_ABA-}" ] && echo "INSTALLED_VER=${INSTALLED_VER-} and repo_ver=${repo_ver-}" >&2
 			if [ "$INSTALLED_VER" -a "$repo_ver" ] && [ $INSTALLED_VER -lt $repo_ver ]; then

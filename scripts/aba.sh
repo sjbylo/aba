@@ -1,16 +1,30 @@
 #!/bin/bash
 # Start here, run this script to get going!
 
-ABA_VERSION=20260105224944
-# Sanity check
-# FIXME: Can only use 'echo' here since cann't locate the include_all.sh file yet
-echo -n $ABA_VERSION | grep -qE "^[0-9]{14}$" || { echo "ABA_VERSION in $0 is incorrect [$ABA_VERSION]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
+# Semantic version (updated by build/release.sh at release time)
+ABA_VERSION="0.9.0"
+
+# Build timestamp (updated by build/pre-commit-checks.sh)
+ABA_BUILD=20260126024756
+
+# Sanity check build timestamp
+# FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
+echo -n $ABA_BUILD | grep -qE "^[0-9]{14}$" || { echo "ABA_BUILD in $0 is incorrect [$ABA_BUILD]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
 ARCH=$(uname -m)
 [ "$ARCH" = "aarch64" ] && export ARCH=arm64  # ARM
 [ "$ARCH" = "x86_64" ] && export ARCH=amd64   # Intel
 
 uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a Centos-Stream container. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
+
+# Handle --aba-version early (before sudo check)
+if [ "$1" = "--aba-version" ]; then
+	echo "aba version $ABA_VERSION (build $ABA_BUILD)"
+	git_branch=$(git branch --show-current 2>/dev/null)
+	git_commit=$(git rev-parse --short HEAD 2>/dev/null)
+	[ "$git_branch" -a "$git_commit" ] && echo "Git: $git_branch @ $git_commit"
+	exit 0
+fi
 
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
@@ -21,27 +35,57 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 WORK_DIR=$PWD # Remember so can change config file here 
 
 
-# Need to catch these option, esp. if they are at the start
-while [ "$1" = "-D" -o "$1" = "--debug" -o "$1" = "--dir" -o "$1" = "-d" ] 
-do
-	## Change dir if asked
-	# Keep these lines, ready for the below lines of code #FIXME: Use well-known loaction for static files, e.g. /opt/aba
-	if [ "$1" = "--dir" -o "$1" = "-d" ]; then
-		[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
-		[ ! -e "$2" ] && echo "Error: directory $2 does not exist!" >&2 && exit 1
-		[ ! -d "$2" ] && echo "Error: cannot change to $2: not a directory!" >&2 && exit 1
+# Pre-process ALL arguments to extract --dir/-d (first only) and --debug/-D (anywhere)
+# This scans through all arguments and filters out these special options
+new_args=()           # Array to collect arguments we want to keep
+dir_already_set=false # Only process first --dir/-d
+i=1
 
-		[ "$DEBUG_ABA" ] && echo "Changing dir to: $2" # Keep the $DEBUG_ABA as have not sourced the include file yet!
+while [ $i -le $# ]; do
+	arg="${!i}"  # Get the i-th argument (indirect expansion: if i=1, get $1)
 
-		cd "$2"
-		shift 2
+	case "$arg" in
+		--dir|-d)
+			if [ "$dir_already_set" = false ]; then
+				dir_already_set=true
+				i=$((i + 1))  # Move to next arg (the directory value)
+				target_dir="${!i}"
 
-		WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
-	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
-		export DEBUG_ABA=1
-		shift
-	fi
+				# Validate directory argument
+				[ -z "$target_dir" ] && echo "Error: directory path expected after option $arg" >&2 && exit 1
+				target_dir=$(eval echo "$target_dir")  # Expand ~ in path
+				[ ! -e "$target_dir" ] && echo "Error: directory $target_dir does not exist!" >&2 && exit 1
+				[ ! -d "$target_dir" ] && echo "Error: cannot change to $target_dir: not a directory!" >&2 && exit 1
+
+				[ "$DEBUG_ABA" ] && echo "Changing dir to: $target_dir"
+
+				if ! cd "$target_dir" 2>/dev/null; then
+					echo "Error: cannot change to directory $target_dir (permission denied)" >&2
+					exit 1
+				fi
+
+				WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
+			else
+				# Skip subsequent --dir/-d and their values
+				i=$((i + 1))
+			fi
+			;;
+
+		--debug|-D)
+			export DEBUG_ABA=1
+			;;
+
+		*)
+			# Keep all other arguments
+			new_args+=("$arg")
+			;;
+	esac
+
+	i=$((i + 1))
 done
+
+# Replace $1, $2, etc. with filtered arguments
+set -- "${new_args[@]}"
 
 export INFO_ABA=1
 export ABA_ROOT
@@ -92,18 +136,18 @@ fi
 ##cd $ABA_ROOT
 
 # install will check if aba needs to be updated, if so it will return 3 ... so we re-execute it!
-#if [ ! "$ABA_DO_NOT_UPDATE" ]; then
-#	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
-#	if [ $? -eq 2 ]; then
-#		export ABA_DO_NOT_UPDATE=1
-#		$0 "$@"  # This means aba was updated and needs to be called again
-#		exit
-#	fi
-#fi
+if [ ! "$ABA_DO_NOT_UPDATE" ]; then
+	$ABA_ROOT/install -q   # Only aba iself should use the flag -q
+	if [ $? -eq 2 ]; then
+		export ABA_DO_NOT_UPDATE=1
+		$0 "$@"  # This means aba was updated and needs to be called again
+		exit
+	fi
+fi
 
 source $ABA_ROOT/scripts/include_all.sh
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
-aba_runtime_install_traps  # Used to clean up runner bg tasks
+# Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
 [ ! "$RUN_ONCE_CLEANED" ] && run_once -F # Clean out only the previously failed tasks
 export RUN_ONCE_CLEANED=1 # Be sure it's only run once!
 
@@ -131,7 +175,7 @@ if [ ! -s $ABA_ROOT/aba.conf ]; then
 	aba_debug next_hop_address:	$next_hop_address
 	aba_debug ntp_servers:		$ntp_servers
 
-	scripts/j2 templates/aba.conf.j2 > $ABA_ROOT/aba.conf
+	$ABA_ROOT/scripts/j2 $ABA_ROOT/templates/aba.conf.j2 > $ABA_ROOT/aba.conf
 else
 	# If the repo has empty network values in aba.conf, add defaults - as now is the best time (on internal network).
 	# For pre-created bundles, aba.conf will exist but these values will be empty ... so attempt to fill them in. 
@@ -156,6 +200,15 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 
 # Interactive mode is used when no args are suplied
 [ "$*" ] && interactive_mode= && have_args=1
+
+# For non-interactive mode (aba bundle, aba -d mirror save, etc.):
+# Start CLI downloads early to maximize parallel download time
+# For interactive mode: Wait until after user input (line ~1152) to avoid
+# bandwidth contention that could slow down reaching the user prompts
+if [ ! "$interactive_mode" ]; then
+	aba_debug "Non-interactive mode detected - starting CLI downloads early"
+	scripts/cli-download-all.sh
+fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
 
@@ -185,46 +238,6 @@ do
 		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
 		export ask=1
 		shift
-	elif [ "$1" = "--dir" -o "$1" = "-d" ]; then
-		# If there are commands/targets to execute in the CWD, do it...
-		BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
-		# Simplify option/arg processing
-		[ "$BUILD_COMMAND" ] && aba_abort "option $1 not allowed after a command: [$BUILD_COMMAND]"
-
-		# FIXME: change this
-		#if [ "$BUILD_COMMAND" ]; then
-		#	if [ "$DEBUG_ABA" ]; then
-		#		aba_debug "In folder $PWD: Running make $BUILD_COMMAND" 
-		#		read -t 3 || true
-		#		eval make $BUILD_COMMAND
-		#	else
-		#		# Eval used here as some variable may need evaluation from bash
-		#		eval make -s $BUILD_COMMAND
-		#	fi
-		#
-		#	# Remove already executed targets 
-		#	BUILD_COMMAND=
-		#fi
-
-		# If no directory path provided, assume it's ".", i.e. $ABA_ROOT/.
-		# If dir path arg privided, then shift
-		[[ "$2" =~ ^- || -z "$2" ]] && provided_dir=. || shift  # If no arg provided, use CWD
-		[[ ! "$1" ]] && provided_dir=.  # FIXME: this is the same
-
-		provided_dir=$(eval echo $1)  # Resolve any ~
-
-		[[ "$provided_dir" != /* ]] && provided_dir="$ABA_ROOT/$provided_dir"  # If not an absolute path ...
-
-		# FIXME: Simplify this!  Put all static files into well-known location?
-		#[ ! "$2" ] && echo "Error: directory path expected after option $1" >&2 && exit 1
-		[ ! -e "$provided_dir" ] && aba_abort "directory: $provided_dir does not exist!"
-		[ ! -d "$provided_dir" ] && aba_abort "cannot change to $provided_dir: not a directory!"
-
-		# FIXME:
-		#WORK_DIR="$ABA_ROOT/$provided_dir"  # dir should always be relative from Aba repo's root dir
-		#aba_debug "changing to \"$WORK_DIR\"" 
-		#cd "$WORK_DIR" 
-		shift
 	elif [ "$1" = "--quiet" -o "$1" = "-q" ]; then
 		export INFO_ABA=
 		shift 
@@ -233,12 +246,12 @@ do
 		shift 
 	elif [ "$1" = "--debug" -o "$1" = "-D" ]; then
 		export DEBUG_ABA=1
-		export INFO_ABA=1
-		shift 
-	elif [ "$1" = "--split" ]; then
-		export opt_split="--split"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
-		#BUILD_COMMAND="$BUILD_COMMAND split=split"  # FIXME: Should only allow force=1 after the appropriate target
-		shift
+	export INFO_ABA=1
+	shift 
+elif [ "$1" = "--light" ]; then
+	export opt_light="--light"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
+	#BUILD_COMMAND="$BUILD_COMMAND light=light"  # FIXME: Should only allow force=1 after the appropriate target
+	shift
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
 		echo_yellow "Available OpenShift versions:"
@@ -321,11 +334,12 @@ do
 
 		replace-value-conf -n ocp_version -v $ver -f $ABA_ROOT/aba.conf
 
-		# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
-		aba_debug Downloading operator index for version $ver 
+	# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
+	aba_debug Downloading operator index for version $ver 
 
-		#( make -s -C $ABA_ROOT catalog bg=true & ) & 
-		run_once -i download_catalog_indexes -- make -s -C $ABA_ROOT catalog bg=true
+	# Use new helper function for parallel catalog downloads
+	ver_short="${ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
+	download_all_catalogs "$ver_short" 86400  # 1-day TTL
 
 		shift 2
 		ocp_version=$ver
@@ -773,12 +787,12 @@ if [ "$cur_target" ]; then
 			$ABA_ROOT/scripts/oc-command.sh "$cmd"
 			exit 
 		;;
-		bundle)
-			trap - ERR  # No need for this anymore
-			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_split
-			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_split
-			exit 
-		;;
+	bundle)
+		trap - ERR  # No need for this anymore
+		aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
+		eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
+		exit 
+	;;
 	esac
 fi
 
@@ -838,7 +852,7 @@ export ASK_ALWAYS=1   # Force to always ask, no matter the $ask or $ASK_OVERRIDE
 
 #verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_version or channel defined
 
-cat others/message.txt
+sed "s/VERSION/v$ABA_VERSION/" others/message.txt
 
 ##############################################################################################################################
 # Determine if this is an "aba bundle" or just a clone from GitHub
@@ -849,8 +863,11 @@ if [ -f .bundle ]; then
 	# make & jq are needed below and in the next steps. Best to install all at once.
 	scripts/install-rpms.sh internal
 
-	# May as well install the CLI binaries from aba/cli/ now
-	scripts/cli-install-all.sh >/dev/null
+	# Start extracting all CLI binaries and mirror-registry in parallel (tarballs already in bundle)
+	# These run in background and will be ready when user runs commands that need them
+	
+	scripts/cli-install-all.sh                                    # Start CLI extractions (background)
+	run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry  # Start mirror-registry extraction (background)
 
 	echo_yellow "Aba install bundle detected for OpenShift v$ocp_version."
 
@@ -934,32 +951,42 @@ fi
 	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
 
 	aba_debug "Downloading oc-mirror in the background ..."
-	PLAIN_OUTPUT=1 run_once -i cli:install:oc-mirror			-- make -sC cli oc-mirror
+	PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR"			-- make -sC cli oc-mirror
 
-
-	echo_white -n "Checking Internet connectivity ..."
-	if ! release_text=$(curl -f --connect-timeout 20 --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/stable/release.txt); then
-		[ "$TERM" ] && tput el1 && tput cr
+	# Check Internet connectivity to required sites (using shared function)
+	aba_info "Checking Internet connectivity to required sites..."
+	
+	if ! check_internet_connectivity "cli"; then
 		aba_abort \
-			"Cannot access https://mirror.openshift.com/.  Ensure you have Internet access to download the required images." \
+			"Cannot access required sites: $FAILED_SITES" \
+			"" \
+			"Error details:" \
+			"  $ERROR_DETAILS" \
+			"" \
+			"Ensure you have Internet access to download the required images." \
 			"To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." \
 			"" \
-			"Required sites:                                Other sites:"		\
-			"   mirror.openshift.com                           docker.io"		\
-			"   api.openshift.com                              docker.com"		\
-			"   registry.redhat.io                             hub.docker.com"	\
-			"   quay.io and *.quay.io                          index.docker.io"	\
-			"   console.redhat.com"		\
-			"   registry.access.redhat.com"	\
-
+			"Required sites:                                Other sites:" \
+			"   mirror.openshift.com                           docker.io" \
+			"   api.openshift.com                              docker.com" \
+			"   registry.redhat.io                             hub.docker.com" \
+			"   quay.io and *.quay.io                          index.docker.io" \
+			"   console.redhat.com" \
+			"   registry.access.redhat.com"
 	fi
-
-	[ "$TERM" ] && tput el1 && tput cr
+	
+	# Only show success message if we actually checked (not from cache)
+	if [[ "$checking_connectivity" == "true" ]]; then
+		aba_debug "Connectivity check passed - all sites accessible"
+		aba_info "  ✓ All required sites accessible"
+	else
+		aba_debug "Connectivity check skipped - using cached results"
+	fi
 
 	[ "$ocp_channel" ] && ch_def=${ocp_channel:0:1} || ch_def=s  # Set the default 
 
 	while true; do
-		echo_white -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [$ch_def]: "
+		aba_info -n "Which OpenShift update channel do you want to use? (c)andidate, (f)ast or (s)table [$ch_def]: "
 		read -r ans
 
 		[ ! "$ans" ] && ans=$ch_def
@@ -984,7 +1011,7 @@ fi
 	done
 
 	replace-value-conf -q -n ocp_channel -v $ocp_channel -f aba.conf
-	echo_white "'ocp_channel' set to '$ocp_channel' in aba.conf"
+	aba_info "'ocp_channel' set to '$ocp_channel' in aba.conf"
 
 #fi
 
@@ -997,9 +1024,16 @@ fi
 #else
 
 	echo_white -n "Fetching available versions ..."
-	# Wait for only the data we need ...
-	run_once -w -i ocp:$ocp_channel:latest_version
-	run_once -w -i ocp:$ocp_channel:latest_version_previous
+	# Wait for only the data we need (quietly - message already shown above)
+	if ! run_once -w -q -i ocp:$ocp_channel:latest_version; then
+		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version)
+		aba_abort "Failed to fetch latest OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
+	fi
+	
+	if ! run_once -w -q -i ocp:$ocp_channel:latest_version_previous; then
+		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version_previous)
+		aba_abort "Failed to fetch previous OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
+	fi
 #	if [ "$ocp_channel" = "stable" ]; then
 #		run_once -w -i ocp:stable:latest_version
 #		run_once -w -i ocp:stable:latest_version_previous
@@ -1040,56 +1074,112 @@ fi
 
 	[ "$TERM" ] && tput el1 && tput cr
 
-	echo "Which version of OpenShift do you want to install?"
+	aba_info "Which version of OpenShift do you want to install?"
 
 	target_ver=
 	while true
 	do
 		# Exit loop if release version exists
 		if [ "$target_ver" ]; then
+			aba_debug "Validating user input: target_ver=[$target_ver]"
 			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+$"; then
-				url="https://mirror.openshift.com/pub/openshift-v4/$ARCH/clients/ocp/$target_ver/release.txt"
-				if curl -f --connect-timeout 60 --retry 8 -sSL -o /dev/null -w "%{http_code}\n" $url| grep -q ^200$; then
-					break
+				# Validate x.y.z using Cincinnati graph (cached)
+				minor="${target_ver%.*}"  # 4.18.10 → 4.18
+				aba_debug "Detected x.y.z format, extracting minor: $minor"
+				
+				# Fetch all versions for this channel-minor (may fail if minor doesn't exist)
+				aba_debug "Fetching all versions for $ocp_channel/$minor"
+				if all_versions=$(fetch_all_versions "$ocp_channel" "$minor" 2>/dev/null) && [ -n "$all_versions" ]; then
+					aba_debug "Successfully fetched version list ($(echo "$all_versions" | wc -l) versions)"
+					if echo "$all_versions" | grep -qx "$target_ver"; then
+						aba_debug "Version $target_ver validated successfully"
+						break
+					else
+						aba_debug "Version $target_ver not found in version list"
+						echo_red "Version $target_ver not found in $ocp_channel channel" >&2
+						echo_red "" >&2
+						echo_red "This version is either invalid or has reached End-of-Life." >&2
+						echo_red "" >&2
+						echo_red "Try:" >&2
+						[ -n "$channel_ver" ] && echo_red "  • Latest: $channel_ver (press 'l')" >&2
+						[ -n "$channel_ver_prev" ] && echo_red "  • Previous: $channel_ver_prev (press 'p')" >&2
+						echo_red "  • List all: aba ocp-versions" >&2
+						target_ver=""  # Reset to loop again
+					fi
 				else
-					echo_red "Error: Failed to fetch release.txt file from $url" >&2
+					aba_debug "Failed to fetch versions for $ocp_channel/$minor (minor doesn't exist)"
+					echo_red "Version $target_ver not found in $ocp_channel channel" >&2
+					echo_red "" >&2
+					echo_red "OpenShift $minor does not exist or has reached End-of-Life." >&2
+					echo_red "" >&2
+					echo_red "Try:" >&2
+					[ -n "$channel_ver" ] && echo_red "  • Latest: $channel_ver (press 'l')" >&2
+					[ -n "$channel_ver_prev" ] && echo_red "  • Previous: $channel_ver_prev (press 'p')" >&2
+					echo_red "  • List all: aba ocp-versions" >&2
+					target_ver=""  # Reset to loop again
 				fi
 			else
-				echo_red "Invalid input. Enter a valid OpenShift version (e.g., 4.18.10 or 4.17)." >&2
+				aba_debug "Invalid format: $target_ver (not x.y or x.y.z)"
+				echo_red "Invalid input. Enter a valid OpenShift version (e.g., 4.18.10 or 4.18)." >&2
+				target_ver=""  # Reset to loop again
 			fi
 		fi
 
 		[ "$channel_ver" ] && or_s="or $channel_ver (l)atest "
 		[ "$channel_ver_prev" ] && or_p="or $channel_ver_prev (p)revious "
 
-		#echo_white -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
-		echo_white -n "Enter x.y.z or x.y version $or_s$or_p(<version>/l/p/Enter) [$default_ver]: "
+		#aba_info -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
+		aba_info -n "Enter x.y.z or x.y version $or_s$or_p(<version>/l/p/Enter) [$default_ver]: "
 		read target_ver
 
-		[ ! "$target_ver" ] && target_ver=$default_ver          # use default
-		[ "$target_ver" = "l" -a "$channel_ver" ] && target_ver=$channel_ver       # latest
-		[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev  # previous latest
+		[ ! "$target_ver" ] && target_ver=$default_ver && aba_debug "Using default: $default_ver"
+		[ "$target_ver" = "l" -a "$channel_ver" ] && target_ver=$channel_ver && aba_debug "User selected latest: $channel_ver"
+		[ "$target_ver" = "p" -a "$channel_ver_prev" ] && target_ver=$channel_ver_prev && aba_debug "User selected previous: $channel_ver_prev"
 
 		# If user enters just a point version, x.y, fetch the latest .z value for that point version of OpenShift
-		echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$" && target_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver")
+		if echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$"; then
+			aba_debug "Detected x.y format, resolving to latest z-stream: $target_ver"
+			resolved_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver")
+			if [ -n "$resolved_ver" ]; then
+				aba_debug "Resolved $target_ver -> $resolved_ver"
+				target_ver="$resolved_ver"
+			else
+				aba_debug "Failed to resolve $target_ver (minor doesn't exist)"
+				echo_red "Version $target_ver not found in $ocp_channel channel" >&2
+				echo_red "" >&2
+				echo_red "This version is either invalid or has reached End-of-Life." >&2
+				echo_red "" >&2
+				echo_red "Try:" >&2
+				[ -n "$channel_ver" ] && echo_red "  • Latest: $channel_ver (press 'l')" >&2
+				[ -n "$channel_ver_prev" ] && echo_red "  • Previous: $channel_ver_prev (press 'p')" >&2
+				echo_red "  • List all: aba ocp-versions" >&2
+				target_ver=""  # Reset to loop again
+			fi
+		fi
 	done
 
 	# Update the conf file
+	aba_debug "Updating aba.conf with validated version: $target_ver"
 	replace-value-conf -q -n ocp_version -v $target_ver -f aba.conf
-	echo_white "'ocp_version' set to '$target_ver' in aba.conf"
+	aba_info "'ocp_version' set to '$target_ver' in aba.conf"
 #fi
 
 # Now we know the desired openshift version...
 
 # Fetch the operator indexes (in the background to save time).
-run_once -i download_catalog_indexes -- make -s -C $ABA_ROOT catalog bg=true
+# Use new helper function for parallel catalog downloads (runs in background)
+ocp_ver_short="${target_ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
+download_all_catalogs "$ocp_ver_short" 86400  # 1-day TTL
+# Note: Catalogs wait/check happens in scripts that actually need them
+# (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
 
-# Trigger download of all CLI binaries
-# Note: Ths only other place this is done is in "scripts/reg-save.sh"
+# Trigger download of all CLI binaries (for interactive mode only)
+# Note: Non-interactive mode already started these at line ~205
+# Note: Another place this is checked is in "scripts/reg-save.sh"
 scripts/cli-download-all.sh
 
 # Initiate download of mirror-install and docker-reg image
-run_once -i mirror:reg:download -- make -s -C $ABA_ROOT/mirror download-registries
+run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- make -s -C mirror download-registries
 
 # make & jq are needed below and in the next steps 
 scripts/install-rpms.sh external 
@@ -1147,19 +1237,35 @@ fi
 
 if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 	if jq empty $pull_secret_file; then
-		echo_white "Pull secret found at '$pull_secret_file'."
+		aba_info "Pull secret found at '$pull_secret_file'."
+		
+		# Validate pull secret by testing authentication with registry.redhat.io
+		aba_info -n "Validating pull secret authentication..."
+		if validate_pull_secret "$pull_secret_file" >/dev/null 2>&1; then
+			aba_info " ✓ Authentication successful"
+		else
+			echo
+			# validate_pull_secret already outputs detailed error with [ABA] prefix
+			validate_pull_secret "$pull_secret_file" >/dev/null || true  # Show stderr, ignore exit code
+			echo >&2
+			aba_info "This may mean:" >&2
+			aba_info "  • Pull secret is expired (download new from console.redhat.com)" >&2
+			aba_info "  • Invalid credentials" >&2
+			aba_info "  • Network/DNS issue" >&2
+			echo >&2
+			aba_info "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret" >&2
+			echo >&2
+			aba_abort "Pull secret validation failed. Please fix and try again."
+		fi
 	else
-		aba_abort "pull secret file sytax error: $pull_secret_file!" 
+		aba_abort "pull secret file syntax error: $pull_secret_file!" 
 	fi
 else
-	echo
-	echo_red "Error: No Red Hat pull secret file found at '$pull_secret_file'!" >&2
-	echo_white "To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!" >&2
-	echo_white "Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" >&2
-	##echo_white "Note that, if needed, the location of your pull secret file can be changed in 'aba.conf'." >&2
-	echo
-
-	exit 1
+	aba_abort \
+		"No Red Hat pull secret file found at '$pull_secret_file'!" \
+		"" \
+		"To allow access to the Red Hat image registry, download your Red Hat pull secret and store it in the file '$pull_secret_file' and try again!" \
+		"Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)"
 fi
 
 ##############################################################################################################################
