@@ -93,22 +93,17 @@ $RELEASE_DESC
 $UNRELEASED_CONTENT"
 
 # Update CHANGELOG.md: Clear [Unreleased], add new release
-sed -i "/^## \[Unreleased\]/,/^---$/c\\
-## [Unreleased]\\
-\\
-### Added\\
-\\
-### Changed\\
-\\
-### Fixed\\
-\\
-### Documentation\\
-\\
----\\
-\\
-$NEW_RELEASE_SECTION\\
-\\
----" CHANGELOG.md
+# Use a simpler format - just empty unreleased section
+{
+    echo "## [Unreleased]"
+    echo ""
+    echo "---"
+    echo ""
+    echo "$NEW_RELEASE_SECTION"
+    echo ""
+    echo "---"
+    sed -n '/^---$/,$p' CHANGELOG.md | tail -n +2
+} > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
 
 # Update version links at bottom
 sed -i "s|\[Unreleased\]:.*|[Unreleased]: https://github.com/sjbylo/aba/compare/v$NEW_VERSION...HEAD|" CHANGELOG.md
