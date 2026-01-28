@@ -89,8 +89,8 @@ vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=p
 export VER_OVERRIDE=p  # Must set to p since we do upgrade test below
 [ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
-#test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE  	# FIXME: put back as it was
-test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel fast          --version 4.20  		# FIXME: put back as it was
+test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE  	# FIXME: put back as it was
+#test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel fast          --version 4.20  		# FIXME: put back as it was
 test-cmd -m "Show ocp_version in $PWD/aba.conf" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
 # for upgrade tests - reduce the version so it can be upgraded later (see below)
