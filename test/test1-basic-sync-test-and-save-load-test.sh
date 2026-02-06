@@ -105,9 +105,6 @@ test-cmd -m "Checking aba.conf settings - platform=vmw" "grep ^platform=vmw aba.
 test-cmd -m "Checking aba.conf settings - ocp_channel=$TEST_CHANNEL" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
 test-cmd -m "Checking aba.conf settings - ocp_version=x.y.z" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}\b' aba.conf"
 
-mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
-sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
-
 ##test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba --noask
 
 mylog Set up vmware.conf

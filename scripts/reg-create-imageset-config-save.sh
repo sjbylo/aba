@@ -40,7 +40,7 @@ if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-conf
 	[ ! "$excl_platform" ] && aba_info "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$ARCH' ..."
 
 	aba_debug Values: ARCH=$ARCH ocp_channel=$ocp_channel ocp_version=$ocp_version
-	scripts/j2 ./templates/imageset-config-save-$oc_mirror_version.yaml.j2 > save/imageset-config-save.yaml
+	scripts/j2 ./templates/imageset-config-save-v2.yaml.j2 > save/imageset-config-save.yaml
 	touch save/.created  # In case next line fails!
 
 	scripts/add-operators-to-imageset.sh --output save/imageset-config-save.yaml
