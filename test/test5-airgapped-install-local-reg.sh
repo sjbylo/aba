@@ -89,8 +89,8 @@ vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=p
 export VER_OVERRIDE=p  # Must set to p since we do upgrade test below
 [ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
-#test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE  	# FIXME: put back as it was
-test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel fast          --version 4.20  		# FIXME: put back as it was
+test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE  	# FIXME: put back as it was
+#test-cmd -m "Configure aba.conf for ocp_version '$VER_OVERRIDE'" aba --noask --platform vmw --channel fast          --version 4.20  		# FIXME: put back as it was
 #test-cmd -m "Show ocp_version in $PWD/aba.conf" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
 # for upgrade tests - reduce the version so it can be upgraded later (see below)
@@ -151,7 +151,8 @@ source <(normalize-aba-conf)
 mylog "Checking value of: ocp_version=$ocp_version"
 
 # Be sure this file exists
-test-cmd -r 1 30 -m "Init test: download mirror-registry-amd64.tar.gz" "aba --dir test mirror-registry-amd64.tar.gz"
+#test-cmd -r 1 30 -m "Init test: download mirror-registry-amd64.tar.gz" "aba --dir test mirror-registry-amd64.tar.gz"
+test-cmd -r 1 30 -m "Init test: download mirror-registry-amd64.tar.gz" "make -C test mirror-registry-amd64.tar.gz"
 ##! tar tvf test/mirror-registry-amd64.tar.gz && [ -s ~/mirror-registry-amd64.tar.gz ] && cp -v ~/mirror-registry-amd64.tar.gz test
 
 #################################
@@ -191,7 +192,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 ### CREATE BUNDLE & COPY TO BASTION ###
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -v -p $subdir" 
-test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and extract to '$reg_ssh_user@$int_bastion_hostname:$subdir'" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel fast --version $ocp_version --op-sets abatest --ops web-terminal yaks vault-secrets-operator flux --base-domain example.com --machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp $ntp_ip  ntp.example.com --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
+test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and extract to '$reg_ssh_user@$int_bastion_hostname:$subdir'" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks vault-secrets-operator flux --base-domain example.com --machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp $ntp_ip  ntp.example.com --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
 # Back up the image set conf file so we can upgrade the cluster later
 test-cmd -m "Back up the image set conf file so we can use it to upgrade the cluster later" cp mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.release.images
