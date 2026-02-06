@@ -132,7 +132,7 @@ do
 
 	if [ -s "$error_file" ]; then
 		mkdir -p save/saved_errors
-		cp $error_file save/saved_errors
+		mv $error_file save/saved_errors
 		aba_warning "An error was detected and the log file was saved in save/saved_errors/$(basename $error_file)"
 	fi
 	#fi

@@ -133,7 +133,7 @@ do
 
 	if [ -s "$error_file" ]; then
 		mkdir -p save/saved_errors
-		cp $error_file save/saved_errors
+		mv $error_file save/saved_errors
 		echo_red "[ABA] Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
 	fi
 	#fi
