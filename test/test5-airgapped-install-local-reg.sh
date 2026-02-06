@@ -129,9 +129,6 @@ test-cmd -m "Show ocp_version in $PWD/aba.conf" "grep -o '^ocp_version=[^ ]*' ab
 
 test-cmd -m "Show setting of ask in $PWD/aba.conf" "grep -o '^ask=[^ ]*' aba.conf"
 
-mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
-sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
-
 mylog Set up vmware.conf
 test-cmd cp -v $vf vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf
@@ -265,10 +262,8 @@ mylog Now adding more images to the mirror registry
 
 mylog Runtest: vote-app
 
-# Here, we need to cater for both v1 and v2 of oc-mirror which behave differently
-# For v2, we create a new isc file every time we mirror
-# For v1, we always append to the isc file (not sure what is the best practice).
-[ "$oc_mirror_version" = "v1" ] && gvk=v1alpha2 || gvk=v2alpha1
+# Using oc-mirror v2 (v1 no longer supported)
+gvk=v2alpha1
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
 [ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.$(date "+%Y-%m-%d-%H:%M:%S")
 # CHANGE ACCUMULATE # if [ "$oc_mirror_version" = "v2" ]; then

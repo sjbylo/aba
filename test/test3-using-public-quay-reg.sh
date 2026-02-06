@@ -84,9 +84,6 @@ vf=~steve/.vmware.conf
 test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE ### --vmw $vf
 #test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ### --vmw $vf
 
-mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
-sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
-
 mylog Set up vmware.conf
 test-cmd cp -v $vf vmware.conf 
 sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" vmware.conf

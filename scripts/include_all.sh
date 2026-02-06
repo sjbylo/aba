@@ -345,7 +345,6 @@ verify-aba-conf() {
 	[ "$dns_servers" ] && ! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
 	[ "$next_hop_address" ] && ! echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && { echo_red "Error: next_hop_address is invalid in aba.conf [$next_hop_address]" >&2; ret=1; }
 
-	echo $oc_mirror_version | grep -q -E '^v[12]$' || { echo_red "Error: oc_mirror_version is invalid in aba.conf [$oc_mirror_version]" >&2; ret=1; }
 
 	return $ret
 }
@@ -358,7 +357,6 @@ normalize-mirror-conf()
 	# Ensure reg_ssh_user has a value
 	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 	# Ensure only one arg after 'export'   # Note that all values are now single string, e.g. single value or comma-sep list (one string)
-	# Verify oc_mirror_version exists and is somewhat correct and defaults to v1
 	# Prepend "export "
 	# reg_path must not start with a /, if so, remove it
 	# Force tls_verify=true 
@@ -373,8 +371,6 @@ normalize-mirror-conf()
 				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 				-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
 				-e 's/^(data_dir=)([[:space:]].*|#.*|~|$)/\1\\~/' \
-				-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
-				-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
 				-e 's#^reg_path=([^/ \t])#reg_path=/\1#g' \
 				| \
 			awk '{print $1}' | \

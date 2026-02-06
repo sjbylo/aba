@@ -114,38 +114,34 @@ do
 	aba_info "$(cat load-mirror.sh)"
 	echo
 
-	# v1/v2 switch. For v2 need to do extra check!
-	if [ "$oc_mirror_version" = "v1" ]; then
-		./load-mirror.sh && failed= && break || ret=$?
-	else
-		./load-mirror.sh
-		ret=$?
-		#if [ $ret -eq 0 ]; then
-		#if ./load-mirror.sh; then
-			# Check for error files (only required for v2 of oc-mirror)
-			#ls -lt save/working-dir/logs > /tmp/error_file.out
-			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
-			# Example error file:  mirroring_errors_20250914_230908.txt 
+	# Run load command (v2 requires extra error checks)
+	./load-mirror.sh
+	ret=$?
+	#if [ $ret -eq 0 ]; then
+	#if ./load-mirror.sh; then
+	# Check for error files (only required for v2 of oc-mirror)
+	#ls -lt save/working-dir/logs > /tmp/error_file.out
+	error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
+	# Example error file:  mirroring_errors_20250914_230908.txt 
 
-			# v2 of oc-mirror can be in error, even if ret=0!
-			if [ ! "$error_file" -a $ret -eq 0 ]; then
-				failed=
-				break    # stop the "try loop"
-			fi
-
-			if [ -s "$error_file" ]; then
-				mkdir -p save/saved_errors
-				cp $error_file save/saved_errors
-				aba_warning "An error was detected and the log file was saved in save/saved_errors/$(basename $error_file)"
-			fi
-		#fi
-
-		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
-		#parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# half the value but it must always be at least 1
-		parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 )) 	# Subtract 2 but never less than 2
-		retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
-		retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
+	# v2 of oc-mirror can be in error, even if ret=0!
+	if [ ! "$error_file" -a $ret -eq 0 ]; then
+		failed=
+		break    # stop the "try loop"
 	fi
+
+	if [ -s "$error_file" ]; then
+		mkdir -p save/saved_errors
+		cp $error_file save/saved_errors
+		aba_warning "An error was detected and the log file was saved in save/saved_errors/$(basename $error_file)"
+	fi
+	#fi
+
+	# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
+	#parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# half the value but it must always be at least 1
+	parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 )) 	# Subtract 2 but never less than 2
+	retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
+	retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
 
 	let try=$try+1
 	[ $try -le $try_tot ] && echo_red -n "[ABA] Image loading failed ($ret) ... Trying again. " >&2

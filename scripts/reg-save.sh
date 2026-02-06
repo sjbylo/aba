@@ -104,19 +104,9 @@ failed=1
 while [ $try -le $try_tot ]
 do
 	# Set up the command in a script which can be run manually if needed.
-	if [ "$oc_mirror_version" = "v1" ]; then
-		# Set up script to help for re-sync
-		# --continue-on-error : do not use this option. In testing the registry became unusable! 
-		cmd="oc-mirror --v1 --config=imageset-config-save.yaml file://."
-		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
-	else
-		# --since string Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored (only m2d)
-		#cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01                     --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-		# Wait for oc-mirror to be available!
-		##run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
-		cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01  --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-		echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
-	fi
+	# --since string Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored (only m2d)
+	cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01  --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+	echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
 
 	echo
 	aba_info -n "Attempt ($try/$try_tot)."
@@ -125,38 +115,34 @@ do
 	aba_info "$(cat save-mirror.sh)"
 	echo
 
-	# v1/v2 switch. For v2 need to do extra error checks!
-	if [ "$oc_mirror_version" = "v1" ]; then
-		./save-mirror.sh && failed= && break || ret=$?
-	else
-		# v2 will return zero even if some images failed to mirror
-		./save-mirror.sh
-		ret=$?
-		#if [ $ret -eq 0 ]; then
-		#if ./save-mirror.sh; then
-			# Check for error files (only required for v2 of oc-mirror)
-			error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
-			# Example error file:  mirroring_errors_20250914_230908.txt 
+	# Run save command (v2 requires extra error checks)
+	# v2 will return zero even if some images failed to mirror
+	./save-mirror.sh
+	ret=$?
+	#if [ $ret -eq 0 ]; then
+	#if ./save-mirror.sh; then
+	# Check for error files (only required for v2 of oc-mirror)
+	error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
+	# Example error file:  mirroring_errors_20250914_230908.txt 
 
-			# v2 of oc-mirror can be in error, even if ret=0!
-			if [ ! "$error_file" -a $ret -eq 0 ]; then
-				failed=
-				break    # stop the "try loop"
-			fi
-
-			if [ -s "$error_file" ]; then
-				mkdir -p save/saved_errors
-				cp $error_file save/saved_errors
-				echo_red "[ABA] Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
-			fi
-		#fi
-
-		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
-		#parallel_images=$(( parallel_images / 2 < 2 ? 2 : parallel_images / 2 ))	# half the value but it must always be at least 1
-		parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 )) 	# Subtract 2 but never less than 2
-		retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
-		retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
+	# v2 of oc-mirror can be in error, even if ret=0!
+	if [ ! "$error_file" -a $ret -eq 0 ]; then
+		failed=
+		break    # stop the "try loop"
 	fi
+
+	if [ -s "$error_file" ]; then
+		mkdir -p save/saved_errors
+		cp $error_file save/saved_errors
+		echo_red "[ABA] Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
+	fi
+	#fi
+
+	# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
+	#parallel_images=$(( parallel_images / 2 < 2 ? 2 : parallel_images / 2 ))	# half the value but it must always be at least 1
+	parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 )) 	# Subtract 2 but never less than 2
+	retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
+	retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
 
 	let try=$try+1
 	[ $try -le $try_tot ] && echo_red -n "[ABA] Image saving failed ($ret) ... Trying again. " >&2

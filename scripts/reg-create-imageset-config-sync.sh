@@ -53,7 +53,7 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf" 
 
 	aba_debug Values: ARCH=$ARCH ocp_channel=$ocp_channel ocp_version=$ocp_version
-	scripts/j2 ./templates/imageset-config-sync-$oc_mirror_version.yaml.j2 > sync/imageset-config-sync.yaml 
+	scripts/j2 ./templates/imageset-config-sync-v2.yaml.j2 > sync/imageset-config-sync.yaml 
 	touch sync/.created # In case next line fails!
 
 	scripts/add-operators-to-imageset.sh --output sync/imageset-config-sync.yaml
