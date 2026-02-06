@@ -10,9 +10,10 @@
 uname -o | grep -q "^Darwin$" && echo "Install ABA on RHEL, Centos Stream or Fedora.  Most tested is RHEL 8 or 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 # We need git, which, id, diff commands to run this script (not always available in a container) ... 
-# Other rpm packages that ABA requires are copied into the below line at build time, from templates/rpms-external.txt (which isn't available yet!)
+# Other rpm packages that ABA requires are copied into the below lines at build time (which aren't available yet!)
 required_pkgs=(which file hostname diffutils git make jq python3-jinja2 python3-pyyaml ncurses)
 required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which diffutils dialog podman httpd-tools skopeo)  # Synced from templates/rpms-external.txt
+required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd)  # Synced from templates/rpms-internal.txt
 missing_pkgs=()
 
 # Check which packages are missing ...
