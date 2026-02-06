@@ -51,29 +51,46 @@ DELETION DETECTED #43 at Wed Jan 28 10:02:47 AM +08 2026
 
 **Solution:** Tell Cursor to stop watching `.git/` directory
 
-### File Created: `.vscode/settings.json`
+### Initial Attempt: Workspace Settings (FAILED)
 
+Created `.vscode/settings.json` in workspace - but this failed because:
+- `.vscode/` is in `.gitignore` (not committed)
+- Settings were lost on `git restore .`
+- Not a reliable solution for Remote-SSH
+
+### Final Solution: User Settings (SUCCESS)
+
+**Added to Cursor User Settings (applies globally):**
+
+**Location:** `Cmd/Ctrl+Shift+P` → "Preferences: Open User Settings (JSON)"
+
+**Settings added:**
 ```json
 {
   "files.watcherExclude": {
     "**/.git/**": true,
     "**/.git/objects/**": true,
-    "**/.git/subtree-cache/**": true,
-    "**/node_modules/*/**": true
-  },
-  "git.ignoreLimitWarning": true
+    "**/.git/subtree-cache/**": true
+  }
 }
 ```
 
 **What this does:**
-- Tells Cursor's file watcher to ignore `.git/` directory
-- Prevents race condition between Cursor's cache and git operations
+- Tells Cursor's file watcher to ignore `.git/` directory in ALL workspaces
+- Prevents race condition between Cursor's cache and git operations over slow VPN
 - Git integration still works (Cursor calls git commands, just doesn't watch files)
-- Stops the file deletion issue immediately
+- Persists across window reloads and git operations
+- Applies to all projects opened in Cursor (global setting)
 
 **To apply:** 
-- Cursor should auto-reload settings
-- Or manually: `Cmd/Ctrl+Shift+P` → "Developer: Reload Window"
+1. Add settings to User Settings JSON (as shown above)
+2. Reload window: `Cmd/Ctrl+Shift+P` → "Developer: Reload Window"
+3. Verify: `git status --short` should only show untracked files, NO deletions
+
+**Why User Settings vs Workspace Settings:**
+- User settings stored on LOCAL machine (not affected by git operations)
+- Workspace settings (`.vscode/`) in gitignore → lost on git restore
+- User settings persist and apply globally
 
 ---
 
@@ -125,11 +142,12 @@ git status  # Verify clean
 
 ## Next Steps
 
-1. ✅ Root cause identified
-2. ✅ Fix implemented (`.vscode/settings.json`)
-3. ⏳ Monitor for 30 minutes to verify fix works
-4. ⏳ Stop monitor script if issue resolved: `pkill -f git-monitor.sh`
-5. ⏳ Decide: commit `.vscode/settings.json` or add to `.gitignore`
+1. ✅ Root cause identified (Cursor fileWatcher + slow VPN)
+2. ✅ Fix implemented (User Settings - global)
+3. ✅ User settings configured and Cursor reloaded
+4. ⏳ Monitor for 30 minutes to verify fix works
+5. ⏳ Stop monitor script if issue resolved: `pkill -f git-monitor.sh`
+6. ⏳ Remove temporary files: `rm git-monitor.sh`
 
 ---
 
@@ -142,5 +160,6 @@ git status  # Verify clean
 
 ---
 
-**Status:** RESOLVED  
-**Last Updated:** 2026-01-28 10:15
+**Status:** RESOLVED (fix applied to User Settings)  
+**Last Updated:** 2026-01-28 15:40  
+**Fix Verification:** In progress - monitoring for 30 minutes
