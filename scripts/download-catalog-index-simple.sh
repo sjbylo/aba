@@ -78,7 +78,10 @@ aba_info "Downloading operator $catalog_name index v$ocp_ver_major..."
 
 # Wait for oc-mirror to be available
 aba_debug "Ensuring oc-mirror is downloaded"
-ensure_oc_mirror
+if ! ensure_oc_mirror; then
+	error_msg=$(get_task_error "$TASK_OC_MIRROR")
+	aba_abort "Failed to install oc-mirror:\n$error_msg"
+fi
 
 # Fetch catalog using oc-mirror
 catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
