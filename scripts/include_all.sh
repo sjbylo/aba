@@ -1670,7 +1670,6 @@ run_once() {
 		exec 9>>"$lock_file"
 		if flock -n 9; then
 			# Lock acquired - safe to validate
-			exec 9>&-
 			aba_debug "Task $work_id completed successfully, running validation..."
 			
 			# Restore original CWD if saved (needed for relative paths in commands)
@@ -1681,15 +1680,26 @@ run_once() {
 				cd "$saved_cwd" || aba_debug "Warning: Could not restore CWD to $saved_cwd"
 			fi
 			
-			rm -f "$exit_file"  # Clear exit so task can run
-			_start_task "false"  # Run in background mode (logs to files, no terminal output)
-			wait $!  # Wait for validation task to complete
+			# Clear exit file and run validation while holding lock
+			rm -f "$exit_file"
+			
+			# Run validation command directly (keep lock held to prevent races)
+			# Validation runs synchronously while we hold the lock
+			: >"$log_out_file"
+			: >"$log_err_file"
+			
+			"${command[@]}" >"$log_out_file" 2>"$log_err_file"
+			local validation_rc=$?
+			echo "$validation_rc" > "$exit_file"
+			exit_code="$validation_rc"
 			
 			# Restore current CWD
 			cd "$original_cwd" || true
 			
-			# Get new exit code from validation run
-			exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+			# Release lock after validation complete
+			exec 9>&-
+			
+			aba_debug "Task $work_id validation completed with exit code: $exit_code"
 		else
 			# Lock held - another process is running this task, skip validation
 			exec 9>&-
