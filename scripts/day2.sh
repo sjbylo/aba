@@ -2,7 +2,7 @@
 # Run some day 2 changes
 # Set up cluster trust CA with the internal registry's Root CA
 # Configure OperatorHub using the internal mirror registry. 
-# Apply the imageContentSourcePolicy resource files that were created by oc-mirror (make sync/load)
+# Apply the imageContentSourcePolicy resource files that were created by oc-mirror (aba -d mirror sync/load)
 ## This script also solves the problem that multiple sync/save runs do not containing all ICSPs. See: https://github.com/openshift/oc-mirror/issues/597 
 # For disconnected environments, disable online public catalog sources
 # Install any CatalogSources
