@@ -34,7 +34,7 @@ echo cincinnati-operator > templates/operator-set-abatest   # Create a test "ope
 
 # Create install bundle
 aba -y bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel fast --version p \
-	--op-sets abatest --ops yaks vault-secrets-operator flux --base-domain example.com \
+	--op-sets abatest --ops yaks nginx-ingress-operator --base-domain example.com \
 	--machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp 10.0.1.8  ntp.example.com --out $TEST_DIR_DISCO/delete-me \
 	$LIGHT
 
