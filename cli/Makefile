@@ -239,8 +239,9 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 
 # Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
 
-oc_mirror_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.tar.gz
-oc_mirror_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/sha256sum.txt
+# Had to switch from 4.21 (latest) to 4.20 due to "signature missing" errors.
+oc_mirror_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/oc-mirror.tar.gz
+oc_mirror_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/sha256sum.txt
 oc-mirror.tar.gz: ## Download oc-mirror tarball
 	echo [ABA] Downloading $(oc_mirror_url)
 	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url)
@@ -251,8 +252,9 @@ oc-mirror.tar.gz: ## Download oc-mirror tarball
 #	curl -f --retry 8 -sL $(CURL_PROGRESS) -o oc-mirror-sha256sum.txt $(oc_mirror_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" oc-mirror-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
 #	echo [ABA] "File $@ checksum valid!"
 
-oc_mirror_url_rhel9 = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.rhel9.tar.gz
-oc_mirror_url_rhel9_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/sha256sum.txt
+# Had to switch from 4.21 (latest) to 4.20 due to "signature missing" errors.
+oc_mirror_url_rhel9 = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/oc-mirror.rhel9.tar.gz
+oc_mirror_url_rhel9_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/sha256sum.txt
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 	echo [ABA] Downloading $(oc_mirror_url_rhel9)
 	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url_rhel9)
