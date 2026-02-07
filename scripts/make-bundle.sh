@@ -194,7 +194,7 @@ if [ "$light_bundle" ]; then
 
 	echo_magenta "[ABA] A *light* install bundle will be created."
 	echo_magenta "[ABA] Image-set archive file(s) will NOT be included in the bundle and must be transferred separately"
-	echo_magenta "[ABA] to the disconnected environment, then manually added to the extracted install bundle."
+	echo_magenta "[ABA] to the disconnected environment, then manually moved into the extracted install bundle."
 
 	# Create light bundle with "aba tarrepo..."
 	aba_info "Pulling images ..."
