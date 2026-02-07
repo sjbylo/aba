@@ -16,6 +16,7 @@ catalog_name="${1:-redhat-operator}"
 aba_debug "Starting simple catalog download for: $catalog_name"
 
 # Validate config
+aba_debug "Loading and validating configuration"
 source <(normalize-aba-conf)
 verify-aba-conf || exit 1
 
@@ -29,6 +30,7 @@ ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
 aba_debug "OCP version: $ocp_ver (major: $ocp_ver_major)"
 
 # Prepare container auth
+aba_debug "Creating container auth file"
 scripts/create-containers-auth.sh >/dev/null
 
 # Setup paths - must be run from aba root directory
@@ -50,9 +52,11 @@ trap 'handle_interrupt' INT TERM
 
 # Check if already downloaded
 if [[ -s "$index_file" && -f "$done_file" ]]; then
+	aba_debug "Index already exists and is complete"
 	aba_info "Operator index $catalog_name v$ocp_ver_major already downloaded"
 	exit 0
 fi
+aba_debug "Index not found or incomplete - starting download"
 
 # Check connectivity to registry
 aba_debug "Checking connectivity to registry.redhat.io"
@@ -85,11 +89,14 @@ fi
 
 # Fetch catalog using oc-mirror
 catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
-aba_info "Running: oc-mirror      list operators --catalog $catalog_url"
+aba_debug "catalog_url=$catalog_url"
+aba_info "Running: oc-mirror list operators --catalog $catalog_url"
 
 # awk '/^NAME/{flag=1; next} flag'  => only used to skip over any unwanted header message
-oc-mirror      list operators --catalog "$catalog_url" | awk '/^NAME/{flag=1; next} flag'  > "$index_file"
+aba_debug "Executing oc-mirror list operators"
+oc-mirror list operators --catalog "$catalog_url" | awk '/^NAME/{flag=1; next} flag'  > "$index_file"
 ret=$?
+aba_debug "oc-mirror exit code: $ret"
 
 # Check both exit code AND output file (oc-mirror v2 sometimes returns 0 even on failure)
 if [ $ret -ne 0 ]; then
@@ -99,6 +106,7 @@ elif [ ! -s "$index_file" ]; then
 fi
 
 # Mark completion
+aba_debug "Marking download as complete"
 touch "$done_file"
 aba_info_ok "Downloaded $catalog_name index v$ocp_ver_major successfully"
 
