@@ -106,7 +106,7 @@ ocp_version_major=$(echo $ocp_version_desired | cut -d\. -f1-2)
 ## Reduce the version to create 'bundle' (below) with 
 source scripts/include_all.sh  # Used to fetch the previous available version
 trap - ERR
-ocp_version_older=$(fetch_all_versions $ocp_channel | tail -2 | head -1)  # Fetch 2nd fron last version
+ocp_version_older=$(fetch_all_versions $ocp_channel | grep "^$ocp_version_major" | tail -2 | head -1)  # Fetch 2nd fron last version
 mylog Setting older OCP version to $ocp_version_older
 # CAN BE MISSING # ocp_version_older_point=$(expr $ocp_version_point - 1 )  # Change to one patch version lower # fails if the version below is missing!
 # CAN BE MISSING # ocp_version_older=$ocp_version_major.$ocp_version_older_point
