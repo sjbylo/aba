@@ -105,7 +105,7 @@ if [ "$ops" -o "$op_sets" ]; then
 			"- Refresh any existing catalog files by running: 'cd $PWD; rm -f .index/redhat-operator-index-v${ocp_ver_major}*' and try again." \
 			"- run 'cd mirror; aba catalog' to try to download the catalog file again." \
 			"- Check that the following command is working:" \
-			"    oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major" \
+			"    oc-mirror --v1 list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major" \
 			"- Check access to registry is working: 'curl -IL http://registry.redhat.io/v2'" 
 		# We want to ensure the user gets what they expect, i.e. operators downloaded! So we abort.
 	fi
