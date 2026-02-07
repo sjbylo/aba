@@ -189,7 +189,7 @@ mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg
 ### CREATE BUNDLE & COPY TO BASTION ###
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Create test subdir: '$subdir'" "mkdir -v -p $subdir" 
-test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and extract to '$reg_ssh_user@$int_bastion_hostname:$subdir'" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks vault-secrets-operator flux --base-domain example.com --machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp $ntp_ip  ntp.example.com --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
+test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_version, with various operators and extract to '$reg_ssh_user@$int_bastion_hostname:$subdir'" "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks nginx-ingress-operator flux --base-domain example.com --machine-network 10.0.0.0/20 --dns 10.0.1.8 10.0.2.8 --ntp $ntp_ip  ntp.example.com --out - | ssh $reg_ssh_user@$int_bastion_hostname tar -C $subdir -xvf -"
 
 # Back up the image set conf file so we can upgrade the cluster later
 test-cmd -m "Back up the image set conf file so we can use it to upgrade the cluster later" cp mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.release.images
@@ -247,9 +247,9 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests'"
 
-# Test for operators: web-terminal yaks vault-secrets-operator flux
+# Test for operators: web-terminal yaks nginx-ingress-operator flux
 test-cmd -m "Pause, so the operator will show up" "read -t 60 yn || true"
-for op in web-terminal yaks vault-secrets-operator flux
+for op in web-terminal yaks nginx-ingress-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests' | grep -i $op"
 done
@@ -484,17 +484,17 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 test-cmd -m "Sleep 2m" "read -t 120 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests'"
 
-# Test for operators: web-terminal yaks vault-secrets-operator flux
+# Test for operators: web-terminal yaks nginx-ingress-operator flux
 test-cmd -m "Pause, so the operator will show up" "read -t 60 yn || true"
-for op in servicemeshoperator3 #web-terminal yaks vault-secrets-operator flux
+for op in servicemeshoperator3 #web-terminal yaks nginx-ingress-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests' | grep -i $op"
 done
 
-# Test for operators: web-terminal yaks vault-secrets-operator flux
-#for op in web-terminal yaks vault-secrets-operator flux
+# Test for operators: web-terminal yaks nginx-ingress-operator flux
+#for op in web-terminal yaks nginx-ingress-operator flux
 test-cmd -m "Pause, so the operator will show up" "read -t 60 yn || true"
-for op in              yaks vault-secrets-operator flux
+for op in              yaks nginx-ingress-operator flux
 do
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Ensure $op Operator exists" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc get packagemanifests' | grep -i $op"
 done
