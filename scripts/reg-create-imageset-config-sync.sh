@@ -16,13 +16,16 @@ aba_debug "Starting: $0 $*"
 
 umask 077
 
+aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
+aba_debug "Configuration validated"
 
 export reg_url=https://$reg_host:$reg_port
+aba_debug "reg_url=$reg_url reg_host=$reg_host reg_port=$reg_port"
 
 # FIXME: PROBE NOT NEEDED HERE?!
 ## Can the registry mirror already be reached?
@@ -37,11 +40,13 @@ export reg_url=https://$reg_host:$reg_port
 # FIXME: PROBE NOT NEEDED HERE?!
 
 # Note that any existing sync/* files will not be deleted
+aba_debug "Creating sync/ directory"
 mkdir -p sync 
 
 # Generate first imageset-config file for syncing images.  
 # Do not overwrite the file if it has been modified. Allow users to add images and operators to imageset-config-sync.yaml and run "make sync" again. 
 if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-config-sync.yaml ]; then
+	aba_debug "Generating new imageset-config-sync.yaml"
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
 	#export ocp_ver=$ocp_version
@@ -53,21 +58,25 @@ if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-conf
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf" 
 
 	aba_debug Values: ARCH=$ARCH ocp_channel=$ocp_channel ocp_version=$ocp_version
+	aba_debug "Rendering imageset-config-sync.yaml from template"
 	scripts/j2 ./templates/imageset-config-sync-v2.yaml.j2 > sync/imageset-config-sync.yaml 
 	touch sync/.created # In case next line fails!
 
+	aba_debug "Adding operators to imageset config"
 	scripts/add-operators-to-imageset.sh --output sync/imageset-config-sync.yaml
 	touch sync/.created # In case next line fails!
 
-	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" sync/imageset-config-sync.yaml
+	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" sync/imageset-config-sync.yaml && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
 	touch sync/.created
 
 	aba_info_ok "Image set config file created: mirror/sync/imageset-config-sync.yaml ($ocp_channel-$ocp_version $ARCH)"
 	aba_info    "Reminder: Edit this file to add more content, e.g. Operators, and then run 'aba -d mirror sync' again."
 else
+	aba_debug "Using existing imageset-config-sync.yaml (not regenerating)"
 	aba_info "Using existing image set config file (save/imageset-config-sync.yaml)"
 fi
 
 # This is needed since sometimes an existing registry may already be available
+aba_debug "Creating containers auth file"
 scripts/create-containers-auth.sh
 
