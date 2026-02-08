@@ -24,7 +24,10 @@ opts=
 [ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"
 
 # Ensure openshift-install is available (wait for background download/install)
-ensure_openshift_install >/dev/null
+if ! ensure_openshift_install >/dev/null; then
+	error_msg=$(get_task_error "$TASK_OPENSHIFT_INSTALL")
+	aba_abort "Failed to install openshift-install:\n$error_msg"
+fi
 
 echo_yellow "[ABA] Running: openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR"
 

@@ -17,27 +17,35 @@ aba_debug "Starting: $0 $*"
 try_tot=1  # def. value
 #[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
 [ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && aba_info "Attempting $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
+aba_debug "try_tot=$try_tot"
 
 umask 077
 
+aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
+aba_debug "Configuration validated"
 
 # Be sure a download has started ..
+aba_debug "Ensuring oc-mirror is available"
 if ! PLAIN_OUTPUT=1 ensure_oc_mirror; then
 	error_msg=$(get_task_error "$TASK_OC_MIRROR")
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
+aba_debug "oc-mirror is ready"
 
 # This is a pull secret for RH registry
 pull_secret_mirror_file=pull-secret-mirror.json
+aba_debug "Checking pull secret files: $pull_secret_mirror_file or $pull_secret_file"
 
 if [ -s $pull_secret_mirror_file ]; then
 	aba_info Using $pull_secret_mirror_file ...
+	aba_debug "Using mirror-specific pull secret"
 elif [ -s $pull_secret_file ]; then
+	aba_debug "Using default pull secret: $pull_secret_file"
 	:
 else
 	aba_abort \
@@ -55,9 +63,10 @@ if ! probe_host "https://api.openshift.com/" "OpenShift API"; then
 fi
 
 export reg_url=https://$reg_host:$reg_port
+aba_debug "reg_url=$reg_url reg_host=$reg_host reg_port=$reg_port reg_path=$reg_path"
 
 # Adjust no_proxy if proxy is configured (duplicates are harmless for temporary export)
-[ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host"
+[ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host" && aba_debug "Adjusted no_proxy=$no_proxy"
 
 # Can the registry mirror already be reached?
 # Support both Quay and Docker registries with different health endpoints
@@ -77,10 +86,12 @@ else
 fi
 
 # This is needed since sometimes an existing registry may already be available
+aba_debug "Creating containers auth file"
 scripts/create-containers-auth.sh
 
 [ ! "$data_dir" ] && data_dir=\~
 reg_root=$data_dir/quay-install
+aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
 ###[ ! "$reg_root" ] && reg_root=$HOME/quay-install  # Needed for below TMPDIR
 
@@ -103,27 +114,19 @@ echo
 parallel_images=8
 retry_delay=2
 retry_times=2
+aba_debug "Initial tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 
 # This loop is based on the "retry=?" value
 try=1
 failed=1
+aba_debug "Starting retry loop: try_tot=$try_tot"
 while [ $try -le $try_tot ]
 do
+	aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 	# Set up the command in a script which can be run manually if needed.
-	if [ "$oc_mirror_version" = "v1" ]; then
-		# Set up script to help for manual re-sync
-	# --continue-on-error : do not use this option. In testing the registry became unusable! 
-	cmd="oc-mirror --v1 --config=imageset-config-sync.yaml docker://$reg_host:$reg_port$reg_path"
-	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
-	else
-		# Wait for oc-mirror to be available!
-		if ! ensure_oc_mirror; then
-			error_msg=$(get_task_error "$TASK_OC_MIRROR")
-			aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
-	fi
 	cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
-	fi
+	aba_debug "Created sync-mirror.sh script"
 
 	echo
 	aba_info -n "Attempt ($try/$try_tot)."
@@ -134,37 +137,39 @@ do
 
 	###./sync-mirror.sh && failed= && break
 
-	# v1/v2 switch. For v2 need to do extra check!
-	#####./load-mirror.sh && failed= && break
-	if [ "$oc_mirror_version" = "v1" ]; then
-		./sync-mirror.sh && failed= && break || ret=$?
-	else
-		./sync-mirror.sh
-		ret=$?
-		#if [ $ret -eq 0 ]; then
-			# Check for error files (only required for v2 of oc-mirror)
-			error_file=$(ls -t sync/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
-			# Example error file:  mirroring_errors_20250914_230908.txt 
+	# Run sync command (v2 requires extra error checks)
+	aba_debug "Running sync-mirror.sh"
+	./sync-mirror.sh
+	ret=$?
+	aba_debug "sync-mirror.sh exit code: $ret"
+	#if [ $ret -eq 0 ]; then
+	# Check for error files (only required for v2 of oc-mirror)
+	error_file=$(ls -t sync/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
+	# Example error file:  mirroring_errors_20250914_230908.txt 
+	aba_debug "error_file=${error_file:-none}"
 
-			# v2 of oc-mirror can be in error, even if ret=0!
-			if [ ! "$error_file" -a $ret -eq 0 ]; then
-				failed=
-				break    # stop the "try loop"
-			fi
-
-			if [ -s "$error_file" ]; then
-				mkdir -p sync/saved_errors
-				cp $error_file sync/saved_errors
-				echo_red "[ABA] Error detected and log file saved in sync/saved_errors/$(basename $error_file)" >&2
-			fi
-		#fi
-
-		# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
-		#parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# half the value but it must always be at least 1
-		parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 )) 	# Subtract 2 but never less than 2
-		retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
-		retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
+	# v2 of oc-mirror can be in error, even if ret=0!
+	if [ ! "$error_file" -a $ret -eq 0 ]; then
+		aba_debug "Sync completed successfully (no error file, ret=0)"
+		failed=
+		break    # stop the "try loop"
 	fi
+
+	if [ -s "$error_file" ]; then
+		aba_debug "Error file found: $error_file - saving to sync/saved_errors/"
+		mkdir -p sync/saved_errors
+		mv $error_file sync/saved_errors
+		echo_red "[ABA] Error detected and log file saved in sync/saved_errors/$(basename $error_file)" >&2
+	fi
+	#fi
+
+	# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
+	aba_debug "Adjusting tuning parameters for next retry"
+	#parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# half the value but it must always be at least 1
+	parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 )) 	# Subtract 2 but never less than 2
+	retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
+	retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
+	aba_debug "New tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 
 	let try=$try+1
 	[ $try -le $try_tot ] && echo_red -n "[ABA] Image synchronization failed ($ret) ... Trying again. "

@@ -345,7 +345,6 @@ verify-aba-conf() {
 	[ "$dns_servers" ] && ! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
 	[ "$next_hop_address" ] && ! echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && { echo_red "Error: next_hop_address is invalid in aba.conf [$next_hop_address]" >&2; ret=1; }
 
-	echo $oc_mirror_version | grep -q -E '^v[12]$' || { echo_red "Error: oc_mirror_version is invalid in aba.conf [$oc_mirror_version]" >&2; ret=1; }
 
 	return $ret
 }
@@ -358,7 +357,6 @@ normalize-mirror-conf()
 	# Ensure reg_ssh_user has a value
 	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
 	# Ensure only one arg after 'export'   # Note that all values are now single string, e.g. single value or comma-sep list (one string)
-	# Verify oc_mirror_version exists and is somewhat correct and defaults to v1
 	# Prepend "export "
 	# reg_path must not start with a /, if so, remove it
 	# Force tls_verify=true 
@@ -373,8 +371,6 @@ normalize-mirror-conf()
 				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
 				-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
 				-e 's/^(data_dir=)([[:space:]].*|#.*|~|$)/\1\\~/' \
-				-e 's/^oc_mirror_version=[^v].*/oc_mirror_version=v1/g' \
-				-e 's/^oc_mirror_version=v[^12].*/oc_mirror_version=v1/g' \
 				-e 's#^reg_path=([^/ \t])#reg_path=/\1#g' \
 				| \
 			awk '{print $1}' | \
@@ -1473,6 +1469,12 @@ run_once() {
 	local log_err_file="$id_dir/log.err"
 	local cmd_file="$id_dir/cmd"
 	local pid_file="$id_dir/pid"
+	local history_file="$id_dir/history"
+
+	# Append a timestamped one-line entry to the task history file
+	_log_history() {
+		echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$history_file"
+	}
 
 	# Create the task directory
 	mkdir -p "$id_dir"
@@ -1494,15 +1496,17 @@ run_once() {
 			local age=$((now - exit_mtime))
 			if [[ $age -gt $ttl ]]; then
 				# Task output is stale, reset it
+				_log_history "TTL_EXPIRED age=${age}s ttl=${ttl}s"
 				_kill_id "$work_id"
 				mkdir -p "$id_dir"
-		chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
 			fi
 		fi
 	fi
 
 	# --- RESET/KILL ---
 	if [[ "$reset" == true ]]; then
+		_log_history "RESET"
 		_kill_id "$work_id"
 		return 0
 	fi
@@ -1522,10 +1526,16 @@ run_once() {
 			return 0
 		fi
 
+		# Rotate non-empty logs before truncating (keep one previous copy for debugging)
+		[[ -s "$log_out_file" ]] && mv "$log_out_file" "${log_out_file}.1"
+		[[ -s "$log_err_file" ]] && mv "$log_err_file" "${log_err_file}.1"
+
 		# Initialize log files
 		: >"$log_out_file"
 		: >"$log_err_file"
 		rm -f "$exit_file"
+
+		_log_history "STARTED cmd=\"$(printf '%s ' "${command[@]}")\""
 		
 		# Save command in two formats:
 		# 1. cmd.sh - Machine-readable (declare -p) for reliable re-execution
@@ -1553,6 +1563,7 @@ run_once() {
 				setsid "${command[@]}" 2> >(tee -a "$log_err_file" >&2) | tee -a "$log_out_file"
 				rc="${PIPESTATUS[0]}"
 				echo "$rc" >"$exit_file"
+				_log_history "COMPLETE rc=$rc"
 				exit "$rc"
 			fi
 
@@ -1563,6 +1574,7 @@ run_once() {
 			wait $!
 			rc=$?
 			echo "$rc" >"$exit_file"
+			_log_history "COMPLETE rc=$rc"
 			exit "$rc"
 		) &
 
@@ -1597,10 +1609,11 @@ run_once() {
 			# Exit codes 128-165 indicate termination by signal (kill, Ctrl-C, etc.)
 			# These are interruptions, not legitimate failures, so treat as crash and retry
 			if [[ $exit_code -ge 128 && $exit_code -le 165 ]]; then
+				_log_history "SIGNAL rc=$exit_code (restarting)"
 				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
 				rm -rf "$id_dir"
 				mkdir -p "$id_dir"
-		chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
 				# Fall through to restart logic below
 			fi
 		fi
@@ -1674,7 +1687,6 @@ run_once() {
 		exec 9>>"$lock_file"
 		if flock -n 9; then
 			# Lock acquired - safe to validate
-			exec 9>&-
 			aba_debug "Task $work_id completed successfully, running validation..."
 			
 			# Restore original CWD if saved (needed for relative paths in commands)
@@ -1685,15 +1697,28 @@ run_once() {
 				cd "$saved_cwd" || aba_debug "Warning: Could not restore CWD to $saved_cwd"
 			fi
 			
-			rm -f "$exit_file"  # Clear exit so task can run
-			_start_task "false"  # Run in background mode (logs to files, no terminal output)
-			wait $!  # Wait for validation task to complete
+			# Clear exit file and run validation while holding lock
+			rm -f "$exit_file"
+			
+			# Run validation command directly (keep lock held to prevent races)
+			# Validation runs synchronously while we hold the lock
+			# Rotate non-empty logs before validation (keep previous run for debugging)
+			[[ -s "$log_out_file" ]] && mv "$log_out_file" "${log_out_file}.1"
+			[[ -s "$log_err_file" ]] && mv "$log_err_file" "${log_err_file}.1"
+			
+			"${command[@]}" >"$log_out_file" 2>"$log_err_file"
+			local validation_rc=$?
+			echo "$validation_rc" > "$exit_file"
+			exit_code="$validation_rc"
+			_log_history "VALIDATE rc=$validation_rc"
 			
 			# Restore current CWD
 			cd "$original_cwd" || true
 			
-			# Get new exit code from validation run
-			exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+			# Release lock after validation complete
+			exec 9>&-
+			
+			aba_debug "Task $work_id validation completed with exit code: $exit_code"
 		else
 			# Lock held - another process is running this task, skip validation
 			exec 9>&-

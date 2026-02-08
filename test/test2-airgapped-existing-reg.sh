@@ -92,9 +92,6 @@ if [ ! "$1" ]; then
 	[ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
 	test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE ### --vmw $vf
 
-	mylog "Setting oc_mirror_version=$oc_mirror_ver_override in aba.conf"
-	sed -i "s/^oc_mirror_version=.*/oc_mirror_version=$oc_mirror_ver_override /g" aba.conf
-
 	test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba -A  # noask
 
 	#test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ## --vmw $vf
