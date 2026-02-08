@@ -1469,6 +1469,12 @@ run_once() {
 	local log_err_file="$id_dir/log.err"
 	local cmd_file="$id_dir/cmd"
 	local pid_file="$id_dir/pid"
+	local history_file="$id_dir/history"
+
+	# Append a timestamped one-line entry to the task history file
+	_log_history() {
+		echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$history_file"
+	}
 
 	# Create the task directory
 	mkdir -p "$id_dir"
@@ -1490,6 +1496,7 @@ run_once() {
 			local age=$((now - exit_mtime))
 			if [[ $age -gt $ttl ]]; then
 				# Task output is stale, reset it
+				_log_history "TTL_EXPIRED age=${age}s ttl=${ttl}s"
 				_kill_id "$work_id"
 				mkdir -p "$id_dir"
 				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
@@ -1499,6 +1506,7 @@ run_once() {
 
 	# --- RESET/KILL ---
 	if [[ "$reset" == true ]]; then
+		_log_history "RESET"
 		_kill_id "$work_id"
 		return 0
 	fi
@@ -1518,10 +1526,16 @@ run_once() {
 			return 0
 		fi
 
+		# Rotate non-empty logs before truncating (keep one previous copy for debugging)
+		[[ -s "$log_out_file" ]] && mv "$log_out_file" "${log_out_file}.1"
+		[[ -s "$log_err_file" ]] && mv "$log_err_file" "${log_err_file}.1"
+
 		# Initialize log files
 		: >"$log_out_file"
 		: >"$log_err_file"
 		rm -f "$exit_file"
+
+		_log_history "STARTED cmd=\"$(printf '%s ' "${command[@]}")\""
 		
 		# Save command in two formats:
 		# 1. cmd.sh - Machine-readable (declare -p) for reliable re-execution
@@ -1549,6 +1563,7 @@ run_once() {
 				setsid "${command[@]}" 2> >(tee -a "$log_err_file" >&2) | tee -a "$log_out_file"
 				rc="${PIPESTATUS[0]}"
 				echo "$rc" >"$exit_file"
+				_log_history "COMPLETE rc=$rc"
 				exit "$rc"
 			fi
 
@@ -1559,6 +1574,7 @@ run_once() {
 			wait $!
 			rc=$?
 			echo "$rc" >"$exit_file"
+			_log_history "COMPLETE rc=$rc"
 			exit "$rc"
 		) &
 
@@ -1593,6 +1609,7 @@ run_once() {
 			# Exit codes 128-165 indicate termination by signal (kill, Ctrl-C, etc.)
 			# These are interruptions, not legitimate failures, so treat as crash and retry
 			if [[ $exit_code -ge 128 && $exit_code -le 165 ]]; then
+				_log_history "SIGNAL rc=$exit_code (restarting)"
 				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
 				rm -rf "$id_dir"
 				mkdir -p "$id_dir"
@@ -1685,13 +1702,15 @@ run_once() {
 			
 			# Run validation command directly (keep lock held to prevent races)
 			# Validation runs synchronously while we hold the lock
-			: >"$log_out_file"
-			: >"$log_err_file"
+			# Rotate non-empty logs before validation (keep previous run for debugging)
+			[[ -s "$log_out_file" ]] && mv "$log_out_file" "${log_out_file}.1"
+			[[ -s "$log_err_file" ]] && mv "$log_err_file" "${log_err_file}.1"
 			
 			"${command[@]}" >"$log_out_file" 2>"$log_err_file"
 			local validation_rc=$?
 			echo "$validation_rc" > "$exit_file"
 			exit_code="$validation_rc"
+			_log_history "VALIDATE rc=$validation_rc"
 			
 			# Restore current CWD
 			cd "$original_cwd" || true
