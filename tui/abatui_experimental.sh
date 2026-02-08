@@ -1625,9 +1625,9 @@ select_operators() {
 	
 	# Check if catalogs are already complete (quick check)
 	local need_wait=false
-	run_once -p -i "catalog:4.20:redhat-operator" || need_wait=true
-	run_once -p -i "catalog:4.20:certified-operator" || need_wait=true
-	run_once -p -i "catalog:4.20:community-operator" || need_wait=true
+	run_once -p -i "catalog:${version_short}:redhat-operator" || need_wait=true
+	run_once -p -i "catalog:${version_short}:certified-operator" || need_wait=true
+	run_once -p -i "catalog:${version_short}:community-operator" || need_wait=true
 	
 	# If catalogs are still downloading, show a waiting dialog
 	if [[ "$need_wait" == "true" ]]; then
