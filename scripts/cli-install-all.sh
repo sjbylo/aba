@@ -17,6 +17,15 @@ out=Installing
 
 export PLAIN_OUTPUT=1
 
+# CRITICAL: Wait for all tarball downloads to complete before starting extractions.
+# Without this, 'make -sC cli <tool>' sees a partially downloaded tarball (curl still
+# writing) and starts 'tar' on it, producing a truncated/corrupt binary (segfault).
+if [ "$1" != "--reset" ]; then
+	aba_debug "Waiting for all CLI downloads to complete before extracting"
+	scripts/cli-download-all.sh --wait
+	aba_debug "All CLI downloads complete"
+fi
+
 for item in $(make --no-print-directory -sC cli out-install-all)
 do
 	aba_debug $out: item=$item

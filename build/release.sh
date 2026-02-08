@@ -65,15 +65,22 @@ if ! git diff-index --quiet HEAD --; then
     exit 1
 fi
 
-echo -e "${YELLOW}[1/8] Updating VERSION file...${NC}"
+echo -e "${YELLOW}[1/9] Updating VERSION file...${NC}"
 echo "$NEW_VERSION" > VERSION
 echo -e "${GREEN}      ✓ VERSION updated to $NEW_VERSION${NC}\n"
 
-echo -e "${YELLOW}[2/8] Embedding version in scripts/aba.sh...${NC}"
+echo -e "${YELLOW}[2/9] Embedding version in scripts/aba.sh...${NC}"
 sed -i "s/^ABA_VERSION=\".*\"/ABA_VERSION=\"$NEW_VERSION\"/" scripts/aba.sh
 echo -e "${GREEN}      ✓ scripts/aba.sh now contains ABA_VERSION=\"$NEW_VERSION\"${NC}\n"
 
-echo -e "${YELLOW}[3/8] Updating CHANGELOG.md...${NC}"
+echo -e "${YELLOW}[3/9] Updating version references in README.md...${NC}"
+sed -i "s|/tags/v[0-9]*\.[0-9]*\.[0-9]*\.tar\.gz|/tags/v$NEW_VERSION.tar.gz|g" README.md
+sed -i "s|tar xzf v[0-9]*\.[0-9]*\.[0-9]*\.tar\.gz|tar xzf v$NEW_VERSION.tar.gz|g" README.md
+sed -i "s|cd aba-[0-9]*\.[0-9]*\.[0-9]*|cd aba-$NEW_VERSION|g" README.md
+sed -i "s|--branch v[0-9]*\.[0-9]*\.[0-9]*|--branch v$NEW_VERSION|g" README.md
+echo -e "${GREEN}      ✓ README.md version references updated to $NEW_VERSION${NC}\n"
+
+echo -e "${YELLOW}[4/9] Updating CHANGELOG.md...${NC}"
 # Extract current [Unreleased] section
 UNRELEASED_CONTENT=$(sed -n '/^## \[Unreleased\]/,/^---$/p' CHANGELOG.md | sed '1d;$d')
 
@@ -111,15 +118,15 @@ sed -i "/^\[Unreleased\]:/a [$NEW_VERSION]: https://github.com/sjbylo/aba/releas
 
 echo -e "${GREEN}      ✓ CHANGELOG.md updated${NC}\n"
 
-echo -e "${YELLOW}[4/8] Running pre-commit checks...${NC}"
+echo -e "${YELLOW}[5/9] Running pre-commit checks...${NC}"
 build/pre-commit-checks.sh
 echo
 
-echo -e "${YELLOW}[5/8] Staging changes...${NC}"
-git add VERSION CHANGELOG.md scripts/aba.sh
-echo -e "${GREEN}      ✓ Staged: VERSION, CHANGELOG.md, scripts/aba.sh${NC}\n"
+echo -e "${YELLOW}[6/9] Staging changes...${NC}"
+git add VERSION CHANGELOG.md README.md scripts/aba.sh
+echo -e "${GREEN}      ✓ Staged: VERSION, CHANGELOG.md, README.md, scripts/aba.sh${NC}\n"
 
-echo -e "${YELLOW}[6/8] Creating commit...${NC}"
+echo -e "${YELLOW}[7/9] Creating commit...${NC}"
 git commit -m "release: Bump version to $NEW_VERSION
 
 $RELEASE_DESC
@@ -128,11 +135,11 @@ Release notes:
 - See CHANGELOG.md for full details"
 echo -e "${GREEN}      ✓ Commit created${NC}\n"
 
-echo -e "${YELLOW}[7/8] Creating git tag v$NEW_VERSION...${NC}"
+echo -e "${YELLOW}[8/9] Creating git tag v$NEW_VERSION...${NC}"
 git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION: $RELEASE_DESC"
 echo -e "${GREEN}      ✓ Tag created: v$NEW_VERSION${NC}\n"
 
-echo -e "${YELLOW}[8/8] Verifying version embedding...${NC}"
+echo -e "${YELLOW}[9/9] Verifying version embedding...${NC}"
 if grep -q "^ABA_VERSION=\"$NEW_VERSION\"" scripts/aba.sh; then
     echo -e "${GREEN}      ✓ Version correctly embedded in aba.sh${NC}\n"
 else

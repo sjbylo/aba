@@ -28,6 +28,9 @@ if [ "$dest" != "-" ]; then
 	[ -s $dest ] && aba_abort "File $dest already exists. Aborting!" 
 fi
 
+# Capture actual repo directory name before cd (needed when repo is not named "aba")
+repo_dir=$(basename "$PWD")
+
 # Assume this script is run via 'make ...' from aba's top level dir
 cd ..  
 
@@ -42,48 +45,48 @@ cd ..
 #aba/vmware.conf		\
 
 # Add the bundle flag file to the archive so when aba is run again it knows it's a bundle!
-touch aba/.bundle  # Flag this archive as a bundle
-rm -f aba/.aba.conf.seen   # Ensure user can be offered to edit this conf file again on the internal/private network
+touch "${repo_dir}/.bundle"  # Flag this archive as a bundle
+rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this conf file again on the internal/private network
 
 # All 'find expr' below are by default "and"
 file_list=$(find		\
-	aba/install		\
-	aba/aba			\
-	aba/aba.conf		\
-	aba/.bundle		\
-	aba/cli			\
-	aba/rpms		\
-	aba/others		\
-	aba/scripts		\
-	aba/templates		\
-	aba/Makefile		\
-	aba/README.md		\
-	aba/Troubleshooting.md	\
-	aba/mirror		\
+	"${repo_dir}/install"		\
+	"${repo_dir}/aba"			\
+	"${repo_dir}/aba.conf"		\
+	"${repo_dir}/.bundle"		\
+	"${repo_dir}/cli"			\
+	"${repo_dir}/rpms"		\
+	"${repo_dir}/others"		\
+	"${repo_dir}/scripts"		\
+	"${repo_dir}/templates"		\
+	"${repo_dir}/Makefile"		\
+	"${repo_dir}/README.md"		\
+	"${repo_dir}/Troubleshooting.md"	\
+	"${repo_dir}/mirror"		\
 								\
-	! -path "aba/.git*"  					\
-	! -path "aba/cli/.init"  				\
-	! -path "aba/cli/.??*"	  				\
-	! -path "aba/mirror/.init" 	 			\
-	! -path "aba/mirror/.rpms"  				\
-	! -path "aba/mirror/.installed"  			\
-	! -path "aba/mirror/.loaded" 				\
-	! -path "aba/mirror/mirror-registry"  			\
-	! -path "aba/mirror/execution-environment.tar"  	\
-	! -path "aba/mirror/image-archive.tar"  		\
-	! -path "aba/mirror/quay.tar"  				\
-	! -path "aba/mirror/pause.tar"  			\
-	! -path "aba/mirror/postgres.tar"  			\
-	! -path "aba/mirror/redis.tar"  			\
-	! -path "aba/mirror/regcreds/*"	  			\
-	! -path "aba/mirror/reg-uninstall.sh"  			\
-	! -path "aba/*/iso-agent-based*"  			\
-	! -path "aba/mirror/sync/working-dir*"  		\
-	! -path "aba/mirror/save/working-dir*"			\
-	! -path "aba/mirror/sync/oc-mirror-workspace*"  	\
-	! -path "aba/mirror/save/oc-mirror-workspace*"		\
-	! -path "aba/test/output.log" 				\
-	! -path "aba/bundles*"	 				\
+	! -path "${repo_dir}/.git*"  					\
+	! -path "${repo_dir}/cli/.init"  				\
+	! -path "${repo_dir}/cli/.??*"	  				\
+	! -path "${repo_dir}/mirror/.init" 	 			\
+	! -path "${repo_dir}/mirror/.rpms"  				\
+	! -path "${repo_dir}/mirror/.installed"  			\
+	! -path "${repo_dir}/mirror/.loaded" 				\
+	! -path "${repo_dir}/mirror/mirror-registry"  			\
+	! -path "${repo_dir}/mirror/execution-environment.tar"  	\
+	! -path "${repo_dir}/mirror/image-archive.tar"  		\
+	! -path "${repo_dir}/mirror/quay.tar"  				\
+	! -path "${repo_dir}/mirror/pause.tar"  			\
+	! -path "${repo_dir}/mirror/postgres.tar"  			\
+	! -path "${repo_dir}/mirror/redis.tar"  			\
+	! -path "${repo_dir}/mirror/regcreds/*"	  			\
+	! -path "${repo_dir}/mirror/reg-uninstall.sh"  			\
+	! -path "${repo_dir}/*/iso-agent-based*"  			\
+	! -path "${repo_dir}/mirror/sync/working-dir*"  		\
+	! -path "${repo_dir}/mirror/save/working-dir*"			\
+	! -path "${repo_dir}/mirror/sync/oc-mirror-workspace*"  	\
+	! -path "${repo_dir}/mirror/save/oc-mirror-workspace*"		\
+	! -path "${repo_dir}/test/output.log" 				\
+	! -path "${repo_dir}/bundles*"	 				\
 								\
 	\( -type f -o -type l \)				\
 								\
@@ -99,7 +102,7 @@ file_list=$(find		\
 # Added [! -path "aba/mirror/reg-uninstall.sh"] to be sure no old scripts are added. Intent is to install the registry *from* internal bastion/net.
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
-[ "$repo_only" ] && file_list=$(echo "$file_list" | grep -E -v "^aba/mirror/s.*/mirror_.*[0-9]{6}\.tar$") || true  # 'true' needed!
+[ "$repo_only" ] && file_list=$(echo "$file_list" | grep -E -v "^${repo_dir}/mirror/s.*/mirror_.*[0-9]{6}\.tar$") || true  # 'true' needed!
 
 # Clean up file_list
 file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " white space (is empty)
@@ -116,7 +119,7 @@ if [ "$repo_only" ]; then
 	#echo_magenta "           To avoid this in future write the full install bundle to *external media* or to a *separate drive*." >&2
 
 	echo_magenta "IMPORTANT: No image-set files are being added to this install bundle (*light bundle*)." >&2
-	echo_magenta "           The image-set archive(s) are located at: $PWD/aba/mirror/save/mirror_*.tar" >&2
+	echo_magenta "           The image-set archive(s) are located at: ${PWD}/${repo_dir}/mirror/save/mirror_*.tar" >&2
 	echo_magenta "           You must copy these archive files to your internal bastion together with the install bundle ($dest)," >&2
 	echo_magenta "           and then combine them there." >&2
 	echo_magenta "           PLEASE READ THE INSTRUCTIONS BELOW CAREFULLY." >&2
@@ -179,10 +182,10 @@ out_file_list=$(echo $file_list | cut -c-90)
 aba_info "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
 aba_info "Please wait!" >&2
 
-set +e   # Needed so we can capture the return code from tar and not just exit (bash -e) 
-tar cf $dest $file_list
+set +e   # Needed so we can capture the return code from tar and not just exit (bash -e)
+tar cf "${dest}" --transform "s,^${repo_dir},aba," $file_list
 ret=$?
-rm -f aba/.bundle  # We don't want this repo to be labeled as 'bundle', only the tar archive should be
+rm -f "${repo_dir}/.bundle"  # We don't want this repo to be labeled as 'bundle', only the tar archive should be
 if [ $ret -ne 0 ]; then
 	echo >&2
 	echo_red "Error: The tar command failed with return code $ret!" >&2

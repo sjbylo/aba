@@ -192,17 +192,22 @@ openshift_install_url := https://mirror.openshift.com/pub/openshift-v4/$(arch)/c
 $(rhel9_oc_tar_file):  ## Downlaod oc tarball for rhel9, if available
 	curl -sfkLI $(rhel9_oc_url) >/dev/null # Check connection only
 	echo [ABA] Downloading $(rhel9_oc_url)
-	curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || { echo [ABA] $(rhel9_oc_tar_file) failed download; > $(rhel9_oc_tar_file); }
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-client-rhel9-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" openshift-client-rhel9-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
-	echo [ABA] "File $(rhel9_oc_tar_file) checksum valid!"  # Be sure it's valid
+	curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || { echo [ABA] $(@) failed download; > $(@); }
+	@echo -n "[ABA] Verifying checksum for $(@): "
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
+	echo "valid!"
 
 # Ensure all possible tarballs are downloaded
 $(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
 	curl -sfkLI $(rhel8_oc_url) >/dev/null # Check connection only
 	echo [ABA] Downloading $(rhel8_oc_url)
-	curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || { echo [ABA] $(rhel8_oc_tar_file) failed download; > $(rhel8_oc_tar_file); }
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-client-rhel8-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=$$(sha256sum $@) && grep -q "$$cs" openshift-client-rhel8-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
-	echo [ABA] "File $(rhel8_oc_tar_file) checksum valid!"  # Be sure it's valid
+	curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || { echo [ABA] $(@) failed download; > $(@); }
+	@echo -n "[ABA] Verifying checksum for $(@): "
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
+	echo "valid!"
+
+#	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-client-rhel8-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=$$(sha256sum $@) && grep -q "$$cs" openshift-client-rhel8-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
+#	echo [ABA] "File $(rhel8_oc_tar_file) checksum valid!"  # Be sure it's valid
 
 
 ########################################
@@ -216,8 +221,12 @@ openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/b
 $(openshift_install_file):  ## Download openshift-install tarball
 	@echo [ABA] Downloading $(openshift_install_url)/$@
 	curl -f --retry 8 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$@
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-install-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" openshift-install-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
-	echo [ABA] "File $@ checksum valid!"
+	@echo -n "[ABA] Verifying checksum for $(@): "
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
+	echo "valid!"
+
+#	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-install-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" openshift-install-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
+#	echo [ABA] "File $@ checksum valid!"
 
 
 ########################################
@@ -230,25 +239,31 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 
 # Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
 
-oc_mirror_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.tar.gz
-oc_mirror_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/sha256sum.txt
+# Had to switch from 4.21 (latest) to 4.20 due to "signature missing" errors.
+oc_mirror_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/oc-mirror.tar.gz
+oc_mirror_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/sha256sum.txt
 oc-mirror.tar.gz: ## Download oc-mirror tarball
 	echo [ABA] Downloading $(oc_mirror_url)
 	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url)
-#	file $@ | grep -q "gzip compressed data" || { rm -f $@; exit 1; } # in case of 5xx errors!
-#	tar tvf $@ >/dev/null|| { rm -f $@; exit 1; } # in case of 5xx errors!  # Be sure it's valid
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o oc-mirror-sha256sum.txt $(oc_mirror_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" oc-mirror-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
-	echo [ABA] "File $@ checksum valid!"
+	@echo -n "[ABA] Verifying checksum for $(@): "
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(oc_mirror_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
+	echo "valid!"
+#
+#	curl -f --retry 8 -sL $(CURL_PROGRESS) -o oc-mirror-sha256sum.txt $(oc_mirror_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" oc-mirror-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
+#	echo [ABA] "File $@ checksum valid!"
 
-oc_mirror_url_rhel9 = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/oc-mirror.rhel9.tar.gz
-oc_mirror_url_rhel9_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/latest/sha256sum.txt
+# Had to switch from 4.21 (latest) to 4.20 due to "signature missing" errors.
+oc_mirror_url_rhel9 = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/oc-mirror.rhel9.tar.gz
+oc_mirror_url_rhel9_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/sha256sum.txt
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 	echo [ABA] Downloading $(oc_mirror_url_rhel9)
 	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url_rhel9)
-#	file oc-mirror.rhel9.tar.gz | grep -q "gzip compressed data" || { rm -f oc-mirror.rhel9.tar.gz; exit 1; } # in case of 5xx errors!
-#	tar tvf oc-mirror.rhel9.tar.gz >/dev/null|| { rm -f oc-mirror.rhel9.tar.gz; exit 1; } # in case of 5xx errors!  # Be sure it's valid
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o oc-mirror-rhel9-sha256sum.txt $(oc_mirror_url_rhel9_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" oc-mirror-rhel9-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
-	echo [ABA] "File $@ checksum valid!"
+	@echo -n "[ABA] Verifying checksum for $(@): "
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(oc_mirror_url_rhel9_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
+	echo "valid!"
+
+#	curl -f --retry 8 -sL $(CURL_PROGRESS) -o oc-mirror-rhel9-sha256sum.txt $(oc_mirror_url_rhel9_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" oc-mirror-rhel9-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
+#	echo [ABA] "File $@ checksum valid!"
 
 
 ########################################

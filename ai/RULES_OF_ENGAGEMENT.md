@@ -91,6 +91,11 @@ build/pre-commit-checks.sh --skip-version
    git push origin dev              # ALWAYS push after commit (unless explicitly told "commit only")
    ```
 
+**Commit Message Rules:**
+- ✅ **Clear, concise messages**: Describe what and why
+- ❌ **NO "Co-authored-by" tags**: Never add `Co-authored-by: Cursor` or similar AI attribution
+- ✅ **Multi-line format**: Use short summary, then detailed body if needed
+
 **Important Notes:**
 - Use `build/pre-commit-checks.sh` for code changes (updates BUILD timestamp)
 - Use `build/pre-commit-checks.sh --skip-version` for docs-only commits

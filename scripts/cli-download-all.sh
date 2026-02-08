@@ -14,13 +14,17 @@ ro_opt=
 out=Downloading
 [ "$1" = "--wait" ] && ro_opt=-w && out=Waiting
 [ "$1" = "--reset" ] && ro_opt=-r && out=Resetting
+aba_debug "Mode: $out (ro_opt=$ro_opt)"
 
 export PLAIN_OUTPUT=1
+aba_debug "PLAIN_OUTPUT=1 (suppressing progress indicators)"
 
+aba_debug "Fetching download list from cli/Makefile"
 for item in $(make --no-print-directory -sC cli out-download-all)
 do
-	aba_debug $out: item=$item
+	aba_debug "$out: item=$item"
 	aba_debug "run_once $ro_opt -i \"cli:download:$item\" -- make -sC cli $item"
 	run_once $ro_opt -i "cli:download:$item" -- make -sC cli $item  # This is non-blocking
 done
+aba_debug "All CLI download tasks initiated"
 

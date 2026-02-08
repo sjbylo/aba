@@ -11,22 +11,40 @@ tool="$1"
 
 case "$tool" in
     oc-mirror)
-        ensure_oc_mirror
+        if ! ensure_oc_mirror; then
+            echo "Error: Failed to install oc-mirror" >&2
+            exit 1
+        fi
         ;;
     oc)
-        ensure_oc
+        if ! ensure_oc; then
+            echo "Error: Failed to install oc" >&2
+            exit 1
+        fi
         ;;
     openshift-install)
-        ensure_openshift_install
+        if ! ensure_openshift_install; then
+            echo "Error: Failed to install openshift-install" >&2
+            exit 1
+        fi
         ;;
     govc)
-        ensure_govc
+        if ! ensure_govc; then
+            echo "Error: Failed to install govc" >&2
+            exit 1
+        fi
         ;;
     butane)
-        ensure_butane
+        if ! ensure_butane; then
+            echo "Error: Failed to install butane" >&2
+            exit 1
+        fi
         ;;
     quay-registry)
-        ensure_quay_registry
+        if ! ensure_quay_registry; then
+            echo "Error: Failed to install quay-registry" >&2
+            exit 1
+        fi
         ;;
     *)
         echo "Error: Unknown tool: $tool" >&2
