@@ -1492,7 +1492,7 @@ run_once() {
 				# Task output is stale, reset it
 				_kill_id "$work_id"
 				mkdir -p "$id_dir"
-		chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
 			fi
 		fi
 	fi
@@ -1596,7 +1596,7 @@ run_once() {
 				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
 				rm -rf "$id_dir"
 				mkdir -p "$id_dir"
-		chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
 				# Fall through to restart logic below
 			fi
 		fi
