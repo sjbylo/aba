@@ -29,7 +29,9 @@ sudo nmcli con up ens224
 cd $TEST_DIR_CONN
 #set +x; bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"; set -x
 set +x; bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev; set -x
-cd aba
+rm -rf aba-vX
+mv aba aba-vX  # test with any repo dir name
+cd aba-vX
 echo cincinnati-operator > templates/operator-set-abatest   # Create a test "operator set"
 
 # Create install bundle
@@ -57,7 +59,7 @@ rm -vf delete-me*tar
 cd aba
 ./install
 [ "$LIGHT" ] && aba   # Show the bundle instructions
-[ "$LIGHT" ] && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
+[ "$LIGHT" ] && mv -v $TEST_DIR_CONN/aba-vX/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
 rm -rf $TEST_DIR_CONN/aba   # Not needed anymore
 aba     # Show the bundle instructions
 aba -d mirror load -H $MY_HOST -r -y
