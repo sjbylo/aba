@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+---
+
+## [0.9.1] - 2026-02-08
+
+Bug fixes and improvements
+
+
 ### Bug Fixes
 - Fixed TUI hang: use dynamic version in catalog peek checks
 - Fixed segfault caused by tar extracting incomplete tarball during download
@@ -66,6 +73,7 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/sjbylo/aba/releases/tag/v0.9.1
 [0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
 [0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
