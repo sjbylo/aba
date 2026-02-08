@@ -265,7 +265,6 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 
 ## Method 2: Git clone
 
-<!--
 **For production use, install from a specific release version:**
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
@@ -277,7 +276,6 @@ cd aba-0.9.1
 ./install
 aba
 ```
--->
 
 Or clone a specific release tag:
 ```bash
