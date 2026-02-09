@@ -7,9 +7,12 @@
 # dynamic VM pool management via govc.
 #
 # A single VM template per RHEL version is used for both connected and
-# internal bastions. After cloning/reverting, a configuration profile
-# (configure_connected_bastion or configure_internal_bastion) turns the
-# generic VM into the right type.
+# internal bastions. Templates are minimal RHEL installs that are never
+# modified. Each run clones fresh VMs from templates, configures them
+# with a profile (configure_connected_bastion or configure_internal_bastion),
+# and destroys the clones when done.
+#
+# Clone naming: reg1/reg2/... (connected), disco1/disco2/... (internal)
 # =============================================================================
 
 _E2E_LIB_DIR_PL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,15 +24,28 @@ fi
 
 # --- VM Template Configuration ----------------------------------------------
 
-# VM templates by RHEL version (names in VMware with clean snapshots)
+# VM templates by RHEL version (minimal RHEL installs, never modified)
 declare -A VM_TEMPLATES=(
     [rhel8]="bastion-internal-rhel8"
     [rhel9]="bastion-internal-rhel9"
     [rhel10]="bastion-internal-rhel10"
 )
 
-# All internal bastion VM names (for power-off-all before revert)
-ALL_INTERNAL_VMS="bastion-internal-rhel8 bastion-internal-rhel9 bastion-internal-rhel10"
+# --- Clone MAC Addresses ----------------------------------------------------
+# Each clone needs specific MAC addresses so DHCP assigns the correct IPs.
+# Format: VM_CLONE_MACS[clone_name]="ens192-MAC ens224-MAC [ens256-MAC]"
+#   Position 1 = ethernet-0 / ens192 (primary NIC, gets IP via DHCP)
+#   Position 2 = ethernet-1 / ens224 (internal/VLAN NIC)
+#   Position 3 = ethernet-2 / ens256 (optional, connected bastions with 3 NICs)
+#
+# The VMware network (port group) for each NIC is auto-detected from the
+# clone, so only MAC addresses are needed here.
+#
+# Declare only if not already set (config.env is sourced first and takes
+# precedence).
+if ! declare -p VM_CLONE_MACS &>/dev/null 2>&1; then
+    declare -A VM_CLONE_MACS=()
+fi
 
 # Default user pre-configured on VM templates
 VM_DEFAULT_USER="${VM_DEFAULT_USER:-steve}"
@@ -434,13 +450,16 @@ configure_internal_bastion() {
 # =============================================================================
 
 # --- create_pools -----------------------------------------------------------
-# Create N VM pools by reverting existing VMs to snapshots and configuring them.
+# Create N VM pools by cloning from template VMs and configuring them.
 #
 # Usage: create_pools N [--rhel rhel8|rhel9|rhel10] [--connected-only]
 #
 # Each pool gets:
-#   - A connected bastion VM (regN)
-#   - Optionally a paired internal bastion VM (intN / discoN)
+#   - A connected bastion clone (regN) from the template
+#   - Optionally a paired internal bastion clone (discoN) from the template
+#
+# Templates are never modified. Previous clones are destroyed and re-cloned
+# fresh every time.
 #
 create_pools() {
     local count="$1"; shift
@@ -456,45 +475,26 @@ create_pools() {
     done
 
     local vm_template="${VM_TEMPLATES[$rhel_ver]:-bastion-internal-$rhel_ver}"
-    local snapshot="${VM_SNAPSHOT:-aba-test}"
 
-    echo "=== Creating $count pool(s) from template $vm_template ==="
-
-    # First, power off all internal bastion VMs to avoid conflicts
-    for vm in $ALL_INTERNAL_VMS; do
-        power_off_vm "$vm"
-    done
+    echo "=== Creating $count pool(s) by cloning template $vm_template ==="
 
     local i
     for (( i=1; i<=count; i++ )); do
         echo ""
         echo "--- Pool $i ---"
 
-        # Revert and power on connected bastion
+        # Clone connected bastion: template -> regN
         local conn_vm="reg${i}"
-        if vm_exists "$conn_vm"; then
-            echo "  Reverting connected bastion: $conn_vm"
-            init_bastion_vm "$conn_vm" "$snapshot"
-            configure_connected_bastion "$conn_vm"
-        else
-            echo "  WARNING: VM $conn_vm does not exist, skipping"
-        fi
+        echo "  Cloning connected bastion: $vm_template -> $conn_vm"
+        clone_vm "$vm_template" "$conn_vm"
+        configure_connected_bastion "$conn_vm"
 
-        # Revert and power on internal bastion (if not --connected-only)
+        # Clone internal bastion: template -> discoN (if not --connected-only)
         if [ -z "$connected_only" ]; then
             local int_vm="disco${i}"
-            local int_vm_name="${vm_template}"
-            if [ $i -gt 1 ]; then
-                int_vm_name="${vm_template}-${i}"  # e.g. bastion-internal-rhel9-2
-            fi
-
-            if vm_exists "$int_vm_name"; then
-                echo "  Reverting internal bastion: $int_vm_name -> $int_vm"
-                init_bastion_vm "$int_vm_name" "$snapshot"
-                configure_internal_bastion "$int_vm"
-            else
-                echo "  WARNING: VM $int_vm_name does not exist, skipping internal bastion for pool $i"
-            fi
+            echo "  Cloning internal bastion: $vm_template -> $int_vm"
+            clone_vm "$vm_template" "$int_vm"
+            configure_internal_bastion "$int_vm"
         fi
     done
 
@@ -503,70 +503,60 @@ create_pools() {
 }
 
 # --- destroy_pools ----------------------------------------------------------
-# Power off and optionally delete pool VMs.
+# Destroy cloned pool VMs (power off + delete). Safe because these are
+# disposable clones, not templates.
 #
-# Usage: destroy_pools [--all] [--delete] [pool1 pool2 ...]
+# Usage: destroy_pools [--all] [pool1 pool2 ...]
 #
 destroy_pools() {
-    local delete_vms=""
     local all_pools=""
     local pools=()
 
     while [ $# -gt 0 ]; do
         case "$1" in
             --all) all_pools=1; shift ;;
-            --delete) delete_vms=1; shift ;;
             *) pools+=("$1"); shift ;;
         esac
     done
 
     if [ -n "$all_pools" ]; then
-        echo "=== Destroying all pool VMs ==="
-        for vm in $ALL_INTERNAL_VMS; do
-            power_off_vm "$vm"
-        done
-        # Power off regN VMs (try reg1..reg10)
+        echo "=== Destroying all pool clone VMs ==="
+        # Destroy regN and discoN clones (try 1..10)
         local i
         for (( i=1; i<=10; i++ )); do
-            power_off_vm "reg${i}" 2>/dev/null || true
+            destroy_vm "reg${i}" 2>/dev/null
+            destroy_vm "disco${i}" 2>/dev/null
         done
     else
         for pool in "${pools[@]}"; do
-            echo "  Destroying pool: $pool"
-            power_off_vm "$pool" 2>/dev/null || true
+            echo "  Destroying clone: $pool"
+            destroy_vm "$pool"
         done
     fi
 
-    if [ -n "$delete_vms" ]; then
-        echo "  (VM deletion via govc vm.destroy is not implemented for safety. Power-off only.)"
-    fi
-
-    echo "=== Pools destroyed ==="
+    echo "=== Pool clones destroyed ==="
 }
 
 # --- list_pools -------------------------------------------------------------
-# Show current pool status (which VMs are powered on).
+# Show current pool status (which clone VMs exist and their power state).
 #
 list_pools() {
-    echo "=== Pool Status ==="
+    echo "=== Pool Status (Clones) ==="
     echo ""
-    printf "  %-25s %-10s\n" "VM NAME" "POWER"
+    printf "  %-25s %-10s\n" "CLONE NAME" "POWER"
     echo "  $(printf '%0.s-' {1..40})"
 
-    for vm in $ALL_INTERNAL_VMS; do
-        local power
-        power=$(govc vm.info -json "$vm" 2>/dev/null | grep -o '"powerState":"[^"]*"' | head -1 | cut -d'"' -f4)
-        printf "  %-25s %-10s\n" "$vm" "${power:-unknown}"
-    done
-
-    # Check regN VMs
+    # Check regN and discoN clones
     local i
     for (( i=1; i<=10; i++ )); do
-        if vm_exists "reg${i}" 2>/dev/null; then
-            local power
-            power=$(govc vm.info -json "reg${i}" 2>/dev/null | grep -o '"powerState":"[^"]*"' | head -1 | cut -d'"' -f4)
-            printf "  %-25s %-10s\n" "reg${i}" "${power:-unknown}"
-        fi
+        for prefix in reg disco; do
+            local vm="${prefix}${i}"
+            if vm_exists "$vm" 2>/dev/null; then
+                local power
+                power=$(govc vm.info -json "$vm" 2>/dev/null | grep -o '"powerState":"[^"]*"' | head -1 | cut -d'"' -f4)
+                printf "  %-25s %-10s\n" "$vm" "${power:-unknown}"
+            fi
+        done
     done
 
     echo ""

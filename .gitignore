@@ -71,3 +71,5 @@ cli/scripts
 bundles/work
 .vscode*
 .bundle
+test/e2e/LAB-NETWORK.md
+test/e2e/SESSION-NOTES.md

@@ -116,26 +116,120 @@ remote_wait_ssh() {
     done
 }
 
-# --- init_bastion_vm --------------------------------------------------------
+# --- _get_nic_network -------------------------------------------------------
 #
-# Revert a VMware VM to a named snapshot and power it on.
-# Requires govc to be installed and configured (vmware.conf sourced).
+# Get the current VMware network (port group) name for a NIC device on a VM.
+# This reads the "Summary" line from govc device.info for the given device.
 #
-# Usage: init_bastion_vm VM_NAME [SNAPSHOT_NAME]
+# Usage: _get_nic_network VM_NAME DEVICE_NAME
+# Returns: network name on stdout, or empty string on failure
 #
-init_bastion_vm() {
-    local vm_name="$1"
-    local snapshot="${2:-${VM_SNAPSHOT:-aba-test}}"
+_get_nic_network() {
+    local vm="$1"
+    local device="$2"
+    govc device.info -vm "$vm" "$device" 2>/dev/null | awk '/Summary:/{$1=""; print substr($0,2)}'
+}
 
-    echo "  Reverting VM '$vm_name' to snapshot '$snapshot' ..."
-    govc snapshot.revert -vm "$vm_name" "$snapshot" || return 1
+# --- clone_vm ---------------------------------------------------------------
+#
+# Clone a VM from a template. If a clone with the same name already exists,
+# it is destroyed first (always-fresh strategy).
+#
+# The template VM (e.g. bastion-internal-rhel9) is a minimal RHEL install
+# that is never modified. Clones are disposable and get pool-style names
+# (e.g. reg1, disco1).
+#
+# After cloning (while still powered off), MAC addresses are set on the
+# clone's NICs so DHCP assigns the correct IP addresses. The current
+# VMware network for each NIC is auto-detected from the clone so NICs
+# stay on the same port groups as the template.
+#
+# MAC addresses must be defined in the VM_CLONE_MACS associative array
+# (see pool-lifecycle.sh / config.env) in the format:
+#   VM_CLONE_MACS[CLONE_NAME]="MAC0 MAC1 [MAC2]"
+# where each MAC corresponds to ethernet-0, ethernet-1, ethernet-2, etc.
+#
+#   ethernet-0 = ens192 (primary, DHCP for IP)
+#   ethernet-1 = ens224 (internal/VLAN)
+#   ethernet-2 = ens256 (optional, e.g. connected bastions with 3 NICs)
+#
+# Usage: clone_vm TEMPLATE CLONE_NAME [FOLDER]
+#
+# Example: clone_vm bastion-internal-rhel9 disco1
+#
+clone_vm() {
+    local template="$1"
+    local clone_name="$2"
+    local folder="${3:-${VC_FOLDER:-/Datacenter/vm/abatesting}}"
+
+    echo "  Cloning VM: $template -> $clone_name (folder: $folder) ..."
+
+    # Destroy existing clone if present (clones are disposable)
+    if vm_exists "$clone_name"; then
+        echo "  Destroying previous clone '$clone_name' ..."
+        govc vm.power -off "$clone_name" 2>/dev/null || true
+        govc vm.destroy "$clone_name" || true
+    fi
+
+    # Clone from template (powered off initially)
+    govc vm.clone -vm "$template" -folder "$folder" -on=false "$clone_name" || return 1
+
+    # --- Set MAC addresses on the clone's NICs (before power-on) -----------
+    # The clone inherits the template's MACs which won't match DHCP
+    # reservations. Look up the correct MACs from VM_CLONE_MACS[clone_name].
+    # For each NIC we auto-detect its current VMware network (port group)
+    # so we don't accidentally move it to a different network.
+    local mac_entry="${VM_CLONE_MACS[$clone_name]:-}"
+    if [ -n "$mac_entry" ]; then
+        local -a macs=($mac_entry)
+        local i
+        for (( i=0; i<${#macs[@]}; i++ )); do
+            local device="ethernet-${i}"
+            local mac="${macs[$i]}"
+
+            # Auto-detect the NIC's current network from the cloned VM
+            local nic_net
+            nic_net=$(_get_nic_network "$clone_name" "$device")
+            if [ -z "$nic_net" ]; then
+                echo "  WARNING: Could not detect network for $device, using GOVC_NETWORK"
+                nic_net="${GOVC_NETWORK:-VM Network}"
+            fi
+
+            echo "  Setting $device MAC -> $mac (network: $nic_net)"
+            govc vm.network.change -vm "$clone_name" -net "$nic_net" \
+                -net.address "$mac" "$device" || return 1
+        done
+    else
+        echo "  WARNING: No MAC addresses defined for '$clone_name' in VM_CLONE_MACS."
+        echo "           DHCP may not assign the expected IP. Define them in config.env."
+    fi
+
+    # Power on the clone
+    echo "  Powering on clone '$clone_name' ..."
+    govc vm.power -on "$clone_name" || return 1
 
     sleep "${VM_BOOT_DELAY:-8}"
 
-    echo "  Powering on VM '$vm_name' ..."
-    govc vm.power -on "$vm_name" || return 1
+    echo "  Clone '$clone_name' is booting."
+}
 
-    sleep 5
+# --- destroy_vm -------------------------------------------------------------
+#
+# Power off and destroy a cloned VM. Safe to call on non-existent VMs.
+# NOTE: Only use this on clones, never on template VMs!
+#
+# Usage: destroy_vm VM_NAME
+#
+destroy_vm() {
+    local vm_name="$1"
+
+    if vm_exists "$vm_name"; then
+        echo "  Destroying VM '$vm_name' ..."
+        govc vm.power -off "$vm_name" 2>/dev/null || true
+        govc vm.destroy "$vm_name" || true
+    else
+        echo "  VM '$vm_name' does not exist, nothing to destroy."
+    fi
 }
 
 # --- power_off_vm -----------------------------------------------------------

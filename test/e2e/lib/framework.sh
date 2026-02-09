@@ -333,12 +333,16 @@ _interactive_prompt() {
 
 # --- Core Execution: e2e_run -----------------------------------------------
 #
-# Usage: e2e_run [-r RETRIES BACKOFF] [-h HOST] [-i] "description" command...
+# Usage: e2e_run [-r RETRIES BACKOFF] [-h HOST] [-i] [-q] "description" command...
+#
+# By default, command output is shown on screen AND logged to the suite log
+# file (like the original test-cmd). Use -q to suppress screen output.
 #
 # Flags:
 #   -r RETRIES BACKOFF   Retry on failure (default: 5 retries, 1.5x backoff)
 #   -h HOST              Run command on remote HOST via SSH
 #   -i                   Ignore result (return actual exit code, don't fail suite)
+#   -q                   Quiet: log output to file only (don't show on screen)
 #   "description"        First non-flag argument = human-readable description
 #   command...           Remaining arguments = the command to run
 #
@@ -347,6 +351,7 @@ e2e_run() {
     local backoff=1.5
     local host=""
     local ignore_result=""
+    local quiet=""
     local mark="L"
 
     # Parse flags
@@ -355,17 +360,17 @@ e2e_run() {
             -r) tot_cnt="$2"; backoff="$3"; shift 3 ;;
             -h) host="$2"; mark="R"; shift 2 ;;
             -i) ignore_result=1; shift ;;
+            -q) quiet=1; shift ;;
             *)  break ;;
         esac
     done
 
     local description="$1"; shift
     local cmd="$*"
+    local _lf="${E2E_LOG_FILE:-/dev/null}"
 
     _e2e_draw_line "."
-    _e2e_log_and_print "  $mark $description"
-    _e2e_log "    CMD: $cmd"
-    [ -n "$host" ] && _e2e_log "    HOST: $host"
+    _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_cyan "($cmd)") $(_e2e_yellow "[$PWD -> ${host:-localhost}]")"
 
     # Outer loop: interactive retry wraps the automatic retry loop
     while true; do
@@ -378,11 +383,20 @@ e2e_run() {
 
             if [ -n "$host" ]; then
                 _e2e_log "  Running on $host (attempt $attempt/$tot_cnt): $cmd"
-                ssh -t -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
-                    >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
+                if [ -n "$quiet" ]; then
+                    ssh -t -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                        >> "$_lf" 2>&1 || ret=$?
+                else
+                    ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                        2>&1 | tee -a "$_lf" || ret=$?
+                fi
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
-                ( eval "$cmd" ) >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
+                if [ -n "$quiet" ]; then
+                    ( eval "$cmd" ) >> "$_lf" 2>&1 || ret=$?
+                else
+                    ( eval "$cmd" ) 2>&1 | tee -a "$_lf" || ret=$?
+                fi
             fi
 
             # Ctrl-C during execution

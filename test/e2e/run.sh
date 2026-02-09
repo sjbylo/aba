@@ -25,10 +25,8 @@ _ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
 # --- Source libraries -------------------------------------------------------
 
 source "$_RUN_DIR/lib/framework.sh"
-source "$_RUN_DIR/lib/config-helpers.sh"
 source "$_RUN_DIR/lib/remote.sh"
 source "$_RUN_DIR/lib/pool-lifecycle.sh"
-source "$_RUN_DIR/lib/setup.sh"
 
 # --- CLI Variables ----------------------------------------------------------
 
