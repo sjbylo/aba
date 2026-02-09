@@ -207,7 +207,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # bandwidth contention that could slow down reaching the user prompts
 if [ ! "$interactive_mode" ]; then
 	aba_debug "Non-interactive mode detected - starting CLI downloads early"
-	scripts/cli-download-all.sh
+	$ABA_ROOT/scripts/cli-download-all.sh
 fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
