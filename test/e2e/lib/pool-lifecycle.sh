@@ -47,6 +47,13 @@ if ! declare -p VM_CLONE_MACS &>/dev/null 2>&1; then
     declare -A VM_CLONE_MACS=()
 fi
 
+# --- Clone VLAN IPs (static) -----------------------------------------------
+# The 10.10.10.0/24 VLAN has no DHCP. Each clone's ens224.10 IP is defined
+# here. Used by _vm_setup_network.
+if ! declare -p VM_CLONE_VLAN_IPS &>/dev/null 2>&1; then
+    declare -A VM_CLONE_VLAN_IPS=()
+fi
+
 # Default user pre-configured on VM templates
 VM_DEFAULT_USER="${VM_DEFAULT_USER:-steve}"
 
@@ -155,13 +162,20 @@ _vm_dnf_update() {
 
 # --- _vm_setup_network ------------------------------------------------------
 # Configure network: VLAN interface, MTU 9000, nmcli adjustments.
-# This is specifically for internal bastions that need the private VLAN network.
+# This is specifically for bastions that need the private VLAN network.
+#
+# The VLAN IP is looked up from VM_CLONE_VLAN_IPS[clone_name]. If not
+# found, falls back to 10.10.10.1/24.
+#
+# Usage: _vm_setup_network HOST [USER] [CLONE_NAME]
 #
 _vm_setup_network() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
+    local clone_name="${3:-}"
+    local vlan_ip="${VM_CLONE_VLAN_IPS[$clone_name]:-10.10.10.1/24}"
 
-    echo "  [vm] Configuring network (VLAN, MTU) on $host ..."
+    echo "  [vm] Configuring network (VLAN, MTU) on $host (VLAN IP: $vlan_ip) ..."
 
     cat <<-NETEOF | ssh "${user}@${host}" -- sudo bash
 		set -ex
@@ -177,11 +191,11 @@ _vm_setup_network() {
 		ip link set ens192 mtu 9000 2>/dev/null || true
 		ip link set ens224 mtu 9000 2>/dev/null || true
 
-		# Create VLAN interface for private /24 network (used to test VLAN config)
+		# Create VLAN interface for private /24 network
 		nmcli connection modify ens224 ipv4.method disabled ipv6.method disabled
 		nmcli connection up ens224
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
-		    id 10 ipv4.method manual ipv4.addresses 10.10.10.1/24 ipv4.never-default yes
+		    id 10 ipv4.method manual ipv4.addresses $vlan_ip ipv4.never-default yes
 
 		ip a
 		ip route
@@ -405,12 +419,17 @@ configure_connected_bastion() {
 # network hardening, firewall/NAT, RPM removal, proxy removal, etc.
 # This is the modular equivalent of the old init_bastion() in test/include.sh.
 #
+# Usage: configure_internal_bastion HOST [USER] [TEST_USER] [CLONE_NAME]
+#   CLONE_NAME is used to look up the VLAN IP from VM_CLONE_VLAN_IPS.
+#   If omitted, defaults to HOST (works when hostname = clone name).
+#
 configure_internal_bastion() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
     local test_user="${3:-${TEST_USER:-$VM_DEFAULT_USER}}"
+    local clone_name="${4:-$host}"
 
-    echo "=== Configuring internal bastion: $host ==="
+    echo "=== Configuring internal bastion: $host (clone: $clone_name) ==="
 
     _vm_wait_ssh "$host" "$user"
     _vm_setup_ssh_keys "$host" "$user"
@@ -421,7 +440,7 @@ configure_internal_bastion() {
     _vm_wait_ssh "$host" "$user"
 
     # Network hardening
-    _vm_setup_network "$host" "$user"
+    _vm_setup_network "$host" "$user" "$clone_name"
     _vm_setup_firewall "$host" "$user"
 
     # Clean up

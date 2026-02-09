@@ -118,31 +118,49 @@ remote_wait_ssh() {
 
 # --- _get_nic_network -------------------------------------------------------
 #
-# Get the current VMware network (port group) name for a NIC device on a VM.
-# This reads the "Summary" line from govc device.info for the given device.
+# Get the VMware port group name for a NIC on a VM. Works with both
+# standard vSwitches and Distributed Virtual Switches.
+#
+# For dvSwitches: extracts the portgroupKey from the device JSON, then
+# resolves it to a name via govc object.collect.
+# For standard vSwitches: reads the Summary field from govc device.info.
 #
 # Usage: _get_nic_network VM_NAME DEVICE_NAME
-# Returns: network name on stdout, or empty string on failure
+# Returns: port group name on stdout, or empty string on failure
 #
 _get_nic_network() {
     local vm="$1"
     local device="$2"
-    govc device.info -vm "$vm" "$device" 2>/dev/null | awk '/Summary:/{$1=""; print substr($0,2)}'
+
+    # Get the portgroupKey from the device's backing info (dvSwitch)
+    local pg_key
+    pg_key=$(govc device.info -vm "$vm" -json "$device" 2>/dev/null \
+        | jq -r '.devices[0].backing.port.portgroupKey // empty' 2>/dev/null)
+
+    if [ -n "$pg_key" ]; then
+        # Distributed switch -- resolve portgroupKey to name
+        govc object.collect -s "$pg_key" name 2>/dev/null
+    else
+        # Standard switch -- Summary field has the network name directly
+        govc device.info -vm "$vm" "$device" 2>/dev/null \
+            | awk '/Summary:/{$1=""; print substr($0,2)}'
+    fi
 }
 
 # --- clone_vm ---------------------------------------------------------------
 #
-# Clone a VM from a template. If a clone with the same name already exists,
-# it is destroyed first (always-fresh strategy).
+# Clone a VM from a source VM. If a clone with the same name already
+# exists, it is destroyed first (always-fresh strategy).
 #
-# The template VM (e.g. bastion-internal-rhel9) is a minimal RHEL install
-# that is never modified. Clones are disposable and get pool-style names
-# (e.g. reg1, disco1).
+# Before cloning, the source VM is reverted to its snapshot (default:
+# "aba-test") to ensure the clone is always from a known-clean state.
+# The source VMs (e.g. bastion-internal-rhel9) are regular VMs with a
+# clean snapshot -- not VMware "template" objects.
 #
 # After cloning (while still powered off), MAC addresses are set on the
-# clone's NICs so DHCP assigns the correct IP addresses. The current
-# VMware network for each NIC is auto-detected from the clone so NICs
-# stay on the same port groups as the template.
+# clone's NICs so DHCP assigns the correct IP addresses. The port group
+# name for each NIC is auto-detected from the clone (works with both
+# standard and distributed virtual switches).
 #
 # MAC addresses must be defined in the VM_CLONE_MACS associative array
 # (see pool-lifecycle.sh / config.env) in the format:
@@ -153,16 +171,17 @@ _get_nic_network() {
 #   ethernet-1 = ens224 (internal/VLAN)
 #   ethernet-2 = ens256 (optional, e.g. connected bastions with 3 NICs)
 #
-# Usage: clone_vm TEMPLATE CLONE_NAME [FOLDER]
+# Usage: clone_vm SOURCE_VM CLONE_NAME [FOLDER] [SNAPSHOT]
 #
 # Example: clone_vm bastion-internal-rhel9 disco1
 #
 clone_vm() {
-    local template="$1"
+    local source_vm="$1"
     local clone_name="$2"
     local folder="${3:-${VC_FOLDER:-/Datacenter/vm/abatesting}}"
+    local snapshot="${4:-${VM_SNAPSHOT:-aba-test}}"
 
-    echo "  Cloning VM: $template -> $clone_name (folder: $folder) ..."
+    echo "  Cloning VM: $source_vm -> $clone_name (folder: $folder) ..."
 
     # Destroy existing clone if present (clones are disposable)
     if vm_exists "$clone_name"; then
@@ -171,14 +190,18 @@ clone_vm() {
         govc vm.destroy "$clone_name" || true
     fi
 
-    # Clone from template (powered off initially)
-    govc vm.clone -vm "$template" -folder "$folder" -on=false "$clone_name" || return 1
+    # Revert source VM to clean snapshot before cloning
+    echo "  Reverting '$source_vm' to snapshot '$snapshot' ..."
+    govc vm.power -off "$source_vm" 2>/dev/null || true
+    govc snapshot.revert -vm "$source_vm" "$snapshot" || return 1
+
+    # Clone from source (powered off initially)
+    govc vm.clone -vm "$source_vm" -folder "$folder" -on=false "$clone_name" || return 1
 
     # --- Set MAC addresses on the clone's NICs (before power-on) -----------
-    # The clone inherits the template's MACs which won't match DHCP
+    # The clone inherits the source's MACs which won't match DHCP
     # reservations. Look up the correct MACs from VM_CLONE_MACS[clone_name].
-    # For each NIC we auto-detect its current VMware network (port group)
-    # so we don't accidentally move it to a different network.
+    # The port group for each NIC is auto-detected from the clone.
     local mac_entry="${VM_CLONE_MACS[$clone_name]:-}"
     if [ -n "$mac_entry" ]; then
         local -a macs=($mac_entry)
@@ -187,7 +210,7 @@ clone_vm() {
             local device="ethernet-${i}"
             local mac="${macs[$i]}"
 
-            # Auto-detect the NIC's current network from the cloned VM
+            # Auto-detect the NIC's port group (works with dvSwitch)
             local nic_net
             nic_net=$(_get_nic_network "$clone_name" "$device")
             if [ -z "$nic_net" ]; then
