@@ -90,11 +90,11 @@ fi
 # Fetch catalog using oc-mirror
 catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
 aba_debug "catalog_url=$catalog_url"
-aba_info "Running: oc-mirror list operators --catalog $catalog_url"
+aba_info "Running: oc-mirror --v1 list operators --catalog $catalog_url"
 
 # awk '/^NAME/{flag=1; next} flag'  => only used to skip over any unwanted header message
 aba_debug "Executing oc-mirror list operators"
-oc-mirror list operators --catalog "$catalog_url" | awk '/^NAME/{flag=1; next} flag'  > "$index_file"
+oc-mirror --v1 list operators --catalog "$catalog_url" | awk '/^NAME/{flag=1; next} flag'  > "$index_file"
 ret=$?
 aba_debug "oc-mirror exit code: $ret"
 
