@@ -10,9 +10,6 @@
 _E2E_LIB_DIR_SU="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source other libs if not already loaded
-if ! type gen_aba_conf &>/dev/null 2>&1; then
-    source "$_E2E_LIB_DIR_SU/config-helpers.sh"
-fi
 if ! type remote_exec &>/dev/null 2>&1; then
     source "$_E2E_LIB_DIR_SU/remote.sh"
 fi
@@ -26,11 +23,9 @@ fi
 # preamble that appeared at the top of every test[1-5]-*.sh:
 #   - Remove RPMs (so aba tests auto-install)
 #   - Reset aba state
-#   - Generate aba.conf with test parameters
-#   - Copy vmware.conf
 #   - Clean podman images and caches
 #
-# Options: same as gen_aba_conf (--channel, --version, --platform, --op-sets, --ops)
+# NOTE: Does NOT generate aba.conf or vmware.conf -- use the aba CLI for that.
 #
 setup_aba_from_scratch() {
     local aba_root
@@ -44,94 +39,67 @@ setup_aba_from_scratch() {
         "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y 2>/dev/null || true"
 
     # Clean podman images
-    e2e_run "Clean podman images" \
+    e2e_run -q "Clean podman images" \
         "podman system prune --all --force 2>/dev/null; podman rmi --all 2>/dev/null; sudo rm -rf ~/.local/share/containers/storage; true"
 
     # Remove oc-mirror caches
-    e2e_run "Remove oc-mirror caches" \
+    e2e_run -q "Remove oc-mirror caches" \
         "rm -rf \$(find ~/ -type d -name .oc-mirror 2>/dev/null); true"
 
     # Reset aba
     e2e_run -i "Reset aba" \
         "cd $aba_root && make -C mirror reset yes=1 2>/dev/null; true"
 
-    # Generate aba.conf with test parameters
-    gen_aba_conf "$@"
-
-    # Copy vmware.conf
-    gen_vmware_conf
-
     echo "=== setup_aba_from_scratch complete ==="
 }
 
 # --- setup_bastion ----------------------------------------------------------
 #
-# Initialize an internal (air-gapped) bastion VM. This wraps the full
-# pool-lifecycle configure_internal_bastion flow:
-#   1. Power off all bastion VMs
-#   2. Revert to snapshot
-#   3. Power on
-#   4. Apply internal bastion configuration profile
+# Initialize an internal (air-gapped) bastion VM by cloning from template.
+# Clones the template, powers on, and applies configure_internal_bastion.
 #
-# Usage: setup_bastion HOSTNAME [VM_NAME] [SNAPSHOT] [TEST_USER]
+# Usage: setup_bastion CLONE_NAME [TEMPLATE] [TEST_USER]
 #
-# Example: setup_bastion disco1 bastion-internal-rhel9 aba-test steve
+# Example: setup_bastion disco1 bastion-internal-rhel9 steve
 #
 setup_bastion() {
-    local hostname="$1"
-    local vm_name="${2:-${VM_TEMPLATES[${INTERNAL_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
-    local snapshot="${3:-${VM_SNAPSHOT:-aba-test}}"
-    local test_user="${4:-${TEST_USER:-$VM_DEFAULT_USER}}"
+    local clone_name="$1"
+    local template="${2:-${VM_TEMPLATES[${INTERNAL_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
+    local test_user="${3:-${TEST_USER:-$VM_DEFAULT_USER}}"
 
-    echo "=== setup_bastion: $hostname (VM: $vm_name, snap: $snapshot) ==="
+    echo "=== setup_bastion: clone $template -> $clone_name ==="
 
     # Install govc if needed
     e2e_run "Install govc" "aba --dir cli ~/bin/govc"
 
-    # Power off all internal bastion VMs to avoid conflicts
-    for vm in $ALL_INTERNAL_VMS; do
-        power_off_vm "$vm"
-    done
-
-    # Revert to snapshot and power on
-    init_bastion_vm "$vm_name" "$snapshot"
+    # Clone from template (destroys old clone if present)
+    clone_vm "$template" "$clone_name"
 
     # Apply the internal bastion configuration profile
-    configure_internal_bastion "$hostname" "$VM_DEFAULT_USER" "$test_user"
+    configure_internal_bastion "$clone_name" "$VM_DEFAULT_USER" "$test_user"
 
-    echo "=== setup_bastion complete: $hostname ==="
+    echo "=== setup_bastion complete: $clone_name ==="
 }
 
 # --- setup_connected_bastion ------------------------------------------------
 #
-# Initialize a connected (internet-facing) bastion VM.
+# Initialize a connected (internet-facing) bastion VM by cloning from template.
 #
-# Usage: setup_connected_bastion HOSTNAME [VM_NAME] [SNAPSHOT]
+# Usage: setup_connected_bastion CLONE_NAME [TEMPLATE]
 #
 setup_connected_bastion() {
-    local hostname="$1"
-    local vm_name="${2:-$hostname}"
-    local snapshot="${3:-${VM_SNAPSHOT:-aba-test}}"
+    local clone_name="$1"
+    local template="${2:-${VM_TEMPLATES[${INTERNAL_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
 
-    echo "=== setup_connected_bastion: $hostname ==="
+    echo "=== setup_connected_bastion: clone $template -> $clone_name ==="
 
-    # Revert to snapshot and power on
-    init_bastion_vm "$vm_name" "$snapshot"
+    # Clone from template (destroys old clone if present)
+    clone_vm "$template" "$clone_name"
 
     # Apply connected bastion configuration profile
-    configure_connected_bastion "$hostname"
+    configure_connected_bastion "$clone_name"
 
-    echo "=== setup_connected_bastion complete: $hostname ==="
-}
-
-# --- setup_mirror_conf ------------------------------------------------------
-#
-# Create and customize mirror/mirror.conf after aba has created the mirror dir.
-#
-# Options: same as gen_mirror_conf (--reg-type, --reg-host, --reg-port)
-#
-setup_mirror_conf() {
-    gen_mirror_conf "$@"
+    echo "=== setup_connected_bastion complete: $clone_name ==="
 }
 
 # --- cleanup_all ------------------------------------------------------------
