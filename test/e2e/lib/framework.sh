@@ -695,7 +695,9 @@ e2e_setup() {
     fi
 
     # Source aba's own include files if available
-    [ -f "scripts/include_all.sh" ] && source scripts/include_all.sh 2>/dev/null || true
+    if [ -f "scripts/include_all.sh" ]; then
+        source scripts/include_all.sh no-trap 2>/dev/null || true
+    fi
 
     # Log the active parameter set
     _e2e_log "=== E2E Environment ==="
