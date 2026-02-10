@@ -5,6 +5,7 @@ cli/*-download
 compact*
 *.md.bak
 *.bak
+.backup/
 mirror/aba.conf
 mirror.conf
 mirror/.dnf-install.log

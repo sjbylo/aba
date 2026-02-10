@@ -1372,13 +1372,14 @@ run_once() {
 	local wait_timeout=""
 	local waiting_message=""
 	local quiet_wait=false
+	local skip_validation=false
 	local OPTIND=1
 
 	# Allow override for tests
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:eW:m:q" opt; do
+	while getopts "swi:cprGFt:eW:m:qS" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1393,6 +1394,7 @@ run_once() {
 			W) wait_timeout=$OPTARG ;;
 			m) waiting_message=$OPTARG ;;
 			q) quiet_wait=true ;;
+			S) skip_validation=true ;;
 			*) return 1 ;;
 		esac
 	done
@@ -1682,7 +1684,7 @@ run_once() {
 	# Tasks are idempotent - they check their artifacts and exit quickly if valid
 	# If artifacts missing (e.g. user deleted files), task recreates them automatically
 	# This prevents "file not found" errors from stale cached success states
-	if [[ $exit_code -eq 0 && ${#command[@]} -gt 0 ]]; then
+	if [[ $exit_code -eq 0 && ${#command[@]} -gt 0 && "$skip_validation" != true ]]; then
 		# Check if task is currently running (lock held)
 		exec 9>>"$lock_file"
 		if flock -n 9; then
@@ -2142,23 +2144,23 @@ check_internet_connectivity() {
 		need_check=true
 	fi
 	
-	# Start all three checks in parallel (lightweight curl HEAD requests, 30-sec TTL)
-	run_once -t 30 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
-	run_once -t 30 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
-	run_once -t 30 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
+	# Start all three checks in parallel (lightweight curl HEAD requests, 5-min TTL)
+	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
+	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
+	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
 	
 	# Now wait for all three and check results (quietly, no waiting messages)
 	FAILED_SITES=""
 	ERROR_DETAILS=""
 	
-	if ! run_once -w -q -i "${prefix}:check:api.openshift.com"; then
+	if ! run_once -w -q -S -i "${prefix}:check:api.openshift.com"; then
 		FAILED_SITES="api.openshift.com"
 		local err_msg=$(run_once -e -i "${prefix}:check:api.openshift.com" | head -1)
 		[[ -z "$err_msg" ]] && err_msg="Connection failed"
 		ERROR_DETAILS="api.openshift.com: $err_msg"
 	fi
 	
-	if ! run_once -w -q -i "${prefix}:check:mirror.openshift.com"; then
+	if ! run_once -w -q -S -i "${prefix}:check:mirror.openshift.com"; then
 		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
 		FAILED_SITES="${FAILED_SITES}mirror.openshift.com"
 		local err_msg=$(run_once -e -i "${prefix}:check:mirror.openshift.com" | head -1)
@@ -2167,7 +2169,7 @@ check_internet_connectivity() {
 		ERROR_DETAILS="${ERROR_DETAILS}mirror.openshift.com: $err_msg"
 	fi
 	
-	if ! run_once -w -q -i "${prefix}:check:registry.redhat.io"; then
+	if ! run_once -w -q -S -i "${prefix}:check:registry.redhat.io"; then
 		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
 		FAILED_SITES="${FAILED_SITES}registry.redhat.io"
 		local err_msg=$(run_once -e -i "${prefix}:check:registry.redhat.io" | head -1)
