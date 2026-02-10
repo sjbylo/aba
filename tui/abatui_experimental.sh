@@ -527,6 +527,88 @@ resume_from_conf() {
 	log "Final basket has ${#OP_BASKET[@]} operators after loading from op_sets"
 }
 
+# -----------------------------------------------------------------------------
+# Check if configuration is complete enough to skip wizard
+# Returns 0 if complete, 1 if wizard is needed
+# -----------------------------------------------------------------------------
+config_is_complete() {
+	# Must have channel, version, and a valid pull secret
+	[[ -n "${OCP_CHANNEL:-}" ]] || return 1
+	[[ -n "${OCP_VERSION:-}" ]] || return 1
+	[[ -f "$HOME/.pull-secret.json" ]] || return 1
+	validate_pull_secret "$HOME/.pull-secret.json" >/dev/null 2>&1 || return 1
+	# Must have a domain
+	[[ -n "${DOMAIN:-}" ]] || return 1
+	return 0
+}
+
+# -----------------------------------------------------------------------------
+# Show resume dialog if config is already complete
+# Sets STEP to "summary" (skip wizard) or "channel" (run wizard)
+# -----------------------------------------------------------------------------
+show_resume_dialog() {
+	log "Checking if config is complete for resume dialog"
+	
+	if ! config_is_complete; then
+		log "Config incomplete, running full wizard"
+		STEP="channel"
+		return
+	fi
+	
+	# Build summary display
+	local op_count=${#OP_BASKET[@]}
+	local platform_display
+	case "${PLATFORM:-}" in
+		bm) platform_display="Bare-metal" ;;
+		vsphere) platform_display="VMware vSphere" ;;
+		*) platform_display="${PLATFORM:-unknown}" ;;
+	esac
+	
+	local _dns_display="${DNS_SERVERS//,/ }"
+	local _ntp_display="${NTP_SERVERS//,/ }"
+	
+	dialog --colors --no-collapse --backtitle "$(ui_backtitle)" --title "Existing Configuration Found" \
+		--ok-label "Continue" \
+		--extra-button --extra-label "Reconfigure" \
+		--cancel-label "Exit" \
+		--msgbox "\
+Current configuration (from aba.conf):
+
+  Channel:      \Zb${OCP_CHANNEL}\Zn
+  Version:      \Zb${OCP_VERSION}\Zn
+  Platform:     \Zb${platform_display}\Zn
+  Domain:       \Zb${DOMAIN}\Zn
+
+  Network:      \Zb${MACHINE_NETWORK:-not set}\Zn
+  Default Gw:   \Zb${NEXT_HOP_ADDRESS:-not set}\Zn
+  DNS:          \Zb${_dns_display:-not set}\Zn
+  NTP:          \Zb${_ntp_display:-not set}\Zn
+
+  Operators:    \Zb${op_count} selected\Zn
+
+Press \ZbContinue\Zn to go to the action menu.
+Press \ZbReconfigure\Zn to run the setup wizard again." 0 0
+	local rc=$?
+	
+	case $rc in
+		0)
+			# Continue - skip to action menu
+			log "User chose to continue with existing config"
+			STEP="summary"
+			;;
+		3)
+			# Extra button - Reconfigure
+			log "User chose to reconfigure"
+			STEP="channel"
+			;;
+		1|255)
+			# Cancel/ESC - Exit
+			log "User chose to exit from resume dialog"
+			clear
+			exit 0
+			;;
+	esac
+}
 
 # -----------------------------------------------------------------------------
 # Step 1: Select OpenShift channel
@@ -2936,6 +3018,10 @@ summary_apply() {
 	
 	# Wait for oc-mirror to be installed (needed for isconf generation)
 	log "Ensuring oc-mirror is installed before generating ImageSet config"
+	# Show waiting dialog if oc-mirror is still downloading
+	if ! run_once -p -i "$TASK_OC_MIRROR"; then
+		dialog --backtitle "$(ui_backtitle)" --infobox "Installing oc-mirror...\n\nThis is needed before proceeding." 6 50
+	fi
 	# Let errors flow to logs, suppress stdout (informational messages only)
 	if ! run_once -w -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror >/dev/null; then
 		log "ERROR: Failed to install oc-mirror"
@@ -3111,18 +3197,23 @@ summary_apply() {
 		--ok-label "Select" \
 		--extra-button --extra-label "Back" \
 		--default-item "$default_item" \
-		--menu "Configuration saved to aba.conf. Choose what to do next:" 0 0 10 \
+		--menu "Configuration saved to aba.conf. Choose what to do next:" 0 0 0 \
+		"" "──── Review ─────────────────────────────" \
 		1 "View Generated ImageSet Config" \
+		"" " " \
 		"" "──── Air-Gapped (Fully Disconnected) ────" \
-		2 "Create Air-Gapped Bundle" \
+		2 "Create Air-Gapped Install Bundle" \
 		3 "Save Images to Local Archive" \
+		"" " " \
 		"" "──── Connected / Partially Connected ────" \
 		4 "Install & Sync to Local Registry" \
 		5 "Install & Sync to Remote Registry via SSH" \
-		"" "─────────────────────────────────────────" \
-		6 "Settings..." \
-		7 "Advanced Options..." \
-		8 "Exit" \
+		"" " " \
+		"" "──── Other ──────────────────────────────" \
+		6 "Rerun Wizard" \
+		7 "Settings..." \
+		8 "Advanced Options..." \
+		9 "Exit" \
 		2>"$TMP"
 		rc=$?
 		
@@ -3211,33 +3302,39 @@ summary_apply() {
 						continue
 					fi
 					;;
-				6)
-					# Settings sub-menu
-					_show_settings
-					default_item="6"
-					continue
-					;;
-				7)
-					# Advanced sub-menu
-					_show_advanced
-					if [[ "$ADVANCED_EXIT" == "0" ]]; then
-						return 0
-					fi
-					default_item="7"
-					continue
-					;;
-				8)
-					# Exit
-					log "User chose to exit"
-					clear
-					echo "Configuration saved to: $ABA_ROOT/aba.conf"
-					if [[ -n "$custom_set_name" ]]; then
-						echo "Custom operator set: templates/operator-set-${custom_set_name}"
-					fi
-					echo ""
-					echo "Run 'aba --help' to see available commands"
+			6)
+				# Rerun Wizard
+				log "User chose to rerun wizard"
+				RERUN_WIZARD=true
+				return 0
+				;;
+			7)
+				# Settings sub-menu
+				_show_settings
+				default_item="7"
+				continue
+				;;
+			8)
+				# Advanced sub-menu
+				_show_advanced
+				if [[ "$ADVANCED_EXIT" == "0" ]]; then
 					return 0
-					;;
+				fi
+				default_item="8"
+				continue
+				;;
+			9)
+				# Exit
+				log "User chose to exit"
+				clear
+				echo "Configuration saved to: $ABA_ROOT/aba.conf"
+				if [[ -n "$custom_set_name" ]]; then
+					echo "Custom operator set: templates/operator-set-${custom_set_name}"
+				fi
+				echo ""
+				echo "Run 'aba --help' to see available commands"
+				return 0
+				;;
 			esac
 				;;
 			1)
@@ -3263,7 +3360,7 @@ VIEW:
 
 AIR-GAPPED (Fully Disconnected):
   For environments with no internet access.
-• Create Air-Gapped Bundle - Package images, binaries & configs
+• Create Air-Gapped Install Bundle - Package images, binaries & configs
                               Transfer this bundle to the air-gapped site
 • Save Images to Archive - Save images to aba/mirror/save/
 
@@ -3271,6 +3368,9 @@ CONNECTED / PARTIALLY CONNECTED:
   For environments with direct or proxied internet.
 • Local Registry  - Install a registry here and sync images
 • Remote Registry - Install a registry on a remote host via SSH
+
+RERUN WIZARD:
+• Go back to channel/version/operator selection to change config
 
 SETTINGS (sub-menu):
 • Auto-answer (-y) - Skip confirmation prompts
@@ -3348,7 +3448,8 @@ log "  OP_BASKET count: ${#OP_BASKET[@]}"
 log "  OP_SET_ADDED count: ${#OP_SET_ADDED[@]}"
 log "Starting wizard loop"
 
-STEP="channel"
+# Check if we can skip wizard (config already complete)
+show_resume_dialog
 while :; do
 	log "Current step: $STEP"
 	case "$STEP" in
@@ -3426,12 +3527,18 @@ while :; do
 			[[ "$DIALOG_RC" == "next" ]] && STEP="summary"
 			[[ "$DIALOG_RC" == "back" ]] && STEP="platform"
 			;;
-		summary)
-			if summary_apply; then
-				break
+	summary)
+		RERUN_WIZARD=false
+		if summary_apply; then
+			if [[ "$RERUN_WIZARD" == "true" ]]; then
+				log "Rerunning wizard from channel selection"
+				STEP="channel"
 			else
-				STEP="operators"
+				break
 			fi
+		else
+			STEP="operators"
+		fi
 			;;
 	esac
 done
