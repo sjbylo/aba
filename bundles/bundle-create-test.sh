@@ -105,8 +105,11 @@ if [ -d $WORK_DIR/test-install/aba ]; then
 	(
 		cd $WORK_DIR/test-install/aba
 		./install  # install aba
-		#aba -d mirror uninstall -y
-		aba -d mirror uninstall-docker-registry -y
+
+		# Use one of the following:
+		aba -d mirror uninstall -y
+		#aba -d mirror uninstall-docker-registry -y
+
 		sudo rm -rf ~/quay-install
 		sudo rm -rf ~/docker-reg
 	)
@@ -345,9 +348,9 @@ ls -lta mirror
 echo -n "Pausing: "
 read -t 60 yn || true
 
-#rm -rf ~/.oc-mirror  # We need some storage back! # FIXME: The cache gets filled again!
+#rm -rf ~/.oc-mirror  # We need some storage back! # Now done in "go.sh"
 #aba -d mirror load --retry 2 -H $TEST_HOST -k \~/.ssh/id_rsa
-aba -d mirror -H $TEST_HOST install-docker-registry   # Use this instead of Quay due to quay issues
+#aba -d mirror -H $TEST_HOST install-docker-registry   # Use this instead of Quay due to quay issues
 aba -d mirror load --retry 2 -H $TEST_HOST
 
 # Be sure all CLI files can install and are executable
@@ -532,13 +535,14 @@ echo_step Remove Quay ...
 cd $WORK_DIR/test-install/aba
 ./install  # install aba
 aba -A
-#aba -d mirror uninstall -y
-aba -d mirror uninstall-docker-registry -y
+# Use one of the following two:
+aba -d mirror uninstall -y
+#aba -d mirror uninstall-docker-registry -y
 sudo rm -rf ~/quay-install
 sudo rm -rf ~/docker-reg
 
 . ~steve/.proxy-set.sh  # Go online!
-# Test connectivity is not working
+# Test connectivity is working
 echo_step Test internet connection with curl google.com ...
 curl -sfkIL google.com >/dev/null  # Must work
 
