@@ -249,7 +249,7 @@ echo_step Save images to disk ...
 ##### TRY WITHOUT rm -rf ~/.oc-mirror  # We don't want to include all the older images?!?!
 sed -i "s/--since 2025-01-01//g" scripts/reg-save.sh  # Experimental: keeping the cache for re-use to speed things up
 aba -d cli download-all  # Just to be sure we have everything
-aba -d mirror save -r 8
+aba -d mirror save -r 2
 
 # Need to explicitly fetch govc since we are in 'bm' mode
 aba -d cli govc
@@ -346,9 +346,9 @@ echo -n "Pausing: "
 read -t 60 yn || true
 
 #rm -rf ~/.oc-mirror  # We need some storage back! # FIXME: The cache gets filled again!
-#aba -d mirror load --retry 7 -H $TEST_HOST -k \~/.ssh/id_rsa
+#aba -d mirror load --retry 2 -H $TEST_HOST -k \~/.ssh/id_rsa
 aba -d mirror -H $TEST_HOST install-docker-registry   # Use this instead of Quay due to quay issues
-aba -d mirror load --retry 7 -H $TEST_HOST
+aba -d mirror load --retry 2 -H $TEST_HOST
 
 # Be sure all CLI files can install and are executable
 scripts/cli-install-all.sh --wait
