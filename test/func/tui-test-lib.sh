@@ -76,7 +76,7 @@ start_tui() {
 	fi
 
 	log_info "Starting TUI in tmux session: $SESSION"
-	tmux new-session -d -s "$SESSION" -x 160 -y 50 "$cmd"
+	tmux new-session -d -s "$SESSION" -x 192 -y 60 "$cmd"
 }
 
 stop_tui() {
@@ -212,16 +212,20 @@ paste_pull_secret() {
 # ============================================================
 
 SCREENSHOT_DIR="${ABA_ROOT}/test/func/screenshots"
+SCREENSHOT_NUM=0
 
 # Save a "screenshot" of the current tmux pane to a file
 # Usage: screenshot "step-name"
-# Files are saved to test/func/screenshots/<test>-<step-name>.txt
+# Files are numbered chronologically: 01-welcome.txt, 02-channel.txt, etc.
 screenshot() {
 	local name="$1"
+	SCREENSHOT_NUM=$((SCREENSHOT_NUM + 1))
+	local num
+	num=$(printf "%02d" "$SCREENSHOT_NUM")
 	local test_name
 	test_name=$(basename "${BASH_SOURCE[1]}" .sh)
 	mkdir -p "$SCREENSHOT_DIR"
-	local file="${SCREENSHOT_DIR}/${test_name}-${name}.txt"
+	local file="${SCREENSHOT_DIR}/${test_name}-${num}-${name}.txt"
 	capture > "$file"
 	log_info "Screenshot saved: $file"
 }

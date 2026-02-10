@@ -32,7 +32,15 @@ start_tui
 # ============================================================
 
 log_info "Test 0: Welcome dialog should appear"
-dismiss_welcome
+if wait_for "OpenShift Installer" 15; then
+	log_pass "Welcome dialog appeared"
+	screenshot "welcome"
+else
+	log_fail "Welcome dialog did not appear"
+	exit 1
+fi
+send Enter
+sleep 2
 
 # ============================================================
 # Test 1: Resume dialog appears (config already exists)
@@ -92,6 +100,7 @@ sleep 1
 
 if wait_for "Settings" 5; then
 	log_pass "Settings dialog appeared"
+	screenshot "settings"
 else
 	log_fail "Settings dialog did not appear"
 fi

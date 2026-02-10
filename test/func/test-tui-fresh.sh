@@ -62,7 +62,15 @@ start_tui
 # ============================================================
 
 log_info "Test 1: Welcome dialog"
-dismiss_welcome
+if wait_for "OpenShift Installer" 15; then
+	log_pass "Welcome dialog appeared"
+	screenshot "welcome"
+else
+	log_fail "Welcome dialog did not appear"
+	exit 1
+fi
+send Enter
+sleep 2
 
 # ============================================================
 # Test 2: Channel selection (fresh — no resume possible)
@@ -71,6 +79,7 @@ dismiss_welcome
 log_info "Test 2: Channel selection"
 if wait_for "OpenShift Channel" 20; then
 	log_pass "Channel dialog appeared (fresh start)"
+	screenshot "channel"
 else
 	log_fail "Channel dialog did not appear"
 	log_info "Screen dump:"
@@ -93,6 +102,7 @@ log_info "Test 3: Version selection (may take time — fetching from Red Hat)"
 # Might see "Fetching" or "Please wait" first
 if wait_for "OpenShift Version" 60; then
 	log_pass "Version dialog appeared"
+	screenshot "version"
 else
 	log_fail "Version dialog did not appear (timeout 60s)"
 	log_info "Screen:"
@@ -114,11 +124,13 @@ log_info "Test 4: Version confirmation"
 # Version verification might take time on fresh start
 if wait_for "Confirm Selection" 45; then
 	log_pass "Version confirmation appeared"
+	screenshot "version-confirm"
 else
 	if wait_for "Verifying" 5; then
 		log_info "Version verification in progress..."
 		if wait_for "Confirm Selection" 60; then
 			log_pass "Version confirmation appeared (after verification)"
+			screenshot "version-confirm"
 		else
 			log_fail "Version confirmation did not appear after verification"
 			exit 1
@@ -140,6 +152,7 @@ sleep 2
 log_info "Test 5: Pull secret instructions"
 if wait_for "Red Hat Pull Secret" 10; then
 	log_pass "Pull secret instructions appeared"
+	screenshot "pull-secret-instructions"
 else
 	log_fail "Pull secret instructions did not appear"
 	exit 1
@@ -156,6 +169,7 @@ sleep 1
 log_info "Test 6: Pull secret paste (editbox)"
 if wait_for "Paste JSON" 5; then
 	log_pass "Pull secret editbox appeared"
+	screenshot "pull-secret-editbox"
 else
 	log_fail "Pull secret editbox did not appear"
 	exit 1
@@ -191,6 +205,7 @@ fi
 # ============================================================
 
 log_info "Test 8: Platform & Network"
+screenshot "platform"
 assert_screen "Platform" "Platform & Network dialog present"
 assert_screen "Base Domain" "Shows Base Domain field"
 
@@ -206,12 +221,14 @@ log_info "Test 9: Operators"
 # On fresh start, might need to wait for catalog download
 if wait_for "Operators" 120; then
 	log_pass "Operators dialog appeared"
+	screenshot "operators"
 else
 	# Check if waiting for catalogs
 	if capture | grep -qi "catalog\|Downloading\|Installing"; then
 		log_info "Waiting for background downloads..."
 		if wait_for "Operators" 180; then
 			log_pass "Operators dialog appeared (after downloads)"
+			screenshot "operators"
 		else
 			log_fail "Operators dialog did not appear (timeout 180s)"
 			exit 1
@@ -233,6 +250,7 @@ sleep 1
 log_info "Test 10: Empty basket warning"
 if wait_for "No operators\|Empty Basket\|empty basket" 5; then
 	log_pass "Empty basket warning appeared"
+	screenshot "empty-basket"
 else
 	if capture | grep -qi "Choose Next Action"; then
 		log_pass "Skipped to action menu"
@@ -252,6 +270,7 @@ sleep 2
 log_info "Test 11: Action menu"
 if wait_for "Choose Next Action" 30; then
 	log_pass "Action menu appeared — full fresh wizard complete!"
+	screenshot "action-menu"
 else
 	log_fail "Action menu did not appear"
 	log_info "Screen:"
