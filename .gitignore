@@ -74,3 +74,4 @@ bundles/work
 .bundle
 test/e2e/LAB-NETWORK.md
 test/e2e/SESSION-NOTES.md
+test/func/screenshots/
