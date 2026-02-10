@@ -70,7 +70,15 @@ start_tui
 # ============================================================
 
 log_info "Test 1: Welcome dialog"
-dismiss_welcome
+if wait_for "OpenShift Installer" 15; then
+	log_pass "Welcome dialog appeared"
+	screenshot "welcome"
+else
+	log_fail "Welcome dialog did not appear"
+	exit 1
+fi
+send Enter
+sleep 2
 
 # ============================================================
 # Test 2: Channel selection (no resume — config incomplete)
@@ -122,12 +130,14 @@ sleep 2
 log_info "Test 4: Version confirmation"
 if wait_for "Confirm Selection" 10; then
 	log_pass "Version confirmation dialog appeared"
+	screenshot "version-confirm"
 else
 	# Might show "Verifying" first
 	if wait_for "Verifying" 5; then
 		log_info "Version verification in progress..."
 		if wait_for "Confirm Selection" 30; then
 			log_pass "Version confirmation dialog appeared (after verification)"
+			screenshot "version-confirm"
 		else
 			log_fail "Version confirmation did not appear after verification"
 			exit 1
@@ -152,6 +162,7 @@ sleep 2
 log_info "Test 5: Pull secret instructions"
 if wait_for "Red Hat Pull Secret" 10; then
 	log_pass "Pull secret instructions appeared"
+	screenshot "pull-secret-instructions"
 else
 	log_fail "Pull secret instructions did not appear"
 	exit 1
@@ -170,6 +181,7 @@ sleep 1
 log_info "Test 6: Pull secret paste"
 if wait_for "Paste JSON" 5; then
 	log_pass "Pull secret editbox appeared"
+	screenshot "pull-secret-editbox"
 else
 	log_fail "Pull secret editbox did not appear"
 	exit 1
@@ -244,6 +256,7 @@ sleep 1
 log_info "Test 10: Empty basket warning"
 if wait_for "No operators\|Empty Basket\|empty basket" 5; then
 	log_pass "Empty basket warning appeared"
+	screenshot "empty-basket"
 else
 	# Might have skipped to summary (if operators were pre-selected)
 	if capture | grep -qi "Choose Next Action"; then

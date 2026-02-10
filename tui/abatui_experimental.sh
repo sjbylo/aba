@@ -200,7 +200,7 @@ read -r TERM_ROWS TERM_COLS < <(stty size 2>/dev/null || echo "24 80")
 # TUI global state variables
 # -----------------------------------------------------------------------------
 # Retry count for transient failures (applies to save/sync/bundle)
-RETRY_COUNT="3"  # Values: "off", "3", "8"
+RETRY_COUNT="2"  # Values: "off", "2", "8"
 
 # Registry type selection
 ABA_REGISTRY_TYPE="Auto"  # Values: "Auto", "Quay", "Docker"
@@ -1745,54 +1745,43 @@ select_operators() {
 		dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalogs...\n\nThis may take a few minutes on first run." 6 55
 	fi
 	
-	# Wait for all 3 catalogs - returns immediately if already done
-	run_once -q -w -i "catalog:${version_short}:redhat-operator"
-	run_once -q -w -i "catalog:${version_short}:certified-operator"
-	run_once -q -w -i "catalog:${version_short}:community-operator"
+	# Ensure all 3 catalogs are running in parallel (no-op if already started)
+	download_all_catalogs "$version_short" 86400 >>"$LOG_FILE" 2>&1
 	
-	# Check exit codes to identify failures
-	local RUNNER_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
+	# Now wait for all 3 — they're already running in parallel
 	local failed_catalogs=()
 	
 	for catalog in redhat-operator certified-operator community-operator; do
-		local exit_file="$RUNNER_DIR/catalog:${version_short}:${catalog}/exit"
-		if [[ -f "$exit_file" ]]; then
-			local exit_code=$(cat "$exit_file" 2>/dev/null || echo "1")
-			if [[ "$exit_code" != "0" ]]; then
-				log "ERROR: Catalog download failed: $catalog (exit code: $exit_code)"
-				failed_catalogs+=("$catalog")
-			fi
-		else
-			log "ERROR: Catalog task missing exit file: $catalog"
+		if ! run_once -q -w -i "catalog:${version_short}:${catalog}"; then
+			log "ERROR: Catalog download failed: $catalog"
 			failed_catalogs+=("$catalog")
 		fi
 	done
 	
-	# If any catalogs failed, show error with actual details
+	# If any catalogs failed, show a user-friendly error
 	if [[ ${#failed_catalogs[@]} -gt 0 ]]; then
 		log "ERROR: ${#failed_catalogs[@]} catalog(s) failed: ${failed_catalogs[*]}"
 		
-		# Show error for the first failed catalog
+		# Get error details via run_once (not direct runner access)
 		local first_failed="${failed_catalogs[0]}"
-		local error_msg=$(run_once -e -i "catalog:${version_short}:${first_failed}" 2>/dev/null | head -5)
+		local error_msg
+		error_msg=$(run_once -e -i "catalog:${version_short}:${first_failed}" 2>/dev/null | head -5)
 		
 		if [[ -z "$error_msg" ]]; then
-			error_msg="No error details available. Check logs in ~/.aba/runner/"
+			error_msg="No details available."
 		fi
 		
 		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
-"\Z1ERROR: Failed to download required operator catalogs\Zn
+"\Z1ERROR: Failed to download operator catalogs\Zn
 
 Failed catalog(s): ${failed_catalogs[*]}
 
-Error details:
-─────────────────────────────────────────
 $error_msg
-─────────────────────────────────────────
 
-Cannot proceed without operator catalog indexes.
-
-Check full logs: ~/.aba/runner/catalog:${version_short}:${first_failed}/log" 0 0
+\ZbWhat to try:\Zn
+  1. Check your internet connection
+  2. Press OK and go back to retry
+  3. Run 'aba doctor' for diagnostics" 0 0
 		
 		DIALOG_RC="back"
 		return
@@ -3078,7 +3067,7 @@ summary_apply() {
 			local toggle_retry_display
 			case "$RETRY_COUNT" in
 				off) toggle_retry_display="Retry Count: \Z1OFF\Zn" ;;
-				3)   toggle_retry_display="Retry Count: \Z23\Zn" ;;
+				2)   toggle_retry_display="Retry Count: \Z22\Zn" ;;
 				8)   toggle_retry_display="Retry Count: \Z38\Zn" ;;
 			esac
 			
@@ -3115,8 +3104,8 @@ summary_apply() {
 					;;
 				3)
 					case "$RETRY_COUNT" in
-						off) RETRY_COUNT="3"; log "Retry count toggled to 3" ;;
-						3)   RETRY_COUNT="8"; log "Retry count toggled to 8" ;;
+						off) RETRY_COUNT="2"; log "Retry count toggled to 2" ;;
+						2)   RETRY_COUNT="8"; log "Retry count toggled to 8" ;;
 						8)   RETRY_COUNT="off"; log "Retry count toggled to OFF" ;;
 					esac
 					settings_default="3"
