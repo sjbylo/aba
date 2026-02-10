@@ -98,6 +98,7 @@ if [[ -z "${ABA_ROOT:-}" ]]; then
 	export ABA_ROOT
 fi
 
+
 # Auto-install required packages (dialog, jq, make, etc.) if missing
 "$ABA_ROOT/scripts/install-rpms.sh" external
 
@@ -175,6 +176,7 @@ log "ABA_ROOT: $ABA_ROOT"
 # Change to ABA_ROOT so all paths work correctly
 cd "$ABA_ROOT" || { log "ERROR: Cannot cd to ABA_ROOT"; exit 1; }
 log "Changed to ABA_ROOT"
+
 
 # shellcheck disable=SC1091
 source scripts/include_all.sh
@@ -672,9 +674,13 @@ select_ocp_version() {
 	# Only show wait dialog if actually waiting
 	if [[ $need_wait -eq 1 ]]; then
 		log "Version data not ready, showing wait dialog"
-		dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… fetching version data for channel '$OCP_CHANNEL'" 5 80
-		run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
-		run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+		dialog --backtitle "$(ui_backtitle)" --infobox "Fetching version data for channel '$OCP_CHANNEL'...\n\nPlease wait..." 6 55
+		# Start tasks in background (if not already running), then wait.
+		# Two-step start+wait avoids foreground mode which leaks stdout to terminal.
+		run_once    -i "ocp:${OCP_CHANNEL}:latest_version"          -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
+		run_once    -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+		run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version"
+		run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_previous"
 	else
 		log "Version data already available, no wait needed"
 	fi
@@ -741,11 +747,11 @@ What would you like to do?"
 				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_previous"
 				
 			# Show wait dialog and re-run the fetches
-			dialog --backtitle "$(ui_backtitle)" --infobox "Retrying... fetching version data for channel '$OCP_CHANNEL'" 5 80
+			dialog --backtitle "$(ui_backtitle)" --infobox "Retrying version fetch for channel '$OCP_CHANNEL'...\n\nPlease wait..." 6 55
 			run_once -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
 			run_once -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
-			run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version"
-			run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+			run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version"
+			run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_previous"
 				
 				DIALOG_RC="repeat"
 				return
@@ -896,8 +902,8 @@ The installer will validate the selected version."
 					log "Detected x.y format, resolving: $OCP_VERSION"
 					run_once -i "ocp:${OCP_CHANNEL}:${OCP_VERSION}:latest_z" -- \
 					bash -lc 'source ./scripts/include_all.sh; fetch_latest_z_version "'$OCP_CHANNEL'" "'$OCP_VERSION'"'
-				dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… resolving $OCP_VERSION to latest z-stream" 5 80
-				run_once -q -w -i "ocp:${OCP_CHANNEL}:${OCP_VERSION}:latest_z"
+				dialog --backtitle "$(ui_backtitle)" --infobox "Resolving $OCP_VERSION to latest z-stream...\n\nPlease wait..." 6 55
+				run_once -q -w -S -i "ocp:${OCP_CHANNEL}:${OCP_VERSION}:latest_z"
 				OCP_VERSION=$(fetch_latest_z_version "$OCP_CHANNEL" "$OCP_VERSION")
 					
 					if [[ -n "$OCP_VERSION" ]]; then
@@ -1139,7 +1145,7 @@ Location: ~/.pull-secret.json
 
 Your Red Hat pull secret is valid and ready to use.
 
-Press <Next> to continue or <Back> to return." 0 0
+Next: Configure platform and network." 0 0
 		rc=$?
 		
 		case "$rc" in
@@ -1162,6 +1168,7 @@ Press <Next> to continue or <Back> to return." 0 0
 	fi
 	
 	# Collect pull secret from user (simplified flow)
+	local _showed_instructions=0
 	while :; do
 		# Show error message if there was a validation issue
 		if [[ -n "$error_msg" ]]; then
@@ -1169,6 +1176,18 @@ Press <Next> to continue or <Back> to return." 0 0
 			dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Validation Error" \
 				--msgbox "$error_msg" 0 0 || true
 			error_msg=""  # Clear for next iteration
+		elif [[ $_showed_instructions -eq 0 ]]; then
+			# Show instructions on first visit (no error, no existing pull secret)
+			_showed_instructions=1
+			dialog --colors --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
+				--ok-label "Continue" \
+				--msgbox "Paste your Red Hat pull secret into the next screen.
+
+Get your pull secret from:
+  https://console.redhat.com/openshift/downloads#tool-pull-secret
+  (select \ZbTokens\Zn in the pull-down)
+
+Copy the entire JSON text and paste it into the editor." 0 0 || true
 		fi
 		
 		# Show editbox for paste - BLANK, large size
@@ -1190,8 +1209,9 @@ Press <Next> to continue or <Back> to return." 0 0
 		local empty_file=$(mktemp)
 		echo "" > "$empty_file"
 		
-		# Show editbox with empty file
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
+		# Show editbox - title tells user what to do
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret - Paste JSON below" \
+			--no-cancel \
 			--extra-button --extra-label "Back" \
 			--help-button --help-label "Clear" \
 			--ok-label "Next" \
@@ -1224,12 +1244,11 @@ Press <Next> to continue or <Back> to return." 0 0
 			if [[ -z "$pull_secret" || "$pull_secret" =~ ^[[:space:]]*$ ]]; then
 				error_msg="\Z1ERROR: Pull secret is empty\Zn
 
-Please paste your pull secret and press <Next>
+Please paste your pull secret and press <Next>.
 
 Get it from:
-  https://console.redhat.com/openshift/install/pull-secret
-
-Press <Help> for more information."
+  https://console.redhat.com/openshift/downloads#tool-pull-secret
+  (select 'Tokens' in the pull-down)"
 				log "User didn't paste anything, showing error"
 				continue
 			fi
@@ -1300,10 +1319,9 @@ This may mean:
 
 The pull secret does not contain 'registry.redhat.io'.
 
-Please ensure you copied the complete pull secret from:
-  https://console.redhat.com/openshift/install/pull-secret
-
-Press <Help> for more information."
+Please copy the complete pull secret from:
+  https://console.redhat.com/openshift/downloads#tool-pull-secret
+  (select 'Tokens' in the pull-down)"
 					continue
 				fi
 			else
@@ -1315,7 +1333,9 @@ The pasted content is not valid JSON.
 Please copy the ENTIRE pull secret from the Red Hat console.
 It should start with { and end with }
 
-Press <Help> for more information."
+Get it from:
+  https://console.redhat.com/openshift/downloads#tool-pull-secret
+  (select 'Tokens' in the pull-down)"
 			continue
 		fi
 			;;
@@ -1347,7 +1367,7 @@ select_platform_network() {
 	log "Entering select_platform_network"
 
 	# Track cursor position for menu navigation
-	local default_item="${1:-1}"  # Start at option 1 or use passed value
+	local default_item="${1:-2}"  # Start at option 2 (Base Domain) or use passed value
 
 	while :; do
 		# Use auto-sizing for better fit
@@ -1364,21 +1384,25 @@ select_platform_network() {
 		log "About to show platform menu dialog..."
 		log "TMP file: $TMP"
 		
-		# Use explicit arguments (no array expansion issues)
+		# Display multi-value fields with spaces for readability (stored with commas)
+		local _dns_display="${DNS_SERVERS:-(auto-detect)}"
+		local _ntp_display="${NTP_SERVERS:-(auto-detect)}"
+		[[ "$_dns_display" != "(auto-detect)" ]] && _dns_display="${_dns_display//,/ }"
+		[[ "$_ntp_display" != "(auto-detect)" ]] && _ntp_display="${_ntp_display//,/ }"
+
 		dialog --colors --backtitle "$(ui_backtitle)" --title "Platform & Network" \
 			--cancel-label "Back" \
 			--help-button \
 			--ok-label "Select" \
 			--extra-button --extra-label "Next" \
 			--default-item "$default_item" \
-			--menu "Configure platform and network:" 0 0 7 \
-			1 "\ZbAccept\Zn" \
-			2 "Platform: ${PLATFORM:-bm}" \
-			3 "Base Domain: ${DOMAIN:-example.com}" \
-			4 "Machine Network: ${MACHINE_NETWORK:-(auto-detect)}" \
-			5 "DNS Servers: ${DNS_SERVERS:-(auto-detect)}" \
-			6 "Default Route: ${NEXT_HOP_ADDRESS:-(auto-detect)}" \
-			7 "NTP Servers: ${NTP_SERVERS:-(auto-detect)}" \
+			--menu "Select an item to edit, then press Next to continue." 0 0 6 \
+			1 "Platform: ${PLATFORM:-bm}" \
+			2 "Base Domain: ${DOMAIN:-example.com}" \
+			3 "Machine Network: ${MACHINE_NETWORK:-(auto-detect)}" \
+			4 "DNS Servers: ${_dns_display}" \
+			5 "Default Route: ${NEXT_HOP_ADDRESS:-(auto-detect)}" \
+			6 "NTP Servers: ${_ntp_display}" \
 			2>"$TMP"
 		rc=$?
 		
@@ -1418,9 +1442,9 @@ select_platform_network() {
 • Platform: bm (bare-metal) or vmw (VMware)
 • Base Domain: DNS domain for cluster (e.g., example.com)
 • Machine Network: CIDR for cluster nodes (e.g., 10.0.0.0/24)
-• DNS Servers: Comma-separated IPs (e.g., 8.8.8.8,1.1.1.1)
+• DNS Servers: IPs separated by spaces (e.g., 8.8.8.8 1.1.1.1)
 • Default Route: Gateway IP for cluster network
-• NTP Servers: Time sync servers (IPs or hostnames)
+• NTP Servers: IPs or hostnames separated by spaces (e.g., pool.ntp.org 10.0.1.8)
 
 Leave blank to use auto-detected values." 0 0 || true
 				continue
@@ -1443,12 +1467,6 @@ Leave blank to use auto-detected values." 0 0 || true
 		log "Platform menu action selected: $action"
 		case "$action" in
 		1)
-			# Accept - move to next
-			DIALOG_RC="next"
-			log "User selected Accept, moving to next"
-			return
-			;;
-		2)
 			# Toggle platform between bm and vmw
 			log "Toggling platform"
 			case "${PLATFORM:-bm}" in
@@ -1463,7 +1481,7 @@ Leave blank to use auto-detected values." 0 0 || true
 			esac
 			default_item="$action"  # Keep cursor on Platform
 			;;
-			3)
+			2)
 				log "Showing domain inputbox"
 				while :; do
 					dialog --backtitle "$(ui_backtitle)" --inputbox "Base Domain (e.g., example.com):" 10 70 "$DOMAIN" 2>"$TMP" || { log "Domain input cancelled"; break; }
@@ -1481,7 +1499,7 @@ Leave blank to use auto-detected values." 0 0 || true
 				done
 				default_item="$action"  # Keep cursor on Base Domain
 				;;
-			4)
+			3)
 				log "Showing machine network inputbox"
 				while :; do
 					dialog --backtitle "$(ui_backtitle)" --inputbox "Machine Network CIDR (e.g., 10.0.0.0/24):" 10 70 "$MACHINE_NETWORK" 2>"$TMP" || { log "Machine network input cancelled"; break; }
@@ -1500,17 +1518,26 @@ Leave blank to use auto-detected values." 0 0 || true
 				done
 				default_item="$action"  # Keep cursor on Machine Network
 				;;
-			5)
+			4)
 				log "Showing DNS servers inputbox"
 				while :; do
-					dialog --backtitle "$(ui_backtitle)" --inputbox "DNS Servers (comma-separated IPs):" 10 70 "$DNS_SERVERS" 2>"$TMP" || { log "DNS input cancelled"; break; }
+					# Show space-separated in the input box for readability
+					local _dns_edit="${DNS_SERVERS//,/ }"
+					dialog --backtitle "$(ui_backtitle)" --inputbox "DNS Servers (space or comma-separated IPs):" 10 70 "$_dns_edit" 2>"$TMP" || { log "DNS input cancelled"; break; }
 					input=$(<"$TMP")
 					input=${input##[[:space:]]}
 					input=${input%%[[:space:]]}
 					
+					# Normalize: replace spaces/commas with single commas
+					if [[ -n "$input" ]]; then
+						input="${input//,/ }"          # commas -> spaces
+						input=$(echo "$input" | xargs) # collapse whitespace
+						input="${input// /,}"          # spaces -> commas
+					fi
+					
 					# Allow empty (auto-detect) or valid IP list
 					if [[ -n "$input" ]] && ! validate_ip_list "$input"; then
-						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid IP address format. Please enter comma-separated IPs (e.g., 8.8.8.8,1.1.1.1)" 0 0
+						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid IP address format. Please enter IPs separated by spaces or commas (e.g., 8.8.8.8 1.1.1.1)" 0 0
 						continue
 					fi
 					DNS_SERVERS="$input"
@@ -1519,7 +1546,7 @@ Leave blank to use auto-detected values." 0 0 || true
 				done
 				default_item="$action"  # Keep cursor on DNS Servers
 				;;
-			6)
+			5)
 				log "Showing default route inputbox"
 				while :; do
 					dialog --backtitle "$(ui_backtitle)" --inputbox "Default Route (gateway IP):" 10 70 "$NEXT_HOP_ADDRESS" 2>"$TMP" || { log "Default route input cancelled"; break; }
@@ -1538,17 +1565,26 @@ Leave blank to use auto-detected values." 0 0 || true
 				done
 				default_item="$action"  # Keep cursor on Default Route
 				;;
-			7)
+			6)
 				log "Showing NTP servers inputbox"
 				while :; do
-					dialog --backtitle "$(ui_backtitle)" --inputbox "NTP Servers (comma-separated IPs or hostnames):" 10 70 "$NTP_SERVERS" 2>"$TMP" || { log "NTP input cancelled"; break; }
+					# Show space-separated in the input box for readability
+					local _ntp_edit="${NTP_SERVERS//,/ }"
+					dialog --backtitle "$(ui_backtitle)" --inputbox "NTP Servers (space or comma-separated IPs or hostnames):" 10 70 "$_ntp_edit" 2>"$TMP" || { log "NTP input cancelled"; break; }
 					input=$(<"$TMP")
 					input=${input##[[:space:]]}
 					input=${input%%[[:space:]]}
 					
+					# Normalize: replace spaces/commas with single commas
+					if [[ -n "$input" ]]; then
+						input="${input//,/ }"          # commas -> spaces
+						input=$(echo "$input" | xargs) # collapse whitespace
+						input="${input// /,}"          # spaces -> commas
+					fi
+					
 					# Allow empty (auto-detect) or valid NTP server list
 					if [[ -n "$input" ]] && ! validate_ntp_servers "$input"; then
-						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid NTP server format. Please enter comma-separated IPs or hostnames (e.g., pool.ntp.org,time.google.com,192.168.1.1)" 0 0
+						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid NTP server format. Please enter IPs or hostnames separated by spaces or commas (e.g., pool.ntp.org time.google.com 192.168.1.1)" 0 0
 						continue
 					fi
 					NTP_SERVERS="$input"
@@ -1709,12 +1745,11 @@ Check full logs: ~/.aba/runner/catalog:${version_short}:${first_failed}/log" 0 0
 			--ok-label "Select" \
 			--extra-button --extra-label "Next" \
 			--default-item "$default_item" \
-			--menu "Select operator actions:" 0 0 5 \
+			--menu "Select operator actions:" 0 0 4 \
 			1 "Select Operator Sets" \
 			2 "Search Operator Names" \
 			3 "View/Edit Basket ($basket_count operators)" \
 			4 "Clear Basket" \
-			5 "\ZbAccept\Zn" \
 			2>"$TMP"
 		rc=$?
 		
@@ -1741,7 +1776,7 @@ Check full logs: ~/.aba/runner/catalog:${version_short}:${first_failed}/log" 0 0
 						--extra-button --extra-label "Back" \
 						--yes-label "Continue Anyway" \
 						--no-label "Add Operators" \
-						--yesno "No operators selected. Continue with empty basket?\n\nYou can add operators later as Day-2 operations." 0 0
+						--yesno "No operators selected. Continue with empty basket?" 0 0
 					empty_rc=$?
 					
 					case "$empty_rc" in
@@ -1844,8 +1879,10 @@ image synchronization process." 0 0 || true
 
 				# Calculate size based on number of operator sets (items has 3 elements per set)
 				local num_sets=$((${#items[@]} / 3))
+				local list_h=$((num_sets < 18 ? num_sets + 2 : 18))
 				dialog --clear --backtitle "$(ui_backtitle)" --title "Operator Sets" \
-					--checklist "Select operator sets to add to basket:" 0 0 15 \
+					--ok-label "Add to Basket" \
+					--checklist "Use spacebar to toggle, then press Add to Basket:" 0 70 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
 				newsel=$(<"$TMP")
@@ -1990,8 +2027,10 @@ image synchronization process." 0 0 || true
 
 			# Calculate size based on number of matching operators
 			local num_ops=$((${#items[@]} / 3))
+			local list_h=$((num_ops < 18 ? num_ops + 2 : 18))
 			dialog --clear --backtitle "$(ui_backtitle)" --title "Select Operators" \
-				--checklist "Toggle operators (already-selected are ON):" 0 0 18 \
+				--ok-label "Add to Basket" \
+				--checklist "Use spacebar to toggle, then press Add to Basket:" 0 60 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
 			newsel=$(<"$TMP")
@@ -2091,9 +2130,11 @@ image synchronization process." 0 0 || true
 			log "Displaying ${#items[@]} items in basket view"
 			# Calculate size based on number of operators in basket
 			local num_ops=$((${#items[@]} / 3))
+			local list_h=$((num_ops < 18 ? num_ops + 2 : 18))
 			dialog --clear --backtitle "$(ui_backtitle)" --title "Basket (${#OP_BASKET[@]} operators)" \
-				--checklist "Toggle operators (uncheck to remove from basket):" \
-				0 0 18 \
+				--ok-label "Apply" \
+				--checklist "Uncheck to remove. Use spacebar to toggle:" \
+				0 60 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
 				newsel=$(<"$TMP")
@@ -2122,17 +2163,12 @@ image synchronization process." 0 0 || true
 				;;
 
 			4)
-			dialog --backtitle "$(ui_backtitle)" --yesno "Clear operator basket?" 10 55 && {
+			dialog --backtitle "$(ui_backtitle)" --yesno "Clear operator basket?" 0 0 && {
 				log "Clearing operator basket"
 				OP_BASKET=()
 				OP_SET_ADDED=()
 			}
 				default_item="$action"  # Keep cursor on Clear Basket
-				;;
-
-			5)
-				DIALOG_RC="next"
-				return
 				;;
 		esac
 	done
@@ -3297,8 +3333,6 @@ run_once -i "ocp:fast:latest_version_previous"      -- bash -lc 'source ./script
 
 run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate' >/dev/null
 run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate' >/dev/null
-
-log "Background OCP version fetches started"
 
 # Download oc-mirror early (needed for catalog downloads later)
 log "Starting oc-mirror download in background"
