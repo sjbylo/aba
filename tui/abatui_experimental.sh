@@ -337,18 +337,15 @@ ui_header() {
 "\
   __   ____   __
  / _\ (  _ \ / _\     Aba v${aba_version}
-/    \ ) _ (/    \    Install & configure 
+/    \ ) _ (/    \    Install & configure
 \_/\_/(____/\_/\_/    air-gapped OpenShift quickly!
 
 Follow the setup wizard or see the README.md file for more.
 Get help: https://github.com/sjbylo/aba/discussions
 
-IMPORTANT: You must have Internet access before you continue!
+Note: Internet access is required.
 
-Press <Continue> to start configuration.
-Press <Help> for more information.
-Press <Tab> and <Cursor keys> to navigate.
-Press <ESC> to quit abatui.
+Navigate with <Tab> and arrow keys. Press <ESC> to quit.
 " 0 0
 		rc=$?
 		
@@ -366,21 +363,16 @@ Press <ESC> to quit abatui.
 				dialog --backtitle "$(ui_backtitle)" --title "ABA Help" --msgbox \
 "ABA (Agent-Based Automation) helps install OpenShift in disconnected environments.
 
-The ABA TUI helps you with the following:
-  1. Create Agent-based ImageSet configuration YAML
-  2. Create a custom ABA install bundle for air-gapped installations (aba bundle)
-  3. Download OpenShift images from the Internet to disk (aba -d mirror save)
-  4. Install a mirror registry on the local or a remote host (aba -d mirror install)
-  5. Load and push images to a mirror registry (aba -d mirror load/sync)
+The wizard guides you through:
+  1. OpenShift channel & version selection
+  2. Red Hat pull secret validation
+  3. Platform configuration (bare-metal/VMware)
+  4. Network settings (domain, IPs, DNS, NTP)
+  5. Operator selection (highly recommended!)
+  6. Choose a deployment path:
 
-This wizard guides you through:
-  1. OpenShift channel selection (stable/fast/candidate)
-  2. OpenShift version selection
-  3. Red Hat pull secret validation
-  4. Platform configuration (bare-metal/VMware)
-  5. Network settings (domain, IPs, DNS, NTP)
-  6. Operator selection (optional)
-  7. ABA command selection (bundle, mirror, sync, save, etc.)
+     Air-Gapped:  Create a bundle or save images to transfer offline
+     Connected:   Install a local or remote mirror registry and sync
 
 Configuration is saved to:
   $ABA_ROOT/aba.conf
@@ -928,7 +920,7 @@ Try:
 					# x.y.z format - validate using Cincinnati graph (cached)
 					local minor="${OCP_VERSION%.*}"  # 4.18.10 → 4.18
 					log "Detected x.y.z format, validating: $OCP_VERSION (minor: $minor)"
-					dialog --backtitle "$(ui_backtitle)" --infobox "Verifying version $OCP_VERSION exists..." 5 80
+					dialog --backtitle "$(ui_backtitle)" --infobox "Verifying $OCP_VERSION in $OCP_CHANNEL channel..." 5 80
 					
 					# Fetch all versions for this channel-minor (may fail if minor doesn't exist)
 					local all_versions
@@ -1261,8 +1253,8 @@ Get it from:
 						chmod 600 "$pull_secret_file"
 						log "Pull secret saved successfully to $pull_secret_file"
 						
-				# Validate pull secret by testing authentication
-				dialog --backtitle "$(ui_backtitle)" --infobox "Validating pull secret...\n\nTesting authentication with registry.redhat.io\n\nPlease wait..." 7 60
+			# Validate pull secret by testing authentication
+			dialog --backtitle "$(ui_backtitle)" --infobox "Validating pull secret...\n\nTesting authentication with registry.redhat.io" 6 60
 				
 				# Capture only stderr (errors), discard stdout (success messages)
 				local validation_error
@@ -1270,10 +1262,10 @@ Get it from:
 				local validation_rc=$?
 				
 				if [[ $validation_rc -eq 0 ]]; then
-				log "Pull secret validation successful"
-				# Show success message briefly before proceeding
-				dialog --colors --backtitle "$(ui_backtitle)" --infobox "\Z2Pull secret validated successfully!\Zn\n\nAuthentication with registry.redhat.io succeeded.\n\nProceeding..." 7 60
-				sleep 1
+			log "Pull secret validation successful"
+			# Show success message briefly before proceeding
+			dialog --colors --backtitle "$(ui_backtitle)" --infobox "\Z2Pull secret validated!\Zn\n\nAuthentication successful." 5 60
+			sleep 1
 					DIALOG_RC="next"
 					return
 				else
@@ -1668,7 +1660,7 @@ select_operators() {
 	# If catalogs are still downloading, show a waiting dialog
 	if [[ "$need_wait" == "true" ]]; then
 		log "Catalogs still downloading, showing wait dialog..."
-		dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for operator catalog indexes...\n\nPlease wait..." 6 50
+		dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalogs...\n\nThis may take a few minutes on first run." 6 55
 	fi
 	
 	# Wait for all 3 catalogs - returns immediately if already done
@@ -2185,7 +2177,7 @@ handle_action_view_isconf() {
 	# Wait for background isconf generation to complete AND file to exist
 	if ! run_once -p -i "tui:isconf:generate"; then
 	log "Waiting for ImageSet config generation to complete"
-	dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for ImageSet configuration...\n\nPlease wait..." 6 50
+	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nThis may take a moment." 6 50
 	
 	if ! run_once -q -w -i "tui:isconf:generate"; then
 			log "ERROR: ImageSet config generation failed"
@@ -2743,34 +2735,27 @@ confirm_and_execute() {
 					;;
 			esac
 		else
-			# Failure - show output with error indicator and action buttons
-			dialog --colors --backtitle "$(ui_backtitle)" --title "\Z1Command Output (Failed - exit code: $exit_code)\Zn: $tui_cmd" \
-				--ok-label "Retry" \
-				--cancel-label "Back to Menu" \
-				--extra-button --extra-label "Exit TUI" \
-				--textbox "$output_file" 0 0
-			local choice=$?
-			
-			rm -f "$output_file"
-			
-			case $choice in
-				0)
-					# OK = Retry - loop back to confirmation
-					log "User chose to retry after failed command"
-					continue
-					;;
-				1|255)
-					# Cancel/ESC = Back to menu
-					log "User chose to return to menu after failed command"
-					return 1
-					;;
-				3)
-					# Extra button = Exit TUI
-					log "User chose to exit TUI after failed command"
-					clear
-					exit $exit_code
-					;;
-			esac
+		# Failure - show output with error indicator and action buttons
+		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z1Command Output (Failed - exit code: $exit_code)\Zn: $tui_cmd" \
+			--ok-label "Back to Menu" \
+			--extra-button --extra-label "Retry" \
+			--textbox "$output_file" 0 0
+		local choice=$?
+		
+		rm -f "$output_file"
+		
+		case $choice in
+			0|255)
+				# OK/ESC = Back to menu
+				log "User chose to return to menu after failed command"
+				return 1
+				;;
+			3)
+				# Extra button = Retry - loop back to confirmation
+				log "User chose to retry after failed command"
+				continue
+				;;
+		esac
 		fi
 				;;
 			2)
@@ -2982,43 +2967,143 @@ summary_apply() {
 	# Initialize registry type setting if not set
 	: "${ABA_REGISTRY_TYPE:=Auto}"
 	
-	# Track which item has focus (start at item 3 for first display)
-	local default_item="3"
+	# Track which item has focus (start at item 1 for first display)
+	local default_item="1"
+	
+	# --- Settings sub-dialog ---
+	_show_settings() {
+		local settings_default="1"
+		while :; do
+			# Determine toggle displays
+			local toggle_answer_display
+			if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
+				toggle_answer_display="Auto-answer: \Z2ON\Zn (-y)"
+			else
+				toggle_answer_display="Auto-answer: \Z1OFF\Zn"
+			fi
+			
+			local toggle_registry_display
+			case "$ABA_REGISTRY_TYPE" in
+				Auto)  toggle_registry_display="Registry Type: \Z6Auto\Zn" ;;
+				Quay)  toggle_registry_display="Registry Type: \Z2Quay\Zn" ;;
+				Docker) toggle_registry_display="Registry Type: \Z3Docker\Zn" ;;
+			esac
+			
+			local toggle_retry_display
+			case "$RETRY_COUNT" in
+				off) toggle_retry_display="Retry Count: \Z1OFF\Zn" ;;
+				3)   toggle_retry_display="Retry Count: \Z23\Zn" ;;
+				8)   toggle_retry_display="Retry Count: \Z38\Zn" ;;
+			esac
+			
+		dialog --colors --backtitle "$(ui_backtitle)" --title "Settings" \
+			--ok-label "Toggle" \
+			--cancel-label "Back" \
+			--default-item "$settings_default" \
+			--menu "Select a setting to toggle:" 0 0 3 \
+				1 "$toggle_answer_display" \
+				2 "$toggle_registry_display" \
+				3 "$toggle_retry_display" \
+				2>"$TMP"
+			local src=$?
+			
+			[[ $src -ne 0 ]] && return  # Done/Cancel
+			
+			local saction=$(<"$TMP")
+			case "$saction" in
+				1)
+					if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
+						ABA_AUTO_ANSWER="no"; log "Auto-answer toggled OFF"
+					else
+						ABA_AUTO_ANSWER="yes"; log "Auto-answer toggled ON"
+					fi
+					settings_default="1"
+					;;
+				2)
+					case "$ABA_REGISTRY_TYPE" in
+						Auto)   ABA_REGISTRY_TYPE="Quay"; log "Registry type toggled to Quay" ;;
+						Quay)   ABA_REGISTRY_TYPE="Docker"; log "Registry type toggled to Docker" ;;
+						Docker) ABA_REGISTRY_TYPE="Auto"; log "Registry type toggled to Auto" ;;
+					esac
+					settings_default="2"
+					;;
+				3)
+					case "$RETRY_COUNT" in
+						off) RETRY_COUNT="3"; log "Retry count toggled to 3" ;;
+						3)   RETRY_COUNT="8"; log "Retry count toggled to 8" ;;
+						8)   RETRY_COUNT="off"; log "Retry count toggled to OFF" ;;
+					esac
+					settings_default="3"
+					;;
+			esac
+		done
+	}
+	
+	# --- Advanced sub-dialog ---
+	_show_advanced() {
+		local adv_default="1"
+		while :; do
+			dialog --colors --backtitle "$(ui_backtitle)" --title "Advanced Options" \
+				--cancel-label "Back" \
+				--ok-label "Select" \
+				--default-item "$adv_default" \
+				--menu "Advanced actions:" 0 0 4 \
+				1 "Generate ImageSet Config & Exit" \
+				2 "Delete Registry (Quay)" \
+				3 "Delete Registry (Docker)" \
+				4 "Exit (run commands manually)" \
+				2>"$TMP"
+			local arc=$?
+			
+			[[ $arc -ne 0 ]] && return  # Back/Cancel
+			
+			local aaction=$(<"$TMP")
+			case "$aaction" in
+				1)
+					if handle_action_isconf; then
+						ADVANCED_EXIT=0; return
+					fi
+					adv_default="1"; continue
+					;;
+				2)
+					log "User chose to delete Quay registry"
+					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+						dialog --colors --title "Error" --msgbox \
+							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
+						adv_default="2"; continue
+					fi
+					if ! confirm_and_execute "aba -d mirror uninstall -y"; then
+						adv_default="2"; continue
+					fi
+					;;
+				3)
+					log "User chose to delete Docker registry"
+					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+						dialog --colors --title "Error" --msgbox \
+							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
+						adv_default="3"; continue
+					fi
+					if ! confirm_and_execute "aba -d mirror uninstall-docker-registry -y"; then
+						adv_default="3"; continue
+					fi
+					;;
+				4)
+					log "User chose to exit and run commands manually"
+					clear
+					echo "Configuration saved to: $ABA_ROOT/aba.conf"
+					if [[ -n "$custom_set_name" ]]; then
+						echo "Custom operator set: templates/operator-set-${custom_set_name}"
+					fi
+					echo ""
+					echo "Run 'aba --help' to see available commands"
+					ADVANCED_EXIT=0; return
+					;;
+			esac
+		done
+	}
 	
 	while :; do
-		# Determine toggle displays
-		local toggle_answer_display
-		if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
-			toggle_answer_display="Toggle Auto-answer: \Z2ON\Zn (-y)"
-		else
-			toggle_answer_display="Toggle Auto-answer: \Z1OFF\Zn"
-		fi
-		
-		local toggle_registry_display
-		case "$ABA_REGISTRY_TYPE" in
-			Auto)
-				toggle_registry_display="Toggle Registry Type: \Z6Auto\Zn"
-				;;
-			Quay)
-				toggle_registry_display="Toggle Registry Type: \Z2Quay\Zn"
-				;;
-			Docker)
-				toggle_registry_display="Toggle Registry Type: \Z3Docker\Zn"
-				;;
-		esac
-		
-		local toggle_retry_display
-		case "$RETRY_COUNT" in
-			off)
-				toggle_retry_display="Toggle Retry Count: \Z1OFF\Zn"
-				;;
-			3)
-				toggle_retry_display="Toggle Retry Count: \Z23\Zn"
-				;;
-			8)
-				toggle_retry_display="Toggle Retry Count: \Z38\Zn"
-				;;
-		esac
+		local ADVANCED_EXIT=""
 		
 		dialog --colors --backtitle "$(ui_backtitle)" --title "Choose Next Action" \
 		--cancel-label "Exit" \
@@ -3026,22 +3111,18 @@ summary_apply() {
 		--ok-label "Select" \
 		--extra-button --extra-label "Back" \
 		--default-item "$default_item" \
-		--menu "Configuration saved to aba.conf\n\nChoose what to do next:" 0 0 13 \
-		0 "$toggle_answer_display" \
-		1 "$toggle_registry_display" \
-		2 "$toggle_retry_display" \
-		3 "View Generated ImageSet Config" \
-		"" "━━━ Air-Gapped (Fully Disconnected) ━━━" \
-		4 "Create ABA Install Bundle (air-gapped)" \
-		5 "Save Images to Local Archive" \
-		"" "━━━ Connected/Partially Connected ━━━" \
-		6 "Install & Sync to Local Registry" \
-		7 "Install & Sync to Remote Registry via SSH" \
-		"" "━━━━━━━━━━━━━ Advanced ━━━━━━━━━━━━━" \
-		8 "Generate ImageSet Config & Exit" \
-		9 "Delete Registry (Quay)" \
-		10 "Delete Registry (Docker)" \
-		11 "Exit (run commands manually)" \
+		--menu "Configuration saved to aba.conf. Choose what to do next:" 0 0 10 \
+		1 "View Generated ImageSet Config" \
+		"" "──── Air-Gapped (Fully Disconnected) ────" \
+		2 "Create Air-Gapped Bundle" \
+		3 "Save Images to Local Archive" \
+		"" "──── Connected / Partially Connected ────" \
+		4 "Install & Sync to Local Registry" \
+		5 "Install & Sync to Remote Registry via SSH" \
+		"" "─────────────────────────────────────────" \
+		6 "Settings..." \
+		7 "Advanced Options..." \
+		8 "Exit" \
 		2>"$TMP"
 		rc=$?
 		
@@ -3057,97 +3138,40 @@ summary_apply() {
 					log "Separator selected, redisplaying menu"
 					continue
 					;;
-				0)
-					# Toggle auto-answer
-						if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
-							ABA_AUTO_ANSWER="no"
-							log "Auto-answer toggled OFF"
-						else
-							ABA_AUTO_ANSWER="yes"
-							log "Auto-answer toggled ON"
-						fi
-						# Keep focus on item 0
-						default_item="0"
-						continue
-						;;
-					1)
-						# Toggle registry type
-						case "$ABA_REGISTRY_TYPE" in
-							Auto)
-								ABA_REGISTRY_TYPE="Quay"
-								log "Registry type toggled to Quay"
-								;;
-							Quay)
-								ABA_REGISTRY_TYPE="Docker"
-								log "Registry type toggled to Docker"
-								;;
-							Docker)
-								ABA_REGISTRY_TYPE="Auto"
-								log "Registry type toggled to Auto"
-								;;
-						esac
-						# Keep focus on item 1
-						default_item="1"
-						continue
-						;;
-					2)
-						# Toggle retry count
-						case "$RETRY_COUNT" in
-							off)
-								RETRY_COUNT="3"
-								log "Retry count toggled to 3"
-								;;
-							3)
-								RETRY_COUNT="8"
-								log "Retry count toggled to 8"
-								;;
-							8)
-								RETRY_COUNT="off"
-								log "Retry count toggled to OFF"
-								;;
-						esac
-						# Keep focus on item 2
-						default_item="2"
-						continue
-						;;
-				3)
+				1)
 					# View ImageSet Config
 					handle_action_view_isconf
-					# Stay in menu after viewing, keep focus on item 3
-					default_item="3"
+					default_item="1"
 					continue
 					;;
-				4)
+				2)
 					# Create Bundle
 					if handle_action_bundle; then
 						return 0
 					else
-						# User cancelled, stay in menu, keep focus on item 4
-						default_item="4"
+						default_item="2"
 						continue
 					fi
 					;;
-				5)
+				3)
 					# Save Images
 					if handle_action_save; then
 						return 0
 					else
-						# User cancelled, stay in menu, keep focus on item 5
-						default_item="5"
+						default_item="3"
 						continue
 					fi
 					;;
-				6)
+				4)
 					# Local Registry (Auto/Quay/Docker based on setting)
 					case "$ABA_REGISTRY_TYPE" in
 						Auto)
-							# Auto-detect: Docker for ARM64, Quay otherwise
 							if [[ "$(uname -m)" == "aarch64" ]] || [[ "$(uname -m)" == "arm64" ]]; then
 								log "Auto-selected Docker for ARM64 architecture"
 								if handle_action_local_docker; then
 									return 0
 								else
-									default_item="6"
+									default_item="4"
 									continue
 								fi
 							else
@@ -3155,7 +3179,7 @@ summary_apply() {
 								if handle_action_local_quay; then
 									return 0
 								else
-									default_item="6"
+									default_item="4"
 									continue
 								fi
 							fi
@@ -3164,7 +3188,7 @@ summary_apply() {
 							if handle_action_local_quay; then
 								return 0
 							else
-								default_item="6"
+								default_item="4"
 								continue
 							fi
 							;;
@@ -3172,69 +3196,39 @@ summary_apply() {
 							if handle_action_local_docker; then
 								return 0
 							else
-								default_item="6"
+								default_item="4"
 								continue
 							fi
 							;;
 					esac
 					;;
-				7)
+				5)
 					# Remote Registry
 					if handle_action_remote_quay; then
 						return 0
 					else
-						# User cancelled, stay in menu, keep focus on item 7
-						default_item="7"
+						default_item="5"
 						continue
 					fi
+					;;
+				6)
+					# Settings sub-menu
+					_show_settings
+					default_item="6"
+					continue
+					;;
+				7)
+					# Advanced sub-menu
+					_show_advanced
+					if [[ "$ADVANCED_EXIT" == "0" ]]; then
+						return 0
+					fi
+					default_item="7"
+					continue
 					;;
 				8)
-					# Generate ISConf
-					if handle_action_isconf; then
-						return 0
-					else
-						# User cancelled, stay in menu, keep focus on item 8
-						default_item="8"
-						continue
-					fi
-					;;
-				9)
-					# Delete Registry (Quay)
-					log "User chose to delete Quay registry"
-					
-					# Check if mirror.conf exists
-					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-						dialog --colors --title "Error" --msgbox \
-							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 10 60
-						default_item="9"
-						continue
-					fi
-					
-					if ! confirm_and_execute "aba -d mirror uninstall -y"; then
-						default_item="9"
-						continue
-					fi
-					;;
-				10)
-					# Delete Registry (Docker)
-					log "User chose to delete Docker registry"
-					
-					# Check if mirror.conf exists
-					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-						dialog --colors --title "Error" --msgbox \
-							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 10 60
-						default_item="10"
-						continue
-					fi
-					
-					if ! confirm_and_execute "aba -d mirror uninstall-docker-registry -y"; then
-						default_item="10"
-						continue
-					fi
-					;;
-				11)
-					# Exit manually
-					log "User chose to exit and run commands manually"
+					# Exit
+					log "User chose to exit"
 					clear
 					echo "Configuration saved to: $ABA_ROOT/aba.conf"
 					if [[ -n "$custom_set_name" ]]; then
@@ -3262,34 +3256,32 @@ summary_apply() {
 			# Help
 			log "Help button pressed in action menu"
 			dialog --backtitle "$(ui_backtitle)" --msgbox \
-"Next Actions:
+"Choose Next Action - Help
 
-CONFIGURATION TOGGLES:
-• Auto-answer (-y) - Skip confirmation prompts
-• Registry Type - Switch between Quay/Docker registry
-• Retry Count - Number of oc-mirror retry attempts
-
-REVIEW:
-• View ImageSet Config - View generated YAML configuration
+VIEW:
+• View ImageSet Config - Preview the generated YAML for oc-mirror
 
 AIR-GAPPED (Fully Disconnected):
-• Bundle - Create complete install bundle (includes images, binaries, configs)
-           Transfer this bundle to air-gapped environment
-• Save - Save images to ImageSet archive file under aba/mirror/save
+  For environments with no internet access.
+• Create Air-Gapped Bundle - Package images, binaries & configs
+                              Transfer this bundle to the air-gapped site
+• Save Images to Archive - Save images to aba/mirror/save/
 
-CONNECTED/PARTIALLY CONNECTED:
-• Local Mirror - Install registry locally and sync images directly
-• Remote Mirror - Install registry on remote host via SSH and sync
+CONNECTED / PARTIALLY CONNECTED:
+  For environments with direct or proxied internet.
+• Local Registry  - Install a registry here and sync images
+• Remote Registry - Install a registry on a remote host via SSH
 
-ADVANCED:
-• ISConf - Generate ImageSet config YAML file only (no downloads)
-           For manual oc-mirror operations
-• Delete Registry (Quay) - Uninstall the Quay registry
-• Delete Registry (Docker) - Uninstall the Docker registry
-• Exit - Exit TUI to run 'aba' commands manually
+SETTINGS (sub-menu):
+• Auto-answer (-y) - Skip confirmation prompts
+• Registry Type    - Toggle between Auto / Quay / Docker
+• Retry Count      - oc-mirror retry attempts (off / 3 / 8)
 
-After selecting an action, you'll be prompted for any required
-inputs, then the corresponding ABA command will be executed.
+ADVANCED (sub-menu):
+• Generate ISConf & Exit  - Create YAML only (for manual oc-mirror)
+• Delete Registry (Quay)  - Uninstall Quay mirror registry
+• Delete Registry (Docker) - Uninstall Docker mirror registry
+• Exit (manual)           - Exit TUI to run 'aba' commands yourself
 
 Log file: $LOG_FILE" 0 0 || true
 				continue
@@ -3322,10 +3314,10 @@ log "=== STARTING TUI ==="
 # Check internet access first
 check_internet_access
 
-# Start background version fetches for fast and candidate channels
-# (stable:latest already fetched in check_internet_access)
-log "Starting background OCP version fetches for remaining channels"
+# Start background version fetches for ALL channels (latest + previous)
+log "Starting background OCP version fetches for all channels"
 # Let errors flow to logs (stderr), suppress stdout (version output)
+run_once -i "ocp:stable:latest_version"             -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version stable' >/dev/null
 run_once -i "ocp:stable:latest_version_previous"    -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable' >/dev/null
 
 run_once -i "ocp:fast:latest_version"               -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast' >/dev/null
@@ -3338,6 +3330,11 @@ run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./script
 log "Starting oc-mirror download in background"
 PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror
 log "oc-mirror download started"
+
+# Pre-fetch catalogs for stable:latest in background
+log "Starting background catalog pre-fetch"
+run_once -S -i "tui:prefetch:catalogs" -- "$ABA_ROOT/scripts/prefetch-catalogs.sh"
+log "Background catalog pre-fetch started"
 
 # Show header
 ui_header
