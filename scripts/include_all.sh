@@ -1520,12 +1520,15 @@ run_once() {
 
 	_start_task() {
 		local is_fg="$1"
+		local lock_held="${2:-false}"
 
-		# Acquire lock via FD 9; lock remains held while subshell keeps FD open
-		exec 9>>"$lock_file"
-		if ! flock -n 9; then
-			exec 9>&-
-			return 0
+		if [[ "$lock_held" != "true" ]]; then
+			# Acquire lock via FD 9; lock remains held while subshell keeps FD open
+			exec 9>>"$lock_file"
+			if ! flock -n 9; then
+				exec 9>&-
+				return 0
+			fi
 		fi
 
 		# Rotate non-empty logs before truncating (keep one previous copy for debugging)
@@ -1624,12 +1627,13 @@ run_once() {
 			exec 9>>"$lock_file"
 			if flock -n 9; then
 				# Lock is free => not running => implicitly start (requires command)
-				exec 9>&-
+				# Keep FD 9 open -- lock transfers to _start_task's subshell
 				if [[ ${#command[@]} -eq 0 ]]; then
 					echo "Error: Task not started and no command provided." >&2
+					exec 9>&-   # Release lock on error path
 					return 1
 				fi
-				_start_task "true"
+				_start_task "true" "true"
 				wait $!
 			else
 				# Running elsewhere => block until lock released
@@ -2090,6 +2094,10 @@ wait_all_cli_downloads() {
 
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
+	# Wait for oc-mirror download to complete before extracting
+	# (cli-download-all.sh starts downloads in background; extracting a
+	#  partially-downloaded tarball causes "gzip: unexpected end of file" errors)
+	run_once -q -w -i "cli:download:oc-mirror"
 	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
 }
 
