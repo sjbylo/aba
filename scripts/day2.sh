@@ -31,7 +31,7 @@ if [ "$int_connection" ]; then
 fi
 
 aba_info "Ensuring CLI binaries are installed"
-scripts/cli-install-all.sh --wait  # FIXME: should only be for oc?
+scripts/cli-install-all.sh --wait oc
 
 aba_info "Accessing the cluster ..."
 

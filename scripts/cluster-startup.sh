@@ -8,7 +8,7 @@ aba_debug "Starting: $0 $*"
 [ ! -d iso-agent-based ] && aba_abort "Cluster not installed!  Try running 'aba clean; aba' to install this cluster!"
 
 aba_info "Ensuring CLI binaries are installed"
-scripts/cli-install-all.sh --wait  # FIXME: should only be for oc?
+scripts/cli-install-all.sh --wait oc
 
 unset KUBECONFIG
 # Use the actual kubeconfig used after the cluster was installed, in case it was overwritten
