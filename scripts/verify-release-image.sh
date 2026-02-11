@@ -17,7 +17,7 @@ source <(normalize-mirror-conf)
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
-aba_info "Downloading CLI installation binaries"
+aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait  # FIXME: should only be for oc / openshift-install?
 
 out=$(openshift-install version)
