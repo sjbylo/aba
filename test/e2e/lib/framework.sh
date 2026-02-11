@@ -692,20 +692,9 @@ e2e_setup() {
     hash -r  # Forget cached command paths
 
     # Load config.env defaults (if it exists)
+    # Source it directly so declare -A and multi-line constructs work.
     if [ -f "$_E2E_DIR/config.env" ]; then
-        # Source config.env, but don't overwrite variables already set (by CLI or pool overrides)
-        set -a
-        while IFS='=' read -r key val; do
-            # Skip comments and empty lines
-            [[ "$key" =~ ^[[:space:]]*# ]] && continue
-            [[ -z "$key" ]] && continue
-            key=$(echo "$key" | xargs)  # trim whitespace
-            # Only set if not already defined
-            if [ -z "${!key+x}" ]; then
-                eval "export $key=$val"
-            fi
-        done < "$_E2E_DIR/config.env"
-        set +a
+        source "$_E2E_DIR/config.env"
     fi
 
     # Source aba's own include files if available
