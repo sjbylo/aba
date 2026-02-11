@@ -57,7 +57,7 @@ _print_colored() {
     local n_opt="$1"; shift
     local line="$*"
 
-    if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "$PLAIN_OUTPUT" ]; then
+    if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
         tput setaf "$color"
         echo -e $n_opt "$line"
         tput sgr0
@@ -109,7 +109,7 @@ color_demo() {
 }
 
 aba_info() {
-	[ ! "$INFO_ABA" ] && return 0
+	[ ! "${INFO_ABA:-}" ] && return 0
 
 	if [ "$1" = "-n" ]; then
 		shift
@@ -141,7 +141,7 @@ echo_warn() {
 aba_debug() {
     local newline=1
 
-    [ ! "$DEBUG_ABA" ] && return 0
+    [ ! "${DEBUG_ABA:-}" ] && return 0
 
     # Erase to col1 and return
     [ "$TERM" ] && { tput el1 && tput cr; } >&2
@@ -266,7 +266,7 @@ show_error() {
 
 # Set the trap to call the show_error function on ERR signal
 # If no first argument is provided, set a trap for errors
-[ -z "${1-}" ] && trap 'show_error' ERR && [ "$DEBUG_ABA" ] && echo Error trap set >&2
+[ -z "${1-}" ] && trap 'show_error' ERR && [ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
@@ -1675,6 +1675,8 @@ run_once() {
 
 	local exit_code
 	exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+	# Guard against empty exit_file (concurrent write in progress)
+	[[ -z "$exit_code" ]] && exit_code=1
 
 	# --- SELF-HEALING VALIDATION ---
 	# If no command provided but task previously succeeded, load saved command
@@ -1703,10 +1705,9 @@ run_once() {
 				cd "$saved_cwd" || aba_debug "Warning: Could not restore CWD to $saved_cwd"
 			fi
 			
-			# Clear exit file and run validation while holding lock
-			rm -f "$exit_file"
-			
 			# Run validation command directly (keep lock held to prevent races)
+			# NOTE: Do NOT delete exit_file before validation — concurrent readers
+			# at line 1676 would see it missing and get exit_code=1 (TOCTOU race).
 			# Validation runs synchronously while we hold the lock
 			# Rotate non-empty logs before validation (keep previous run for debugging)
 			[[ -s "$log_out_file" ]] && mv "$log_out_file" "${log_out_file}.1"
@@ -1714,7 +1715,9 @@ run_once() {
 			
 			"${command[@]}" >"$log_out_file" 2>"$log_err_file"
 			local validation_rc=$?
-			echo "$validation_rc" > "$exit_file"
+			# Atomic write: rename is atomic on same filesystem, avoids
+			# concurrent readers seeing a truncated (empty) file
+			echo "$validation_rc" > "${exit_file}.tmp" && mv -f "${exit_file}.tmp" "$exit_file"
 			exit_code="$validation_rc"
 			_log_history "VALIDATE rc=$validation_rc"
 			
