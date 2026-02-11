@@ -137,13 +137,12 @@ help: ## Help
 #openshift-client-linux-arm64-rhel8-4.18.9.tar.gz
 #openshift-client-linux-arm64-rhel9-4.18.9.tar.gz
 
-# This is the tarball that's needed for this local host OS
-loacl_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-$(rhel_ver)-$(ocp_version).tar.gz
-#full_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(loacl_oc_tar_file)
+# This is the tarball that matches this localhost's OS and arch.
+local_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-$(rhel_ver)-$(ocp_version).tar.gz
+#full_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(local_oc_tar_file)
 
-# Generic oc binary 
-#gen_oc_tar_file		:= openshift-client-$(os)-$(ocp_version).tar.gz
-#gen_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
+local_oc_mirror_tar	:= $(if $(filter rhel9,$(rhel_ver)),oc-mirror.rhel9.tar.gz,oc-mirror.tar.gz)
+
 
 rhel9_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-rhel9-$(ocp_version).tar.gz
 rhel9_oc_url      	:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
@@ -177,16 +176,16 @@ out-download:
 	echo oc oc-mirror openshift-install butane $(govc_bin)
 
 out-download-all:
-	echo oc oc-mirror openshift-install butane govc
+	echo oc:$(ocp_version) oc-mirror openshift-install:$(ocp_version) butane govc
 
 
 ########################################
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
 oc: ~/bin/oc  ## Install oc into ~/bin
-~/bin/oc: .init $(loacl_oc_tar_file)
-	file $(loacl_oc_tar_file) | grep -q "gzip compressed data"
-	@echo [ABA] Extracting $(loacl_oc_tar_file) to ~/bin/oc
-	tar -C ~/bin -xmzf $(loacl_oc_tar_file) oc kubectl || { echo [ABA] Extracting $(gen_oc_tar_file) instead to ~/bin/oc; tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl; } || { echo [ABA] Error: Invalid files: $(loacl_oc_tar_file) or $(gen_oc_tar_file); exit 1; }
+~/bin/oc: .init $(local_oc_tar_file)
+	file $(local_oc_tar_file) | grep -q "gzip compressed data"
+	@echo [ABA] Extracting $(local_oc_tar_file) to ~/bin/oc
+	tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || { echo [ABA] Error: Failed to extract $(local_oc_tar_file); exit 1; }
 	~/bin/oc --help >/dev/null 2>&1
 
 openshift_install_url := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)
@@ -234,9 +233,9 @@ $(openshift_install_file):  ## Download openshift-install tarball
 
 ########################################
 oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
-~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz
-	@echo $(os_ver) | grep -q "^9\." && echo [ABA] Extracting oc-mirror.rhel9.tar.gz to ~/bin/oc-mirror	|| echo [ABA] Extracting oc-mirror.tar.gz to ~/bin/oc-mirror
-	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror		|| tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
+~/bin/oc-mirror: .init $(local_oc_mirror_tar)
+	@echo [ABA] Extracting $(local_oc_mirror_tar) to ~/bin/oc-mirror
+	tar -C ~/bin -xmzf $(local_oc_mirror_tar) oc-mirror
 	chmod +x ~/bin/oc-mirror
 #	~/bin/oc-mirror --help >/tmp/.oc-mirror-exec.log 2>&1 || { echo [ABA] "Error: ~/bin/oc-mirror failed to execute"; cp -p ~/bin/oc-mirror /tmp; exit 1; }
 
@@ -310,6 +309,7 @@ clean: ## Clean up installed binaries
 reset: clean # Clean up everything. Only use if you know what you are doing!
 	@../scripts/cli-download-all.sh --reset
 	@rm -f *.tar.gz .init butane* #.*-download
+	@rm -f scripts
 #	bash -lc 'source ../scripts/include_all.sh; run_once -r -i "download_all_cli"'
 #	This should be just: run_once -r -i "cli:download" # to reset all downloads in cli dir
 
