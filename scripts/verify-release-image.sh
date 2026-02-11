@@ -12,7 +12,7 @@ verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
 aba_info "Ensuring CLI binaries are installed"
-scripts/cli-install-all.sh --wait  # FIXME: should only be for oc / openshift-install?
+scripts/cli-install-all.sh --wait oc openshift-install
 
 if [ ! -x ~/bin/openshift-install ]; then
 	aba_abort "The ~/bin/openshift-install CLI is missing!  Please run aba first."
