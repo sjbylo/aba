@@ -12,7 +12,7 @@
 # with a profile (configure_connected_bastion or configure_internal_bastion),
 # and destroys the clones when done.
 #
-# Clone naming: reg1/reg2/... (connected), disco1/disco2/... (internal)
+# Clone naming: con1/con2/... (connected), dis1/dis2/... (disconnected)
 # =============================================================================
 
 _E2E_LIB_DIR_PL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -161,13 +161,26 @@ _vm_dnf_update() {
 }
 
 # --- _vm_setup_network ------------------------------------------------------
-# Configure network: VLAN interface, MTU 9000, nmcli adjustments.
-# This is specifically for bastions that need the private VLAN network.
+# Configure network: VLAN interface, MTU, nmcli adjustments, hostname.
+# Auto-detects role from clone name: con* = connected, dis* = disconnected.
 #
-# The VLAN IP is looked up from VM_CLONE_VLAN_IPS[clone_name]. If not
-# found, falls back to 10.10.10.1/24.
+# Connected bastion (con#):
+#   ens192  = lab (DHCP, MTU 9000, never-default -- NOT the default route)
+#   ens224  = base for VLAN (disabled, MTU 9000)
+#   ens224.10 = VLAN to dis# (static IP, never-default)
+#   ens256  = internet (DHCP, IS the default route)
+#   hostname = con#
 #
-# Usage: _vm_setup_network HOST [USER] [CLONE_NAME]
+# Disconnected bastion (dis#):
+#   ens192  = lab (DHCP, MTU 9000, IS the default route)
+#   ens224  = base for VLAN (disabled, MTU 9000)
+#   ens224.10 = VLAN to con# (static IP, never-default)
+#   ens256  = disabled (disconnected host has no internet)
+#   hostname = dis#
+#
+# Reference configs:  registry2 (connected), registry (disconnected)
+#
+# Usage: _vm_setup_network HOST USER CLONE_NAME
 #
 _vm_setup_network() {
     local host="$1"
@@ -175,41 +188,150 @@ _vm_setup_network() {
     local clone_name="${3:-}"
     local vlan_ip="${VM_CLONE_VLAN_IPS[$clone_name]:-10.10.10.1/24}"
 
-    echo "  [vm] Configuring network (VLAN, MTU) on $host (VLAN IP: $vlan_ip) ..."
+    # Auto-detect role from clone name
+    local role="disconnected"
+    case "$clone_name" in con*) role="connected" ;; esac
+
+    echo "  [vm] Configuring network ($role) on $host (VLAN IP: $vlan_ip) ..."
+
+    if [ "$role" = "connected" ]; then
+        _vm_setup_network_connected "$host" "$user" "$clone_name" "$vlan_ip"
+    else
+        _vm_setup_network_disconnected "$host" "$user" "$clone_name" "$vlan_ip"
+    fi
+}
+
+# --- _vm_setup_network_connected -------------------------------------------
+# Configure a connected bastion (gateway). Default route via ens256 (internet).
+# Matches registry2 reference config.
+#
+_vm_setup_network_connected() {
+    local host="$1" user="$2" clone_name="$3" vlan_ip="$4"
 
     cat <<-NETEOF | ssh "${user}@${host}" -- sudo bash
 		set -ex
-		# Tidy up network interface names
+
+		# --- Rename default nmcli connections to match interface names ---
 		nmcli connection show
 		nmcli connection modify "Wired connection 1" connection.id ens224 2>/dev/null || true
-		nmcli connection modify ens192 ipv4.never-default yes 2>/dev/null || true
-		nmcli connection modify ens224 ipv4.never-default yes 2>/dev/null || true
-		nmcli connection modify ens192 ipv6.method disabled 2>/dev/null || true
-		nmcli connection modify ens224 ipv6.method disabled 2>/dev/null || true
+		nmcli connection modify "Wired connection 2" connection.id ens256 2>/dev/null || true
 
-		# Set MTU 9000 for faster data transfer
-		ip link set ens192 mtu 9000 2>/dev/null || true
-		ip link set ens224 mtu 9000 2>/dev/null || true
+		# --- ens192: lab network (NOT default route) ---
+		nmcli connection modify ens192 \
+		    ipv4.never-default yes \
+		    ipv6.method disabled \
+		    802-3-ethernet.mtu 9000
+		nmcli connection up ens192
 
-		# Create VLAN interface for private /24 network
-		nmcli connection modify ens224 ipv4.method disabled ipv6.method disabled
+		# --- ens256: internet (IS the default route) ---
+		nmcli connection modify ens256 \
+		    ipv4.never-default no \
+		    ipv6.method disabled
+		nmcli connection up ens256
+
+		# --- ens224: base for VLAN (no IP, just carrier) ---
+		nmcli connection modify ens224 \
+		    ipv4.method disabled \
+		    ipv4.never-default yes \
+		    ipv6.method disabled \
+		    802-3-ethernet.mtu 9000
 		nmcli connection up ens224
+
+		# --- ens224.10: VLAN to disconnected bastion ---
+		nmcli connection delete ens224.10 2>/dev/null || true
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
 		    id 10 ipv4.method manual ipv4.addresses $vlan_ip ipv4.never-default yes
 
-		ip a
+		# --- Hostname ---
+		hostnamectl set-hostname $clone_name
+
+		echo "=== Network configured (connected) ==="
+		ip -br addr
+		ip route
+	NETEOF
+}
+
+# --- _vm_setup_network_disconnected ----------------------------------------
+# Configure a disconnected bastion. Default route via con#'s VLAN IP so all
+# internet traffic is routed through the connected bastion's masquerade.
+# ens256 is disabled (disconnected host has no direct internet).
+#
+# Routing:
+#   default -> con#'s VLAN IP via ens224.10 (internet through masquerade)
+#   lab     -> ens192 (never-default, lab traffic only)
+#   VLAN    -> ens224.10 (direct link to con#)
+#
+_vm_setup_network_disconnected() {
+    local host="$1" user="$2" clone_name="$3" vlan_ip="$4"
+
+    # Derive the connected bastion's VLAN IP as the default gateway.
+    # dis1 -> con1, dis2 -> con2, etc.
+    local pool_num="${clone_name#dis}"
+    local con_name="con${pool_num}"
+    local gateway_ip="${VM_CLONE_VLAN_IPS[$con_name]%%/*}"
+
+    echo "  [vm] Default gateway for $clone_name: $gateway_ip ($con_name via VLAN)"
+
+    cat <<-NETEOF | ssh "${user}@${host}" -- sudo bash
+		set -ex
+
+		# --- Rename default nmcli connections to match interface names ---
+		nmcli connection show
+		nmcli connection modify "Wired connection 1" connection.id ens224 2>/dev/null || true
+		nmcli connection modify "Wired connection 2" connection.id ens256 2>/dev/null || true
+
+		# --- ens256: DISABLE (disconnected host has no direct internet) ---
+		nmcli connection modify ens256 \
+		    autoconnect no \
+		    ipv4.method disabled \
+		    ipv6.method disabled
+		nmcli connection down ens256 2>/dev/null || true
+		ip link set ens256 down
+
+		# --- ens192: lab network (NOT the default route) ---
+		nmcli connection modify ens192 \
+		    ipv4.never-default yes \
+		    ipv6.method disabled \
+		    802-3-ethernet.mtu 9000
+		nmcli connection up ens192
+
+		# --- ens224: base for VLAN (no IP, just carrier) ---
+		nmcli connection modify ens224 \
+		    ipv4.method disabled \
+		    ipv4.never-default yes \
+		    ipv6.method disabled \
+		    802-3-ethernet.mtu 9000
+		nmcli connection up ens224
+
+		# --- ens224.10: VLAN to connected bastion ---
+		# Gateway = con#'s VLAN IP -> all internet traffic goes via masquerade
+		nmcli connection delete ens224.10 2>/dev/null || true
+		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
+		    id 10 ipv4.method manual ipv4.addresses $vlan_ip \
+		    ipv4.gateway $gateway_ip
+
+		# --- Hostname ---
+		hostnamectl set-hostname $clone_name
+
+		echo "=== Network configured (disconnected) ==="
+		echo "Default gateway: $gateway_ip (via VLAN to $con_name)"
+		ip -br addr
 		ip route
 	NETEOF
 }
 
 # --- _vm_setup_firewall -----------------------------------------------------
-# Set up firewalld with NAT masquerade for the internal network.
+# Set up firewalld with NAT masquerade on a connected bastion.
+# Matches registry2 reference: zone-wide masquerade, ip_forward=1.
+# This allows the disconnected bastion to reach the internet via the VLAN.
+#
+# Usage: _vm_setup_firewall HOST [USER]
 #
 _vm_setup_firewall() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
 
-    echo "  [vm] Configuring firewall + NAT on $host ..."
+    echo "  [vm] Configuring firewall + NAT masquerade on $host ..."
 
     cat <<-FWEOF | ssh "${user}@${host}" -- sudo bash
 		set -ex
@@ -220,19 +342,19 @@ _vm_setup_firewall() {
 		# Enable firewalld
 		systemctl enable --now firewalld
 
-		# Enable IP forwarding
+		# Enable IP forwarding (persistent)
 		cat > /etc/sysctl.d/99-ipforward.conf <<-SYSEOF
 		net.ipv4.ip_forward = 1
 		SYSEOF
 		sysctl -p /etc/sysctl.d/99-ipforward.conf
 
-		# NAT masquerade for the internal 10.10.10.0/24 network
-		firewall-cmd --permanent --zone=public \
-		    --add-rich-rule='rule family="ipv4" source address="10.10.10.0/24" masquerade'
+		# Zone-wide masquerade (matches registry2 reference config)
+		firewall-cmd --permanent --zone=public --add-masquerade
 		firewall-cmd --reload
 
 		echo "=== FIREWALL CONFIG ==="
 		firewall-cmd --list-all --zone=public
+		echo "ip_forward=$(cat /proc/sys/net/ipv4/ip_forward)"
 	FWEOF
 }
 
@@ -382,6 +504,9 @@ _vm_install_aba() {
 
     echo "  [vm] Installing aba on ${user}@${host} ..."
 
+    # Ensure rsync is available on the remote host
+    ssh "${user}@${host}" -- "which rsync 2>/dev/null || sudo dnf install -y rsync"
+
     rsync -az --no-perms --exclude='.git' --exclude='cli/*.tar.gz' \
         "$aba_root/" "${user}@${host}:~/aba/"
 
@@ -394,19 +519,38 @@ _vm_install_aba() {
 
 # --- configure_connected_bastion --------------------------------------------
 # Configure a VM as an internet-connected registry host (bastion).
-# Lighter setup: SSH keys, time, caches, vmware.conf, install aba.
+# The connected bastion bridges the internet (ens256) to the private VLAN
+# (ens224.10) so the disconnected bastion can reach it via NAT masquerade.
+#
+# NICs:
+#   ens192     = private lab (DHCP, MTU 9000)
+#   ens224.10  = VLAN to disconnected bastion (static IP from VM_CLONE_VLAN_IPS)
+#   ens256     = internet (DHCP, default route)
+#
+# Usage: configure_connected_bastion HOST [USER] [CLONE_NAME]
 #
 configure_connected_bastion() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
+    local clone_name="${3:-$host}"
 
-    echo "=== Configuring connected bastion: $host ==="
+    echo "=== Configuring connected bastion: $host (clone: $clone_name) ==="
 
     _vm_wait_ssh "$host" "$user"
     _vm_setup_ssh_keys "$host" "$user"
+
+    # Network + firewall first (NTP needs internet via ens256)
+    _vm_setup_network "$host" "$user" "$clone_name"
+    _vm_setup_firewall "$host" "$user"
+
     _vm_setup_time "$host" "$user"
+
+    # Clean up
     _vm_cleanup_caches "$host" "$user"
+    _vm_cleanup_podman "$host" "$user"
     _vm_cleanup_home "$host" "$user"
+
+    # Config
     _vm_setup_vmware_conf "$host" "$user"
     _vm_create_test_user "$host" "$user"
     _vm_install_aba "$host" "$user"
@@ -433,15 +577,16 @@ configure_internal_bastion() {
 
     _vm_wait_ssh "$host" "$user"
     _vm_setup_ssh_keys "$host" "$user"
+
+    # Network + firewall first (NTP needs route through con# masquerade)
+    _vm_setup_network "$host" "$user" "$clone_name"
+    _vm_setup_firewall "$host" "$user"
+
     _vm_setup_time "$host" "$user"
 
     # Update and reboot
     _vm_dnf_update "$host" "$user"
     _vm_wait_ssh "$host" "$user"
-
-    # Network hardening
-    _vm_setup_network "$host" "$user" "$clone_name"
-    _vm_setup_firewall "$host" "$user"
 
     # Clean up
     _vm_cleanup_caches "$host" "$user"
@@ -474,8 +619,8 @@ configure_internal_bastion() {
 # Usage: create_pools N [--rhel rhel8|rhel9|rhel10] [--connected-only]
 #
 # Each pool gets:
-#   - A connected bastion clone (regN) from the template
-#   - Optionally a paired internal bastion clone (discoN) from the template
+#   - A connected bastion clone (conN) from the template
+#   - Optionally a paired disconnected bastion clone (disN) from the template
 #
 # Templates are never modified. Previous clones are destroyed and re-cloned
 # fresh every time.
@@ -502,16 +647,16 @@ create_pools() {
         echo ""
         echo "--- Pool $i ---"
 
-        # Clone connected bastion: template -> regN
-        local conn_vm="reg${i}"
+        # Clone connected bastion: template -> conN
+        local conn_vm="con${i}"
         echo "  Cloning connected bastion: $vm_template -> $conn_vm"
         clone_vm "$vm_template" "$conn_vm"
-        configure_connected_bastion "$conn_vm"
+        configure_connected_bastion "$conn_vm" "$VM_DEFAULT_USER" "$conn_vm"
 
-        # Clone internal bastion: template -> discoN (if not --connected-only)
+        # Clone disconnected bastion: template -> disN (if not --connected-only)
         if [ -z "$connected_only" ]; then
-            local int_vm="disco${i}"
-            echo "  Cloning internal bastion: $vm_template -> $int_vm"
+            local int_vm="dis${i}"
+            echo "  Cloning disconnected bastion: $vm_template -> $int_vm"
             clone_vm "$vm_template" "$int_vm"
             configure_internal_bastion "$int_vm"
         fi
@@ -540,11 +685,11 @@ destroy_pools() {
 
     if [ -n "$all_pools" ]; then
         echo "=== Destroying all pool clone VMs ==="
-        # Destroy regN and discoN clones (try 1..10)
+        # Destroy conN and disN clones (try 1..10)
         local i
         for (( i=1; i<=10; i++ )); do
-            destroy_vm "reg${i}" 2>/dev/null
-            destroy_vm "disco${i}" 2>/dev/null
+            destroy_vm "con${i}" 2>/dev/null
+            destroy_vm "dis${i}" 2>/dev/null
         done
     else
         for pool in "${pools[@]}"; do
@@ -565,10 +710,10 @@ list_pools() {
     printf "  %-25s %-10s\n" "CLONE NAME" "POWER"
     echo "  $(printf '%0.s-' {1..40})"
 
-    # Check regN and discoN clones
+    # Check conN and disN clones
     local i
     for (( i=1; i<=10; i++ )); do
-        for prefix in reg disco; do
+        for prefix in con dis; do
             local vm="${prefix}${i}"
             if vm_exists "$vm" 2>/dev/null; then
                 local power
