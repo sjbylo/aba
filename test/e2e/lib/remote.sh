@@ -173,7 +173,7 @@ _get_nic_network() {
 #
 # Usage: clone_vm SOURCE_VM CLONE_NAME [FOLDER] [SNAPSHOT]
 #
-# Example: clone_vm bastion-internal-rhel9 disco1
+# Example: clone_vm bastion-internal-rhel9 dis1
 #
 clone_vm() {
     local source_vm="$1"
@@ -196,7 +196,9 @@ clone_vm() {
     govc snapshot.revert -vm "$source_vm" "$snapshot" || return 1
 
     # Clone from source (powered off initially)
-    govc vm.clone -vm "$source_vm" -folder "$folder" -on=false "$clone_name" || return 1
+    local ds_flag=""
+    [ -n "${VM_DATASTORE:-}" ] && ds_flag="-ds=$VM_DATASTORE"
+    govc vm.clone -vm "$source_vm" -folder "$folder" $ds_flag -on=false "$clone_name" || return 1
 
     # --- Set MAC addresses on the clone's NICs (before power-on) -----------
     # The clone inherits the source's MACs which won't match DHCP

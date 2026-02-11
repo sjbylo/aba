@@ -60,7 +60,7 @@ setup_aba_from_scratch() {
 #
 # Usage: setup_bastion CLONE_NAME [TEMPLATE] [TEST_USER]
 #
-# Example: setup_bastion disco1 bastion-internal-rhel9 steve
+# Example: setup_bastion dis1 bastion-internal-rhel9 steve
 #
 setup_bastion() {
     local clone_name="$1"

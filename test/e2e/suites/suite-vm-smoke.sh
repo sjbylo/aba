@@ -9,7 +9,7 @@
 #
 # What it tests:
 #   - govc VMware connectivity (list VMs, verify template exists)
-#   - VM clone: clone template -> disco1 (destroy old clone first)
+#   - VM clone: clone template -> dis1 (destroy old clone first)
 #   - VM boot: power on, DHCP/DNS, wait for SSH
 #   - configure_internal_bastion: SSH keys, time/NTP, dnf update, network,
 #     firewall/NAT, cache cleanup, podman cleanup, RPM removal, proxy
@@ -36,8 +36,8 @@ source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
 # --- Configuration ----------------------------------------------------------
 
 TEMPLATE="${VM_TEMPLATES[${INTERNAL_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}"
-CLONE_NAME="${CLONE_NAME:-disco1}"
-CLONE_HOST="${INT_BASTION_HOST:-registry.example.com}"
+CLONE_NAME="${CLONE_NAME:-dis1}"
+CLONE_HOST="${CLONE_NAME}.${VM_BASE_DOMAIN:-example.com}"
 DEF_USER="${VM_DEFAULT_USER:-steve}"
 TEST_USER_NAME="${TEST_USER:-steve}"
 VF="${VMWARE_CONF:-~/.vmware.conf}"
@@ -83,7 +83,7 @@ e2e_run "Verify template VM exists: $TEMPLATE" "govc vm.info $TEMPLATE"
 test_end 0
 
 # ============================================================================
-# 2. Clone: destroy old clone, clone template -> disco1
+# 2. Clone: destroy old clone, clone template -> dis1
 # ============================================================================
 test_begin "Clone: $TEMPLATE -> $CLONE_NAME"
 
