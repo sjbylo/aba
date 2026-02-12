@@ -25,6 +25,7 @@ _ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
 # --- Source libraries -------------------------------------------------------
 
 source "$_RUN_DIR/lib/framework.sh"
+source "$_RUN_DIR/lib/config-helpers.sh"
 source "$_RUN_DIR/lib/remote.sh"
 source "$_RUN_DIR/lib/pool-lifecycle.sh"
 
@@ -230,46 +231,111 @@ resolve_suite_file() {
     fi
 }
 
-# --- Run a Suite Locally ----------------------------------------------------
+# --- Run a Suite on the Connected Bastion -----------------------------------
+#
+# Dispatches the suite to conN via SSH. The coordinator only orchestrates;
+# all L commands execute on conN, all R commands SSH from conN to disN.
+#
+# If E2E_ON_BASTION is already set, we're running on conN (dispatched by a
+# previous coordinator call) -- run the suite directly, no re-dispatch.
+#
 
 run_suite_local() {
     local suite_name="$1"
     local suite_file
     suite_file="$(resolve_suite_file "$suite_name")" || return 1
 
-    echo ""
-    echo "========================================"
-    echo "  Running suite: $suite_name"
-    echo "========================================"
-    echo ""
+    # --- Guard: coordinator-only suite? Run locally. -----------------------
+    # Suites like clone-check create VMs and need govc on the coordinator.
+    if grep -q '^E2E_COORDINATOR_ONLY=true' "$suite_file" 2>/dev/null; then
+        echo ""
+        echo "========================================"
+        echo "  Running suite: $suite_name (coordinator-only, running locally)"
+        echo "========================================"
+        echo ""
+        bash "$suite_file"
+        return $?
+    fi
 
-    # Handle resume
-    if [ -n "$CLI_RESUME" ]; then
-        local state_file="${E2E_LOG_DIR}/${suite_name}.state"
-        if [ -f "$state_file" ]; then
-            export E2E_RESUME_FILE="$state_file"
-            echo "  Resuming from checkpoint: $state_file"
+    # --- Guard: already on bastion? Run directly. --------------------------
+    if [ -n "${E2E_ON_BASTION:-}" ]; then
+        echo ""
+        echo "========================================"
+        echo "  Running suite: $suite_name (on bastion)"
+        echo "========================================"
+        echo ""
+
+        # Handle resume
+        if [ -n "$CLI_RESUME" ]; then
+            local state_file="${E2E_LOG_DIR}/${suite_name}.state"
+            if [ -f "$state_file" ]; then
+                export E2E_RESUME_FILE="$state_file"
+                echo "  Resuming from checkpoint: $state_file"
+            fi
         fi
+
+        # Handle clean
+        if [ -n "$CLI_CLEAN" ]; then
+            rm -f "${E2E_LOG_DIR}/${suite_name}.state"
+            echo "  Cleaned checkpoint state for $suite_name"
+        fi
+
+        bash "$suite_file"
+        return $?
     fi
 
-    # Handle clean
-    if [ -n "$CLI_CLEAN" ]; then
-        rm -f "${E2E_LOG_DIR}/${suite_name}.state"
-        echo "  Cleaned checkpoint state for $suite_name"
-    fi
+    # --- Dispatch to connected bastion via SSH -----------------------------
 
-    # Run the suite script
-    bash "$suite_file"
+    local con_host
+    con_host="$(pool_connected_bastion)"
+
+    echo ""
+    echo "========================================"
+    echo "  Running suite: $suite_name (dispatching to $con_host)"
+    echo "========================================"
+    echo ""
+
+    # Sync latest test framework + scripts to conN
+    echo "  Syncing aba tree to $con_host ..."
+    rsync -az --delete \
+        --exclude='mirror/save/' \
+        --exclude='mirror/.oc-mirror/' \
+        --exclude='cli/' \
+        --exclude='.git/' \
+        "$_ABA_ROOT/" "$con_host:~/aba/"
+
+    # Build environment variable exports (same pattern as parallel.sh)
+    local env_exports="export E2E_ON_BASTION=1; "
+    local var
+    for var in TEST_CHANNEL VER_OVERRIDE INTERNAL_BASTION_RHEL_VER \
+               TEST_USER OC_MIRROR_VER POOL_NUM ABA_TESTING; do
+        [ -n "${!var:-}" ] && env_exports+="export $var='${!var}'; "
+    done
+
+    # Pass resume/clean flags
+    local extra_flags=""
+    [ -n "$CLI_RESUME" ] && extra_flags+=" --resume"
+    [ -n "$CLI_CLEAN" ]  && extra_flags+=" --clean"
+
+    # Interactive flag
+    [ -n "${_E2E_INTERACTIVE:-}" ] && extra_flags+=" -i"
+
+    # Dispatch to conN via SSH (-t for TTY, needed for interactive mode)
+    echo "  Dispatching suite '$suite_name' to $con_host ..."
+    ssh -t -o LogLevel=ERROR -o ConnectTimeout=30 "$con_host" -- \
+        "${env_exports}cd ~/aba && test/e2e/run.sh --suite $suite_name $extra_flags"
 }
 
 # --- Main -------------------------------------------------------------------
 
 main() {
     parse_args "$@"
-    apply_params
 
-    # Initialize the framework
+    # Initialize the framework (sources config.env defaults)
     e2e_setup
+
+    # Apply CLI overrides AFTER config.env so they take precedence
+    apply_params
 
     # Destroy pools and exit if requested
     if [ -n "$CLI_DESTROY_POOLS" ]; then
