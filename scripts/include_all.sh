@@ -1379,7 +1379,7 @@ run_once() {
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:eW:m:qS" opt; do
+	while getopts "swi:cprGFt:eoEW:m:qS" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1391,6 +1391,8 @@ run_once() {
 			F) global_failed_clean=true ;;
 			t) ttl=$OPTARG ;;
 			e) mode="get_error" ;;
+			o) mode="get_output" ;;
+			E) mode="get_exit" ;;
 			W) wait_timeout=$OPTARG ;;
 			m) waiting_message=$OPTARG ;;
 			q) quiet_wait=true ;;
@@ -1482,10 +1484,27 @@ run_once() {
 	mkdir -p "$id_dir"
 	chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
 	
-	# --- GET ERROR MODE ---
+	# --- GET ERROR MODE (stderr) ---
 	if [[ "$mode" == "get_error" ]]; then
 		[[ -f "$log_err_file" ]] && cat "$log_err_file"
 		return 0
+	fi
+
+	# --- GET OUTPUT MODE (stdout) ---
+	if [[ "$mode" == "get_output" ]]; then
+		[[ -f "$log_out_file" ]] && cat "$log_out_file"
+		return 0
+	fi
+
+	# --- GET EXIT CODE MODE ---
+	# Prints exit code to stdout if task completed, returns 0.
+	# Returns 1 (prints nothing) if task has not completed.
+	if [[ "$mode" == "get_exit" ]]; then
+		if [[ -f "$exit_file" ]]; then
+			cat "$exit_file"
+			return 0
+		fi
+		return 1
 	fi
 
 	# --- TTL CHECK ---

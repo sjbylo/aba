@@ -159,11 +159,8 @@ DIALOG_OPTS="--no-shadow --colors --aspect 50"
 export DIALOG_OPTS
 
 # -----------------------------------------------------------------------------
-# Aba runtime init (required for run_once)
+# Aba runtime init
 # -----------------------------------------------------------------------------
-WORK_DIR=~/.aba/runner
-export WORK_DIR
-
 WORK_ID="tui-$(date +%Y%m%d%H%M%S)-$$"
 export WORK_ID
 
@@ -238,29 +235,31 @@ dlg() {
 show_run_once_error() {
 	local task_id="$1"
 	local title="${2:-Operation Failed}"
-	local RUNNER_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
-	local log_file="$RUNNER_DIR/$task_id/log"
 	
-	if [[ ! -f "$log_file" ]]; then
+	# Use run_once API to get stderr and stdout logs
+	local stderr_log stdout_log
+	stderr_log=$(run_once -e -i "$task_id" 2>/dev/null) || true
+	stdout_log=$(run_once -o -i "$task_id" 2>/dev/null) || true
+	
+	if [[ -z "$stderr_log" && -z "$stdout_log" ]]; then
 		dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1$title\Zn
 
-No log file found for task: $task_id
+No log output found for task: $task_id
 
 This usually means the task never started.
-Check: $RUNNER_DIR/$task_id/
 
 \Z1If errors persist:\Zn
-Clear the cache by running: \Zbcd aba && ./install\ZB
-Or manually: \Zbrm -rf ~/.aba/runner\ZB" 0 0
+Clear the cache by running: \Zbcd aba && ./install\ZB" 0 0
 		return
 	fi
 	
-	# Extract last meaningful errors
-	local error_lines=$(tail -30 "$log_file" | grep -iE 'error|fail|fatal|unable|cannot|denied' | tail -8)
+	# Extract last meaningful errors from stderr, falling back to stdout
+	local log_text="${stderr_log:-$stdout_log}"
+	local error_lines=$(echo "$log_text" | tail -30 | grep -iE 'error|fail|fatal|unable|cannot|denied' | tail -8)
 	
 	# Fallback: just show last few lines if no errors matched
 	if [[ -z "$error_lines" ]]; then
-		error_lines=$(tail -8 "$log_file")
+		error_lines=$(echo "$log_text" | tail -8)
 	fi
 	
 	dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1$title\Zn
@@ -269,8 +268,6 @@ Recent output:
 ─────────────────────────────────────────
 $error_lines
 ─────────────────────────────────────────
-
-Full log: $log_file
 
 \Z1If errors persist:\Zn
 Clear the cache: \Zbcd aba && ./install\ZB
@@ -723,19 +720,15 @@ select_ocp_version() {
 
 	# Check if cached version tasks exist and if they FAILED (non-zero exit code)
 	# If so, reset them and retry automatically
-	local latest_exit_file="${RUN_ONCE_DIR:-$HOME/.aba/runner}/ocp:${OCP_CHANNEL}:latest_version/exit"
-	local prev_exit_file="${RUN_ONCE_DIR:-$HOME/.aba/runner}/ocp:${OCP_CHANNEL}:latest_version_previous/exit"
-	local need_reset=0
+	local need_reset=0 exit_code
 	
-	if [[ -f "$latest_exit_file" ]]; then
-		local exit_code=$(cat "$latest_exit_file")
+	if exit_code=$(run_once -E -i "ocp:${OCP_CHANNEL}:latest_version" 2>/dev/null); then
 		if [[ "$exit_code" != "0" ]]; then
 			log "Cached task ocp:${OCP_CHANNEL}:latest_version has failed (exit $exit_code) - will reset and retry"
 			need_reset=1
 		fi
 	fi
-	if [[ -f "$prev_exit_file" ]]; then
-		local exit_code=$(cat "$prev_exit_file")
+	if exit_code=$(run_once -E -i "ocp:${OCP_CHANNEL}:latest_version_previous" 2>/dev/null); then
 		if [[ "$exit_code" != "0" ]]; then
 			log "Cached task ocp:${OCP_CHANNEL}:latest_version_previous has failed (exit $exit_code) - will reset and retry"
 			need_reset=1
