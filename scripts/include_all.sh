@@ -1648,8 +1648,11 @@ run_once() {
 				# Lock is free => not running => implicitly start (requires command)
 				# Keep FD 9 open -- lock transfers to _start_task's subshell
 				if [[ ${#command[@]} -eq 0 ]]; then
-					echo "Error: Task not started and no command provided." >&2
 					exec 9>&-   # Release lock on error path
+					# Only show internal diagnostic when not in quiet mode;
+					# callers that check rc already have their own error messages.
+					[[ "$quiet_wait" != true ]] && \
+						echo "Error: Task not started and no command provided." >&2
 					return 1
 				fi
 				_start_task "true" "true"
