@@ -267,7 +267,7 @@ When adding new dialogs:
 
 ```bash
 # Always run before committing/syncing:
-bash -n tui/abatui_experimental.sh && echo "Syntax OK"
+bash -n tui/abatui.sh && echo "Syntax OK"
 ```
 
 **Common mistakes**:
@@ -410,5 +410,5 @@ curl -sf --head --connect-timeout 5 --max-time 10 https://site.com >/dev/null 2>
 ---
 
 **Last Updated**: February 12, 2026  
-**Location**: `tui/abatui_experimental.sh`, `tui/tui-strings.sh`
+**Location**: `tui/abatui.sh`, `tui/tui-strings.sh`
 

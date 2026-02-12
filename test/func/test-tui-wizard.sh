@@ -118,6 +118,8 @@ else
 fi
 
 assert_screen "Latest" "Version option: Latest"
+assert_screen "Previous" "Version option: Previous"
+assert_screen "Older" "Version option: Older (N-2)"
 
 # Accept default (Latest) — OK button is "Next"
 send Enter
@@ -291,10 +293,33 @@ for item in "$TUI_ACTION_LABEL_VIEW_IMAGESET" "Air-Gapped" "Connected" "$TUI_ACT
 done
 
 # ============================================================
-# Test 12: Exit TUI cleanly
+# Test 12: Network values remain empty (auto-detect preserved)
 # ============================================================
 
-log_info "Test 12: Exit TUI cleanly"
+log_info "Test 12: Verify network values stayed empty in aba.conf"
+if [[ -f aba.conf ]]; then
+	# After wizard completion with auto-detect, network values should be empty.
+	# aba.conf format: key=VALUE  # comment — strip inline comments before checking.
+	_strip_comment() { sed 's/#.*//' | tr -d '[:space:]'; }
+	_mn=$(grep "^machine_network=" aba.conf | cut -d= -f2 | _strip_comment)
+	_dns=$(grep "^dns_servers=" aba.conf | cut -d= -f2 | _strip_comment)
+	_gw=$(grep "^next_hop_address=" aba.conf | cut -d= -f2 | _strip_comment)
+	_ntp=$(grep "^ntp_servers=" aba.conf | cut -d= -f2 | _strip_comment)
+	
+	if [[ -z "$_mn" && -z "$_dns" && -z "$_gw" && -z "$_ntp" ]]; then
+		log_pass "Network values are empty (auto-detect preserved)"
+	else
+		log_fail "Network values were auto-filled: mn=$_mn dns=$_dns gw=$_gw ntp=$_ntp"
+	fi
+else
+	log_fail "aba.conf not found after wizard completion"
+fi
+
+# ============================================================
+# Test 13: Exit TUI cleanly
+# ============================================================
+
+log_info "Test 13: Exit TUI cleanly"
 send "$TUI_ACTION_EXIT" Enter
 sleep 2
 

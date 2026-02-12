@@ -19,7 +19,8 @@ uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a Cent
 
 # Handle --aba-version early (before sudo check)
 if [ "$1" = "--aba-version" ]; then
-	echo "aba version $ABA_VERSION (build $ABA_BUILD)"
+	ver=$(cat "$(dirname "$(readlink -f "$0")")/../VERSION" 2>/dev/null)
+	echo "aba${ver:+ v$ver} version $ABA_VERSION (build $ABA_BUILD)"
 	git_branch=$(git branch --show-current 2>/dev/null)
 	git_commit=$(git rev-parse --short HEAD 2>/dev/null)
 	[ "$git_branch" -a "$git_commit" ] && echo "Git: $git_branch @ $git_commit"

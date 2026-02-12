@@ -135,7 +135,7 @@ command || true
 **Date:** Jan 19, 2026  
 **Decision:** The `$ABA_ROOT` variable must **ONLY** be used in:
 - `scripts/aba.sh`
-- `tui/abatui_experimental.sh`
+- `tui/abatui.sh`
 
 **All other scripts MUST:**
 1. Change to aba root at start: `cd "$(dirname "$0")/.." || exit 1`
