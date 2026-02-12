@@ -15,8 +15,8 @@ verify-cluster-conf || exit 1
 
 [ ! "$ntp_servers" ] && aba_abort "Define 'ntp_servers' value in 'aba.conf' to configure NTP" 
 
-aba_info "Downloading CLI installation binaries"
-scripts/cli-install-all.sh --wait  # FIXME: should only be for oc?
+aba_info "Ensuring CLI binaries are installed"
+scripts/cli-install-all.sh --wait oc butane
 
 ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
 

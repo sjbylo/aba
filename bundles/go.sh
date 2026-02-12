@@ -56,7 +56,7 @@ export PLAIN_OUTPUT=1  # Supress curl progress bars and other color output
 
 rm -vf ~/bin/{aba,butane,govc,kubectl,oc,oc-mirror,openshift-install}
 rm -rf ~/.aba
-rm -rf ~/.oc-mirror/  # This is needed due to space limitations...  Also don't want some kind of "contamination"! 
+#rm -rf ~/.oc-mirror/  # Now done below. # This is needed due to space limitations...  Also don't want some kind of "contamination"! 
 # If we use other files, e.g. caches for testing and the tests pass, then the actual archive might container a bug and fail later on!
 # e.g. "Expected version 9.6.20251015-1 but found 9.0.20250510-0" -> Bug https://issues.redhat.com/browse/OCPBUGS-65899 
 
@@ -82,6 +82,9 @@ echo
 
 for ver in ${versions[@]}
 do
+	# Does this need to be removed "per-version"?  
+	rm -rf ~/.oc-mirror/  # This is needed due to space limitations...  Also don't want some kind of "contamination"! 
+
 	for i in ${!arr_name[@]}
 	do
 		op_sets=${arr_op_sets[$i]}

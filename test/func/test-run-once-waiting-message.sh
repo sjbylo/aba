@@ -10,6 +10,9 @@ export RUN_ONCE_DIR="$TEST_DIR/runner"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ABA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Enable aba_info() output so waiting messages are actually printed
+export INFO_ABA=1
+
 # Source the functions
 source "$ABA_ROOT/scripts/include_all.sh"
 

@@ -245,7 +245,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)
 
 mylog "Starting tests for all combinations of config files for various cluster types, e.g. sno, compact, standard with no bonding/bonding/vlan"
 
-test-cmd -m "Copy test script" scp test/misc/test_ssh_ntp.sh $TEST_USER@$int_bastion_hostname:
+test-cmd -m "Copy test scripts" scp test/misc/test_ssh_*.sh $TEST_USER@$int_bastion_hostname:
 
 for vlan in 10 ""
 do
@@ -315,7 +315,8 @@ do
 	test-cmd -m "Pausing ..." "read -t 60 yn || true"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 	test-cmd -m "Pausing" "read -t 60 yn || true"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep 'ens160: .*state UP '"
+	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd \"ip a\"|grep 'ens160: .*state UP '"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface ens160" "time timeout -v 5m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'ens160: .*state UP '"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
 	# Clean up
@@ -342,7 +343,8 @@ do
 	test-cmd -m "Pausing ..." "read -t 60 yn || true"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 	test-cmd -m "Pausing" sleep 120  
-	test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 10 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep 'bond0: .* state UP '"
+	#test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 10 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd \"ip a\"|grep 'bond0: .* state UP '"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface" "time timeout -v 5m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'bond0: .* state UP '"
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
 	# Test node0 is accessible

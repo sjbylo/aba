@@ -100,9 +100,8 @@ out-install:
 out-install-all:
 	echo oc openshift-install oc-mirror butane govc
 
-# For "reset" and "oc-mirror" and "govc" targets we DO NOT need to check for the target ocp version
-# If 'reset' found in $MAKECMDGOALS, i.e. no reset target provided
-ifneq ($(filter reset oc-mirror govc,$(MAKECMDGOALS)),)
+# For "reset", "oc-mirror", "govc" and their download targets we DO NOT need ocp_version
+ifneq ($(filter reset oc-mirror govc download-oc-mirror download-govc download-butane,$(MAKECMDGOALS)),)
   # reset not given
 else
   ifeq ($(ocp_version),)
@@ -138,13 +137,12 @@ help: ## Help
 #openshift-client-linux-arm64-rhel8-4.18.9.tar.gz
 #openshift-client-linux-arm64-rhel9-4.18.9.tar.gz
 
-# This is the tarball that's needed for this local host OS
-loacl_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-$(rhel_ver)-$(ocp_version).tar.gz
-#full_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(loacl_oc_tar_file)
+# This is the tarball that matches this localhost's OS and arch.
+local_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-$(rhel_ver)-$(ocp_version).tar.gz
+#full_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(local_oc_tar_file)
 
-# Generic oc binary 
-#gen_oc_tar_file		:= openshift-client-$(os)-$(ocp_version).tar.gz
-#gen_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(gen_oc_tar_file)
+local_oc_mirror_tar	:= $(if $(filter rhel9,$(rhel_ver)),oc-mirror.rhel9.tar.gz,oc-mirror.tar.gz)
+
 
 rhel9_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-rhel9-$(ocp_version).tar.gz
 rhel9_oc_url      	:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
@@ -158,33 +156,37 @@ openshift_install_file	:= openshift-install-$(os)-$(ocp_version).tar.gz
 # 	openshift-install-linux-4.20.8.tar.gz   #amd64
 # 	openshift-install-linux-arm64-4.20.8.tar.gz
 
-# Download *all* the install files that might be use in the disconnected env, both rhel9 and rhel8.
-download = $(rhel9_oc_tar_file) $(rhel8_oc_tar_file) $(openshift_install_file) oc-mirror.tar.gz oc-mirror.rhel9.tar.gz $(butane_binary_file) $(govc_tar_target)
-# This is the same as download but with govc added 
-download_all = $(download) $(govc_tar_file)
+# Logical download targets — group tarballs by tool so callers don't need to know filenames.
+# cli-download-all.sh iterates over out-download-all and creates run_once tasks per tool.
+.PHONY: download-oc download-oc-mirror download-openshift-install download-butane download-govc
 
-download: $(download)
+download-oc: $(rhel9_oc_tar_file) $(rhel8_oc_tar_file)
+download-oc-mirror: oc-mirror.tar.gz oc-mirror.rhel9.tar.gz
+download-openshift-install: $(openshift_install_file)
+download-butane: $(butane_binary_file)
+download-govc: $(govc_tar_file)
 
-download-all: $(download_all)
+# Download all CLI tarballs (govc is optional, depends on platform)
+download: download-oc download-oc-mirror download-openshift-install download-butane $(if $(govc_bin),download-govc)
+download-all: download-oc download-oc-mirror download-openshift-install download-butane download-govc
 
+# Output logical tool names for cli-download-all.sh
+# Task IDs become: cli:download:oc, cli:download:oc-mirror, etc.
 out-download:
-	echo $(download)
+	echo oc oc-mirror openshift-install butane $(govc_bin)
 
 out-download-all:
-	echo $(download_all)
+	echo oc:$(ocp_version) oc-mirror openshift-install:$(ocp_version) butane govc
 
 
 ########################################
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
 oc: ~/bin/oc  ## Install oc into ~/bin
-~/bin/oc: .init $(loacl_oc_tar_file)
-	file $(loacl_oc_tar_file) | grep -q "gzip compressed data"
-	@echo [ABA] Extracting $(loacl_oc_tar_file) to ~/bin/oc
-	tar -C ~/bin -xmzf $(loacl_oc_tar_file) oc kubectl || { echo [ABA] Extracting $(gen_oc_tar_file) instead to ~/bin/oc; tar -C ~/bin -xmzf $(gen_oc_tar_file) oc kubectl; } || { echo [ABA] Error: Invalid files: $(loacl_oc_tar_file) or $(gen_oc_tar_file); exit 1; }
+~/bin/oc: .init $(local_oc_tar_file)
+	file $(local_oc_tar_file) | grep -q "gzip compressed data"
+	@echo [ABA] Extracting $(local_oc_tar_file) to ~/bin/oc
+	tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || { echo [ABA] Error: Failed to extract $(local_oc_tar_file); exit 1; }
 	~/bin/oc --help >/dev/null 2>&1
-
-# Download just the oc tar files
-octars: $(rhel9_oc_tar_file) $(rhel8_oc_tar_file)
 
 openshift_install_url := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)
 
@@ -231,39 +233,31 @@ $(openshift_install_file):  ## Download openshift-install tarball
 
 ########################################
 oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
-~/bin/oc-mirror: .init oc-mirror.tar.gz oc-mirror.rhel9.tar.gz
-	@echo $(os_ver) | grep -q "^9\." && echo [ABA] Extracting oc-mirror.rhel9.tar.gz to ~/bin/oc-mirror	|| echo [ABA] Extracting oc-mirror.tar.gz to ~/bin/oc-mirror
-	@echo $(os_ver) | grep -q "^9\." && tar -C ~/bin -xmzf oc-mirror.rhel9.tar.gz oc-mirror		|| tar -C ~/bin -xmzf oc-mirror.tar.gz oc-mirror
+~/bin/oc-mirror: .init $(local_oc_mirror_tar)
+	@echo [ABA] Extracting $(local_oc_mirror_tar) to ~/bin/oc-mirror
+	tar -C ~/bin -xmzf $(local_oc_mirror_tar) oc-mirror
 	chmod +x ~/bin/oc-mirror
 #	~/bin/oc-mirror --help >/tmp/.oc-mirror-exec.log 2>&1 || { echo [ABA] "Error: ~/bin/oc-mirror failed to execute"; cp -p ~/bin/oc-mirror /tmp; exit 1; }
 
 # Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
 
 # Had to switch from 4.21 (latest) to 4.20 due to "signature missing" errors.
-oc_mirror_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/oc-mirror.tar.gz
-oc_mirror_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/sha256sum.txt
+oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20
+oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
+
 oc-mirror.tar.gz: ## Download oc-mirror tarball
-	echo [ABA] Downloading $(oc_mirror_url)
-	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url)
+	echo [ABA] Downloading $(oc_mirror_base_url)/$@
+	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_base_url)/$@
 	@echo -n "[ABA] Verifying checksum for $(@): "
 	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(oc_mirror_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
 	echo "valid!"
-#
-#	curl -f --retry 8 -sL $(CURL_PROGRESS) -o oc-mirror-sha256sum.txt $(oc_mirror_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" oc-mirror-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
-#	echo [ABA] "File $@ checksum valid!"
 
-# Had to switch from 4.21 (latest) to 4.20 due to "signature missing" errors.
-oc_mirror_url_rhel9 = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/oc-mirror.rhel9.tar.gz
-oc_mirror_url_rhel9_sha256sum = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20/sha256sum.txt
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
-	echo [ABA] Downloading $(oc_mirror_url_rhel9)
-	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_url_rhel9)
+	echo [ABA] Downloading $(oc_mirror_base_url)/$@
+	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_base_url)/$@
 	@echo -n "[ABA] Verifying checksum for $(@): "
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(oc_mirror_url_rhel9_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(oc_mirror_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
 	echo "valid!"
-
-#	curl -f --retry 8 -sL $(CURL_PROGRESS) -o oc-mirror-rhel9-sha256sum.txt $(oc_mirror_url_rhel9_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" oc-mirror-rhel9-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
-#	echo [ABA] "File $@ checksum valid!"
 
 
 ########################################
@@ -315,6 +309,7 @@ clean: ## Clean up installed binaries
 reset: clean # Clean up everything. Only use if you know what you are doing!
 	@../scripts/cli-download-all.sh --reset
 	@rm -f *.tar.gz .init butane* #.*-download
+	@rm -f scripts
 #	bash -lc 'source ../scripts/include_all.sh; run_once -r -i "download_all_cli"'
 #	This should be just: run_once -r -i "cli:download" # to reset all downloads in cli dir
 

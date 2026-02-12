@@ -24,6 +24,15 @@ alwaysApply: true
 - Run `build/pre-commit-checks.sh` before committing code changes
 - Run `build/pre-commit-checks.sh --skip-version` for docs-only commits
 
+## Backup uncommitted changes before editing
+
+- Before editing a file, check if it has uncommitted changes (`git diff --name-only`)
+- If it does, back it up to `.backup/` preserving the path: `mkdir -p .backup/DIR && cp FILE .backup/DIR/`
+- Example: `tui/foo.sh` backs up to `.backup/tui/foo.sh`
+- Clean up `.backup/` after a successful commit
+- `.backup/` is gitignored -- backups never get committed
+- This guards against unexplained file reverts/deletions
+
 ## "Show me" means SHOW, not APPLY
 
 - When user says "show me" a change, display it -- do not edit the file

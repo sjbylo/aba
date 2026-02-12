@@ -98,6 +98,7 @@ if [[ -z "${ABA_ROOT:-}" ]]; then
 	export ABA_ROOT
 fi
 
+
 # Auto-install required packages (dialog, jq, make, etc.) if missing
 "$ABA_ROOT/scripts/install-rpms.sh" external
 
@@ -176,6 +177,7 @@ log "ABA_ROOT: $ABA_ROOT"
 cd "$ABA_ROOT" || { log "ERROR: Cannot cd to ABA_ROOT"; exit 1; }
 log "Changed to ABA_ROOT"
 
+
 # shellcheck disable=SC1091
 source scripts/include_all.sh
 
@@ -198,7 +200,7 @@ read -r TERM_ROWS TERM_COLS < <(stty size 2>/dev/null || echo "24 80")
 # TUI global state variables
 # -----------------------------------------------------------------------------
 # Retry count for transient failures (applies to save/sync/bundle)
-RETRY_COUNT="3"  # Values: "off", "3", "8"
+RETRY_COUNT="2"  # Values: "off", "2", "8"
 
 # Registry type selection
 ABA_REGISTRY_TYPE="Auto"  # Values: "Auto", "Quay", "Docker"
@@ -335,18 +337,15 @@ ui_header() {
 "\
   __   ____   __
  / _\ (  _ \ / _\     Aba v${aba_version}
-/    \ ) _ (/    \    Install & configure 
+/    \ ) _ (/    \    Install & configure
 \_/\_/(____/\_/\_/    air-gapped OpenShift quickly!
 
 Follow the setup wizard or see the README.md file for more.
 Get help: https://github.com/sjbylo/aba/discussions
 
-IMPORTANT: You must have Internet access before you continue!
+Note: Internet access is required.
 
-Press <Continue> to start configuration.
-Press <Help> for more information.
-Press <Tab> and <Cursor keys> to navigate.
-Press <ESC> to quit abatui.
+Navigate with <Tab> and arrow keys. Press <ESC> to quit.
 " 0 0
 		rc=$?
 		
@@ -364,21 +363,16 @@ Press <ESC> to quit abatui.
 				dialog --backtitle "$(ui_backtitle)" --title "ABA Help" --msgbox \
 "ABA (Agent-Based Automation) helps install OpenShift in disconnected environments.
 
-The ABA TUI helps you with the following:
-  1. Create Agent-based ImageSet configuration YAML
-  2. Create a custom ABA install bundle for air-gapped installations (aba bundle)
-  3. Download OpenShift images from the Internet to disk (aba -d mirror save)
-  4. Install a mirror registry on the local or a remote host (aba -d mirror install)
-  5. Load and push images to a mirror registry (aba -d mirror load/sync)
+The wizard guides you through:
+  1. OpenShift channel & version selection
+  2. Red Hat pull secret validation
+  3. Platform configuration (bare-metal/VMware)
+  4. Network settings (domain, IPs, DNS, NTP)
+  5. Operator selection (highly recommended!)
+  6. Choose a deployment path:
 
-This wizard guides you through:
-  1. OpenShift channel selection (stable/fast/candidate)
-  2. OpenShift version selection
-  3. Red Hat pull secret validation
-  4. Platform configuration (bare-metal/VMware)
-  5. Network settings (domain, IPs, DNS, NTP)
-  6. Operator selection (optional)
-  7. ABA command selection (bundle, mirror, sync, save, etc.)
+     Air-Gapped:  Create a bundle or save images to transfer offline
+     Connected:   Install a local or remote mirror registry and sync
 
 Configuration is saved to:
   $ABA_ROOT/aba.conf
@@ -533,6 +527,88 @@ resume_from_conf() {
 	log "Final basket has ${#OP_BASKET[@]} operators after loading from op_sets"
 }
 
+# -----------------------------------------------------------------------------
+# Check if configuration is complete enough to skip wizard
+# Returns 0 if complete, 1 if wizard is needed
+# -----------------------------------------------------------------------------
+config_is_complete() {
+	# Must have channel, version, and a valid pull secret
+	[[ -n "${OCP_CHANNEL:-}" ]] || return 1
+	[[ -n "${OCP_VERSION:-}" ]] || return 1
+	[[ -f "$HOME/.pull-secret.json" ]] || return 1
+	validate_pull_secret "$HOME/.pull-secret.json" >/dev/null 2>&1 || return 1
+	# Must have a domain
+	[[ -n "${DOMAIN:-}" ]] || return 1
+	return 0
+}
+
+# -----------------------------------------------------------------------------
+# Show resume dialog if config is already complete
+# Sets STEP to "summary" (skip wizard) or "channel" (run wizard)
+# -----------------------------------------------------------------------------
+show_resume_dialog() {
+	log "Checking if config is complete for resume dialog"
+	
+	if ! config_is_complete; then
+		log "Config incomplete, running full wizard"
+		STEP="channel"
+		return
+	fi
+	
+	# Build summary display
+	local op_count=${#OP_BASKET[@]}
+	local platform_display
+	case "${PLATFORM:-}" in
+		bm) platform_display="Bare-metal" ;;
+		vsphere) platform_display="VMware vSphere" ;;
+		*) platform_display="${PLATFORM:-unknown}" ;;
+	esac
+	
+	local _dns_display="${DNS_SERVERS//,/ }"
+	local _ntp_display="${NTP_SERVERS//,/ }"
+	
+	dialog --colors --no-collapse --backtitle "$(ui_backtitle)" --title "Existing Configuration Found" \
+		--ok-label "Continue" \
+		--extra-button --extra-label "Reconfigure" \
+		--cancel-label "Exit" \
+		--msgbox "\
+Current configuration (from aba.conf):
+
+  Channel:      \Zb${OCP_CHANNEL}\Zn
+  Version:      \Zb${OCP_VERSION}\Zn
+  Platform:     \Zb${platform_display}\Zn
+  Domain:       \Zb${DOMAIN}\Zn
+
+  Network:      \Zb${MACHINE_NETWORK:-not set}\Zn
+  Default Gw:   \Zb${NEXT_HOP_ADDRESS:-not set}\Zn
+  DNS:          \Zb${_dns_display:-not set}\Zn
+  NTP:          \Zb${_ntp_display:-not set}\Zn
+
+  Operators:    \Zb${op_count} selected\Zn
+
+Press \ZbContinue\Zn to go to the action menu.
+Press \ZbReconfigure\Zn to run the setup wizard again." 0 0
+	local rc=$?
+	
+	case $rc in
+		0)
+			# Continue - skip to action menu
+			log "User chose to continue with existing config"
+			STEP="summary"
+			;;
+		3)
+			# Extra button - Reconfigure
+			log "User chose to reconfigure"
+			STEP="channel"
+			;;
+		1|255)
+			# Cancel/ESC - Exit
+			log "User chose to exit from resume dialog"
+			clear
+			exit 0
+			;;
+	esac
+}
 
 # -----------------------------------------------------------------------------
 # Step 1: Select OpenShift channel
@@ -672,9 +748,13 @@ select_ocp_version() {
 	# Only show wait dialog if actually waiting
 	if [[ $need_wait -eq 1 ]]; then
 		log "Version data not ready, showing wait dialog"
-		dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… fetching version data for channel '$OCP_CHANNEL'" 5 80
-		run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
-		run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+		dialog --backtitle "$(ui_backtitle)" --infobox "Fetching version data for channel '$OCP_CHANNEL'...\n\nPlease wait..." 6 55
+		# Start tasks in background (if not already running), then wait.
+		# Two-step start+wait avoids foreground mode which leaks stdout to terminal.
+		run_once    -i "ocp:${OCP_CHANNEL}:latest_version"          -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
+		run_once    -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+		run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version"
+		run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_previous"
 	else
 		log "Version data already available, no wait needed"
 	fi
@@ -741,11 +821,11 @@ What would you like to do?"
 				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_previous"
 				
 			# Show wait dialog and re-run the fetches
-			dialog --backtitle "$(ui_backtitle)" --infobox "Retrying... fetching version data for channel '$OCP_CHANNEL'" 5 80
+			dialog --backtitle "$(ui_backtitle)" --infobox "Retrying version fetch for channel '$OCP_CHANNEL'...\n\nPlease wait..." 6 55
 			run_once -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
 			run_once -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
-			run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version"
-			run_once -q -w -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+			run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version"
+			run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_previous"
 				
 				DIALOG_RC="repeat"
 				return
@@ -896,8 +976,8 @@ The installer will validate the selected version."
 					log "Detected x.y format, resolving: $OCP_VERSION"
 					run_once -i "ocp:${OCP_CHANNEL}:${OCP_VERSION}:latest_z" -- \
 					bash -lc 'source ./scripts/include_all.sh; fetch_latest_z_version "'$OCP_CHANNEL'" "'$OCP_VERSION'"'
-				dialog --backtitle "$(ui_backtitle)" --infobox "Please wait… resolving $OCP_VERSION to latest z-stream" 5 80
-				run_once -q -w -i "ocp:${OCP_CHANNEL}:${OCP_VERSION}:latest_z"
+				dialog --backtitle "$(ui_backtitle)" --infobox "Resolving $OCP_VERSION to latest z-stream...\n\nPlease wait..." 6 55
+				run_once -q -w -S -i "ocp:${OCP_CHANNEL}:${OCP_VERSION}:latest_z"
 				OCP_VERSION=$(fetch_latest_z_version "$OCP_CHANNEL" "$OCP_VERSION")
 					
 					if [[ -n "$OCP_VERSION" ]]; then
@@ -922,7 +1002,7 @@ Try:
 					# x.y.z format - validate using Cincinnati graph (cached)
 					local minor="${OCP_VERSION%.*}"  # 4.18.10 → 4.18
 					log "Detected x.y.z format, validating: $OCP_VERSION (minor: $minor)"
-					dialog --backtitle "$(ui_backtitle)" --infobox "Verifying version $OCP_VERSION exists..." 5 80
+					dialog --backtitle "$(ui_backtitle)" --infobox "Verifying $OCP_VERSION in $OCP_CHANNEL channel..." 5 80
 					
 					# Fetch all versions for this channel-minor (may fail if minor doesn't exist)
 					local all_versions
@@ -1139,7 +1219,7 @@ Location: ~/.pull-secret.json
 
 Your Red Hat pull secret is valid and ready to use.
 
-Press <Next> to continue or <Back> to return." 0 0
+Next: Configure platform and network." 0 0
 		rc=$?
 		
 		case "$rc" in
@@ -1162,6 +1242,7 @@ Press <Next> to continue or <Back> to return." 0 0
 	fi
 	
 	# Collect pull secret from user (simplified flow)
+	local _showed_instructions=0
 	while :; do
 		# Show error message if there was a validation issue
 		if [[ -n "$error_msg" ]]; then
@@ -1169,6 +1250,18 @@ Press <Next> to continue or <Back> to return." 0 0
 			dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Validation Error" \
 				--msgbox "$error_msg" 0 0 || true
 			error_msg=""  # Clear for next iteration
+		elif [[ $_showed_instructions -eq 0 ]]; then
+			# Show instructions on first visit (no error, no existing pull secret)
+			_showed_instructions=1
+			dialog --colors --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
+				--ok-label "Continue" \
+				--msgbox "Paste your Red Hat pull secret into the next screen.
+
+Get your pull secret from:
+  https://console.redhat.com/openshift/downloads#tool-pull-secret
+  (select \ZbTokens\Zn in the pull-down)
+
+Copy the entire JSON text and paste it into the editor." 0 0 || true
 		fi
 		
 		# Show editbox for paste - BLANK, large size
@@ -1190,8 +1283,9 @@ Press <Next> to continue or <Back> to return." 0 0
 		local empty_file=$(mktemp)
 		echo "" > "$empty_file"
 		
-		# Show editbox with empty file
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
+		# Show editbox - title tells user what to do
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret - Paste JSON below" \
+			--no-cancel \
 			--extra-button --extra-label "Back" \
 			--help-button --help-label "Clear" \
 			--ok-label "Next" \
@@ -1224,12 +1318,11 @@ Press <Next> to continue or <Back> to return." 0 0
 			if [[ -z "$pull_secret" || "$pull_secret" =~ ^[[:space:]]*$ ]]; then
 				error_msg="\Z1ERROR: Pull secret is empty\Zn
 
-Please paste your pull secret and press <Next>
+Please paste your pull secret and press <Next>.
 
 Get it from:
-  https://console.redhat.com/openshift/install/pull-secret
-
-Press <Help> for more information."
+  https://console.redhat.com/openshift/downloads#tool-pull-secret
+  (select 'Tokens' in the pull-down)"
 				log "User didn't paste anything, showing error"
 				continue
 			fi
@@ -1242,8 +1335,8 @@ Press <Help> for more information."
 						chmod 600 "$pull_secret_file"
 						log "Pull secret saved successfully to $pull_secret_file"
 						
-				# Validate pull secret by testing authentication
-				dialog --backtitle "$(ui_backtitle)" --infobox "Validating pull secret...\n\nTesting authentication with registry.redhat.io\n\nPlease wait..." 7 60
+			# Validate pull secret by testing authentication
+			dialog --backtitle "$(ui_backtitle)" --infobox "Validating pull secret...\n\nTesting authentication with registry.redhat.io" 6 60
 				
 				# Capture only stderr (errors), discard stdout (success messages)
 				local validation_error
@@ -1251,10 +1344,10 @@ Press <Help> for more information."
 				local validation_rc=$?
 				
 				if [[ $validation_rc -eq 0 ]]; then
-				log "Pull secret validation successful"
-				# Show success message briefly before proceeding
-				dialog --colors --backtitle "$(ui_backtitle)" --infobox "\Z2Pull secret validated successfully!\Zn\n\nAuthentication with registry.redhat.io succeeded.\n\nProceeding..." 7 60
-				sleep 1
+			log "Pull secret validation successful"
+			# Show success message briefly before proceeding
+			dialog --colors --backtitle "$(ui_backtitle)" --infobox "\Z2Pull secret validated!\Zn\n\nAuthentication successful." 5 60
+			sleep 1
 					DIALOG_RC="next"
 					return
 				else
@@ -1300,10 +1393,9 @@ This may mean:
 
 The pull secret does not contain 'registry.redhat.io'.
 
-Please ensure you copied the complete pull secret from:
-  https://console.redhat.com/openshift/install/pull-secret
-
-Press <Help> for more information."
+Please copy the complete pull secret from:
+  https://console.redhat.com/openshift/downloads#tool-pull-secret
+  (select 'Tokens' in the pull-down)"
 					continue
 				fi
 			else
@@ -1315,7 +1407,9 @@ The pasted content is not valid JSON.
 Please copy the ENTIRE pull secret from the Red Hat console.
 It should start with { and end with }
 
-Press <Help> for more information."
+Get it from:
+  https://console.redhat.com/openshift/downloads#tool-pull-secret
+  (select 'Tokens' in the pull-down)"
 			continue
 		fi
 			;;
@@ -1347,7 +1441,7 @@ select_platform_network() {
 	log "Entering select_platform_network"
 
 	# Track cursor position for menu navigation
-	local default_item="${1:-1}"  # Start at option 1 or use passed value
+	local default_item="${1:-2}"  # Start at option 2 (Base Domain) or use passed value
 
 	while :; do
 		# Use auto-sizing for better fit
@@ -1364,21 +1458,25 @@ select_platform_network() {
 		log "About to show platform menu dialog..."
 		log "TMP file: $TMP"
 		
-		# Use explicit arguments (no array expansion issues)
+		# Display multi-value fields with spaces for readability (stored with commas)
+		local _dns_display="${DNS_SERVERS:-(auto-detect)}"
+		local _ntp_display="${NTP_SERVERS:-(auto-detect)}"
+		[[ "$_dns_display" != "(auto-detect)" ]] && _dns_display="${_dns_display//,/ }"
+		[[ "$_ntp_display" != "(auto-detect)" ]] && _ntp_display="${_ntp_display//,/ }"
+
 		dialog --colors --backtitle "$(ui_backtitle)" --title "Platform & Network" \
 			--cancel-label "Back" \
 			--help-button \
 			--ok-label "Select" \
 			--extra-button --extra-label "Next" \
 			--default-item "$default_item" \
-			--menu "Configure platform and network:" 0 0 7 \
-			1 "\ZbAccept\Zn" \
-			2 "Platform: ${PLATFORM:-bm}" \
-			3 "Base Domain: ${DOMAIN:-example.com}" \
-			4 "Machine Network: ${MACHINE_NETWORK:-(auto-detect)}" \
-			5 "DNS Servers: ${DNS_SERVERS:-(auto-detect)}" \
-			6 "Default Route: ${NEXT_HOP_ADDRESS:-(auto-detect)}" \
-			7 "NTP Servers: ${NTP_SERVERS:-(auto-detect)}" \
+			--menu "Select an item to edit, then press Next to continue." 0 0 6 \
+			1 "Platform: ${PLATFORM:-bm}" \
+			2 "Base Domain: ${DOMAIN:-example.com}" \
+			3 "Machine Network: ${MACHINE_NETWORK:-(auto-detect)}" \
+			4 "DNS Servers: ${_dns_display}" \
+			5 "Default Route: ${NEXT_HOP_ADDRESS:-(auto-detect)}" \
+			6 "NTP Servers: ${_ntp_display}" \
 			2>"$TMP"
 		rc=$?
 		
@@ -1418,9 +1516,9 @@ select_platform_network() {
 • Platform: bm (bare-metal) or vmw (VMware)
 • Base Domain: DNS domain for cluster (e.g., example.com)
 • Machine Network: CIDR for cluster nodes (e.g., 10.0.0.0/24)
-• DNS Servers: Comma-separated IPs (e.g., 8.8.8.8,1.1.1.1)
+• DNS Servers: IPs separated by spaces (e.g., 8.8.8.8 1.1.1.1)
 • Default Route: Gateway IP for cluster network
-• NTP Servers: Time sync servers (IPs or hostnames)
+• NTP Servers: IPs or hostnames separated by spaces (e.g., pool.ntp.org 10.0.1.8)
 
 Leave blank to use auto-detected values." 0 0 || true
 				continue
@@ -1443,12 +1541,6 @@ Leave blank to use auto-detected values." 0 0 || true
 		log "Platform menu action selected: $action"
 		case "$action" in
 		1)
-			# Accept - move to next
-			DIALOG_RC="next"
-			log "User selected Accept, moving to next"
-			return
-			;;
-		2)
 			# Toggle platform between bm and vmw
 			log "Toggling platform"
 			case "${PLATFORM:-bm}" in
@@ -1463,7 +1555,7 @@ Leave blank to use auto-detected values." 0 0 || true
 			esac
 			default_item="$action"  # Keep cursor on Platform
 			;;
-			3)
+			2)
 				log "Showing domain inputbox"
 				while :; do
 					dialog --backtitle "$(ui_backtitle)" --inputbox "Base Domain (e.g., example.com):" 10 70 "$DOMAIN" 2>"$TMP" || { log "Domain input cancelled"; break; }
@@ -1481,7 +1573,7 @@ Leave blank to use auto-detected values." 0 0 || true
 				done
 				default_item="$action"  # Keep cursor on Base Domain
 				;;
-			4)
+			3)
 				log "Showing machine network inputbox"
 				while :; do
 					dialog --backtitle "$(ui_backtitle)" --inputbox "Machine Network CIDR (e.g., 10.0.0.0/24):" 10 70 "$MACHINE_NETWORK" 2>"$TMP" || { log "Machine network input cancelled"; break; }
@@ -1500,17 +1592,26 @@ Leave blank to use auto-detected values." 0 0 || true
 				done
 				default_item="$action"  # Keep cursor on Machine Network
 				;;
-			5)
+			4)
 				log "Showing DNS servers inputbox"
 				while :; do
-					dialog --backtitle "$(ui_backtitle)" --inputbox "DNS Servers (comma-separated IPs):" 10 70 "$DNS_SERVERS" 2>"$TMP" || { log "DNS input cancelled"; break; }
+					# Show space-separated in the input box for readability
+					local _dns_edit="${DNS_SERVERS//,/ }"
+					dialog --backtitle "$(ui_backtitle)" --inputbox "DNS Servers (space or comma-separated IPs):" 10 70 "$_dns_edit" 2>"$TMP" || { log "DNS input cancelled"; break; }
 					input=$(<"$TMP")
 					input=${input##[[:space:]]}
 					input=${input%%[[:space:]]}
 					
+					# Normalize: replace spaces/commas with single commas
+					if [[ -n "$input" ]]; then
+						input="${input//,/ }"          # commas -> spaces
+						input=$(echo "$input" | xargs) # collapse whitespace
+						input="${input// /,}"          # spaces -> commas
+					fi
+					
 					# Allow empty (auto-detect) or valid IP list
 					if [[ -n "$input" ]] && ! validate_ip_list "$input"; then
-						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid IP address format. Please enter comma-separated IPs (e.g., 8.8.8.8,1.1.1.1)" 0 0
+						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid IP address format. Please enter IPs separated by spaces or commas (e.g., 8.8.8.8 1.1.1.1)" 0 0
 						continue
 					fi
 					DNS_SERVERS="$input"
@@ -1519,7 +1620,7 @@ Leave blank to use auto-detected values." 0 0 || true
 				done
 				default_item="$action"  # Keep cursor on DNS Servers
 				;;
-			6)
+			5)
 				log "Showing default route inputbox"
 				while :; do
 					dialog --backtitle "$(ui_backtitle)" --inputbox "Default Route (gateway IP):" 10 70 "$NEXT_HOP_ADDRESS" 2>"$TMP" || { log "Default route input cancelled"; break; }
@@ -1538,17 +1639,26 @@ Leave blank to use auto-detected values." 0 0 || true
 				done
 				default_item="$action"  # Keep cursor on Default Route
 				;;
-			7)
+			6)
 				log "Showing NTP servers inputbox"
 				while :; do
-					dialog --backtitle "$(ui_backtitle)" --inputbox "NTP Servers (comma-separated IPs or hostnames):" 10 70 "$NTP_SERVERS" 2>"$TMP" || { log "NTP input cancelled"; break; }
+					# Show space-separated in the input box for readability
+					local _ntp_edit="${NTP_SERVERS//,/ }"
+					dialog --backtitle "$(ui_backtitle)" --inputbox "NTP Servers (space or comma-separated IPs or hostnames):" 10 70 "$_ntp_edit" 2>"$TMP" || { log "NTP input cancelled"; break; }
 					input=$(<"$TMP")
 					input=${input##[[:space:]]}
 					input=${input%%[[:space:]]}
 					
+					# Normalize: replace spaces/commas with single commas
+					if [[ -n "$input" ]]; then
+						input="${input//,/ }"          # commas -> spaces
+						input=$(echo "$input" | xargs) # collapse whitespace
+						input="${input// /,}"          # spaces -> commas
+					fi
+					
 					# Allow empty (auto-detect) or valid NTP server list
 					if [[ -n "$input" ]] && ! validate_ntp_servers "$input"; then
-						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid NTP server format. Please enter comma-separated IPs or hostnames (e.g., pool.ntp.org,time.google.com,192.168.1.1)" 0 0
+						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid NTP server format. Please enter IPs or hostnames separated by spaces or commas (e.g., pool.ntp.org time.google.com 192.168.1.1)" 0 0
 						continue
 					fi
 					NTP_SERVERS="$input"
@@ -1632,57 +1742,46 @@ select_operators() {
 	# If catalogs are still downloading, show a waiting dialog
 	if [[ "$need_wait" == "true" ]]; then
 		log "Catalogs still downloading, showing wait dialog..."
-		dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for operator catalog indexes...\n\nPlease wait..." 6 50
+		dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalogs...\n\nThis may take a few minutes on first run." 6 55
 	fi
 	
-	# Wait for all 3 catalogs - returns immediately if already done
-	run_once -q -w -i "catalog:${version_short}:redhat-operator"
-	run_once -q -w -i "catalog:${version_short}:certified-operator"
-	run_once -q -w -i "catalog:${version_short}:community-operator"
+	# Ensure all 3 catalogs are running in parallel (no-op if already started)
+	download_all_catalogs "$version_short" 86400 >>"$LOG_FILE" 2>&1
 	
-	# Check exit codes to identify failures
-	local RUNNER_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
+	# Now wait for all 3 — they're already running in parallel
 	local failed_catalogs=()
 	
 	for catalog in redhat-operator certified-operator community-operator; do
-		local exit_file="$RUNNER_DIR/catalog:${version_short}:${catalog}/exit"
-		if [[ -f "$exit_file" ]]; then
-			local exit_code=$(cat "$exit_file" 2>/dev/null || echo "1")
-			if [[ "$exit_code" != "0" ]]; then
-				log "ERROR: Catalog download failed: $catalog (exit code: $exit_code)"
-				failed_catalogs+=("$catalog")
-			fi
-		else
-			log "ERROR: Catalog task missing exit file: $catalog"
+		if ! run_once -q -w -i "catalog:${version_short}:${catalog}"; then
+			log "ERROR: Catalog download failed: $catalog"
 			failed_catalogs+=("$catalog")
 		fi
 	done
 	
-	# If any catalogs failed, show error with actual details
+	# If any catalogs failed, show a user-friendly error
 	if [[ ${#failed_catalogs[@]} -gt 0 ]]; then
 		log "ERROR: ${#failed_catalogs[@]} catalog(s) failed: ${failed_catalogs[*]}"
 		
-		# Show error for the first failed catalog
+		# Get error details via run_once (not direct runner access)
 		local first_failed="${failed_catalogs[0]}"
-		local error_msg=$(run_once -e -i "catalog:${version_short}:${first_failed}" 2>/dev/null | head -5)
+		local error_msg
+		error_msg=$(run_once -e -i "catalog:${version_short}:${first_failed}" 2>/dev/null | head -5)
 		
 		if [[ -z "$error_msg" ]]; then
-			error_msg="No error details available. Check logs in ~/.aba/runner/"
+			error_msg="No details available."
 		fi
 		
 		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
-"\Z1ERROR: Failed to download required operator catalogs\Zn
+"\Z1ERROR: Failed to download operator catalogs\Zn
 
 Failed catalog(s): ${failed_catalogs[*]}
 
-Error details:
-─────────────────────────────────────────
 $error_msg
-─────────────────────────────────────────
 
-Cannot proceed without operator catalog indexes.
-
-Check full logs: ~/.aba/runner/catalog:${version_short}:${first_failed}/log" 0 0
+\ZbWhat to try:\Zn
+  1. Check your internet connection
+  2. Press OK and go back to retry
+  3. Run 'aba doctor' for diagnostics" 0 0
 		
 		DIALOG_RC="back"
 		return
@@ -1709,12 +1808,11 @@ Check full logs: ~/.aba/runner/catalog:${version_short}:${first_failed}/log" 0 0
 			--ok-label "Select" \
 			--extra-button --extra-label "Next" \
 			--default-item "$default_item" \
-			--menu "Select operator actions:" 0 0 5 \
+			--menu "Select operator actions:" 0 0 4 \
 			1 "Select Operator Sets" \
 			2 "Search Operator Names" \
 			3 "View/Edit Basket ($basket_count operators)" \
 			4 "Clear Basket" \
-			5 "\ZbAccept\Zn" \
 			2>"$TMP"
 		rc=$?
 		
@@ -1741,7 +1839,7 @@ Check full logs: ~/.aba/runner/catalog:${version_short}:${first_failed}/log" 0 0
 						--extra-button --extra-label "Back" \
 						--yes-label "Continue Anyway" \
 						--no-label "Add Operators" \
-						--yesno "No operators selected. Continue with empty basket?\n\nYou can add operators later as Day-2 operations." 0 0
+						--yesno "No operators selected. Continue with empty basket?" 0 0
 					empty_rc=$?
 					
 					case "$empty_rc" in
@@ -1844,8 +1942,10 @@ image synchronization process." 0 0 || true
 
 				# Calculate size based on number of operator sets (items has 3 elements per set)
 				local num_sets=$((${#items[@]} / 3))
+				local list_h=$((num_sets < 18 ? num_sets + 2 : 18))
 				dialog --clear --backtitle "$(ui_backtitle)" --title "Operator Sets" \
-					--checklist "Select operator sets to add to basket:" 0 0 15 \
+					--ok-label "Add to Basket" \
+					--checklist "Use spacebar to toggle, then press Add to Basket:" 0 70 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
 				newsel=$(<"$TMP")
@@ -1990,8 +2090,10 @@ image synchronization process." 0 0 || true
 
 			# Calculate size based on number of matching operators
 			local num_ops=$((${#items[@]} / 3))
+			local list_h=$((num_ops < 18 ? num_ops + 2 : 18))
 			dialog --clear --backtitle "$(ui_backtitle)" --title "Select Operators" \
-				--checklist "Toggle operators (already-selected are ON):" 0 0 18 \
+				--ok-label "Add to Basket" \
+				--checklist "Use spacebar to toggle, then press Add to Basket:" 0 60 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
 			newsel=$(<"$TMP")
@@ -2091,9 +2193,11 @@ image synchronization process." 0 0 || true
 			log "Displaying ${#items[@]} items in basket view"
 			# Calculate size based on number of operators in basket
 			local num_ops=$((${#items[@]} / 3))
+			local list_h=$((num_ops < 18 ? num_ops + 2 : 18))
 			dialog --clear --backtitle "$(ui_backtitle)" --title "Basket (${#OP_BASKET[@]} operators)" \
-				--checklist "Toggle operators (uncheck to remove from basket):" \
-				0 0 18 \
+				--ok-label "Apply" \
+				--checklist "Uncheck to remove. Use spacebar to toggle:" \
+				0 60 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
 				newsel=$(<"$TMP")
@@ -2122,17 +2226,12 @@ image synchronization process." 0 0 || true
 				;;
 
 			4)
-			dialog --backtitle "$(ui_backtitle)" --yesno "Clear operator basket?" 10 55 && {
+			dialog --backtitle "$(ui_backtitle)" --yesno "Clear operator basket?" 0 0 && {
 				log "Clearing operator basket"
 				OP_BASKET=()
 				OP_SET_ADDED=()
 			}
 				default_item="$action"  # Keep cursor on Clear Basket
-				;;
-
-			5)
-				DIALOG_RC="next"
-				return
 				;;
 		esac
 	done
@@ -2149,7 +2248,7 @@ handle_action_view_isconf() {
 	# Wait for background isconf generation to complete AND file to exist
 	if ! run_once -p -i "tui:isconf:generate"; then
 	log "Waiting for ImageSet config generation to complete"
-	dialog --backtitle "$(ui_backtitle)" --infobox "Waiting for ImageSet configuration...\n\nPlease wait..." 6 50
+	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nThis may take a moment." 6 50
 	
 	if ! run_once -q -w -i "tui:isconf:generate"; then
 			log "ERROR: ImageSet config generation failed"
@@ -2707,34 +2806,27 @@ confirm_and_execute() {
 					;;
 			esac
 		else
-			# Failure - show output with error indicator and action buttons
-			dialog --colors --backtitle "$(ui_backtitle)" --title "\Z1Command Output (Failed - exit code: $exit_code)\Zn: $tui_cmd" \
-				--ok-label "Retry" \
-				--cancel-label "Back to Menu" \
-				--extra-button --extra-label "Exit TUI" \
-				--textbox "$output_file" 0 0
-			local choice=$?
-			
-			rm -f "$output_file"
-			
-			case $choice in
-				0)
-					# OK = Retry - loop back to confirmation
-					log "User chose to retry after failed command"
-					continue
-					;;
-				1|255)
-					# Cancel/ESC = Back to menu
-					log "User chose to return to menu after failed command"
-					return 1
-					;;
-				3)
-					# Extra button = Exit TUI
-					log "User chose to exit TUI after failed command"
-					clear
-					exit $exit_code
-					;;
-			esac
+		# Failure - show output with error indicator and action buttons
+		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z1Command Output (Failed - exit code: $exit_code)\Zn: $tui_cmd" \
+			--ok-label "Back to Menu" \
+			--extra-button --extra-label "Retry" \
+			--textbox "$output_file" 0 0
+		local choice=$?
+		
+		rm -f "$output_file"
+		
+		case $choice in
+			0|255)
+				# OK/ESC = Back to menu
+				log "User chose to return to menu after failed command"
+				return 1
+				;;
+			3)
+				# Extra button = Retry - loop back to confirmation
+				log "User chose to retry after failed command"
+				continue
+				;;
+		esac
 		fi
 				;;
 			2)
@@ -2915,6 +3007,10 @@ summary_apply() {
 	
 	# Wait for oc-mirror to be installed (needed for isconf generation)
 	log "Ensuring oc-mirror is installed before generating ImageSet config"
+	# Show waiting dialog if oc-mirror is still downloading
+	if ! run_once -p -i "$TASK_OC_MIRROR"; then
+		dialog --backtitle "$(ui_backtitle)" --infobox "Installing oc-mirror...\n\nThis is needed before proceeding." 6 50
+	fi
 	# Let errors flow to logs, suppress stdout (informational messages only)
 	if ! run_once -w -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror >/dev/null; then
 		log "ERROR: Failed to install oc-mirror"
@@ -2946,43 +3042,143 @@ summary_apply() {
 	# Initialize registry type setting if not set
 	: "${ABA_REGISTRY_TYPE:=Auto}"
 	
-	# Track which item has focus (start at item 3 for first display)
-	local default_item="3"
+	# Track which item has focus (start at item 1 for first display)
+	local default_item="1"
+	
+	# --- Settings sub-dialog ---
+	_show_settings() {
+		local settings_default="1"
+		while :; do
+			# Determine toggle displays
+			local toggle_answer_display
+			if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
+				toggle_answer_display="Auto-answer: \Z2ON\Zn (-y)"
+			else
+				toggle_answer_display="Auto-answer: \Z1OFF\Zn"
+			fi
+			
+			local toggle_registry_display
+			case "$ABA_REGISTRY_TYPE" in
+				Auto)  toggle_registry_display="Registry Type: \Z6Auto\Zn" ;;
+				Quay)  toggle_registry_display="Registry Type: \Z2Quay\Zn" ;;
+				Docker) toggle_registry_display="Registry Type: \Z3Docker\Zn" ;;
+			esac
+			
+			local toggle_retry_display
+			case "$RETRY_COUNT" in
+				off) toggle_retry_display="Retry Count: \Z1OFF\Zn" ;;
+				2)   toggle_retry_display="Retry Count: \Z22\Zn" ;;
+				8)   toggle_retry_display="Retry Count: \Z38\Zn" ;;
+			esac
+			
+		dialog --colors --backtitle "$(ui_backtitle)" --title "Settings" \
+			--ok-label "Toggle" \
+			--cancel-label "Back" \
+			--default-item "$settings_default" \
+			--menu "Select a setting to toggle:" 0 0 3 \
+				1 "$toggle_answer_display" \
+				2 "$toggle_registry_display" \
+				3 "$toggle_retry_display" \
+				2>"$TMP"
+			local src=$?
+			
+			[[ $src -ne 0 ]] && return  # Done/Cancel
+			
+			local saction=$(<"$TMP")
+			case "$saction" in
+				1)
+					if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
+						ABA_AUTO_ANSWER="no"; log "Auto-answer toggled OFF"
+					else
+						ABA_AUTO_ANSWER="yes"; log "Auto-answer toggled ON"
+					fi
+					settings_default="1"
+					;;
+				2)
+					case "$ABA_REGISTRY_TYPE" in
+						Auto)   ABA_REGISTRY_TYPE="Quay"; log "Registry type toggled to Quay" ;;
+						Quay)   ABA_REGISTRY_TYPE="Docker"; log "Registry type toggled to Docker" ;;
+						Docker) ABA_REGISTRY_TYPE="Auto"; log "Registry type toggled to Auto" ;;
+					esac
+					settings_default="2"
+					;;
+				3)
+					case "$RETRY_COUNT" in
+						off) RETRY_COUNT="2"; log "Retry count toggled to 2" ;;
+						2)   RETRY_COUNT="8"; log "Retry count toggled to 8" ;;
+						8)   RETRY_COUNT="off"; log "Retry count toggled to OFF" ;;
+					esac
+					settings_default="3"
+					;;
+			esac
+		done
+	}
+	
+	# --- Advanced sub-dialog ---
+	_show_advanced() {
+		local adv_default="1"
+		while :; do
+			dialog --colors --backtitle "$(ui_backtitle)" --title "Advanced Options" \
+				--cancel-label "Back" \
+				--ok-label "Select" \
+				--default-item "$adv_default" \
+				--menu "Advanced actions:" 0 0 4 \
+				1 "Generate ImageSet Config & Exit" \
+				2 "Delete Registry (Quay)" \
+				3 "Delete Registry (Docker)" \
+				4 "Exit (run commands manually)" \
+				2>"$TMP"
+			local arc=$?
+			
+			[[ $arc -ne 0 ]] && return  # Back/Cancel
+			
+			local aaction=$(<"$TMP")
+			case "$aaction" in
+				1)
+					if handle_action_isconf; then
+						ADVANCED_EXIT=0; return
+					fi
+					adv_default="1"; continue
+					;;
+				2)
+					log "User chose to delete Quay registry"
+					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+						dialog --colors --title "Error" --msgbox \
+							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
+						adv_default="2"; continue
+					fi
+					if ! confirm_and_execute "aba -d mirror uninstall -y"; then
+						adv_default="2"; continue
+					fi
+					;;
+				3)
+					log "User chose to delete Docker registry"
+					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+						dialog --colors --title "Error" --msgbox \
+							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
+						adv_default="3"; continue
+					fi
+					if ! confirm_and_execute "aba -d mirror uninstall-docker-registry -y"; then
+						adv_default="3"; continue
+					fi
+					;;
+				4)
+					log "User chose to exit and run commands manually"
+					clear
+					echo "Configuration saved to: $ABA_ROOT/aba.conf"
+					if [[ -n "$custom_set_name" ]]; then
+						echo "Custom operator set: templates/operator-set-${custom_set_name}"
+					fi
+					echo ""
+					echo "Run 'aba --help' to see available commands"
+					ADVANCED_EXIT=0; return
+					;;
+			esac
+		done
+	}
 	
 	while :; do
-		# Determine toggle displays
-		local toggle_answer_display
-		if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
-			toggle_answer_display="Toggle Auto-answer: \Z2ON\Zn (-y)"
-		else
-			toggle_answer_display="Toggle Auto-answer: \Z1OFF\Zn"
-		fi
-		
-		local toggle_registry_display
-		case "$ABA_REGISTRY_TYPE" in
-			Auto)
-				toggle_registry_display="Toggle Registry Type: \Z6Auto\Zn"
-				;;
-			Quay)
-				toggle_registry_display="Toggle Registry Type: \Z2Quay\Zn"
-				;;
-			Docker)
-				toggle_registry_display="Toggle Registry Type: \Z3Docker\Zn"
-				;;
-		esac
-		
-		local toggle_retry_display
-		case "$RETRY_COUNT" in
-			off)
-				toggle_retry_display="Toggle Retry Count: \Z1OFF\Zn"
-				;;
-			3)
-				toggle_retry_display="Toggle Retry Count: \Z23\Zn"
-				;;
-			8)
-				toggle_retry_display="Toggle Retry Count: \Z38\Zn"
-				;;
-		esac
+		local ADVANCED_EXIT=""
 		
 		dialog --colors --backtitle "$(ui_backtitle)" --title "Choose Next Action" \
 		--cancel-label "Exit" \
@@ -2990,22 +3186,23 @@ summary_apply() {
 		--ok-label "Select" \
 		--extra-button --extra-label "Back" \
 		--default-item "$default_item" \
-		--menu "Configuration saved to aba.conf\n\nChoose what to do next:" 0 0 13 \
-		0 "$toggle_answer_display" \
-		1 "$toggle_registry_display" \
-		2 "$toggle_retry_display" \
-		3 "View Generated ImageSet Config" \
-		"" "━━━ Air-Gapped (Fully Disconnected) ━━━" \
-		4 "Create ABA Install Bundle (air-gapped)" \
-		5 "Save Images to Local Archive" \
-		"" "━━━ Connected/Partially Connected ━━━" \
-		6 "Install & Sync to Local Registry" \
-		7 "Install & Sync to Remote Registry via SSH" \
-		"" "━━━━━━━━━━━━━ Advanced ━━━━━━━━━━━━━" \
-		8 "Generate ImageSet Config & Exit" \
-		9 "Delete Registry (Quay)" \
-		10 "Delete Registry (Docker)" \
-		11 "Exit (run commands manually)" \
+		--menu "Configuration saved to aba.conf. Choose what to do next:" 0 0 0 \
+		"" "──── Review ─────────────────────────────" \
+		1 "View Generated ImageSet Config" \
+		"" " " \
+		"" "──── Air-Gapped (Fully Disconnected) ────" \
+		2 "Create Air-Gapped Install Bundle" \
+		3 "Save Images to Local Archive" \
+		"" " " \
+		"" "──── Connected / Partially Connected ────" \
+		4 "Install & Sync to Local Registry" \
+		5 "Install & Sync to Remote Registry via SSH" \
+		"" " " \
+		"" "──── Other ──────────────────────────────" \
+		6 "Rerun Wizard" \
+		7 "Settings..." \
+		8 "Advanced Options..." \
+		9 "Exit" \
 		2>"$TMP"
 		rc=$?
 		
@@ -3021,97 +3218,40 @@ summary_apply() {
 					log "Separator selected, redisplaying menu"
 					continue
 					;;
-				0)
-					# Toggle auto-answer
-						if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
-							ABA_AUTO_ANSWER="no"
-							log "Auto-answer toggled OFF"
-						else
-							ABA_AUTO_ANSWER="yes"
-							log "Auto-answer toggled ON"
-						fi
-						# Keep focus on item 0
-						default_item="0"
-						continue
-						;;
-					1)
-						# Toggle registry type
-						case "$ABA_REGISTRY_TYPE" in
-							Auto)
-								ABA_REGISTRY_TYPE="Quay"
-								log "Registry type toggled to Quay"
-								;;
-							Quay)
-								ABA_REGISTRY_TYPE="Docker"
-								log "Registry type toggled to Docker"
-								;;
-							Docker)
-								ABA_REGISTRY_TYPE="Auto"
-								log "Registry type toggled to Auto"
-								;;
-						esac
-						# Keep focus on item 1
-						default_item="1"
-						continue
-						;;
-					2)
-						# Toggle retry count
-						case "$RETRY_COUNT" in
-							off)
-								RETRY_COUNT="3"
-								log "Retry count toggled to 3"
-								;;
-							3)
-								RETRY_COUNT="8"
-								log "Retry count toggled to 8"
-								;;
-							8)
-								RETRY_COUNT="off"
-								log "Retry count toggled to OFF"
-								;;
-						esac
-						# Keep focus on item 2
-						default_item="2"
-						continue
-						;;
-				3)
+				1)
 					# View ImageSet Config
 					handle_action_view_isconf
-					# Stay in menu after viewing, keep focus on item 3
-					default_item="3"
+					default_item="1"
 					continue
 					;;
-				4)
+				2)
 					# Create Bundle
 					if handle_action_bundle; then
 						return 0
 					else
-						# User cancelled, stay in menu, keep focus on item 4
-						default_item="4"
+						default_item="2"
 						continue
 					fi
 					;;
-				5)
+				3)
 					# Save Images
 					if handle_action_save; then
 						return 0
 					else
-						# User cancelled, stay in menu, keep focus on item 5
-						default_item="5"
+						default_item="3"
 						continue
 					fi
 					;;
-				6)
+				4)
 					# Local Registry (Auto/Quay/Docker based on setting)
 					case "$ABA_REGISTRY_TYPE" in
 						Auto)
-							# Auto-detect: Docker for ARM64, Quay otherwise
 							if [[ "$(uname -m)" == "aarch64" ]] || [[ "$(uname -m)" == "arm64" ]]; then
 								log "Auto-selected Docker for ARM64 architecture"
 								if handle_action_local_docker; then
 									return 0
 								else
-									default_item="6"
+									default_item="4"
 									continue
 								fi
 							else
@@ -3119,7 +3259,7 @@ summary_apply() {
 								if handle_action_local_quay; then
 									return 0
 								else
-									default_item="6"
+									default_item="4"
 									continue
 								fi
 							fi
@@ -3128,7 +3268,7 @@ summary_apply() {
 							if handle_action_local_quay; then
 								return 0
 							else
-								default_item="6"
+								default_item="4"
 								continue
 							fi
 							;;
@@ -3136,78 +3276,54 @@ summary_apply() {
 							if handle_action_local_docker; then
 								return 0
 							else
-								default_item="6"
+								default_item="4"
 								continue
 							fi
 							;;
 					esac
 					;;
-				7)
+				5)
 					# Remote Registry
 					if handle_action_remote_quay; then
 						return 0
 					else
-						# User cancelled, stay in menu, keep focus on item 7
-						default_item="7"
+						default_item="5"
 						continue
 					fi
 					;;
-				8)
-					# Generate ISConf
-					if handle_action_isconf; then
-						return 0
-					else
-						# User cancelled, stay in menu, keep focus on item 8
-						default_item="8"
-						continue
-					fi
-					;;
-				9)
-					# Delete Registry (Quay)
-					log "User chose to delete Quay registry"
-					
-					# Check if mirror.conf exists
-					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-						dialog --colors --title "Error" --msgbox \
-							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 10 60
-						default_item="9"
-						continue
-					fi
-					
-					if ! confirm_and_execute "aba -d mirror uninstall -y"; then
-						default_item="9"
-						continue
-					fi
-					;;
-				10)
-					# Delete Registry (Docker)
-					log "User chose to delete Docker registry"
-					
-					# Check if mirror.conf exists
-					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-						dialog --colors --title "Error" --msgbox \
-							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 10 60
-						default_item="10"
-						continue
-					fi
-					
-					if ! confirm_and_execute "aba -d mirror uninstall-docker-registry -y"; then
-						default_item="10"
-						continue
-					fi
-					;;
-				11)
-					# Exit manually
-					log "User chose to exit and run commands manually"
-					clear
-					echo "Configuration saved to: $ABA_ROOT/aba.conf"
-					if [[ -n "$custom_set_name" ]]; then
-						echo "Custom operator set: templates/operator-set-${custom_set_name}"
-					fi
-					echo ""
-					echo "Run 'aba --help' to see available commands"
+			6)
+				# Rerun Wizard
+				log "User chose to rerun wizard"
+				RERUN_WIZARD=true
+				return 0
+				;;
+			7)
+				# Settings sub-menu
+				_show_settings
+				default_item="7"
+				continue
+				;;
+			8)
+				# Advanced sub-menu
+				_show_advanced
+				if [[ "$ADVANCED_EXIT" == "0" ]]; then
 					return 0
-					;;
+				fi
+				default_item="8"
+				continue
+				;;
+			9)
+				# Exit
+				log "User chose to exit"
+				clear
+				echo "Configuration saved to: $ABA_ROOT/aba.conf"
+				if [[ -n "$custom_set_name" ]]; then
+					echo "Custom operator set: templates/operator-set-${custom_set_name}"
+				fi
+				echo ""
+				echo "Run 'aba --help' to see available commands"
+				return 0
+				;;
 			esac
 				;;
 			1)
@@ -3226,34 +3342,35 @@ summary_apply() {
 			# Help
 			log "Help button pressed in action menu"
 			dialog --backtitle "$(ui_backtitle)" --msgbox \
-"Next Actions:
+"Choose Next Action - Help
 
-CONFIGURATION TOGGLES:
-• Auto-answer (-y) - Skip confirmation prompts
-• Registry Type - Switch between Quay/Docker registry
-• Retry Count - Number of oc-mirror retry attempts
-
-REVIEW:
-• View ImageSet Config - View generated YAML configuration
+VIEW:
+• View ImageSet Config - Preview the generated YAML for oc-mirror
 
 AIR-GAPPED (Fully Disconnected):
-• Bundle - Create complete install bundle (includes images, binaries, configs)
-           Transfer this bundle to air-gapped environment
-• Save - Save images to ImageSet archive file under aba/mirror/save
+  For environments with no internet access.
+• Create Air-Gapped Install Bundle - Package images, binaries & configs
+                              Transfer this bundle to the air-gapped site
+• Save Images to Archive - Save images to aba/mirror/save/
 
-CONNECTED/PARTIALLY CONNECTED:
-• Local Mirror - Install registry locally and sync images directly
-• Remote Mirror - Install registry on remote host via SSH and sync
+CONNECTED / PARTIALLY CONNECTED:
+  For environments with direct or proxied internet.
+• Local Registry  - Install a registry here and sync images
+• Remote Registry - Install a registry on a remote host via SSH
 
-ADVANCED:
-• ISConf - Generate ImageSet config YAML file only (no downloads)
-           For manual oc-mirror operations
-• Delete Registry (Quay) - Uninstall the Quay registry
-• Delete Registry (Docker) - Uninstall the Docker registry
-• Exit - Exit TUI to run 'aba' commands manually
+RERUN WIZARD:
+• Go back to channel/version/operator selection to change config
 
-After selecting an action, you'll be prompted for any required
-inputs, then the corresponding ABA command will be executed.
+SETTINGS (sub-menu):
+• Auto-answer (-y) - Skip confirmation prompts
+• Registry Type    - Toggle between Auto / Quay / Docker
+• Retry Count      - oc-mirror retry attempts (off / 3 / 8)
+
+ADVANCED (sub-menu):
+• Generate ISConf & Exit  - Create YAML only (for manual oc-mirror)
+• Delete Registry (Quay)  - Uninstall Quay mirror registry
+• Delete Registry (Docker) - Uninstall Docker mirror registry
+• Exit (manual)           - Exit TUI to run 'aba' commands yourself
 
 Log file: $LOG_FILE" 0 0 || true
 				continue
@@ -3286,10 +3403,10 @@ log "=== STARTING TUI ==="
 # Check internet access first
 check_internet_access
 
-# Start background version fetches for fast and candidate channels
-# (stable:latest already fetched in check_internet_access)
-log "Starting background OCP version fetches for remaining channels"
+# Start background version fetches for ALL channels (latest + previous)
+log "Starting background OCP version fetches for all channels"
 # Let errors flow to logs (stderr), suppress stdout (version output)
+run_once -i "ocp:stable:latest_version"             -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version stable' >/dev/null
 run_once -i "ocp:stable:latest_version_previous"    -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable' >/dev/null
 
 run_once -i "ocp:fast:latest_version"               -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast' >/dev/null
@@ -3298,12 +3415,15 @@ run_once -i "ocp:fast:latest_version_previous"      -- bash -lc 'source ./script
 run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate' >/dev/null
 run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate' >/dev/null
 
-log "Background OCP version fetches started"
-
 # Download oc-mirror early (needed for catalog downloads later)
 log "Starting oc-mirror download in background"
 PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror
 log "oc-mirror download started"
+
+# Pre-fetch catalogs for stable:latest in background
+log "Starting background catalog pre-fetch"
+run_once -S -i "tui:prefetch:catalogs" -- "$ABA_ROOT/scripts/prefetch-catalogs.sh"
+log "Background catalog pre-fetch started"
 
 # Show header
 ui_header
@@ -3317,7 +3437,8 @@ log "  OP_BASKET count: ${#OP_BASKET[@]}"
 log "  OP_SET_ADDED count: ${#OP_SET_ADDED[@]}"
 log "Starting wizard loop"
 
-STEP="channel"
+# Check if we can skip wizard (config already complete)
+show_resume_dialog
 while :; do
 	log "Current step: $STEP"
 	case "$STEP" in
@@ -3395,12 +3516,18 @@ while :; do
 			[[ "$DIALOG_RC" == "next" ]] && STEP="summary"
 			[[ "$DIALOG_RC" == "back" ]] && STEP="platform"
 			;;
-		summary)
-			if summary_apply; then
-				break
+	summary)
+		RERUN_WIZARD=false
+		if summary_apply; then
+			if [[ "$RERUN_WIZARD" == "true" ]]; then
+				log "Rerunning wizard from channel selection"
+				STEP="channel"
 			else
-				STEP="operators"
+				break
 			fi
+		else
+			STEP="operators"
+		fi
 			;;
 	esac
 done

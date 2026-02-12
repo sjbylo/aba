@@ -13,7 +13,7 @@ aba_debug "Starting: $0 $* from $PWD"
 echo "$cmd" | grep "^oc " && cmd=$(echo "$cmd" | cut -f2-  -d" ")  # Fix command if needed
 
 #aba_info "Downloading CLI installation binaries"
-#scripts/cli-install-all.sh --wait  # FIXME: should only be for oc?
+#scripts/cli-install-all.sh --wait oc
 
 aba_info "Running command: oc --kubeconfig=iso-agent-based/auth/kubeconfig $cmd"
 eval oc --kubeconfig=iso-agent-based/auth/kubeconfig $cmd
