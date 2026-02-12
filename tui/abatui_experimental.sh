@@ -10,6 +10,8 @@
 
 echo Initializing ...
 
+_TUI_START_EPOCH=$(date +%s)
+
 set -o pipefail  # Catch pipeline errors
 set +m            # Disable job control monitoring for faster exit
 
@@ -28,6 +30,40 @@ log() {
 		[[ ! -d "$log_dir" ]] && mkdir -p "$log_dir" 2>/dev/null
 		echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE" 2>/dev/null || true
 	fi
+}
+
+# -----------------------------------------------------------------------------
+# Show config files created/modified during this TUI session
+# -----------------------------------------------------------------------------
+_show_exit_files() {
+	local f mod_epoch shown=0
+	for f in aba.conf mirror/mirror.conf \
+	         mirror/save/imageset-config-save.yaml \
+	         mirror/sync/imageset-config-sync.yaml; do
+		[[ -f "$ABA_ROOT/$f" ]] || continue
+		mod_epoch=$(stat -c %Y "$ABA_ROOT/$f" 2>/dev/null) || continue
+		if (( mod_epoch >= _TUI_START_EPOCH )); then
+			if (( shown == 0 )); then
+				echo "Files created/updated:"
+				shown=1
+			fi
+			echo "  $f"
+		fi
+	done
+	if (( shown == 0 )); then
+		echo "No files were modified."
+	fi
+}
+
+_show_exit_summary() {
+	echo "TUI complete."
+	echo
+	_show_exit_files
+	echo
+	echo "Log file: $LOG_FILE"
+	echo
+	echo "Run 'aba --help' for available commands."
+	echo "See the README.md for more."
 }
 
 # -----------------------------------------------------------------------------
@@ -392,6 +428,7 @@ For full documentation:
 			if confirm_quit; then
 				log "User quit from header"
 				clear
+				_show_exit_summary
 				exit 0
 				else
 					log "User cancelled quit, staying on header"
@@ -948,6 +985,7 @@ The installer will validate the selected version."
 			if confirm_quit; then
 				log "User confirmed quit from version screen"
 				clear
+				_show_exit_summary
 				exit 0
 			else
 				log "User cancelled quit, staying on version screen"
@@ -1129,9 +1167,7 @@ Try again." 0 0 || true
 		--yesno "Selected:
 
   Channel: $OCP_CHANNEL
-  Version: $OCP_VERSION
-
-Next: Configure platform and network." 0 0
+  Version: $OCP_VERSION" 0 0
 	rc=$?
 	
 	case "$rc" in
@@ -1226,9 +1262,7 @@ Please paste a valid pull secret."
 
 Location: ~/.pull-secret.json
 
-Your Red Hat pull secret is valid and ready to use.
-
-Next: Configure platform and network." 0 0
+Your Red Hat pull secret is valid and ready to use." 0 0
 		rc=$?
 		
 		case "$rc" in
@@ -1310,6 +1344,7 @@ Copy the entire JSON text and paste it into the editor." 0 0 || true
 			if confirm_quit; then
 				log "User confirmed quit from pull secret screen"
 				clear
+				_show_exit_summary
 				exit 0
 			else
 				log "User cancelled quit, staying on pull secret screen"
@@ -1511,6 +1546,7 @@ select_platform_network() {
 				if confirm_quit; then
 					log "User confirmed quit from platform screen"
 					clear
+					_show_exit_summary
 					exit 0
 				else
 					log "User cancelled quit, staying on platform screen"
@@ -1817,7 +1853,7 @@ $error_msg
 			--ok-label "Select" \
 			--extra-button --extra-label "Next" \
 			--default-item "$default_item" \
-			--menu "Select operator actions:" 0 0 4 \
+			--menu "$TUI_TITLE_SELECT_OPERATORS" 0 0 4 \
 			1 "Select Operator Sets" \
 			2 "Search Operator Names" \
 			3 "View/Edit Basket ($basket_count operators)" \
@@ -1904,6 +1940,7 @@ image synchronization process." 0 0 || true
 				if confirm_quit; then
 					log "User confirmed quit from operators screen"
 					clear
+					_show_exit_summary
 					exit 0
 				else
 					log "User cancelled quit, staying on operators screen"
@@ -2704,23 +2741,23 @@ handle_action_save() {
 handle_action_isconf() {
 	log "Handling action: Generate ImageSet Config"
 	
-	# No form needed - just confirm and execute using global auto-answer setting
-	local y_flag=""
-	if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
-		y_flag="-y"
-		log "Using global auto-answer: -y flag enabled"
-	else
-		log "Using global auto-answer: -y flag disabled"
-	fi
+	# Fast command -- run directly without confirmation dialog
+	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration..." 4 50
 	
-	# Confirm and execute
-	local cmd="aba -d mirror isconf $y_flag"
-	if ! confirm_and_execute "$cmd"; then
+	local output rc
+	output=$(aba -d mirror isconf -y 2>&1) || true
+	rc=$?
+	log "aba -d mirror isconf -y returned rc=$rc"
+	
+	if [[ $rc -eq 0 ]]; then
+		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2ImageSet Config Generated\Zn" \
+			--msgbox "ImageSet configuration generated successfully.\n\nFiles:\n  mirror/save/imageset-config-save.yaml\n  mirror/sync/imageset-config-sync.yaml" 0 0 || true
+	else
+		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z1ImageSet Config Failed\Zn" \
+			--msgbox "Failed to generate ImageSet configuration.\n\n$output" 0 0 || true
 		return 1
 	fi
 	
-	# Success - user either exited or chose to go back to menu
-	# (handled by confirm_and_execute's success dialog)
 	return 0
 }
 
@@ -2732,12 +2769,35 @@ confirm_and_execute() {
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CONFIRM_EXEC" \
 			--cancel-label "Back" \
 			--ok-label "Select" \
+			--help-button \
 			--menu "Ready to execute:\n\n\Zb$cmd\Zn\n\nChoose execution mode:" 0 0 0 \
 			"1" "Run in TUI (auto-answer, dialog output)" \
 			"2" "Run in Terminal (interactive, full colors)" \
-			"3" "Help (explain options)" \
 			2>"$TMP"
 		rc=$?
+		
+		if [[ $rc -eq 2 ]]; then
+			# Help button
+			log "Help button pressed in confirm execution"
+			dialog --backtitle "$(ui_backtitle)" --msgbox \
+"Execution Options:
+
+• Run in TUI
+  - Command runs inside dialog interface
+  - Auto-answer (-y) is ALWAYS enabled (non-interactive)
+  - Output shown live in progressbox
+  - Scrollable output review after completion
+
+• Run in Terminal  
+  - Command runs in real terminal (exits dialog temporarily)
+  - Respects your Auto-answer toggle setting from action menu
+  - Full interactive mode (can answer prompts, see colors)
+  - Press ENTER to return to TUI after completion
+
+For most operations, 'Run in TUI' is recommended.
+Use 'Run in Terminal' if you need to interact with the command." 0 0 || true
+			continue
+		fi
 		
 		if [[ $rc -ne 0 ]]; then
 			# Cancel/Back
@@ -2806,6 +2866,7 @@ confirm_and_execute() {
 					# Extra button = Exit TUI
 					log "User chose to exit TUI after successful command"
 					clear
+					_show_exit_summary
 					exit 0
 					;;
 				255)
@@ -2881,28 +2942,6 @@ confirm_and_execute() {
 					log "Terminal execution failed with exit code $exit_code, returning to menu"
 					return 1
 				fi
-				;;
-			3)
-				# Help - Show execution help
-				log "Help selected in confirm execution"
-				dialog --backtitle "$(ui_backtitle)" --msgbox \
-"Execution Options:
-
-• Run in TUI
-  - Command runs inside dialog interface
-  - Auto-answer (-y) is ALWAYS enabled (non-interactive)
-  - Output shown live in progressbox
-  - Scrollable output review after completion
-
-• Run in Terminal  
-  - Command runs in real terminal (exits dialog temporarily)
-  - Respects your Auto-answer toggle setting from action menu
-  - Full interactive mode (can answer prompts, see colors)
-  - Press ENTER to return to TUI after completion
-
-For most operations, 'Run in TUI' is recommended.
-Use 'Run in Terminal' if you need to see prompts or interact with the command." 0 0 || true
-				continue
 				;;
 			*)
 				log "ERROR: Unexpected menu choice: $choice"
@@ -3083,6 +3122,7 @@ summary_apply() {
 		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_SETTINGS" \
 			--ok-label "Toggle" \
 			--cancel-label "Back" \
+			--help-button \
 			--default-item "$settings_default" \
 			--menu "Select a setting to toggle:" 0 0 3 \
 				$TUI_SETTINGS_AUTO_ANSWER "$toggle_answer_display" \
@@ -3090,6 +3130,26 @@ summary_apply() {
 				$TUI_SETTINGS_RETRY_COUNT "$toggle_retry_display" \
 				2>"$TMP"
 			local src=$?
+			
+			if [[ $src -eq 2 ]]; then
+				# Help button
+				dialog --backtitle "$(ui_backtitle)" --title "Settings Help" --msgbox \
+"Auto-answer (-y):
+  When ON, aba commands run without confirmation prompts.
+  When OFF, you will be asked to confirm each action.
+
+Registry Type:
+  Auto   - Let aba choose the registry (recommended).
+  Quay   - Force Quay mirror registry.
+  Docker - Force Docker V2 mirror registry.
+
+Retry Count:
+  How many times to retry failed oc-mirror operations.
+  OFF = no retries, 2 or 8 = retry that many times.
+
+Toggle a setting by selecting it and pressing Enter." 0 0 || true
+				continue
+			fi
 			
 			[[ $src -ne 0 ]] && return  # Done/Cancel
 			
@@ -3174,12 +3234,7 @@ summary_apply() {
 				4)
 					log "User chose to exit and run commands manually"
 					clear
-					echo "Configuration saved to: $ABA_ROOT/aba.conf"
-					if [[ -n "$custom_set_name" ]]; then
-						echo "Custom operator set: templates/operator-set-${custom_set_name}"
-					fi
-					echo ""
-					echo "Run 'aba --help' to see available commands"
+					_show_exit_summary
 					ADVANCED_EXIT=0; return
 					;;
 			esac
@@ -3325,12 +3380,7 @@ summary_apply() {
 				# Exit
 				log "User chose to exit"
 				clear
-				echo "Configuration saved to: $ABA_ROOT/aba.conf"
-				if [[ -n "$custom_set_name" ]]; then
-					echo "Custom operator set: templates/operator-set-${custom_set_name}"
-				fi
-				echo ""
-				echo "Run 'aba --help' to see available commands"
+				_show_exit_summary
 				return 0
 				;;
 			esac
@@ -3339,7 +3389,7 @@ summary_apply() {
 				# Cancel = Exit
 				log "User cancelled from action menu"
 				clear
-				echo "Configuration saved to: $ABA_ROOT/aba.conf"
+				_show_exit_summary
 				return 0
 				;;
 			3)
@@ -3356,13 +3406,13 @@ summary_apply() {
 VIEW:
 • View ImageSet Config - Preview the generated YAML for oc-mirror
 
-AIR-GAPPED (Fully Disconnected):
+AIR-GAPPED (Fully Disconnected) - uses mirror-to-disk:
   For environments with no internet access.
 • Create Air-Gapped Install Bundle - Package images, binaries & configs
                               Transfer this bundle to the air-gapped site
 • Save Images to Archive - Save images to aba/mirror/save/
 
-CONNECTED / PARTIALLY CONNECTED:
+CONNECTED / PARTIALLY CONNECTED - uses mirror-to-mirror:
   For environments with direct or proxied internet.
 • Local Registry  - Install a registry here and sync images
 • Remote Registry - Install a registry on a remote host via SSH
@@ -3389,6 +3439,7 @@ Log file: $LOG_FILE" 0 0 || true
 				if confirm_quit; then
 					log "User confirmed quit from action menu"
 					clear
+					_show_exit_summary
 					exit 0
 				else
 					log "User cancelled quit, staying on action menu"
@@ -3463,6 +3514,7 @@ while :; do
 			if confirm_quit; then
 				log "User quit from channel selection"
 				clear
+				_show_exit_summary
 				break
 				else
 					log "User cancelled quit, staying on channel"
@@ -3544,15 +3596,4 @@ done
 
 clear
 log "TUI completed successfully"
-echo "TUI complete."
-echo
-echo "Configuration saved to:"
-echo "  $ABA_ROOT/aba.conf"
-if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-	echo "  $ABA_ROOT/mirror/mirror.conf"
-fi
-echo
-echo "Log file: $LOG_FILE"
-echo
-echo "Run 'aba --help' for available commands."
-echo "See the README.md for more."
+_show_exit_summary
