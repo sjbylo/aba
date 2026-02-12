@@ -423,8 +423,8 @@ DNSEOF
     cat <<-SETUPEOF | ssh "${user}@${host}" -- sudo bash
 		set -ex
 
-		# Install dnsmasq
-		dnf install -y dnsmasq
+		# Install dnsmasq and dig (bind-utils)
+		dnf install -y dnsmasq bind-utils
 
 		# Write config
 		cat > /etc/dnsmasq.d/e2e-pool.conf << 'CONFEOF'

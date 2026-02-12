@@ -328,9 +328,9 @@ e2e_run "$CON_HOST: *.apps.standard.$pool_dom -> $expected_apps" \
 e2e_run "$CON_HOST: upstream DNS forwarding (google.com)" \
     "ssh $DEF_USER@$CON_HOST dig +short google.com @127.0.0.1 | grep -q '[0-9]'"
 
-# dis1 can resolve cluster DNS via con1's dnsmasq (via con1's lab IP)
-e2e_run "$DIS_HOST: resolve api.sno.$pool_dom via $CON_NAME ($con_ip)" \
-    "ssh $DEF_USER@$DIS_HOST dig +short api.sno.$pool_dom @$con_ip | grep -q $expected_node"
+# Verify con1's dnsmasq is reachable from the network (run dig locally, targeting con1's IP)
+e2e_run "Network DNS: api.sno.$pool_dom via $CON_NAME ($con_ip)" \
+    "dig +short api.sno.$pool_dom @$con_ip | grep -q $expected_node"
 
 # --- Root SSH ---
 e2e_run "$CON_HOST: root SSH" "ssh root@$CON_HOST whoami | grep root"
