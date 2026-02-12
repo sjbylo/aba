@@ -21,7 +21,7 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-INT_BASTION_HOST="${INT_BASTION_HOST:-registry.example.com}"
+INT_BASTION_HOST="${INT_BASTION_HOST:-con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}}"
 INT_BASTION_VM="${INT_BASTION_VM:-bastion-internal-${INTERNAL_BASTION_RHEL_VER:-rhel9}}"
 INTERNAL_BASTION="${TEST_USER:-steve}@${INT_BASTION_HOST}"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
@@ -152,7 +152,7 @@ test_end 0
 test_begin "SNO: install cluster"
 
 e2e_run_remote "Create SNO cluster" \
-    "cd ~/aba && aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step install"
+    "cd ~/aba && aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Verify cluster operators" \
     "cd ~/aba && aba --dir sno run"
 e2e_run_remote "Check cluster operators" \

@@ -19,7 +19,7 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-INT_BASTION_HOST="${INT_BASTION_HOST:-registry.example.com}"
+INT_BASTION_HOST="${INT_BASTION_HOST:-con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}}"
 INT_BASTION_VM="${INT_BASTION_VM:-bastion-internal-${INTERNAL_BASTION_RHEL_VER:-rhel9}}"
 INTERNAL_BASTION="${TEST_USER:-steve}@${INT_BASTION_HOST}"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
@@ -152,7 +152,7 @@ test_begin "Bonding: install SNO with bond0"
 
 # Create cluster with bonding configuration
 e2e_run_remote "Create SNO config for bonding" \
-    "cd ~/aba && aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf"
+    "cd ~/aba && aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 
 # Configure bonding in cluster.conf
 e2e_run_remote "Set bond config in cluster.conf" \
