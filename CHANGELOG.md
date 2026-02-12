@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+---
+
+## [0.9.2] - 2026-02-13
+
+TUI polish, new E2E test framework, reliability and UX fixes
+
+
 ### New Features
 - **TUI promoted to stable** - Removed "Experimental" label, renamed to `abatui.sh`, added root symlink `./abatui`
 - **Older version option** - TUI version selection now offers Latest, Previous, and Older (N-2 minor release)
@@ -101,7 +108,8 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/sjbylo/aba/releases/tag/v0.9.2
 [0.9.1]: https://github.com/sjbylo/aba/releases/tag/v0.9.1
 [0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
 [0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
