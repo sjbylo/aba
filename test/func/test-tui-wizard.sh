@@ -70,7 +70,7 @@ start_tui
 # ============================================================
 
 log_info "Test 1: Welcome dialog"
-if wait_for "OpenShift Installer" 15; then
+if wait_for "$TUI_TITLE_WELCOME" 15; then
 	log_pass "Welcome dialog appeared"
 	screenshot "welcome"
 else
@@ -85,7 +85,7 @@ sleep 2
 # ============================================================
 
 log_info "Test 2: Channel selection (should skip resume)"
-if wait_for "OpenShift Channel" 15; then
+if wait_for "$TUI_TITLE_CHANNEL" 15; then
 	log_pass "Channel dialog appeared (resume skipped — config incomplete)"
 	screenshot "channel"
 else
@@ -109,7 +109,7 @@ sleep 1
 # ============================================================
 
 log_info "Test 3: Version selection"
-if wait_for "OpenShift Version" 20; then
+if wait_for "$TUI_TITLE_VERSION" 20; then
 	log_pass "Version dialog appeared"
 	screenshot "version"
 else
@@ -128,14 +128,14 @@ sleep 2
 # ============================================================
 
 log_info "Test 4: Version confirmation"
-if wait_for "Confirm Selection" 10; then
+if wait_for "$TUI_TITLE_CONFIRM" 10; then
 	log_pass "Version confirmation dialog appeared"
 	screenshot "version-confirm"
 else
 	# Might show "Verifying" first
 	if wait_for "Verifying" 5; then
 		log_info "Version verification in progress..."
-		if wait_for "Confirm Selection" 30; then
+		if wait_for "$TUI_TITLE_CONFIRM" 30; then
 			log_pass "Version confirmation dialog appeared (after verification)"
 			screenshot "version-confirm"
 		else
@@ -160,7 +160,7 @@ sleep 2
 # ============================================================
 
 log_info "Test 5: Pull secret instructions"
-if wait_for "Red Hat Pull Secret" 10; then
+if wait_for "$TUI_TITLE_PULL_SECRET" 10; then
 	log_pass "Pull secret instructions appeared"
 	screenshot "pull-secret-instructions"
 else
@@ -179,7 +179,7 @@ sleep 1
 # ============================================================
 
 log_info "Test 6: Pull secret paste"
-if wait_for "Paste JSON" 5; then
+if wait_for "$TUI_TITLE_PULL_SECRET_PASTE" 5; then
 	log_pass "Pull secret editbox appeared"
 	screenshot "pull-secret-editbox"
 else
@@ -202,7 +202,7 @@ sleep 2
 log_info "Test 7: Pull secret validation"
 # May see "Validating" briefly, then auto-proceeds to Platform
 # Wait for either the success flash or the Platform screen
-if wait_for "Platform" 30; then
+if wait_for "$TUI_TITLE_PLATFORM" 30; then
 	log_pass "Reached Platform screen (pull secret validated)"
 else
 	# Check if validation failed
@@ -222,7 +222,7 @@ fi
 
 log_info "Test 8: Platform & Network"
 screenshot "platform"
-assert_screen "Platform" "Platform & Network dialog present"
+assert_screen "$TUI_TITLE_PLATFORM" "Platform & Network dialog present"
 assert_screen "Base Domain" "Shows Base Domain field"
 assert_screen "Machine Network" "Shows Machine Network field"
 
@@ -235,7 +235,7 @@ sleep 2
 # ============================================================
 
 log_info "Test 9: Operators"
-if wait_for "Operators" 10; then
+if wait_for "$TUI_TITLE_OPERATORS" 10; then
 	log_pass "Operators dialog appeared"
 	screenshot "operators"
 else
@@ -254,12 +254,12 @@ sleep 1
 # ============================================================
 
 log_info "Test 10: Empty basket warning"
-if wait_for "No operators\|Empty Basket\|empty basket" 5; then
+if wait_for "$TUI_TITLE_EMPTY_BASKET" 5; then
 	log_pass "Empty basket warning appeared"
 	screenshot "empty-basket"
 else
 	# Might have skipped to summary (if operators were pre-selected)
-	if capture | grep -qi "Choose Next Action"; then
+	if capture | grep -qi "$TUI_TITLE_ACTION_MENU"; then
 		log_pass "Skipped to action menu (operators may have been pre-selected)"
 	else
 		log_fail "Empty basket warning did not appear"
@@ -275,7 +275,7 @@ sleep 2
 # ============================================================
 
 log_info "Test 11: Action menu"
-if wait_for "Choose Next Action" 20; then
+if wait_for "$TUI_TITLE_ACTION_MENU" 20; then
 	log_pass "Action menu appeared — full wizard complete!"
 	screenshot "action-menu"
 else
@@ -286,7 +286,7 @@ else
 fi
 
 # Verify key menu items
-for item in "View Generated ImageSet" "Air-Gapped" "Connected" "Rerun Wizard" "Settings" "Exit"; do
+for item in "$TUI_ACTION_LABEL_VIEW_IMAGESET" "Air-Gapped" "Connected" "$TUI_ACTION_LABEL_RERUN_WIZARD" "$TUI_TITLE_SETTINGS" "$TUI_ACTION_LABEL_EXIT"; do
 	assert_screen "$item" "Menu item present: $item"
 done
 
@@ -295,7 +295,7 @@ done
 # ============================================================
 
 log_info "Test 12: Exit TUI cleanly"
-send "9" Enter
+send "$TUI_ACTION_EXIT" Enter
 sleep 2
 
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then

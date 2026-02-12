@@ -21,8 +21,32 @@ if [[ ! -f aba.conf ]]; then
 	exit 1
 fi
 
+# --- Backup aba.conf so other tests can't break us ---
+
+_CONF_BACKUP=""
+
+backup_conf() {
+	_CONF_BACKUP=$(mktemp /tmp/tui-test-conf-XXXXXX)
+	cp aba.conf "$_CONF_BACKUP"
+	log_info "Backed up aba.conf to $_CONF_BACKUP"
+}
+
+restore_conf() {
+	if [[ -n "$_CONF_BACKUP" ]] && [[ -f "$_CONF_BACKUP" ]]; then
+		cp "$_CONF_BACKUP" aba.conf
+		rm -f "$_CONF_BACKUP"
+		log_info "Restored aba.conf"
+	fi
+}
+
+backup_conf
+
 # --- Cleanup on exit ---
-trap stop_tui EXIT
+cleanup_basic_test() {
+	stop_tui
+	restore_conf
+}
+trap cleanup_basic_test EXIT
 
 # --- Start TUI ---
 start_tui
@@ -32,7 +56,7 @@ start_tui
 # ============================================================
 
 log_info "Test 0: Welcome dialog should appear"
-if wait_for "OpenShift Installer" 15; then
+if wait_for "$TUI_TITLE_WELCOME" 15; then
 	log_pass "Welcome dialog appeared"
 	screenshot "welcome"
 else
@@ -47,20 +71,13 @@ sleep 2
 # ============================================================
 
 log_info "Test 1: Resume dialog should appear"
-if wait_for "Existing Configuration Found" 15; then
+if wait_for "$TUI_TITLE_RESUME" 15; then
 	log_pass "Resume dialog appeared"
 	screenshot "resume-dialog"
 else
-	# Config might not be complete — might go straight to wizard
-	if capture | grep -qi "channel"; then
-		log_info "No resume dialog — config may be incomplete, wizard started"
-		log_pass "Wizard started (resume skipped — config incomplete)"
-		echo ""
-		echo "(Resume dialog not shown — remaining tests skipped)"
-		report_results
-		exit $?
-	fi
-	log_fail "Resume dialog did not appear"
+	log_fail "Resume dialog did not appear (aba.conf may be incomplete)"
+	log_info "Screen dump:"
+	capture | head -25
 	exit 1
 fi
 
@@ -77,7 +94,7 @@ log_info "Test 2: Press Continue to reach action menu"
 send Enter
 sleep 2
 
-if wait_for "Choose Next Action" 20; then
+if wait_for "$TUI_TITLE_ACTION_MENU" 20; then
 	log_pass "Action menu appeared"
 	screenshot "action-menu"
 else
@@ -86,7 +103,7 @@ else
 fi
 
 # Verify key menu items are present
-for item in "View Generated ImageSet" "Air-Gapped" "Connected" "Rerun Wizard" "Settings" "Advanced" "Exit"; do
+for item in "$TUI_ACTION_LABEL_VIEW_IMAGESET" "Air-Gapped" "Connected" "$TUI_ACTION_LABEL_RERUN_WIZARD" "$TUI_TITLE_SETTINGS" "$TUI_ACTION_LABEL_ADVANCED" "$TUI_ACTION_LABEL_EXIT"; do
 	assert_screen "$item" "Menu item present: $item"
 done
 
@@ -95,10 +112,10 @@ done
 # ============================================================
 
 log_info "Test 3: Navigate to Settings sub-menu"
-send "7" Enter
+send "$TUI_ACTION_SETTINGS" Enter
 sleep 1
 
-if wait_for "Settings" 5; then
+if wait_for "$TUI_TITLE_SETTINGS" 5; then
 	log_pass "Settings dialog appeared"
 	screenshot "settings"
 else
@@ -111,7 +128,7 @@ assert_screen "Auto-answer" "Settings shows Auto-answer toggle"
 send Escape
 sleep 1
 
-if wait_for "Choose Next Action" 5; then
+if wait_for "$TUI_TITLE_ACTION_MENU" 5; then
 	log_pass "Returned to action menu from Settings"
 else
 	log_fail "Did not return to action menu from Settings"
@@ -122,7 +139,7 @@ fi
 # ============================================================
 
 log_info "Test 4: Exit TUI cleanly"
-send "9" Enter
+send "$TUI_ACTION_EXIT" Enter
 sleep 2
 
 # Check if session ended

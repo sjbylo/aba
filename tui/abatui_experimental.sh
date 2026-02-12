@@ -35,7 +35,7 @@ log() {
 # -----------------------------------------------------------------------------
 confirm_quit() {
 	log "User attempting to quit, showing confirmation"
-	dialog --backtitle "ABA TUI" --title "Confirm Exit" \
+	dialog --backtitle "ABA TUI" --title "$TUI_TITLE_CONFIRM_EXIT" \
 		--help-button \
 		--yes-label "Exit" \
 		--no-label "Continue" \
@@ -98,6 +98,9 @@ if [[ -z "${ABA_ROOT:-}" ]]; then
 	export ABA_ROOT
 fi
 
+# Source shared constants (dialog titles, menu IDs) — single source of truth
+# shared with automated tests in test/func/
+source "$ABA_ROOT/tui/tui-strings.sh"
 
 # Auto-install required packages (dialog, jq, make, etc.) if missing
 "$ABA_ROOT/scripts/install-rpms.sh" external
@@ -285,7 +288,7 @@ check_internet_access() {
 	if ! check_internet_connectivity "tui"; then
 		# Function sets FAILED_SITES and ERROR_DETAILS
 		log "ERROR: No internet access to: $FAILED_SITES"
-		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
+		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_INTERNET_REQUIRED" \
 			--msgbox \
 "\Z1ERROR: Internet access required\Zn
 
@@ -330,7 +333,7 @@ ui_header() {
 	
 	local rc
 	while :; do
-		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "ABA – OpenShift Installer" \
+		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_WELCOME" \
 			--help-button --help-label "Help" \
 			--ok-label "Continue" \
 			--msgbox \
@@ -360,7 +363,7 @@ Navigate with <Tab> and arrow keys. Press <ESC> to quit.
 			2)
 				# Help button pressed - show help and loop back
 				log "Help button pressed in header"
-				dialog --backtitle "$(ui_backtitle)" --title "ABA Help" --msgbox \
+				dialog --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_HELP" --msgbox \
 "ABA (Agent-Based Automation) helps install OpenShift in disconnected environments.
 
 The wizard guides you through:
@@ -376,7 +379,6 @@ The wizard guides you through:
 
 Configuration is saved to:
   $ABA_ROOT/aba.conf
-  $ABA_ROOT/mirror/mirror.conf
 
 After completing this wizard:
   • The TUI will guide you through next steps
@@ -567,7 +569,7 @@ show_resume_dialog() {
 	local _dns_display="${DNS_SERVERS//,/ }"
 	local _ntp_display="${NTP_SERVERS//,/ }"
 	
-	dialog --colors --no-collapse --backtitle "$(ui_backtitle)" --title "Existing Configuration Found" \
+	dialog --colors --no-collapse --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_RESUME" \
 		--ok-label "Continue" \
 		--extra-button --extra-label "Reconfigure" \
 		--cancel-label "Exit" \
@@ -632,7 +634,7 @@ select_ocp_channel() {
 	local default_tag="${OCP_CHANNEL:0:1}"  # First letter: s, f, or c
 	[[ -z "$default_tag" ]] && default_tag="s"
 	
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "OpenShift Channel" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CHANNEL" \
 		--extra-button --extra-label "Back" \
 		--help-button \
 		--ok-label "Next" \
@@ -807,7 +809,7 @@ Check log file for details:
 
 What would you like to do?"
 		
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Version Fetch Failed" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_VERSION_FETCH_FAILED" \
 			--yes-label "Retry" \
 			--no-label "Back" \
 			--yesno "$error_msg" 0 0
@@ -887,7 +889,7 @@ What would you like to do?"
 	
 	menu_items+=("m" "Manual entry (x.y or x.y.z)")
 
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "OpenShift Version" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_VERSION" \
 		--extra-button --extra-label "Back" \
 		--help-button \
 		--ok-label "Next" \
@@ -1114,7 +1116,7 @@ Try again." 0 0 || true
 	
 	log "aba.conf updated successfully"
 	
-	dialog --backtitle "$(ui_backtitle)" --title "Confirm Selection" \
+	dialog --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CONFIRM" \
 		--yes-label "Next" \
 		--no-label "Back" \
 		--yesno "Selected:
@@ -1210,7 +1212,7 @@ Please paste a valid pull secret."
 	# If valid but not auto-skipping (came from Back), show info and allow Back
 	if [[ -f "$pull_secret_file" ]] && [[ -z "$error_msg" ]]; then
 		log "Valid pull secret exists, showing info (user can go back)"
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET" \
 			--yes-label "Next" \
 			--no-label "Back" \
 			--yesno "\Z2✓ Valid Pull Secret Found\Zn
@@ -1247,13 +1249,13 @@ Next: Configure platform and network." 0 0
 		# Show error message if there was a validation issue
 		if [[ -n "$error_msg" ]]; then
 			# Use dialog's auto-sizing (0 0 = auto height/width)
-			dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Validation Error" \
+			dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_VALIDATION_ERROR" \
 				--msgbox "$error_msg" 0 0 || true
 			error_msg=""  # Clear for next iteration
 		elif [[ $_showed_instructions -eq 0 ]]; then
 			# Show instructions on first visit (no error, no existing pull secret)
 			_showed_instructions=1
-			dialog --colors --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
+			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET" \
 				--ok-label "Continue" \
 				--msgbox "Paste your Red Hat pull secret into the next screen.
 
@@ -1284,7 +1286,7 @@ Copy the entire JSON text and paste it into the editor." 0 0 || true
 		echo "" > "$empty_file"
 		
 		# Show editbox - title tells user what to do
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret - Paste JSON below" \
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET_PASTE" \
 			--no-cancel \
 			--extra-button --extra-label "Back" \
 			--help-button --help-label "Clear" \
@@ -1353,7 +1355,7 @@ Get it from:
 				else
 					log "Pull secret validation failed: $validation_error"
 					
-					dialog --colors --backtitle "$(ui_backtitle)" --title "Pull Secret Validation Failed" \
+					dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET_VALIDATION_FAILED" \
 						--yes-label "Try Again" \
 						--no-label "Continue Anyway" \
 						--yesno "\Z1Pull secret authentication failed!\Zn
@@ -1464,7 +1466,7 @@ select_platform_network() {
 		[[ "$_dns_display" != "(auto-detect)" ]] && _dns_display="${_dns_display//,/ }"
 		[[ "$_ntp_display" != "(auto-detect)" ]] && _ntp_display="${_ntp_display//,/ }"
 
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Platform & Network" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PLATFORM" \
 			--cancel-label "Back" \
 			--help-button \
 			--ok-label "Select" \
@@ -1802,7 +1804,7 @@ $error_msg
 		
 		log "About to show operators menu dialog..."
 		
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Operators" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_OPERATORS" \
 			--cancel-label "Back" \
 			--help-button \
 			--ok-label "Select" \
@@ -1835,7 +1837,7 @@ $error_msg
 				# Check if basket is empty and warn
 				if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
 					log "Empty basket - showing warning"
-					dialog --backtitle "$(ui_backtitle)" --title "Empty Basket" \
+					dialog --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_EMPTY_BASKET" \
 						--extra-button --extra-label "Back" \
 						--yes-label "Continue Anyway" \
 						--no-label "Add Operators" \
@@ -1943,7 +1945,7 @@ image synchronization process." 0 0 || true
 				# Calculate size based on number of operator sets (items has 3 elements per set)
 				local num_sets=$((${#items[@]} / 3))
 				local list_h=$((num_sets < 18 ? num_sets + 2 : 18))
-				dialog --clear --backtitle "$(ui_backtitle)" --title "Operator Sets" \
+				dialog --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_OPERATOR_SETS" \
 					--ok-label "Add to Basket" \
 					--checklist "Use spacebar to toggle, then press Add to Basket:" 0 70 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
@@ -2091,7 +2093,7 @@ image synchronization process." 0 0 || true
 			# Calculate size based on number of matching operators
 			local num_ops=$((${#items[@]} / 3))
 			local list_h=$((num_ops < 18 ? num_ops + 2 : 18))
-			dialog --clear --backtitle "$(ui_backtitle)" --title "Select Operators" \
+			dialog --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_SELECT_OPERATORS" \
 				--ok-label "Add to Basket" \
 				--checklist "Use spacebar to toggle, then press Add to Basket:" 0 60 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
@@ -2279,7 +2281,7 @@ This file should have been generated automatically." 0 0 || true
 	fi
 	
 	# Show file in scrollable textbox
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_IMAGESET" \
 		--exit-label "OK" \
 		--textbox "$isconf_file" 0 0
 	
@@ -2292,7 +2294,7 @@ handle_action_bundle() {
 	# Get output path from user
 	local default_bundle="/tmp/ocp-bundle"
 	
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CREATE_BUNDLE" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
 		--inputbox "Enter output path for install bundle:\n\n(Version suffix will be added automatically)" 10 70 "$default_bundle" \
@@ -2339,7 +2341,7 @@ handle_action_bundle() {
 		log "Output and mirror on same device"
 		
 		# Ask user if they want --light option
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CREATE_BUNDLE" \
 			--yes-label "Yes" \
 			--no-label "No" \
 			--yesno "Enable light bundle option?\n\n(Excludes large image-set archives from bundle to save disk space)\n\nBundle output: $bundle_path" 0 0
@@ -2352,7 +2354,7 @@ handle_action_bundle() {
 			log "Light option disabled by user - will create full bundle"
 			
 			# Warn about disk space (like aba.sh does for full bundles on same device)
-			dialog --colors --backtitle "$(ui_backtitle)" --title "Disk Space Warning" \
+			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_DISK_SPACE_WARNING" \
 				--yes-label "Continue" \
 				--no-label "Cancel" \
 				--yesno "\Z3Disk Space Consideration\Zn
@@ -2422,7 +2424,7 @@ handle_action_local_quay() {
 	local default_data_dir="${data_dir:-~}"
 	
 	# Collect inputs using form
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Local Quay Registry" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_LOCAL_QUAY" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
 		--form "Configure local Quay registry:" 0 0 0 \
@@ -2513,7 +2515,7 @@ handle_action_local_docker() {
 	local default_data_dir="${data_dir:-~}"
 	
 	# Collect inputs using form
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Local Docker Registry" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_LOCAL_DOCKER" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
 		--form "Configure local Docker registry:" 0 0 0 \
@@ -2588,7 +2590,7 @@ handle_action_remote_quay() {
 	local default_data_dir="${data_dir:-~}"
 	
 	# Collect inputs using form
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Remote Quay Registry (SSH)" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_REMOTE_QUAY" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
 		--form "Configure remote Quay registry:" 0 0 0 \
@@ -2720,7 +2722,7 @@ confirm_and_execute() {
 	log "Confirming command: $cmd"
 	
 	while :; do
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Confirm Execution" \
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CONFIRM_EXEC" \
 			--cancel-label "Back" \
 			--ok-label "Select" \
 			--menu "Ready to execute:\n\n\Zb$cmd\Zn\n\nChoose execution mode:" 0 0 0 \
@@ -3071,14 +3073,14 @@ summary_apply() {
 				8)   toggle_retry_display="Retry Count: \Z38\Zn" ;;
 			esac
 			
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Settings" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_SETTINGS" \
 			--ok-label "Toggle" \
 			--cancel-label "Back" \
 			--default-item "$settings_default" \
 			--menu "Select a setting to toggle:" 0 0 3 \
-				1 "$toggle_answer_display" \
-				2 "$toggle_registry_display" \
-				3 "$toggle_retry_display" \
+				$TUI_SETTINGS_AUTO_ANSWER "$toggle_answer_display" \
+				$TUI_SETTINGS_REGISTRY_TYPE "$toggle_registry_display" \
+				$TUI_SETTINGS_RETRY_COUNT "$toggle_retry_display" \
 				2>"$TMP"
 			local src=$?
 			
@@ -3086,29 +3088,29 @@ summary_apply() {
 			
 			local saction=$(<"$TMP")
 			case "$saction" in
-				1)
+				$TUI_SETTINGS_AUTO_ANSWER)
 					if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
 						ABA_AUTO_ANSWER="no"; log "Auto-answer toggled OFF"
 					else
 						ABA_AUTO_ANSWER="yes"; log "Auto-answer toggled ON"
 					fi
-					settings_default="1"
+					settings_default="$TUI_SETTINGS_AUTO_ANSWER"
 					;;
-				2)
+				$TUI_SETTINGS_REGISTRY_TYPE)
 					case "$ABA_REGISTRY_TYPE" in
 						Auto)   ABA_REGISTRY_TYPE="Quay"; log "Registry type toggled to Quay" ;;
 						Quay)   ABA_REGISTRY_TYPE="Docker"; log "Registry type toggled to Docker" ;;
 						Docker) ABA_REGISTRY_TYPE="Auto"; log "Registry type toggled to Auto" ;;
 					esac
-					settings_default="2"
+					settings_default="$TUI_SETTINGS_REGISTRY_TYPE"
 					;;
-				3)
+				$TUI_SETTINGS_RETRY_COUNT)
 					case "$RETRY_COUNT" in
 						off) RETRY_COUNT="2"; log "Retry count toggled to 2" ;;
 						2)   RETRY_COUNT="8"; log "Retry count toggled to 8" ;;
 						8)   RETRY_COUNT="off"; log "Retry count toggled to OFF" ;;
 					esac
-					settings_default="3"
+					settings_default="$TUI_SETTINGS_RETRY_COUNT"
 					;;
 			esac
 		done
@@ -3118,7 +3120,7 @@ summary_apply() {
 	_show_advanced() {
 		local adv_default="1"
 		while :; do
-			dialog --colors --backtitle "$(ui_backtitle)" --title "Advanced Options" \
+			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_ADVANCED" \
 				--cancel-label "Back" \
 				--ok-label "Select" \
 				--default-item "$adv_default" \
@@ -3143,7 +3145,7 @@ summary_apply() {
 				2)
 					log "User chose to delete Quay registry"
 					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-						dialog --colors --title "Error" --msgbox \
+						dialog --colors --title "$TUI_TITLE_ERROR" --msgbox \
 							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
 						adv_default="2"; continue
 					fi
@@ -3154,7 +3156,7 @@ summary_apply() {
 				3)
 					log "User chose to delete Docker registry"
 					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-						dialog --colors --title "Error" --msgbox \
+						dialog --colors --title "$TUI_TITLE_ERROR" --msgbox \
 							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
 						adv_default="3"; continue
 					fi
@@ -3180,7 +3182,7 @@ summary_apply() {
 	while :; do
 		local ADVANCED_EXIT=""
 		
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Choose Next Action" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_ACTION_MENU" \
 		--cancel-label "Exit" \
 		--help-button \
 		--ok-label "Select" \
@@ -3188,21 +3190,21 @@ summary_apply() {
 		--default-item "$default_item" \
 		--menu "Configuration saved to aba.conf. Choose what to do next:" 0 0 0 \
 		"" "──── Review ─────────────────────────────" \
-		1 "View Generated ImageSet Config" \
+		$TUI_ACTION_VIEW_IMAGESET "$TUI_ACTION_LABEL_VIEW_IMAGESET" \
 		"" " " \
 		"" "──── Air-Gapped (Fully Disconnected) ────" \
-		2 "Create Air-Gapped Install Bundle" \
-		3 "Save Images to Local Archive" \
+		$TUI_ACTION_CREATE_BUNDLE "$TUI_ACTION_LABEL_CREATE_BUNDLE" \
+		$TUI_ACTION_SAVE_IMAGES "$TUI_ACTION_LABEL_SAVE_IMAGES" \
 		"" " " \
 		"" "──── Connected / Partially Connected ────" \
-		4 "Install & Sync to Local Registry" \
-		5 "Install & Sync to Remote Registry via SSH" \
+		$TUI_ACTION_LOCAL_REGISTRY "$TUI_ACTION_LABEL_LOCAL_REGISTRY" \
+		$TUI_ACTION_REMOTE_REGISTRY "$TUI_ACTION_LABEL_REMOTE_REGISTRY" \
 		"" " " \
 		"" "──── Other ──────────────────────────────" \
-		6 "Rerun Wizard" \
-		7 "Settings..." \
-		8 "Advanced Options..." \
-		9 "Exit" \
+		$TUI_ACTION_RERUN_WIZARD "$TUI_ACTION_LABEL_RERUN_WIZARD" \
+		$TUI_ACTION_SETTINGS "$TUI_ACTION_LABEL_SETTINGS" \
+		$TUI_ACTION_ADVANCED "$TUI_ACTION_LABEL_ADVANCED" \
+		$TUI_ACTION_EXIT "$TUI_ACTION_LABEL_EXIT" \
 		2>"$TMP"
 		rc=$?
 		
@@ -3218,31 +3220,31 @@ summary_apply() {
 					log "Separator selected, redisplaying menu"
 					continue
 					;;
-				1)
+				$TUI_ACTION_VIEW_IMAGESET)
 					# View ImageSet Config
 					handle_action_view_isconf
-					default_item="1"
+					default_item="$TUI_ACTION_VIEW_IMAGESET"
 					continue
 					;;
-				2)
+				$TUI_ACTION_CREATE_BUNDLE)
 					# Create Bundle
 					if handle_action_bundle; then
 						return 0
 					else
-						default_item="2"
+						default_item="$TUI_ACTION_CREATE_BUNDLE"
 						continue
 					fi
 					;;
-				3)
+				$TUI_ACTION_SAVE_IMAGES)
 					# Save Images
 					if handle_action_save; then
 						return 0
 					else
-						default_item="3"
+						default_item="$TUI_ACTION_SAVE_IMAGES"
 						continue
 					fi
 					;;
-				4)
+				$TUI_ACTION_LOCAL_REGISTRY)
 					# Local Registry (Auto/Quay/Docker based on setting)
 					case "$ABA_REGISTRY_TYPE" in
 						Auto)
@@ -3251,7 +3253,7 @@ summary_apply() {
 								if handle_action_local_docker; then
 									return 0
 								else
-									default_item="4"
+									default_item="$TUI_ACTION_LOCAL_REGISTRY"
 									continue
 								fi
 							else
@@ -3259,7 +3261,7 @@ summary_apply() {
 								if handle_action_local_quay; then
 									return 0
 								else
-									default_item="4"
+									default_item="$TUI_ACTION_LOCAL_REGISTRY"
 									continue
 								fi
 							fi
@@ -3268,7 +3270,7 @@ summary_apply() {
 							if handle_action_local_quay; then
 								return 0
 							else
-								default_item="4"
+								default_item="$TUI_ACTION_LOCAL_REGISTRY"
 								continue
 							fi
 							;;
@@ -3276,43 +3278,43 @@ summary_apply() {
 							if handle_action_local_docker; then
 								return 0
 							else
-								default_item="4"
+								default_item="$TUI_ACTION_LOCAL_REGISTRY"
 								continue
 							fi
 							;;
 					esac
 					;;
-				5)
+				$TUI_ACTION_REMOTE_REGISTRY)
 					# Remote Registry
 					if handle_action_remote_quay; then
 						return 0
 					else
-						default_item="5"
+						default_item="$TUI_ACTION_REMOTE_REGISTRY"
 						continue
 					fi
 					;;
-			6)
+			$TUI_ACTION_RERUN_WIZARD)
 				# Rerun Wizard
 				log "User chose to rerun wizard"
 				RERUN_WIZARD=true
 				return 0
 				;;
-			7)
+			$TUI_ACTION_SETTINGS)
 				# Settings sub-menu
 				_show_settings
-				default_item="7"
+				default_item="$TUI_ACTION_SETTINGS"
 				continue
 				;;
-			8)
+			$TUI_ACTION_ADVANCED)
 				# Advanced sub-menu
 				_show_advanced
 				if [[ "$ADVANCED_EXIT" == "0" ]]; then
 					return 0
 				fi
-				default_item="8"
+				default_item="$TUI_ACTION_ADVANCED"
 				continue
 				;;
-			9)
+			$TUI_ACTION_EXIT)
 				# Exit
 				log "User chose to exit"
 				clear
@@ -3538,7 +3540,9 @@ echo "TUI complete."
 echo
 echo "Configuration saved to:"
 echo "  $ABA_ROOT/aba.conf"
-echo "  $ABA_ROOT/mirror/mirror.conf"
+if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+	echo "  $ABA_ROOT/mirror/mirror.conf"
+fi
 echo
 echo "Log file: $LOG_FILE"
 echo
