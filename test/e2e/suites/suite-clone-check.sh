@@ -88,7 +88,8 @@ plan_tests \
     "Cleanup: caches, podman, home on both hosts" \
     "Config: vmware.conf, test user, aba install ($CON_NAME)" \
     "Harden: remove RPMs, pull-secret, proxy ($DIS_NAME)" \
-    "Verify: full configuration check"
+    "Verify: full configuration check" \
+    "Cleanup: destroy $CON_NAME + $DIS_NAME"
 
 suite_begin "clone-check"
 
@@ -323,18 +324,15 @@ e2e_run "$DIS_HOST: vmware.conf exists" \
 test_end 0
 
 # ============================================================================
+# 12. Cleanup: destroy clones (all tests passed)
+# ============================================================================
+test_begin "Cleanup: destroy $CON_NAME + $DIS_NAME"
+
+e2e_run "Destroy $DIS_NAME" "destroy_vm $DIS_NAME"
+e2e_run "Destroy $CON_NAME" "destroy_vm $CON_NAME"
+
+test_end 0
+
+# ============================================================================
 
 suite_end
-
-echo ""
-echo "================================================="
-echo "Pool ${POOL_NUM} VMs fully configured:"
-echo "  $CON_NAME ($CON_HOST) -- connected bastion / gateway"
-echo "  $DIS_NAME ($DIS_HOST) -- disconnected bastion (air-gapped)"
-echo ""
-echo "VLAN IPs:"
-echo "  $CON_NAME: ${VM_CLONE_VLAN_IPS[$CON_NAME]}"
-echo "  $DIS_NAME: ${VM_CLONE_VLAN_IPS[$DIS_NAME]}"
-echo ""
-echo "VMs are still running for manual inspection."
-echo "================================================="
