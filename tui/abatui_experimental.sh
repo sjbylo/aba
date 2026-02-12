@@ -431,6 +431,20 @@ resume_from_conf() {
 				scripts/j2 templates/aba.conf.j2 > aba.conf 2>>"$LOG_FILE"; then
 				log "Created aba.conf from templates/aba.conf.j2"
 				log "aba.conf size: $(wc -l < aba.conf) lines"
+				
+				# Populate with latest stable version so aba.conf is always valid.
+				# Version fetches were already started in background at startup.
+				log "Waiting for stable:latest version fetch to populate aba.conf"
+				run_once -q -w -S -i "ocp:stable:latest_version" 2>>"$LOG_FILE" || true
+				local latest_ver
+				latest_ver=$(fetch_latest_version stable 2>>"$LOG_FILE") || true
+				if [[ -n "$latest_ver" ]]; then
+					log "Setting default ocp_version=$latest_ver, ocp_channel=stable"
+					replace-value-conf -q -n ocp_version -v "$latest_ver" -f aba.conf
+					replace-value-conf -q -n ocp_channel -v "stable"      -f aba.conf
+				else
+					log "WARNING: Could not fetch latest stable version (no internet?)"
+				fi
 			else
 				log "ERROR: Failed to create aba.conf from template (exit code: $?)"
 			fi
@@ -2003,7 +2017,7 @@ image synchronization process." 0 0 || true
 			# Search operators (needs index files)
 			log "User searching operators (catalog already loaded)"
 		
-		dialog --colors --backtitle "$(ui_backtitle)" --inputbox "Search operator names (min 2 chars, multiple terms AND'ed):" 0 0 2>"$TMP" || continue
+		dialog --colors --backtitle "$(ui_backtitle)" --inputbox "Search operator names (min 2 chars, multiple terms AND'ed):" 10 50 2>"$TMP" || continue
 			query=$(<"$TMP")
 			query=${query//$'
 '/}
@@ -3422,6 +3436,10 @@ log "Starting oc-mirror download in background"
 PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror
 log "oc-mirror download started"
 
+# Initialize configuration and global arrays (must happen BEFORE prefetch
+# so that aba.conf exists when background catalog scripts try to read it)
+resume_from_conf
+
 # Pre-fetch catalogs for stable:latest in background
 log "Starting background catalog pre-fetch"
 run_once -S -i "tui:prefetch:catalogs" -- "$ABA_ROOT/scripts/prefetch-catalogs.sh"
@@ -3429,9 +3447,6 @@ log "Background catalog pre-fetch started"
 
 # Show header
 ui_header
-
-# Initialize configuration and global arrays
-resume_from_conf
 
 log "After resume_from_conf:"
 log "  OP_BASKET type: $(declare -p OP_BASKET 2>&1)"

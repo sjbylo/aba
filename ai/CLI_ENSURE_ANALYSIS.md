@@ -16,7 +16,7 @@ This document analyzes where each CLI binary is first used across all scripts an
   before the install, to prevent extracting a partially-downloaded tarball
 - This was needed because `ensure_oc_mirror()` bypasses `cli-install-all.sh`
   (which has its own `cli-download-all.sh --wait`) — called directly from
-  `download-catalog-index-simple.sh` via `make -sC cli oc-mirror`
+  `download-catalog-index.sh` via `make -sC cli oc-mirror`
 - Uses clean logical task ID `cli:download:oc-mirror` (not tarball filenames)
   thanks to the Makefile refactor (see below)
 
@@ -83,7 +83,7 @@ This document analyzes where each CLI binary is first used across all scripts an
 - `scripts/reg-save.sh` - ✅ Has `ensure_oc_mirror` (implicit via run_once)
 - `scripts/reg-sync.sh` - ✅ Has `ensure_oc_mirror` (implicit via run_once)
 - `scripts/reg-load.sh` - ✅ Has `ensure_oc_mirror` (implicit via run_once)
-- `scripts/download-catalog-index-simple.sh` - ✅ Has `ensure_oc_mirror` (line ~52)
+- `scripts/download-catalog-index.sh` - ✅ Has `ensure_oc_mirror` (line ~52)
 
 #### Analysis:
 - **All oc-mirror usage is already protected** ✅
@@ -175,7 +175,7 @@ This document analyzes where each CLI binary is first used across all scripts an
 ### When are CLIs needed?
 
 **Very early (must have ensure_*()):**
-- ✅ `download-catalog-index-simple.sh` → Has `ensure_oc_mirror` ✅
+- ✅ `download-catalog-index.sh` → Has `ensure_oc_mirror` ✅
 - ✅ `reg-save.sh` → Has `ensure_oc_mirror` ✅
 - ✅ `reg-sync.sh` → Has `ensure_oc_mirror` ✅
 - ✅ `reg-load.sh` → Has `ensure_oc_mirror` ✅

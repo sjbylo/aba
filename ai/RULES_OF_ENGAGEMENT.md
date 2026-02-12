@@ -824,7 +824,7 @@ cd "$SCRIPT_DIR/.." || exit 1
 
 **When to use**:
 - Scripts that need to cd to a specific directory based on their location
-- Examples: `download-catalog-index-simple.sh`, `reg-sync.sh`, `reg-save.sh`
+- Examples: `download-catalog-index.sh`, `reg-sync.sh`, `reg-save.sh`
 
 **When NOT needed**:
 - Scripts that just source files (source works fine with symlinks)

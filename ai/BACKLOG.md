@@ -47,7 +47,7 @@ Currently, scripts have inconsistent directory management practices:
 - scripts/cli-install-all.sh
 - scripts/cli-download-all.sh
 - scripts/cleanup-runner.sh
-- scripts/download-catalog-index-simple.sh
+- scripts/download-catalog-index.sh
 ```
 
 **Recommended Approach:**

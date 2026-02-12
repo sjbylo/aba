@@ -171,7 +171,7 @@ day2-osus: .cli
 - `reg-save.sh` → `ensure_oc_mirror` ✅ (already has it)
 - `reg-sync.sh` → `ensure_oc_mirror` ✅ (already has it)
 - `reg-load.sh` → `ensure_oc_mirror` ✅ (already has it)
-- `download-catalog-index-simple.sh` → `ensure_oc_mirror` ✅ (already has it)
+- `download-catalog-index.sh` → `ensure_oc_mirror` ✅ (already has it)
 
 **Can rely on background download (but ensure_* is good safety):**
 - `day2.sh` → Background downloads usually complete by cluster install

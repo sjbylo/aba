@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test script for download-catalog-index-simple.sh
+# Test script for download-catalog-index.sh
 
 set -euo pipefail
 
@@ -9,8 +9,13 @@ export ABA_ROOT="$(pwd)"
 
 source scripts/include_all.sh
 
-echo "=== Test: download-catalog-index-simple.sh ==="
+echo "=== Test: download-catalog-index.sh ==="
 echo ""
+
+# Get OCP version from aba.conf (single source of truth)
+source <(normalize-aba-conf)
+ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
+echo "Using OCP version: $ocp_version (minor: $ocp_ver_major)"
 
 # Use test runner directory
 export RUN_ONCE_DIR="/tmp/test-catalog-simple"
@@ -23,7 +28,7 @@ rm -f mirror/.index/redhat-operator-index-v*.done 2>/dev/null || true
 echo "=== Test 1: Download redhat-operator catalog ==="
 cd mirror
 run_once -i "test:catalog:redhat-operator" -- \
-	"$ABA_ROOT/scripts/download-catalog-index-simple.sh" redhat-operator
+	"$ABA_ROOT/scripts/download-catalog-index.sh" redhat-operator "$ocp_ver_major"
 
 echo ""
 echo "=== Waiting for download to complete ==="
@@ -36,10 +41,6 @@ fi
 
 echo ""
 echo "=== Verifying output files ==="
-
-# Get OCP version from aba.conf
-source <(normalize-aba-conf)
-ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
 
 index_file=".index/redhat-operator-index-v${ocp_ver_major}"
 done_file=".index/.redhat-operator-index-v${ocp_ver_major}.done"
@@ -74,7 +75,7 @@ echo ""
 echo "=== Test 2: Run again (should skip) ==="
 run_once -r -i "test:catalog:redhat-operator"  # Reset task
 run_once -i "test:catalog:redhat-operator" -- \
-	"$ABA_ROOT/scripts/download-catalog-index-simple.sh" redhat-operator
+	"$ABA_ROOT/scripts/download-catalog-index.sh" redhat-operator "$ocp_ver_major"
 run_once -w -i "test:catalog:redhat-operator"
 
 echo "✓ Second run completed (should have skipped actual download)"
@@ -84,12 +85,12 @@ echo "=== Test 3: Test with TTL ==="
 run_once -r -i "test:catalog:redhat-operator:ttl"
 echo "First download with 5 second TTL..."
 run_once -i "test:catalog:redhat-operator:ttl" -t 5 -- \
-	"$ABA_ROOT/scripts/download-catalog-index-simple.sh" redhat-operator
+	"$ABA_ROOT/scripts/download-catalog-index.sh" redhat-operator "$ocp_ver_major"
 run_once -w -i "test:catalog:redhat-operator:ttl"
 
 echo "Immediate re-run (should skip)..."
 run_once -i "test:catalog:redhat-operator:ttl" -t 5 -- \
-	"$ABA_ROOT/scripts/download-catalog-index-simple.sh" redhat-operator
+	"$ABA_ROOT/scripts/download-catalog-index.sh" redhat-operator "$ocp_ver_major"
 run_once -w -i "test:catalog:redhat-operator:ttl"
 echo "✓ Skipped as expected"
 

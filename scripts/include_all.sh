@@ -1765,13 +1765,13 @@ download_all_catalogs() {
 	# Each download will skip if already completed within TTL
 	# Note: Scripts use pwd -P to resolve symlinks and find real aba root
 	run_once -i "catalog:${version_short}:redhat-operator" -t "$ttl" -- \
-		scripts/download-catalog-index-simple.sh redhat-operator
+		scripts/download-catalog-index.sh redhat-operator "$version_short"
 	
 	run_once -i "catalog:${version_short}:certified-operator" -t "$ttl" -- \
-		scripts/download-catalog-index-simple.sh certified-operator
+		scripts/download-catalog-index.sh certified-operator "$version_short"
 	
 	run_once -i "catalog:${version_short}:community-operator" -t "$ttl" -- \
-		scripts/download-catalog-index-simple.sh community-operator
+		scripts/download-catalog-index.sh community-operator "$version_short"
 	
 	aba_debug "Catalog download tasks started in background"
 }
