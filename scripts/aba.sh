@@ -177,22 +177,22 @@ if [ ! -s $ABA_ROOT/aba.conf ]; then
 
 	$ABA_ROOT/scripts/j2 $ABA_ROOT/templates/aba.conf.j2 > $ABA_ROOT/aba.conf
 else
-	# If the repo has empty network values in aba.conf, add defaults - as now is the best time (on internal network).
-	# For pre-created bundles, aba.conf will exist but these values will be empty ... so attempt to fill them in. 
 	source <(cd $ABA_ROOT && normalize-aba-conf)
-	# Determine resonable defaults for the following ... and add to conf file if value exists ...
-	# This will always try to add sensible default values from the local network config. if not already set in the config file.
-	[ ! "$domain" ]			&& v=$(get_domain)		&& [ "$v" ] && replace-value-conf -n domain		-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: domain=$domain
-	[ ! "$machine_network" ]	&& v=$(get_machine_network) 	&& [ "$v" ] && replace-value-conf -n machine_network	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: machine_network=$machine_network
-	[ ! "$dns_servers" ]		&& v=$(get_dns_servers)		&& [ "$v" ] && replace-value-conf -n dns_servers	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: dns_servers=$dns_servers
-	[ ! "$next_hop_address" ]	&& v=$(get_next_hop)		&& [ "$v" ] && replace-value-conf -n next_hop_address	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: next_hop_address=$next_hop_address
-	[ ! "$ntp_servers" ]		&& v=$(get_ntp_servers) 	&& [ "$v" ] && replace-value-conf -n ntp_servers	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: ntp_servers=$ntp_servers
+	# Only auto-fill empty network values in bundle mode (on internal/disconnected network).
+	# For pre-created bundles, aba.conf will exist but network values will be empty ... so attempt to fill them in.
+	if [ -f "$ABA_ROOT/.bundle" ]; then
+		[ ! "$domain" ]			&& v=$(get_domain)		&& [ "$v" ] && replace-value-conf -n domain		-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: domain=$domain
+		[ ! "$machine_network" ]	&& v=$(get_machine_network) 	&& [ "$v" ] && replace-value-conf -n machine_network	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: machine_network=$machine_network
+		[ ! "$dns_servers" ]		&& v=$(get_dns_servers)		&& [ "$v" ] && replace-value-conf -n dns_servers	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: dns_servers=$dns_servers
+		[ ! "$next_hop_address" ]	&& v=$(get_next_hop)		&& [ "$v" ] && replace-value-conf -n next_hop_address	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: next_hop_address=$next_hop_address
+		[ ! "$ntp_servers" ]		&& v=$(get_ntp_servers) 	&& [ "$v" ] && replace-value-conf -n ntp_servers	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: ntp_servers=$ntp_servers
 
-	aba_debug domain:		$domain
-	aba_debug machine_network:	$machine_network
-	aba_debug dns_servers:		$dns_servers
-	aba_debug next_hop_address:	$next_hop_address
-	aba_debug ntp_servers:		$ntp_servers
+		aba_debug domain:		$domain
+		aba_debug machine_network:	$machine_network
+		aba_debug dns_servers:		$dns_servers
+		aba_debug next_hop_address:	$next_hop_address
+		aba_debug ntp_servers:		$ntp_servers
+	fi
 fi
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')

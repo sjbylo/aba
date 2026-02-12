@@ -56,6 +56,25 @@ _show_exit_files() {
 }
 
 _show_exit_summary() {
+	# Clean up auto-created aba.conf if the user quit before completing the wizard.
+	# _TUI_FRESH_CONF is set to "1" when aba.conf is first created from the template
+	# (in resume_from_conf), and cleared in summary_apply() once the user finishes the
+	# wizard and the full configuration is committed.  If the flag is still set at exit,
+	# the user abandoned the wizard early, so the half-baked aba.conf (containing only
+	# template defaults and possibly an auto-selected version) is removed to ensure a
+	# clean slate on the next TUI run.
+	if [[ "${_TUI_FRESH_CONF:-}" == "1" && -f "$ABA_ROOT/aba.conf" ]]; then
+		rm -f "$ABA_ROOT/aba.conf"
+		log "Removed auto-created aba.conf (wizard not completed)"
+		echo "TUI exited before wizard completion. No configuration was saved."
+		echo
+		echo "Log file: $LOG_FILE"
+		echo
+		echo "Run 'aba --help' for available commands."
+		echo "See the README.md for more."
+		return
+	fi
+
 	echo "TUI complete."
 	echo
 	_show_exit_files
@@ -479,6 +498,11 @@ resume_from_conf() {
 				else
 					log "WARNING: Could not fetch latest stable version (no internet?)"
 				fi
+				# Mark that aba.conf was auto-created this session (not by the user).
+				# If the user quits before completing the wizard, _show_exit_summary()
+				# will remove this auto-created file to keep a clean slate.
+				# The flag is cleared in summary_apply() once the wizard is completed.
+				_TUI_FRESH_CONF=1
 			else
 				log "ERROR: Failed to create aba.conf from template (exit code: $?)"
 			fi
@@ -599,6 +623,13 @@ config_is_complete() {
 show_resume_dialog() {
 	log "Checking if config is complete for resume dialog"
 	
+	# Skip resume dialog if aba.conf was just created in this session
+	if [[ "${_TUI_FRESH_CONF:-}" == "1" ]]; then
+		log "Config freshly created this session, running wizard"
+		STEP="channel"
+		return
+	fi
+
 	if ! config_is_complete; then
 		log "Config incomplete, running full wizard"
 		STEP="channel"
@@ -771,12 +802,19 @@ select_ocp_version() {
 			need_reset=1
 		fi
 	fi
+	if exit_code=$(run_once -E -i "ocp:${OCP_CHANNEL}:latest_version_older" 2>/dev/null); then
+		if [[ "$exit_code" != "0" ]]; then
+			log "Cached task ocp:${OCP_CHANNEL}:latest_version_older has failed (exit $exit_code) - will reset and retry"
+			need_reset=1
+		fi
+	fi
 	
 	# Reset failed caches
 	if [[ $need_reset -eq 1 ]]; then
 		log "Resetting failed version fetch caches for channel $OCP_CHANNEL"
 		run_once -r -i "ocp:${OCP_CHANNEL}:latest_version"
 		run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+		run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_older"
 	fi
 
 	# Peek first to see if we need to wait
@@ -790,6 +828,10 @@ select_ocp_version() {
 		log "Previous version not ready"
 		need_wait=1
 	fi
+	if ! run_once -p -i "ocp:${OCP_CHANNEL}:latest_version_older"; then
+		log "Older version not ready"
+		need_wait=1
+	fi
 	
 	# Only show wait dialog if actually waiting
 	if [[ $need_wait -eq 1 ]]; then
@@ -799,8 +841,10 @@ select_ocp_version() {
 		# Two-step start+wait avoids foreground mode which leaks stdout to terminal.
 		run_once    -i "ocp:${OCP_CHANNEL}:latest_version"          -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
 		run_once    -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+		run_once    -i "ocp:${OCP_CHANNEL}:latest_version_older"    -- bash -lc "source ./scripts/include_all.sh; fetch_older_version $OCP_CHANNEL"
 		run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version"
 		run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+		run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_older"
 	else
 		log "Version data already available, no wait needed"
 	fi
@@ -809,9 +853,10 @@ select_ocp_version() {
 	# Note: fetch functions read from run_once cache, so don't redirect their stderr
 	latest=$(fetch_latest_version "$OCP_CHANNEL")
 	previous=$(fetch_previous_version "$OCP_CHANNEL")
-	log "Versions: latest=$latest previous=$previous"
+	older=$(fetch_older_version "$OCP_CHANNEL")
+	log "Versions: latest=$latest previous=$previous older=$older"
 	
-	# Check if version fetch failed
+	# Check if version fetch failed (older is optional - N-2 may not exist)
 	if [[ -z "$latest" || -z "$previous" ]]; then
 		log "ERROR: Failed to fetch version data for channel $OCP_CHANNEL"
 		
@@ -865,13 +910,16 @@ What would you like to do?"
 				log "User chose to retry version fetch"
 				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version"
 				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_older"
 				
 			# Show wait dialog and re-run the fetches
 			dialog --backtitle "$(ui_backtitle)" --infobox "Retrying version fetch for channel '$OCP_CHANNEL'...\n\nPlease wait..." 6 55
 			run_once -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
 			run_once -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+			run_once -i "ocp:${OCP_CHANNEL}:latest_version_older" -- bash -lc "source ./scripts/include_all.sh; fetch_older_version $OCP_CHANNEL"
 			run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version"
 			run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+			run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_older"
 				
 				DIALOG_RC="repeat"
 				return
@@ -894,6 +942,8 @@ What would you like to do?"
 			default_item="l"
 		elif [[ "$OCP_VERSION" == "$previous" ]]; then
 			default_item="p"
+		elif [[ -n "$older" && "$OCP_VERSION" == "$older" ]]; then
+			default_item="o"
 		else
 			# Current version is different - but does it exist in this channel?
 			log "Checking if current version $OCP_VERSION exists in channel $OCP_CHANNEL"
@@ -926,6 +976,9 @@ What would you like to do?"
 	local menu_items=()
 	menu_items+=("l" "Latest   ($latest)")
 	menu_items+=("p" "Previous ($previous)")
+	if [[ -n "$older" ]]; then
+		menu_items+=("o" "Older    ($older)")
+	fi
 	
 	if [[ $show_current -eq 1 ]]; then
 		menu_items+=("c" "Current  ($OCP_VERSION)")
@@ -955,8 +1008,13 @@ What would you like to do?"
 			log "Help button pressed in version selection"
 			local help_text="OpenShift Version Selection:
 
-• Latest: Most recent release in the channel
-• Previous: Previous stable release"
+• Latest: Most recent release in the channel (N)
+• Previous: Previous minor release (N-1)"
+			
+			if [[ -n "$older" ]]; then
+				help_text="${help_text}
+• Older: Older minor release (N-2)"
+			fi
 			
 			if [[ $show_current -eq 1 ]]; then
 				help_text="${help_text}
@@ -1003,6 +1061,7 @@ The installer will validate the selected version."
 	case "$choice" in
 		l|"") OCP_VERSION="$latest" ;;
 		p) OCP_VERSION="$previous" ;;
+		o) OCP_VERSION="$older" ;;
 		c) 
 			# Keep current version (already in OCP_VERSION)
 			log "User selected current version: $OCP_VERSION"
@@ -3047,6 +3106,11 @@ summary_apply() {
 	replace-value-conf -q -n ops               -v ""                   -f aba.conf
 	replace-value-conf -q -n op_sets           -v "$op_sets_value"     -f aba.conf
 	log "Configuration saved to aba.conf"
+
+	# Clear the fresh-config flag now that the user has completed the wizard.
+	# This prevents _show_exit_summary() from deleting aba.conf on exit.
+	# See _show_exit_summary() for the full explanation of this mechanism.
+	_TUI_FRESH_CONF=
 	
 	# ALWAYS pre-generate ImageSet config in background before showing action menu
 	# This ensures it's ready for any action (with or without operators)
@@ -3463,17 +3527,20 @@ log "=== STARTING TUI ==="
 # Check internet access first
 check_internet_access
 
-# Start background version fetches for ALL channels (latest + previous)
+# Start background version fetches for ALL channels (latest + previous + older)
 log "Starting background OCP version fetches for all channels"
 # Let errors flow to logs (stderr), suppress stdout (version output)
 run_once -i "ocp:stable:latest_version"             -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version stable' >/dev/null
 run_once -i "ocp:stable:latest_version_previous"    -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable' >/dev/null
+run_once -i "ocp:stable:latest_version_older"       -- bash -lc 'source ./scripts/include_all.sh; fetch_older_version stable' >/dev/null
 
 run_once -i "ocp:fast:latest_version"               -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast' >/dev/null
 run_once -i "ocp:fast:latest_version_previous"      -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version fast' >/dev/null
+run_once -i "ocp:fast:latest_version_older"         -- bash -lc 'source ./scripts/include_all.sh; fetch_older_version fast' >/dev/null
 
 run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate' >/dev/null
 run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate' >/dev/null
+run_once -i "ocp:candidate:latest_version_older"    -- bash -lc 'source ./scripts/include_all.sh; fetch_older_version candidate' >/dev/null
 
 # Download oc-mirror early (needed for catalog downloads later)
 log "Starting oc-mirror download in background"

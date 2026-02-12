@@ -94,6 +94,8 @@ ABA helps you with the following and more:
 
 All ABA commands and actions are idempotent. If something goes wrong, fix it and run the command again — ABA will always try to do the right thing.
 
+**New:** ABA also includes an experimental TUI (Text User Interface) wizard that guides you through configuration and setup interactively. See [Install ABA](#install-aba) for details.
+
 
 # About Installing OpenShift in a Disconnected Environment
 
@@ -375,6 +377,7 @@ aba -d cli download
 ```
   - *Optionally* download the CLI binaries into `aba/cli`. This is only needed if you plan to disconnect from the Internet before installing OpenShift.
 
+**Tip:** The TUI wizard can also configure and execute registry sync operations interactively: `tui/abatui_experimental.sh`
 
 Now continue with [Installing OpenShift](#installing-openshift) below.
 
@@ -623,6 +626,8 @@ git clone https://github.com/sjbylo/aba.git
 cd aba
 ./install
 ```
+
+**Tip:** You can also use the TUI wizard to configure and create an install bundle interactively: `tui/abatui_experimental.sh`
 
 Connect a large USB media stick (or other device) to your VM and write the `install bundle` to it:
 
