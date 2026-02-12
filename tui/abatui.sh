@@ -147,8 +147,9 @@ log "Log file: $LOG_FILE"
 # Sanity checks & auto-install dependencies
 # -----------------------------------------------------------------------------
 # Derive ABA_ROOT early (needed for install-rpms.sh)
+# Use readlink -f to resolve symlinks (e.g. ./abatui -> tui/abatui.sh)
 if [[ -z "${ABA_ROOT:-}" ]]; then
-	SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+	SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 	ABA_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 	export ABA_ROOT
 fi
@@ -220,9 +221,9 @@ WORK_ID="tui-$(date +%Y%m%d%H%M%S)-$$"
 export WORK_ID
 
 # Aba repo root (best-effort). If ABA_ROOT isn't set, derive it from this script path.
-# This script lives under tui/, so default ABA_ROOT to the parent dir.
+# Use readlink -f to resolve symlinks (e.g. ./abatui -> tui/abatui.sh)
 if [[ -z "${ABA_ROOT:-}" ]]; then
-	ABA_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+	ABA_ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
 	export ABA_ROOT
 fi
 
