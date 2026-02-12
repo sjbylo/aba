@@ -21,7 +21,7 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-INT_BASTION="${INT_BASTION_HOST:-registry.example.com}"
+INT_BASTION="${INT_BASTION_HOST:-con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}}"
 INT_BASTION_VM="${INT_BASTION_VM:-bastion-internal-${INTERNAL_BASTION_RHEL_VER:-rhel9}}"
 INTERNAL_BASTION="${TEST_USER:-steve}@${INT_BASTION}"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
@@ -121,9 +121,9 @@ test_begin "ABI config: sno/compact/standard"
 
 for cname in sno compact standard; do
     local_starting_ip=""
-    [ "$cname" = "sno" ] && local_starting_ip=10.0.1.201
-    [ "$cname" = "compact" ] && local_starting_ip=10.0.1.71
-    [ "$cname" = "standard" ] && local_starting_ip=10.0.1.81
+    [ "$cname" = "sno" ] && local_starting_ip=$(pool_sno_ip)
+    [ "$cname" = "compact" ] && local_starting_ip=$(pool_compact_api_vip)
+    [ "$cname" = "standard" ] && local_starting_ip=$(pool_standard_api_vip)
 
     e2e_run "Create cluster.conf for $cname" \
         "rm -rf $cname && aba cluster -n $cname -t $cname -i $local_starting_ip --step cluster.conf"
@@ -146,7 +146,7 @@ test_begin "SNO: install cluster"
 
 e2e_run "Clean up previous sno" "rm -rf sno"
 e2e_run "Create and install SNO cluster" \
-    "aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step install"
+    "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Verify cluster operators" "aba --dir sno run"
 e2e_run -i "Delete SNO cluster" "aba --dir sno delete"
 
@@ -175,10 +175,10 @@ test_begin "SNO: re-install after save/load"
 
 e2e_run "Clean sno directory" "aba --dir sno clean; rm -f sno/cluster.conf"
 e2e_run "Test small CIDR 10.0.1.200/30" \
-    "aba cluster -n sno -t sno --starting-ip 10.0.1.201 --machine-network '10.0.1.200/30' --step iso"
+    "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --machine-network '10.0.1.200/30' --step iso"
 e2e_run "Clean and recreate with normal CIDR" "rm -rf sno"
 e2e_run "Create and install SNO" \
-    "aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step install --machine-network 10.0.0.0/20"
+    "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
 e2e_run "Verify cluster operators" "aba --dir sno run"
 
 test_end 0
@@ -205,7 +205,7 @@ e2e_run -r 15 3 "Sync images with testy user config" "aba --dir mirror sync --re
 
 # Re-install SNO with testy config
 e2e_run "Clean sno" "aba --dir sno clean; rm -f sno/cluster.conf"
-e2e_run "Install SNO" "aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step install"
+e2e_run "Install SNO" "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Verify operators" "aba --dir sno run"
 e2e_run -i "Shutdown cluster" "yes | aba --dir sno shutdown --wait"
 
@@ -225,7 +225,7 @@ e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
 
 e2e_run "Clean standard dir" "rm -rf standard"
 e2e_run "Create agent configs (bare-metal)" \
-    "aba cluster -n standard -t standard -i 10.0.1.81 -s install"
+    "aba cluster -n standard -t standard -i $(pool_standard_api_vip) -s install"
 e2e_run "Verify cluster.conf" "ls -l standard/cluster.conf"
 e2e_run "Verify agent configs" "ls -l standard/install-config.yaml standard/agent-config.yaml"
 e2e_run "Verify ISO not yet created" "! ls -l standard/iso-agent-based/agent.*.iso 2>/dev/null"
