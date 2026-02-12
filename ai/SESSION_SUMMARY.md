@@ -48,7 +48,7 @@ cd "$(dirname "$0")/../mirror" || exit 1
 ### 2. **$ABA_ROOT Usage Architecture** (Jan 19, 2026)
 **Rule:** `$ABA_ROOT` should ONLY be used in:
 - `scripts/aba.sh` (sets it and exports it)
-- `tui/abatui_experimental.sh` (TUI needs it)
+- `tui/abatui.sh` (TUI needs it)
 
 **All other scripts** must:
 - Either `cd "$(dirname "$0")/.."` to aba root (if running from aba/)

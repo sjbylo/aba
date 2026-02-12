@@ -26,7 +26,7 @@ source "$ABA_ROOT/tui/tui-strings.sh"
 
 # --- Config ---
 SESSION="${SESSION:-tui-test-$$}"
-TUI_CMD="${TUI_CMD:-tui/abatui_experimental.sh}"
+TUI_CMD="${TUI_CMD:-tui/abatui.sh}"
 TIMEOUT="${TIMEOUT:-30}"
 POLL_INTERVAL="${POLL_INTERVAL:-1}"
 

@@ -94,7 +94,7 @@ ABA helps you with the following and more:
 
 All ABA commands and actions are idempotent. If something goes wrong, fix it and run the command again — ABA will always try to do the right thing.
 
-**New:** ABA also includes an experimental TUI (Text User Interface) wizard that guides you through configuration and setup interactively. See [Install ABA](#install-aba) for details.
+**New:** ABA also includes a TUI (Text User Interface) wizard that guides you through configuration and setup interactively. See [Install ABA](#install-aba) for details.
 
 
 # About Installing OpenShift in a Disconnected Environment
@@ -304,9 +304,9 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 
 Note that 'aba' will create the `aba.conf` file which contains some values that you *should change* as soon as you can, such as your _preferred platform_, your _base domain name_, your _network address_ and any _operators_ you will require etc (if known).
 
-**Experimental TUI (Text User Interface):** For a guided wizard experience to prepare a disconnected OpenShift installation, try:
+**TUI (Text User Interface):** For a guided wizard experience to prepare a disconnected OpenShift installation, try:
 ```bash
-tui/abatui_experimental.sh    # Interactive wizard to configure and prepare your environment
+./abatui    # Interactive wizard to configure and prepare your environment
 ```
 Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI walks you through selecting OpenShift version, operators, and creating install bundles or syncing to registries.
 
@@ -377,7 +377,7 @@ aba -d cli download
 ```
   - *Optionally* download the CLI binaries into `aba/cli`. This is only needed if you plan to disconnect from the Internet before installing OpenShift.
 
-**Tip:** The TUI wizard can also configure and execute registry sync operations interactively: `tui/abatui_experimental.sh`
+**Tip:** The TUI wizard can also configure and execute registry sync operations interactively: `./abatui`
 
 Now continue with [Installing OpenShift](#installing-openshift) below.
 
@@ -627,7 +627,7 @@ cd aba
 ./install
 ```
 
-**Tip:** You can also use the TUI wizard to configure and create an install bundle interactively: `tui/abatui_experimental.sh`
+**Tip:** You can also use the TUI wizard to configure and create an install bundle interactively: `./abatui`
 
 Connect a large USB media stick (or other device) to your VM and write the `install bundle` to it:
 

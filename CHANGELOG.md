@@ -40,7 +40,7 @@ First release
 ## [0.9.0] - 2026-01-21
 
 ### New Features
-- **Experimental TUI** - Interactive wizard for guided disconnected installation setup (`tui/abatui_experimental.sh`)
+- **TUI** - Interactive wizard for guided disconnected installation setup (`./abatui`)
 - **Versioning** - Check your ABA version with `aba --aba-version`
 
 ### Improvements

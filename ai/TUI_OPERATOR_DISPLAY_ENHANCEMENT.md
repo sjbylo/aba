@@ -330,17 +330,17 @@ User can distinguish by package name.
 1. **Operator catalog parsing**:
    - Functions that call `oc-mirror list operators`
    - Functions that parse catalog index files
-   - May be in `tui/abatui_experimental.sh` or `scripts/include_all.sh`
+   - May be in `tui/abatui.sh` or `scripts/include_all.sh`
 
 2. **Operator search/filter**:
    - Functions that implement operator search in TUI
    - Dialog search/filter handlers
-   - In `tui/abatui_experimental.sh`
+   - In `tui/abatui.sh`
 
 3. **Operator display/selection**:
    - Functions that build operator selection dialogs
    - Menu item formatting functions
-   - In `tui/abatui_experimental.sh`
+   - In `tui/abatui.sh`
 
 4. **Operator selection processing**:
    - Functions that handle user selection
@@ -349,7 +349,7 @@ User can distinguish by package name.
 
 ### Files to Examine
 
-- `tui/abatui_experimental.sh` - Main TUI logic
+- `tui/abatui.sh` - Main TUI logic
 - `scripts/include_all.sh` - May contain operator parsing helpers
 - `scripts/add-operators-to-imageset.sh` - Operator addition logic
 - Any scripts that call `oc-mirror list operators`

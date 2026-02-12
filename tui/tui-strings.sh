@@ -3,7 +3,7 @@
 # TUI Shared Constants — Single source of truth for dialog titles and menu IDs
 # =============================================================================
 #
-# Both the TUI (abatui_experimental.sh) and the automated tests (test/func/)
+# Both the TUI (abatui.sh) and the automated tests (test/func/)
 # source this file. Changing a string here keeps both sides in sync.
 #
 # Rules:

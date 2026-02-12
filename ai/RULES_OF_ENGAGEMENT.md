@@ -189,7 +189,7 @@ git checkout dev
 ## File Modification Permissions
 
 ### ✅ CAN MODIFY (without explicit permission):
-- `aba/tui/*` - TUI experimental work
+- `aba/tui/*` - TUI work
 - `aba/test/func/*` - Functional/unit tests
 - `aba/ai/*` - AI documentation and rules
 
@@ -275,7 +275,7 @@ if ! some_command; then
         "Additional context line 2"
 fi
 
-# ❌ WRONG - In tui/abatui_experimental.sh
+# ❌ WRONG - In tui/abatui.sh
 if ! some_command; then
     aba_abort "This will break the TUI!"  # NEVER DO THIS!
 fi

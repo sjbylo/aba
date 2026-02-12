@@ -9,7 +9,7 @@ Audit of places where we suppress stderr/stdout and whether that's appropriate.
 
 ---
 
-## TUI (tui/abatui_experimental.sh)
+## TUI (tui/abatui.sh)
 
 ### ✅ OK - Infrastructure/Sanity Checks
 
