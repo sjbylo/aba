@@ -18,10 +18,10 @@ source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
+# L commands run on conN (this host). R commands SSH to disN.
 
-INT_BASTION_HOST="${INT_BASTION_HOST:-con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}}"
-INT_BASTION_VM="${INT_BASTION_VM:-bastion-internal-${INTERNAL_BASTION_RHEL_VER:-rhel9}}"
-INTERNAL_BASTION="${TEST_USER:-steve}@${INT_BASTION_HOST}"
+DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
 # --- Suite ------------------------------------------------------------------
@@ -30,7 +30,7 @@ e2e_setup
 
 plan_tests \
     "Setup: install aba and configure" \
-    "Setup: init internal bastion VM" \
+    "Setup: reset internal bastion" \
     "Setup: save and load images" \
     "VLAN: verify interface on bastion" \
     "VLAN: install SNO cluster on VLAN" \
@@ -63,17 +63,16 @@ e2e_run "Set operator sets" \
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set mirror host" \
-    "sed -i 's/registry.example.com/${INT_BASTION_HOST} /g' ./mirror/mirror.conf"
+    "sed -i 's/registry.example.com/${DIS_HOST} /g' ./mirror/mirror.conf"
 
 test_end 0
 
 # ============================================================================
-# 2. Init bastion
+# 2. Reset internal bastion (reuse clone-check's disN)
 # ============================================================================
-test_begin "Setup: init internal bastion VM"
+test_begin "Setup: reset internal bastion"
 
-export subdir=subdir
-setup_bastion "$INT_BASTION_HOST" "$INT_BASTION_VM"
+reset_internal_bastion
 
 test_end 0
 

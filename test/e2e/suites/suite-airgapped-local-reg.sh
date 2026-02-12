@@ -28,9 +28,9 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-INT_BASTION_HOST="${INT_BASTION_HOST:-con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}}"
-INT_BASTION_VM="${INT_BASTION_VM:-bastion-internal-${INTERNAL_BASTION_RHEL_VER:-rhel9}}"
-INTERNAL_BASTION="${TEST_USER:-steve}@${INT_BASTION_HOST}"
+# L commands run on conN (this host). R commands SSH to disN.
+DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
 # --- Suite ------------------------------------------------------------------
@@ -40,7 +40,7 @@ e2e_setup
 plan_tests \
     "Setup: install aba and configure" \
     "Setup: calculate older version for upgrade" \
-    "Setup: init internal bastion VM" \
+    "Setup: reset internal bastion" \
     "Bundle: create with older version" \
     "Bundle: transfer to bastion" \
     "Registry: Quay install and uninstall" \
@@ -82,7 +82,7 @@ e2e_run "Set operator sets" \
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set mirror host" \
-    "sed -i 's/registry.example.com/${INT_BASTION_HOST} /g' ./mirror/mirror.conf"
+    "sed -i 's/registry.example.com/${DIS_HOST} /g' ./mirror/mirror.conf"
 
 test_end 0
 
@@ -112,12 +112,11 @@ e2e_run "Show configured version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 test_end 0
 
 # ============================================================================
-# 3. Setup: init internal bastion VM
+# 3. Setup: reset internal bastion (reuse clone-check's disN)
 # ============================================================================
-test_begin "Setup: init internal bastion VM"
+test_begin "Setup: reset internal bastion"
 
-export subdir=subdir
-setup_bastion "$INT_BASTION_HOST" "$INT_BASTION_VM"
+reset_internal_bastion
 
 test_end 0
 

@@ -20,10 +20,10 @@ source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
+# L commands run on conN (this host). R commands SSH to disN.
 
-INT_BASTION="${INT_BASTION_HOST:-con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}}"
-INT_BASTION_VM="${INT_BASTION_VM:-bastion-internal-${INTERNAL_BASTION_RHEL_VER:-rhel9}}"
-INTERNAL_BASTION="${TEST_USER:-steve}@${INT_BASTION}"
+DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
 # --- Suite ------------------------------------------------------------------
@@ -32,7 +32,7 @@ e2e_setup
 
 plan_tests \
     "Setup: install aba and configure" \
-    "Setup: init internal bastion VM" \
+    "Setup: reset internal bastion" \
     "Firewalld: bring down and sync" \
     "Firewalld: bring up and verify port" \
     "ABI config: sno/compact/standard" \
@@ -72,12 +72,11 @@ e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 test_end 0
 
 # ============================================================================
-# 2. Setup: init internal bastion VM
+# 2. Setup: reset internal bastion (reuse clone-check's disN)
 # ============================================================================
-test_begin "Setup: init internal bastion VM"
+test_begin "Setup: reset internal bastion"
 
-export subdir=\~/subdir
-setup_bastion "$INT_BASTION" "$INT_BASTION_VM"
+reset_internal_bastion
 
 test_end 0
 
@@ -94,7 +93,7 @@ e2e_run "Show firewalld status (should be down)" \
     "ssh ${INTERNAL_BASTION} 'sudo systemctl status firewalld || true'"
 
 e2e_run -r 15 3 "Sync images to remote registry" \
-    "aba -d mirror sync --retry -H $INT_BASTION -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+    "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
 e2e_run "Check oc-mirror cache location (local)" \
     "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*' 2>/dev/null || true"

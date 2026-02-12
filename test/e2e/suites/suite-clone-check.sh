@@ -23,6 +23,8 @@
 
 set -euo pipefail
 
+E2E_COORDINATOR_ONLY=true  # Must run on coordinator (creates VMs, needs govc)
+
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
@@ -64,8 +66,15 @@ clone_with_macs() {
             local device="ethernet-${i}"
             local mac="${macs[$i]}"
             local nic_net
-            nic_net=$(_get_nic_network "$clone" "$device")
-            [ -z "$nic_net" ] && nic_net="${GOVC_NETWORK:-VM Network}"
+            nic_net=$(_get_nic_network "$clone" "$device" 2>/dev/null) || true
+            if [ -z "$nic_net" ]; then
+                # Device might not exist on this template (e.g. 2-NIC template with 3 MACs)
+                if ! govc device.info -vm "$clone" "$device" &>/dev/null; then
+                    echo "  SKIP: $clone has no $device -- skipping MAC $mac"
+                    continue
+                fi
+                nic_net="${GOVC_NETWORK:-VM Network}"
+            fi
             e2e_run "  $clone: $device MAC -> $mac" \
                 "govc vm.network.change -vm $clone -net '$nic_net' -net.address $mac $device"
         done

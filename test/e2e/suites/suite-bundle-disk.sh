@@ -22,6 +22,7 @@ set -euo pipefail
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
+source "$_SUITE_DIR/../lib/config-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 

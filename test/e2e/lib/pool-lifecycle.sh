@@ -603,6 +603,35 @@ _vm_create_test_user() {
     ssh -i "$key_file" "${test_user_name}@${host}" -- whoami | grep -q "$test_user_name"
 }
 
+# --- _vm_set_aba_testing ----------------------------------------------------
+# Add 'export ABA_TESTING=1' to ~/.bashrc for root, the default user (steve),
+# and the test user (testy). This disables usage tracking during E2E runs.
+#
+_vm_set_aba_testing() {
+    local host="$1"
+    local def_user="${2:-$VM_DEFAULT_USER}"
+
+    echo "  [vm] Setting ABA_TESTING=1 on $host (root, $def_user, testy) ..."
+
+    cat <<-'TESTEOF' | ssh "${def_user}@${host}" -- sudo bash
+		set -e
+		for home_dir in /root "/home/$SUDO_USER" /home/testy; do
+		    [ -d "$home_dir" ] || continue
+		    rc="$home_dir/.bashrc"
+		    # Ensure .bashrc exists
+		    touch "$rc"
+		    # Remove any existing ABA_TESTING lines to avoid duplicates
+		    sed -i '/^export ABA_TESTING=/d' "$rc"
+		    # Append the export
+		    echo 'export ABA_TESTING=1' >> "$rc"
+		    # Fix ownership (testy's home must be owned by testy, etc.)
+		    user_name=$(basename "$home_dir")
+		    [ "$home_dir" = "/root" ] && user_name=root
+		    chown "$user_name":"$user_name" "$rc" 2>/dev/null || true
+		done
+	TESTEOF
+}
+
 # --- _vm_install_aba --------------------------------------------------------
 # Rsync the aba tree to the VM and run ./install.
 #
@@ -665,6 +694,7 @@ configure_connected_bastion() {
     # Config
     _vm_setup_vmware_conf "$host" "$user"
     _vm_create_test_user "$host" "$user"
+    _vm_set_aba_testing "$host" "$user"
     _vm_install_aba "$host" "$user"
 
     echo "=== Connected bastion ready: $host ==="
@@ -717,6 +747,7 @@ configure_internal_bastion() {
 
     # Create test user
     _vm_create_test_user "$host" "$user"
+    _vm_set_aba_testing "$host" "$user"
 
     echo "=== Internal bastion ready: $host ==="
 }
