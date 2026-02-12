@@ -934,6 +934,28 @@ fetch_previous_version() {
 	return 0
 }
 
+############################################
+# Fetch latest version of N-2 minor (older)
+# Example: if latest minor is 4.21 -> return latest 4.19.z
+############################################
+fetch_older_version() {
+	local channel="${1:-stable}"
+	local minor prev older v
+
+	minor="$(fetch_latest_minor_version "$channel")"
+	[[ -n "$minor" ]] || { echo ""; return 0; }
+
+	prev="$(_prev_minor "$minor")"
+	[[ -n "$prev" ]] || { echo ""; return 0; }
+
+	older="$(_prev_minor "$prev")"
+	[[ -n "$older" ]] || { echo ""; return 0; }
+
+	v="$(fetch_all_versions "$channel" "$older" | tail -n1)"
+	[[ -n "$v" ]] && echo "$v"
+	return 0
+}
+
 
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {
