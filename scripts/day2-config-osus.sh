@@ -16,8 +16,8 @@ verify-aba-conf || exit 1
 verify-cluster-conf || exit 1
 verify-mirror-conf || exit 1
 
-aba_info "Downloading CLI installation binaries"
-scripts/cli-install-all.sh --wait  # FIXME: should only be for oc?
+aba_info "Ensuring CLI binaries are installed"
+scripts/cli-install-all.sh --wait oc
 
 # Stop processing (CatalogSources and Signatires etc) if this cluster is a connected cluster!
 if [ "$int_connection" ]; then

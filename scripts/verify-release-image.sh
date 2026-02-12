@@ -5,20 +5,18 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-
-
-if [ ! -x ~/bin/openshift-install ]; then
-	aba_abort "The ~/bin/openshift-install CLI is missing!  Please run aba first."
-fi
-
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1
 
-aba_info "Downloading CLI installation binaries"
-scripts/cli-install-all.sh --wait  # FIXME: should only be for oc / openshift-install?
+aba_info "Ensuring CLI binaries are installed"
+scripts/cli-install-all.sh --wait oc openshift-install
+
+if [ ! -x ~/bin/openshift-install ]; then
+	aba_abort "The ~/bin/openshift-install CLI is missing!  Please run aba first."
+fi
 
 out=$(openshift-install version)
 release_sha=$(echo "$out" | grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")

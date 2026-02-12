@@ -2,7 +2,7 @@
 # Start here, run this script to get going!
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION="0.9.1"
+ABA_VERSION=20260210174451
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
 ABA_BUILD=20260208234722
@@ -207,7 +207,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # bandwidth contention that could slow down reaching the user prompts
 if [ ! "$interactive_mode" ]; then
 	aba_debug "Non-interactive mode detected - starting CLI downloads early"
-	scripts/cli-download-all.sh
+	$ABA_ROOT/scripts/cli-download-all.sh
 fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 

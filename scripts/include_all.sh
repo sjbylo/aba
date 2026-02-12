@@ -57,7 +57,7 @@ _print_colored() {
     local n_opt="$1"; shift
     local line="$*"
 
-    if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "$PLAIN_OUTPUT" ]; then
+    if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
         tput setaf "$color"
         echo -e $n_opt "$line"
         tput sgr0
@@ -109,7 +109,7 @@ color_demo() {
 }
 
 aba_info() {
-	[ ! "$INFO_ABA" ] && return 0
+	[ ! "${INFO_ABA:-}" ] && return 0
 
 	if [ "$1" = "-n" ]; then
 		shift
@@ -141,7 +141,7 @@ echo_warn() {
 aba_debug() {
     local newline=1
 
-    [ ! "$DEBUG_ABA" ] && return 0
+    [ ! "${DEBUG_ABA:-}" ] && return 0
 
     # Erase to col1 and return
     [ "$TERM" ] && { tput el1 && tput cr; } >&2
@@ -266,7 +266,7 @@ show_error() {
 
 # Set the trap to call the show_error function on ERR signal
 # If no first argument is provided, set a trap for errors
-[ -z "${1-}" ] && trap 'show_error' ERR && [ "$DEBUG_ABA" ] && echo Error trap set >&2
+[ -z "${1-}" ] && trap 'show_error' ERR && [ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
 normalize-aba-conf() {
 	# Normalize or sanitize the config file
@@ -1372,13 +1372,14 @@ run_once() {
 	local wait_timeout=""
 	local waiting_message=""
 	local quiet_wait=false
+	local skip_validation=false
 	local OPTIND=1
 
 	# Allow override for tests
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:eW:m:q" opt; do
+	while getopts "swi:cprGFt:eW:m:qS" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1393,6 +1394,7 @@ run_once() {
 			W) wait_timeout=$OPTARG ;;
 			m) waiting_message=$OPTARG ;;
 			q) quiet_wait=true ;;
+			S) skip_validation=true ;;
 			*) return 1 ;;
 		esac
 	done
@@ -1518,12 +1520,15 @@ run_once() {
 
 	_start_task() {
 		local is_fg="$1"
+		local lock_held="${2:-false}"
 
-		# Acquire lock via FD 9; lock remains held while subshell keeps FD open
-		exec 9>>"$lock_file"
-		if ! flock -n 9; then
-			exec 9>&-
-			return 0
+		if [[ "$lock_held" != "true" ]]; then
+			# Acquire lock via FD 9; lock remains held while subshell keeps FD open
+			exec 9>>"$lock_file"
+			if ! flock -n 9; then
+				exec 9>&-
+				return 0
+			fi
 		fi
 
 		# Rotate non-empty logs before truncating (keep one previous copy for debugging)
@@ -1622,12 +1627,13 @@ run_once() {
 			exec 9>>"$lock_file"
 			if flock -n 9; then
 				# Lock is free => not running => implicitly start (requires command)
-				exec 9>&-
+				# Keep FD 9 open -- lock transfers to _start_task's subshell
 				if [[ ${#command[@]} -eq 0 ]]; then
 					echo "Error: Task not started and no command provided." >&2
+					exec 9>&-   # Release lock on error path
 					return 1
 				fi
-				_start_task "true"
+				_start_task "true" "true"
 				wait $!
 			else
 				# Running elsewhere => block until lock released
@@ -1669,6 +1675,8 @@ run_once() {
 
 	local exit_code
 	exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
+	# Guard against empty exit_file (concurrent write in progress)
+	[[ -z "$exit_code" ]] && exit_code=1
 
 	# --- SELF-HEALING VALIDATION ---
 	# If no command provided but task previously succeeded, load saved command
@@ -1682,7 +1690,7 @@ run_once() {
 	# Tasks are idempotent - they check their artifacts and exit quickly if valid
 	# If artifacts missing (e.g. user deleted files), task recreates them automatically
 	# This prevents "file not found" errors from stale cached success states
-	if [[ $exit_code -eq 0 && ${#command[@]} -gt 0 ]]; then
+	if [[ $exit_code -eq 0 && ${#command[@]} -gt 0 && "$skip_validation" != true ]]; then
 		# Check if task is currently running (lock held)
 		exec 9>>"$lock_file"
 		if flock -n 9; then
@@ -1697,10 +1705,9 @@ run_once() {
 				cd "$saved_cwd" || aba_debug "Warning: Could not restore CWD to $saved_cwd"
 			fi
 			
-			# Clear exit file and run validation while holding lock
-			rm -f "$exit_file"
-			
 			# Run validation command directly (keep lock held to prevent races)
+			# NOTE: Do NOT delete exit_file before validation — concurrent readers
+			# at line 1676 would see it missing and get exit_code=1 (TOCTOU race).
 			# Validation runs synchronously while we hold the lock
 			# Rotate non-empty logs before validation (keep previous run for debugging)
 			[[ -s "$log_out_file" ]] && mv "$log_out_file" "${log_out_file}.1"
@@ -1708,7 +1715,9 @@ run_once() {
 			
 			"${command[@]}" >"$log_out_file" 2>"$log_err_file"
 			local validation_rc=$?
-			echo "$validation_rc" > "$exit_file"
+			# Atomic write: rename is atomic on same filesystem, avoids
+			# concurrent readers seeing a truncated (empty) file
+			echo "$validation_rc" > "${exit_file}.tmp" && mv -f "${exit_file}.tmp" "$exit_file"
 			exit_code="$validation_rc"
 			_log_history "VALIDATE rc=$validation_rc"
 			
@@ -2088,26 +2097,42 @@ wait_all_cli_downloads() {
 
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
+	# Wait for oc-mirror download to complete before extracting
+	# (cli-download-all.sh starts downloads in background; extracting a
+	#  partially-downloaded tarball causes "gzip: unexpected end of file" errors)
+	run_once -q -w -i "cli:download:oc-mirror"
 	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
 }
 
 # Ensure oc CLI is installed in ~/bin
 ensure_oc() {
+	if [[ -z "${ocp_version:-}" ]]; then
+		aba_debug "ensure_oc: ocp_version not set, skipping"
+		return 0
+	fi
+	run_once -q -w -i "cli:download:oc:${ocp_version}"
 	run_once -w -m "Installing oc to ~/bin" -i "$TASK_OC" -- make -sC cli oc
 }
 
 # Ensure openshift-install is installed in ~/bin
 ensure_openshift_install() {
+	if [[ -z "${ocp_version:-}" ]]; then
+		aba_debug "ensure_openshift_install: ocp_version not set, skipping"
+		return 0
+	fi
+	run_once -q -w -i "cli:download:openshift-install:${ocp_version}"
 	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL" -- make -sC cli openshift-install
 }
 
 # Ensure govc is installed in ~/bin
 ensure_govc() {
+	run_once -q -w -i "cli:download:govc"
 	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
 }
 
 # Ensure butane is installed in ~/bin
 ensure_butane() {
+	run_once -q -w -i "cli:download:butane"
 	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
 }
 
@@ -2142,23 +2167,23 @@ check_internet_connectivity() {
 		need_check=true
 	fi
 	
-	# Start all three checks in parallel (lightweight curl HEAD requests, 30-sec TTL)
-	run_once -t 30 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
-	run_once -t 30 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
-	run_once -t 30 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
+	# Start all three checks in parallel (lightweight curl HEAD requests, 5-min TTL)
+	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
+	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
+	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
 	
 	# Now wait for all three and check results (quietly, no waiting messages)
 	FAILED_SITES=""
 	ERROR_DETAILS=""
 	
-	if ! run_once -w -q -i "${prefix}:check:api.openshift.com"; then
+	if ! run_once -w -q -S -i "${prefix}:check:api.openshift.com"; then
 		FAILED_SITES="api.openshift.com"
 		local err_msg=$(run_once -e -i "${prefix}:check:api.openshift.com" | head -1)
 		[[ -z "$err_msg" ]] && err_msg="Connection failed"
 		ERROR_DETAILS="api.openshift.com: $err_msg"
 	fi
 	
-	if ! run_once -w -q -i "${prefix}:check:mirror.openshift.com"; then
+	if ! run_once -w -q -S -i "${prefix}:check:mirror.openshift.com"; then
 		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
 		FAILED_SITES="${FAILED_SITES}mirror.openshift.com"
 		local err_msg=$(run_once -e -i "${prefix}:check:mirror.openshift.com" | head -1)
@@ -2167,7 +2192,7 @@ check_internet_connectivity() {
 		ERROR_DETAILS="${ERROR_DETAILS}mirror.openshift.com: $err_msg"
 	fi
 	
-	if ! run_once -w -q -i "${prefix}:check:registry.redhat.io"; then
+	if ! run_once -w -q -S -i "${prefix}:check:registry.redhat.io"; then
 		[[ -n "$FAILED_SITES" ]] && FAILED_SITES="$FAILED_SITES, "
 		FAILED_SITES="${FAILED_SITES}registry.redhat.io"
 		local err_msg=$(run_once -e -i "${prefix}:check:registry.redhat.io" | head -1)

@@ -6,10 +6,27 @@ This document analyzes where each CLI binary is first used across all scripts an
 
 ## Background: Recent Improvements
 
-**Already fixed (commit fe3606d):**
-- ✅ Removed `wait_all_cli_downloads` from all `ensure_*()` functions
-- ✅ Each `ensure_*()` now only waits for its specific tool
-- ✅ Much faster! No more waiting for all 5 tools when you only need 1
+**Commit fe3606d — removed broad download waits:**
+- Removed `wait_all_cli_downloads` from all `ensure_*()` functions
+- Each `ensure_*()` now only waits for its specific tool install
+- Much faster! No more waiting for all 5 tools when you only need 1
+
+**Commit 19666af — re-added targeted download wait for oc-mirror:**
+- `ensure_oc_mirror()` now calls `run_once -q -w -i "cli:download:oc-mirror"`
+  before the install, to prevent extracting a partially-downloaded tarball
+- This was needed because `ensure_oc_mirror()` bypasses `cli-install-all.sh`
+  (which has its own `cli-download-all.sh --wait`) — called directly from
+  `download-catalog-index-simple.sh` via `make -sC cli oc-mirror`
+- Uses clean logical task ID `cli:download:oc-mirror` (not tarball filenames)
+  thanks to the Makefile refactor (see below)
+
+**Commit 19666af — Makefile download target refactor:**
+- Added logical download targets: `download-oc`, `download-oc-mirror`, etc.
+- `out-download-all` now outputs tool names (`oc oc-mirror ...`) not tarball filenames
+- `cli-download-all.sh` creates tasks like `cli:download:oc-mirror` (clean)
+  instead of `cli:download:oc-mirror.rhel9.tar.gz` (leaky abstraction)
+- Removed duplicate `octars` target (replaced by `download-oc`)
+- Deduplicated oc-mirror URLs (single `oc_mirror_base_url` variable)
 
 ## CLI Binaries We Track
 
