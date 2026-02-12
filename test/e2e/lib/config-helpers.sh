@@ -8,6 +8,75 @@
 
 _E2E_LIB_DIR_CH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# --- Pool-Aware Helpers -----------------------------------------------------
+#
+# Resolve per-pool values from the POOL_* arrays in config.env.
+# All functions default to POOL_NUM=1 if not set.
+#
+# Only ONE cluster type (SNO, compact, or standard) runs per pool at a time,
+# so all types share the same static IPs within a pool:
+#   - pool_node_ip   = SNO node / rendezvous node (.x2)
+#   - pool_api_vip   = API VIP (.x3) -- for SNO, same as node_ip
+#   - pool_apps_vip  = APPS VIP (.x4) -- for SNO, same as node_ip
+#
+
+# Get the base domain for a pool: pool_domain [POOL_NUM]
+pool_domain() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_DOMAIN[$p]:-p${p}.example.com}"
+}
+
+# Get the cluster node / SNO / rendezvous IP: pool_node_ip [POOL_NUM]
+pool_node_ip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_NODE_IP[$p]:-${POOL_SUBNET:-10.0.2}.$((p * 10 + 2))}"
+}
+
+# Get the API VIP: pool_api_vip [POOL_NUM]
+pool_api_vip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_API_VIP[$p]:-${POOL_SUBNET:-10.0.2}.$((p * 10 + 3))}"
+}
+
+# Get the APPS/Ingress VIP: pool_apps_vip [POOL_NUM]
+pool_apps_vip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_APPS_VIP[$p]:-${POOL_SUBNET:-10.0.2}.$((p * 10 + 4))}"
+}
+
+# Get the machine network: pool_machine_network [POOL_NUM]
+pool_machine_network() {
+    echo "${POOL_MACHINE_NETWORK:-10.0.0.0/20}"
+}
+
+# Get the connected bastion's lab IP (ens192): pool_con_ip [POOL_NUM]
+# This is the .x0 address in the pool's decade: 10.0.2.(N*10)
+pool_con_ip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_SUBNET:-10.0.2}.$((p * 10))"
+}
+
+# Get the DNS server IP for a pool (= conN's lab IP, running dnsmasq)
+pool_dns_server() {
+    pool_con_ip "$@"
+}
+
+# Convenience aliases -- all cluster types share the same IPs.
+# SNO uses node_ip for everything; compact/standard use node_ip + VIPs.
+pool_sno_ip()             { pool_node_ip "$@"; }
+pool_compact_api_vip()    { pool_api_vip "$@"; }
+pool_compact_apps_vip()   { pool_apps_vip "$@"; }
+pool_standard_api_vip()   { pool_api_vip "$@"; }
+pool_standard_apps_vip()  { pool_apps_vip "$@"; }
+
+# Get starting IP for a cluster type: pool_starting_ip <sno|compact|standard> [POOL_NUM]
+pool_starting_ip() {
+    local ctype="$1"
+    local p="${2:-${POOL_NUM:-1}}"
+    # All types share pool_node_ip as the starting/rendezvous IP
+    pool_node_ip "$p"
+}
+
 # --- gen_aba_conf -----------------------------------------------------------
 #
 # Generate a test aba.conf in the current directory (must be aba root).
@@ -29,9 +98,9 @@ gen_aba_conf() {
     local ops=""
     local ask="false"
     local ntp_servers="${NTP_SERVERS:-10.0.1.8,2.rhel.pool.ntp.org}"
-    local domain="${DOMAIN:-example.com}"
-    local machine_network="${MACHINE_NETWORK:-10.0.0.0/20}"
-    local dns_servers="${DNS_SERVERS:-10.0.1.8}"
+    local domain="${DOMAIN:-$(pool_domain)}"
+    local machine_network="${MACHINE_NETWORK:-$(pool_machine_network)}"
+    local dns_servers="${DNS_SERVERS:-$(pool_dns_server)}"
     local next_hop="${NEXT_HOP:-10.0.1.1}"
 
     while [ $# -gt 0 ]; do
