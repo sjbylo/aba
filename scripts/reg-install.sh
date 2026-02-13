@@ -276,7 +276,7 @@ else
 	# On the off-chance that ssh does work out-of-the-box to this host using the default key, let's check $reg_host is NOT a remote host!
 	# It's expected that this may fail since there may not be any default ssh key configured. But, if it is and ssh reaches a remote host, then we
 	# can catch that early here and show a warning. 
-	if h=$(ssh -F $ssh_conf_file                  $reg_host touch $flag_file; hostname) >/dev/null 2>&1; then
+	if h=$(ssh -F $ssh_conf_file $reg_host "touch $flag_file && hostname") >/dev/null 2>&1; then
 		if [ ! -f $flag_file ]; then
 
 			aba_warning \

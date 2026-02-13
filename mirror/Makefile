@@ -10,6 +10,19 @@ force     ?= no
 bg        ?=
 ##catalog-name   ?=
 
+# Detect host architecture for mirror-registry download.
+# Available builds: amd64, s390x, ppc64le (no arm64 as of Feb 2026).
+# aarch64 falls back to amd64 since Red Hat doesn't publish an arm64 build.
+arch   := $(strip $(shell uname -m))
+ifeq ($(arch),x86_64)
+  MR_ARCH := amd64
+else ifeq ($(arch),aarch64)
+  MR_ARCH := amd64
+else
+  MR_ARCH := $(arch)
+endif
+MR_TARBALL := mirror-registry-$(MR_ARCH).tar.gz
+
 ##########################
 # Allow env variable to force plain output (e.g., PLAIN_OUTPUT=1)
 # Otherwise auto-detect from TTY
@@ -80,12 +93,12 @@ sync: .init .rpmsint ~/.pull-secret.json                     install verify sync
 
 .PHONY: save
 # Note that for a connected workstation or bastion there is no need to install all the required packages, only 'rpmsext' is needed.
-# mirror-registry-amd64.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
+# $(MR_TARBALL) is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
 # Same with docker-reg-image.tgz (via download-registries)
 # download-registries is executed last in case docker.io is inaccessible 
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
 # Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
-save: .init .rpmsext ~/.pull-secret.json              download-registries                     save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
+save: .init .rpmsext ~/.pull-secret.json              download-registries                     save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download mirror-registry tarball and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
 # oc-mirror is idempotent so no need for 'dot' flag files
@@ -107,19 +120,19 @@ testload: save install load     # Test the save, install, load process on a conn
 rpmsclean:
 	@rm -f .rpms*
 
-mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry binary 
-	@echo [ABA] Extracting mirror-registry-amd64.tar.gz into $$PWD
-	tar xmvzf mirror-registry-amd64.tar.gz
+mirror-registry: $(MR_TARBALL) ## Extract the mirror-registry binary 
+	@echo [ABA] Extracting $(MR_TARBALL) into $$PWD
+	tar xmvzf $(MR_TARBALL)
 
 .PHONY: download-registries
-download-registries: mirror-registry-amd64.tar.gz docker-reg-image.tgz
+download-registries: $(MR_TARBALL) docker-reg-image.tgz
 
 mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/latest
 
-mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball (note: no arm64 version available as of Dec 25)
-	echo [ABA] "Downloading $(mirror_registry_url)/mirror-registry-amd64.tar.gz ..."
-	curl $(CURL_PROGRESS) -OL $(mirror_registry_url)/mirror-registry-amd64.tar.gz
-	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
+$(MR_TARBALL): ## Download the mirror-registry tarball for $(MR_ARCH)
+	echo [ABA] "Downloading $(mirror_registry_url)/$(MR_TARBALL) ..."
+	curl $(CURL_PROGRESS) -OL $(mirror_registry_url)/$(MR_TARBALL)
+	file $(MR_TARBALL) | grep -q "gzip compressed data"
 	@echo -n "[ABA] Verifying checksum for $(@): "
 	curl -f --retry 8 -sL $(CURL_PROGRESS) -o mirror-registry-sha256sum.txt $(mirror_registry_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" mirror-registry-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
 	echo "valid!"
@@ -239,7 +252,7 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 	rm -f  save/oc-mirror-workspace 
 	rm -f  save/publish 
 
-# Note that 'mirror-registry-amd64.tar.gz' is needed to 'uninstall' the registry.
+# Note that the mirror-registry tarball ($(MR_TARBALL)) is needed to 'uninstall' the registry.
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
@@ -274,7 +287,7 @@ reset:                # Clean up all files. Only use if you know what you're doi
 #	These need resetting FIXME
 	rm -f $(DOCKER_REG_FILE)
 #	These need resetting FIXME
-	rm -rf mirror-registry-amd64.tar.gz
+	rm -rf mirror-registry-*.tar.gz
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
