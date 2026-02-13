@@ -130,7 +130,7 @@ test-cmd() {
 
 			[ $ret -eq 130 ] && break  # on Ctrl-C *during command execution*
 
-			[ $ret -eq 0 -a $i -gt 1 ] && notify.sh "Command ok: $cmd (`date`)" && echo "Command ok: $cmd (`date`)" || true  # Only success after failure
+			[ $ret -eq 0 -a $i -gt 1 ] && notify.sh "Command ok: $cmd" && echo "Command ok: $cmd (`date`)" && log-test "Command ok: $cmd (`date`)" || true  # Only success after failure
 
 			[ "$must_fail"     -a $ret -ne 0 ] && return 0  # Return success, if the command failed!
 			[ "$must_fail"     -a $ret -eq 0 ] && return 1  # Return failure, if the command succeeded!
