@@ -1,34 +1,29 @@
 #!/bin/bash
 # Release script for aba
-# Usage: build/release.sh [--dry-run] <version> "<release description>" [<commit-ref>]
+# Usage: build/release.sh [--dry-run] <version> "<release description>"
 #
 # Examples:
-#   build/release.sh 0.9.2 "Bug fixes and improvements"            # release from HEAD on dev
-#   build/release.sh 0.9.2 "Bug fixes and improvements" 76c9bfc    # release from specific commit
-#   build/release.sh --dry-run 0.9.3 "New features"                # preview without changes
+#   build/release.sh 0.9.4 "Bug fixes and improvements"
+#   build/release.sh --dry-run 0.9.4 "New features"
 #
 # Options:
 #   --dry-run   Show what would happen without making any changes.
 #
-# Without <commit-ref>:
-#   Works on the current dev branch (existing behavior).
-#   Updates VERSION, aba.sh, README.md, CHANGELOG.md, commits, and tags on dev.
-#
-# With <commit-ref>:
-#   Merges <commit-ref> into main, applies version-bump commit there, and tags.
-#   Then prints instructions to push main and merge the version bump back into dev.
-#
-# This script:
-# 1. Validates inputs and pre-conditions (CHANGELOG, clean tree, etc.)
-# 2. Updates VERSION file
-# 3. Embeds version in scripts/aba.sh
-# 4. Updates version references in README.md
-# 5. Updates CHANGELOG.md
-# 6. Runs pre-commit checks
+# This script runs on the dev branch and:
+# 1. Validates inputs and pre-conditions (CHANGELOG, clean tree, tag, branch)
+# 2. Runs pre-commit checks (RPM sync, syntax, git pull)
+# 3. Updates VERSION file
+# 4. Embeds version in scripts/aba.sh
+# 5. Updates version references in README.md
+# 6. Updates CHANGELOG.md
 # 7. Commits changes
 # 8. Creates git tag
 # 9. Verifies the tagged commit has correct version data
-# 10. Shows commands to push
+# 10. Shows commands to push and merge to main
+#
+# After running this script, merge dev to main:
+#   git push origin dev && git push origin v<VERSION>
+#   git checkout main && git merge --no-ff dev && git push origin main && git checkout dev
 #
 # Exit codes:
 #   0 = Success
@@ -64,21 +59,19 @@ set -- "${ARGS[@]}"
 
 # Validate arguments
 if [ -z "$1" ] || [ -z "$2" ]; then
-    echo -e "${RED}Usage: $0 [--dry-run] <version> \"<release description>\" [<commit-ref>]${NC}"
-    echo -e "${YELLOW}Example: $0 0.9.2 \"Bug fixes and improvements\"${NC}"
-    echo -e "${YELLOW}Example: $0 0.9.2 \"Bug fixes and improvements\" 76c9bfc${NC}"
-    echo -e "${YELLOW}Example: $0 --dry-run 0.9.3 \"New features\"${NC}"
+    echo -e "${RED}Usage: $0 [--dry-run] <version> \"<release description>\"${NC}"
+    echo -e "${YELLOW}Example: $0 0.9.4 \"Bug fixes and improvements\"${NC}"
+    echo -e "${YELLOW}Example: $0 --dry-run 0.9.4 \"New features\"${NC}"
     exit 1
 fi
 
 NEW_VERSION="$1"
 RELEASE_DESC="$2"
-RELEASE_REF="${3:-}"  # Optional: specific commit/ref to release
 
 # Validate version format (semver: MAJOR.MINOR.PATCH)
 if ! echo "$NEW_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
     echo -e "${RED}Error: Invalid version format '$NEW_VERSION'${NC}"
-    echo -e "${YELLOW}Expected format: MAJOR.MINOR.PATCH (e.g., 0.9.2)${NC}"
+    echo -e "${YELLOW}Expected format: MAJOR.MINOR.PATCH (e.g., 0.9.4)${NC}"
     exit 1
 fi
 
@@ -92,6 +85,13 @@ echo -e "${YELLOW}New version: $NEW_VERSION${NC}"
 echo -e "${YELLOW}Description: $RELEASE_DESC${NC}"
 
 # --- Pre-flight checks (read-only, safe for dry-run) ---
+
+# Must be on dev branch
+CURRENT_BRANCH=$(git branch --show-current)
+if [ "$CURRENT_BRANCH" != "dev" ]; then
+    echo -e "${RED}Error: Must be on 'dev' branch (currently on '$CURRENT_BRANCH')${NC}"
+    exit 1
+fi
 
 # Check if tag already exists (prevents mid-script failure after changes are committed)
 if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
@@ -116,37 +116,13 @@ if [ -z "$UNRELEASED_CONTENT" ]; then
 fi
 echo -e "${GREEN}CHANGELOG [Unreleased] section has content${NC}\n"
 
-# Validate ref if provided
-if [ -n "$RELEASE_REF" ]; then
-    if ! git rev-parse --verify "$RELEASE_REF" >/dev/null 2>&1; then
-        echo -e "${RED}Error: Ref '$RELEASE_REF' does not exist${NC}"
-        exit 1
-    fi
-    RESOLVED_REF=$(git rev-parse --short "$RELEASE_REF")
-    echo -e "${YELLOW}Release ref: $RESOLVED_REF ($(git log -1 --format='%s' "$RELEASE_REF"))${NC}\n"
-else
-    CURRENT_BRANCH=$(git branch --show-current)
-    if [ "$CURRENT_BRANCH" != "dev" ]; then
-        echo -e "${RED}Error: Must be on 'dev' branch (currently on '$CURRENT_BRANCH')${NC}"
-        echo -e "${YELLOW}Hint: Use a commit ref as 3rd argument to release from a specific commit.${NC}"
-        exit 1
-    fi
-fi
-
 # --- Dry-run: show summary and exit ---
 if $DRY_RUN; then
     echo -e "${CYAN}--- Dry Run Summary ---${NC}\n"
 
-    if [ -n "$RELEASE_REF" ]; then
-        echo -e "${YELLOW}Mode:${NC} Ref-based release"
-        echo -e "${YELLOW}  - Merge $RESOLVED_REF into main${NC}"
-        echo -e "${YELLOW}  - Version-bump commit on main${NC}"
-        echo -e "${YELLOW}  - Tag v$NEW_VERSION on main${NC}"
-    else
-        echo -e "${YELLOW}Mode:${NC} HEAD release on dev"
-        echo -e "${YELLOW}  - Version-bump commit on dev${NC}"
-        echo -e "${YELLOW}  - Tag v$NEW_VERSION on dev${NC}"
-    fi
+    echo -e "${YELLOW}  - Pre-commit checks (RPM sync, syntax, pull)${NC}"
+    echo -e "${YELLOW}  - Version-bump commit on dev${NC}"
+    echo -e "${YELLOW}  - Tag v$NEW_VERSION on dev${NC}"
 
     echo
     echo -e "${YELLOW}Files that would be modified:${NC}"
@@ -172,59 +148,31 @@ fi
 # Beyond this point, changes are made. Dry-run has already exited above.
 # =====================================================================
 
-# --- Determine release mode and set up branches ---
-if [ -n "$RELEASE_REF" ]; then
-    # --- Ref mode: merge specific commit into main, version-bump there ---
+TOTAL=9
 
-    # Remember where we started so we can return
-    STARTING_BRANCH=$(git branch --show-current)
-    if [ -z "$STARTING_BRANCH" ]; then
-        echo -e "${RED}Error: Not on a branch (detached HEAD). Checkout a branch first.${NC}"
-        exit 1
-    fi
+# --- Step 1: Pre-commit checks (runs BEFORE any file changes, so git pull is safe) ---
+echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks...${NC}"
+build/pre-commit-checks.sh
+echo
 
-    # Switch to main and merge the ref
-    echo -e "${YELLOW}[1/10] Switching to main and merging $RESOLVED_REF...${NC}"
-    git checkout main
-    git merge --no-ff "$RELEASE_REF" -m "Merge $RESOLVED_REF for release v$NEW_VERSION"
-    echo -e "${GREEN}       ✓ Merged $RESOLVED_REF into main${NC}\n"
-
-    RELEASE_BRANCH="main"
-    STEP_OFFSET=1  # Extra step for the merge
-else
-    # --- HEAD mode: release from current dev branch ---
-    echo -e ""
-
-    STARTING_BRANCH="dev"
-    RELEASE_BRANCH="dev"
-    STEP_OFFSET=0
-fi
-
-# --- Common release steps (run on whichever branch we're on) ---
-
-STEP=$((2 + STEP_OFFSET))
-TOTAL=$((10 + STEP_OFFSET))
-
-echo -e "${YELLOW}[$STEP/$TOTAL] Updating VERSION file...${NC}"
+# --- Step 2-5: Version bump ---
+echo -e "${YELLOW}[2/$TOTAL] Updating VERSION file...${NC}"
 echo "$NEW_VERSION" > VERSION
 echo -e "${GREEN}       ✓ VERSION updated to $NEW_VERSION${NC}\n"
 
-STEP=$((STEP + 1))
-echo -e "${YELLOW}[$STEP/$TOTAL] Embedding version in scripts/aba.sh...${NC}"
+echo -e "${YELLOW}[3/$TOTAL] Embedding version in scripts/aba.sh...${NC}"
 # Handle both quoted (ABA_VERSION="...") and unquoted (ABA_VERSION=...) formats
 sed -i "s/^ABA_VERSION=.*/ABA_VERSION=$NEW_VERSION/" scripts/aba.sh
 echo -e "${GREEN}       ✓ scripts/aba.sh now contains ABA_VERSION=$NEW_VERSION${NC}\n"
 
-STEP=$((STEP + 1))
-echo -e "${YELLOW}[$STEP/$TOTAL] Updating version references in README.md...${NC}"
+echo -e "${YELLOW}[4/$TOTAL] Updating version references in README.md...${NC}"
 sed -i "s|/tags/v[0-9]*\.[0-9]*\.[0-9]*\.tar\.gz|/tags/v$NEW_VERSION.tar.gz|g" README.md
 sed -i "s|tar xzf v[0-9]*\.[0-9]*\.[0-9]*\.tar\.gz|tar xzf v$NEW_VERSION.tar.gz|g" README.md
 sed -i "s|cd aba-[0-9]*\.[0-9]*\.[0-9]*|cd aba-$NEW_VERSION|g" README.md
 sed -i "s|--branch v[0-9]*\.[0-9]*\.[0-9]*|--branch v$NEW_VERSION|g" README.md
 echo -e "${GREEN}       ✓ README.md version references updated to $NEW_VERSION${NC}\n"
 
-STEP=$((STEP + 1))
-echo -e "${YELLOW}[$STEP/$TOTAL] Updating CHANGELOG.md...${NC}"
+echo -e "${YELLOW}[5/$TOTAL] Updating CHANGELOG.md...${NC}"
 # UNRELEASED_CONTENT was already validated at the top of the script
 
 # Get today's date
@@ -255,18 +203,9 @@ sed -i "/^\[Unreleased\]:/a [$NEW_VERSION]: https://github.com/sjbylo/aba/releas
 
 echo -e "${GREEN}       ✓ CHANGELOG.md updated${NC}\n"
 
-STEP=$((STEP + 1))
-echo -e "${YELLOW}[$STEP/$TOTAL] Running pre-commit checks...${NC}"
-build/pre-commit-checks.sh --skip-version
-echo
-
-STEP=$((STEP + 1))
-echo -e "${YELLOW}[$STEP/$TOTAL] Staging changes...${NC}"
+# --- Step 6-7: Commit and tag ---
+echo -e "${YELLOW}[6/$TOTAL] Staging and committing...${NC}"
 git add VERSION CHANGELOG.md README.md scripts/aba.sh
-echo -e "${GREEN}       ✓ Staged: VERSION, CHANGELOG.md, README.md, scripts/aba.sh${NC}\n"
-
-STEP=$((STEP + 1))
-echo -e "${YELLOW}[$STEP/$TOTAL] Creating commit...${NC}"
 git commit -m "release: Bump version to $NEW_VERSION
 
 $RELEASE_DESC
@@ -275,16 +214,14 @@ Release notes:
 - See CHANGELOG.md for full details"
 echo -e "${GREEN}       ✓ Commit created${NC}\n"
 
-STEP=$((STEP + 1))
-echo -e "${YELLOW}[$STEP/$TOTAL] Creating git tag v$NEW_VERSION...${NC}"
+echo -e "${YELLOW}[7/$TOTAL] Creating git tag v$NEW_VERSION...${NC}"
 git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION: $RELEASE_DESC"
 echo -e "${GREEN}       ✓ Tag created: v$NEW_VERSION${NC}\n"
 
-# --- Post-release verification ---
+# --- Step 8: Post-release verification ---
 # Verify the tagged commit has the correct version data.
 # This catches issues like sed patterns not matching or wrong files being committed.
-STEP=$((STEP + 1))
-echo -e "${YELLOW}[$STEP/$TOTAL] Verifying tagged release v$NEW_VERSION...${NC}"
+echo -e "${YELLOW}[8/$TOTAL] Verifying tagged release v$NEW_VERSION...${NC}"
 VERIFY_OK=true
 
 # Check VERSION file at the tag
@@ -327,40 +264,23 @@ else
     echo -e "${RED}       ✗ Verification FAILED — review the tag before pushing!${NC}\n"
 fi
 
+# --- Step 9: Show next steps ---
 echo -e "${GREEN}=== Release v$NEW_VERSION Ready! ===${NC}\n"
 
-# --- Print next steps depending on mode ---
-
-echo -e "${CYAN}Next steps:${NC}"
+echo -e "${CYAN}[9/$TOTAL] Next steps:${NC}"
 echo -e "${YELLOW}1. Review the changes:${NC}"
 echo -e "   git show HEAD"
 echo -e "   git show v$NEW_VERSION"
 echo
 
-if [ -n "$RELEASE_REF" ]; then
-    # Ref mode: we're on main, need to push main + tag, then merge back to dev
-    echo -e "${YELLOW}2. Push main and tag:${NC}"
-    echo -e "   git push origin main"
-    echo -e "   git push origin v$NEW_VERSION"
-    echo
-    echo -e "${YELLOW}3. Merge version bump back into dev:${NC}"
-    echo -e "   git checkout $STARTING_BRANCH"
-    echo -e "   git merge main"
-    echo -e "   git push origin $STARTING_BRANCH"
-    echo
-else
-    # HEAD mode: we're on dev
-    echo -e "${YELLOW}2. Push to origin:${NC}"
-    echo -e "   git push origin dev"
-    echo -e "   git push origin v$NEW_VERSION"
-    echo
-    echo -e "${YELLOW}3. Merge to main:${NC}"
-    echo -e "   git checkout main"
-    echo -e "   git merge --no-ff dev -m \"Merge release v$NEW_VERSION\""
-    echo -e "   git push origin main"
-    echo -e "   git checkout dev"
-    echo
-fi
+echo -e "${YELLOW}2. Push dev and tag:${NC}"
+echo -e "   git push origin dev"
+echo -e "   git push origin v$NEW_VERSION"
+echo
+
+echo -e "${YELLOW}3. Merge to main:${NC}"
+echo -e "   git checkout main && git merge --no-ff dev && git push origin main && git checkout dev"
+echo
 
 echo -e "${YELLOW}4. Create GitHub release:${NC}"
 echo
