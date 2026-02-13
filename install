@@ -14,6 +14,7 @@ uname -o | grep -q "^Darwin$" && echo "Install ABA on RHEL, Centos Stream or Fed
 required_pkgs=(which file hostname diffutils git make jq python3-jinja2 python3-pyyaml ncurses)
 required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which diffutils dialog podman httpd-tools skopeo)  # Synced from templates/rpms-external.txt
 required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd)  # Synced from templates/rpms-internal.txt
+required_pkgs=($(printf '%s\n' "${required_pkgs[@]}" | sort -u))  # Deduplicate
 missing_pkgs=()
 
 # Check which packages are missing ...
