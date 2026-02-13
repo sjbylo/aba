@@ -1,10 +1,14 @@
 #!/bin/bash
 # Release script for aba
-# Usage: build/release.sh <version> "<release description>" [<commit-ref>]
+# Usage: build/release.sh [--dry-run] <version> "<release description>" [<commit-ref>]
 #
 # Examples:
 #   build/release.sh 0.9.2 "Bug fixes and improvements"            # release from HEAD on dev
 #   build/release.sh 0.9.2 "Bug fixes and improvements" 76c9bfc    # release from specific commit
+#   build/release.sh --dry-run 0.9.3 "New features"                # preview without changes
+#
+# Options:
+#   --dry-run   Show what would happen without making any changes.
 #
 # Without <commit-ref>:
 #   Works on the current dev branch (existing behavior).
@@ -15,7 +19,7 @@
 #   Then prints instructions to push main and merge the version bump back into dev.
 #
 # This script:
-# 1. Validates version format
+# 1. Validates inputs and pre-conditions (CHANGELOG, clean tree, etc.)
 # 2. Updates VERSION file
 # 3. Embeds version in scripts/aba.sh
 # 4. Updates version references in README.md
@@ -23,7 +27,8 @@
 # 6. Runs pre-commit checks
 # 7. Commits changes
 # 8. Creates git tag
-# 9. Shows commands to push
+# 9. Verifies the tagged commit has correct version data
+# 10. Shows commands to push
 #
 # Exit codes:
 #   0 = Success
@@ -42,11 +47,27 @@ NC='\033[0m'
 cd "$(dirname "$0")/.." || exit 1
 ABA_ROOT="$(pwd)"
 
+# --- Parse arguments ---
+# Extract --dry-run flag from anywhere in the argument list
+DRY_RUN=false
+ARGS=()
+for arg in "$@"; do
+    if [ "$arg" = "--dry-run" ]; then
+        DRY_RUN=true
+    else
+        ARGS+=("$arg")
+    fi
+done
+
+# Reassign positional args (without --dry-run)
+set -- "${ARGS[@]}"
+
 # Validate arguments
 if [ -z "$1" ] || [ -z "$2" ]; then
-    echo -e "${RED}Usage: $0 <version> \"<release description>\" [<commit-ref>]${NC}"
+    echo -e "${RED}Usage: $0 [--dry-run] <version> \"<release description>\" [<commit-ref>]${NC}"
     echo -e "${YELLOW}Example: $0 0.9.2 \"Bug fixes and improvements\"${NC}"
     echo -e "${YELLOW}Example: $0 0.9.2 \"Bug fixes and improvements\" 76c9bfc${NC}"
+    echo -e "${YELLOW}Example: $0 --dry-run 0.9.3 \"New features\"${NC}"
     exit 1
 fi
 
@@ -61,9 +82,16 @@ if ! echo "$NEW_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
     exit 1
 fi
 
-echo -e "${CYAN}=== Aba Release Process ===${NC}\n"
+# --- Header ---
+if $DRY_RUN; then
+    echo -e "${CYAN}=== Aba Release Process (DRY RUN — no changes will be made) ===${NC}\n"
+else
+    echo -e "${CYAN}=== Aba Release Process ===${NC}\n"
+fi
 echo -e "${YELLOW}New version: $NEW_VERSION${NC}"
 echo -e "${YELLOW}Description: $RELEASE_DESC${NC}"
+
+# --- Pre-flight checks (read-only, safe for dry-run) ---
 
 # Check for uncommitted changes
 if ! git diff-index --quiet HEAD --; then
@@ -81,19 +109,65 @@ if [ -z "$UNRELEASED_CONTENT" ]; then
 fi
 echo -e "${GREEN}CHANGELOG [Unreleased] section has content${NC}\n"
 
-# --- Determine release mode ---
+# Validate ref if provided
 if [ -n "$RELEASE_REF" ]; then
-    # --- Ref mode: merge specific commit into main, version-bump there ---
-    echo -e "${YELLOW}Release ref: $RELEASE_REF${NC}\n"
-
-    # Validate the ref exists
     if ! git rev-parse --verify "$RELEASE_REF" >/dev/null 2>&1; then
         echo -e "${RED}Error: Ref '$RELEASE_REF' does not exist${NC}"
         exit 1
     fi
-
     RESOLVED_REF=$(git rev-parse --short "$RELEASE_REF")
-    echo -e "${YELLOW}Resolved ref: $RESOLVED_REF ($(git log -1 --format='%s' "$RELEASE_REF"))${NC}\n"
+    echo -e "${YELLOW}Release ref: $RESOLVED_REF ($(git log -1 --format='%s' "$RELEASE_REF"))${NC}\n"
+else
+    CURRENT_BRANCH=$(git branch --show-current)
+    if [ "$CURRENT_BRANCH" != "dev" ]; then
+        echo -e "${RED}Error: Must be on 'dev' branch (currently on '$CURRENT_BRANCH')${NC}"
+        echo -e "${YELLOW}Hint: Use a commit ref as 3rd argument to release from a specific commit.${NC}"
+        exit 1
+    fi
+fi
+
+# --- Dry-run: show summary and exit ---
+if $DRY_RUN; then
+    echo -e "${CYAN}--- Dry Run Summary ---${NC}\n"
+
+    if [ -n "$RELEASE_REF" ]; then
+        echo -e "${YELLOW}Mode:${NC} Ref-based release"
+        echo -e "${YELLOW}  - Merge $RESOLVED_REF into main${NC}"
+        echo -e "${YELLOW}  - Version-bump commit on main${NC}"
+        echo -e "${YELLOW}  - Tag v$NEW_VERSION on main${NC}"
+    else
+        echo -e "${YELLOW}Mode:${NC} HEAD release on dev"
+        echo -e "${YELLOW}  - Version-bump commit on dev${NC}"
+        echo -e "${YELLOW}  - Tag v$NEW_VERSION on dev${NC}"
+    fi
+
+    echo
+    echo -e "${YELLOW}Files that would be modified:${NC}"
+    echo -e "  VERSION              -> $NEW_VERSION"
+    echo -e "  scripts/aba.sh       -> ABA_VERSION=$NEW_VERSION"
+    echo -e "  README.md            -> version refs updated to v$NEW_VERSION"
+    echo -e "  CHANGELOG.md         -> [Unreleased] moved to [$NEW_VERSION]"
+
+    echo
+    echo -e "${YELLOW}CHANGELOG [Unreleased] content to be released:${NC}"
+    echo "$UNRELEASED_CONTENT" | head -20
+    TOTAL_LINES=$(echo "$UNRELEASED_CONTENT" | wc -l)
+    if [ "$TOTAL_LINES" -gt 20 ]; then
+        echo -e "  ${YELLOW}... ($((TOTAL_LINES - 20)) more lines)${NC}"
+    fi
+
+    echo
+    echo -e "${GREEN}=== Dry run complete. No changes were made. ===${NC}"
+    exit 0
+fi
+
+# =====================================================================
+# Beyond this point, changes are made. Dry-run has already exited above.
+# =====================================================================
+
+# --- Determine release mode and set up branches ---
+if [ -n "$RELEASE_REF" ]; then
+    # --- Ref mode: merge specific commit into main, version-bump there ---
 
     # Remember where we started so we can return
     STARTING_BRANCH=$(git branch --show-current)
@@ -114,13 +188,6 @@ else
     # --- HEAD mode: release from current dev branch ---
     echo -e ""
 
-    CURRENT_BRANCH=$(git branch --show-current)
-    if [ "$CURRENT_BRANCH" != "dev" ]; then
-        echo -e "${RED}Error: Must be on 'dev' branch (currently on '$CURRENT_BRANCH')${NC}"
-        echo -e "${YELLOW}Hint: Use a commit ref as 3rd argument to release from a specific commit.${NC}"
-        exit 1
-    fi
-
     STARTING_BRANCH="dev"
     RELEASE_BRANCH="dev"
     STEP_OFFSET=0
@@ -129,7 +196,7 @@ fi
 # --- Common release steps (run on whichever branch we're on) ---
 
 STEP=$((2 + STEP_OFFSET))
-TOTAL=$((9 + STEP_OFFSET))
+TOTAL=$((10 + STEP_OFFSET))
 
 echo -e "${YELLOW}[$STEP/$TOTAL] Updating VERSION file...${NC}"
 echo "$NEW_VERSION" > VERSION
@@ -206,13 +273,51 @@ echo -e "${YELLOW}[$STEP/$TOTAL] Creating git tag v$NEW_VERSION...${NC}"
 git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION: $RELEASE_DESC"
 echo -e "${GREEN}       ✓ Tag created: v$NEW_VERSION${NC}\n"
 
+# --- Post-release verification ---
+# Verify the tagged commit has the correct version data.
+# This catches issues like sed patterns not matching or wrong files being committed.
 STEP=$((STEP + 1))
-echo -e "${YELLOW}[$STEP/$TOTAL] Verifying version embedding...${NC}"
-if grep -q "^ABA_VERSION=$NEW_VERSION" scripts/aba.sh; then
-    echo -e "${GREEN}       ✓ Version correctly embedded in aba.sh${NC}\n"
+echo -e "${YELLOW}[$STEP/$TOTAL] Verifying tagged release v$NEW_VERSION...${NC}"
+VERIFY_OK=true
+
+# Check VERSION file at the tag
+TAG_VERSION=$(git show "v$NEW_VERSION:VERSION" 2>/dev/null | tr -d '[:space:]')
+if [ "$TAG_VERSION" = "$NEW_VERSION" ]; then
+    echo -e "${GREEN}       ✓ VERSION file: $TAG_VERSION${NC}"
 else
-    echo -e "${RED}       ✗ Version NOT embedded in aba.sh!${NC}\n"
-    exit 1
+    echo -e "${RED}       ✗ VERSION file: expected '$NEW_VERSION', got '$TAG_VERSION'${NC}"
+    VERIFY_OK=false
+fi
+
+# Check ABA_VERSION in aba.sh at the tag
+TAG_ABA_VER=$(git show "v$NEW_VERSION:scripts/aba.sh" 2>/dev/null | grep "^ABA_VERSION=" | cut -d= -f2)
+if [ "$TAG_ABA_VER" = "$NEW_VERSION" ]; then
+    echo -e "${GREEN}       ✓ ABA_VERSION in aba.sh: $TAG_ABA_VER${NC}"
+else
+    echo -e "${RED}       ✗ ABA_VERSION in aba.sh: expected '$NEW_VERSION', got '$TAG_ABA_VER'${NC}"
+    VERIFY_OK=false
+fi
+
+# Check CHANGELOG has the version section
+if git show "v$NEW_VERSION:CHANGELOG.md" 2>/dev/null | grep -q "^## \[$NEW_VERSION\]"; then
+    echo -e "${GREEN}       ✓ CHANGELOG.md has [$NEW_VERSION] section${NC}"
+else
+    echo -e "${RED}       ✗ CHANGELOG.md missing [$NEW_VERSION] section${NC}"
+    VERIFY_OK=false
+fi
+
+# Check README has the version in download URLs
+if git show "v$NEW_VERSION:README.md" 2>/dev/null | grep -q "v$NEW_VERSION"; then
+    echo -e "${GREEN}       ✓ README.md references v$NEW_VERSION${NC}"
+else
+    echo -e "${RED}       ✗ README.md does not reference v$NEW_VERSION${NC}"
+    VERIFY_OK=false
+fi
+
+if $VERIFY_OK; then
+    echo -e "${GREEN}       ✓ All verification checks passed${NC}\n"
+else
+    echo -e "${RED}       ✗ Verification FAILED — review the tag before pushing!${NC}\n"
 fi
 
 echo -e "${GREEN}=== Release v$NEW_VERSION Ready! ===${NC}\n"
@@ -250,15 +355,12 @@ else
     echo
 fi
 
-echo -e "${YELLOW}4. Create GitHub release (optional):${NC}"
+echo -e "${YELLOW}4. Create GitHub release:${NC}"
 echo
-echo -e "   ${CYAN}Recommended: Web Interface (no tools needed)${NC}"
-echo -e "   https://github.com/sjbylo/aba/releases/new?tag=v$NEW_VERSION"
-echo -e "   - Select tag v$NEW_VERSION"
-echo -e "   - Copy release notes from CHANGELOG.md"
-echo -e "   - Click 'Publish release'"
-echo
-echo -e "   ${CYAN}Alternative: Automated script (requires 'gh' CLI)${NC}"
+echo -e "   ${CYAN}Automated (recommended, requires 'gh' CLI):${NC}"
 echo -e "   build/create-github-release.sh v$NEW_VERSION"
+echo
+echo -e "   ${CYAN}Alternative: Web Interface${NC}"
+echo -e "   https://github.com/sjbylo/aba/releases/new?tag=v$NEW_VERSION"
 echo
 echo -e "${CYAN}See build/RELEASE_WORKFLOW.md for complete instructions.${NC}"
