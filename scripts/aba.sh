@@ -11,6 +11,7 @@ ABA_BUILD=20260213070035
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
 echo -n $ABA_BUILD | grep -qE "^[0-9]{14}$" || { echo "ABA_BUILD in $0 is incorrect [$ABA_BUILD]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
+# Map uname -m to OpenShift architecture names (s390x/ppc64le stay as-is)
 ARCH=$(uname -m)
 [ "$ARCH" = "aarch64" ] && export ARCH=arm64  # ARM
 [ "$ARCH" = "x86_64" ] && export ARCH=amd64   # Intel
