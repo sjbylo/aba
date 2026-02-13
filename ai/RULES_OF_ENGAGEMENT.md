@@ -1,5 +1,10 @@
 # ABA Development Rules of Engagement
 
+> **RULE #1: NEVER commit or push without explicit user permission.**
+> After making file edits, STOP. Show the user what changed. Ask: "Should I commit and push?"
+> Do NOT proceed until the user explicitly says "commit", "push", or "commit and push".
+> "yes" to a file edit does NOT mean "yes, commit it" — it only means "yes, make the edit".
+
 This document contains the key rules, workflow, and architectural principles for working on the ABA project with AI assistance.
 
 ## Workflow
