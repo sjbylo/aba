@@ -38,10 +38,11 @@ echo ""
 echo "Test 1: oc-mirror binary installation (via run_once)"
 echo "-----------------------------------------------------"
 
-# Use download-catalog-index-simple.sh which calls run_once for oc-mirror
+# Use download-catalog-index.sh which calls run_once for oc-mirror
 # This tests the actual usage pattern
-# (Script gets version from aba.conf, just pass catalog name)
-if ! scripts/download-catalog-index-simple.sh redhat-operator >&2; then
+source <(normalize-aba-conf)
+ocp_ver_short=$(echo "$ocp_version" | cut -d. -f1-2)
+if ! scripts/download-catalog-index.sh redhat-operator "$ocp_ver_short" >&2; then
 	# Don't abort on catalog download failure - we're just testing oc-mirror install
 	aba_info "Note: Catalog download may have failed, but checking if oc-mirror was installed..." >&2
 fi
@@ -95,8 +96,8 @@ for catalog_file in "${catalog_files[@]}"; do
 	if [ ! -s "$catalog_file" ]; then
 		aba_abort "Test 2 FAILED: Catalog file $catalog_file is empty"
 	fi
-	# Verify it contains actual catalog data (skip oc-mirror warnings at top)
-	if ! grep -q "^NAME.*DISPLAY NAME" "$catalog_file"; then
+	# Verify it contains actual catalog data (header is stripped by awk, check for operator names)
+	if ! grep -q "operator" "$catalog_file"; then
 		aba_abort "Test 2 FAILED: Catalog file $catalog_file doesn't contain expected data"
 	fi
 	aba_info_ok "✓ $catalog_file exists and is valid" >&2

@@ -47,7 +47,7 @@ Currently, scripts have inconsistent directory management practices:
 - scripts/cli-install-all.sh
 - scripts/cli-download-all.sh
 - scripts/cleanup-runner.sh
-- scripts/download-catalog-index-simple.sh
+- scripts/download-catalog-index.sh
 ```
 
 **Recommended Approach:**
@@ -103,9 +103,65 @@ Currently, scripts have inconsistent directory management practices:
 
 ## Medium Priority
 
-*(Add future items here)*
+### 2. E2E Clone-Check: Parallelize VM Cloning and Configuration
 
----
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Medium  
+**Created:** 2026-02-12
+
+**Current State:**
+`suite-clone-check.sh` runs all steps sequentially (~11 minutes). Each `_vm_*` operation on con1 completes before the same operation starts on dis1.
+
+**Proposed Optimization -- Parallel Operations:**
+
+Steps that CAN be parallelized (independent per VM):
+- SSH wait after power-on (both VMs boot simultaneously)
+- SSH key setup on both VMs
+- NTP on both (after con1 firewall is up)
+- Cleanup (caches, podman, home) on both
+- Config (vmware.conf, test user) on both
+
+Steps that MUST stay sequential:
+- Cloning: both share the same template; `clone_with_macs` reverts the template snapshot before each clone. Fix: revert once, then clone twice.
+- con1 network + firewall + dnsmasq BEFORE dis1 network: dis1's default route goes through con1's VLAN masquerade.
+
+**Estimated time saving:** ~11 min down to ~7-8 min.
+
+### 3. E2E VM Reuse: Snapshot-Based Fast Restart
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Medium  
+**Created:** 2026-02-12
+
+**Problem:**
+Every clone-check run destroys and re-clones VMs from template, then reconfigures from scratch. This is the biggest time cost (~10 min) and is wasteful when the VMs are already configured correctly.
+
+**Proposed Solution -- Three-tier reuse:**
+
+1. **Snapshot reuse (fastest, ~30s):** After clone-check fully configures VMs, take a govc snapshot `e2e-configured`. On subsequent runs, if VMs exist with that snapshot, revert to it and power on. Guarantees clean, known-good state.
+
+2. **Power-on + light cleanup (fast, ~60s):** Leave VMs powered off after tests. Next run powers on and runs a refresh (reset aba state, clean caches). Network/firewall/dnsmasq survive reboots. Slightly less deterministic than snapshots.
+
+3. **Full re-clone (current, ~11 min):** Destroy VMs and clone fresh from template. Used with `--fresh` flag or when VMs don't exist.
+
+**Recommended approach:** Hybrid -- snapshots for the clone-check / infra setup, light cleanup for the actual test suites that run on already-configured VMs. `--fresh` flag forces full re-clone.
+
+**Implementation sketch:**
+```bash
+# In suite-clone-check.sh or a new pool-reuse.sh:
+if vm_exists "$CON_NAME" && vm_has_snapshot "$CON_NAME" "e2e-configured"; then
+    govc snapshot.revert -vm "$CON_NAME" e2e-configured
+    govc vm.power -on "$CON_NAME"
+    # ... same for DIS_NAME
+else
+    # full clone + configure pipeline
+fi
+# After full configure:
+govc snapshot.create -vm "$CON_NAME" e2e-configured
+govc snapshot.create -vm "$DIS_NAME" e2e-configured
+```
 
 ## Low Priority
 

@@ -4,7 +4,7 @@
 # Architecture Rule:
 #   $ABA_ROOT must ONLY be used in:
 #     - scripts/aba.sh
-#     - tui/abatui_experimental.sh
+#     - tui/abatui.sh
 #
 #   All other scripts must:
 #     1. cd "$(dirname "$0")/.." || exit 1
@@ -36,7 +36,7 @@ echo
 # Allowed files (exceptions to the rule)
 ALLOWED_FILES=(
 	"scripts/aba.sh"
-	"tui/abatui_experimental.sh"
+	"tui/abatui.sh"
 )
 
 # Find all shell scripts that contain $ABA_ROOT
@@ -86,7 +86,7 @@ else
 	echo "Architecture Rule Violation:"
 	echo "  \$ABA_ROOT must ONLY be used in:"
 	echo "    - scripts/aba.sh"
-	echo "    - tui/abatui_experimental.sh"
+	echo "    - tui/abatui.sh"
 	echo
 	echo "Fix by:"
 	echo "  1. Add at script start: cd \"\$(dirname \"\$0\")/..\" || exit 1"

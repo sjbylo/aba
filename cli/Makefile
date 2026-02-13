@@ -56,9 +56,16 @@ ifeq ($(os),mac)
 	endif
 endif
 
-ARCH := amd64
-ifneq ($(arch),x86_64)
+# Map uname -m to OpenShift download architecture names used in tarball filenames.
+# x86_64 -> amd64, aarch64 -> arm64, s390x/ppc64le stay as-is (OpenShift uses raw names).
+# Note: $(arch) is used in the URL *path* (e.g. .../s390x/clients/ocp/...),
+#       $(ARCH) is used in the tarball *filename* (e.g. openshift-client-linux-s390x-...).
+ifeq ($(arch),x86_64)
+	ARCH := amd64
+else ifeq ($(arch),aarch64)
 	ARCH := arm64
+else
+	ARCH := $(arch)
 endif
 
 butane_arch := $(arch)
@@ -128,14 +135,11 @@ help: ## Help
 
 # The preference to download the oc CLI tar files is: rhel9, then rhel8 
 
-# See:
-# https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.9/ 
-# Example x86:
-#openshift-client-linux-amd64-rhel9-4.18.9.tar.gz
-#openshift-client-linux-amd64-rhel8-4.18.9.tar.gz
-# Example ARM:
-#openshift-client-linux-arm64-rhel8-4.18.9.tar.gz
-#openshift-client-linux-arm64-rhel9-4.18.9.tar.gz
+# See: https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.9/ 
+# Example x86:    openshift-client-linux-amd64-rhel9-4.18.9.tar.gz
+# Example ARM:    openshift-client-linux-arm64-rhel9-4.18.9.tar.gz
+# Example s390x:  openshift-client-linux-s390x-rhel9-4.18.9.tar.gz
+# Example ppc64le: openshift-client-linux-ppc64le-rhel9-4.18.9.tar.gz
 
 # This is the tarball that matches this localhost's OS and arch.
 local_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-$(rhel_ver)-$(ocp_version).tar.gz

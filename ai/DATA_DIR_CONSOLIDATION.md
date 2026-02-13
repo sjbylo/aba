@@ -445,7 +445,7 @@ mirror/
 
 ---
 
-### 12. tui/abatui_experimental.sh
+### 12. tui/abatui.sh
 
 ```diff
  # Line 2140: Update config path
@@ -533,7 +533,7 @@ Search and replace:
 - [ ] Update verify-release-image.sh
 
 ### Phase 4: UI & Config
-- [ ] Update tui/abatui_experimental.sh
+- [ ] Update tui/abatui.sh
 - [ ] Update mirror/Makefile
 
 ### Phase 5: Templates

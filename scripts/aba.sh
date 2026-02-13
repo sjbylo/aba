@@ -5,12 +5,13 @@
 ABA_VERSION=0.9.3
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260208234722
+ABA_BUILD=20260213070035
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
 echo -n $ABA_BUILD | grep -qE "^[0-9]{14}$" || { echo "ABA_BUILD in $0 is incorrect [$ABA_BUILD]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
+# Map uname -m to OpenShift architecture names (s390x/ppc64le stay as-is)
 ARCH=$(uname -m)
 [ "$ARCH" = "aarch64" ] && export ARCH=arm64  # ARM
 [ "$ARCH" = "x86_64" ] && export ARCH=amd64   # Intel
@@ -19,7 +20,8 @@ uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a Cent
 
 # Handle --aba-version early (before sudo check)
 if [ "$1" = "--aba-version" ]; then
-	echo "aba version $ABA_VERSION (build $ABA_BUILD)"
+	ver=$(cat "$(dirname "$(readlink -f "$0")")/../VERSION" 2>/dev/null)
+	echo "aba${ver:+ v$ver} version $ABA_VERSION (build $ABA_BUILD)"
 	git_branch=$(git branch --show-current 2>/dev/null)
 	git_commit=$(git rev-parse --short HEAD 2>/dev/null)
 	[ "$git_branch" -a "$git_commit" ] && echo "Git: $git_branch @ $git_commit"
@@ -177,22 +179,22 @@ if [ ! -s $ABA_ROOT/aba.conf ]; then
 
 	$ABA_ROOT/scripts/j2 $ABA_ROOT/templates/aba.conf.j2 > $ABA_ROOT/aba.conf
 else
-	# If the repo has empty network values in aba.conf, add defaults - as now is the best time (on internal network).
-	# For pre-created bundles, aba.conf will exist but these values will be empty ... so attempt to fill them in. 
 	source <(cd $ABA_ROOT && normalize-aba-conf)
-	# Determine resonable defaults for the following ... and add to conf file if value exists ...
-	# This will always try to add sensible default values from the local network config. if not already set in the config file.
-	[ ! "$domain" ]			&& v=$(get_domain)		&& [ "$v" ] && replace-value-conf -n domain		-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: domain=$domain
-	[ ! "$machine_network" ]	&& v=$(get_machine_network) 	&& [ "$v" ] && replace-value-conf -n machine_network	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: machine_network=$machine_network
-	[ ! "$dns_servers" ]		&& v=$(get_dns_servers)		&& [ "$v" ] && replace-value-conf -n dns_servers	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: dns_servers=$dns_servers
-	[ ! "$next_hop_address" ]	&& v=$(get_next_hop)		&& [ "$v" ] && replace-value-conf -n next_hop_address	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: next_hop_address=$next_hop_address
-	[ ! "$ntp_servers" ]		&& v=$(get_ntp_servers) 	&& [ "$v" ] && replace-value-conf -n ntp_servers	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: ntp_servers=$ntp_servers
+	# Only auto-fill empty network values in bundle mode (on internal/disconnected network).
+	# For pre-created bundles, aba.conf will exist but network values will be empty ... so attempt to fill them in.
+	if [ -f "$ABA_ROOT/.bundle" ]; then
+		[ ! "$domain" ]			&& v=$(get_domain)		&& [ "$v" ] && replace-value-conf -n domain		-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: domain=$domain
+		[ ! "$machine_network" ]	&& v=$(get_machine_network) 	&& [ "$v" ] && replace-value-conf -n machine_network	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: machine_network=$machine_network
+		[ ! "$dns_servers" ]		&& v=$(get_dns_servers)		&& [ "$v" ] && replace-value-conf -n dns_servers	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: dns_servers=$dns_servers
+		[ ! "$next_hop_address" ]	&& v=$(get_next_hop)		&& [ "$v" ] && replace-value-conf -n next_hop_address	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: next_hop_address=$next_hop_address
+		[ ! "$ntp_servers" ]		&& v=$(get_ntp_servers) 	&& [ "$v" ] && replace-value-conf -n ntp_servers	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: ntp_servers=$ntp_servers
 
-	aba_debug domain:		$domain
-	aba_debug machine_network:	$machine_network
-	aba_debug dns_servers:		$dns_servers
-	aba_debug next_hop_address:	$next_hop_address
-	aba_debug ntp_servers:		$ntp_servers
+		aba_debug domain:		$domain
+		aba_debug machine_network:	$machine_network
+		aba_debug dns_servers:		$dns_servers
+		aba_debug next_hop_address:	$next_hop_address
+		aba_debug ntp_servers:		$ntp_servers
+	fi
 fi
 
 # Fetch any existing values (e.e. ocp_channel is used later for '-v')

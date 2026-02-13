@@ -46,6 +46,7 @@ Options:
   -D, --debug                           # Increase output
   -q, --quiet                           # Less output
       --info                            # Increase output (default)
+      --aba-version                     # Show aba version and build information
 
 Usage:
   aba <command> [options]

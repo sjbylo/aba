@@ -23,8 +23,11 @@
 
 set -euo pipefail
 
+E2E_COORDINATOR_ONLY=true  # Must run on coordinator (creates VMs, needs govc)
+
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
+source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
 
@@ -63,8 +66,15 @@ clone_with_macs() {
             local device="ethernet-${i}"
             local mac="${macs[$i]}"
             local nic_net
-            nic_net=$(_get_nic_network "$clone" "$device")
-            [ -z "$nic_net" ] && nic_net="${GOVC_NETWORK:-VM Network}"
+            nic_net=$(_get_nic_network "$clone" "$device" 2>/dev/null) || true
+            if [ -z "$nic_net" ]; then
+                # Device might not exist on this template (e.g. 2-NIC template with 3 MACs)
+                if ! govc device.info -vm "$clone" "$device" &>/dev/null; then
+                    echo "  SKIP: $clone has no $device -- skipping MAC $mac"
+                    continue
+                fi
+                nic_net="${GOVC_NETWORK:-VM Network}"
+            fi
             e2e_run "  $clone: $device MAC -> $mac" \
                 "govc vm.network.change -vm $clone -net '$nic_net' -net.address $mac $device"
         done
@@ -84,6 +94,7 @@ plan_tests \
     "SSH keys: root access on both hosts" \
     "Network: role-aware config (connected + disconnected)" \
     "Firewall: masquerade + NAT on $CON_NAME" \
+    "DNS: dnsmasq on $CON_NAME for pool $POOL_NUM cluster records" \
     "NTP: chrony and timezone on both hosts" \
     "Cleanup: caches, podman, home on both hosts" \
     "Config: vmware.conf, test user, aba install ($CON_NAME)" \
@@ -175,7 +186,17 @@ e2e_run "Setup firewall + masquerade on $CON_NAME" \
 test_end 0
 
 # ============================================================================
-# 7. NTP: chrony and timezone (AFTER network + firewall so dis1 can reach NTP)
+# 7. DNS: dnsmasq on connected bastion (serves cluster DNS for this pool)
+# ============================================================================
+test_begin "DNS: dnsmasq on $CON_NAME for pool $POOL_NUM cluster records"
+
+e2e_run "Setup dnsmasq on $CON_NAME" \
+    "_vm_setup_dnsmasq $CON_HOST $DEF_USER $CON_NAME"
+
+test_end 0
+
+# ============================================================================
+# 8. NTP: chrony and timezone (AFTER network + firewall so dis1 can reach NTP)
 # ============================================================================
 test_begin "NTP: chrony and timezone on both hosts"
 
@@ -185,7 +206,7 @@ e2e_run "NTP/time on $DIS_NAME" "_vm_setup_time $DIS_HOST $DEF_USER"
 test_end 0
 
 # ============================================================================
-# 8. Cleanup: caches, podman, home
+# 9. Cleanup: caches, podman, home
 # ============================================================================
 test_begin "Cleanup: caches, podman, home on both hosts"
 
@@ -201,7 +222,7 @@ e2e_run "Cleanup home on $DIS_NAME" "_vm_cleanup_home $DIS_HOST $DEF_USER"
 test_end 0
 
 # ============================================================================
-# 9. Config: vmware.conf, test user, install aba on con1
+# 10. Config: vmware.conf, test user, install aba on con1
 # ============================================================================
 test_begin "Config: vmware.conf, test user, aba install ($CON_NAME)"
 
@@ -216,7 +237,7 @@ e2e_run "Install aba on $CON_NAME" "_vm_install_aba $CON_HOST $DEF_USER"
 test_end 0
 
 # ============================================================================
-# 10. Harden dis1: remove RPMs, pull-secret, proxy
+# 11. Harden dis1: remove RPMs, pull-secret, proxy
 # ============================================================================
 test_begin "Harden: remove RPMs, pull-secret, proxy ($DIS_NAME)"
 
@@ -227,7 +248,7 @@ e2e_run "Remove proxy on $DIS_NAME" "_vm_remove_proxy $DIS_HOST $DEF_USER"
 test_end 0
 
 # ============================================================================
-# 11. Verify everything
+# 12. Verify everything
 # ============================================================================
 test_begin "Verify: full configuration check"
 
@@ -282,6 +303,44 @@ e2e_run "$DIS_HOST: default route via $CON_NAME VLAN ($con_vlan_ip)" \
 e2e_run "$DIS_HOST: ping internet via $CON_NAME masquerade (8.8.8.8)" \
     "ssh $DEF_USER@$DIS_HOST ping -c 3 -W 5 8.8.8.8"
 
+# --- DNS: dnsmasq on con1 ---
+pool_dom="$(pool_domain $POOL_NUM)"
+expected_node="$(pool_node_ip $POOL_NUM)"
+expected_api="$(pool_api_vip $POOL_NUM)"
+expected_apps="$(pool_apps_vip $POOL_NUM)"
+con_ip="$(pool_con_ip $POOL_NUM)"
+
+e2e_run "$CON_HOST: dnsmasq running" \
+    "ssh $DEF_USER@$CON_HOST systemctl is-active dnsmasq"
+e2e_run "$CON_HOST: DNS port 53 open" \
+    "ssh $DEF_USER@$CON_HOST sudo firewall-cmd --list-services | grep dns"
+
+# SNO records
+e2e_run "$CON_HOST: api.sno.$pool_dom -> $expected_node" \
+    "ssh $DEF_USER@$CON_HOST dig +short api.sno.$pool_dom @127.0.0.1 | grep -q $expected_node"
+e2e_run "$CON_HOST: *.apps.sno.$pool_dom -> $expected_node" \
+    "ssh $DEF_USER@$CON_HOST dig +short test.apps.sno.$pool_dom @127.0.0.1 | grep -q $expected_node"
+
+# Compact records
+e2e_run "$CON_HOST: api.compact.$pool_dom -> $expected_api" \
+    "ssh $DEF_USER@$CON_HOST dig +short api.compact.$pool_dom @127.0.0.1 | grep -q $expected_api"
+e2e_run "$CON_HOST: *.apps.compact.$pool_dom -> $expected_apps" \
+    "ssh $DEF_USER@$CON_HOST dig +short test.apps.compact.$pool_dom @127.0.0.1 | grep -q $expected_apps"
+
+# Standard records
+e2e_run "$CON_HOST: api.standard.$pool_dom -> $expected_api" \
+    "ssh $DEF_USER@$CON_HOST dig +short api.standard.$pool_dom @127.0.0.1 | grep -q $expected_api"
+e2e_run "$CON_HOST: *.apps.standard.$pool_dom -> $expected_apps" \
+    "ssh $DEF_USER@$CON_HOST dig +short test.apps.standard.$pool_dom @127.0.0.1 | grep -q $expected_apps"
+
+# Upstream forwarding works
+e2e_run "$CON_HOST: upstream DNS forwarding (google.com)" \
+    "ssh $DEF_USER@$CON_HOST dig +short google.com @127.0.0.1 | grep -q '[0-9]'"
+
+# Verify con1's dnsmasq is reachable from the network (run dig locally, targeting con1's IP)
+e2e_run "Network DNS: api.sno.$pool_dom via $CON_NAME ($con_ip)" \
+    "dig +short api.sno.$pool_dom @$con_ip | grep -q $expected_node"
+
 # --- Root SSH ---
 e2e_run "$CON_HOST: root SSH" "ssh root@$CON_HOST whoami | grep root"
 e2e_run "$DIS_HOST: root SSH" "ssh root@$DIS_HOST whoami | grep root"
@@ -328,13 +387,10 @@ suite_end
 
 echo ""
 echo "================================================="
-echo "Pool ${POOL_NUM} VMs fully configured:"
+echo "Pool ${POOL_NUM} VMs fully configured and verified:"
 echo "  $CON_NAME ($CON_HOST) -- connected bastion / gateway"
 echo "  $DIS_NAME ($DIS_HOST) -- disconnected bastion (air-gapped)"
 echo ""
-echo "VLAN IPs:"
-echo "  $CON_NAME: ${VM_CLONE_VLAN_IPS[$CON_NAME]}"
-echo "  $DIS_NAME: ${VM_CLONE_VLAN_IPS[$DIS_NAME]}"
-echo ""
-echo "VMs are still running for manual inspection."
+echo "VMs are left running. Destroy manually when done:"
+echo "  destroy_vm $CON_NAME && destroy_vm $DIS_NAME"
 echo "================================================="

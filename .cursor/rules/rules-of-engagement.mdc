@@ -7,11 +7,14 @@ alwaysApply: true
 
 ## NEVER commit or push without explicit user permission
 
+- After making file edits, STOP. Show the user what changed. Ask: "Should I commit and push?"
+- Do NOT proceed with git commit or git push until the user explicitly says to commit.
+- "yes" to a file edit does NOT mean "yes, commit it" — it only means "yes, make the edit"
 - Do NOT commit after making changes
-- Do NOT commit when user says "ok" or "continue" (unless specifically about commits)
+- Do NOT commit when user says "ok", "yes", or "continue" (unless specifically about commits)
 - Do NOT push to origin without being asked
-- ALWAYS ask "Should I commit and push?" when work is complete
-- WAIT for user to explicitly say "yes", "commit", "push", or "commit and push"
+- WAIT for user to explicitly say "commit", "push", or "commit and push"
+- NEVER use required_permissions: ["all"] for git commit or git push — they must run inside the sandbox so Cursor's approval gate is enforced
 
 ## NEVER add AI attribution to commits
 

@@ -28,9 +28,9 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-INT_BASTION_HOST="${INT_BASTION_HOST:-registry.example.com}"
-INT_BASTION_VM="${INT_BASTION_VM:-bastion-internal-${INTERNAL_BASTION_RHEL_VER:-rhel9}}"
-INTERNAL_BASTION="${TEST_USER:-steve}@${INT_BASTION_HOST}"
+# L commands run on conN (this host). R commands SSH to disN.
+DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
 # --- Suite ------------------------------------------------------------------
@@ -40,7 +40,7 @@ e2e_setup
 plan_tests \
     "Setup: install aba and configure" \
     "Setup: calculate older version for upgrade" \
-    "Setup: init internal bastion VM" \
+    "Setup: reset internal bastion" \
     "Bundle: create with older version" \
     "Bundle: transfer to bastion" \
     "Registry: Quay install and uninstall" \
@@ -82,7 +82,7 @@ e2e_run "Set operator sets" \
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set mirror host" \
-    "sed -i 's/registry.example.com/${INT_BASTION_HOST} /g' ./mirror/mirror.conf"
+    "sed -i 's/registry.example.com/${DIS_HOST} /g' ./mirror/mirror.conf"
 
 test_end 0
 
@@ -112,12 +112,11 @@ e2e_run "Show configured version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 test_end 0
 
 # ============================================================================
-# 3. Setup: init internal bastion VM
+# 3. Setup: reset internal bastion (reuse clone-check's disN)
 # ============================================================================
-test_begin "Setup: init internal bastion VM"
+test_begin "Setup: reset internal bastion"
 
-export subdir=subdir
-setup_bastion "$INT_BASTION_HOST" "$INT_BASTION_VM"
+reset_internal_bastion
 
 test_end 0
 
@@ -127,7 +126,7 @@ test_end 0
 test_begin "Bundle: create with older version"
 
 e2e_run -r 3 3 "Create bundle and pipe to bastion" \
-    "source <(normalize-aba-conf) && aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel ${TEST_CHANNEL:-stable} --version \$ocp_version --op-sets abatest --ops web-terminal --base-domain example.com -o - -y | ssh ${INTERNAL_BASTION} 'mkdir -p ~/aba && tar xf - -C ~/aba'"
+    "source <(normalize-aba-conf) && aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel ${TEST_CHANNEL:-stable} --version \$ocp_version --op-sets abatest --ops web-terminal --base-domain $(pool_domain) -o - -y | ssh ${INTERNAL_BASTION} 'mkdir -p ~/aba && tar xf - -C ~/aba'"
 
 test_end 0
 
@@ -180,7 +179,7 @@ test_end 0
 test_begin "SNO: install cluster"
 
 e2e_run_remote "Create and install SNO" \
-    "cd ~/aba && aba cluster -n sno -t sno --starting-ip 10.0.1.201 -s install"
+    "cd ~/aba && aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Verify cluster operators" \
     "cd ~/aba && aba --dir sno run"
 e2e_run_remote "Check cluster operators" \
@@ -305,7 +304,7 @@ e2e_run_remote "Clean sno dir" \
 
 # Build standard cluster
 e2e_run_remote "Create standard cluster config" \
-    "cd ~/aba && aba cluster -n standard -t standard -i 10.0.1.81 --step cluster.conf"
+    "cd ~/aba && aba cluster -n standard -t standard -i $(pool_standard_api_vip) --step cluster.conf"
 e2e_run_remote "Verify macs.conf used" \
     "cd ~/aba && grep mac_prefix standard/cluster.conf || cat standard/cluster.conf"
 e2e_run_remote "Generate agent configs" \

@@ -102,6 +102,34 @@ setup_connected_bastion() {
     echo "=== setup_connected_bastion complete: $clone_name ==="
 }
 
+# --- reset_internal_bastion -------------------------------------------------
+#
+# Reset the internal (air-gapped) bastion to a clean state WITHOUT re-cloning.
+# Assumes clone-check has already created and configured the disN VM.
+#
+# Resets aba state, removes cluster dirs, cleans podman and oc-mirror caches.
+# This is the lightweight alternative to setup_bastion for reusing VMs.
+#
+# Usage: reset_internal_bastion
+#   (uses INTERNAL_BASTION from the calling suite)
+#
+reset_internal_bastion() {
+    echo "=== reset_internal_bastion: ${INTERNAL_BASTION:-unset} ==="
+
+    e2e_run_remote "Reset aba on internal bastion" \
+        "cd ~/aba && aba reset -f 2>/dev/null || true"
+    e2e_run_remote "Clean cluster dirs on internal bastion" \
+        "cd ~/aba && rm -rf sno sno2 compact standard 2>/dev/null || true"
+    e2e_run_remote "Clean podman on internal bastion" \
+        "podman system prune --all --force 2>/dev/null; podman rmi --all 2>/dev/null; true"
+    e2e_run_remote "Clean oc-mirror caches on internal bastion" \
+        "rm -rf ~/.cache/agent ~/.oc-mirror 2>/dev/null; true"
+    e2e_run_remote "Clean containers storage on internal bastion" \
+        "sudo rm -rf ~/.local/share/containers/storage 2>/dev/null; true"
+
+    echo "=== reset_internal_bastion complete ==="
+}
+
 # --- cleanup_all ------------------------------------------------------------
 #
 # Full cleanup: reset aba state, clean caches, remove cluster directories.
