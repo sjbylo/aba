@@ -39,7 +39,7 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
   - [Synchronize NTP Across Cluster Nodes](#synchronize-ntp-across-cluster-nodes)
   - [Enable OpenShift Update Service (OSUS)](#enable-openshift-update-service-osus)
 - [Advanced Use](#advanced-use)
-  - [Running ABA on arm64](#running-aba-on-arm64)
+  - [Supported Architectures](#supported-architectures)
   - [Running ABA in a container](#running-aba-in-a-container)
   - [Creating an Install bundle on a restricted VM or Laptop](#creating-an-install-bundle-on-a-restricted-vm-or-laptop)
   - [To install aba from the dev branch run the following:](#to-install-aba-from-the-dev-branch-run-the-following)
@@ -51,7 +51,7 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
   - [Q: Can bonds and/or vlan be configured on my nodes?](#q-can-bonds-andor-vlan-be-configured-on-my-nodes)
   - [Q: How can I determine the network interface names of my bare-metal servers?](#q-how-can-i-determine-the-network-interface-names-of-my-bare-metal-servers)
   - [Q: Can ABA run inside a container?](#q-can-aba-run-inside-a-container)
-  - [Q: Does ABA support ARM?](#q-does-aba-support-arm)
+  - [Q: Does ABA support ARM, s390x, or ppc64le?](#q-does-aba-support-arm-s390x-or-ppc64le)
   - [Q: How much disk space do I need when using ABA?](#q-how-much-disk-space-do-i-need-when-using-aba)
   - [Q: Can I install Operators from community catalogs?](#q-can-i-install-operators-from-community-catalogs)
   - [Q: Where are cluster types (SNO, compact, standard) configured?](#q-where-are-cluster-types-sno-compact-standard-configured)
@@ -975,9 +975,20 @@ In a partially disconnected environment, the following can be done:
 
 # Advanced Use
 
-## Running ABA on arm64
+## Supported Architectures
 
-  - Tested on Mac M1 with arm64 VMware fusion VMs:
+ABA supports the following architectures, automatically detecting the host and downloading the correct OpenShift binaries:
+
+| Architecture | `uname -m` | Status |
+|---|---|---|
+| Intel/AMD | `x86_64` | Fully tested |
+| ARM | `aarch64` | Tested (see notes below) |
+| IBM Z (System Z) | `s390x` | Supported |
+| IBM Power | `ppc64le` | Supported |
+
+### Notes on arm64
+
+  - Tested on Mac M1 with arm64 VMware Fusion VMs:
     - ABA can install the docker registry and connect to it.  The registry for OpenShift (Quay) is not yet available for arm64. The generated iso was then used to complete OpenShift installation in a second arm64 VM on the same private network. 
 
 
@@ -1241,9 +1252,9 @@ Boot your servers using the Red Hat CoreOS live DVD and check the output of the 
 
 ---
 
-## Q: Does ABA support ARM?
+## Q: Does ABA support ARM, s390x, or ppc64le?
 
-**Yes.** ABA supports both x86_64 and aarch64 (ARM) architectures. A RHEL (aarch64) or CentOS Stream (aarch64) instance can be used as the bastion host.  Since there is no official Quay installer for ARM, use an existing registry or the Docker registry instead (see the FAQ for how to use the docker registry instead of Quay).
+**Yes.** ABA supports x86_64, aarch64 (ARM), s390x (IBM Z), and ppc64le (IBM Power) architectures. ABA automatically detects the host architecture and downloads the correct OpenShift binaries. For ARM, since there is no official Quay installer, use an existing registry or the Docker registry instead (see the FAQ for how to use the docker registry instead of Quay).
 
 ---
 
