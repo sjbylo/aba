@@ -5,11 +5,13 @@
 - **Release post-tag verification** - Automated checks that VERSION, ABA_VERSION, CHANGELOG, and README are correct in the tagged commit
 - **Release workflow docs rewritten** - Documents both HEAD and ref-based flows, dry-run usage, common pitfalls, and quick reference
 - **Install `gh` CLI** - GitHub CLI now available for automated GitHub release creation
+- **README cleanup** - Removed stale content, fixed inconsistencies, broadened architecture references, improved install description
 
 ### Bug Fixes
 - **s390x/ppc64le architecture support** - Fixed architecture mapping that caused x86 or arm64 binaries to be downloaded on s390x (System Z) and ppc64le (Power) systems
 - **Install update detection** - Uses `diff` to compare file contents instead of timestamp comparison, fixing false "up-to-date" when switching between dev and release builds
 - **Test SSH scripts** - Added `exit 0` to prevent spurious failures when final informational SSH call times out
+- **Duplicate RPM packages in install script** - Deduplicated the package list to avoid redundant entries in the install output
 
 ---
 
