@@ -1102,6 +1102,31 @@ done
 
 **Current**: Everything in `~/aba/` (mixed code + data)
 
+## README.md TOC Rule
+
+**CRITICAL**: When changing any heading in `README.md`, you MUST also update the Table of Contents (TOC) at the top of the file.
+
+- The TOC uses markdown anchor links: `[Heading Text](#heading-text-lowercased-with-dashes)`
+- If you rename a heading (e.g., "Running ABA on arm64" → "Supported Architectures"), update the corresponding TOC entry
+- Search for the old heading text in the TOC to find the entry to update
+- Verify the anchor link matches the new heading (lowercase, spaces → dashes, special chars removed)
+
+**Example:**
+```markdown
+# Before:
+  - [Running ABA on arm64](#running-aba-on-arm64)
+
+# After renaming heading to "Supported Architectures":
+  - [Supported Architectures](#supported-architectures)
+```
+
+## README.md Permalink Headings Rule
+
+**CRITICAL**: Some headings in `README.md` have a `<!-- this is a perma-link ... -->` HTML comment immediately after them. These headings must **NOT** be renamed, because they are referenced from external sources (blog posts, other documentation, bundle README files).
+
+- Before renaming any heading, check for a permalink comment on the line below it.
+- If a permalink comment is present, leave the heading unchanged.
+
 ## Don't Forget!
 
 - ✅ **Never commit without permission**: Always ask user first!
@@ -1112,6 +1137,8 @@ done
 - ✅ **Empty lines clean**: No whitespace
 - ✅ **Stderr for messages**: Stdout for structured data
 - ✅ **Relative paths**: Minimal $ABA_ROOT usage
+- ✅ **README TOC**: Update TOC when changing any heading in README.md
+- ✅ **Permalink headings**: Never rename README headings that have a `<!-- this is a perma-link ... -->` comment
 
 ## Troubleshooting Pattern for Users
 
