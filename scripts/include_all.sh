@@ -14,12 +14,12 @@ BASE_NAME=$(basename "${BASH_SOURCE[0]}")  # Needed in case this file is sourced
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
 
-# Set up the arch vars
+# Map uname -m to OpenShift download architecture names.
+# x86_64 -> amd64, aarch64 -> arm64, s390x/ppc64le stay as-is (match OpenShift naming).
 export ARCH=$(uname -m)
-#export arch=amd64
-#export ARCH=amd64
 [ "$ARCH" = "aarch64" ] && export ARCH=arm64  # ARM
 [ "$ARCH" = "x86_64" ] && export ARCH=amd64   # Intel
+# s390x and ppc64le: no mapping needed — OpenShift uses the raw uname -m value
 
 # ===========================
 # Color Echo Functions
