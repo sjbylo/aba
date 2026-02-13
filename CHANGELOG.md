@@ -2,6 +2,41 @@
 
 ---
 
+## [0.9.2] - 2026-02-13
+
+TUI polish, new E2E test framework, reliability and UX fixes
+
+
+### New Features
+- **TUI promoted to stable** - Removed "Experimental" label, renamed to `abatui.sh`, added root symlink `./abatui`
+- **Older version option** - TUI version selection now offers Latest, Previous, and Older (N-2 minor release)
+- **Version display** - `aba --aba-version` now shows the semantic version (e.g. v0.9.2)
+- **E2E test framework** - New three-tier architecture (coordinator/connected bastion/internal bastion) with pool-aware helpers, per-pool DNS via dnsmasq, and parallel test execution support
+- **TUI automated tests** - New test suites for basic flow, full wizard, and early-exit cleanup
+
+### Bug Fixes
+- Fixed `run_once` race condition (TOCTOU) in validation and guarded unbound variables
+- Fixed `run_once` "Error: Task not started" message suppressed in quiet wait mode
+- Fixed download-before-install sequencing so `ensure_*()` functions wait for downloads
+- Fixed TUI network auto-fill: values only populated in bundle mode (disconnected), no longer overwritten in connected environments
+- Fixed TUI resume dialog appearing on fresh start when `aba.conf` was auto-created
+- Fixed TUI deletes auto-created `aba.conf` on early wizard exit for a clean slate
+- Fixed TUI symlink path resolution so `./abatui` works correctly
+- Fixed misleading "Downloading CLI" message when CLIs already installed
+
+### Improvements
+- TUI exit shows consistent summary with modified files, log path, and help hints
+- TUI Settings and action dialogs now have inline Help buttons
+- TUI help text clarifies Save/Bundle (mirror-to-disk) vs Sync (mirror-to-mirror) operations
+- TUI simplified `isconf` execution by removing unnecessary confirmation dialog
+- Shared TUI constants (`tui-strings.sh`) for dialog titles and menu IDs
+- `--aba-version` documented in help text
+- CLI tools download in parallel via `cli-download-all.sh` filtering
+- Version-aware download task IDs prevent stale cache across OCP version changes
+- E2E suites use pool-aware helpers instead of hardcoded IPs
+
+---
+
 ## [0.9.1] - 2026-02-08
 
 Bug fixes and improvements
@@ -73,7 +108,8 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/sjbylo/aba/releases/tag/v0.9.2
 [0.9.1]: https://github.com/sjbylo/aba/releases/tag/v0.9.1
 [0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
 [0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
