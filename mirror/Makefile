@@ -72,7 +72,7 @@ init: .init
 #cli-oc-mirror:
 #	@make -sC ../cli ~/bin/oc-mirror
 
-imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the intial image set config file with all provided values and operators
+imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the initial image set config file with all provided values and operators
 isconf: imagesetconf ## Same as imagesetconf
 
 sync/imageset-config-sync.yaml: ../aba.conf catalogs-download catalogs-wait
@@ -84,7 +84,6 @@ save/imageset-config-save.yaml: ../aba.conf catalogs-download catalogs-wait
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
-#sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 sync: .init .rpmsint ~/.pull-secret.json                     install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
 
@@ -151,8 +150,6 @@ $(DOCKER_REG_FILE):
 		rm -f $(DOCKER_REG_FILE); \
 	fi
 
-#		podman rmi $(DOCKER_REG_IMAGE); \
-
 .PHONY: install-docker-registry
 install-docker-registry:
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for Docker registry image download" -i mirror:download:docker-reg-image.tgz -- make -sC . docker-reg-image.tgz
@@ -182,7 +179,7 @@ install: .installed
 installclean:
 	@rm -f .installed
 
-.PHONEY: password pw
+.PHONY: password pw
 password: pw
 pw: 
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh
@@ -205,7 +202,7 @@ tar:   ## Create a full tar backup of ~/aba & ~/bin, ready to be transported to 
 tarrepo:   ## Same as 'make tar' but excludes all 'mirror_000*.tar' files under aba/mirror/save/.
 	@make -sC .. tarrepo $(out)
 
-# This will be depricated!
+# This will be deprecated!
 .PHONY: inc
 inc:   ## Same as 'make tar' except a timestamp file is used to only backup files that have changed since the last 'make inc' was run.
 	@make -sC .. inc $(out)
@@ -268,8 +265,8 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh # Only clean up the created scripts, not the script needed to uninstall the reg.
 	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 
-	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rf save || true  # Delete only if not edited
-	@[ -d sync ] && [ sync/.created -nt sync/imageset-config*yaml ] && rm -rf sync || true  # Delete only if not edited
+	@[ -d save ] && [ save/.created -nt "save/imageset-config-save.yaml" ] && rm -rf save || true  # Delete only if not edited
+	@[ -d sync ] && [ sync/.created -nt "sync/imageset-config-sync.yaml" ] && rm -rf sync || true  # Delete only if not edited
 	rm -f .cmd.out
 	rm -f *sha256sum.txt
 
