@@ -2,6 +2,12 @@
 # Simple catalog downloader - designed to work with run_once
 # No background logic, no internal locking, no daemonization
 # All orchestration handled by run_once
+#
+# Usage: download-catalog-index.sh <catalog_name> <version_short>
+# Example: download-catalog-index.sh redhat-operator 4.21
+#
+# Both parameters are required. The caller is responsible for determining
+# the version (e.g. from aba.conf or from the release graph for prefetch).
 
 # Derive aba root from script location (this script is in scripts/)
 # Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
@@ -10,24 +16,11 @@ cd "$SCRIPT_DIR/.." || exit 1
 
 source scripts/include_all.sh
 
-# Parse catalog name
-catalog_name="${1:-redhat-operator}"
+# Parse required parameters
+catalog_name="${1:?Usage: $0 <catalog_name> <version_short>}"
+ocp_ver_major="${2:?Usage: $0 <catalog_name> <version_short>}"
 
-aba_debug "Starting simple catalog download for: $catalog_name"
-
-# Validate config
-aba_debug "Loading and validating configuration"
-source <(normalize-aba-conf)
-verify-aba-conf || exit 1
-
-if [ -z "$ocp_version" ]; then
-	aba_abort "Error: ocp_version not defined in aba.conf"
-fi
-
-ocp_ver="$ocp_version"
-ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
-
-aba_debug "OCP version: $ocp_ver (major: $ocp_ver_major)"
+aba_debug "Catalog: $catalog_name, version: $ocp_ver_major"
 
 # Prepare container auth
 aba_debug "Creating container auth file"

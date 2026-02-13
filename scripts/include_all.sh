@@ -14,12 +14,12 @@ BASE_NAME=$(basename "${BASH_SOURCE[0]}")  # Needed in case this file is sourced
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
 
-# Set up the arch vars
+# Map uname -m to OpenShift download architecture names.
+# x86_64 -> amd64, aarch64 -> arm64, s390x/ppc64le stay as-is (match OpenShift naming).
 export ARCH=$(uname -m)
-#export arch=amd64
-#export ARCH=amd64
 [ "$ARCH" = "aarch64" ] && export ARCH=arm64  # ARM
 [ "$ARCH" = "x86_64" ] && export ARCH=amd64   # Intel
+# s390x and ppc64le: no mapping needed — OpenShift uses the raw uname -m value
 
 # ===========================
 # Color Echo Functions
@@ -934,6 +934,28 @@ fetch_previous_version() {
 	return 0
 }
 
+############################################
+# Fetch latest version of N-2 minor (older)
+# Example: if latest minor is 4.21 -> return latest 4.19.z
+############################################
+fetch_older_version() {
+	local channel="${1:-stable}"
+	local minor prev older v
+
+	minor="$(fetch_latest_minor_version "$channel")"
+	[[ -n "$minor" ]] || { echo ""; return 0; }
+
+	prev="$(_prev_minor "$minor")"
+	[[ -n "$prev" ]] || { echo ""; return 0; }
+
+	older="$(_prev_minor "$prev")"
+	[[ -n "$older" ]] || { echo ""; return 0; }
+
+	v="$(fetch_all_versions "$channel" "$older" | tail -n1)"
+	[[ -n "$v" ]] && echo "$v"
+	return 0
+}
+
 
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {
@@ -1379,7 +1401,7 @@ run_once() {
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:eW:m:qS" opt; do
+	while getopts "swi:cprGFt:eoEW:m:qS" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
@@ -1391,6 +1413,8 @@ run_once() {
 			F) global_failed_clean=true ;;
 			t) ttl=$OPTARG ;;
 			e) mode="get_error" ;;
+			o) mode="get_output" ;;
+			E) mode="get_exit" ;;
 			W) wait_timeout=$OPTARG ;;
 			m) waiting_message=$OPTARG ;;
 			q) quiet_wait=true ;;
@@ -1482,10 +1506,27 @@ run_once() {
 	mkdir -p "$id_dir"
 	chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
 	
-	# --- GET ERROR MODE ---
+	# --- GET ERROR MODE (stderr) ---
 	if [[ "$mode" == "get_error" ]]; then
 		[[ -f "$log_err_file" ]] && cat "$log_err_file"
 		return 0
+	fi
+
+	# --- GET OUTPUT MODE (stdout) ---
+	if [[ "$mode" == "get_output" ]]; then
+		[[ -f "$log_out_file" ]] && cat "$log_out_file"
+		return 0
+	fi
+
+	# --- GET EXIT CODE MODE ---
+	# Prints exit code to stdout if task completed, returns 0.
+	# Returns 1 (prints nothing) if task has not completed.
+	if [[ "$mode" == "get_exit" ]]; then
+		if [[ -f "$exit_file" ]]; then
+			cat "$exit_file"
+			return 0
+		fi
+		return 1
 	fi
 
 	# --- TTL CHECK ---
@@ -1629,8 +1670,11 @@ run_once() {
 				# Lock is free => not running => implicitly start (requires command)
 				# Keep FD 9 open -- lock transfers to _start_task's subshell
 				if [[ ${#command[@]} -eq 0 ]]; then
-					echo "Error: Task not started and no command provided." >&2
 					exec 9>&-   # Release lock on error path
+					# Only show internal diagnostic when not in quiet mode;
+					# callers that check rc already have their own error messages.
+					[[ "$quiet_wait" != true ]] && \
+						echo "Error: Task not started and no command provided." >&2
 					return 1
 				fi
 				_start_task "true" "true"
@@ -1765,13 +1809,13 @@ download_all_catalogs() {
 	# Each download will skip if already completed within TTL
 	# Note: Scripts use pwd -P to resolve symlinks and find real aba root
 	run_once -i "catalog:${version_short}:redhat-operator" -t "$ttl" -- \
-		scripts/download-catalog-index-simple.sh redhat-operator
+		scripts/download-catalog-index.sh redhat-operator "$version_short"
 	
 	run_once -i "catalog:${version_short}:certified-operator" -t "$ttl" -- \
-		scripts/download-catalog-index-simple.sh certified-operator
+		scripts/download-catalog-index.sh certified-operator "$version_short"
 	
 	run_once -i "catalog:${version_short}:community-operator" -t "$ttl" -- \
-		scripts/download-catalog-index-simple.sh community-operator
+		scripts/download-catalog-index.sh community-operator "$version_short"
 	
 	aba_debug "Catalog download tasks started in background"
 }

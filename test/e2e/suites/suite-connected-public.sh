@@ -60,7 +60,7 @@ test_begin "Direct mode: create SNO config"
 
 e2e_run "Clean sno dir" "rm -rf sno"
 e2e_run "Create SNO config with -I direct" \
-    "aba cluster -n sno -t sno -i 10.0.1.201 -I direct --step cluster.conf"
+    "aba cluster -n sno -t sno -i $(pool_sno_ip) -I direct --step cluster.conf"
 e2e_run "Generate agent config" "aba -d sno agentconf"
 
 test_end 0
@@ -90,7 +90,7 @@ test_begin "Proxy mode: create SNO config"
 
 e2e_run "Clean sno dir" "rm -rf sno"
 e2e_run "Create SNO config with -I proxy" \
-    "aba cluster -n sno -t sno -i 10.0.1.201 -I proxy --step cluster.conf"
+    "aba cluster -n sno -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 
 test_end 0
 

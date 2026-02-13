@@ -4,7 +4,7 @@ Date: 2026-01-18
 
 ## Changes Made
 
-### 1. Added Error Display Helper Function (tui/abatui_experimental.sh)
+### 1. Added Error Display Helper Function (tui/abatui.sh)
 
 **New function**: `show_run_once_error()`
 - Extracts last 8 meaningful error lines from run_once task logs
@@ -13,7 +13,7 @@ Date: 2026-01-18
 
 ### 2. Fixed High Priority Error Suppressions
 
-#### TUI (tui/abatui_experimental.sh)
+#### TUI (tui/abatui.sh)
 
 **Line ~801 - Catalog Downloads**
 - **Before**: `download_all_catalogs ... >/dev/null 2>&1`
@@ -107,7 +107,7 @@ fi
 
 ## Files Modified
 
-1. `tui/abatui_experimental.sh`:
+1. `tui/abatui.sh`:
    - Added `show_run_once_error()` helper
    - Fixed 6 critical suppression points
    - Total: ~40 lines changed

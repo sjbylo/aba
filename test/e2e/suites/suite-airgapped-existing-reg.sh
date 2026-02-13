@@ -20,10 +20,10 @@ source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
+# L commands run on conN (this host). R commands SSH to disN.
 
-INT_BASTION_HOST="${INT_BASTION_HOST:-registry.example.com}"
-INT_BASTION_VM="${INT_BASTION_VM:-bastion-internal-${INTERNAL_BASTION_RHEL_VER:-rhel9}}"
-INTERNAL_BASTION="${TEST_USER:-steve}@${INT_BASTION_HOST}"
+DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
 # --- Suite ------------------------------------------------------------------
@@ -32,7 +32,7 @@ e2e_setup
 
 plan_tests \
     "Setup: install aba and configure" \
-    "Setup: init internal bastion VM" \
+    "Setup: reset internal bastion" \
     "Existing registry: install on bastion" \
     "Must-fail checks" \
     "Save images to disk" \
@@ -74,12 +74,11 @@ e2e_run "Clean cluster dirs" "rm -rf sno compact standard"
 test_end 0
 
 # ============================================================================
-# 2. Setup: init internal bastion VM
+# 2. Setup: reset internal bastion (reuse clone-check's disN)
 # ============================================================================
-test_begin "Setup: init internal bastion VM"
+test_begin "Setup: reset internal bastion"
 
-export subdir=subdir
-setup_bastion "$INT_BASTION_HOST" "$INT_BASTION_VM"
+reset_internal_bastion
 
 test_end 0
 
@@ -93,11 +92,11 @@ e2e_run -r 1 30 "Download mirror-registry tarball" \
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set mirror host" \
-    "sed -i 's/registry.example.com/${INT_BASTION_HOST} /g' ./mirror/mirror.conf"
+    "sed -i 's/registry.example.com/${DIS_HOST} /g' ./mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
 
 e2e_run "Install test registry on bastion" \
-    "test/reg-test-install-remote.sh ${TEST_USER:-steve} ${INT_BASTION_HOST}"
+    "test/reg-test-install-remote.sh ${TEST_USER:-steve} ${DIS_HOST}"
 
 test_end 0
 
@@ -152,7 +151,7 @@ test_end 0
 test_begin "SNO: install cluster"
 
 e2e_run_remote "Create SNO cluster" \
-    "cd ~/aba && aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step install"
+    "cd ~/aba && aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Verify cluster operators" \
     "cd ~/aba && aba --dir sno run"
 e2e_run_remote "Check cluster operators" \

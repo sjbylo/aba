@@ -22,6 +22,7 @@ set -euo pipefail
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
+source "$_SUITE_DIR/../lib/config-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -122,7 +123,7 @@ e2e_run -q "Create temp dir" "mkdir -v -p ~/tmp"
 e2e_run -q "Clean previous light bundles" "rm -fv ~/tmp/delete-me*tar"
 
 e2e_run -r 3 3 "Create light bundle (channel=$TEST_CHANNEL version=$ocp_version ops=abatest+extras)" \
-    "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks nginx-ingress-operator flux --base-domain example.com -o ~/tmp/delete-me -y"
+    "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks nginx-ingress-operator flux --base-domain $(pool_domain) -o ~/tmp/delete-me -y"
 
 test_end 0
 
@@ -146,7 +147,7 @@ test_begin "Full bundle: create without operator filters"
 e2e_run -q "Clean previous full bundles" "rm -fv /tmp/delete-me*tar"
 
 e2e_run -r 3 3 "Create full bundle (channel=$TEST_CHANNEL version=$ocp_version all operators)" \
-    "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets --ops --base-domain example.com -o /tmp/delete-me -y"
+    "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets --ops --base-domain $(pool_domain) -o /tmp/delete-me -y"
 
 test_end 0
 

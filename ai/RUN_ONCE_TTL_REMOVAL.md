@@ -35,9 +35,9 @@ else:
 
 ### Issue 1: TTL Bypasses Script Idempotency
 
-Scripts like `download-catalog-index-simple.sh` have their own idempotency checks:
+Scripts like `download-catalog-index.sh` have their own idempotency checks:
 
-```52:55:scripts/download-catalog-index-simple.sh
+```52:55:scripts/download-catalog-index.sh
 # Check if already downloaded
 if [[ -s "$index_file" && -f "$done_file" ]]; then
     aba_info "Operator index $catalog_name v$ocp_ver_major already downloaded"
@@ -166,7 +166,7 @@ else:
 **Potential Concern**: More script executions (fork/exec overhead)
 
 **Reality**: Negligible impact because:
-- Scripts exit immediately if work not needed (lines 52-55 in download-catalog-index-simple.sh)
+- Scripts exit immediately if work not needed (lines 52-55 in download-catalog-index.sh)
 - Fork/exec is < 10ms on modern systems
 - Catalog operations are network-bound (seconds to minutes), not CPU-bound
 - User perception: no difference
@@ -217,11 +217,11 @@ Difference: 10ms (imperceptible to user)
    ```bash
    # Before
    run_once -i "catalog:${version_short}:redhat-operator" -t "$ttl" -- \
-       scripts/download-catalog-index-simple.sh redhat-operator
+       scripts/download-catalog-index.sh redhat-operator
    
    # After
    run_once -i "catalog:${version_short}:redhat-operator" -- \
-       scripts/download-catalog-index-simple.sh redhat-operator
+       scripts/download-catalog-index.sh redhat-operator
    ```
 
 2. **scripts/download-catalogs-start.sh**:

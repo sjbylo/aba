@@ -21,9 +21,12 @@ fi
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 ABA_ROOT="$(pwd)"
 
+# --- Source shared TUI constants (dialog titles, menu IDs) ---
+source "$ABA_ROOT/tui/tui-strings.sh"
+
 # --- Config ---
 SESSION="${SESSION:-tui-test-$$}"
-TUI_CMD="${TUI_CMD:-tui/abatui_experimental.sh}"
+TUI_CMD="${TUI_CMD:-tui/abatui.sh}"
 TIMEOUT="${TIMEOUT:-30}"
 POLL_INTERVAL="${POLL_INTERVAL:-1}"
 
@@ -152,7 +155,7 @@ assert_screen() {
 # Dismiss the welcome dialog (wait for it, press Enter)
 dismiss_welcome() {
 	log_info "Waiting for welcome dialog..."
-	if wait_for "OpenShift Installer" 15; then
+	if wait_for "$TUI_TITLE_WELCOME" 15; then
 		log_pass "Welcome dialog appeared"
 	else
 		log_fail "Welcome dialog did not appear"

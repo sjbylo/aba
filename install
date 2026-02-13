@@ -14,6 +14,7 @@ uname -o | grep -q "^Darwin$" && echo "Install ABA on RHEL, Centos Stream or Fed
 required_pkgs=(which file hostname diffutils git make jq python3-jinja2 python3-pyyaml ncurses)
 required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which diffutils dialog podman httpd-tools skopeo)  # Synced from templates/rpms-external.txt
 required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd)  # Synced from templates/rpms-internal.txt
+required_pkgs=($(printf '%s\n' "${required_pkgs[@]}" | sort -u))  # Deduplicate
 missing_pkgs=()
 
 # Check which packages are missing ...
@@ -118,10 +119,6 @@ aba_is_installed() {
 	which aba >/dev/null 2>&1 && return 0 || return 1
 }
 
-get_repo_ver() {
-	grep "^ABA_BUILD=" ./scripts/aba.sh | cut -d= -f2 | grep -oE "^[0-9]{14}$"
-}
-
 if ! is_repo_available; then
 	download_repo
 	msg="Run: 'cd aba; aba' or see the README.md file"
@@ -185,20 +182,25 @@ do
 		action=
 		ret=0 # default return value
 		if [ -s "$d/aba" -a -x "$d/aba" ]; then
-			repo_ver=$(get_repo_ver)
-			INSTALLED_VER=$(grep "^ABA_BUILD=[0-9]" $d/aba | cut -d= -f2)
-			#[ "$DEBUG_ABA" ] && echo INSTALLED_VER=$INSTALLED_VER and repo_ver=$repo_ver >&2
-			[ -n "${DEBUG_ABA-}" ] && echo "INSTALLED_VER=${INSTALLED_VER-} and repo_ver=${repo_ver-}" >&2
-			if [ "$INSTALLED_VER" -a "$repo_ver" ] && [ $INSTALLED_VER -lt $repo_ver ]; then
-				action=updated
-				ret=2 # If aba is updated we want aba to re-execute itself (see scripts/aba.sh)
-				[ ! "$quiet" ] && ret=0	# Bit of a hack to stop returning non-zero when user runs ./install interactivly
-							# Note: Only aba.sh calls this script with -q flag
-			else
-				# Nothing to do
+			# Compare installed aba with repo version using diff.
+			# This reliably detects ANY change (upgrades, downgrades, dev builds)
+			# without relying on version or timestamp comparisons.
+			[ -n "${DEBUG_ABA-}" ] && echo "Comparing $d/aba with scripts/aba.sh" >&2
+			if diff -q "$d/aba" scripts/aba.sh >/dev/null 2>&1; then
+				# Installed aba is identical to repo — genuinely up-to-date
 				[ ! "$quiet" ] && echo ABA is already up-to-date >&2
-
 				exit 0
+			else
+				# Installed aba differs from repo — update needed.
+				# In quiet mode (-q), return 2 so aba.sh can re-exec itself
+				# with the updated script (see scripts/aba.sh auto-update logic).
+				# In manual mode (user ran ./install), return 0 as normal.
+				action=updated
+				if [ "$quiet" ]; then
+					ret=2
+				else
+					ret=0
+				fi
 			fi
 		else
 			action=installed

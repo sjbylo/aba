@@ -10,6 +10,8 @@
 
 echo Initializing ...
 
+_TUI_START_EPOCH=$(date +%s)
+
 set -o pipefail  # Catch pipeline errors
 set +m            # Disable job control monitoring for faster exit
 
@@ -31,11 +33,64 @@ log() {
 }
 
 # -----------------------------------------------------------------------------
+# Show config files created/modified during this TUI session
+# -----------------------------------------------------------------------------
+_show_exit_files() {
+	local f mod_epoch shown=0
+	for f in aba.conf mirror/mirror.conf \
+	         mirror/save/imageset-config-save.yaml \
+	         mirror/sync/imageset-config-sync.yaml; do
+		[[ -f "$ABA_ROOT/$f" ]] || continue
+		mod_epoch=$(stat -c %Y "$ABA_ROOT/$f" 2>/dev/null) || continue
+		if (( mod_epoch >= _TUI_START_EPOCH )); then
+			if (( shown == 0 )); then
+				echo "Files created/updated:"
+				shown=1
+			fi
+			echo "  $f"
+		fi
+	done
+	if (( shown == 0 )); then
+		echo "No files were modified."
+	fi
+}
+
+_show_exit_summary() {
+	# Clean up auto-created aba.conf if the user quit before completing the wizard.
+	# _TUI_FRESH_CONF is set to "1" when aba.conf is first created from the template
+	# (in resume_from_conf), and cleared in summary_apply() once the user finishes the
+	# wizard and the full configuration is committed.  If the flag is still set at exit,
+	# the user abandoned the wizard early, so the half-baked aba.conf (containing only
+	# template defaults and possibly an auto-selected version) is removed to ensure a
+	# clean slate on the next TUI run.
+	if [[ "${_TUI_FRESH_CONF:-}" == "1" && -f "$ABA_ROOT/aba.conf" ]]; then
+		rm -f "$ABA_ROOT/aba.conf"
+		log "Removed auto-created aba.conf (wizard not completed)"
+		echo "TUI exited before wizard completion. No configuration was saved."
+		echo
+		echo "Log file: $LOG_FILE"
+		echo
+		echo "Run 'aba --help' for available commands."
+		echo "See the README.md for more."
+		return
+	fi
+
+	echo "TUI complete."
+	echo
+	_show_exit_files
+	echo
+	echo "Log file: $LOG_FILE"
+	echo
+	echo "Run 'aba --help' for available commands."
+	echo "See the README.md for more."
+}
+
+# -----------------------------------------------------------------------------
 # Confirmation dialog for quitting
 # -----------------------------------------------------------------------------
 confirm_quit() {
 	log "User attempting to quit, showing confirmation"
-	dialog --backtitle "ABA TUI" --title "Confirm Exit" \
+	dialog --backtitle "ABA TUI" --title "$TUI_TITLE_CONFIRM_EXIT" \
 		--help-button \
 		--yes-label "Exit" \
 		--no-label "Continue" \
@@ -92,12 +147,16 @@ log "Log file: $LOG_FILE"
 # Sanity checks & auto-install dependencies
 # -----------------------------------------------------------------------------
 # Derive ABA_ROOT early (needed for install-rpms.sh)
+# Use readlink -f to resolve symlinks (e.g. ./abatui -> tui/abatui.sh)
 if [[ -z "${ABA_ROOT:-}" ]]; then
-	SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+	SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 	ABA_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 	export ABA_ROOT
 fi
 
+# Source shared constants (dialog titles, menu IDs) — single source of truth
+# shared with automated tests in test/func/
+source "$ABA_ROOT/tui/tui-strings.sh"
 
 # Auto-install required packages (dialog, jq, make, etc.) if missing
 "$ABA_ROOT/scripts/install-rpms.sh" external
@@ -156,18 +215,15 @@ DIALOG_OPTS="--no-shadow --colors --aspect 50"
 export DIALOG_OPTS
 
 # -----------------------------------------------------------------------------
-# Aba runtime init (required for run_once)
+# Aba runtime init
 # -----------------------------------------------------------------------------
-WORK_DIR=~/.aba/runner
-export WORK_DIR
-
 WORK_ID="tui-$(date +%Y%m%d%H%M%S)-$$"
 export WORK_ID
 
 # Aba repo root (best-effort). If ABA_ROOT isn't set, derive it from this script path.
-# This script lives under tui/, so default ABA_ROOT to the parent dir.
+# Use readlink -f to resolve symlinks (e.g. ./abatui -> tui/abatui.sh)
 if [[ -z "${ABA_ROOT:-}" ]]; then
-	ABA_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+	ABA_ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
 	export ABA_ROOT
 fi
 
@@ -206,7 +262,7 @@ RETRY_COUNT="2"  # Values: "off", "2", "8"
 ABA_REGISTRY_TYPE="Auto"  # Values: "Auto", "Quay", "Docker"
 
 ui_backtitle() {
-	echo "ABA TUI (Experimental)  |  channel: ${OCP_CHANNEL:-?}  version: ${OCP_VERSION:-?}"
+	echo "ABA TUI  |  channel: ${OCP_CHANNEL:-?}  version: ${OCP_VERSION:-?}"
 }
 
 # Resolve actual registry type based on Auto selection and architecture
@@ -235,29 +291,31 @@ dlg() {
 show_run_once_error() {
 	local task_id="$1"
 	local title="${2:-Operation Failed}"
-	local RUNNER_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
-	local log_file="$RUNNER_DIR/$task_id/log"
 	
-	if [[ ! -f "$log_file" ]]; then
+	# Use run_once API to get stderr and stdout logs
+	local stderr_log stdout_log
+	stderr_log=$(run_once -e -i "$task_id" 2>/dev/null) || true
+	stdout_log=$(run_once -o -i "$task_id" 2>/dev/null) || true
+	
+	if [[ -z "$stderr_log" && -z "$stdout_log" ]]; then
 		dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1$title\Zn
 
-No log file found for task: $task_id
+No log output found for task: $task_id
 
 This usually means the task never started.
-Check: $RUNNER_DIR/$task_id/
 
 \Z1If errors persist:\Zn
-Clear the cache by running: \Zbcd aba && ./install\ZB
-Or manually: \Zbrm -rf ~/.aba/runner\ZB" 0 0
+Clear the cache by running: \Zbcd aba && ./install\ZB" 0 0
 		return
 	fi
 	
-	# Extract last meaningful errors
-	local error_lines=$(tail -30 "$log_file" | grep -iE 'error|fail|fatal|unable|cannot|denied' | tail -8)
+	# Extract last meaningful errors from stderr, falling back to stdout
+	local log_text="${stderr_log:-$stdout_log}"
+	local error_lines=$(echo "$log_text" | tail -30 | grep -iE 'error|fail|fatal|unable|cannot|denied' | tail -8)
 	
 	# Fallback: just show last few lines if no errors matched
 	if [[ -z "$error_lines" ]]; then
-		error_lines=$(tail -8 "$log_file")
+		error_lines=$(echo "$log_text" | tail -8)
 	fi
 	
 	dialog --colors --backtitle "$(ui_backtitle)" --msgbox "\Z1$title\Zn
@@ -266,8 +324,6 @@ Recent output:
 ─────────────────────────────────────────
 $error_lines
 ─────────────────────────────────────────
-
-Full log: $log_file
 
 \Z1If errors persist:\Zn
 Clear the cache: \Zbcd aba && ./install\ZB
@@ -285,7 +341,7 @@ check_internet_access() {
 	if ! check_internet_connectivity "tui"; then
 		# Function sets FAILED_SITES and ERROR_DETAILS
 		log "ERROR: No internet access to: $FAILED_SITES"
-		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
+		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_INTERNET_REQUIRED" \
 			--msgbox \
 "\Z1ERROR: Internet access required\Zn
 
@@ -330,7 +386,7 @@ ui_header() {
 	
 	local rc
 	while :; do
-		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "ABA – OpenShift Installer" \
+		dialog --colors --clear --no-collapse --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_WELCOME" \
 			--help-button --help-label "Help" \
 			--ok-label "Continue" \
 			--msgbox \
@@ -360,7 +416,7 @@ Navigate with <Tab> and arrow keys. Press <ESC> to quit.
 			2)
 				# Help button pressed - show help and loop back
 				log "Help button pressed in header"
-				dialog --backtitle "$(ui_backtitle)" --title "ABA Help" --msgbox \
+				dialog --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_HELP" --msgbox \
 "ABA (Agent-Based Automation) helps install OpenShift in disconnected environments.
 
 The wizard guides you through:
@@ -376,7 +432,6 @@ The wizard guides you through:
 
 Configuration is saved to:
   $ABA_ROOT/aba.conf
-  $ABA_ROOT/mirror/mirror.conf
 
 After completing this wizard:
   • The TUI will guide you through next steps
@@ -393,6 +448,7 @@ For full documentation:
 			if confirm_quit; then
 				log "User quit from header"
 				clear
+				_show_exit_summary
 				exit 0
 				else
 					log "User cancelled quit, staying on header"
@@ -429,6 +485,25 @@ resume_from_conf() {
 				scripts/j2 templates/aba.conf.j2 > aba.conf 2>>"$LOG_FILE"; then
 				log "Created aba.conf from templates/aba.conf.j2"
 				log "aba.conf size: $(wc -l < aba.conf) lines"
+				
+				# Populate with latest stable version so aba.conf is always valid.
+				# Version fetches were already started in background at startup.
+				log "Waiting for stable:latest version fetch to populate aba.conf"
+				run_once -q -w -S -i "ocp:stable:latest_version" 2>>"$LOG_FILE" || true
+				local latest_ver
+				latest_ver=$(fetch_latest_version stable 2>>"$LOG_FILE") || true
+				if [[ -n "$latest_ver" ]]; then
+					log "Setting default ocp_version=$latest_ver, ocp_channel=stable"
+					replace-value-conf -q -n ocp_version -v "$latest_ver" -f aba.conf
+					replace-value-conf -q -n ocp_channel -v "stable"      -f aba.conf
+				else
+					log "WARNING: Could not fetch latest stable version (no internet?)"
+				fi
+				# Mark that aba.conf was auto-created this session (not by the user).
+				# If the user quits before completing the wizard, _show_exit_summary()
+				# will remove this auto-created file to keep a clean slate.
+				# The flag is cleared in summary_apply() once the wizard is completed.
+				_TUI_FRESH_CONF=1
 			else
 				log "ERROR: Failed to create aba.conf from template (exit code: $?)"
 			fi
@@ -549,6 +624,13 @@ config_is_complete() {
 show_resume_dialog() {
 	log "Checking if config is complete for resume dialog"
 	
+	# Skip resume dialog if aba.conf was just created in this session
+	if [[ "${_TUI_FRESH_CONF:-}" == "1" ]]; then
+		log "Config freshly created this session, running wizard"
+		STEP="channel"
+		return
+	fi
+
 	if ! config_is_complete; then
 		log "Config incomplete, running full wizard"
 		STEP="channel"
@@ -567,7 +649,7 @@ show_resume_dialog() {
 	local _dns_display="${DNS_SERVERS//,/ }"
 	local _ntp_display="${NTP_SERVERS//,/ }"
 	
-	dialog --colors --no-collapse --backtitle "$(ui_backtitle)" --title "Existing Configuration Found" \
+	dialog --colors --no-collapse --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_RESUME" \
 		--ok-label "Continue" \
 		--extra-button --extra-label "Reconfigure" \
 		--cancel-label "Exit" \
@@ -632,7 +714,7 @@ select_ocp_channel() {
 	local default_tag="${OCP_CHANNEL:0:1}"  # First letter: s, f, or c
 	[[ -z "$default_tag" ]] && default_tag="s"
 	
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "OpenShift Channel" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CHANNEL" \
 		--extra-button --extra-label "Back" \
 		--help-button \
 		--ok-label "Next" \
@@ -707,21 +789,23 @@ select_ocp_version() {
 
 	# Check if cached version tasks exist and if they FAILED (non-zero exit code)
 	# If so, reset them and retry automatically
-	local latest_exit_file="${RUN_ONCE_DIR:-$HOME/.aba/runner}/ocp:${OCP_CHANNEL}:latest_version/exit"
-	local prev_exit_file="${RUN_ONCE_DIR:-$HOME/.aba/runner}/ocp:${OCP_CHANNEL}:latest_version_previous/exit"
-	local need_reset=0
+	local need_reset=0 exit_code
 	
-	if [[ -f "$latest_exit_file" ]]; then
-		local exit_code=$(cat "$latest_exit_file")
+	if exit_code=$(run_once -E -i "ocp:${OCP_CHANNEL}:latest_version" 2>/dev/null); then
 		if [[ "$exit_code" != "0" ]]; then
 			log "Cached task ocp:${OCP_CHANNEL}:latest_version has failed (exit $exit_code) - will reset and retry"
 			need_reset=1
 		fi
 	fi
-	if [[ -f "$prev_exit_file" ]]; then
-		local exit_code=$(cat "$prev_exit_file")
+	if exit_code=$(run_once -E -i "ocp:${OCP_CHANNEL}:latest_version_previous" 2>/dev/null); then
 		if [[ "$exit_code" != "0" ]]; then
 			log "Cached task ocp:${OCP_CHANNEL}:latest_version_previous has failed (exit $exit_code) - will reset and retry"
+			need_reset=1
+		fi
+	fi
+	if exit_code=$(run_once -E -i "ocp:${OCP_CHANNEL}:latest_version_older" 2>/dev/null); then
+		if [[ "$exit_code" != "0" ]]; then
+			log "Cached task ocp:${OCP_CHANNEL}:latest_version_older has failed (exit $exit_code) - will reset and retry"
 			need_reset=1
 		fi
 	fi
@@ -731,6 +815,7 @@ select_ocp_version() {
 		log "Resetting failed version fetch caches for channel $OCP_CHANNEL"
 		run_once -r -i "ocp:${OCP_CHANNEL}:latest_version"
 		run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+		run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_older"
 	fi
 
 	# Peek first to see if we need to wait
@@ -744,6 +829,10 @@ select_ocp_version() {
 		log "Previous version not ready"
 		need_wait=1
 	fi
+	if ! run_once -p -i "ocp:${OCP_CHANNEL}:latest_version_older"; then
+		log "Older version not ready"
+		need_wait=1
+	fi
 	
 	# Only show wait dialog if actually waiting
 	if [[ $need_wait -eq 1 ]]; then
@@ -753,8 +842,10 @@ select_ocp_version() {
 		# Two-step start+wait avoids foreground mode which leaks stdout to terminal.
 		run_once    -i "ocp:${OCP_CHANNEL}:latest_version"          -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
 		run_once    -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+		run_once    -i "ocp:${OCP_CHANNEL}:latest_version_older"    -- bash -lc "source ./scripts/include_all.sh; fetch_older_version $OCP_CHANNEL"
 		run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version"
 		run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+		run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_older"
 	else
 		log "Version data already available, no wait needed"
 	fi
@@ -763,9 +854,10 @@ select_ocp_version() {
 	# Note: fetch functions read from run_once cache, so don't redirect their stderr
 	latest=$(fetch_latest_version "$OCP_CHANNEL")
 	previous=$(fetch_previous_version "$OCP_CHANNEL")
-	log "Versions: latest=$latest previous=$previous"
+	older=$(fetch_older_version "$OCP_CHANNEL")
+	log "Versions: latest=$latest previous=$previous older=$older"
 	
-	# Check if version fetch failed
+	# Check if version fetch failed (older is optional - N-2 may not exist)
 	if [[ -z "$latest" || -z "$previous" ]]; then
 		log "ERROR: Failed to fetch version data for channel $OCP_CHANNEL"
 		
@@ -807,7 +899,7 @@ Check log file for details:
 
 What would you like to do?"
 		
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Version Fetch Failed" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_VERSION_FETCH_FAILED" \
 			--yes-label "Retry" \
 			--no-label "Back" \
 			--yesno "$error_msg" 0 0
@@ -819,13 +911,16 @@ What would you like to do?"
 				log "User chose to retry version fetch"
 				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version"
 				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+				run_once -r -i "ocp:${OCP_CHANNEL}:latest_version_older"
 				
 			# Show wait dialog and re-run the fetches
 			dialog --backtitle "$(ui_backtitle)" --infobox "Retrying version fetch for channel '$OCP_CHANNEL'...\n\nPlease wait..." 6 55
 			run_once -i "ocp:${OCP_CHANNEL}:latest_version" -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $OCP_CHANNEL"
 			run_once -i "ocp:${OCP_CHANNEL}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $OCP_CHANNEL"
+			run_once -i "ocp:${OCP_CHANNEL}:latest_version_older" -- bash -lc "source ./scripts/include_all.sh; fetch_older_version $OCP_CHANNEL"
 			run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version"
 			run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_previous"
+			run_once -q -w -S -i "ocp:${OCP_CHANNEL}:latest_version_older"
 				
 				DIALOG_RC="repeat"
 				return
@@ -848,6 +943,8 @@ What would you like to do?"
 			default_item="l"
 		elif [[ "$OCP_VERSION" == "$previous" ]]; then
 			default_item="p"
+		elif [[ -n "$older" && "$OCP_VERSION" == "$older" ]]; then
+			default_item="o"
 		else
 			# Current version is different - but does it exist in this channel?
 			log "Checking if current version $OCP_VERSION exists in channel $OCP_CHANNEL"
@@ -880,6 +977,9 @@ What would you like to do?"
 	local menu_items=()
 	menu_items+=("l" "Latest   ($latest)")
 	menu_items+=("p" "Previous ($previous)")
+	if [[ -n "$older" ]]; then
+		menu_items+=("o" "Older    ($older)")
+	fi
 	
 	if [[ $show_current -eq 1 ]]; then
 		menu_items+=("c" "Current  ($OCP_VERSION)")
@@ -887,7 +987,7 @@ What would you like to do?"
 	
 	menu_items+=("m" "Manual entry (x.y or x.y.z)")
 
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "OpenShift Version" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_VERSION" \
 		--extra-button --extra-label "Back" \
 		--help-button \
 		--ok-label "Next" \
@@ -909,8 +1009,13 @@ What would you like to do?"
 			log "Help button pressed in version selection"
 			local help_text="OpenShift Version Selection:
 
-• Latest: Most recent release in the channel
-• Previous: Previous stable release"
+• Latest: Most recent release in the channel (N)
+• Previous: Previous minor release (N-1)"
+			
+			if [[ -n "$older" ]]; then
+				help_text="${help_text}
+• Older: Older minor release (N-2)"
+			fi
 			
 			if [[ $show_current -eq 1 ]]; then
 				help_text="${help_text}
@@ -939,6 +1044,7 @@ The installer will validate the selected version."
 			if confirm_quit; then
 				log "User confirmed quit from version screen"
 				clear
+				_show_exit_summary
 				exit 0
 			else
 				log "User cancelled quit, staying on version screen"
@@ -956,6 +1062,7 @@ The installer will validate the selected version."
 	case "$choice" in
 		l|"") OCP_VERSION="$latest" ;;
 		p) OCP_VERSION="$previous" ;;
+		o) OCP_VERSION="$older" ;;
 		c) 
 			# Keep current version (already in OCP_VERSION)
 			log "User selected current version: $OCP_VERSION"
@@ -1114,15 +1221,13 @@ Try again." 0 0 || true
 	
 	log "aba.conf updated successfully"
 	
-	dialog --backtitle "$(ui_backtitle)" --title "Confirm Selection" \
+	dialog --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CONFIRM" \
 		--yes-label "Next" \
 		--no-label "Back" \
 		--yesno "Selected:
 
   Channel: $OCP_CHANNEL
-  Version: $OCP_VERSION
-
-Next: Configure platform and network." 0 0
+  Version: $OCP_VERSION" 0 0
 	rc=$?
 	
 	case "$rc" in
@@ -1210,16 +1315,14 @@ Please paste a valid pull secret."
 	# If valid but not auto-skipping (came from Back), show info and allow Back
 	if [[ -f "$pull_secret_file" ]] && [[ -z "$error_msg" ]]; then
 		log "Valid pull secret exists, showing info (user can go back)"
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET" \
 			--yes-label "Next" \
 			--no-label "Back" \
 			--yesno "\Z2✓ Valid Pull Secret Found\Zn
 
 Location: ~/.pull-secret.json
 
-Your Red Hat pull secret is valid and ready to use.
-
-Next: Configure platform and network." 0 0
+Your Red Hat pull secret is valid and ready to use." 0 0
 		rc=$?
 		
 		case "$rc" in
@@ -1247,13 +1350,13 @@ Next: Configure platform and network." 0 0
 		# Show error message if there was a validation issue
 		if [[ -n "$error_msg" ]]; then
 			# Use dialog's auto-sizing (0 0 = auto height/width)
-			dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Validation Error" \
+			dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_VALIDATION_ERROR" \
 				--msgbox "$error_msg" 0 0 || true
 			error_msg=""  # Clear for next iteration
 		elif [[ $_showed_instructions -eq 0 ]]; then
 			# Show instructions on first visit (no error, no existing pull secret)
 			_showed_instructions=1
-			dialog --colors --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret" \
+			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET" \
 				--ok-label "Continue" \
 				--msgbox "Paste your Red Hat pull secret into the next screen.
 
@@ -1284,7 +1387,7 @@ Copy the entire JSON text and paste it into the editor." 0 0 || true
 		echo "" > "$empty_file"
 		
 		# Show editbox - title tells user what to do
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Red Hat Pull Secret - Paste JSON below" \
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET_PASTE" \
 			--no-cancel \
 			--extra-button --extra-label "Back" \
 			--help-button --help-label "Clear" \
@@ -1301,6 +1404,7 @@ Copy the entire JSON text and paste it into the editor." 0 0 || true
 			if confirm_quit; then
 				log "User confirmed quit from pull secret screen"
 				clear
+				_show_exit_summary
 				exit 0
 			else
 				log "User cancelled quit, staying on pull secret screen"
@@ -1353,7 +1457,7 @@ Get it from:
 				else
 					log "Pull secret validation failed: $validation_error"
 					
-					dialog --colors --backtitle "$(ui_backtitle)" --title "Pull Secret Validation Failed" \
+					dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET_VALIDATION_FAILED" \
 						--yes-label "Try Again" \
 						--no-label "Continue Anyway" \
 						--yesno "\Z1Pull secret authentication failed!\Zn
@@ -1464,7 +1568,7 @@ select_platform_network() {
 		[[ "$_dns_display" != "(auto-detect)" ]] && _dns_display="${_dns_display//,/ }"
 		[[ "$_ntp_display" != "(auto-detect)" ]] && _ntp_display="${_ntp_display//,/ }"
 
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Platform & Network" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PLATFORM" \
 			--cancel-label "Back" \
 			--help-button \
 			--ok-label "Select" \
@@ -1502,6 +1606,7 @@ select_platform_network() {
 				if confirm_quit; then
 					log "User confirmed quit from platform screen"
 					clear
+					_show_exit_summary
 					exit 0
 				else
 					log "User cancelled quit, staying on platform screen"
@@ -1802,13 +1907,13 @@ $error_msg
 		
 		log "About to show operators menu dialog..."
 		
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Operators" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_OPERATORS" \
 			--cancel-label "Back" \
 			--help-button \
 			--ok-label "Select" \
 			--extra-button --extra-label "Next" \
 			--default-item "$default_item" \
-			--menu "Select operator actions:" 0 0 4 \
+			--menu "$TUI_TITLE_SELECT_OPERATORS" 0 0 4 \
 			1 "Select Operator Sets" \
 			2 "Search Operator Names" \
 			3 "View/Edit Basket ($basket_count operators)" \
@@ -1835,7 +1940,7 @@ $error_msg
 				# Check if basket is empty and warn
 				if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
 					log "Empty basket - showing warning"
-					dialog --backtitle "$(ui_backtitle)" --title "Empty Basket" \
+					dialog --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_EMPTY_BASKET" \
 						--extra-button --extra-label "Back" \
 						--yes-label "Continue Anyway" \
 						--no-label "Add Operators" \
@@ -1895,6 +2000,7 @@ image synchronization process." 0 0 || true
 				if confirm_quit; then
 					log "User confirmed quit from operators screen"
 					clear
+					_show_exit_summary
 					exit 0
 				else
 					log "User cancelled quit, staying on operators screen"
@@ -1943,7 +2049,7 @@ image synchronization process." 0 0 || true
 				# Calculate size based on number of operator sets (items has 3 elements per set)
 				local num_sets=$((${#items[@]} / 3))
 				local list_h=$((num_sets < 18 ? num_sets + 2 : 18))
-				dialog --clear --backtitle "$(ui_backtitle)" --title "Operator Sets" \
+				dialog --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_OPERATOR_SETS" \
 					--ok-label "Add to Basket" \
 					--checklist "Use spacebar to toggle, then press Add to Basket:" 0 70 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
@@ -2001,7 +2107,7 @@ image synchronization process." 0 0 || true
 			# Search operators (needs index files)
 			log "User searching operators (catalog already loaded)"
 		
-		dialog --colors --backtitle "$(ui_backtitle)" --inputbox "Search operator names (min 2 chars, multiple terms AND'ed):" 0 0 2>"$TMP" || continue
+		dialog --colors --backtitle "$(ui_backtitle)" --inputbox "Search operator names (min 2 chars, multiple terms AND'ed):" 10 50 2>"$TMP" || continue
 			query=$(<"$TMP")
 			query=${query//$'
 '/}
@@ -2091,7 +2197,7 @@ image synchronization process." 0 0 || true
 			# Calculate size based on number of matching operators
 			local num_ops=$((${#items[@]} / 3))
 			local list_h=$((num_ops < 18 ? num_ops + 2 : 18))
-			dialog --clear --backtitle "$(ui_backtitle)" --title "Select Operators" \
+			dialog --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_SELECT_OPERATORS" \
 				--ok-label "Add to Basket" \
 				--checklist "Use spacebar to toggle, then press Add to Basket:" 0 60 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
@@ -2279,7 +2385,7 @@ This file should have been generated automatically." 0 0 || true
 	fi
 	
 	# Show file in scrollable textbox
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_IMAGESET" \
 		--exit-label "OK" \
 		--textbox "$isconf_file" 0 0
 	
@@ -2292,7 +2398,7 @@ handle_action_bundle() {
 	# Get output path from user
 	local default_bundle="/tmp/ocp-bundle"
 	
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CREATE_BUNDLE" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
 		--inputbox "Enter output path for install bundle:\n\n(Version suffix will be added automatically)" 10 70 "$default_bundle" \
@@ -2339,7 +2445,7 @@ handle_action_bundle() {
 		log "Output and mirror on same device"
 		
 		# Ask user if they want --light option
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Create Bundle" \
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CREATE_BUNDLE" \
 			--yes-label "Yes" \
 			--no-label "No" \
 			--yesno "Enable light bundle option?\n\n(Excludes large image-set archives from bundle to save disk space)\n\nBundle output: $bundle_path" 0 0
@@ -2352,7 +2458,7 @@ handle_action_bundle() {
 			log "Light option disabled by user - will create full bundle"
 			
 			# Warn about disk space (like aba.sh does for full bundles on same device)
-			dialog --colors --backtitle "$(ui_backtitle)" --title "Disk Space Warning" \
+			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_DISK_SPACE_WARNING" \
 				--yes-label "Continue" \
 				--no-label "Cancel" \
 				--yesno "\Z3Disk Space Consideration\Zn
@@ -2422,7 +2528,7 @@ handle_action_local_quay() {
 	local default_data_dir="${data_dir:-~}"
 	
 	# Collect inputs using form
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Local Quay Registry" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_LOCAL_QUAY" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
 		--form "Configure local Quay registry:" 0 0 0 \
@@ -2513,7 +2619,7 @@ handle_action_local_docker() {
 	local default_data_dir="${data_dir:-~}"
 	
 	# Collect inputs using form
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Local Docker Registry" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_LOCAL_DOCKER" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
 		--form "Configure local Docker registry:" 0 0 0 \
@@ -2588,7 +2694,7 @@ handle_action_remote_quay() {
 	local default_data_dir="${data_dir:-~}"
 	
 	# Collect inputs using form
-	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Remote Quay Registry (SSH)" \
+	dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_REMOTE_QUAY" \
 		--ok-label "Next" \
 		--cancel-label "Back" \
 		--form "Configure remote Quay registry:" 0 0 0 \
@@ -2695,23 +2801,23 @@ handle_action_save() {
 handle_action_isconf() {
 	log "Handling action: Generate ImageSet Config"
 	
-	# No form needed - just confirm and execute using global auto-answer setting
-	local y_flag=""
-	if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
-		y_flag="-y"
-		log "Using global auto-answer: -y flag enabled"
-	else
-		log "Using global auto-answer: -y flag disabled"
-	fi
+	# Fast command -- run directly without confirmation dialog
+	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration..." 4 50
 	
-	# Confirm and execute
-	local cmd="aba -d mirror isconf $y_flag"
-	if ! confirm_and_execute "$cmd"; then
+	local output rc
+	output=$(aba -d mirror isconf -y 2>&1) || true
+	rc=$?
+	log "aba -d mirror isconf -y returned rc=$rc"
+	
+	if [[ $rc -eq 0 ]]; then
+		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2ImageSet Config Generated\Zn" \
+			--msgbox "ImageSet configuration generated successfully.\n\nFiles:\n  mirror/save/imageset-config-save.yaml\n  mirror/sync/imageset-config-sync.yaml" 0 0 || true
+	else
+		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z1ImageSet Config Failed\Zn" \
+			--msgbox "Failed to generate ImageSet configuration.\n\n$output" 0 0 || true
 		return 1
 	fi
 	
-	# Success - user either exited or chose to go back to menu
-	# (handled by confirm_and_execute's success dialog)
 	return 0
 }
 
@@ -2720,15 +2826,38 @@ confirm_and_execute() {
 	log "Confirming command: $cmd"
 	
 	while :; do
-		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "Confirm Execution" \
+		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_CONFIRM_EXEC" \
 			--cancel-label "Back" \
 			--ok-label "Select" \
+			--help-button \
 			--menu "Ready to execute:\n\n\Zb$cmd\Zn\n\nChoose execution mode:" 0 0 0 \
 			"1" "Run in TUI (auto-answer, dialog output)" \
 			"2" "Run in Terminal (interactive, full colors)" \
-			"3" "Help (explain options)" \
 			2>"$TMP"
 		rc=$?
+		
+		if [[ $rc -eq 2 ]]; then
+			# Help button
+			log "Help button pressed in confirm execution"
+			dialog --backtitle "$(ui_backtitle)" --msgbox \
+"Execution Options:
+
+• Run in TUI
+  - Command runs inside dialog interface
+  - Auto-answer (-y) is ALWAYS enabled (non-interactive)
+  - Output shown live in progressbox
+  - Scrollable output review after completion
+
+• Run in Terminal  
+  - Command runs in real terminal (exits dialog temporarily)
+  - Respects your Auto-answer toggle setting from action menu
+  - Full interactive mode (can answer prompts, see colors)
+  - Press ENTER to return to TUI after completion
+
+For most operations, 'Run in TUI' is recommended.
+Use 'Run in Terminal' if you need to interact with the command." 0 0 || true
+			continue
+		fi
 		
 		if [[ $rc -ne 0 ]]; then
 			# Cancel/Back
@@ -2797,6 +2926,7 @@ confirm_and_execute() {
 					# Extra button = Exit TUI
 					log "User chose to exit TUI after successful command"
 					clear
+					_show_exit_summary
 					exit 0
 					;;
 				255)
@@ -2872,28 +3002,6 @@ confirm_and_execute() {
 					log "Terminal execution failed with exit code $exit_code, returning to menu"
 					return 1
 				fi
-				;;
-			3)
-				# Help - Show execution help
-				log "Help selected in confirm execution"
-				dialog --backtitle "$(ui_backtitle)" --msgbox \
-"Execution Options:
-
-• Run in TUI
-  - Command runs inside dialog interface
-  - Auto-answer (-y) is ALWAYS enabled (non-interactive)
-  - Output shown live in progressbox
-  - Scrollable output review after completion
-
-• Run in Terminal  
-  - Command runs in real terminal (exits dialog temporarily)
-  - Respects your Auto-answer toggle setting from action menu
-  - Full interactive mode (can answer prompts, see colors)
-  - Press ENTER to return to TUI after completion
-
-For most operations, 'Run in TUI' is recommended.
-Use 'Run in Terminal' if you need to see prompts or interact with the command." 0 0 || true
-				continue
 				;;
 			*)
 				log "ERROR: Unexpected menu choice: $choice"
@@ -2999,6 +3107,11 @@ summary_apply() {
 	replace-value-conf -q -n ops               -v ""                   -f aba.conf
 	replace-value-conf -q -n op_sets           -v "$op_sets_value"     -f aba.conf
 	log "Configuration saved to aba.conf"
+
+	# Clear the fresh-config flag now that the user has completed the wizard.
+	# This prevents _show_exit_summary() from deleting aba.conf on exit.
+	# See _show_exit_summary() for the full explanation of this mechanism.
+	_TUI_FRESH_CONF=
 	
 	# ALWAYS pre-generate ImageSet config in background before showing action menu
 	# This ensures it's ready for any action (with or without operators)
@@ -3071,44 +3184,65 @@ summary_apply() {
 				8)   toggle_retry_display="Retry Count: \Z38\Zn" ;;
 			esac
 			
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Settings" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_SETTINGS" \
 			--ok-label "Toggle" \
 			--cancel-label "Back" \
+			--help-button \
 			--default-item "$settings_default" \
 			--menu "Select a setting to toggle:" 0 0 3 \
-				1 "$toggle_answer_display" \
-				2 "$toggle_registry_display" \
-				3 "$toggle_retry_display" \
+				$TUI_SETTINGS_AUTO_ANSWER "$toggle_answer_display" \
+				$TUI_SETTINGS_REGISTRY_TYPE "$toggle_registry_display" \
+				$TUI_SETTINGS_RETRY_COUNT "$toggle_retry_display" \
 				2>"$TMP"
 			local src=$?
+			
+			if [[ $src -eq 2 ]]; then
+				# Help button
+				dialog --backtitle "$(ui_backtitle)" --title "Settings Help" --msgbox \
+"Auto-answer (-y):
+  When ON, aba commands run without confirmation prompts.
+  When OFF, you will be asked to confirm each action.
+
+Registry Type:
+  Auto   - Let aba choose the registry (recommended).
+  Quay   - Force Quay mirror registry.
+  Docker - Force Docker V2 mirror registry.
+
+Retry Count:
+  How many times to retry failed oc-mirror operations.
+  OFF = no retries, 2 or 8 = retry that many times.
+
+Toggle a setting by selecting it and pressing Enter." 0 0 || true
+				continue
+			fi
 			
 			[[ $src -ne 0 ]] && return  # Done/Cancel
 			
 			local saction=$(<"$TMP")
 			case "$saction" in
-				1)
+				$TUI_SETTINGS_AUTO_ANSWER)
 					if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
 						ABA_AUTO_ANSWER="no"; log "Auto-answer toggled OFF"
 					else
 						ABA_AUTO_ANSWER="yes"; log "Auto-answer toggled ON"
 					fi
-					settings_default="1"
+					settings_default="$TUI_SETTINGS_AUTO_ANSWER"
 					;;
-				2)
+				$TUI_SETTINGS_REGISTRY_TYPE)
 					case "$ABA_REGISTRY_TYPE" in
 						Auto)   ABA_REGISTRY_TYPE="Quay"; log "Registry type toggled to Quay" ;;
 						Quay)   ABA_REGISTRY_TYPE="Docker"; log "Registry type toggled to Docker" ;;
 						Docker) ABA_REGISTRY_TYPE="Auto"; log "Registry type toggled to Auto" ;;
 					esac
-					settings_default="2"
+					settings_default="$TUI_SETTINGS_REGISTRY_TYPE"
 					;;
-				3)
+				$TUI_SETTINGS_RETRY_COUNT)
 					case "$RETRY_COUNT" in
 						off) RETRY_COUNT="2"; log "Retry count toggled to 2" ;;
 						2)   RETRY_COUNT="8"; log "Retry count toggled to 8" ;;
 						8)   RETRY_COUNT="off"; log "Retry count toggled to OFF" ;;
 					esac
-					settings_default="3"
+					settings_default="$TUI_SETTINGS_RETRY_COUNT"
 					;;
 			esac
 		done
@@ -3118,7 +3252,7 @@ summary_apply() {
 	_show_advanced() {
 		local adv_default="1"
 		while :; do
-			dialog --colors --backtitle "$(ui_backtitle)" --title "Advanced Options" \
+			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_ADVANCED" \
 				--cancel-label "Back" \
 				--ok-label "Select" \
 				--default-item "$adv_default" \
@@ -3143,7 +3277,7 @@ summary_apply() {
 				2)
 					log "User chose to delete Quay registry"
 					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-						dialog --colors --title "Error" --msgbox \
+						dialog --colors --title "$TUI_TITLE_ERROR" --msgbox \
 							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
 						adv_default="2"; continue
 					fi
@@ -3154,7 +3288,7 @@ summary_apply() {
 				3)
 					log "User chose to delete Docker registry"
 					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-						dialog --colors --title "Error" --msgbox \
+						dialog --colors --title "$TUI_TITLE_ERROR" --msgbox \
 							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
 						adv_default="3"; continue
 					fi
@@ -3165,12 +3299,7 @@ summary_apply() {
 				4)
 					log "User chose to exit and run commands manually"
 					clear
-					echo "Configuration saved to: $ABA_ROOT/aba.conf"
-					if [[ -n "$custom_set_name" ]]; then
-						echo "Custom operator set: templates/operator-set-${custom_set_name}"
-					fi
-					echo ""
-					echo "Run 'aba --help' to see available commands"
+					_show_exit_summary
 					ADVANCED_EXIT=0; return
 					;;
 			esac
@@ -3180,7 +3309,7 @@ summary_apply() {
 	while :; do
 		local ADVANCED_EXIT=""
 		
-		dialog --colors --backtitle "$(ui_backtitle)" --title "Choose Next Action" \
+		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_ACTION_MENU" \
 		--cancel-label "Exit" \
 		--help-button \
 		--ok-label "Select" \
@@ -3188,21 +3317,21 @@ summary_apply() {
 		--default-item "$default_item" \
 		--menu "Configuration saved to aba.conf. Choose what to do next:" 0 0 0 \
 		"" "──── Review ─────────────────────────────" \
-		1 "View Generated ImageSet Config" \
+		$TUI_ACTION_VIEW_IMAGESET "$TUI_ACTION_LABEL_VIEW_IMAGESET" \
 		"" " " \
 		"" "──── Air-Gapped (Fully Disconnected) ────" \
-		2 "Create Air-Gapped Install Bundle" \
-		3 "Save Images to Local Archive" \
+		$TUI_ACTION_CREATE_BUNDLE "$TUI_ACTION_LABEL_CREATE_BUNDLE" \
+		$TUI_ACTION_SAVE_IMAGES "$TUI_ACTION_LABEL_SAVE_IMAGES" \
 		"" " " \
 		"" "──── Connected / Partially Connected ────" \
-		4 "Install & Sync to Local Registry" \
-		5 "Install & Sync to Remote Registry via SSH" \
+		$TUI_ACTION_LOCAL_REGISTRY "$TUI_ACTION_LABEL_LOCAL_REGISTRY" \
+		$TUI_ACTION_REMOTE_REGISTRY "$TUI_ACTION_LABEL_REMOTE_REGISTRY" \
 		"" " " \
 		"" "──── Other ──────────────────────────────" \
-		6 "Rerun Wizard" \
-		7 "Settings..." \
-		8 "Advanced Options..." \
-		9 "Exit" \
+		$TUI_ACTION_RERUN_WIZARD "$TUI_ACTION_LABEL_RERUN_WIZARD" \
+		$TUI_ACTION_SETTINGS "$TUI_ACTION_LABEL_SETTINGS" \
+		$TUI_ACTION_ADVANCED "$TUI_ACTION_LABEL_ADVANCED" \
+		$TUI_ACTION_EXIT "$TUI_ACTION_LABEL_EXIT" \
 		2>"$TMP"
 		rc=$?
 		
@@ -3218,31 +3347,31 @@ summary_apply() {
 					log "Separator selected, redisplaying menu"
 					continue
 					;;
-				1)
+				$TUI_ACTION_VIEW_IMAGESET)
 					# View ImageSet Config
 					handle_action_view_isconf
-					default_item="1"
+					default_item="$TUI_ACTION_VIEW_IMAGESET"
 					continue
 					;;
-				2)
+				$TUI_ACTION_CREATE_BUNDLE)
 					# Create Bundle
 					if handle_action_bundle; then
 						return 0
 					else
-						default_item="2"
+						default_item="$TUI_ACTION_CREATE_BUNDLE"
 						continue
 					fi
 					;;
-				3)
+				$TUI_ACTION_SAVE_IMAGES)
 					# Save Images
 					if handle_action_save; then
 						return 0
 					else
-						default_item="3"
+						default_item="$TUI_ACTION_SAVE_IMAGES"
 						continue
 					fi
 					;;
-				4)
+				$TUI_ACTION_LOCAL_REGISTRY)
 					# Local Registry (Auto/Quay/Docker based on setting)
 					case "$ABA_REGISTRY_TYPE" in
 						Auto)
@@ -3251,7 +3380,7 @@ summary_apply() {
 								if handle_action_local_docker; then
 									return 0
 								else
-									default_item="4"
+									default_item="$TUI_ACTION_LOCAL_REGISTRY"
 									continue
 								fi
 							else
@@ -3259,7 +3388,7 @@ summary_apply() {
 								if handle_action_local_quay; then
 									return 0
 								else
-									default_item="4"
+									default_item="$TUI_ACTION_LOCAL_REGISTRY"
 									continue
 								fi
 							fi
@@ -3268,7 +3397,7 @@ summary_apply() {
 							if handle_action_local_quay; then
 								return 0
 							else
-								default_item="4"
+								default_item="$TUI_ACTION_LOCAL_REGISTRY"
 								continue
 							fi
 							;;
@@ -3276,52 +3405,47 @@ summary_apply() {
 							if handle_action_local_docker; then
 								return 0
 							else
-								default_item="4"
+								default_item="$TUI_ACTION_LOCAL_REGISTRY"
 								continue
 							fi
 							;;
 					esac
 					;;
-				5)
+				$TUI_ACTION_REMOTE_REGISTRY)
 					# Remote Registry
 					if handle_action_remote_quay; then
 						return 0
 					else
-						default_item="5"
+						default_item="$TUI_ACTION_REMOTE_REGISTRY"
 						continue
 					fi
 					;;
-			6)
+			$TUI_ACTION_RERUN_WIZARD)
 				# Rerun Wizard
 				log "User chose to rerun wizard"
 				RERUN_WIZARD=true
 				return 0
 				;;
-			7)
+			$TUI_ACTION_SETTINGS)
 				# Settings sub-menu
 				_show_settings
-				default_item="7"
+				default_item="$TUI_ACTION_SETTINGS"
 				continue
 				;;
-			8)
+			$TUI_ACTION_ADVANCED)
 				# Advanced sub-menu
 				_show_advanced
 				if [[ "$ADVANCED_EXIT" == "0" ]]; then
 					return 0
 				fi
-				default_item="8"
+				default_item="$TUI_ACTION_ADVANCED"
 				continue
 				;;
-			9)
+			$TUI_ACTION_EXIT)
 				# Exit
 				log "User chose to exit"
 				clear
-				echo "Configuration saved to: $ABA_ROOT/aba.conf"
-				if [[ -n "$custom_set_name" ]]; then
-					echo "Custom operator set: templates/operator-set-${custom_set_name}"
-				fi
-				echo ""
-				echo "Run 'aba --help' to see available commands"
+				_show_exit_summary
 				return 0
 				;;
 			esac
@@ -3330,7 +3454,7 @@ summary_apply() {
 				# Cancel = Exit
 				log "User cancelled from action menu"
 				clear
-				echo "Configuration saved to: $ABA_ROOT/aba.conf"
+				_show_exit_summary
 				return 0
 				;;
 			3)
@@ -3347,13 +3471,13 @@ summary_apply() {
 VIEW:
 • View ImageSet Config - Preview the generated YAML for oc-mirror
 
-AIR-GAPPED (Fully Disconnected):
+AIR-GAPPED (Fully Disconnected) - uses mirror-to-disk:
   For environments with no internet access.
 • Create Air-Gapped Install Bundle - Package images, binaries & configs
                               Transfer this bundle to the air-gapped site
 • Save Images to Archive - Save images to aba/mirror/save/
 
-CONNECTED / PARTIALLY CONNECTED:
+CONNECTED / PARTIALLY CONNECTED - uses mirror-to-mirror:
   For environments with direct or proxied internet.
 • Local Registry  - Install a registry here and sync images
 • Remote Registry - Install a registry on a remote host via SSH
@@ -3380,6 +3504,7 @@ Log file: $LOG_FILE" 0 0 || true
 				if confirm_quit; then
 					log "User confirmed quit from action menu"
 					clear
+					_show_exit_summary
 					exit 0
 				else
 					log "User cancelled quit, staying on action menu"
@@ -3403,22 +3528,29 @@ log "=== STARTING TUI ==="
 # Check internet access first
 check_internet_access
 
-# Start background version fetches for ALL channels (latest + previous)
+# Start background version fetches for ALL channels (latest + previous + older)
 log "Starting background OCP version fetches for all channels"
 # Let errors flow to logs (stderr), suppress stdout (version output)
 run_once -i "ocp:stable:latest_version"             -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version stable' >/dev/null
 run_once -i "ocp:stable:latest_version_previous"    -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable' >/dev/null
+run_once -i "ocp:stable:latest_version_older"       -- bash -lc 'source ./scripts/include_all.sh; fetch_older_version stable' >/dev/null
 
 run_once -i "ocp:fast:latest_version"               -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast' >/dev/null
 run_once -i "ocp:fast:latest_version_previous"      -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version fast' >/dev/null
+run_once -i "ocp:fast:latest_version_older"         -- bash -lc 'source ./scripts/include_all.sh; fetch_older_version fast' >/dev/null
 
 run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate' >/dev/null
 run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate' >/dev/null
+run_once -i "ocp:candidate:latest_version_older"    -- bash -lc 'source ./scripts/include_all.sh; fetch_older_version candidate' >/dev/null
 
 # Download oc-mirror early (needed for catalog downloads later)
 log "Starting oc-mirror download in background"
 PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror
 log "oc-mirror download started"
+
+# Initialize configuration and global arrays (must happen BEFORE prefetch
+# so that aba.conf exists when background catalog scripts try to read it)
+resume_from_conf
 
 # Pre-fetch catalogs for stable:latest in background
 log "Starting background catalog pre-fetch"
@@ -3427,9 +3559,6 @@ log "Background catalog pre-fetch started"
 
 # Show header
 ui_header
-
-# Initialize configuration and global arrays
-resume_from_conf
 
 log "After resume_from_conf:"
 log "  OP_BASKET type: $(declare -p OP_BASKET 2>&1)"
@@ -3453,6 +3582,7 @@ while :; do
 			if confirm_quit; then
 				log "User quit from channel selection"
 				clear
+				_show_exit_summary
 				break
 				else
 					log "User cancelled quit, staying on channel"
@@ -3534,13 +3664,4 @@ done
 
 clear
 log "TUI completed successfully"
-echo "TUI complete."
-echo
-echo "Configuration saved to:"
-echo "  $ABA_ROOT/aba.conf"
-echo "  $ABA_ROOT/mirror/mirror.conf"
-echo
-echo "Log file: $LOG_FILE"
-echo
-echo "Run 'aba --help' for available commands."
-echo "See the README.md for more."
+_show_exit_summary

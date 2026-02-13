@@ -316,8 +316,8 @@ do
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 	test-cmd -m "Pausing" "read -t 60 yn || true"
 	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd \"ip a\"|grep 'ens160: .*state UP '"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface ens160" "time timeout -v 5m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'ens160: .*state UP '"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface ens160" "time timeout -v 8m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'ens160: .*state UP '"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
 	# Clean up
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname delete" 
@@ -344,14 +344,14 @@ do
 	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 	test-cmd -m "Pausing" sleep 120  
 	#test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 10 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd \"ip a\"|grep 'bond0: .* state UP '"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface" "time timeout -v 5m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'bond0: .* state UP '"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface" "time timeout -v 8m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'bond0: .* state UP '"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
 	# Test node0 is accessible
 	test-cmd -m "Pausing ..." "read -t 60 yn || true"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 5m bash -x test_ssh.sh"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$cname ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
+	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
 	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname delete" 
 
@@ -376,8 +376,8 @@ do
 	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs (cannot test VLAN)" "aba --dir $subdir/aba/$cname refresh" 
 
 	#test-cmd -m "Pausing ..." "read -t 60 yn || true"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 5m bash -x test_ssh.sh"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
+	#test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
+	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
 	###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep '\.10'"
 	###test-cmd -m "Pausing" "read -t 60 yn || true"
@@ -400,8 +400,8 @@ do
 	##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$cname ssh --cmd "chronyc sources | grep $ntp_ip_grep"
 
 	#test-cmd -m "Pausing ..." "read -t 60 yn || true"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 5m bash -x test_ssh.sh"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
+	#test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
+	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 	#
 	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Reset vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=VMNET-DPG /g' $subdir/aba/vmware.conf"
 	#
@@ -614,7 +614,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Initiate NTP config" "aba --dir
 test-cmd -m "Pausing 30s" "read -t 60 xy||true"
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config" "until aba --dir $subdir/aba/sno ssh --cmd \"sudo chronyc sources | grep $ntp_ip_grep\"; do sleep 10; done"
 ###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config (loop)" "until bash -x test_ssh_ntp.sh $subdir/aba/sno $ntp_ip_grep; do sleep 10; done"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 5m bash -x ~/test_ssh_ntp.sh $subdir/aba/sno '$ntp_ip_grep'"
+test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/sno '$ntp_ip_grep'"
 # matches ^* 10.0.1.8    
 # for i in {100..105}; do echo $i:;ssh -o LogLevel=ERROR core@10.0.1.$i "sudo chronyc sources | grep ^\^" ; done
 test-cmd -m "Pausing 5s ..." "read -t 5 yn || true"

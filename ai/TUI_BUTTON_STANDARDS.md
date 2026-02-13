@@ -200,9 +200,58 @@ esac
    - Operators: 8 → 5
    - Reduces wasted vertical space
 
+## Shared Constants (`tui/tui-strings.sh`)
+
+All dialog titles and action menu item numbers are defined in a **single source of truth**:
+`tui/tui-strings.sh`. Both the TUI and automated tests source this file.
+
+### How It Works
+
+```bash
+# tui/tui-strings.sh defines:
+TUI_TITLE_CHANNEL="OpenShift Channel"
+TUI_ACTION_SETTINGS=7
+TUI_ACTION_LABEL_SETTINGS="Settings..."
+
+# TUI uses:
+dialog --title "$TUI_TITLE_CHANNEL" ...
+
+# Tests use:
+wait_for "$TUI_TITLE_CHANNEL"
+send "$TUI_ACTION_SETTINGS" Enter
+```
+
+### When Changing the TUI
+
+1. **Rename a dialog title** → Update the constant in `tui/tui-strings.sh`. Both TUI and tests pick up the change automatically.
+2. **Add a new dialog** → Add a new `TUI_TITLE_*` constant, use it in the TUI, and add test assertions using it.
+3. **Reorder/renumber action menu** → Update `TUI_ACTION_*` numbers in `tui-strings.sh`. Both the menu definition and case handler use these, so they stay in sync.
+4. **Add a menu item** → Add `TUI_ACTION_*` and `TUI_ACTION_LABEL_*` constants, use them in the menu and case statement, add test assertions.
+
+### Constant Naming Convention
+
+| Prefix | Purpose | Example |
+|--------|---------|---------|
+| `TUI_TITLE_*` | Dialog `--title` strings | `TUI_TITLE_CHANNEL` |
+| `TUI_ACTION_*` | Action menu item numbers | `TUI_ACTION_EXIT=9` |
+| `TUI_ACTION_LABEL_*` | Action menu display text | `TUI_ACTION_LABEL_EXIT="Exit"` |
+| `TUI_SETTINGS_*` | Settings menu item numbers | `TUI_SETTINGS_AUTO_ANSWER=1` |
+
+### Dynamic Titles (Not Constants)
+
+Some titles contain runtime values and cannot be constants:
+- `"Basket (${#OP_BASKET[@]} operators)"` — basket count
+- `"Executing: $tui_cmd"` — command being run
+- `"\Z2Command Output (Success)\Zn: $tui_cmd"` — color-coded output title
+
+These remain as inline strings in the TUI code.
+
 ## Testing Checklist
 
 When adding new dialogs:
+- [ ] Add a `TUI_TITLE_*` constant to `tui/tui-strings.sh`
+- [ ] Use the constant in the TUI `--title` argument
+- [ ] Add `wait_for` / `assert_screen` using the constant in tests
 - [ ] Buttons are short (1-2 words)
 - [ ] Button order matches standard
 - [ ] Button widths are similar
@@ -218,7 +267,7 @@ When adding new dialogs:
 
 ```bash
 # Always run before committing/syncing:
-bash -n tui/abatui_experimental.sh && echo "Syntax OK"
+bash -n tui/abatui.sh && echo "Syntax OK"
 ```
 
 **Common mistakes**:
@@ -360,6 +409,6 @@ curl -sf --head --connect-timeout 5 --max-time 10 https://site.com >/dev/null 2>
 
 ---
 
-**Last Updated**: January 17, 2026  
-**Location**: `tui/abatui_experimental.sh`
+**Last Updated**: February 12, 2026  
+**Location**: `tui/abatui.sh`, `tui/tui-strings.sh`
 
