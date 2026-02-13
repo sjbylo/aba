@@ -93,8 +93,15 @@ echo -e "${YELLOW}Description: $RELEASE_DESC${NC}"
 
 # --- Pre-flight checks (read-only, safe for dry-run) ---
 
-# Check for uncommitted changes
-if ! git diff-index --quiet HEAD --; then
+# Check if tag already exists (prevents mid-script failure after changes are committed)
+if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+    echo -e "${RED}Error: Tag v$NEW_VERSION already exists${NC}"
+    echo -e "${YELLOW}Delete it first with: git tag -d v$NEW_VERSION && git push origin --delete v$NEW_VERSION${NC}"
+    exit 1
+fi
+
+# Check for uncommitted changes (skip in dry-run mode since no changes will be made)
+if ! $DRY_RUN && ! git diff-index --quiet HEAD --; then
     echo -e "${RED}Error: You have uncommitted changes. Commit or stash them first.${NC}"
     git status --short
     exit 1
