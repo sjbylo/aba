@@ -14,6 +14,7 @@ alwaysApply: true
 - Do NOT commit when user says "ok", "yes", or "continue" (unless specifically about commits)
 - Do NOT push to origin without being asked
 - WAIT for user to explicitly say "commit", "push", or "commit and push"
+- NEVER use required_permissions: ["all"] for git commit or git push — they must run inside the sandbox so Cursor's approval gate is enforced
 
 ## NEVER add AI attribution to commits
 
