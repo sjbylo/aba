@@ -550,3 +550,51 @@ Use available VMs to test all 4 remote/local combinations:
 14. Update clean/reset targets (clean `mirror/` freely; `~/.aba/registry/` is untouched)
 15. Test all 4 paths: Quay local, Quay remote, Docker local, Docker remote
 16. Test clean/reset scenarios: install -> clean -> uninstall (must work); install -> clean -> re-install (must reconnect)
+
+---
+
+## Addendum: Explicit Remote Mode (`reg_remote`)
+
+**Problem:** Today, setting `reg_ssh_key` in `mirror.conf` implicitly triggers remote
+installation. The parameter name doesn't communicate this intent, which can confuse users
+who don't realize that filling in an SSH key means "install the registry on a remote host."
+
+**Decision:** Add `reg_remote=true/false` to `mirror.conf` (default: not set).
+
+- If `reg_remote=true`: remote install mode; `reg_ssh_key` and `reg_ssh_user` must be set
+  (dispatcher validates this and aborts with a clear error if missing).
+- If `reg_remote=false` or not set: local install mode. `reg_ssh_key` is ignored even if set.
+- **Backward compatibility:** If `reg_remote` is not set but `reg_ssh_key` IS set, fall back to
+  current behavior (treat as remote) and emit a deprecation warning nudging the user to add
+  `reg_remote=true` explicitly.
+
+This removes the "magic inference" while keeping existing configs working.
+
+---
+
+## Addendum: Multiple Mirror Registries / Enclaves (Future)
+
+**Problem:** Today ABA assumes a single `mirror/` directory. Users managing multiple
+disconnected enclaves need multiple mirrors, each with its own registry, imageset-config,
+and credentials.
+
+**Current state:** The architecture *almost* supports this already -- `aba -d mirror2 sync`
+would work if `mirror2/` existed with its own Makefile and `mirror.conf`.
+
+**Design principles for multi-mirror readiness (apply NOW during refactoring):**
+
+1. **Don't hardcode `mirror/`** in new code. Use `$PWD` or the directory set by `aba -d`.
+2. **Scope persistent state by registry host:** Use `~/.aba/registry/<reg_host>/` instead of
+   a flat `~/.aba/registry/`, so multiple registries don't collide.
+3. **Cluster config needs a mirror pointer:** Add (or plan for) a `mirror_dir=mirror` field
+   in cluster configs so each cluster knows which mirror to use.
+
+**NOT implementing now, but when the time comes:**
+
+- Provide a `aba mirror-init <name>` command (or Makefile target) that copies the mirror
+  directory template to `mirror-<name>/` with its own `mirror.conf`.
+- TUI would offer a mirror selector when multiple mirror dirs exist.
+- Bundle creation would ask which mirror to bundle (or accept `-d mirror2`).
+
+**Documentation:** Add a note in `README.md`: "To manage multiple mirrors, copy `mirror/`
+to `mirror2/`, edit its `mirror.conf`, and use `aba -d mirror2`."
