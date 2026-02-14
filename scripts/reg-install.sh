@@ -163,7 +163,8 @@ if [ "$reg_ssh_key" ]; then
 	[ "$err" ] && aba_abort "Install 'podman' and 'jq' on the remote host '$reg_host' and try again."
 
 	# The mirror-registry installer does not open the firewall port for us.
-	# Try firewalld on the remote host first; fall back to iptables if not available.
+	# Try firewalld on the remote host first; try iptables as best-effort.
+	# If neither works, warn the user with exact commands to run on the remote host.
 	aba_info "Allowing firewall access to the registry at $reg_host/$reg_port ..."
 	if ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null"; then
 		# firewalld is installed and running on remote host
@@ -174,13 +175,16 @@ if [ "$reg_ssh_key" ]; then
 		# firewalld installed but not running on remote -- use offline mode
 		ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- \
 			"$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null"
-	elif ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "command -v iptables &>/dev/null"; then
-		# No firewalld on remote -- fall back to iptables
-		aba_info "firewalld not active on $reg_host, using iptables to open port $reg_port ..."
-		ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- \
-			"$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT" || true
+	elif ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- \
+		"command -v iptables &>/dev/null && $SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null"; then
+		# iptables worked on remote -- port opened
+		aba_info "firewalld not active on $reg_host, opened port $reg_port via iptables."
 	else
-		aba_info "No firewalld or iptables found on $reg_host. Ensure port $reg_port is accessible."
+		# Neither firewalld nor iptables worked on remote -- warn with manual instructions
+		aba_warning "Could not auto-open firewall port $reg_port on $reg_host."
+		aba_warning "If the registry is unreachable, open the port manually on $reg_host, e.g.:"
+		aba_warning "  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept"
+		aba_warning "  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
 	fi
 
 	# Fetch the actual absolute dir path for $reg_root.  "~" on remote host may be diff. to this localhost. Ansible installer does not eval "~"
@@ -334,9 +338,10 @@ else
 	aba_info "Installing Quay registry on localhost ..."
 
 	# mirror-registry (Quay) installer does not open the firewall port for us.
-	# Try firewalld first; if not available/active, fall back to iptables.
+	# Try firewalld first; if not available/active, try iptables as best-effort.
+	# If neither works, warn the user with exact commands to run.
 	# On some platforms (e.g. LinuxONE Community Cloud), firewalld is not installed
-	# but iptables/nft rules are active with a default REJECT policy.
+	# and iptables may be incompatible (native nft chains).
 	# Additional issues that cannot be auto-fixed (user must handle manually):
 	#   - raw table NOTRACK rules on loopback can break rootless podman (pasta):
 	#       sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT
@@ -351,12 +356,15 @@ else
 	elif rpm -q firewalld &>/dev/null; then
 		# firewalld installed but not running -- use offline mode
 		$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
-	elif command -v iptables &>/dev/null; then
-		# No firewalld -- fall back to iptables (insert at top of INPUT chain)
-		aba_info "firewalld not active, using iptables to open port $reg_port ..."
-		$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT || true
+	elif command -v iptables &>/dev/null && $SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null; then
+		# iptables worked -- port opened
+		aba_info "firewalld not active, opened port $reg_port via iptables."
 	else
-		aba_info "No firewalld or iptables found. Ensure port $reg_port is accessible."
+		# Neither firewalld nor iptables worked -- warn with manual instructions
+		aba_warning "Could not auto-open firewall port $reg_port."
+		aba_warning "If the registry is unreachable, open the port manually, e.g.:"
+		aba_warning "  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept"
+		aba_warning "  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
 	fi
 
 	# Create random password
