@@ -117,22 +117,28 @@ podman run -d \
 	#-v "$(pwd)/${REGISTRY_AUTH_DIR}:/auth:Z" \
 
 # Open firewall port for registry access.
-# Note: On platforms where firewalld is not running but iptables/nft rules
-# are active (e.g. LinuxONE Community Cloud), this will silently fail.
-# Users must manually open the port:
-#   sudo iptables -I INPUT 1 -p tcp --dport <port> -j ACCEPT
-# LinuxONE Community Cloud also ships raw table NOTRACK rules on loopback
-# that break rootless podman (pasta networking). These must be flushed:
-#   sudo nft flush chain ip raw PREROUTING
-#   sudo nft flush chain ip raw OUTPUT
-# And the FORWARD chain must allow traffic for pasta:
-#   sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD
-# After changes, save: sudo bash -c "iptables-save > /etc/sysconfig/iptables.save"
+# Try firewalld first; if not active, fall back to iptables.
+# On some platforms (e.g. LinuxONE Community Cloud), firewalld is not installed
+# but iptables/nft rules are active with a default REJECT policy.
+# Additional issues that cannot be auto-fixed (user must handle manually):
+#   - raw table NOTRACK rules on loopback can break rootless podman (pasta networking):
+#       sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT
+#   - FORWARD chain may need to allow traffic for pasta:
+#       sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD
+#   - Save changes: sudo bash -c "iptables-save > /etc/sysconfig/iptables.save"
 # See: https://github.com/linuxone-community-cloud/technical-resources
 aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
-$SUDO firewall-cmd --state && \
+if $SUDO firewall-cmd --state &>/dev/null; then
+	# firewalld is running -- use it
 	$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
 		$SUDO firewall-cmd --reload
+elif command -v iptables &>/dev/null; then
+	# No firewalld -- fall back to iptables (insert at top of INPUT chain)
+	aba_info "firewalld not active, using iptables to open port $reg_port ..."
+	$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT || true
+else
+	aba_info "No firewalld or iptables found. Ensure port $reg_port is accessible."
+fi
 
 # --- Step 7: Add CA to system trust ---
 #echo_yellow "Adding CA to system trust (requires sudo)..."
@@ -150,12 +156,18 @@ echo_yellow "[ABA] Running post-deployment verification..."
 REGISTRY_URL_SERVICE="$REGISTRY_DOMAIN:$EXTERNAL_PORT"
 REGISTRY_URL="https://$REGISTRY_URL_SERVICE"
 
-# 1. curl
-if curl -k -u "$REGISTRY_USER:$REGISTRY_PASS" -fsSL "$REGISTRY_URL/v2/" >/dev/null 2>&1; then
+# 1. curl -- verify registry is reachable via the FQDN
+if curl -k -u "$REGISTRY_USER:$REGISTRY_PASS" -fsSL --connect-timeout 10 "$REGISTRY_URL/v2/" >/dev/null 2>&1; then
     pass_check "curl /v2/ succeeded"
 else
-    fail_check "curl /v2/ failed"
-
+    fail_check "curl /v2/ failed -- registry at $REGISTRY_URL is not reachable"
+    fail_check "The registry container is running but cannot be reached via the external address."
+    fail_check "Common causes:"
+    fail_check "  - Firewall (iptables) is blocking port $EXTERNAL_PORT"
+    fail_check "  - nftables raw table NOTRACK rules interfere with podman networking"
+    fail_check "  - FORWARD chain has a DROP/REJECT policy"
+    fail_check "Try: sudo iptables -I INPUT 1 -p tcp --dport $EXTERNAL_PORT -j ACCEPT"
+    fail_check "See the README.md FAQ for detailed troubleshooting steps."
     exit 1
 fi
 
@@ -163,8 +175,8 @@ fi
 if echo "$REGISTRY_PASS" | podman login "$REGISTRY_URL" --username "$REGISTRY_USER" --password-stdin >/dev/null 2>&1; then
     pass_check "podman login succeeded"
 else
-    fail_check "podman login failed"
-
+    fail_check "podman login failed -- could not authenticate to $REGISTRY_URL"
+    fail_check "Check that the registry is reachable and credentials are correct."
     exit 1
 fi
 
