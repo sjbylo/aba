@@ -150,6 +150,23 @@ fi
 # No need: only for docker
 ###$SUDO cp "$REGISTRY_CERTS_DIR/ca.crt" /etc/pki/ca-trust/source/anchors/
 
+# Quick connectivity check -- fail fast if registry is unreachable rather than
+# letting downstream podman login hang with a confusing "invalid credentials" error.
+# This catches firewall issues (e.g. NOTRACK rules breaking pasta networking) early.
+if ! curl -k -fsSL --connect-timeout 10 "https://$REGISTRY_DOMAIN:$EXTERNAL_PORT/v2/" \
+	-u "$REGISTRY_USER:$REGISTRY_PASS" >/dev/null 2>&1; then
+	fail_check "Registry at https://$REGISTRY_DOMAIN:$EXTERNAL_PORT is not reachable."
+	fail_check "The container is running but network connectivity failed."
+	fail_check "Common causes:"
+	fail_check "  - Firewall is blocking port $EXTERNAL_PORT"
+	fail_check "  - nftables raw table NOTRACK rules interfere with podman networking"
+	fail_check "  - FORWARD chain has a DROP/REJECT policy"
+	fail_check "Try: sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT"
+	fail_check "Also try: sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD"
+	fail_check "See the README.md FAQ for detailed troubleshooting steps."
+	exit 1
+fi
+
 mkdir -p regcreds
 cp "$REGISTRY_CERTS_DIR/ca.crt" regcreds/rootCA.pem
 echo -n -e "$REGISTRY_USER\n$REGISTRY_PASS\n" | make password
