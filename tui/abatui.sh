@@ -2652,7 +2652,14 @@ handle_action_local_docker() {
 		log "Using global auto-answer: -y flag disabled"
 	fi
 	
-	log "Local Docker config: host=$reg_host, user=$reg_user, path=$reg_path, data_dir=$data_dir, y_flag=$y_flag"
+	# Use global retry count
+	local retry_flag=""
+	if [[ "$RETRY_COUNT" != "off" ]]; then
+		retry_flag="--retry $RETRY_COUNT"
+		log "Using retry count: $RETRY_COUNT"
+	fi
+
+	log "Local Docker config: host=$reg_host, user=$reg_user, path=$reg_path, data_dir=$data_dir, y_flag=$y_flag, retry=$RETRY_COUNT"
 	
 	# Save to mirror.conf
 	replace-value-conf -q -n reg_host -v "$reg_host" -f mirror/mirror.conf
@@ -2668,7 +2675,7 @@ handle_action_local_docker() {
 	log "Cleared SSH parameters for local registry installation"
 	
 	# Build command (install-docker-registry + sync in one)
-	local cmd="aba -d mirror install-docker-registry -H '$reg_host' sync $y_flag"
+	local cmd="aba -d mirror install-docker-registry $retry_flag -H '$reg_host' sync $y_flag"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
