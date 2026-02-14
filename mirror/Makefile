@@ -11,13 +11,15 @@ bg        ?=
 ##catalog-name   ?=
 
 # Detect host architecture for mirror-registry download.
-# Available builds: amd64, s390x, ppc64le (no arm64 as of Feb 2026).
-# aarch64 falls back to amd64 since Red Hat doesn't publish an arm64 build.
+# Maps uname -m to the naming used by mirror.openshift.com:
+#   x86_64 -> amd64, aarch64 -> arm64, s390x/ppc64le stay as-is.
+# Note: arm64 build may not exist yet. The download rule handles that
+# gracefully with a clear error and workaround suggestion.
 arch   := $(strip $(shell uname -m))
 ifeq ($(arch),x86_64)
   MR_ARCH := amd64
 else ifeq ($(arch),aarch64)
-  MR_ARCH := amd64
+  MR_ARCH := arm64
 else
   MR_ARCH := $(arch)
 endif
@@ -130,7 +132,17 @@ mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/lates
 
 $(MR_TARBALL): ## Download the mirror-registry tarball for $(MR_ARCH)
 	echo [ABA] "Downloading $(mirror_registry_url)/$(MR_TARBALL) ..."
-	curl $(CURL_PROGRESS) -OL $(mirror_registry_url)/$(MR_TARBALL)
+ifeq ($(arch),aarch64)
+	curl -f $(CURL_PROGRESS) -OL $(mirror_registry_url)/$(MR_TARBALL) || { \
+		echo "[ABA] ERROR: Failed to download $(MR_TARBALL)" ; \
+		echo "[ABA] The mirror-registry binary for arm64 may not be available yet." ; \
+		echo "[ABA] Check $(mirror_registry_url) for available builds." ; \
+		echo "[ABA] Workaround: use a Docker registry instead -- run 'aba -d mirror install-docker-registry'" ; \
+		exit 1 ; \
+	}
+else
+	curl -f $(CURL_PROGRESS) -OL $(mirror_registry_url)/$(MR_TARBALL)
+endif
 	file $(MR_TARBALL) | grep -q "gzip compressed data"
 	@echo -n "[ABA] Verifying checksum for $(@): "
 	curl -f --retry 8 -sL $(CURL_PROGRESS) -o mirror-registry-sha256sum.txt $(mirror_registry_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" mirror-registry-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
