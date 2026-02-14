@@ -325,7 +325,17 @@ else
 	ask "Install Quay mirror registry appliance to localhost ($(hostname -s)), accessable via $reg_hostport" || exit 1
 	aba_info "Installing Quay registry on localhost ..."
 
-	# mirror-registry installer does not open the port for us
+	# mirror-registry (Quay) installer does not open the firewall port for us.
+	# Note: On platforms where firewalld is not installed or not running but
+	# iptables/nft rules are active (e.g. LinuxONE Community Cloud), this
+	# section will be skipped. Users must manually open the port:
+	#   sudo iptables -I INPUT 1 -p tcp --dport <port> -j ACCEPT
+	# LinuxONE also requires flushing raw table NOTRACK rules (breaks pasta):
+	#   sudo nft flush chain ip raw PREROUTING
+	#   sudo nft flush chain ip raw OUTPUT
+	# And opening the FORWARD chain:
+	#   sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD
+	# See: https://github.com/linuxone-community-cloud/technical-resources
 	if rpm -q firewalld >/dev/null; then
 		aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
 
