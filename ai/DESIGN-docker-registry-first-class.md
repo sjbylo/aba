@@ -544,8 +544,26 @@ Use available VMs to test all 4 remote/local combinations:
 8. Create `reg-uninstall-remote.sh` (generic SSH uninstall orchestrator)
 9. Implement persistent registry state in `~/.aba/registry/` (written by `reg_post_install()`, read by uninstall dispatcher)
 10. Refactor `mirror/Makefile` (unified targets, backward-compat aliases, `.reg_vendor` convenience marker)
-11. Update Quay-hardcoded messages to be vendor-neutral
-12. Align TUI (replace `ABA_REGISTRY_TYPE` with `reg_vendor`)
+11. **Fix:** Docker install path must NOT extract `mirror-registry` tarball (Quay binary).
+    Currently, `install-docker-registry` depends on targets that extract `mirror-registry-*.tar.gz`,
+    which is unnecessary for Docker and wastes time/disk. The Makefile dependency chain must be
+    vendor-aware so Docker install only pulls the Docker registry image, not the Quay binary.
+12. Update Quay-hardcoded messages to be vendor-neutral
+12. **Align TUI** with new registry architecture. This is a significant change:
+    - Replace `ABA_REGISTRY_TYPE` (Auto/Quay/Docker) with `reg_vendor` (auto/quay/docker)
+      to match `mirror.conf` naming. TUI writes `reg_vendor` to `mirror.conf` instead of
+      using its own internal variable.
+    - `get_actual_registry_type()` resolves `auto` based on architecture (same logic, new name).
+    - Remove separate `handle_action_local_docker` -- the unified `handle_action_local_quay`
+      (renamed to `handle_action_local_registry`) uses `reg_vendor` to build the right command.
+      Same for remote: one `handle_action_remote_registry` instead of `handle_action_remote_quay`.
+    - Settings toggle cycles `reg_vendor` (auto -> quay -> docker -> auto).
+    - TUI must persist `reg_vendor` to `mirror.conf` when saving config, not just keep it in memory.
+    - Docker remote becomes a TUI option (currently only local Docker is offered).
+    - Fix: ensure retry_flag, y_flag, and all other flags are consistently applied across
+      ALL handler paths (the bug we just fixed for Docker retry).
+    - Display the resolved vendor (Quay/Docker) in the TUI status bar or confirmation dialog
+      so the user knows what they're getting with "Auto".
 13. Update `README.md`, `CHANGELOG.md`, help text
 14. Update clean/reset targets (clean `mirror/` freely; `~/.aba/registry/` is untouched)
 15. Test all 4 paths: Quay local, Quay remote, Docker local, Docker remote
