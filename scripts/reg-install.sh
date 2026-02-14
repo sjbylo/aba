@@ -162,17 +162,25 @@ if [ "$reg_ssh_key" ]; then
 
 	[ "$err" ] && aba_abort "Install 'podman' and 'jq' on the remote host '$reg_host' and try again."
 
-	# Note that the mirror-registry installer does not open the port for us
-	if ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "rpm -q firewalld >/dev/null"; then
-		aba_info "Allowing firewall access to the registry at $reg_host/$reg_port ..."
-
-		if ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "systemctl is-active firewalld >/dev/null"; then
-			ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "$SUDO firewall-cmd --state >/dev/null && \
-				$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent >/dev/null && \
-					$SUDO firewall-cmd --reload >/dev/null"
-		else
-			ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null"
-		fi
+	# The mirror-registry installer does not open the firewall port for us.
+	# Try firewalld on the remote host first; fall back to iptables if not available.
+	aba_info "Allowing firewall access to the registry at $reg_host/$reg_port ..."
+	if ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null"; then
+		# firewalld is installed and running on remote host
+		ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- \
+			"$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent >/dev/null && \
+				$SUDO firewall-cmd --reload >/dev/null"
+	elif ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "rpm -q firewalld &>/dev/null"; then
+		# firewalld installed but not running on remote -- use offline mode
+		ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- \
+			"$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null"
+	elif ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "command -v iptables &>/dev/null"; then
+		# No firewalld on remote -- fall back to iptables
+		aba_info "firewalld not active on $reg_host, using iptables to open port $reg_port ..."
+		ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- \
+			"$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT" || true
+	else
+		aba_info "No firewalld or iptables found on $reg_host. Ensure port $reg_port is accessible."
 	fi
 
 	# Fetch the actual absolute dir path for $reg_root.  "~" on remote host may be diff. to this localhost. Ansible installer does not eval "~"
@@ -326,26 +334,29 @@ else
 	aba_info "Installing Quay registry on localhost ..."
 
 	# mirror-registry (Quay) installer does not open the firewall port for us.
-	# Note: On platforms where firewalld is not installed or not running but
-	# iptables/nft rules are active (e.g. LinuxONE Community Cloud), this
-	# section will be skipped. Users must manually open the port:
-	#   sudo iptables -I INPUT 1 -p tcp --dport <port> -j ACCEPT
-	# LinuxONE also requires flushing raw table NOTRACK rules (breaks pasta):
-	#   sudo nft flush chain ip raw PREROUTING
-	#   sudo nft flush chain ip raw OUTPUT
-	# And opening the FORWARD chain:
-	#   sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD
+	# Try firewalld first; if not available/active, fall back to iptables.
+	# On some platforms (e.g. LinuxONE Community Cloud), firewalld is not installed
+	# but iptables/nft rules are active with a default REJECT policy.
+	# Additional issues that cannot be auto-fixed (user must handle manually):
+	#   - raw table NOTRACK rules on loopback can break rootless podman (pasta):
+	#       sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT
+	#   - FORWARD chain may need to allow traffic:
+	#       sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD
 	# See: https://github.com/linuxone-community-cloud/technical-resources
-	if rpm -q firewalld >/dev/null; then
-		aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
-
-		if systemctl is-active firewalld >/dev/null; then
-			$SUDO firewall-cmd --state && \
-				$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
-					$SUDO firewall-cmd --reload
-		else
-			$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
-		fi
+	aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
+	if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
+		# firewalld is installed and running
+		$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
+			$SUDO firewall-cmd --reload
+	elif rpm -q firewalld &>/dev/null; then
+		# firewalld installed but not running -- use offline mode
+		$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
+	elif command -v iptables &>/dev/null; then
+		# No firewalld -- fall back to iptables (insert at top of INPUT chain)
+		aba_info "firewalld not active, using iptables to open port $reg_port ..."
+		$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT || true
+	else
+		aba_info "No firewalld or iptables found. Ensure port $reg_port is accessible."
 	fi
 
 	# Create random password
