@@ -196,6 +196,55 @@ save/imageset-config-save.yaml: ../aba.conf catalogs-download
 
 ---
 
+## run_once vs Make File Dependencies
+
+### Design Constraint: run_once State is Independent of Output Files
+**Date:** Feb 2026  
+**Status:** Known limitation, mitigated
+
+**The Tension:**
+
+Make's dependency model is file-based and self-healing: if a target file is
+deleted, Make re-runs the rule to recreate it. The `run_once` mechanism is
+state-based (`~/.aba/runner/<task-id>/`): once a task is marked "done", the
+wrapper short-circuits and never invokes Make at all.
+
+When `run_once` wraps a Make target, it **overrides Make's dependency tracking**.
+If the output file is deleted manually (`rm mirror-registry`), Make would rebuild
+it, but `run_once` says "already done" and silently skips.
+
+**Scope of the Problem:**
+
+Plain `make` is NOT affected. `make mirror-registry` after `rm mirror-registry`
+works perfectly -- Make sees the missing file and re-runs the rule.
+
+The issue only arises through `run_once`-wrapped code paths:
+- Bundle mode (`scripts/aba.sh`): `run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry`
+- `ensure_quay_registry()`: `run_once -w -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry`
+
+**Current Mitigation:**
+
+Every `rm` in `make clean` / `make reset` is paired with a `run_once -r` call
+to reset the corresponding task state. This ensures the official cleanup paths
+work correctly.
+
+**Remaining Risk:**
+
+If a user deletes files manually with `rm` (bypassing `make clean`), `run_once`
+state becomes stale and subsequent operations silently skip. This is acceptable
+because:
+1. Users should use `make clean` / `make reset` / `aba clean` -- never raw `rm`
+2. Plain `make` (without `run_once`) is unaffected
+3. `aba reset -f` does a global `run_once -G` cleanup as a last resort
+
+**Possible Future Fix:**
+
+Add an optional `-o <output_file>` flag to `run_once`. If the output file is
+missing, treat the task as not-done even if state says "done". This would make
+`run_once` self-healing like Make. Low priority since current mitigation works.
+
+---
+
 ## Notes for AI Assistants
 
 - **Read this file at the start of each session**
