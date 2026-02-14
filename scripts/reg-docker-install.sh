@@ -116,6 +116,19 @@ podman run -d \
 	#-v "$(pwd)/${REGISTRY_CERTS_DIR}:/certs:Z" \
 	#-v "$(pwd)/${REGISTRY_AUTH_DIR}:/auth:Z" \
 
+# Open firewall port for registry access.
+# Note: On platforms where firewalld is not running but iptables/nft rules
+# are active (e.g. LinuxONE Community Cloud), this will silently fail.
+# Users must manually open the port:
+#   sudo iptables -I INPUT 1 -p tcp --dport <port> -j ACCEPT
+# LinuxONE Community Cloud also ships raw table NOTRACK rules on loopback
+# that break rootless podman (pasta networking). These must be flushed:
+#   sudo nft flush chain ip raw PREROUTING
+#   sudo nft flush chain ip raw OUTPUT
+# And the FORWARD chain must allow traffic for pasta:
+#   sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD
+# After changes, save: sudo bash -c "iptables-save > /etc/sysconfig/iptables.save"
+# See: https://github.com/linuxone-community-cloud/technical-resources
 aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
 $SUDO firewall-cmd --state && \
 	$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
