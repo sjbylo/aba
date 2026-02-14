@@ -165,7 +165,26 @@ govc snapshot.create -vm "$DIS_NAME" e2e-configured
 
 ## Low Priority
 
-*(Add future items here)*
+### 4. Validate starting_ip Is Within machine_network CIDR
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-02-14
+
+**Problem:**
+ABA does not check whether `starting_ip` (from cluster config) falls within the `machine_network` CIDR. If a user sets an IP outside the CIDR, the cluster install will fail late with a cryptic error rather than failing early with a clear message.
+
+**Proposed Solution:**
+Add an early validation (e.g., in `verify-aba-conf` or cluster config normalization) that parses the CIDR and checks the starting IP is within it. Pure bash approach: convert IP and network to integers, apply the mask, and compare. Alternatively, use `ipcalc` or Python one-liner if available.
+
+**Where:**
+- `scripts/include_all.sh` (in `verify-aba-conf` or a new `verify-cluster-conf`)
+- Potentially also in the TUI when the user enters `starting_ip`
+
+**Benefits:**
+- Fail early with a clear error message
+- Prevent wasted time on doomed installs
 
 ---
 

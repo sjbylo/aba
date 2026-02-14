@@ -117,9 +117,11 @@ podman run -d \
 	#-v "$(pwd)/${REGISTRY_AUTH_DIR}:/auth:Z" \
 
 # Open firewall port for registry access.
-# Try firewalld first; if not active, fall back to iptables.
+# Try firewalld first; if not active, try iptables as best-effort.
+# If neither works, warn the user with the exact commands to run.
 # On some platforms (e.g. LinuxONE Community Cloud), firewalld is not installed
-# but iptables/nft rules are active with a default REJECT policy.
+# and iptables may be incompatible (native nft chains). In that case the user
+# must open the port manually.
 # Additional issues that cannot be auto-fixed (user must handle manually):
 #   - raw table NOTRACK rules on loopback can break rootless podman (pasta networking):
 #       sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT
@@ -132,12 +134,15 @@ if $SUDO firewall-cmd --state &>/dev/null; then
 	# firewalld is running -- use it
 	$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
 		$SUDO firewall-cmd --reload
-elif command -v iptables &>/dev/null; then
-	# No firewalld -- fall back to iptables (insert at top of INPUT chain)
-	aba_info "firewalld not active, using iptables to open port $reg_port ..."
-	$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT || true
+elif command -v iptables &>/dev/null && $SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null; then
+	# iptables worked -- port opened
+	aba_info "firewalld not active, opened port $reg_port via iptables."
 else
-	aba_info "No firewalld or iptables found. Ensure port $reg_port is accessible."
+	# Neither firewalld nor iptables worked -- warn with manual instructions
+	aba_warning "Could not auto-open firewall port $reg_port."
+	aba_warning "If the registry is unreachable, open the port manually, e.g.:"
+	aba_warning "  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept"
+	aba_warning "  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
 fi
 
 # --- Step 7: Add CA to system trust ---
