@@ -360,13 +360,16 @@ init_bastion() {
 		#### Tidy up network config      ###
 		####################################
 		nmcli connection show
+		ip a
 		nmcli connection modify "Wired connection 1" connection.id ens224
-		nmcli connection modify "Wired connection 2" connection.id ens256 # Not required
-		nmcli connection down ens256 					  # Not required
+		nmcli connection modify "Wired connection 2" connection.id ens256 || true	# NIC Not required
+		nmcli connection down ens256 || true 						# NIC Not required
 		nmcli connection modify ens192 ipv4.never-default yes
 		nmcli connection modify ens224 ipv4.never-default yes
 		nmcli connection modify ens192 ipv6.method disabled
 		nmcli connection modify ens224 ipv6.method disabled
+		nmcli connection show
+		ip a
 
 		# Set this for faster data transfer 
 		ip link set ens192 mtu 9000
