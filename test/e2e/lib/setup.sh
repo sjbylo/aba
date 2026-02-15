@@ -34,21 +34,26 @@ setup_aba_from_scratch() {
 
     echo "=== setup_aba_from_scratch ==="
 
+    # Uninstall any existing registry using aba's own uninstall command.
+    # -i: first run may have no registry to uninstall (exit 0 from aba).
+    e2e_run -i "Uninstall local registry (if any)" \
+        "cd $aba_root && aba -d mirror uninstall"
+
     # Remove RPMs so aba can test auto-install
     e2e_run "Remove RPMs for clean install test" \
-        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y 2>/dev/null || true"
+        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
 
     # Clean podman images
-    e2e_run -q "Clean podman images" \
-        "podman system prune --all --force 2>/dev/null; podman rmi --all 2>/dev/null; sudo rm -rf ~/.local/share/containers/storage; true"
+    e2e_run "Clean podman images" \
+        "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage"
 
     # Remove oc-mirror caches
-    e2e_run -q "Remove oc-mirror caches" \
-        "rm -rf \$(find ~/ -type d -name .oc-mirror 2>/dev/null); true"
+    e2e_run "Remove oc-mirror caches" \
+        "find ~/ -type d -name .oc-mirror 2>&1 | xargs rm -rf"
 
-    # Reset aba
+    # Reset aba.  -i: mirror dir may not exist on first run.
     e2e_run -i "Reset aba" \
-        "cd $aba_root && make -C mirror reset yes=1 2>/dev/null; true"
+        "cd $aba_root && make -C mirror reset yes=1"
 
     echo "=== setup_aba_from_scratch complete ==="
 }
@@ -114,23 +119,45 @@ setup_connected_bastion() {
 #   (uses INTERNAL_BASTION from the calling suite)
 #
 reset_internal_bastion() {
-    echo "=== reset_internal_bastion: ${INTERNAL_BASTION:-unset} ==="
+    local _dis_host="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+    # Extract bare hostname for curl check (strip user@ prefix if present)
+    local _dis_bare="${_dis_host#*@}"
 
+    echo "=== reset_internal_bastion: $_dis_host ==="
+
+    # Sync aba to the internal bastion so 'aba -d mirror uninstall' can run.
+    # This is lightweight (excludes heavy data dirs).  Must happen BEFORE
+    # uninstall because a previous test run may have wiped ~/aba on disN.
+    local _aba_root
+    _aba_root="$(cd "$_E2E_LIB_DIR_SU/../../.." && pwd)"
+    e2e_run "Sync aba to $_dis_bare for cleanup" \
+        "rsync -az --delete \
+            --exclude='mirror/save/' \
+            --exclude='mirror/.oc-mirror/' \
+            --exclude='cli/' \
+            --exclude='.git/' \
+            '${_aba_root}/' '${_dis_host}:~/aba/'"
+
+    # Uninstall any existing registry using aba's own uninstall command.
+    # -i: first run may have no registry to uninstall (exit 0 from aba).
+    e2e_run_remote -i "Uninstall registry on internal bastion" \
+        "cd ~/aba && aba -d mirror uninstall"
+
+    # VERIFY the registry is actually down -- hard failure if it's still up!
+    e2e_run "Verify registry is down on $_dis_bare" \
+        "! curl -sk --connect-timeout 5 https://${_dis_bare}:8443/health/instance"
+
+    # Reset aba state.
     e2e_run_remote "Reset aba on internal bastion" \
-        "cd ~/aba && aba reset -f 2>/dev/null || true"
+        "cd ~/aba && aba reset -f"
     e2e_run_remote "Clean cluster dirs on internal bastion" \
-        "cd ~/aba && rm -rf sno sno2 compact standard 2>/dev/null || true"
+        "cd ~/aba && rm -rf sno sno2 compact standard"
     e2e_run_remote "Clean podman on internal bastion" \
-        "podman system prune --all --force 2>/dev/null; podman rmi --all 2>/dev/null; true"
+        "podman system prune --all --force; podman rmi --all; true"
     e2e_run_remote "Clean oc-mirror caches on internal bastion" \
-        "rm -rf ~/.cache/agent ~/.oc-mirror 2>/dev/null; true"
+        "rm -rf ~/.cache/agent ~/.oc-mirror"
     e2e_run_remote "Clean containers storage on internal bastion" \
-        "sudo rm -rf ~/.local/share/containers/storage 2>/dev/null; true"
-
-    # Note: aba reset -f wipes aba.conf on the remote bastion.  The next
-    # tar-pipe transfer (save/bundle) will overwrite it with the local
-    # aba.conf (which has ask=false).  No explicit re-apply needed here
-    # because the remote state is rebuilt from the transferred tar.
+        "sudo rm -rf ~/.local/share/containers/storage"
 
     echo "=== reset_internal_bastion complete ==="
 }
@@ -146,19 +173,21 @@ cleanup_all() {
 
     echo "=== cleanup_all ==="
 
-    # Reset aba
-    make -C mirror reset yes=1 2>/dev/null || true
+    # Reset aba.  -i: mirror dir may not exist on first run.
+    e2e_run -i "Reset aba mirror state" \
+        "make -C mirror reset yes=1"
 
     # Remove cluster directories
-    rm -rf sno sno2 compact standard 2>/dev/null || true
+    e2e_run "Remove cluster directories" \
+        "rm -rf sno sno2 compact standard"
 
     # Clean podman
-    podman system prune --all --force 2>/dev/null || true
-    podman rmi --all 2>/dev/null || true
-    sudo rm -rf ~/.local/share/containers/storage 2>/dev/null || true
+    e2e_run "Clean podman images" \
+        "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage"
 
     # Remove caches
-    rm -rf $(find ~/ -type d -name .oc-mirror 2>/dev/null) 2>/dev/null || true
+    e2e_run "Remove oc-mirror caches" \
+        "find ~/ -type d -name .oc-mirror 2>&1 | xargs rm -rf"
 
     echo "=== cleanup_all complete ==="
 }
