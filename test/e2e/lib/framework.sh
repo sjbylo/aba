@@ -47,11 +47,8 @@ declare -a _E2E_PLAN_STATUS=()  # PENDING | RUNNING | PASS | FAIL | SKIP | DONE
 
 _e2e_color() {
     local code="$1"; shift
-    if [ -t 1 ] && [ "${TERM:-}" ]; then
-        printf '\033[%sm%s\033[0m' "$code" "$*"
-    else
-        printf '%s' "$*"
-    fi
+    # Always emit ANSI colors -- output is viewed via 'tail -f' on log files
+    printf '\033[%sm%s\033[0m' "$code" "$*"
 }
 
 # Force ANSI colors regardless of TTY (for log files viewed via tail -f)
@@ -154,10 +151,17 @@ _update_plan() {
 _print_progress() {
     [ ${#_E2E_PLAN_NAMES[@]} -eq 0 ] && return
 
+    # Calculate column width from longest test name (min 40, +4 padding)
+    local _col=40
+    for i in "${!_E2E_PLAN_NAMES[@]}"; do
+        local _len=${#_E2E_PLAN_NAMES[$i]}
+        (( _len + 4 > _col )) && _col=$(( _len + 4 ))
+    done
+
     # Print to screen
     echo ""
     _e2e_draw_line "="
-    printf "  %-50s %s\n" "TEST" "STATUS"
+    printf "  %-${_col}s %s\n" "TEST" "STATUS"
     _e2e_draw_line "-"
 
     local i status_str status_str_color
@@ -170,17 +174,20 @@ _print_progress() {
             DONE)    status_str="$(_e2e_green "DONE (resumed)")"; status_str_color="$(_e2e_Green "DONE (resumed)")" ;;
             *)       status_str="  --";                          status_str_color="  --" ;;
         esac
-        printf "  %-50s %s\n" "${_E2E_PLAN_NAMES[$i]}" "$status_str"
+        printf "  %-${_col}s %s\n" "${_E2E_PLAN_NAMES[$i]}" "$status_str"
     done
 
     _e2e_draw_line "="
     echo ""
 
     # Also write the progress table to the summary log (with forced colors for tail -f)
+    local _line
+    printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /=}"
     _e2e_summary ""
-    _e2e_summary "  =========================================================================================================="
-    _e2e_summary "  $(printf '%-50s %s' "TEST" "STATUS")"
-    _e2e_summary "  ----------------------------------------------------------------------------------------------------------"
+    _e2e_summary "  $_line"
+    _e2e_summary "  $(printf "%-${_col}s %s" "TEST" "STATUS")"
+    printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /-}"
+    _e2e_summary "  $_line"
     for i in "${!_E2E_PLAN_NAMES[@]}"; do
         case "${_E2E_PLAN_STATUS[$i]}" in
             PASS)    status_str_color="$(_e2e_Green "PASS")" ;;
@@ -190,19 +197,21 @@ _print_progress() {
             DONE)    status_str_color="$(_e2e_Green "DONE (resumed)")" ;;
             *)       status_str_color="  --" ;;
         esac
-        _e2e_summary "  $(printf '%-50s' "${_E2E_PLAN_NAMES[$i]}") $status_str_color"
+        _e2e_summary "  $(printf "%-${_col}s" "${_E2E_PLAN_NAMES[$i]}") $status_str_color"
     done
-    _e2e_summary "  =========================================================================================================="
+    printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /=}"
+    _e2e_summary "  $_line"
     _e2e_summary ""
 
     # Append to the full log too (plain text, no colors)
     if [ -n "${E2E_LOG_FILE:-}" ]; then
         {
             echo ""
-            printf '  %-50s %s\n' "TEST" "STATUS"
-            printf '  %s\n' "------------------------------------------"
+            printf "  %-${_col}s %s\n" "TEST" "STATUS"
+            printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /-}"
+            echo "  $_line"
             for i in "${!_E2E_PLAN_NAMES[@]}"; do
-                printf '  %-50s %s\n' "${_E2E_PLAN_NAMES[$i]}" "${_E2E_PLAN_STATUS[$i]}"
+                printf "  %-${_col}s %s\n" "${_E2E_PLAN_NAMES[$i]}" "${_E2E_PLAN_STATUS[$i]}"
             done
             echo ""
         } >> "$E2E_LOG_FILE"
@@ -544,9 +553,15 @@ e2e_run() {
             # User chose skip or replacement command succeeded
             return 0
         else
-            # Non-interactive failure or abort
+            # Non-interactive failure or abort -- fail the current test and stop the suite
             _e2e_log "  FAILED: $description (exit=$ret)"
-            return $ret
+            _e2e_log_and_print "  $(_e2e_red "FATAL: $description -- aborting suite")"
+            _e2e_summary "    $(_e2e_Red "FATAL: $description -- aborting suite")"
+            if [ -n "$_E2E_CURRENT_TEST" ]; then
+                test_end "$ret"
+            fi
+            _e2e_notify "FATAL: $description (exit=$ret) -- suite aborted"
+            exit 1
         fi
     done
 }
@@ -558,8 +573,8 @@ e2e_run() {
 #
 e2e_run_remote() {
     if [ -z "${INTERNAL_BASTION:-}" ]; then
-        echo "ERROR: INTERNAL_BASTION not set. Cannot run remote command." >&2
-        return 1
+        _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
+        exit 1
     fi
     e2e_run -h "$INTERNAL_BASTION" "$@"
 }
@@ -589,8 +604,11 @@ e2e_run_must_fail() {
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
-        _e2e_summary "    $(_e2e_Red "UNEXPECTED SUCCESS: $description")"
-        return 1
+        _e2e_summary "    $(_e2e_Red "UNEXPECTED SUCCESS: $description -- aborting suite")"
+        if [ -n "$_E2E_CURRENT_TEST" ]; then
+            test_end 1
+        fi
+        exit 1
     fi
 }
 
@@ -603,8 +621,8 @@ e2e_run_must_fail_remote() {
     local cmd="$*"
 
     if [ -z "${INTERNAL_BASTION:-}" ]; then
-        echo "ERROR: INTERNAL_BASTION not set." >&2
-        return 1
+        _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
+        exit 1
     fi
 
     _e2e_draw_line "."
@@ -623,22 +641,36 @@ e2e_run_must_fail_remote() {
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
-        _e2e_summary "    $(_e2e_Red "UNEXPECTED SUCCESS: $description")"
-        return 1
+        _e2e_summary "    $(_e2e_Red "UNEXPECTED SUCCESS: $description -- aborting suite")"
+        if [ -n "$_E2E_CURRENT_TEST" ]; then
+            test_end 1
+        fi
+        exit 1
     fi
 }
 
 # --- Assertions -------------------------------------------------------------
+#
+# All assertions abort the suite on failure -- tests must not silently continue
+# past a failed check (rule #1: let them fail).
+
+_assert_fail() {
+    local msg="$1"
+    _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
+    _e2e_summary "    $(_e2e_Red "ASSERT FAIL: $msg -- aborting suite")"
+    if [ -n "${_E2E_CURRENT_TEST:-}" ]; then
+        test_end 1
+    fi
+    exit 1
+}
 
 assert_file_exists() {
     local file="$1"
     local msg="${2:-File should exist: $file}"
     if [ -f "$file" ]; then
         _e2e_log "  ASSERT OK: file exists: $file"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -647,10 +679,8 @@ assert_dir_exists() {
     local msg="${2:-Directory should exist: $dir}"
     if [ -d "$dir" ]; then
         _e2e_log "  ASSERT OK: dir exists: $dir"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -659,10 +689,8 @@ assert_file_not_exists() {
     local msg="${2:-File should not exist: $file}"
     if [ ! -f "$file" ]; then
         _e2e_log "  ASSERT OK: file does not exist: $file"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -672,10 +700,8 @@ assert_contains() {
     local msg="${3:-File $file should contain: $pattern}"
     if grep -q "$pattern" "$file" 2>/dev/null; then
         _e2e_log "  ASSERT OK: '$pattern' found in $file"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -685,10 +711,8 @@ assert_not_contains() {
     local msg="${3:-File $file should NOT contain: $pattern}"
     if ! grep -q "$pattern" "$file" 2>/dev/null; then
         _e2e_log "  ASSERT OK: '$pattern' not found in $file (expected)"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -698,10 +722,8 @@ assert_eq() {
     local msg="${3:-Expected '$expected', got '$actual'}"
     if [ "$actual" = "$expected" ]; then
         _e2e_log "  ASSERT OK: '$actual' == '$expected'"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -711,10 +733,8 @@ assert_ne() {
     local msg="${3:-Expected NOT '$unexpected', but got it}"
     if [ "$actual" != "$unexpected" ]; then
         _e2e_log "  ASSERT OK: '$actual' != '$unexpected'"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -723,10 +743,8 @@ assert_command_exists() {
     local msg="${2:-Command should exist: $cmd_name}"
     if command -v "$cmd_name" &>/dev/null; then
         _e2e_log "  ASSERT OK: command exists: $cmd_name"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
