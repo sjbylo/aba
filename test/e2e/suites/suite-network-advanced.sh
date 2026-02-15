@@ -8,7 +8,7 @@
 # Extracted from test2 (VLAN/bonding sections) and test5 (network-related).
 # =============================================================================
 
-set -euo pipefail
+set -u
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"

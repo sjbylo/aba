@@ -10,7 +10,7 @@
 #               Internal bastion VM available for registry install.
 # =============================================================================
 
-set -euo pipefail
+set -u
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"

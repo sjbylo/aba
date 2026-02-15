@@ -8,7 +8,7 @@
 # This is the simplest suite -- no mirror, no air-gap, no internal bastion.
 # =============================================================================
 
-set -euo pipefail
+set -u
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
