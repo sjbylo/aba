@@ -758,6 +758,29 @@ require_ssh() {
     return 0
 }
 
+# Pre-flight SSH connectivity check.  Call at the top of any suite that
+# relies on a remote bastion (INTERNAL_BASTION).  Fails the suite
+# immediately instead of letting dozens of remote commands silently fail.
+#
+# Usage: preflight_ssh           (uses $INTERNAL_BASTION)
+#        preflight_ssh HOST      (explicit host)
+#
+preflight_ssh() {
+    local host="${1:-${INTERNAL_BASTION:-}}"
+    if [ -z "$host" ]; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: INTERNAL_BASTION not set")"
+        exit 1
+    fi
+    _e2e_log "  Preflight: checking SSH to $host ..."
+    if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$host" true 2>/dev/null; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to $host")"
+        _e2e_log_and_print "  $(_e2e_Red "Aborting suite -- remote bastion is unreachable.")"
+        _e2e_notify "PREFLIGHT FAIL: Cannot SSH to $host -- suite aborted"
+        exit 1
+    fi
+    _e2e_log "  Preflight: SSH to $host OK"
+}
+
 require_govc() {
     if ! command -v govc &>/dev/null; then
         _e2e_log_and_print "  $(_e2e_yellow "GUARD: govc not found -- skipping")"
