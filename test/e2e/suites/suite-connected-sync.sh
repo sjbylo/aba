@@ -49,7 +49,7 @@ suite_begin "connected-sync"
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-setup_aba_from_scratch --platform vmw --op-sets abatest
+setup_aba_from_scratch
 
 e2e_run "Install aba" "./install"
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
