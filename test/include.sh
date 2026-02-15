@@ -361,6 +361,8 @@ init_bastion() {
 		####################################
 		nmcli connection show
 		nmcli connection modify "Wired connection 1" connection.id ens224
+		nmcli connection modify "Wired connection 2" connection.id ens256 # Not required
+		nmcli connection down ens256 					  # Not required
 		nmcli connection modify ens192 ipv4.never-default yes
 		nmcli connection modify ens224 ipv4.never-default yes
 		nmcli connection modify ens192 ipv6.method disabled
