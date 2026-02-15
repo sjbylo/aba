@@ -471,15 +471,17 @@ e2e_run() {
                     ssh -t -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
                         >> "$_lf" 2>&1 || ret=$?
                 else
+                    # Use PIPESTATUS to capture ssh exit code, not tee's
                     ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
-                        2>&1 | tee -a "$_lf" || ret=$?
+                        2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
                 fi
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
                     ( eval "$cmd" ) >> "$_lf" 2>&1 || ret=$?
                 else
-                    ( eval "$cmd" ) 2>&1 | tee -a "$_lf" || ret=$?
+                    # Use PIPESTATUS to capture command exit code, not tee's
+                    ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
                 fi
             fi
 
