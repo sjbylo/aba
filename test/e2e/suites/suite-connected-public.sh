@@ -38,7 +38,7 @@ suite_begin "connected-public"
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-setup_aba_from_scratch --platform vmw
+setup_aba_from_scratch
 
 e2e_run "Install aba" "./install"
 

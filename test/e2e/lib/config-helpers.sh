@@ -77,6 +77,25 @@ pool_starting_ip() {
     pool_node_ip "$p"
 }
 
+# Get the VLAN node IP for cluster-on-VLAN tests: pool_vlan_node_ip [POOL_NUM]
+pool_vlan_node_ip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_VLAN_NODE_IP[$p]:-10.10.20.$((200 + p))}"
+}
+
+# Get the VLAN machine network: pool_vlan_network
+pool_vlan_network() {
+    echo "${POOL_VLAN_NETWORK:-10.10.20.0/24}"
+}
+
+# Get the VLAN gateway (= disN's VLAN IP, stripped of /prefix): pool_vlan_gateway [POOL_NUM]
+pool_vlan_gateway() {
+    local p="${1:-${POOL_NUM:-1}}"
+    local dis_vlan="${VM_CLONE_VLAN_IPS[dis${p}]:-10.10.20.$((p * 2))/24}"
+    # Strip the /prefix to get just the IP
+    echo "${dis_vlan%%/*}"
+}
+
 # SSH target for the connected bastion: pool_connected_bastion [POOL_NUM]
 # Returns user@conN.domain suitable for ssh/rsync.
 pool_connected_bastion() {

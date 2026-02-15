@@ -46,7 +46,7 @@ suite_begin "network-advanced"
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-setup_aba_from_scratch --platform vmw --op-sets abatest
+setup_aba_from_scratch
 
 e2e_run "Install aba" "./install"
 
@@ -100,8 +100,8 @@ test_begin "VLAN: verify interface on bastion"
 
 e2e_run_remote "Verify VLAN interface ens224.10 exists" \
     "ip addr show ens224.10"
-e2e_run_remote "Verify VLAN IP 10.10.10.1" \
-    "ip addr show ens224.10 | grep '10.10.10.1'"
+e2e_run_remote "Verify VLAN IP $(pool_vlan_gateway)" \
+    "ip addr show ens224.10 | grep '$(pool_vlan_gateway)'"
 e2e_run_remote "Check VLAN connection details" \
     "nmcli -f GENERAL,IP4 connection show ens224.10"
 
@@ -114,9 +114,9 @@ test_begin "VLAN: install SNO cluster on VLAN"
 
 e2e_run_remote "Clean sno dir" "cd ~/aba && rm -rf sno"
 
-# Create SNO on VLAN network (10.10.10.x)
+# Create SNO on VLAN network (pool-specific VLAN subnet)
 e2e_run_remote "Create SNO config for VLAN" \
-    "cd ~/aba && aba cluster -n sno -t sno --starting-ip 10.10.10.201 --machine-network '10.10.10.0/24' --gateway-ip 10.10.10.1 --dns 10.0.1.8 --step cluster.conf"
+    "cd ~/aba && aba cluster -n sno -t sno --starting-ip $(pool_vlan_node_ip) --machine-network '$(pool_vlan_network)' --gateway-ip $(pool_vlan_gateway) --dns $(pool_dns_server) --step cluster.conf"
 
 # Configure VLAN in cluster.conf
 e2e_run_remote "Set VLAN config in cluster.conf" \

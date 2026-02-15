@@ -198,6 +198,7 @@ git checkout dev
 ### ✅ CAN MODIFY (without explicit permission):
 - `aba/tui/*` - TUI work
 - `aba/test/func/*` - Functional/unit tests
+- `aba/test/e2e/*` - E2E test framework
 - `aba/ai/*` - AI documentation and rules
 
 ### ⚠️ CAN MODIFY (with user permission):
@@ -986,6 +987,35 @@ cd aba
 ```
 
 ## Testing Strategy
+
+### Three Levels of Tests
+
+#### E2E Tests in `test/e2e/` (Full Infrastructure)
+
+**Purpose**: Validate ABA against real VMware infrastructure and OpenShift clusters.
+
+**Characteristics**:
+- ✅ Test complete workflows on real VMs (clone, configure, install, verify)
+- ⏱️ Hours to complete (12+ hours for all suites)
+- 🌐 Requires VMware vCenter, template VMs, network infrastructure
+- 📝 Pool-based isolation for parallel execution
+
+**Key suites**: `clone-check`, `bundle-disk`, `connected-sync`, `airgapped-local-reg`, `network-advanced`
+
+**When to Run**:
+- Before releases
+- After significant architectural changes
+- When testing VMware/cluster-related features
+
+**How to Run**:
+```bash
+test/e2e/run.sh --suite vm-smoke           # Quick VMware sanity check
+test/e2e/run.sh --suite clone-check        # Set up bastion pair
+test/e2e/run.sh --all                      # Run everything
+test/e2e/run.sh --suite connected-sync --resume  # Resume after failure
+```
+
+See `test/e2e/README.md` for full documentation including IP/domain allocation, pool configuration, and how to write new suites.
 
 ### Two Types of Tests in `test/func/`
 

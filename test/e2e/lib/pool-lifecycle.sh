@@ -48,8 +48,8 @@ if ! declare -p VM_CLONE_MACS &>/dev/null 2>&1; then
 fi
 
 # --- Clone VLAN IPs (static) -----------------------------------------------
-# The 10.10.10.0/24 VLAN has no DHCP. Each clone's ens224.10 IP is defined
-# here. Used by _vm_setup_network.
+# The 10.10.20.0/24 VLAN has no DHCP. Each clone's ens224.10 IP is defined
+# in config.env (VM_CLONE_VLAN_IPS). Used by _vm_setup_network.
 if ! declare -p VM_CLONE_VLAN_IPS &>/dev/null 2>&1; then
     declare -A VM_CLONE_VLAN_IPS=()
 fi
