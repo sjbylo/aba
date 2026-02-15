@@ -1614,6 +1614,9 @@ run_once() {
 			fi
 
 			# Background: log.out gets stdout+stderr, log.err gets only stderr
+			# Close inherited stdout/stderr first so this background subshell
+			# doesn't hold a parent pipeline (e.g. `cmd | tee`) open.
+			exec >/dev/null 2>&1
 			setsid "${command[@]}" 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
 			echo $! >"$pid_file"
 		chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
