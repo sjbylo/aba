@@ -16,7 +16,7 @@
 #          [-c CHANNEL] [-v VERSION] [-r RHEL] [-u USER]
 # =============================================================================
 
-set -euo pipefail
+set -u
 
 # Resolve paths
 _RUN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -21,7 +21,7 @@
 #   POOL_NUM=2 test/e2e/run.sh --suite clone-check
 # =============================================================================
 
-set -euo pipefail
+set -u
 
 E2E_COORDINATOR_ONLY=true  # Must run on coordinator (creates VMs, needs govc)
 

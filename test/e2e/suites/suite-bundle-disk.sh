@@ -18,7 +18,7 @@
 #   - Internet access (to download OCP images for the bundle)
 # =============================================================================
 
-set -euo pipefail
+set -u
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"

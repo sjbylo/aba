@@ -26,7 +26,7 @@
 # Runtime: ~10-15 minutes (mostly dnf update + reboot)
 # =============================================================================
 
-set -euo pipefail
+set -u
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
