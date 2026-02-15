@@ -127,6 +127,11 @@ reset_internal_bastion() {
     e2e_run_remote "Clean containers storage on internal bastion" \
         "sudo rm -rf ~/.local/share/containers/storage 2>/dev/null; true"
 
+    # Note: aba reset -f wipes aba.conf on the remote bastion.  The next
+    # tar-pipe transfer (save/bundle) will overwrite it with the local
+    # aba.conf (which has ask=false).  No explicit re-apply needed here
+    # because the remote state is rebuilt from the transferred tar.
+
     echo "=== reset_internal_bastion complete ==="
 }
 
