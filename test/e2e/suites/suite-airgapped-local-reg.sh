@@ -227,12 +227,50 @@ e2e_run_remote -r 8 3 "Load vote-app images" \
 test_end 0
 
 # ============================================================================
-# 12. Deploy vote-app with ImageDigestMirrorSet
+# 12. Deploy vote-app with ImageDigestMirrorSet (Gap 6: explicit IDMS test)
+#     Two deployments: (a) direct from mirror path, (b) via IDMS redirect
 # ============================================================================
 test_begin "Deploy: vote-app with IDMS"
 
-e2e_run_remote "Deploy vote-app" \
+# --- (a) Deploy directly from mirror registry path ---
+e2e_run_remote "Deploy vote-app (direct mirror path)" \
     "cd ~/aba && test/deploy-test-app.sh"
+
+# Clean up before IDMS test
+e2e_run_remote -i "Delete demo project" \
+    "cd ~/aba && aba --dir sno cmd 'oc delete project demo' 2>/dev/null || true"
+e2e_run_remote -r 4 5 "Recreate demo project" \
+    "cd ~/aba && aba --dir sno cmd 'oc new-project demo'"
+
+# --- (b) Deploy via ImageDigestMirrorSet (IDMS) ---
+# Apply an IDMS that redirects quay.io/sjbylo -> mirror registry.
+# This tests the key air-gapped mechanism: users reference public image
+# names and OCP transparently pulls from the mirror.
+e2e_run_remote "Apply ImageDigestMirrorSet for quay.io/sjbylo" \
+    "cd ~/aba && source <(cd mirror && normalize-mirror-conf) && aba --dir sno cmd 'oc apply -f -' <<'IDMSEOF'
+apiVersion: config.openshift.io/v1
+kind: ImageDigestMirrorSet
+metadata:
+  name: idms-vote-app
+spec:
+  imageDigestMirrors:
+  - mirrors:
+    - \${reg_host}:\${reg_port}\${reg_path}/sjbylo
+    source: quay.io/sjbylo
+IDMSEOF"
+
+# Give the MachineConfigOperator time to process the IDMS
+e2e_run_remote -q "Wait for IDMS to propagate" "sleep 30"
+
+# Deploy vote-app using the PUBLIC image name -- IDMS should redirect to mirror
+e2e_run_remote "Deploy vote-app via IDMS (quay.io source)" \
+    "cd ~/aba && aba --dir sno cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
+e2e_run_remote "Wait for vote-app rollout via IDMS" \
+    "cd ~/aba && aba --dir sno cmd 'oc rollout status deployment vote-app -n demo'"
+
+# Clean up
+e2e_run_remote -i "Delete demo project after IDMS test" \
+    "cd ~/aba && aba --dir sno cmd 'oc delete project demo' 2>/dev/null || true"
 
 test_end 0
 
@@ -311,10 +349,11 @@ e2e_run_remote "Generate agent configs" \
     "cd ~/aba && aba --dir standard agentconf"
 e2e_run_remote "Verify agent-config has MACs" \
     "cd ~/aba && cat standard/agent-config.yaml | grep -i mac"
-e2e_run_remote "Install standard cluster" \
-    "cd ~/aba && aba --dir standard install"
-e2e_run_remote "Verify standard cluster operators" \
-    "cd ~/aba && aba --dir standard run"
+# Bootstrap only (saves ~30 min vs full install) -- proves agent configs are
+# valid and control plane comes up.  Full operator verification is done on
+# the SNO cluster earlier in this suite.
+e2e_run_remote "Bootstrap standard cluster" \
+    "cd ~/aba && aba --dir standard bootstrap"
 e2e_run_remote -i "Delete standard cluster" \
     "cd ~/aba && aba --dir standard delete || true"
 

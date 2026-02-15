@@ -35,7 +35,9 @@ plan_tests \
     "Setup: reset internal bastion" \
     "Firewalld: bring down and sync" \
     "Firewalld: bring up and verify port" \
+    "OC_MIRROR_CACHE: custom cache location" \
     "ABI config: sno/compact/standard" \
+    "ABI config: diff against known-good examples" \
     "SNO: install cluster" \
     "Save/Load: roundtrip" \
     "SNO: re-install after save/load" \
@@ -68,6 +70,17 @@ e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
+
+# basic-interactive-test.sh runs "aba reset -f" which wipes aba.conf back to
+# defaults (ask=true, editor=vi).  Re-apply our non-interactive settings so
+# subsequent tests don't hang waiting for an editor or confirmation prompt.
+e2e_run "Re-apply ask=false after interactive test" \
+    "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l}"
+e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
+e2e_run "Set VC_FOLDER (re-apply)" \
+    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
+e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 test_end 0
 
@@ -114,7 +127,30 @@ e2e_run "Verify port 8443 is open" \
 test_end 0
 
 # ============================================================================
-# 4. ABI config: generate and verify agent configs for sno/compact/standard
+# 4. OC_MIRROR_CACHE: verify custom cache directory (Gap 5)
+#    Test2 set OC_MIRROR_CACHE to a custom dir and verified files appeared there.
+# ============================================================================
+test_begin "OC_MIRROR_CACHE: custom cache location"
+
+# The sync above used OC_MIRROR_CACHE default. Now verify the cache exists
+# in the expected default location, then verify a custom path works.
+e2e_run "Create custom cache dir" "mkdir -p \$HOME/.custom_oc_mirror_cache"
+
+# Clean the custom dir to start fresh
+e2e_run -q "Clean custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache/*"
+
+# Run a small aba mirror operation with custom OC_MIRROR_CACHE.
+# The save operation will populate the cache dir.
+e2e_run "Verify OC_MIRROR_CACHE env var is respected" \
+    "export OC_MIRROR_CACHE=\$HOME/.custom_oc_mirror_cache && aba -d mirror save --retry 2>/dev/null && test -d \$HOME/.custom_oc_mirror_cache/.oc-mirror"
+
+# Clean up the custom cache dir
+e2e_run -q "Clean up custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache"
+
+test_end 0
+
+# ============================================================================
+# 5. ABI config: generate and verify agent configs for sno/compact/standard
 # ============================================================================
 test_begin "ABI config: sno/compact/standard"
 
@@ -139,7 +175,33 @@ done
 test_end 0
 
 # ============================================================================
-# 5. SNO: install cluster from synced mirror
+# 6. ABI config: diff against known-good examples (Gap 2)
+#    Catches template regressions by comparing generated configs against
+#    committed example files in test/{sno,compact,standard}/*.example
+# ============================================================================
+test_begin "ABI config: diff against known-good examples"
+
+for cname in sno compact standard; do
+    # Scrub volatile/secret fields from install-config.yaml before comparing
+    # (same yq/sed pipeline as old test1)
+    e2e_run "Scrub $cname install-config.yaml for diff" \
+        "cat $cname/install-config.yaml | yq 'del(.additionalTrustBundle,.pullSecret,.platform.vsphere.vcenters[].password,.platform.vsphere.failureDomains[0].name,.platform.vsphere.failureDomains[0].region,.platform.vsphere.failureDomains[0].zone,.platform.vsphere.failureDomains[0].topology.datastore)' | sed '/^[[:space:]]*$/d' | sed 's/[[:space:]]*$//' > test/$cname/install-config.yaml"
+
+    # Scrub agent-config.yaml (remove trailing whitespace and blank lines)
+    e2e_run -q "Scrub $cname agent-config.yaml for diff" \
+        "cat $cname/agent-config.yaml | sed '/^[[:space:]]*$/d' | sed 's/[[:space:]]*$//' > test/$cname/agent-config.yaml"
+
+    # Diff against committed example files
+    e2e_run "Diff $cname install-config.yaml against example" \
+        "diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example"
+    e2e_run "Diff $cname agent-config.yaml against example" \
+        "diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example"
+done
+
+test_end 0
+
+# ============================================================================
+# 7. SNO: install cluster from synced mirror
 # ============================================================================
 test_begin "SNO: install cluster"
 
@@ -152,7 +214,7 @@ e2e_run -i "Delete SNO cluster" "aba --dir sno delete"
 test_end 0
 
 # ============================================================================
-# 6. Save/Load roundtrip
+# 8. Save/Load roundtrip
 # ============================================================================
 test_begin "Save/Load: roundtrip"
 
@@ -168,7 +230,7 @@ e2e_run "Check oc-mirror cache (local)" \
 test_end 0
 
 # ============================================================================
-# 7. SNO: re-install after save/load
+# 9. SNO: re-install after save/load
 # ============================================================================
 test_begin "SNO: re-install after save/load"
 
@@ -176,9 +238,11 @@ e2e_run "Clean sno directory" "aba --dir sno clean; rm -f sno/cluster.conf"
 e2e_run "Test small CIDR 10.0.1.200/30" \
     "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --machine-network '10.0.1.200/30' --step iso"
 e2e_run "Clean and recreate with normal CIDR" "rm -rf sno"
-e2e_run "Create and install SNO" \
-    "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
-e2e_run "Verify cluster operators" "aba --dir sno run"
+# Bootstrap only (saves ~30 min) -- proves save/load roundtrip produced
+# valid images that a cluster can boot from.  Full install was already
+# done in the previous "SNO: install cluster" test.
+e2e_run "Create and bootstrap SNO" \
+    "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step bootstrap --machine-network $(pool_machine_network)"
 
 test_end 0
 

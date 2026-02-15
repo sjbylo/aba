@@ -28,6 +28,7 @@ E2E_RESUME_FILE=""     # If set, skip tests already passed in a previous run
 # Log file for the current suite run
 E2E_LOG_DIR="${_E2E_DIR}/logs"
 E2E_LOG_FILE=""
+E2E_SUMMARY_FILE=""   # Summary log: only test names, PASS/FAIL, commands (no verbose output)
 
 # Current suite / test tracking
 _E2E_SUITE_NAME=""
@@ -53,11 +54,24 @@ _e2e_color() {
     fi
 }
 
+# Force ANSI colors regardless of TTY (for log files viewed via tail -f)
+_e2e_color_always() {
+    local code="$1"; shift
+    printf '\033[%sm%s\033[0m' "$code" "$*"
+}
+
 _e2e_red()    { _e2e_color "0;31" "$@"; }
 _e2e_green()  { _e2e_color "0;32" "$@"; }
 _e2e_yellow() { _e2e_color "0;33" "$@"; }
 _e2e_cyan()   { _e2e_color "0;36" "$@"; }
 _e2e_bold()   { _e2e_color "1"    "$@"; }
+
+# Always-colored variants (for summary log, always readable via tail -f)
+_e2e_Red()    { _e2e_color_always "1;31" "$@"; }
+_e2e_Green()  { _e2e_color_always "1;32" "$@"; }
+_e2e_Yellow() { _e2e_color_always "1;33" "$@"; }
+_e2e_Cyan()   { _e2e_color_always "1;36" "$@"; }
+_e2e_Bold()   { _e2e_color_always "1"    "$@"; }
 
 # --- Logging ----------------------------------------------------------------
 
@@ -80,11 +94,25 @@ _e2e_draw_line() {
     printf '%*s\n' "$cols" '' | tr ' ' "$char"
 }
 
+# --- Summary Log ------------------------------------------------------------
+# A tidy summary file showing only test names, commands, PASS/FAIL, and timing.
+# Colors are forced on (ANSI) so "tail -f" is always readable.
+# This mirrors the "test/test.log" pattern from the old test-cmd framework.
+
+_e2e_summary() {
+    # Write a color-coded line to the summary log (always with ANSI colors)
+    [ -z "${E2E_SUMMARY_FILE:-}" ] && return
+    local ts
+    ts="$(date '+%H:%M:%S')"
+    echo "$ts  $*" >> "$E2E_SUMMARY_FILE"
+}
+
 # --- Notification -----------------------------------------------------------
 
 _e2e_notify() {
     if [ -n "$NOTIFY_CMD" ]; then
-        echo "$@" | $NOTIFY_CMD "$@" 2>/dev/null || true
+        # Pass message as args only (not also via stdin, which caused duplicates)
+        $NOTIFY_CMD "$@" < /dev/null 2>/dev/null || true
     fi
 }
 
@@ -126,26 +154,59 @@ _update_plan() {
 _print_progress() {
     [ ${#_E2E_PLAN_NAMES[@]} -eq 0 ] && return
 
+    # Print to screen
     echo ""
     _e2e_draw_line "="
     printf "  %-50s %s\n" "TEST" "STATUS"
     _e2e_draw_line "-"
 
-    local i status_str
+    local i status_str status_str_color
     for i in "${!_E2E_PLAN_NAMES[@]}"; do
         case "${_E2E_PLAN_STATUS[$i]}" in
-            PASS)    status_str="$(_e2e_green "PASS")" ;;
-            FAIL)    status_str="$(_e2e_red "FAIL")" ;;
-            SKIP)    status_str="$(_e2e_yellow "SKIP")" ;;
-            RUNNING) status_str="$(_e2e_cyan "RUNNING...")" ;;
-            DONE)    status_str="$(_e2e_green "DONE (resumed)")" ;;
-            *)       status_str="  --" ;;
+            PASS)    status_str="$(_e2e_green "PASS")";          status_str_color="$(_e2e_Green "PASS")" ;;
+            FAIL)    status_str="$(_e2e_red "FAIL")";            status_str_color="$(_e2e_Red "FAIL")" ;;
+            SKIP)    status_str="$(_e2e_yellow "SKIP")";         status_str_color="$(_e2e_Yellow "SKIP")" ;;
+            RUNNING) status_str="$(_e2e_cyan "RUNNING...")";     status_str_color="$(_e2e_Cyan "RUNNING...")" ;;
+            DONE)    status_str="$(_e2e_green "DONE (resumed)")"; status_str_color="$(_e2e_Green "DONE (resumed)")" ;;
+            *)       status_str="  --";                          status_str_color="  --" ;;
         esac
         printf "  %-50s %s\n" "${_E2E_PLAN_NAMES[$i]}" "$status_str"
     done
 
     _e2e_draw_line "="
     echo ""
+
+    # Also write the progress table to the summary log (with forced colors for tail -f)
+    _e2e_summary ""
+    _e2e_summary "  =========================================================================================================="
+    _e2e_summary "  $(printf '%-50s %s' "TEST" "STATUS")"
+    _e2e_summary "  ----------------------------------------------------------------------------------------------------------"
+    for i in "${!_E2E_PLAN_NAMES[@]}"; do
+        case "${_E2E_PLAN_STATUS[$i]}" in
+            PASS)    status_str_color="$(_e2e_Green "PASS")" ;;
+            FAIL)    status_str_color="$(_e2e_Red "FAIL")" ;;
+            SKIP)    status_str_color="$(_e2e_Yellow "SKIP")" ;;
+            RUNNING) status_str_color="$(_e2e_Cyan "RUNNING...")" ;;
+            DONE)    status_str_color="$(_e2e_Green "DONE (resumed)")" ;;
+            *)       status_str_color="  --" ;;
+        esac
+        _e2e_summary "  $(printf '%-50s' "${_E2E_PLAN_NAMES[$i]}") $status_str_color"
+    done
+    _e2e_summary "  =========================================================================================================="
+    _e2e_summary ""
+
+    # Append to the full log too (plain text, no colors)
+    if [ -n "${E2E_LOG_FILE:-}" ]; then
+        {
+            echo ""
+            printf '  %-50s %s\n' "TEST" "STATUS"
+            printf '  %s\n' "------------------------------------------"
+            for i in "${!_E2E_PLAN_NAMES[@]}"; do
+                printf '  %-50s %s\n' "${_E2E_PLAN_NAMES[$i]}" "${_E2E_PLAN_STATUS[$i]}"
+            done
+            echo ""
+        } >> "$E2E_LOG_FILE"
+    fi
 }
 
 # --- Suite Lifecycle --------------------------------------------------------
@@ -159,9 +220,20 @@ suite_begin() {
     _E2E_SKIP_COUNT=0
     _E2E_START_TIME=$(date +%s)
 
-    # Set up log file
+    # Set up log files (timestamped for history, symlinks for easy access)
     mkdir -p "$E2E_LOG_DIR"
-    E2E_LOG_FILE="${E2E_LOG_DIR}/${suite_name}-$(date +%Y%m%d-%H%M%S).log"
+    local ts_stamp
+    ts_stamp="$(date +%Y%m%d-%H%M%S)"
+    E2E_LOG_FILE="${E2E_LOG_DIR}/${suite_name}-${ts_stamp}.log"
+    E2E_SUMMARY_FILE="${E2E_LOG_DIR}/${suite_name}-${ts_stamp}-summary.log"
+
+    # Per-suite symlinks: <suite>-latest.log, <suite>-summary.log
+    ln -sf "$(basename "$E2E_LOG_FILE")" "${E2E_LOG_DIR}/${suite_name}-latest.log"
+    ln -sf "$(basename "$E2E_SUMMARY_FILE")" "${E2E_LOG_DIR}/${suite_name}-summary.log"
+
+    # Global symlinks: latest.log, summary.log  (always point to the active suite)
+    ln -sf "$(basename "$E2E_LOG_FILE")" "${E2E_LOG_DIR}/latest.log"
+    ln -sf "$(basename "$E2E_SUMMARY_FILE")" "${E2E_LOG_DIR}/summary.log"
 
     # Initialize state file for checkpointing
     E2E_STATE_FILE="${E2E_LOG_DIR}/${suite_name}.state"
@@ -170,6 +242,7 @@ suite_begin() {
     _e2e_draw_line "="
     _e2e_log_and_print "$(_e2e_bold "SUITE: $suite_name")"
     _e2e_draw_line "="
+    _e2e_summary "$(_e2e_Bold "========== SUITE: $suite_name ==========")"
     _e2e_notify "Suite started: $suite_name ($(date))"
 }
 
@@ -188,9 +261,11 @@ suite_end() {
     _print_progress
 
     if [ "$_E2E_FAIL_COUNT" -gt 0 ]; then
+        _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, ${mins}m ${secs}s) ==========")"
         _e2e_notify "FAILED: $_E2E_SUITE_NAME -- $_E2E_FAIL_COUNT failures ($(date))"
         return 1
     else
+        _e2e_summary "$(_e2e_Green "========== PASSED: $_E2E_SUITE_NAME  (${_E2E_PASS_COUNT} passed, ${mins}m ${secs}s) ==========")"
         _e2e_notify "PASSED: $_E2E_SUITE_NAME -- $_E2E_PASS_COUNT passed (${mins}m ${secs}s)"
         return 0
     fi
@@ -206,6 +281,8 @@ test_begin() {
     _update_plan "$test_name" "RUNNING"
     _e2e_draw_line "-"
     _e2e_log_and_print "$(_e2e_cyan "TEST [$_E2E_TEST_COUNT]: $test_name")"
+    _e2e_summary ""
+    _e2e_summary "$(_e2e_Cyan "--- TEST [$_E2E_TEST_COUNT]: $test_name ---")"
 }
 
 test_end() {
@@ -216,10 +293,12 @@ test_end() {
         (( _E2E_PASS_COUNT++ )) || true
         _update_plan "$test_name" "PASS"
         _e2e_log_and_print "$(_e2e_green "  PASS: $test_name")"
+        _e2e_summary "$(_e2e_Green "  PASS: $test_name")"
     else
         (( _E2E_FAIL_COUNT++ )) || true
         _update_plan "$test_name" "FAIL"
         _e2e_log_and_print "$(_e2e_red "  FAIL: $test_name")"
+        _e2e_summary "$(_e2e_Red "  FAIL: $test_name")"
     fi
 
     _checkpoint_write "$test_name" "$result"
@@ -231,6 +310,7 @@ test_skip() {
     (( _E2E_SKIP_COUNT++ )) || true
     _update_plan "$test_name" "SKIP"
     _e2e_log_and_print "$(_e2e_yellow "  SKIP: $test_name")"
+    _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
     _checkpoint_write "$test_name" "SKIP"
     _E2E_CURRENT_TEST=""
 }
@@ -244,6 +324,7 @@ run_test() {
         (( _E2E_TEST_COUNT++ )) || true
         _update_plan "$test_name" "DONE"
         _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"
+        _e2e_summary "$(_e2e_Green "  DONE (resumed): $test_name")"
         return 0
     fi
 
@@ -371,6 +452,9 @@ e2e_run() {
 
     _e2e_draw_line "."
     _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_cyan "($cmd)") $(_e2e_yellow "[$PWD -> ${host:-localhost}]")"
+    # Summary: show command description and the actual command being run
+    _e2e_summary "  ----------------------------------------"
+    _e2e_summary "  $mark $(_e2e_Green "$description") $(_e2e_Cyan "($cmd)")"
 
     # Outer loop: interactive retry wraps the automatic retry loop
     while true; do
@@ -405,6 +489,7 @@ e2e_run() {
             # Success
             if [ $ret -eq 0 ]; then
                 if [ $attempt -gt 1 ]; then
+                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description"
                     _e2e_notify "Command recovered: $description ($(date))"
                 fi
                 _e2e_log "  OK (attempt $attempt)"
@@ -419,10 +504,12 @@ e2e_run() {
 
             _e2e_log "  Attempt $attempt/$tot_cnt failed (exit=$ret)"
             _e2e_log_and_print "    $(_e2e_yellow "Attempt ($attempt/$tot_cnt) failed (exit=$ret): $description")"
+            _e2e_summary "    $(_e2e_Yellow "Attempt ($attempt/$tot_cnt) failed (exit=$ret)") $description"
 
             # Exhausted retries?
             if [ $attempt -ge $tot_cnt ]; then
                 _e2e_log "  All $tot_cnt attempts exhausted"
+                _e2e_summary "    $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
                 break  # fall through to interactive prompt
             fi
 
@@ -489,15 +576,18 @@ e2e_run_must_fail() {
     _e2e_draw_line "."
     _e2e_log_and_print "  L $description (expect failure)"
     _e2e_log "    CMD (must-fail): $cmd"
+    _e2e_summary "  L $(_e2e_Yellow "$description (expect failure)") $(_e2e_Cyan "($cmd)")"
 
     local ret=0
     ( eval "$cmd" ) >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected (exit=$ret)"
+        _e2e_summary "    $(_e2e_Green "OK: failed as expected (exit=$ret)")"
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
+        _e2e_summary "    $(_e2e_Red "UNEXPECTED SUCCESS: $description")"
         return 1
     fi
 }
@@ -518,6 +608,7 @@ e2e_run_must_fail_remote() {
     _e2e_draw_line "."
     _e2e_log_and_print "  R $description (expect failure)"
     _e2e_log "    CMD (must-fail on $INTERNAL_BASTION): $cmd"
+    _e2e_summary "  R $(_e2e_Yellow "$description (expect failure)") $(_e2e_Cyan "($cmd)")"
 
     local ret=0
     ssh -t -o LogLevel=ERROR "$INTERNAL_BASTION" -- \
@@ -526,9 +617,11 @@ e2e_run_must_fail_remote() {
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected (exit=$ret)"
+        _e2e_summary "    $(_e2e_Green "OK: failed as expected (exit=$ret)")"
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
+        _e2e_summary "    $(_e2e_Red "UNEXPECTED SUCCESS: $description")"
         return 1
     fi
 }

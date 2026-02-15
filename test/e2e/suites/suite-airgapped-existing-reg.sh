@@ -37,7 +37,9 @@ plan_tests \
     "Must-fail checks" \
     "Save images to disk" \
     "Tar-pipe transfer to bastion" \
+    "Load without regcreds (must fail)" \
     "Load images into existing registry" \
+    "Compact: install and delete cluster" \
     "SNO: install cluster" \
     "Deploy vote-app" \
     "ACM: install operators" \
@@ -70,6 +72,16 @@ e2e_run "Set operator sets" \
 
 e2e_run "Reset aba" "aba reset -f"
 e2e_run "Clean cluster dirs" "rm -rf sno compact standard"
+
+# aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
+e2e_run "Re-apply config after reset" \
+    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l}"
+e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
+e2e_run "Set VC_FOLDER (re-apply)" \
+    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
+e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Set operator sets (re-apply)" \
+    "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 test_end 0
 
@@ -136,7 +148,26 @@ e2e_run -r 3 3 "Pipe tar to bastion" \
 test_end 0
 
 # ============================================================================
-# 7. Load images into existing registry
+# 7. Load without regcreds -- must fail (Gap 4: common user mistake)
+# ============================================================================
+test_begin "Load without regcreds (must fail)"
+
+# Before regcreds are in place, loading should fail with a clear error.
+# This validates error handling for a common user mistake.
+e2e_run_remote -q "Remove any existing regcreds" \
+    "cd ~/aba && rm -rf mirror/regcreds 2>/dev/null || true"
+
+e2e_run_must_fail_remote "Load without regcreds should fail" \
+    "cd ~/aba && aba -d mirror load --retry 2>/dev/null"
+
+# Now restore regcreds so subsequent steps work
+e2e_run_remote -q "Restore regcreds from existing registry" \
+    "cd ~/aba && aba -d mirror verify 2>/dev/null || true"
+
+test_end 0
+
+# ============================================================================
+# 8. Load images into existing registry
 # ============================================================================
 test_begin "Load images into existing registry"
 
@@ -146,7 +177,23 @@ e2e_run_remote -r 15 3 "Load images into registry" \
 test_end 0
 
 # ============================================================================
-# 8. Install SNO cluster
+# 9. Compact: bootstrap and delete (Gap 1: coverage for 3-node combo)
+#    Full install takes ~40 min; bootstrap proves images loaded correctly
+#    and the cluster can start (control plane comes up). Saves ~30 min.
+# ============================================================================
+test_begin "Compact: install and delete cluster"
+
+e2e_run_remote "Create compact cluster (bootstrap only)" \
+    "cd ~/aba && aba cluster -n compact -t compact --starting-ip $(pool_compact_api_vip) --step bootstrap"
+e2e_run_remote -i "Delete compact cluster" \
+    "cd ~/aba && aba --dir compact delete || true"
+e2e_run_remote -q "Clean compact dir" \
+    "cd ~/aba && rm -rf compact"
+
+test_end 0
+
+# ============================================================================
+# 10. Install SNO cluster
 # ============================================================================
 test_begin "SNO: install cluster"
 
@@ -160,7 +207,7 @@ e2e_run_remote "Check cluster operators" \
 test_end 0
 
 # ============================================================================
-# 9. Deploy vote-app
+# 11. Deploy vote-app
 # ============================================================================
 test_begin "Deploy vote-app"
 
@@ -170,7 +217,7 @@ e2e_run_remote "Deploy vote-app" \
 test_end 0
 
 # ============================================================================
-# 10. ACM: install operators
+# 12. ACM: install operators
 # ============================================================================
 test_begin "ACM: install operators"
 
@@ -185,7 +232,7 @@ e2e_run_remote -r 15 3 "Load ACM images" \
 test_end 0
 
 # ============================================================================
-# 11. ACM: MultiClusterHub
+# 13. ACM: MultiClusterHub
 # ============================================================================
 test_begin "ACM: MultiClusterHub"
 
@@ -201,7 +248,7 @@ e2e_run_remote -r 20 3 "Wait for MCH ready" \
 test_end 0
 
 # ============================================================================
-# 12. NTP: day2 configuration and chronyc verify
+# 14. NTP: day2 configuration and chronyc verify
 # ============================================================================
 test_begin "NTP: day2 and chronyc verify"
 
@@ -213,7 +260,7 @@ e2e_run_remote -r 5 3 "Verify chronyc sources" \
 test_end 0
 
 # ============================================================================
-# 13. Shutdown
+# 15. Shutdown
 # ============================================================================
 test_begin "Shutdown cluster"
 
