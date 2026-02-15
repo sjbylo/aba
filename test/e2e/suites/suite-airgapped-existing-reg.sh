@@ -49,6 +49,9 @@ plan_tests \
 
 suite_begin "airgapped-existing-reg"
 
+# Pre-flight: abort immediately if the internal bastion (disN) is unreachable
+preflight_ssh
+
 # ============================================================================
 # 1. Setup: install aba and configure
 # ============================================================================
