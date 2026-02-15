@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Suite: Clone Check
+# Suite: Clone and configure pool VMs (coordinator-only, needs govc)
 # =============================================================================
 # Purpose: Clone pool VMs, configure them fully, and verify everything.
 #          con# = connected bastion (internet gateway via masquerade)
@@ -47,11 +47,13 @@ VF="${VMWARE_CONF:-~/.vmware.conf}"
 clone_with_macs() {
     local clone="$1"
 
-    e2e_run -q "Destroy old $clone (if exists)" \
-        "govc vm.power -off $clone 2>/dev/null; govc vm.destroy $clone 2>/dev/null; true"
+    # -i: VM may not exist on first run
+    e2e_run -i -q "Destroy old $clone (if exists)" \
+        "govc vm.power -off $clone 2>&1; govc vm.destroy $clone"
 
+    # power-off may fail if template is already off -- that's fine
     e2e_run "Revert template to snapshot" \
-        "govc vm.power -off $TEMPLATE 2>/dev/null || true; govc snapshot.revert -vm $TEMPLATE ${VM_SNAPSHOT:-aba-test}"
+        "govc vm.power -off $TEMPLATE 2>&1; govc snapshot.revert -vm $TEMPLATE ${VM_SNAPSHOT:-aba-test}"
 
     local ds_flag=""
     [ -n "${VM_DATASTORE:-}" ] && ds_flag="-ds=${VM_DATASTORE}"
@@ -66,7 +68,7 @@ clone_with_macs() {
             local device="ethernet-${i}"
             local mac="${macs[$i]}"
             local nic_net
-            nic_net=$(_get_nic_network "$clone" "$device" 2>/dev/null) || true
+            nic_net=$(_get_nic_network "$clone" "$device" 2>&1) || true
             if [ -z "$nic_net" ]; then
                 # Device might not exist on this template (e.g. 2-NIC template with 3 MACs)
                 if ! govc device.info -vm "$clone" "$device" &>/dev/null; then
@@ -108,17 +110,17 @@ suite_begin "clone-check"
 # ============================================================================
 test_begin "Prereqs: govc and VMware connectivity"
 
-e2e_run -q "Install aba (if needed)" "./install 2>/dev/null || true"
+e2e_run -q "Install aba (if needed)" "./install"
 e2e_run "Copy vmware.conf" "cp -v $VF vmware.conf"
 e2e_run -q "Set VC_FOLDER" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
 
-source <(normalize-vmware-conf 2>/dev/null) || true
+source <(normalize-vmware-conf) || { echo "WARNING: normalize-vmware-conf failed" >&2; }
 
 e2e_run "Install govc" "aba --dir cli ~/bin/govc"
 e2e_run "Verify template exists: $TEMPLATE" "govc vm.info $TEMPLATE"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 2. Clone both VMs (powered off, MACs set)
@@ -131,7 +133,7 @@ clone_with_macs "$DIS_NAME"
 e2e_run "Verify $CON_NAME exists" "govc vm.info $CON_NAME"
 e2e_run "Verify $DIS_NAME exists" "govc vm.info $DIS_NAME"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 3. Power on both and wait for SSH
@@ -147,7 +149,7 @@ sleep "${VM_BOOT_DELAY:-8}"
 e2e_run "Wait for SSH on $CON_HOST" "_vm_wait_ssh $CON_HOST $DEF_USER"
 e2e_run "Wait for SSH on $DIS_HOST" "_vm_wait_ssh $DIS_HOST $DEF_USER"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 4. SSH keys: root access
@@ -160,7 +162,7 @@ e2e_run "SSH keys on $DIS_NAME" "_vm_setup_ssh_keys $DIS_HOST $DEF_USER"
 e2e_run "Verify root SSH on $CON_HOST" "ssh root@$CON_HOST whoami | grep root"
 e2e_run "Verify root SSH on $DIS_HOST" "ssh root@$DIS_HOST whoami | grep root"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 5. Network config: role-aware (connected vs disconnected)
@@ -173,7 +175,7 @@ e2e_run "Configure network on $CON_NAME (connected)" \
 e2e_run "Configure network on $DIS_NAME (disconnected)" \
     "_vm_setup_network $DIS_HOST $DEF_USER $DIS_NAME"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 6. Firewall + masquerade on connected bastion
@@ -183,7 +185,7 @@ test_begin "Firewall: masquerade + NAT on $CON_NAME"
 e2e_run "Setup firewall + masquerade on $CON_NAME" \
     "_vm_setup_firewall $CON_HOST $DEF_USER"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 7. DNS: dnsmasq on connected bastion (serves cluster DNS for this pool)
@@ -193,7 +195,7 @@ test_begin "DNS: dnsmasq on $CON_NAME for pool $POOL_NUM cluster records"
 e2e_run "Setup dnsmasq on $CON_NAME" \
     "_vm_setup_dnsmasq $CON_HOST $DEF_USER $CON_NAME"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 8. NTP: chrony and timezone (AFTER network + firewall so dis1 can reach NTP)
@@ -203,7 +205,7 @@ test_begin "NTP: chrony and timezone on both hosts"
 e2e_run "NTP/time on $CON_NAME" "_vm_setup_time $CON_HOST $DEF_USER"
 e2e_run "NTP/time on $DIS_NAME" "_vm_setup_time $DIS_HOST $DEF_USER"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 9. Cleanup: caches, podman, home
@@ -219,7 +221,7 @@ e2e_run "Cleanup podman on $DIS_NAME" "_vm_cleanup_podman $DIS_HOST $DEF_USER"
 e2e_run "Cleanup home on $CON_NAME" "_vm_cleanup_home $CON_HOST $DEF_USER"
 e2e_run "Cleanup home on $DIS_NAME" "_vm_cleanup_home $DIS_HOST $DEF_USER"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 10. Config: vmware.conf, test user, install aba on con1
@@ -234,7 +236,7 @@ e2e_run "Create test user on $DIS_NAME" "_vm_create_test_user $DIS_HOST $DEF_USE
 
 e2e_run "Install aba on $CON_NAME" "_vm_install_aba $CON_HOST $DEF_USER"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 11. Harden dis1: remove RPMs, pull-secret, proxy
@@ -245,7 +247,7 @@ e2e_run "Remove RPMs on $DIS_NAME" "_vm_remove_rpms $DIS_HOST $DEF_USER"
 e2e_run "Remove pull-secret on $DIS_NAME" "_vm_remove_pull_secret $DIS_HOST $DEF_USER"
 e2e_run "Remove proxy on $DIS_NAME" "_vm_remove_proxy $DIS_HOST $DEF_USER"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 12. Verify everything
@@ -379,7 +381,7 @@ e2e_run "$CON_HOST: vmware.conf exists" \
 e2e_run "$DIS_HOST: vmware.conf exists" \
     "ssh $DEF_USER@$DIS_HOST test -s ~/.vmware.conf"
 
-test_end 0
+test_end
 
 # ============================================================================
 

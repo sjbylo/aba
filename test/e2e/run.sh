@@ -45,6 +45,7 @@ CLI_CLEAN=""
 CLI_NOTIFY=""
 CLI_NO_NOTIFY=""
 CLI_DRY_RUN=""
+CLI_LIST=""
 CLI_CHANNEL=""
 CLI_VERSION=""
 CLI_RHEL=""
@@ -90,6 +91,8 @@ parse_args() {
                 CLI_NO_NOTIFY=1; shift ;;
             --dry-run)
                 CLI_DRY_RUN=1; shift ;;
+            --list|-l)
+                CLI_LIST=1; shift ;;
             -c|--channel)
                 CLI_CHANNEL="$2"; shift 2 ;;
             -v|--version)
@@ -117,12 +120,14 @@ usage() {
 	  run.sh --suite NAME           Run a specific suite
 	  run.sh --all                  Run all suites sequentially
 	  run.sh --parallel --all       Run all suites across pools in parallel
+	  run.sh --list                 List available suites
 	  run.sh --destroy-pools        Power off all pool VMs
 	
 	Suite selection:
 	  --suite NAME          Run suite by name (e.g. connected-sync)
 	  --suites N1,N2,...    Run multiple suites (comma-separated)
 	  --all                 Run all suites found in suites/
+	  -l, --list            List available suite names and exit
 	
 	Parallel execution:
 	  --parallel            Dispatch suites to remote pools via SSH
@@ -147,6 +152,17 @@ usage() {
 	Notifications:
 	  --notify              Enable notifications (uses NOTIFY_CMD from config.env)
 	  --no-notify           Disable notifications
+	
+	Examples:
+	  run.sh --list                                  # Show available suites
+	  run.sh --suite connected-sync                  # Run one suite
+	  run.sh --suite connected-sync -i               # Interactive: prompt on failure
+	  run.sh --suite connected-sync --resume         # Resume, skip already-passed tests
+	  run.sh --suites connected-sync,network-advanced  # Run two suites
+	  run.sh --all --dry-run                         # Show execution plan
+	  run.sh --all                                   # Run all suites sequentially
+	  run.sh --parallel --all                        # Run all suites across pools
+	  run.sh -c fast -v l --suite connected-sync     # Override channel and version
 	
 	USAGE
 }
@@ -304,6 +320,14 @@ run_suite_local() {
         --exclude='.git/' \
         "$_ABA_ROOT/" "$con_host:~/aba/"
 
+    # Sync notify helper to conN (if it exists on coordinator)
+    local _notify_src
+    _notify_src="$(eval echo "$NOTIFY_CMD" 2>/dev/null)"
+    if [ -n "$_notify_src" ] && [ -x "$_notify_src" ]; then
+        echo "  Syncing $(basename "$_notify_src") to $con_host ..."
+        rsync -az "$_notify_src" "$con_host:$(dirname "$_notify_src")/"
+    fi
+
     # Build environment variable exports (same pattern as parallel.sh)
     local env_exports="export E2E_ON_BASTION=1; "
     local var
@@ -337,6 +361,28 @@ main() {
     # Apply CLI overrides AFTER config.env so they take precedence
     apply_params
 
+    # List suites and exit if requested
+    if [ -n "$CLI_LIST" ]; then
+        echo "Available suites:"
+        echo ""
+        local _suites _file _desc _tag
+        read -ra _suites <<< "$(all_suites)"
+        for s in "${_suites[@]}"; do
+            _file="$_RUN_DIR/suites/suite-${s}.sh"
+            _desc="$(grep -m1 '^# Suite:' "$_file" 2>/dev/null | sed 's/^# Suite: *//')"
+            # Tag coordinator-only suites (infra/provisioning)
+            _tag=""
+            grep -q '^E2E_COORDINATOR_ONLY=true' "$_file" 2>/dev/null && _tag=" [infra]"
+            printf "  %-30s %s%s\n" "$s" "$_desc" "$_tag"
+        done
+        echo ""
+        echo "Note: [infra] suites provision pool VMs (run via --create-pools or manually)."
+        echo ""
+        echo "Run:  test/e2e/run.sh --suite <name>"
+        echo "      test/e2e/run.sh --suite <name> -i   # interactive (prompt on failure)"
+        exit 0
+    fi
+
     # Destroy pools and exit if requested
     if [ -n "$CLI_DESTROY_POOLS" ]; then
         destroy_pools --all
@@ -357,7 +403,7 @@ main() {
         # Handle comma-separated suite list
         IFS=',' read -ra suites_to_run <<< "$CLI_SUITE"
     else
-        echo "ERROR: Specify --suite NAME or --all" >&2
+        echo "ERROR: Specify --suite NAME, --all, or --list to see available suites" >&2
         usage
         exit 1
     fi

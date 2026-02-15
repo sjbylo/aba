@@ -59,7 +59,7 @@ setup_aba_from_scratch
 e2e_run "Install aba" "./install"
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
-e2e_run "Configure aba.conf" "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l}"
+e2e_run "Configure aba.conf" "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l} --base-domain $(pool_domain)"
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=${TEST_CHANNEL:-stable} aba.conf"
@@ -78,14 +78,14 @@ e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 # defaults (ask=true, editor=vi).  Re-apply our non-interactive settings so
 # subsequent tests don't hang waiting for an editor or confirmation prompt.
 e2e_run "Re-apply ask=false after interactive test" \
-    "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l}"
+    "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l} --base-domain $(pool_domain)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
 e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 2. Setup: reset internal bastion (reuse clone-check's disN)
@@ -94,40 +94,43 @@ test_begin "Setup: reset internal bastion"
 
 reset_internal_bastion
 
-test_end 0
+test_end
 
 # ============================================================================
 # 3. Firewalld: bring down, sync, bring up, verify port
 # ============================================================================
 test_begin "Firewalld: bring down and sync"
 
-e2e_run "Show firewalld status" \
-    "ssh ${INTERNAL_BASTION} 'sudo firewall-offline-cmd --list-all; sudo systemctl status firewalld || true'"
+# -i: systemctl status returns non-zero when service is stopped -- that's info, not failure
+e2e_run -i "Show firewalld status" \
+    "ssh ${INTERNAL_BASTION} 'sudo firewall-offline-cmd --list-all; sudo systemctl status firewalld'"
 e2e_run "Bring down firewalld" \
     "ssh ${INTERNAL_BASTION} 'sudo systemctl disable firewalld; sudo systemctl stop firewalld'"
-e2e_run "Show firewalld status (should be down)" \
-    "ssh ${INTERNAL_BASTION} 'sudo systemctl status firewalld || true'"
+# -i: systemctl status returns non-zero for stopped service (expected here)
+e2e_run -i "Show firewalld status (should be down)" \
+    "ssh ${INTERNAL_BASTION} 'sudo systemctl status firewalld'"
 
-e2e_run -r 15 3 "Sync images to remote registry" \
+e2e_run -r 3 2 "Sync images to remote registry" \
     "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
-e2e_run "Check oc-mirror cache location (local)" \
-    "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*' 2>/dev/null || true"
-e2e_run "Check oc-mirror cache location (remote)" \
-    "ssh ${INTERNAL_BASTION} 'sudo find ~/ -name .cache -path \"*/.oc-mirror/*\" 2>/dev/null || true'"
+# -i: diagnostic -- cache may not exist in all configurations
+e2e_run -i "Check oc-mirror cache location (local)" \
+    "find ~/ -name '.cache' -path '*/.oc-mirror/*'"
+e2e_run_remote -i "Check oc-mirror cache location (remote)" \
+    "find ~/ -name .cache -path '*/.oc-mirror/*'"
 
-test_end 0
+test_end
 
 test_begin "Firewalld: bring up and verify port"
 
 e2e_run "Bring up firewalld" \
     "ssh ${INTERNAL_BASTION} 'sudo systemctl enable firewalld; sudo systemctl start firewalld'"
 e2e_run "Show firewalld status (should be up)" \
-    "ssh ${INTERNAL_BASTION} 'sudo systemctl status firewalld || true'"
+    "ssh ${INTERNAL_BASTION} 'sudo systemctl status firewalld'"
 e2e_run "Verify port 8443 is open" \
     "ssh ${INTERNAL_BASTION} 'sudo firewall-cmd --list-all | grep \"ports: .*8443/tcp\"'"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 4. OC_MIRROR_CACHE: verify custom cache directory (Gap 5)
@@ -145,12 +148,12 @@ e2e_run -q "Clean custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache/*"
 # Run a small aba mirror operation with custom OC_MIRROR_CACHE.
 # The save operation will populate the cache dir.
 e2e_run "Verify OC_MIRROR_CACHE env var is respected" \
-    "export OC_MIRROR_CACHE=\$HOME/.custom_oc_mirror_cache && aba -d mirror save --retry 2>/dev/null && test -d \$HOME/.custom_oc_mirror_cache/.oc-mirror"
+    "export OC_MIRROR_CACHE=\$HOME/.custom_oc_mirror_cache && aba -d mirror save --retry && test -d \$HOME/.custom_oc_mirror_cache/.oc-mirror"
 
 # Clean up the custom cache dir
 e2e_run -q "Clean up custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 5. ABI config: generate and verify agent configs for sno/compact/standard
@@ -175,7 +178,7 @@ for cname in sno compact standard; do
         "aba --dir $cname iso"
 done
 
-test_end 0
+test_end
 
 # ============================================================================
 # 6. ABI config: diff against known-good examples (Gap 2)
@@ -201,7 +204,7 @@ for cname in sno compact standard; do
         "diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example"
 done
 
-test_end 0
+test_end
 
 # ============================================================================
 # 7. SNO: install cluster from synced mirror
@@ -212,9 +215,10 @@ e2e_run "Clean up previous sno" "rm -rf sno"
 e2e_run "Create and install SNO cluster" \
     "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Verify cluster operators" "aba --dir sno run"
+# -i: cluster may not be fully up if install failed; delete is best-effort cleanup
 e2e_run -i "Delete SNO cluster" "aba --dir sno delete"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 8. Save/Load roundtrip
@@ -225,12 +229,13 @@ e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
 e2e_run "Verify registry removed" \
     "ssh ${INTERNAL_BASTION} 'podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0$'"
 
-e2e_run -r 15 3 "Save and load images" "aba --dir mirror save load"
+e2e_run -r 3 2 "Save and load images" "aba --dir mirror save load"
 
-e2e_run "Check oc-mirror cache (local)" \
-    "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*' 2>/dev/null || true"
+# -i: diagnostic -- cache may not exist in all configurations
+e2e_run -i "Check oc-mirror cache (local)" \
+    "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*'"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 9. SNO: re-install after save/load
@@ -247,7 +252,7 @@ e2e_run "Clean and recreate with normal CIDR" "rm -rf sno"
 e2e_run "Create and bootstrap SNO" \
     "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step bootstrap --machine-network $(pool_machine_network)"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 8. Testy user: re-sync with custom mirror configuration
@@ -255,7 +260,7 @@ test_end 0
 test_begin "Testy user: re-sync with custom mirror conf"
 
 e2e_run "Uninstall registry" "aba --dir mirror uninstall"
-e2e_run -r 15 3 "Save and reload images" "aba --dir mirror save load"
+e2e_run -r 3 2 "Save and reload images" "aba --dir mirror save load"
 
 # Configure for testy user
 e2e_run "Set data_dir in mirror.conf" "aba -d mirror --data-dir '~/my-quay-mirror-test1'"
@@ -267,15 +272,16 @@ e2e_run "Set reg_ssh_key" "aba -d mirror --reg-ssh-key '~/.ssh/testy_rsa'"
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
 e2e_run "Clean saved data" "rm -rf mirror/save"
-e2e_run -r 15 3 "Sync images with testy user config" "aba --dir mirror sync --retry"
+e2e_run -r 3 2 "Sync images with testy user config" "aba --dir mirror sync --retry"
 
 # Re-install SNO with testy config
 e2e_run "Clean sno" "aba --dir sno clean; rm -f sno/cluster.conf"
 e2e_run "Install SNO" "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Verify operators" "aba --dir sno run"
+# -i: cluster may already be stopped or partially torn down
 e2e_run -i "Shutdown cluster" "yes | aba --dir sno shutdown --wait"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 9. Bare-metal: ISO simulation
@@ -294,7 +300,7 @@ e2e_run "Create agent configs (bare-metal)" \
     "aba cluster -n standard -t standard -i $(pool_standard_api_vip) -s install"
 e2e_run "Verify cluster.conf" "ls -l standard/cluster.conf"
 e2e_run "Verify agent configs" "ls -l standard/install-config.yaml standard/agent-config.yaml"
-e2e_run "Verify ISO not yet created" "! ls -l standard/iso-agent-based/agent.*.iso 2>/dev/null"
+e2e_run "Verify ISO not yet created" "! ls standard/iso-agent-based/agent.*.iso"
 e2e_run "Create ISO (bare-metal)" "aba --dir standard install"
 e2e_run "Verify ISO created" "ls -l standard/iso-agent-based/agent.*.iso"
 
@@ -302,7 +308,7 @@ e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
 e2e_run "Verify registry removed" \
     "ssh ${INTERNAL_BASTION} 'podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0$'"
 
-test_end 0
+test_end
 
 # ============================================================================
 

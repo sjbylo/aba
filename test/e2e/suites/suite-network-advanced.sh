@@ -53,7 +53,7 @@ setup_aba_from_scratch
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l}"
+    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l} --base-domain $(pool_domain)"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
@@ -67,7 +67,7 @@ e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set mirror host" \
     "sed -i 's/registry.example.com/${DIS_HOST} /g' ./mirror/mirror.conf"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 2. Reset internal bastion (reuse clone-check's disN)
@@ -76,24 +76,24 @@ test_begin "Setup: reset internal bastion"
 
 reset_internal_bastion
 
-test_end 0
+test_end
 
 # ============================================================================
 # 3. Save, transfer, and load images
 # ============================================================================
 test_begin "Setup: save and load images"
 
-e2e_run -r 15 3 "Save images" "aba -d mirror save --retry"
-e2e_run -r 3 3 "Transfer to bastion" \
+e2e_run -r 3 2 "Save images" "aba -d mirror save --retry"
+e2e_run -r 3 2 "Transfer to bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'mkdir -p ~/aba && cd ~/aba && tar xf -'"
 e2e_run_remote "Install aba on bastion" \
     "cd ~/aba && ./install"
 e2e_run_remote "Install registry" \
     "cd ~/aba && aba -d mirror install"
-e2e_run_remote -r 15 3 "Load images" \
+e2e_run_remote -r 3 2 "Load images" \
     "cd ~/aba && aba -d mirror load --retry"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 4. VLAN: verify interface on bastion
@@ -107,7 +107,7 @@ e2e_run_remote "Verify VLAN IP $(pool_vlan_gateway)" \
 e2e_run_remote "Check VLAN connection details" \
     "nmcli -f GENERAL,IP4 connection show ens224.10"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 5. VLAN SNO: boot and verify interface (no full install -- just SSH check)
@@ -124,7 +124,7 @@ e2e_run_remote "Create SNO config for VLAN" \
 
 # Configure VLAN in cluster.conf
 e2e_run_remote "Set VLAN and ports in cluster.conf" \
-    "cd ~/aba && sed -i 's/^#vlan_id=.*/vlan_id=10/' sno/cluster.conf 2>/dev/null || echo 'vlan_id=10' >> sno/cluster.conf; sed -i 's/^.*ports=.*/ports=ens160/' sno/cluster.conf 2>/dev/null || echo 'ports=ens160' >> sno/cluster.conf"
+    "cd ~/aba && grep -q '^#\\?vlan_id=' sno/cluster.conf && sed -i 's/^#\\?vlan_id=.*/vlan_id=10/' sno/cluster.conf || echo 'vlan_id=10' >> sno/cluster.conf; grep -q '^.*ports=' sno/cluster.conf && sed -i 's/^.*ports=.*/ports=ens160/' sno/cluster.conf || echo 'ports=ens160' >> sno/cluster.conf"
 
 # Generate ISO, upload to VMware, and boot VMs (but don't wait for full install)
 e2e_run_remote "Create ISO" "cd ~/aba && aba --dir sno iso"
@@ -140,11 +140,12 @@ e2e_run_remote "Verify NTP on VLAN node" \
     "cd ~/aba && timeout 8m bash -c 'until aba --dir sno ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
 
 # Cleanup: delete VMs, clean dir
+# -i: VMs may not exist if boot failed
 e2e_run_remote -i "Delete VLAN SNO VMs" \
-    "cd ~/aba && aba --dir sno delete || true"
+    "cd ~/aba && aba --dir sno delete"
 e2e_run_remote "Clean sno dir" "cd ~/aba && rm -rf sno"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 6. VLAN compact: boot and verify interface (multi-node VLAN test)
@@ -160,7 +161,7 @@ e2e_run_remote "Create compact config for VLAN" \
 
 # Configure VLAN in cluster.conf
 e2e_run_remote "Set VLAN and ports in compact cluster.conf" \
-    "cd ~/aba && sed -i 's/^#vlan_id=.*/vlan_id=10/' compact/cluster.conf 2>/dev/null || echo 'vlan_id=10' >> compact/cluster.conf; sed -i 's/^.*ports=.*/ports=ens160/' compact/cluster.conf 2>/dev/null || echo 'ports=ens160' >> compact/cluster.conf"
+    "cd ~/aba && grep -q '^#\\?vlan_id=' compact/cluster.conf && sed -i 's/^#\\?vlan_id=.*/vlan_id=10/' compact/cluster.conf || echo 'vlan_id=10' >> compact/cluster.conf; grep -q '^.*ports=' compact/cluster.conf && sed -i 's/^.*ports=.*/ports=ens160/' compact/cluster.conf || echo 'ports=ens160' >> compact/cluster.conf"
 
 # Generate ISO, upload, and boot VMs
 e2e_run_remote "Create ISO" "cd ~/aba && aba --dir compact iso"
@@ -174,11 +175,12 @@ e2e_run_remote "Verify ens160 is UP on compact VLAN node" \
     "cd ~/aba && aba --dir compact ssh --cmd 'ip a' | grep 'ens160:.*state UP'"
 
 # Cleanup
+# -i: VMs may not exist if boot failed
 e2e_run_remote -i "Delete VLAN compact VMs" \
-    "cd ~/aba && aba --dir compact delete || true"
+    "cd ~/aba && aba --dir compact delete"
 e2e_run_remote "Clean compact dir" "cd ~/aba && rm -rf compact"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 7. Bonding SNO: boot and verify bond0 (no full install -- just SSH check)
@@ -194,7 +196,7 @@ e2e_run_remote "Create SNO config for bonding" \
 
 # Configure bonding: multiple ports + bond name
 e2e_run_remote "Set bonding in cluster.conf" \
-    "cd ~/aba && sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224/' sno/cluster.conf 2>/dev/null || echo 'ports=ens160,ens192,ens224' >> sno/cluster.conf; echo 'bond=bond0' >> sno/cluster.conf"
+    "cd ~/aba && grep -q '^.*ports=' sno/cluster.conf && sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224/' sno/cluster.conf || echo 'ports=ens160,ens192,ens224' >> sno/cluster.conf; echo 'bond=bond0' >> sno/cluster.conf"
 
 # Generate ISO, upload, and boot VMs
 e2e_run_remote "Create ISO" "cd ~/aba && aba --dir sno iso"
@@ -214,21 +216,23 @@ e2e_run_remote "Verify NTP on bonded node" \
     "cd ~/aba && timeout 8m bash -c 'until aba --dir sno ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
 
 # Cleanup
+# -i: VMs may not exist if boot failed
 e2e_run_remote -i "Delete bonding SNO VMs" \
-    "cd ~/aba && aba --dir sno delete || true"
+    "cd ~/aba && aba --dir sno delete"
 e2e_run_remote "Clean sno dir" "cd ~/aba && rm -rf sno"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 8. Cleanup
 # ============================================================================
 test_begin "Cleanup"
 
+# -i: registry may not be installed if earlier steps failed
 e2e_run_remote -i "Uninstall registry" \
-    "cd ~/aba && aba -d mirror uninstall || true"
+    "cd ~/aba && aba -d mirror uninstall"
 
-test_end 0
+test_end
 
 # ============================================================================
 
