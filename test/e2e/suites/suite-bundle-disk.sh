@@ -50,29 +50,29 @@ suite_begin "bundle-disk"
 # ============================================================================
 test_begin "Setup: clean slate"
 
-# Remove RPMs so aba can test its auto-install logic (matches original test4 RPM list)
-e2e_run "Remove RPMs for clean install test" \
-    "sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y 2>/dev/null || true"
+# -i: some RPMs may not be installed -- dnf returns non-zero for missing packages
+e2e_run -i "Remove RPMs for clean install test" \
+    "sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y"
 
-# Clean podman images and storage
-e2e_run -q "Clean podman" \
-    "podman system prune --all --force 2>/dev/null; podman rmi --all 2>/dev/null; sudo rm -rf ~/.local/share/containers/storage; true"
+# -i: podman may have no images to prune
+e2e_run -i "Clean podman" \
+    "podman system prune --all --force; podman rmi --all; sudo rm -rf ~/.local/share/containers/storage"
 
 # Remove oc-mirror caches
 e2e_run -q "Remove oc-mirror caches" \
-    "rm -rf ~/.cache/agent; rm -rf \$HOME/*/.oc-mirror/.cache; true"
+    "rm -rf ~/.cache/agent; rm -rf \$HOME/*/.oc-mirror/.cache"
 
 # Clean up leftover state from previous test runs
 e2e_run -q "Remove old files" \
-    "rm -rf sno compact standard ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker || true"
+    "rm -rf sno compact standard ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
 # Ensure make is available (needed for aba reset)
 e2e_run -q "Ensure make is installed" \
     "which make || sudo dnf install make -y"
 
-# Reset aba if it was previously installed (-i: ignore failure if not installed)
+# -i: aba may not be installed yet (first run)
 e2e_run -i "Reset aba (if installed)" \
-    "aba reset -f 2>/dev/null || true"
+    "aba reset -f"
 
 test_end 0
 
@@ -84,7 +84,7 @@ test_begin "Setup: install and configure aba"
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-p}"
+    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-p} --base-domain $(pool_domain)"
 
 e2e_run -q "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
@@ -124,7 +124,7 @@ test_begin "Bundle with operator filters: create"
 e2e_run -q "Create temp dir" "mkdir -v -p ~/tmp"
 e2e_run -q "Clean previous light bundles" "rm -fv ~/tmp/delete-me*tar"
 
-e2e_run -r 3 3 "Create light bundle (channel=$TEST_CHANNEL version=$ocp_version ops=abatest+extras)" \
+e2e_run -r 3 2 "Create light bundle (channel=$TEST_CHANNEL version=$ocp_version ops=abatest+extras)" \
     "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks nginx-ingress-operator flux --base-domain $(pool_domain) -o ~/tmp/delete-me -y"
 
 test_end 0
@@ -149,7 +149,7 @@ test_begin "Bundle without operator filters: create"
 e2e_run -q "Clean previous bundles" "rm -fv /tmp/delete-me*tar"
 
 # No --op-sets, no --ops: zero operators are downloaded (only OCP release images)
-e2e_run -r 3 3 "Create bundle without operators (channel=$TEST_CHANNEL version=$ocp_version)" \
+e2e_run -r 3 2 "Create bundle without operators (channel=$TEST_CHANNEL version=$ocp_version)" \
     "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets --ops --base-domain $(pool_domain) -o /tmp/delete-me -y"
 
 test_end 0

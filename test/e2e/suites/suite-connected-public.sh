@@ -43,7 +43,7 @@ setup_aba_from_scratch
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l}"
+    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l} --base-domain $(pool_domain)"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
@@ -51,7 +51,7 @@ e2e_run "Set VC_FOLDER" \
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 2. Direct mode: create SNO config with -I direct
@@ -63,7 +63,7 @@ e2e_run "Create SNO config with -I direct" \
     "aba cluster -n sno -t sno -i $(pool_sno_ip) -I direct --step cluster.conf"
 e2e_run "Generate agent config" "aba -d sno agentconf"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 3. Direct mode: verify install-config.yaml content
@@ -79,9 +79,9 @@ e2e_run "Verify no imageContentSources in direct mode" \
 e2e_run "Verify no additionalTrustBundle in direct mode" \
     "! grep -q additionalTrustBundle sno/install-config.yaml"
 e2e_run "Verify public registry references" \
-    "grep -q registry.redhat.io sno/install-config.yaml || grep -q quay.io sno/install-config.yaml || true"
+    "grep -q registry.redhat.io sno/install-config.yaml || grep -q quay.io sno/install-config.yaml"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 4. Proxy mode: create SNO config with -I proxy
@@ -92,7 +92,7 @@ e2e_run "Clean sno dir" "rm -rf sno"
 e2e_run "Create SNO config with -I proxy" \
     "aba cluster -n sno -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 5. Proxy mode: install SNO cluster from public registry
@@ -102,7 +102,7 @@ test_begin "Proxy mode: install SNO cluster"
 e2e_run "Install SNO from public registry (proxy mode)" \
     "aba -d sno install"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 6. Proxy mode: verify and shutdown
@@ -111,9 +111,10 @@ test_begin "Proxy mode: verify and shutdown"
 
 e2e_run "Verify cluster operators" "aba --dir sno run"
 e2e_run "Check cluster operators" "aba --dir sno cmd 'oc get co'"
+# -i: cluster may already be stopped or partially torn down
 e2e_run -i "Shutdown cluster" "yes | aba --dir sno shutdown --wait"
 
-test_end 0
+test_end
 
 # ============================================================================
 
