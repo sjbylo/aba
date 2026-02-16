@@ -261,7 +261,7 @@ test_begin "SNO: bootstrap after save/load"
 
 e2e_run "Clean sno directory" "aba --dir sno clean; rm -f sno/cluster.conf"
 e2e_run "Test small CIDR 10.0.1.200/30" \
-    "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --machine-network '10.0.1.200/30' --step iso"
+    "aba cluster -n sno -t sno --starting-ip 10.0.1.201 --machine-network '10.0.1.200/30' --step iso"
 e2e_run "Clean and recreate with normal CIDR" "rm -rfv sno"
 # Bootstrap only (saves ~30 min) -- proves save/load roundtrip produced
 # valid images that a cluster can boot from.  Full install was already
