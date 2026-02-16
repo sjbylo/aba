@@ -50,13 +50,13 @@ suite_begin "bundle-disk"
 # ============================================================================
 test_begin "Setup: clean slate"
 
-# -i: some RPMs may not be installed -- dnf returns non-zero for missing packages
-e2e_run -i "Remove RPMs for clean install test" \
-    "sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y"
+# dnf remove returns non-zero only if NONE of the packages are installed (= already clean).
+e2e_run "Remove RPMs for clean install test" \
+    "sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y || { echo 'All packages already absent'; true; }"
 
-# -i: podman may have no images to prune
-e2e_run -i "Clean podman" \
-    "podman system prune --all --force; podman rmi --all; sudo rm -rf ~/.local/share/containers/storage"
+# podman prune/rmi with --force are idempotent (return 0 even when empty).
+e2e_run "Clean podman" \
+    "podman system prune --all --force; podman rmi --all --force; sudo rm -rf ~/.local/share/containers/storage"
 
 # Remove oc-mirror caches
 e2e_run -q "Remove oc-mirror caches" \
@@ -70,9 +70,9 @@ e2e_run -q "Remove old files" \
 e2e_run -q "Ensure make is installed" \
     "which make || sudo dnf install make -y"
 
-# -i: aba may not be installed yet (first run)
-e2e_run -i "Reset aba (if installed)" \
-    "aba reset -f"
+# Conditional: aba may not be installed yet (first run).
+e2e_run "Reset aba (if installed)" \
+    "if command -v aba >/dev/null 2>&1 && [ -d mirror ]; then aba reset -f; else echo 'aba not installed or no mirror dir -- skipping reset'; fi"
 
 test_end 0
 

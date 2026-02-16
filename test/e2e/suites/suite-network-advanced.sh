@@ -140,8 +140,7 @@ e2e_run_remote "Verify NTP on VLAN node" \
     "cd ~/aba && timeout 8m bash -c 'until aba --dir sno ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
 
 # Cleanup: delete VMs, clean dir
-# -i: VMs may not exist if boot failed
-e2e_run_remote -i "Delete VLAN SNO VMs" \
+e2e_run_remote "Delete VLAN SNO VMs" \
     "cd ~/aba && aba --dir sno delete"
 e2e_run_remote "Clean sno dir" "cd ~/aba && rm -rf sno"
 
@@ -175,8 +174,7 @@ e2e_run_remote "Verify ens160 is UP on compact VLAN node" \
     "cd ~/aba && aba --dir compact ssh --cmd 'ip a' | grep 'ens160:.*state UP'"
 
 # Cleanup
-# -i: VMs may not exist if boot failed
-e2e_run_remote -i "Delete VLAN compact VMs" \
+e2e_run_remote "Delete VLAN compact VMs" \
     "cd ~/aba && aba --dir compact delete"
 e2e_run_remote "Clean compact dir" "cd ~/aba && rm -rf compact"
 
@@ -216,8 +214,7 @@ e2e_run_remote "Verify NTP on bonded node" \
     "cd ~/aba && timeout 8m bash -c 'until aba --dir sno ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
 
 # Cleanup
-# -i: VMs may not exist if boot failed
-e2e_run_remote -i "Delete bonding SNO VMs" \
+e2e_run_remote "Delete bonding SNO VMs" \
     "cd ~/aba && aba --dir sno delete"
 e2e_run_remote "Clean sno dir" "cd ~/aba && rm -rf sno"
 
@@ -228,8 +225,7 @@ test_end
 # ============================================================================
 test_begin "Cleanup"
 
-# -i: registry may not be installed if earlier steps failed
-e2e_run_remote -i "Uninstall registry" \
+e2e_run_remote "Uninstall registry" \
     "cd ~/aba && aba -d mirror uninstall"
 
 test_end

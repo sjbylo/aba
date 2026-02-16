@@ -240,8 +240,7 @@ e2e_run_remote "Deploy vote-app (direct mirror path)" \
     "cd ~/aba && test/deploy-test-app.sh"
 
 # Clean up before IDMS test
-# -i: project may not exist if deploy test was skipped or failed
-e2e_run_remote -i "Delete demo project" \
+e2e_run_remote "Delete demo project" \
     "cd ~/aba && aba --dir sno cmd 'oc delete project demo'"
 e2e_run_remote -r 3 2 "Recreate demo project" \
     "cd ~/aba && aba --dir sno cmd 'oc new-project demo'"
@@ -273,8 +272,7 @@ e2e_run_remote "Wait for vote-app rollout via IDMS" \
     "cd ~/aba && aba --dir sno cmd 'oc rollout status deployment vote-app -n demo'"
 
 # Clean up
-# -i: project may not exist if IDMS test was skipped or failed
-e2e_run_remote -i "Delete demo project after IDMS test" \
+e2e_run_remote "Delete demo project after IDMS test" \
     "cd ~/aba && aba --dir sno cmd 'oc delete project demo'"
 
 test_end
@@ -340,8 +338,7 @@ test_begin "Standard: cluster with macs.conf"
 # Copy macs.conf for bare-metal MAC address testing
 e2e_run_remote "Copy macs.conf" \
     "cp -v ~/aba/test/macs.conf ~/aba/"
-# -i: cluster may not be fully up if install failed
-e2e_run_remote -i "Delete SNO cluster" \
+e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir sno delete"
 e2e_run_remote "Clean sno dir" \
     "cd ~/aba && rm -rf sno"
@@ -360,8 +357,7 @@ e2e_run_remote "Verify agent-config has MACs" \
 # the SNO cluster earlier in this suite.
 e2e_run_remote "Bootstrap standard cluster" \
     "cd ~/aba && aba --dir standard bootstrap"
-# -i: cluster may not be fully up if bootstrap failed
-e2e_run_remote -i "Delete standard cluster" \
+e2e_run_remote "Delete standard cluster" \
     "cd ~/aba && aba --dir standard delete"
 
 test_end

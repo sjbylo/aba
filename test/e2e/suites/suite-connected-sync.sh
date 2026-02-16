@@ -101,22 +101,22 @@ test_end
 # ============================================================================
 test_begin "Firewalld: bring down and sync"
 
-# -i: systemctl status returns non-zero when service is stopped -- that's info, not failure
-e2e_run -i "Show firewalld status" \
+# Diagnostic: systemctl status returns non-zero when service is stopped
+e2e_diag "Show firewalld status" \
     "ssh ${INTERNAL_BASTION} 'sudo firewall-offline-cmd --list-all; sudo systemctl status firewalld'"
 e2e_run "Bring down firewalld" \
     "ssh ${INTERNAL_BASTION} 'sudo systemctl disable firewalld; sudo systemctl stop firewalld'"
-# -i: systemctl status returns non-zero for stopped service (expected here)
-e2e_run -i "Show firewalld status (should be down)" \
+# Diagnostic: status of stopped service (non-zero exit is expected)
+e2e_diag "Show firewalld status (should be down)" \
     "ssh ${INTERNAL_BASTION} 'sudo systemctl status firewalld'"
 
 e2e_run -r 3 2 "Sync images to remote registry" \
     "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
-# -i: diagnostic -- cache may not exist in all configurations
-e2e_run -i "Check oc-mirror cache location (local)" \
+# Diagnostic: cache may not exist in all configurations
+e2e_diag "Check oc-mirror cache location (local)" \
     "find ~/ -name '.cache' -path '*/.oc-mirror/*'"
-e2e_run_remote -i "Check oc-mirror cache location (remote)" \
+e2e_diag_remote "Check oc-mirror cache location (remote)" \
     "find ~/ -name .cache -path '*/.oc-mirror/*'"
 
 test_end
@@ -215,8 +215,7 @@ e2e_run "Clean up previous sno" "rm -rf sno"
 e2e_run "Create and install SNO cluster" \
     "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Verify cluster operators" "aba --dir sno run"
-# -i: cluster may not be fully up if install failed; delete is best-effort cleanup
-e2e_run -i "Delete SNO cluster" "aba --dir sno delete"
+e2e_run "Delete SNO cluster" "aba --dir sno delete"
 
 test_end
 
@@ -231,8 +230,8 @@ e2e_run "Verify registry removed" \
 
 e2e_run -r 3 2 "Save and load images" "aba --dir mirror save load"
 
-# -i: diagnostic -- cache may not exist in all configurations
-e2e_run -i "Check oc-mirror cache (local)" \
+# Diagnostic: cache may not exist in all configurations
+e2e_diag "Check oc-mirror cache (local)" \
     "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*'"
 
 test_end
@@ -278,8 +277,7 @@ e2e_run -r 3 2 "Sync images with testy user config" "aba --dir mirror sync --ret
 e2e_run "Clean sno" "aba --dir sno clean; rm -f sno/cluster.conf"
 e2e_run "Install SNO" "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Verify operators" "aba --dir sno run"
-# -i: cluster may already be stopped or partially torn down
-e2e_run -i "Shutdown cluster" "yes | aba --dir sno shutdown --wait"
+e2e_run "Shutdown cluster" "yes | aba --dir sno shutdown --wait"
 
 test_end
 

@@ -988,6 +988,43 @@ cd aba
 
 ## Testing Strategy
 
+### E2E Golden Rules
+
+These are inviolable principles for writing and maintaining E2E tests.  They are also
+documented at the top of `test/e2e/lib/framework.sh`.
+
+1. **Tests MUST fail on error.**  Never mask underlying issues.
+   If something breaks, the test must stop and report it.
+
+2. **Never use `2>/dev/null` in test commands.**
+   Stderr output is diagnostic gold.  Suppressing it hides root causes.
+
+3. **Never use `|| true` in test commands.**
+   If a command can legitimately fail, use `e2e_diag` (diagnostic only) or embed an
+   explicit precondition check in the command (e.g. `if [ -f X ]; then ...; fi`).
+
+4. **When a test fails, check if the fix belongs in ABA code FIRST.**
+   Tests exercise the product -- don't paper over product bugs.
+
+5. **Never "fix" a test just to make it pass.**
+   A passing test that hides a real failure is worse than a failing test.
+
+6. **Uninstall from the same host that installed.**
+   If the registry was installed from conN, uninstall from conN -- not disN.
+
+7. **Never remove tools before operations that need them.**
+   E.g. don't `dnf remove make` before `aba reset -f` (which needs make).
+
+8. **Verify cleanup actually worked.**
+   After uninstall, assert the service is down (e.g. curl check).
+   After cleanup, assert the directory is gone.
+
+9. **Use `e2e_diag` for diagnostic/informational commands** whose exit code
+   does not matter.  Never use it for steps that must succeed.
+
+10. **Prefer `aba` commands over raw `make` / scripts.**
+    Eat your own dog food.  Use the product's CLI for setup and teardown.
+
 ### Three Levels of Tests
 
 #### E2E Tests in `test/e2e/` (Full Infrastructure)
