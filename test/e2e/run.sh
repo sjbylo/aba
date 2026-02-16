@@ -330,7 +330,7 @@ run_suite_local() {
         --exclude='mirror/*.tar' \
         --exclude='mirror/*.tar.gz' \
         --exclude='mirror/mirror-registry' \
-        --exclude='cli/' \
+        --exclude='cli/*.tar.gz' \
         --exclude='.git/' \
         --exclude='sno/' \
         --exclude='sno2/' \

@@ -56,15 +56,15 @@ e2e_run "Remove RPMs for clean install test" \
 
 # podman prune/rmi with --force are idempotent (return 0 even when empty).
 e2e_run "Clean podman" \
-    "podman system prune --all --force; podman rmi --all --force; sudo rm -rf ~/.local/share/containers/storage"
+    "podman system prune --all --force; podman rmi --all --force; sudo rm -rfv ~/.local/share/containers/storage"
 
 # Remove oc-mirror caches
 e2e_run -q "Remove oc-mirror caches" \
-    "rm -rf ~/.cache/agent; rm -rf \$HOME/*/.oc-mirror/.cache"
+    "rm -rfv ~/.cache/agent; rm -rfv \$HOME/*/.oc-mirror/.cache"
 
 # Clean up leftover state from previous test runs
 e2e_run -q "Remove old files" \
-    "rm -rf sno compact standard ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
+    "rm -rfv sno compact standard ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
 # Ensure make is available (needed for aba reset)
 e2e_run -q "Ensure make is installed" \

@@ -224,8 +224,11 @@ _vm_setup_network_connected() {
 		nmcli connection up ens192
 
 		# --- ens256: internet (IS the default route) ---
+		# ignore-auto-dns: the DHCP-provided DNS on this NIC (gateway IP)
+		# does not know about example.com zones; use only the lab DNS (ens192).
 		nmcli connection modify ens256 \
 		    ipv4.never-default no \
+		    ipv4.ignore-auto-dns yes \
 		    ipv6.method disabled
 		nmcli connection up ens256
 
@@ -435,9 +438,18 @@ CONFEOF
 		systemctl disable --now systemd-resolved 2>/dev/null || true
 
 		# Ensure /etc/resolv.conf points to localhost so the bastion itself
-		# uses its own dnsmasq (and through it, the upstream)
+		# uses its own dnsmasq (and through it, the upstream).
+		# Tell NetworkManager not to manage resolv.conf, otherwise it
+		# regenerates it from DHCP and overwrites our 127.0.0.1 entry.
+		cat > /etc/NetworkManager/conf.d/no-dns.conf << 'NMEOF'
+[main]
+dns=none
+NMEOF
+		systemctl reload NetworkManager
+
 		cat > /etc/resolv.conf << 'RESOLVEOF'
-# Managed by E2E dnsmasq setup
+# Managed by E2E dnsmasq setup -- NetworkManager dns=none
+search example.com
 nameserver 127.0.0.1
 RESOLVEOF
 
@@ -481,8 +493,8 @@ _vm_cleanup_caches() {
 		rm -vrf ~/.cache/agent/
 		rm -vrf ~/bin/*
 		rm -f \$HOME/.ssh/quay_installer*
-		rm -rf \$HOME/.oc-mirror/.cache
-		rm -rf \$HOME/*/.oc-mirror/.cache
+		rm -rfv \$HOME/.oc-mirror/.cache
+		rm -rfv \$HOME/*/.oc-mirror/.cache
 		# Ensure test VMs are located together
 		[ -s ~/.vmware.conf ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g" ~/.vmware.conf || true
 	CACHEEOF
@@ -501,8 +513,8 @@ _vm_cleanup_podman() {
         which podman 2>/dev/null || sudo dnf install podman -y
         podman system prune --all --force
         podman rmi --all 2>/dev/null || true
-        sudo rm -rf ~/.local/share/containers/storage
-        rm -rf ~/test
+        sudo rm -rfv ~/.local/share/containers/storage
+        rm -rfv ~/test
     "
 }
 
