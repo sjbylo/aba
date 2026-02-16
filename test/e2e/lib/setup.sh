@@ -137,8 +137,15 @@ reset_internal_bastion() {
         "rsync -az --delete \
             --exclude='mirror/save/' \
             --exclude='mirror/.oc-mirror/' \
+            --exclude='mirror/*.tar' \
+            --exclude='mirror/*.tar.gz' \
+            --exclude='mirror/mirror-registry' \
             --exclude='cli/' \
             --exclude='.git/' \
+            --exclude='sno/' \
+            --exclude='sno2/' \
+            --exclude='compact/' \
+            --exclude='standard/' \
             '${_aba_root}/' '${_dis_host}:~/aba/'"
 
     # Uninstall any existing registry using aba's own uninstall command.

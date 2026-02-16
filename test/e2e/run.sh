@@ -316,8 +316,15 @@ run_suite_local() {
     rsync -az --delete \
         --exclude='mirror/save/' \
         --exclude='mirror/.oc-mirror/' \
+        --exclude='mirror/*.tar' \
+        --exclude='mirror/*.tar.gz' \
+        --exclude='mirror/mirror-registry' \
         --exclude='cli/' \
         --exclude='.git/' \
+        --exclude='sno/' \
+        --exclude='sno2/' \
+        --exclude='compact/' \
+        --exclude='standard/' \
         "$_ABA_ROOT/" "$con_host:~/aba/"
 
     # Sync notify helper to conN (if it exists on coordinator)
