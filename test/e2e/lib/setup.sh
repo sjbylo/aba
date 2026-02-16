@@ -128,8 +128,11 @@ reset_internal_bastion() {
     # Sync aba to the internal bastion so 'aba -d mirror uninstall' can run.
     # This is lightweight (excludes heavy data dirs).  Must happen BEFORE
     # uninstall because a previous test run may have wiped ~/aba on disN.
+    # Ensure rsync is available on the remote (a prior cleanup may have removed it).
     local _aba_root
     _aba_root="$(cd "$_E2E_LIB_DIR_SU/../../.." && pwd)"
+    e2e_run_remote "Ensure rsync on internal bastion" \
+        "which rsync || sudo dnf install -y rsync"
     e2e_run "Sync aba to $_dis_bare for cleanup" \
         "rsync -az --delete \
             --exclude='mirror/save/' \
