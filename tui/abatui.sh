@@ -3316,6 +3316,13 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 	while :; do
 		local ADVANCED_EXIT=""
 		
+		# Build compact settings summary for the Settings menu item
+		local _s_answer _s_reg _s_retry
+		if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then _s_answer="-y"; else _s_answer="ask"; fi
+		_s_reg="$ABA_REGISTRY_TYPE"
+		_s_retry="$RETRY_COUNT"
+		local _settings_label="Settings...  (\Z6${_s_answer}, ${_s_reg}, retry=${_s_retry}\Zn)"
+		
 		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_ACTION_MENU" \
 		--cancel-label "Exit" \
 		--help-button \
@@ -3336,7 +3343,7 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 		"" " " \
 		"" "──── Other ──────────────────────────────" \
 		$TUI_ACTION_RERUN_WIZARD "$TUI_ACTION_LABEL_RERUN_WIZARD" \
-		$TUI_ACTION_SETTINGS "$TUI_ACTION_LABEL_SETTINGS" \
+		$TUI_ACTION_SETTINGS "$_settings_label" \
 		$TUI_ACTION_ADVANCED "$TUI_ACTION_LABEL_ADVANCED" \
 		$TUI_ACTION_EXIT "$TUI_ACTION_LABEL_EXIT" \
 		2>"$TMP"
