@@ -74,7 +74,7 @@ e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Reset aba" "aba reset -f"
-e2e_run "Clean cluster dirs" "rm -rf sno compact standard"
+e2e_run "Clean cluster dirs" "rm -rfv sno compact standard"
 
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
 e2e_run "Re-apply config after reset" \
@@ -158,7 +158,7 @@ test_begin "Load without regcreds (must fail)"
 # Before regcreds are in place, loading should fail with a clear error.
 # This validates error handling for a common user mistake.
 e2e_run_remote -q "Remove any existing regcreds" \
-    "cd ~/aba && rm -rf mirror/regcreds"
+    "cd ~/aba && rm -rfv mirror/regcreds"
 
 e2e_run_must_fail_remote "Load without regcreds should fail" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -191,7 +191,7 @@ e2e_run_remote "Create compact cluster (bootstrap only)" \
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir compact delete"
 e2e_run_remote -q "Clean compact dir" \
-    "cd ~/aba && rm -rf compact"
+    "cd ~/aba && rm -rfv compact"
 
 test_end
 

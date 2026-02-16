@@ -88,6 +88,18 @@ pool_vlan_network() {
     echo "${POOL_VLAN_NETWORK:-10.10.20.0/24}"
 }
 
+# Get the VLAN API VIP for compact/standard on VLAN: pool_vlan_api_vip [POOL_NUM]
+pool_vlan_api_vip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_VLAN_API_VIP[$p]:-10.10.20.$((210 + p))}"
+}
+
+# Get the VLAN APPS VIP for compact/standard on VLAN: pool_vlan_apps_vip [POOL_NUM]
+pool_vlan_apps_vip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_VLAN_APPS_VIP[$p]:-10.10.20.$((220 + p))}"
+}
+
 # Get the VLAN gateway (= disN's VLAN IP, stripped of /prefix): pool_vlan_gateway [POOL_NUM]
 pool_vlan_gateway() {
     local p="${1:-${POOL_NUM:-1}}"

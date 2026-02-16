@@ -35,11 +35,11 @@ setup_aba_from_scratch() {
     echo "=== setup_aba_from_scratch ==="
 
     # Uninstall any existing registry using aba's own uninstall command.
+    # aba checks mirror/.installed internally and does the right thing.
     # This also handles remote registries (e.g. on disN) if mirror.conf has
     # reg_ssh_key set -- Rule 6: uninstall from the same host that installed.
-    # Conditional: first run or previous clean run may have no mirror.conf.
     e2e_run "Uninstall registry (local or remote)" \
-        "cd $aba_root && if [ -f mirror/mirror.conf ]; then aba -d mirror uninstall; else echo 'No mirror.conf -- nothing to uninstall'; fi"
+        "cd $aba_root && aba -d mirror uninstall"
 
     # Reset aba BEFORE removing RPMs -- 'aba reset' needs 'make' which is
     # removed in the RPM removal step below (Rule 7).
@@ -53,11 +53,11 @@ setup_aba_from_scratch() {
 
     # podman prune/rmi with --force are idempotent (return 0 even when empty).
     e2e_run "Clean podman images" \
-        "podman system prune --all --force; podman rmi --all --force; sudo rm -rf ~/.local/share/containers/storage"
+        "podman system prune --all --force; podman rmi --all --force; sudo rm -rfv ~/.local/share/containers/storage"
 
     # Remove oc-mirror caches
     e2e_run "Remove oc-mirror caches" \
-        "find ~/ -type d -name .oc-mirror | xargs rm -rf"
+        "find ~/ -type d -name .oc-mirror | xargs rm -rfv"
 
     echo "=== setup_aba_from_scratch complete ==="
 }
@@ -136,66 +136,61 @@ reset_internal_bastion() {
 
     echo "=== reset_internal_bastion: $_dis_host ==="
 
-    # Ensure rsync and make are available on disN (a prior cleanup may have
-    # removed them, or the VM may be minimal).
     local _aba_root
     _aba_root="$(cd "$_E2E_LIB_DIR_SU/../../.." && pwd)"
-    e2e_run_remote "Ensure rsync and make on internal bastion" \
-        "which rsync || sudo dnf install -y rsync; which make || sudo dnf install -y make"
 
-    # Sync aba tree to disN (lightweight, excludes large data files).
-    # Must happen BEFORE uninstall because a previous run may have wiped ~/aba.
-    e2e_run "Sync aba to $_dis_bare for cleanup" \
-        "rsync -az --delete \
-            --exclude='mirror/save/' \
-            --exclude='mirror/.oc-mirror/' \
-            --exclude='mirror/*.tar' \
-            --exclude='mirror/*.tar.gz' \
-            --exclude='mirror/mirror-registry' \
-            --exclude='cli/' \
-            --exclude='.git/' \
-            --exclude='sno/' \
-            --exclude='sno2/' \
-            --exclude='compact/' \
-            --exclude='standard/' \
-            '${_aba_root}/' '${_dis_host}:~/aba/'"
+    # NOTE: We do NOT rsync the aba tree to disN here.  Only aba itself
+    # (via 'mirror sync', 'bundle', etc.) should manage files on disN.
+    # Rsyncing from the E2E framework bypasses aba's workflow and can mask bugs.
 
-    # NOTE: Do NOT try 'aba -d mirror uninstall' on disN here.
-    # Rule 6: the registry was installed from conN, so uninstall from conN
-    # (already handled by setup_aba_from_scratch).
-    # For airgapped suites where the registry was installed locally on disN,
-    # the suite itself uninstalls at the end.  Either way, what we need here
-    # is to stop any leftover containers and remove data directories.
+    # 1. Uninstall the registry using aba's own uninstall, from conN.
+    #    Rule 6: uninstall from the same host that installed.  In the connected
+    #    case the registry was installed from conN (via SSH), so 'aba -d mirror
+    #    uninstall' from conN will SSH to disN and do the proper teardown.
+    #    aba checks mirror/.installed internally and does the right thing.
+    e2e_diag "Uninstall registry from conN" \
+        "cd ${_aba_root} && aba -d mirror uninstall"
 
-    # Stop ALL containers and pods.  Running containers hold bind mounts on
-    # the quay-storage directory, which blocks rm -rf even with sudo.
-    # Must happen BEFORE data dir cleanup.
-    e2e_run_remote "Stop all containers on internal bastion" \
+    # 2. Defensive: stop and disable Quay systemd user services on disN.
+    #    Rootless containers started with --cgroups=no-conmon are managed by
+    #    systemd and can survive 'aba uninstall' or 'podman stop'.  If systemd
+    #    is not told to stop them, it restarts the containers and rootlessport
+    #    keeps holding port 8443, blocking any new install.
+    e2e_diag_remote "Stop Quay systemd user services" \
+        "systemctl --user stop quay-app quay-redis quay-pod; systemctl --user disable quay-app quay-redis quay-pod; systemctl --user reset-failed"
+
+    # 3. Podman cleanup for anything aba uninstall missed.
+    e2e_diag_remote "Stop all containers on internal bastion" \
         "podman pod stop --all; podman stop --all; podman pod rm --all --force; podman rm --all --force"
 
-    # Remove leftover Quay data directories.  A previous install leaves
-    # storage dirs with files owned by container sub-UIDs that regular rm
-    # can't remove.  Use sudo after stopping containers.
-    e2e_run_remote "Clean Quay data directories on internal bastion" \
-        "sudo rm -rf ~/quay-install ~/my-quay-mirror-test*"
+    # 4. Kill orphan rootlessport/conmon processes from previous installs.
+    #    When container storage was wiped but processes survived (the
+    #    --cgroups=no-conmon case), podman can't see them.  These orphans
+    #    hold port 8443 and block new installs.
+    e2e_diag_remote "Kill orphan container processes (if any)" \
+        "pkill -u \$(whoami) rootlessport; pkill -u \$(whoami) conmon; sleep 1; ss -tlnp | grep 8443 && echo 'WARNING: port 8443 still in use' || echo 'Port 8443 is free'"
 
-    # VERIFY the registry is actually down -- hard failure if it's still up!
+    # 5. Remove leftover Quay data directories.  A previous install leaves
+    #    storage dirs with files owned by container sub-UIDs that regular rm
+    #    can't remove.  Use sudo after stopping containers.
+    e2e_run_remote "Clean Quay data directories on internal bastion" \
+        "sudo rm -rfv ~/quay-install ~/my-quay-mirror-test*"
+
+    # 6. VERIFY the registry is actually down -- hard failure if it's still up!
     e2e_run "Verify registry is down on $_dis_bare" \
         "! curl -sk --connect-timeout 5 https://${_dis_bare}:8443/health/instance"
 
-    # Reset aba state.  Use make directly since 'aba' CLI may not be in PATH
-    # on disN (connected case: only synced the tree, didn't run ./install).
-    # Conditional: mirror dir may not exist on first run.
-    e2e_run_remote "Reset aba on internal bastion" \
-        "cd ~/aba && if [ -d mirror ]; then make -C mirror reset; else echo 'No mirror dir -- nothing to reset'; fi"
-    e2e_run_remote "Clean cluster dirs on internal bastion" \
-        "cd ~/aba && rm -rf sno sno2 compact standard"
+    # 7. Clean slate on disN: remove aba tree, caches, container storage.
+    #    aba itself will repopulate ~/aba via its own mechanisms (mirror sync,
+    #    bundle, etc.) during the next test run.
+    e2e_run_remote "Remove aba tree on internal bastion" \
+        "rm -rfv ~/aba"
     e2e_run_remote "Clean podman images on internal bastion" \
         "podman system prune --all --force; podman rmi --all --force"
     e2e_run_remote "Clean oc-mirror caches on internal bastion" \
-        "rm -rf ~/.cache/agent ~/.oc-mirror"
+        "rm -rfv ~/.cache/agent ~/.oc-mirror"
     e2e_run_remote "Clean containers storage on internal bastion" \
-        "sudo rm -rf ~/.local/share/containers/storage"
+        "sudo rm -rfv ~/.local/share/containers/storage"
 
     echo "=== reset_internal_bastion complete ==="
 }
@@ -217,15 +212,15 @@ cleanup_all() {
 
     # Remove cluster directories
     e2e_run "Remove cluster directories" \
-        "rm -rf sno sno2 compact standard"
+        "rm -rfv sno sno2 compact standard"
 
     # podman prune/rmi with --force are idempotent (return 0 even when empty).
     e2e_run "Clean podman images" \
-        "podman system prune --all --force; podman rmi --all --force; sudo rm -rf ~/.local/share/containers/storage"
+        "podman system prune --all --force; podman rmi --all --force; sudo rm -rfv ~/.local/share/containers/storage"
 
     # Remove caches
     e2e_run "Remove oc-mirror caches" \
-        "find ~/ -type d -name .oc-mirror | xargs rm -rf"
+        "find ~/ -type d -name .oc-mirror | xargs rm -rfv"
 
     echo "=== cleanup_all complete ==="
 }

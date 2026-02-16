@@ -1,11 +1,21 @@
 #!/bin/bash
 # =============================================================================
-# Suite: Network Advanced (new, extracted from test2/test5)
+# Suite: Network Advanced (VLAN + bonding matrix)
 # =============================================================================
-# Purpose: VLAN and bonding network configuration tests. These are separated
-#          because they need special infra (VLAN-capable switches) and are slow.
+# Purpose: VLAN and bonding network configuration tests for all cluster types.
+#          Replicates the old test2 VLAN/bonding matrix using the E2E framework.
 #
-# Extracted from test2 (VLAN/bonding sections) and test5 (network-related).
+# Test matrix (matching old test2-airgapped-existing-reg.sh):
+#   for vlan in 10 ""; do
+#     for ctype in sno compact standard; do
+#       1. Single port (ports=ens160, vlan=$vlan) -- ISO, boot, verify ens160 UP
+#       2. Bonding + balance-xor (ports=ens160,ens192,ens224, vlan=$vlan)
+#          -- agent-config.yaml, sed balance-xor, ISO, boot, verify bond0 UP
+#     done
+#   done
+#
+# VLAN tests use GOVC_NETWORK=PRIVATE-DPG (VLAN-capable port group).
+# Non-VLAN tests use GOVC_NETWORK=VMNET-DPG (regular lab network).
 # =============================================================================
 
 set -u
@@ -33,9 +43,15 @@ plan_tests \
     "Setup: reset internal bastion" \
     "Setup: save and load images" \
     "VLAN: verify interface on bastion" \
-    "VLAN SNO: boot and verify interface" \
-    "VLAN compact: boot and verify interface" \
-    "Bonding SNO: boot and verify bond0" \
+    "VLAN SNO: single port" \
+    "VLAN SNO: bonding + balance-xor" \
+    "VLAN compact: single port" \
+    "VLAN compact: bonding + balance-xor" \
+    "VLAN standard: single port" \
+    "VLAN standard: bonding + balance-xor" \
+    "Non-VLAN SNO: bonding + balance-xor" \
+    "Non-VLAN compact: bonding + balance-xor" \
+    "Non-VLAN standard: bonding + balance-xor" \
     "Cleanup"
 
 suite_begin "network-advanced"
@@ -110,118 +126,165 @@ e2e_run_remote "Check VLAN connection details" \
 test_end
 
 # ============================================================================
-# 5. VLAN SNO: boot and verify interface (no full install -- just SSH check)
-#    Creates ISO, boots VM, waits for SSH, checks ens160 is UP on VLAN.
-#    Saves ~40 min by not waiting for full cluster install.
+# Helper: run a single network config test (single-port or bonding)
 # ============================================================================
-test_begin "VLAN SNO: boot and verify interface"
+# Usage: _net_test LABEL CTYPE CNAME VLAN PORTS IF_CHECK [BALANCE_XOR]
+#
+#   LABEL       = test_begin label (e.g. "VLAN SNO: single port")
+#   CTYPE       = sno | compact | standard
+#   CNAME       = cluster directory name (e.g. sno-vlan, compact, standard)
+#   VLAN        = VLAN tag (e.g. 10) or "" for no VLAN
+#   PORTS       = ports= value (e.g. "ens160" or "ens160,ens192,ens224")
+#   IF_CHECK    = interface pattern to verify (e.g. "ens160:.*state UP" or "bond0:.*state UP")
+#   BALANCE_XOR = "yes" to set balance-xor bonding mode (optional, default "no")
+#
+_net_test() {
+    local label="$1"
+    local ctype="$2"
+    local cname="$3"
+    local vlan="$4"
+    local ports="$5"
+    local if_check="$6"
+    local balance_xor="${7:-no}"
 
-e2e_run_remote "Clean sno dir" "cd ~/aba && rm -rf sno"
+    # Determine network parameters based on VLAN
+    local govc_network machine_network next_hop start_ip
+    if [ -n "$vlan" ]; then
+        govc_network="PRIVATE-DPG"
+        machine_network="$(pool_vlan_network)"
+        next_hop="$(pool_vlan_gateway)"
+        case "$ctype" in
+            sno)      start_ip="$(pool_vlan_node_ip)" ;;
+            compact)  start_ip="$(pool_vlan_node_ip)" ;;
+            standard) start_ip="$(pool_vlan_node_ip)" ;;
+        esac
+    else
+        govc_network="VMNET-DPG"
+        machine_network="$(pool_machine_network)"
+        next_hop="10.0.1.1"
+        start_ip="$(pool_node_ip)"
+    fi
 
-# Create SNO on VLAN network
-e2e_run_remote "Create SNO config for VLAN" \
-    "cd ~/aba && aba cluster -n sno -t sno --starting-ip $(pool_vlan_node_ip) --machine-network '$(pool_vlan_network)' --gateway-ip $(pool_vlan_gateway) --dns $(pool_dns_server) --step cluster.conf"
+    test_begin "$label"
 
-# Configure VLAN in cluster.conf
-e2e_run_remote "Set VLAN and ports in cluster.conf" \
-    "cd ~/aba && grep -q '^#\\?vlan_id=' sno/cluster.conf && sed -i 's/^#\\?vlan_id=.*/vlan_id=10/' sno/cluster.conf || echo 'vlan_id=10' >> sno/cluster.conf; grep -q '^.*ports=' sno/cluster.conf && sed -i 's/^.*ports=.*/ports=ens160/' sno/cluster.conf || echo 'ports=ens160' >> sno/cluster.conf"
+    # Switch GOVC_NETWORK on disN
+    e2e_run_remote "Set GOVC_NETWORK=$govc_network" \
+        "cd ~/aba && sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=$govc_network /g' vmware.conf"
 
-# Generate ISO, upload to VMware, and boot VMs (but don't wait for full install)
-e2e_run_remote "Create ISO" "cd ~/aba && aba --dir sno iso"
-e2e_run_remote "Upload ISO to VMware" "cd ~/aba && aba --dir sno upload"
-e2e_run_remote "Boot VMs" "cd ~/aba && aba --dir sno refresh"
+    # Clean previous cluster dir
+    e2e_run_remote "Clean $cname dir" "cd ~/aba && rm -rfv $cname"
 
-# Wait for node to be SSH-reachable, then check network interface
-e2e_run_remote -r 1 1 "Wait for node0 SSH (VLAN)" \
-    "cd ~/aba && timeout 8m bash -c 'until aba --dir sno ssh --cmd hostname; do sleep 10; done'"
-e2e_run_remote "Verify ens160 is UP on VLAN" \
-    "cd ~/aba && aba --dir sno ssh --cmd 'ip a' | grep 'ens160:.*state UP'"
-e2e_run_remote "Verify NTP on VLAN node" \
-    "cd ~/aba && timeout 8m bash -c 'until aba --dir sno ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
+    # Generate cluster.conf
+    e2e_run_remote "Generate cluster.conf for $cname" \
+        "cd ~/aba && aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
 
-# Cleanup: delete VMs, clean dir
-e2e_run_remote "Delete VLAN SNO VMs" \
-    "cd ~/aba && aba --dir sno delete"
-e2e_run_remote "Clean sno dir" "cd ~/aba && rm -rf sno"
+    # Set machine_network and next_hop_address
+    e2e_run_remote "Set machine_network=$machine_network" \
+        "cd ~/aba && sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $cname/cluster.conf"
+    e2e_run_remote "Set next_hop_address=$next_hop" \
+        "cd ~/aba && sed -i \"s/^.*next_hop_address=.*/next_hop_address=$next_hop /g\" $cname/cluster.conf"
 
-test_end
+    # Set ports
+    e2e_run_remote "Set ports=$ports" \
+        "cd ~/aba && sed -i 's/^.*ports=.*/ports=$ports /g' $cname/cluster.conf"
+
+    # Set vlan (empty string clears it)
+    e2e_run_remote "Set vlan=$vlan" \
+        "cd ~/aba && sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $cname/cluster.conf"
+
+    # Show config for debugging
+    e2e_diag_remote "Show cluster.conf" \
+        "cd ~/aba && grep -e ^vlan= -e ^ports= -e ^port1= $cname/cluster.conf | awk '{print \$1}'"
+
+    # For bonding with balance-xor: generate agent-config.yaml first, then edit mode
+    if [ "$balance_xor" = "yes" ]; then
+        e2e_run_remote "Generate agent-config.yaml" \
+            "cd ~/aba && aba --dir $cname agent-config.yaml"
+        e2e_run_remote "Set bonding mode to balance-xor" \
+            "cd ~/aba && sed -i 's/mode: active-backup/mode: balance-xor/g' $cname/agent-config.yaml"
+    fi
+
+    # Create ISO, upload, boot
+    e2e_run_remote "Create ISO for $cname" "cd ~/aba && aba --dir $cname iso"
+    e2e_run_remote "Upload ISO for $cname" "cd ~/aba && aba --dir $cname upload"
+    e2e_run_remote "Boot VMs for $cname" "cd ~/aba && aba --dir $cname refresh"
+
+    # Wait for node SSH
+    e2e_run_remote -r 1 1 "Wait for node0 SSH ($cname)" \
+        "cd ~/aba && timeout 8m bash -c 'until aba --dir $cname ssh --cmd hostname; do sleep 10; done'"
+
+    # For bonding, wait for bond to settle
+    if echo "$if_check" | grep -q bond0; then
+        e2e_run -q "Wait for bond0 to settle" "sleep 30"
+    fi
+
+    # Show ip a for debugging
+    e2e_diag_remote "Show ip a on $cname node" \
+        "cd ~/aba && aba --dir $cname ssh --cmd 'ip a'"
+
+    # Verify expected interface is UP
+    e2e_run_remote "Verify $if_check on $cname" \
+        "cd ~/aba && timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"ip a\" | grep \"$if_check\"; do sleep 10; done'"
+
+    # Verify NTP
+    e2e_run_remote "Verify NTP on $cname" \
+        "cd ~/aba && timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
+
+    # Cleanup: delete VMs, clean dir
+    e2e_run_remote "Delete $cname VMs" \
+        "cd ~/aba && aba --dir $cname delete"
+    e2e_run_remote "Clean $cname dir" "cd ~/aba && aba -d $cname clean"
+
+    test_end
+}
 
 # ============================================================================
-# 6. VLAN compact: boot and verify interface (multi-node VLAN test)
-#    Same approach: ISO + boot + SSH check. No full cluster install.
+# 5-10. VLAN tests (GOVC_NETWORK=PRIVATE-DPG)
 # ============================================================================
-test_begin "VLAN compact: boot and verify interface"
 
-e2e_run_remote "Clean compact dir" "cd ~/aba && rm -rf compact"
+# 5. VLAN SNO: single port
+_net_test "VLAN SNO: single port" \
+    sno sno-vlan 10 "ens160" "ens160: .*state UP"
 
-# Create compact on VLAN network (3 master/worker combo nodes)
-e2e_run_remote "Create compact config for VLAN" \
-    "cd ~/aba && aba cluster -n compact -t compact --starting-ip $(pool_vlan_node_ip) --machine-network '$(pool_vlan_network)' --gateway-ip $(pool_vlan_gateway) --dns $(pool_dns_server) --step cluster.conf"
+# 6. VLAN SNO: bonding + balance-xor
+_net_test "VLAN SNO: bonding + balance-xor" \
+    sno sno-vlan 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
 
-# Configure VLAN in cluster.conf
-e2e_run_remote "Set VLAN and ports in compact cluster.conf" \
-    "cd ~/aba && grep -q '^#\\?vlan_id=' compact/cluster.conf && sed -i 's/^#\\?vlan_id=.*/vlan_id=10/' compact/cluster.conf || echo 'vlan_id=10' >> compact/cluster.conf; grep -q '^.*ports=' compact/cluster.conf && sed -i 's/^.*ports=.*/ports=ens160/' compact/cluster.conf || echo 'ports=ens160' >> compact/cluster.conf"
+# 7. VLAN compact: single port
+_net_test "VLAN compact: single port" \
+    compact compact-vlan 10 "ens160" "ens160: .*state UP"
 
-# Generate ISO, upload, and boot VMs
-e2e_run_remote "Create ISO" "cd ~/aba && aba --dir compact iso"
-e2e_run_remote "Upload ISO to VMware" "cd ~/aba && aba --dir compact upload"
-e2e_run_remote "Boot VMs" "cd ~/aba && aba --dir compact refresh"
+# 8. VLAN compact: bonding + balance-xor
+_net_test "VLAN compact: bonding + balance-xor" \
+    compact compact-vlan 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
 
-# Wait for first node (node0) SSH, then check network
-e2e_run_remote -r 1 1 "Wait for node0 SSH (compact VLAN)" \
-    "cd ~/aba && timeout 8m bash -c 'until aba --dir compact ssh --cmd hostname; do sleep 10; done'"
-e2e_run_remote "Verify ens160 is UP on compact VLAN node" \
-    "cd ~/aba && aba --dir compact ssh --cmd 'ip a' | grep 'ens160:.*state UP'"
+# 9. VLAN standard: single port
+_net_test "VLAN standard: single port" \
+    standard standard-vlan 10 "ens160" "ens160: .*state UP"
 
-# Cleanup
-e2e_run_remote "Delete VLAN compact VMs" \
-    "cd ~/aba && aba --dir compact delete"
-e2e_run_remote "Clean compact dir" "cd ~/aba && rm -rf compact"
-
-test_end
+# 10. VLAN standard: bonding + balance-xor
+_net_test "VLAN standard: bonding + balance-xor" \
+    standard standard-vlan 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
 
 # ============================================================================
-# 7. Bonding SNO: boot and verify bond0 (no full install -- just SSH check)
-#    Creates ISO with bonding config, boots VM, checks bond0 is UP.
+# 11-13. Non-VLAN bonding tests (GOVC_NETWORK=VMNET-DPG)
+#         Single-port non-VLAN is already tested by connected-sync suite.
 # ============================================================================
-test_begin "Bonding SNO: boot and verify bond0"
 
-e2e_run_remote "Clean sno dir" "cd ~/aba && rm -rf sno"
+# 11. Non-VLAN SNO: bonding + balance-xor
+_net_test "Non-VLAN SNO: bonding + balance-xor" \
+    sno sno "" "ens160,ens192,ens224" "bond0: .* state UP" yes
 
-# Create cluster with bonding configuration
-e2e_run_remote "Create SNO config for bonding" \
-    "cd ~/aba && aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+# 12. Non-VLAN compact: bonding + balance-xor
+_net_test "Non-VLAN compact: bonding + balance-xor" \
+    compact compact "" "ens160,ens192,ens224" "bond0: .* state UP" yes
 
-# Configure bonding: multiple ports + bond name
-e2e_run_remote "Set bonding in cluster.conf" \
-    "cd ~/aba && grep -q '^.*ports=' sno/cluster.conf && sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224/' sno/cluster.conf || echo 'ports=ens160,ens192,ens224' >> sno/cluster.conf; echo 'bond=bond0' >> sno/cluster.conf"
-
-# Generate ISO, upload, and boot VMs
-e2e_run_remote "Create ISO" "cd ~/aba && aba --dir sno iso"
-e2e_run_remote "Upload ISO to VMware" "cd ~/aba && aba --dir sno upload"
-e2e_run_remote "Boot VMs" "cd ~/aba && aba --dir sno refresh"
-
-# Wait for node SSH, then check bond0 interface
-e2e_run_remote -r 1 1 "Wait for node0 SSH (bonding)" \
-    "cd ~/aba && timeout 8m bash -c 'until aba --dir sno ssh --cmd hostname; do sleep 10; done'"
-# Wait a bit for bonding to fully come up
-e2e_run -q "Wait for bond0 to settle" "sleep 30"
-e2e_run_remote "Show ip a output" \
-    "cd ~/aba && aba --dir sno ssh --cmd 'ip a'"
-e2e_run_remote "Verify bond0 is UP" \
-    "cd ~/aba && aba --dir sno ssh --cmd 'ip a' | grep 'bond0:.*state UP'"
-e2e_run_remote "Verify NTP on bonded node" \
-    "cd ~/aba && timeout 8m bash -c 'until aba --dir sno ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
-
-# Cleanup
-e2e_run_remote "Delete bonding SNO VMs" \
-    "cd ~/aba && aba --dir sno delete"
-e2e_run_remote "Clean sno dir" "cd ~/aba && rm -rf sno"
-
-test_end
+# 13. Non-VLAN standard: bonding + balance-xor
+_net_test "Non-VLAN standard: bonding + balance-xor" \
+    standard standard "" "ens160,ens192,ens224" "bond0: .* state UP" yes
 
 # ============================================================================
-# 8. Cleanup
+# 14. Cleanup
 # ============================================================================
 test_begin "Cleanup"
 

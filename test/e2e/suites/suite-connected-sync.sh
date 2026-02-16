@@ -40,7 +40,7 @@ plan_tests \
     "ABI config: diff against known-good examples" \
     "SNO: install cluster" \
     "Save/Load: roundtrip" \
-    "SNO: re-install after save/load" \
+    "SNO: bootstrap after save/load" \
     "Testy user: re-sync with custom mirror conf" \
     "Bare-metal: ISO simulation"
 
@@ -140,10 +140,10 @@ test_begin "OC_MIRROR_CACHE: custom cache location"
 
 # The sync above used OC_MIRROR_CACHE default. Now verify the cache exists
 # in the expected default location, then verify a custom path works.
-e2e_run "Create custom cache dir" "mkdir -p \$HOME/.custom_oc_mirror_cache"
+e2e_run "Create custom cache dir" "mkdir -pv \$HOME/.custom_oc_mirror_cache"
 
 # Clean the custom dir to start fresh
-e2e_run -q "Clean custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache/*"
+e2e_run -q "Clean custom cache dir" "rm -rfv \$HOME/.custom_oc_mirror_cache/*"
 
 # Run a small aba mirror operation with custom OC_MIRROR_CACHE.
 # The save operation will populate the cache dir.
@@ -151,7 +151,7 @@ e2e_run "Verify OC_MIRROR_CACHE env var is respected" \
     "export OC_MIRROR_CACHE=\$HOME/.custom_oc_mirror_cache && aba -d mirror save --retry && test -d \$HOME/.custom_oc_mirror_cache/.oc-mirror"
 
 # Clean up the custom cache dir
-e2e_run -q "Clean up custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache"
+e2e_run -q "Clean up custom cache dir" "rm -rfv \$HOME/.custom_oc_mirror_cache"
 
 test_end
 
@@ -167,7 +167,7 @@ for cname in sno compact standard; do
     [ "$cname" = "standard" ] && local_starting_ip=$(pool_standard_api_vip)
 
     e2e_run "Create cluster.conf for $cname" \
-        "rm -rf $cname && aba cluster -n $cname -t $cname -i $local_starting_ip --step cluster.conf"
+        "rm -rfv $cname && aba cluster -n $cname -t $cname -i $local_starting_ip --step cluster.conf"
     e2e_run "Fix mac_prefix for $cname" \
         "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $cname/cluster.conf"
     e2e_run "Generate install-config.yaml for $cname" \
@@ -188,20 +188,38 @@ test_end
 test_begin "ABI config: diff against known-good examples"
 
 for cname in sno compact standard; do
-    # Scrub volatile/secret fields from install-config.yaml before comparing
-    # (same yq/sed pipeline as old test1)
-    e2e_run "Scrub $cname install-config.yaml for diff" \
-        "cat $cname/install-config.yaml | yq 'del(.additionalTrustBundle,.pullSecret,.platform.vsphere.vcenters[].password,.platform.vsphere.failureDomains[0].name,.platform.vsphere.failureDomains[0].region,.platform.vsphere.failureDomains[0].zone,.platform.vsphere.failureDomains[0].topology.datastore)' | sed '/^[[:space:]]*$/d' | sed 's/[[:space:]]*$//' > test/$cname/install-config.yaml"
-
-    # Scrub agent-config.yaml (remove trailing whitespace and blank lines)
-    e2e_run -q "Scrub $cname agent-config.yaml for diff" \
-        "cat $cname/agent-config.yaml | sed '/^[[:space:]]*$/d' | sed 's/[[:space:]]*$//' > test/$cname/agent-config.yaml"
-
-    # Diff against committed example files
+    # Scrub volatile/secret fields and normalize YAML via python3+pyyaml
+    # (installed by aba).  Both generated and example files go through the
+    # same normalizer so formatting differences (comments, quoting) don't
+    # cause false diffs.
     e2e_run "Diff $cname install-config.yaml against example" \
-        "diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example"
+        "diff <(python3 -c \"
+import yaml, sys
+d = yaml.safe_load(open('$cname/install-config.yaml'))
+for k in ('additionalTrustBundle', 'pullSecret'):
+    d.pop(k, None)
+vs = d.get('platform', {}).get('vsphere', {})
+for vc in vs.get('vcenters', []):
+    vc.pop('password', None)
+fds = vs.get('failureDomains', [])
+if fds:
+    for k in ('name', 'region', 'zone'):
+        fds[0].pop(k, None)
+    fds[0].get('topology', {}).pop('datastore', None)
+yaml.dump(d, sys.stdout, default_flow_style=False, sort_keys=False)
+\") <(python3 -c \"
+import yaml, sys
+yaml.dump(yaml.safe_load(open('test/$cname/install-config.yaml.example')), sys.stdout, default_flow_style=False, sort_keys=False)
+\")"
+
     e2e_run "Diff $cname agent-config.yaml against example" \
-        "diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example"
+        "diff <(python3 -c \"
+import yaml, sys
+yaml.dump(yaml.safe_load(open('$cname/agent-config.yaml')), sys.stdout, default_flow_style=False, sort_keys=False)
+\") <(python3 -c \"
+import yaml, sys
+yaml.dump(yaml.safe_load(open('test/$cname/agent-config.yaml.example')), sys.stdout, default_flow_style=False, sort_keys=False)
+\")"
 done
 
 test_end
@@ -211,7 +229,7 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster"
 
-e2e_run "Clean up previous sno" "rm -rf sno"
+e2e_run "Clean up previous sno" "rm -rfv sno"
 e2e_run "Create and install SNO cluster" \
     "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Verify cluster operators" "aba --dir sno run"
@@ -237,14 +255,14 @@ e2e_diag "Check oc-mirror cache (local)" \
 test_end
 
 # ============================================================================
-# 9. SNO: re-install after save/load
+# 9. SNO: bootstrap after save/load
 # ============================================================================
-test_begin "SNO: re-install after save/load"
+test_begin "SNO: bootstrap after save/load"
 
 e2e_run "Clean sno directory" "aba --dir sno clean; rm -f sno/cluster.conf"
 e2e_run "Test small CIDR 10.0.1.200/30" \
     "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --machine-network '10.0.1.200/30' --step iso"
-e2e_run "Clean and recreate with normal CIDR" "rm -rf sno"
+e2e_run "Clean and recreate with normal CIDR" "rm -rfv sno"
 # Bootstrap only (saves ~30 min) -- proves save/load roundtrip produced
 # valid images that a cluster can boot from.  Full install was already
 # done in the previous "SNO: install cluster" test.
@@ -270,7 +288,7 @@ e2e_run "Set reg_ssh_user=testy" "aba -d mirror --reg-ssh-user testy"
 e2e_run "Set reg_ssh_key" "aba -d mirror --reg-ssh-key '~/.ssh/testy_rsa'"
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
-e2e_run "Clean saved data" "rm -rf mirror/save"
+e2e_run "Clean saved data" "rm -rfv mirror/save"
 e2e_run -r 3 2 "Sync images with testy user config" "aba --dir mirror sync --retry"
 
 # Re-install SNO with testy config
@@ -293,7 +311,7 @@ e2e_run "Verify govc tar missing" "! test -f cli/govc*gz"
 e2e_run "Run download-all (should re-download govc)" "aba -d cli download-all"
 e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
 
-e2e_run "Clean standard dir" "rm -rf standard"
+e2e_run "Clean standard dir" "rm -rfv standard"
 e2e_run "Create agent configs (bare-metal)" \
     "aba cluster -n standard -t standard -i $(pool_standard_api_vip) -s install"
 e2e_run "Verify cluster.conf" "ls -l standard/cluster.conf"
