@@ -53,7 +53,7 @@ setup_aba_from_scratch() {
 
     # Reset aba.  -i: mirror dir may not exist on first run.
     e2e_run -i "Reset aba" \
-        "cd $aba_root && make -C mirror reset yes=1"
+        "cd $aba_root && aba reset -f"
 
     echo "=== setup_aba_from_scratch complete ==="
 }
@@ -160,7 +160,7 @@ reset_internal_bastion() {
     # Reset aba state.  Use make directly since 'aba' CLI may not be installed
     # on the remote yet (we only synced the tree, didn't run ./install).
     e2e_run_remote -i "Reset aba on internal bastion" \
-        "cd ~/aba && make -C mirror reset yes=1"
+        "cd ~/aba && make -C mirror reset"
     e2e_run_remote "Clean cluster dirs on internal bastion" \
         "cd ~/aba && rm -rf sno sno2 compact standard"
     e2e_run_remote "Clean podman on internal bastion" \
@@ -186,7 +186,7 @@ cleanup_all() {
 
     # Reset aba.  -i: mirror dir may not exist on first run.
     e2e_run -i "Reset aba mirror state" \
-        "make -C mirror reset yes=1"
+        "aba reset -f"
 
     # Remove cluster directories
     e2e_run "Remove cluster directories" \
