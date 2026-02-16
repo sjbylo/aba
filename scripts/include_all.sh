@@ -1169,7 +1169,7 @@ get_domain() {
 
 # Get the default gateway / next hop (best guess for install interface, not system default)
 get_next_hop() {
-	local gw ifc cidr ip prefix net first_three
+	local gw ifc cidr ip prefix a b c d ip_int mask net_int gw_int
 
 	ifc=$(_pick_install_iface 2>/dev/null || true)
 
@@ -1179,16 +1179,20 @@ get_next_hop() {
 			| awk '/default/ {for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
 	fi
 
-	# 2) If no default route for that iface, guess .1 from the iface subnet (weak heuristic)
+	# 2) No default route: compute network_base+1 from iface CIDR (subnet-aware)
 	if [[ -z "${gw:-}" ]] && [[ -n "${ifc:-}" ]]; then
 		cidr=$(ip -o -4 addr show dev "$ifc" 2>/dev/null | awk '{print $4; exit}')
 		ip=${cidr%/*}
 		prefix=${cidr#*/}
 
-		# If it's an RFC1918-ish address, guess x.x.x.1 (common gateway convention)
-		if echo "$ip" | grep -q -E '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)'; then
-			first_three=$(echo "$ip" | awk -F. '{print $1"."$2"."$3}')
-			gw="${first_three}.1"
+		if [[ -n "$ip" && -n "$prefix" ]]; then
+			# Convert IP to 32-bit integer, mask to network base, add 1
+			IFS=. read -r a b c d <<< "$ip"
+			ip_int=$(( (a << 24) + (b << 16) + (c << 8) + d ))
+			mask=$(( 0xFFFFFFFF << (32 - prefix) & 0xFFFFFFFF ))
+			net_int=$(( ip_int & mask ))
+			gw_int=$(( net_int + 1 ))
+			gw="$(( (gw_int >> 24) & 0xFF )).$(( (gw_int >> 16) & 0xFF )).$(( (gw_int >> 8) & 0xFF )).$(( gw_int & 0xFF ))"
 		fi
 	fi
 
