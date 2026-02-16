@@ -111,8 +111,7 @@ test_begin "Proxy mode: verify and shutdown"
 
 e2e_run "Verify cluster operators" "aba --dir sno run"
 e2e_run "Check cluster operators" "aba --dir sno cmd 'oc get co'"
-# -i: cluster may already be stopped or partially torn down
-e2e_run -i "Shutdown cluster" "yes | aba --dir sno shutdown --wait"
+e2e_run "Shutdown cluster" "yes | aba --dir sno shutdown --wait"
 
 test_end
 

@@ -311,6 +311,17 @@ run_suite_local() {
     echo "========================================"
     echo ""
 
+    # Warn if working tree has uncommitted changes (helps catch accidental local hacks)
+    local _dirty
+    _dirty="$(git -C "$_ABA_ROOT" status --porcelain 2>/dev/null)"
+    if [ -n "$_dirty" ]; then
+        echo "  WARNING: aba tree has uncommitted changes -- syncing working tree as-is"
+        git -C "$_ABA_ROOT" status --short 2>/dev/null | head -15 | while IFS= read -r _l; do
+            echo "    $_l"
+        done
+        echo ""
+    fi
+
     # Sync latest test framework + scripts to conN
     echo "  Syncing aba tree to $con_host ..."
     rsync -az --delete \

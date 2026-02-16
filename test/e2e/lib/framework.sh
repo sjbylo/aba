@@ -8,6 +8,42 @@
 #
 # Usage: source this file from suite scripts or run.sh
 # =============================================================================
+#
+# ===========================  E2E GOLDEN RULES  =============================
+#
+#  1. Tests MUST fail on error.  Never mask underlying issues.
+#     If something breaks, the test must stop and report it.
+#
+#  2. Never use '2>/dev/null' in test commands.
+#     Stderr output is diagnostic gold.  Suppressing it hides root causes.
+#
+#  3. Never use '|| true' in test commands.
+#     If a command can legitimately fail, use 'e2e_diag' or embed an explicit
+#     precondition check (e.g. if [ -f X ]; then ...; fi).
+#
+#  4. When a test fails, check if the fix belongs in ABA code FIRST.
+#     Tests exercise the product -- don't paper over product bugs.
+#
+#  5. Never "fix" a test just to make it pass.
+#     A passing test that hides a real failure is worse than a failing test.
+#
+#  6. Uninstall from the same host that installed.
+#     If the registry was installed from conN, uninstall from conN -- not disN.
+#
+#  7. Never remove tools before operations that need them.
+#     E.g. don't 'dnf remove make' before 'aba reset -f' (which needs make).
+#
+#  8. Verify cleanup actually worked.
+#     After uninstall, assert the service is down (e.g. curl check).
+#     After cleanup, assert the directory is gone.
+#
+#  9. Use 'e2e_diag' for diagnostic/informational commands whose exit code
+#     does not matter.  Never use it for steps that must succeed.
+#
+# 10. Prefer 'aba' commands over raw 'make' / scripts.
+#     Eat your own dog food.  Use the product's CLI for setup and teardown.
+#
+# ============================================================================
 
 # Resolve the directory this library lives in
 _E2E_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -431,7 +467,6 @@ _interactive_prompt() {
 # Flags:
 #   -r RETRIES BACKOFF   Retry on failure (default: 5 retries, 1.5x backoff)
 #   -h HOST              Run command on remote HOST via SSH
-#   -i                   Ignore result (return actual exit code, don't fail suite)
 #   -q                   Quiet: log output to file only (don't show on screen)
 #   "description"        First non-flag argument = human-readable description
 #   command...           Remaining arguments = the command to run
@@ -440,7 +475,6 @@ e2e_run() {
     local tot_cnt=5
     local backoff=1.5
     local host=""
-    local ignore_result=""
     local quiet=""
     local mark="L"
 
@@ -449,7 +483,6 @@ e2e_run() {
         case "$1" in
             -r) tot_cnt="$2"; backoff="$3"; shift 3 ;;
             -h) host="$2"; mark="R"; shift 2 ;;
-            -i) ignore_result=1; shift ;;
             -q) quiet=1; shift ;;
             *)  break ;;
         esac
@@ -505,12 +538,6 @@ e2e_run() {
                 fi
                 _e2e_log "  OK (attempt $attempt)"
                 return 0
-            fi
-
-            # Ignore result mode: return actual exit code
-            if [ -n "$ignore_result" ]; then
-                _e2e_log "  Failed (exit=$ret), returning actual result (-i flag)"
-                return $ret
             fi
 
             _e2e_log "  Attempt $attempt/$tot_cnt failed (exit=$ret)"
@@ -577,6 +604,61 @@ e2e_run_remote() {
         exit 1
     fi
     e2e_run -h "$INTERNAL_BASTION" "$@"
+}
+
+# --- e2e_diag ---------------------------------------------------------------
+#
+# Run a DIAGNOSTIC command whose exit code does NOT affect the test outcome.
+# Output is logged for troubleshooting, but the suite continues regardless of
+# success or failure.  Use this ONLY for informational checks, never for steps
+# that must succeed for the test to be valid.
+#
+# Flags:
+#   -h HOST   Run on remote HOST via SSH
+#
+# Usage:
+#   e2e_diag "Show firewalld status" "systemctl status firewalld"
+#   e2e_diag -h "$host" "Check disk space" "df -h"
+#
+e2e_diag() {
+    local host=""
+    local mark="L"
+
+    while [[ "${1:-}" == -* ]]; do
+        case "$1" in
+            -h) host="$2"; mark="R"; shift 2 ;;
+            *)  break ;;
+        esac
+    done
+
+    local description="$1"; shift
+    local cmd="$*"
+    local _lf="${E2E_LOG_FILE:-/dev/null}"
+    local ret=0
+
+    _e2e_log_and_print "  $mark $(_e2e_yellow "[diag]") $description $(_e2e_cyan "($cmd)")"
+
+    if [ -n "$host" ]; then
+        ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+            2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+    else
+        ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+    fi
+
+    if [ $ret -ne 0 ]; then
+        _e2e_log "  [diag] $description exited $ret (informational only)"
+    fi
+
+    return 0  # Always succeed -- this is diagnostic only
+}
+
+# Shorthand: e2e_diag on $INTERNAL_BASTION
+e2e_diag_remote() {
+    if [ -z "${INTERNAL_BASTION:-}" ]; then
+        _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
+        exit 1
+    fi
+    e2e_diag -h "$INTERNAL_BASTION" "$@"
 }
 
 # --- e2e_run_must_fail ------------------------------------------------------
@@ -838,9 +920,22 @@ e2e_setup() {
         source scripts/include_all.sh no-trap 2>/dev/null || true
     fi
 
-    # Log the active parameter set
+    # Log git state so we know exactly what was tested
+    local _git_head _git_dirty
+    _git_head="$(git -C "$aba_root" log -1 --format='%h %s' 2>/dev/null || echo 'unknown')"
+    _git_dirty="$(git -C "$aba_root" status --porcelain 2>/dev/null | head -20)"
+
     _e2e_log "=== E2E Environment ==="
     _e2e_log "  ABA_ROOT=$aba_root"
+    _e2e_log "  GIT_HEAD=$_git_head"
+    if [ -n "$_git_dirty" ]; then
+        _e2e_log "  GIT_STATE=DIRTY (uncommitted changes):"
+        while IFS= read -r _line; do
+            _e2e_log "    $_line"
+        done <<< "$_git_dirty"
+    else
+        _e2e_log "  GIT_STATE=clean"
+    fi
     _e2e_log "  TEST_CHANNEL=${TEST_CHANNEL:-unset}"
     _e2e_log "  VER_OVERRIDE=${VER_OVERRIDE:-unset}"
     _e2e_log "  INTERNAL_BASTION_RHEL_VER=${INTERNAL_BASTION_RHEL_VER:-unset}"

@@ -188,8 +188,7 @@ test_begin "Compact: install and delete cluster"
 
 e2e_run_remote "Create compact cluster (bootstrap only)" \
     "cd ~/aba && aba cluster -n compact -t compact --starting-ip $(pool_compact_api_vip) --step bootstrap"
-# -i: cluster may not be fully up if bootstrap failed
-e2e_run_remote -i "Delete compact cluster" \
+e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir compact delete"
 e2e_run_remote -q "Clean compact dir" \
     "cd ~/aba && rm -rf compact"
