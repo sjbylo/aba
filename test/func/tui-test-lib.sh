@@ -79,7 +79,7 @@ start_tui() {
 	fi
 
 	log_info "Starting TUI in tmux session: $SESSION"
-	tmux new-session -d -s "$SESSION" -x 192 -y 60 "$cmd"
+	tmux new-session -d -s "$SESSION" -x 240 -y 70 "$cmd"
 }
 
 stop_tui() {
