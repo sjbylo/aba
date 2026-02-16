@@ -150,9 +150,10 @@ reset_internal_bastion() {
     e2e_run "Verify registry is down on $_dis_bare" \
         "! curl -sk --connect-timeout 5 https://${_dis_bare}:8443/health/instance"
 
-    # Reset aba state.
-    e2e_run_remote "Reset aba on internal bastion" \
-        "cd ~/aba && aba reset -f"
+    # Reset aba state.  Use make directly since 'aba' CLI may not be installed
+    # on the remote yet (we only synced the tree, didn't run ./install).
+    e2e_run_remote -i "Reset aba on internal bastion" \
+        "cd ~/aba && make -C mirror reset yes=1"
     e2e_run_remote "Clean cluster dirs on internal bastion" \
         "cd ~/aba && rm -rf sno sno2 compact standard"
     e2e_run_remote "Clean podman on internal bastion" \
