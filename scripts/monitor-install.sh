@@ -70,11 +70,20 @@ aba_info_ok "Run 'aba info' to view this information again."
 aba_info_ok "Run 'aba help' and 'aba -h' for more options."
 
 if [ ! -f ~/.aba/.first_cluster_success ]; then
+	_bdr=$(printf '═%.0s' $(seq 1 64))
+	_boxl() { printf "  ║  %-62s║" "$1"; }
 	echo
-	echo ">>> Congratulations! You've installed your first OpenShift cluster using Aba! <<<"
-	echo ">>>       Please consider giving our project a star to let us know, at:       <<<"
-	echo ">>>                    https://github.com/sjbylo/aba                          <<<"
-	echo ">>>                             Thank you! :)                                 <<<"
+	echo_bright_green  "  ╔${_bdr}╗"
+	echo_bright_green  "$(_boxl '')"
+	echo_bright_green  "$(_boxl 'Congratulations!')"
+	echo_bright_green  "$(_boxl "You've installed your first OpenShift cluster using Aba!")"
+	echo_bright_green  "$(_boxl '')"
+	echo_bright_green  "$(_boxl 'Please consider giving our project a star to let us know:')"
+	echo_bright_cyan   "$(_boxl 'https://github.com/sjbylo/aba')"
+	echo_bright_green  "$(_boxl '')"
+	echo_bright_yellow "$(_boxl 'Thank you! :)')"
+	echo_bright_green  "$(_boxl '')"
+	echo_bright_green  "  ╚${_bdr}╝"
 	echo
 
 	touch ~/.aba/.first_cluster_success
