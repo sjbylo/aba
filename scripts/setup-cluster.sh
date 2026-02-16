@@ -38,7 +38,11 @@ else
 	fi
 fi
 
-aba_info "Creating '$name/cluster.conf' file for cluster type '$type'."
+if [ -s cluster.conf ]; then
+	aba_info "Using existing '$name/cluster.conf'."
+else
+	aba_info "Creating '$name/cluster.conf' file for cluster type '$type'."
+fi
 
 create_cluster_cmd="scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip"
 
