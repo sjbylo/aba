@@ -94,12 +94,10 @@ sync: .init .rpmsint ~/.pull-secret.json                     install verify sync
 
 .PHONY: save
 # Note that for a connected workstation or bastion there is no need to install all the required packages, only 'rpmsext' is needed.
-# $(MR_TARBALL) is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
-# Same with docker-reg-image.tgz (via download-registries)
-# download-registries is executed last in case docker.io is inaccessible 
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
 # Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
-save: .init .rpmsext ~/.pull-secret.json              download-registries                     save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download mirror-registry tarball and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
+# Registry binaries are NOT downloaded here -- 'aba bundle' handles that separately.
+save: .init .rpmsext ~/.pull-secret.json                                                     save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar. Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
 # oc-mirror is idempotent so no need for 'dot' flag files

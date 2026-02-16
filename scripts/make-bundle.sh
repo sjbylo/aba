@@ -160,9 +160,12 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_debug "Stdout mode: streaming tar bundle to stdout"
 	aba_info "Downloading binary data." >&2  # Must use stderr channel here
 
-	# FIXME - is this needed since make save will do this - make -s -C cli download        >&2 	|| exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
+	# Best-effort: download registry binaries for inclusion in the bundle (non-fatal)
+	aba_debug "Calling: make -s -C mirror download-registries (best-effort)"
+	make -s -C mirror download-registries >&2 2>&1 || aba_warning "Registry binary download failed (non-fatal)." >&2
+
 	aba_debug "Calling: make -s -C mirror save retry=7"
-	make -s -C mirror save retry=7 >&2 	|| exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
+	make -s -C mirror save retry=7 >&2 	|| exit 1
 	aba_debug "Mirror save completed successfully"
 
 	aba_info "Writing install bundle (tar format) to stdout ..." >&2
@@ -195,6 +198,11 @@ if [ "$light_bundle" ]; then
 	echo_magenta "[ABA] A *light* install bundle will be created."
 	echo_magenta "[ABA] Image-set archive file(s) will NOT be included in the bundle and must be transferred separately"
 	echo_magenta "[ABA] to the disconnected environment, then manually moved into the extracted install bundle."
+
+	# Best-effort: download registry binaries for inclusion in the bundle (non-fatal)
+	aba_info "Downloading registry binaries (best-effort) ..."
+	aba_debug "Calling: make -C mirror download-registries (best-effort)"
+	make -C mirror download-registries 2>&1 || aba_warning "Registry binary download failed (non-fatal). You can download it later or use a Docker registry."
 
 	# Create light bundle with "aba tarrepo..."
 	aba_info "Pulling images ..."
@@ -238,6 +246,11 @@ else
 	else
 		aba_debug "Mirror and bundle destination are on different filesystems - no disk space concern"
 	fi
+
+	# Best-effort: download registry binaries for inclusion in the bundle (non-fatal)
+	aba_info "Downloading registry binaries (best-effort) ..."
+	aba_debug "Calling: make -C mirror download-registries (best-effort)"
+	make -C mirror download-registries 2>&1 || aba_warning "Registry binary download failed (non-fatal). You can download it later or use a Docker registry."
 
 	# Create full bundle ... with "aba tar..."
 	aba_info "Pulling images to disk ..."
