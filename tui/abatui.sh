@@ -2902,10 +2902,20 @@ Use 'Run in Terminal' if you need to interact with the command." 0 0 || true
 		# Strip ANSI color codes (sed -u for unbuffered/line-by-line output) before showing in dialog
 		# This prevents control characters from displaying literally
 		# Set ASK_OVERRIDE=1 to skip interactive prompts (TUI is non-interactive)
+		#
+		# Handle SIGINT in the parent shell while the pipeline runs.
+		# Without this, Ctrl-C kills the pipeline processes AND the parent
+		# bash (cooperative exit), crashing the entire TUI.
+		# IMPORTANT: use 'trap : INT' (command trap), NOT 'trap "" INT' (ignore).
+		# An ignore trap is inherited by child processes, making Ctrl-C useless.
+		# A command trap is NOT inherited, so pipeline processes still die on
+		# SIGINT while the parent shell survives and shows the failure dialog.
+		trap : INT
 		ASK_OVERRIDE=1 bash -c "$tui_cmd" 2>&1 | tee "$output_file" | \
 			sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
 			dialog --backtitle "$(ui_backtitle)" --title "Executing: $tui_cmd" \
 				--progressbox $box_height $box_width
+		trap - INT
 				
 			# Get exit code from the command (via PIPESTATUS before pipe)
 			local exit_code=${PIPESTATUS[0]}
