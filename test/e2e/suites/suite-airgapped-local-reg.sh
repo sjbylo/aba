@@ -33,6 +33,10 @@ DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
+# Pool-unique cluster names (avoid VM collisions when pools run in parallel)
+SNO="$(pool_cluster_name sno)"
+STANDARD="$(pool_cluster_name standard)"
+
 # --- Suite ------------------------------------------------------------------
 
 e2e_setup
@@ -70,7 +74,7 @@ setup_aba_from_scratch
 
 e2e_run "Install aba" "./install"
 
-# Use VER_OVERRIDE=p for upgrade testing (we'll reduce version further below)
+# Use OCP_VERSION=p for upgrade testing (we'll reduce version further below)
 e2e_run "Configure aba.conf with previous version" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version p --base-domain $(pool_domain)"
 e2e_run "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
@@ -182,11 +186,13 @@ test_end
 test_begin "SNO: install cluster"
 
 e2e_run_remote "Create and install SNO" \
-    "cd ~/aba && aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) -s install"
+    "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Verify cluster operators" \
-    "cd ~/aba && aba --dir sno run"
+    "cd ~/aba && aba --dir $SNO run"
+e2e_run_remote -r 180 10 "Wait for all operators fully available" \
+    "cd ~/aba && aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_run_remote "Check cluster operators" \
-    "cd ~/aba && aba --dir sno cmd 'oc get co'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc get co'"
 
 test_end
 
@@ -196,7 +202,7 @@ test_end
 test_begin "SNO: day2 configuration"
 
 e2e_run_remote "Apply day2 config" \
-    "cd ~/aba && aba --dir sno day2"
+    "cd ~/aba && aba --dir $SNO day2"
 
 test_end
 
@@ -241,16 +247,16 @@ e2e_run_remote "Deploy vote-app (direct mirror path)" \
 
 # Clean up before IDMS test
 e2e_run_remote "Delete demo project" \
-    "cd ~/aba && aba --dir sno cmd 'oc delete project demo'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc delete project demo'"
 e2e_run_remote -r 3 2 "Recreate demo project" \
-    "cd ~/aba && aba --dir sno cmd 'oc new-project demo'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc new-project demo'"
 
 # --- (b) Deploy via ImageDigestMirrorSet (IDMS) ---
 # Apply an IDMS that redirects quay.io/sjbylo -> mirror registry.
 # This tests the key air-gapped mechanism: users reference public image
 # names and OCP transparently pulls from the mirror.
 e2e_run_remote "Apply ImageDigestMirrorSet for quay.io/sjbylo" \
-    "cd ~/aba && source <(cd mirror && normalize-mirror-conf) && aba --dir sno cmd 'oc apply -f -' <<'IDMSEOF'
+    "cd ~/aba && source <(cd mirror && normalize-mirror-conf) && aba --dir $SNO cmd 'oc apply -f -' <<'IDMSEOF'
 apiVersion: config.openshift.io/v1
 kind: ImageDigestMirrorSet
 metadata:
@@ -267,13 +273,13 @@ e2e_run_remote -q "Wait for IDMS to propagate" "sleep 30"
 
 # Deploy vote-app using the PUBLIC image name -- IDMS should redirect to mirror
 e2e_run_remote "Deploy vote-app via IDMS (quay.io source)" \
-    "cd ~/aba && aba --dir sno cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
 e2e_run_remote "Wait for vote-app rollout via IDMS" \
-    "cd ~/aba && aba --dir sno cmd 'oc rollout status deployment vote-app -n demo'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc rollout status deployment vote-app -n demo'"
 
 # Clean up
 e2e_run_remote "Delete demo project after IDMS test" \
-    "cd ~/aba && aba --dir sno cmd 'oc delete project demo'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc delete project demo'"
 
 test_end
 
@@ -306,13 +312,13 @@ e2e_run_remote -r 3 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
 
 e2e_run_remote "Apply OSUS day2" \
-    "cd ~/aba && aba --dir sno day2-osus"
+    "cd ~/aba && aba --dir $SNO day2-osus"
 
 e2e_run_remote -r 3 2 "Trigger cluster upgrade" \
-    "cd ~/aba && aba --dir sno cmd 'oc adm upgrade --to-latest=true'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc adm upgrade --to-latest=true'"
 
 e2e_run_remote -r 20 1.5 "Wait for upgrade to complete" \
-    "cd ~/aba && aba --dir sno cmd 'oc get clusterversion -o jsonpath={.items[0].status.history[0].state}' | grep Completed"
+    "cd ~/aba && aba --dir $SNO cmd 'oc get clusterversion -o jsonpath={.items[0].status.history[0].state}' | grep Completed"
 
 test_end
 
@@ -322,11 +328,11 @@ test_end
 test_begin "Lifecycle: shutdown/startup"
 
 e2e_run_remote "Shutdown cluster" \
-    "cd ~/aba && yes | aba --dir sno shutdown --wait"
+    "cd ~/aba && yes | aba --dir $SNO shutdown --wait"
 e2e_run_remote "Startup cluster" \
-    "cd ~/aba && aba --dir sno startup --wait"
+    "cd ~/aba && aba --dir $SNO startup --wait"
 e2e_run_remote "Verify cluster healthy after restart" \
-    "cd ~/aba && aba --dir sno run"
+    "cd ~/aba && aba --dir $SNO run"
 
 test_end
 
@@ -339,26 +345,26 @@ test_begin "Standard: cluster with macs.conf"
 e2e_run_remote "Copy macs.conf" \
     "cp -v ~/aba/test/macs.conf ~/aba/"
 e2e_run_remote "Delete SNO cluster" \
-    "cd ~/aba && aba --dir sno delete"
+    "cd ~/aba && aba --dir $SNO delete"
 e2e_run_remote "Clean sno dir" \
-    "cd ~/aba && rm -rfv sno"
+    "cd ~/aba && rm -rfv $SNO"
 
 # Build standard cluster
 e2e_run_remote "Create standard cluster config" \
-    "cd ~/aba && aba cluster -n standard -t standard -i $(pool_standard_api_vip) --step cluster.conf"
+    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_standard_api_vip) --step cluster.conf"
 e2e_run_remote "Verify macs.conf used" \
-    "cd ~/aba && grep mac_prefix standard/cluster.conf || cat standard/cluster.conf"
+    "cd ~/aba && grep mac_prefix $STANDARD/cluster.conf || cat $STANDARD/cluster.conf"
 e2e_run_remote "Generate agent configs" \
-    "cd ~/aba && aba --dir standard agentconf"
+    "cd ~/aba && aba --dir $STANDARD agentconf"
 e2e_run_remote "Verify agent-config has MACs" \
-    "cd ~/aba && cat standard/agent-config.yaml | grep -i mac"
+    "cd ~/aba && cat $STANDARD/agent-config.yaml | grep -i mac"
 # Bootstrap only (saves ~30 min vs full install) -- proves agent configs are
 # valid and control plane comes up.  Full operator verification is done on
 # the SNO cluster earlier in this suite.
 e2e_run_remote "Bootstrap standard cluster" \
-    "cd ~/aba && aba --dir standard bootstrap"
+    "cd ~/aba && aba --dir $STANDARD bootstrap"
 e2e_run_remote "Delete standard cluster" \
-    "cd ~/aba && aba --dir standard delete"
+    "cd ~/aba && aba --dir $STANDARD delete"
 
 test_end
 

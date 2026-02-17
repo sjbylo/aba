@@ -26,6 +26,11 @@ DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
+# Pool-unique cluster names (avoid VM collisions when pools run in parallel)
+SNO="$(pool_cluster_name sno)"
+COMPACT="$(pool_cluster_name compact)"
+STANDARD="$(pool_cluster_name standard)"
+
 # --- Suite ------------------------------------------------------------------
 
 e2e_setup
@@ -59,7 +64,7 @@ setup_aba_from_scratch
 e2e_run "Install aba" "./install"
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
-e2e_run "Configure aba.conf" "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l} --base-domain $(pool_domain)"
+e2e_run "Configure aba.conf" "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=${TEST_CHANNEL:-stable} aba.conf"
@@ -78,7 +83,7 @@ e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 # defaults (ask=true, editor=vi).  Re-apply our non-interactive settings so
 # subsequent tests don't hang waiting for an editor or confirmation prompt.
 e2e_run "Re-apply ask=false after interactive test" \
-    "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l} --base-domain $(pool_domain)"
+    "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
@@ -160,14 +165,15 @@ test_end
 # ============================================================================
 test_begin "ABI config: sno/compact/standard"
 
-for cname in sno compact standard; do
+for ctype in sno compact standard; do
+    cname="$(pool_cluster_name $ctype)"
     local_starting_ip=""
-    [ "$cname" = "sno" ] && local_starting_ip=$(pool_sno_ip)
-    [ "$cname" = "compact" ] && local_starting_ip=$(pool_compact_api_vip)
-    [ "$cname" = "standard" ] && local_starting_ip=$(pool_standard_api_vip)
+    [ "$ctype" = "sno" ] && local_starting_ip=$(pool_sno_ip)
+    [ "$ctype" = "compact" ] && local_starting_ip=$(pool_compact_api_vip)
+    [ "$ctype" = "standard" ] && local_starting_ip=$(pool_standard_api_vip)
 
     e2e_run "Create cluster.conf for $cname" \
-        "rm -rfv $cname && aba cluster -n $cname -t $cname -i $local_starting_ip --step cluster.conf"
+        "rm -rfv $cname && aba cluster -n $cname -t $ctype -i $local_starting_ip --step cluster.conf"
     e2e_run "Fix mac_prefix for $cname" \
         "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $cname/cluster.conf"
     e2e_run "Generate install-config.yaml for $cname" \
@@ -187,11 +193,13 @@ test_end
 # ============================================================================
 test_begin "ABI config: diff against known-good examples"
 
-for cname in sno compact standard; do
+for ctype in sno compact standard; do
+    cname="$(pool_cluster_name $ctype)"
     # Scrub volatile/secret fields and normalize YAML via python3+pyyaml
     # (installed by aba).  Both generated and example files go through the
     # same normalizer so formatting differences (comments, quoting) don't
     # cause false diffs.
+    # Note: example files are always under test/{sno,compact,standard}/ (type, not pool name)
     e2e_run "Diff $cname install-config.yaml against example" \
         "diff <(python3 -c \"
 import yaml, sys
@@ -209,7 +217,7 @@ if fds:
 yaml.dump(d, sys.stdout, default_flow_style=False, sort_keys=False)
 \") <(python3 -c \"
 import yaml, sys
-yaml.dump(yaml.safe_load(open('test/$cname/install-config.yaml.example')), sys.stdout, default_flow_style=False, sort_keys=False)
+yaml.dump(yaml.safe_load(open('test/$ctype/install-config.yaml.example')), sys.stdout, default_flow_style=False, sort_keys=False)
 \")"
 
     e2e_run "Diff $cname agent-config.yaml against example" \
@@ -218,7 +226,7 @@ import yaml, sys
 yaml.dump(yaml.safe_load(open('$cname/agent-config.yaml')), sys.stdout, default_flow_style=False, sort_keys=False)
 \") <(python3 -c \"
 import yaml, sys
-yaml.dump(yaml.safe_load(open('test/$cname/agent-config.yaml.example')), sys.stdout, default_flow_style=False, sort_keys=False)
+yaml.dump(yaml.safe_load(open('test/$ctype/agent-config.yaml.example')), sys.stdout, default_flow_style=False, sort_keys=False)
 \")"
 done
 
@@ -229,14 +237,14 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster"
 
-e2e_run "Clean up previous sno" "rm -rfv sno"
+e2e_run "Clean up previous $SNO" "rm -rfv $SNO"
 e2e_run "Create and install SNO cluster" \
-    "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
-e2e_run "Verify cluster operators" "aba --dir sno run"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
+e2e_run "Verify cluster operators" "aba --dir $SNO run"
 e2e_run -r 180 10 "Wait for all operators fully available" \
-    "aba --dir sno run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
-e2e_run "Show cluster operators" "aba --dir sno cmd 'oc get co'"
-e2e_run "Delete SNO cluster" "aba --dir sno delete"
+    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_run "Show cluster operators" "aba --dir $SNO cmd 'oc get co'"
+e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 
 test_end
 
@@ -262,15 +270,15 @@ test_end
 # ============================================================================
 test_begin "SNO: bootstrap after save/load"
 
-e2e_run "Clean sno directory" "aba --dir sno clean; rm -f sno/cluster.conf"
+e2e_run "Clean sno directory" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
 e2e_run "Test small CIDR 10.0.1.200/30" \
-    "aba cluster -n sno -t sno --starting-ip 10.0.1.201 --machine-network '10.0.1.200/30' --step iso"
-e2e_run "Clean and recreate with normal CIDR" "rm -rfv sno"
+    "aba cluster -n $SNO -t sno --starting-ip 10.0.1.201 --machine-network '10.0.1.200/30' --step iso"
+e2e_run "Clean and recreate with normal CIDR" "rm -rfv $SNO"
 # Bootstrap only (saves ~30 min) -- proves save/load roundtrip produced
 # valid images that a cluster can boot from.  Full install was already
 # done in the previous "SNO: install cluster" test.
 e2e_run "Create and bootstrap SNO" \
-    "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step bootstrap --machine-network $(pool_machine_network)"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step bootstrap --machine-network $(pool_machine_network)"
 
 test_end
 
@@ -295,13 +303,13 @@ e2e_run "Clean saved data" "rm -rfv mirror/save"
 e2e_run -r 3 2 "Sync images with testy user config" "aba --dir mirror sync --retry"
 
 # Re-install SNO with testy config
-e2e_run "Clean sno" "aba --dir sno clean; rm -f sno/cluster.conf"
-e2e_run "Install SNO" "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
-e2e_run "Verify operators" "aba --dir sno run"
+e2e_run "Clean sno" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
+e2e_run "Verify operators" "aba --dir $SNO run"
 e2e_run -r 180 10 "Wait for all operators fully available" \
-    "aba --dir sno run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
-e2e_run "Show cluster operators" "aba --dir sno cmd 'oc get co'"
-e2e_run "Shutdown cluster" "yes | aba --dir sno shutdown --wait"
+    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_run "Show cluster operators" "aba --dir $SNO cmd 'oc get co'"
+e2e_run "Shutdown cluster" "yes | aba --dir $SNO shutdown --wait"
 
 test_end
 
@@ -317,14 +325,14 @@ e2e_run "Verify govc tar missing" "! test -f cli/govc*gz"
 e2e_run "Run download-all (should re-download govc)" "aba -d cli download-all"
 e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
 
-e2e_run "Clean standard dir" "rm -rfv standard"
+e2e_run "Clean standard dir" "rm -rfv $STANDARD"
 e2e_run "Create agent configs (bare-metal)" \
-    "aba cluster -n standard -t standard -i $(pool_standard_api_vip) -s agentconf"
-e2e_run "Verify cluster.conf" "ls -l standard/cluster.conf"
-e2e_run "Verify agent configs" "ls -l standard/install-config.yaml standard/agent-config.yaml"
-e2e_run "Verify ISO not yet created" "! ls standard/iso-agent-based/agent.*.iso"
-e2e_run "Create ISO (bare-metal)" "aba --dir standard install"
-e2e_run "Verify ISO created" "ls -l standard/iso-agent-based/agent.*.iso"
+    "aba cluster -n $STANDARD -t standard -i $(pool_standard_api_vip) -s agentconf"
+e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"
+e2e_run "Verify agent configs" "ls -l $STANDARD/install-config.yaml $STANDARD/agent-config.yaml"
+e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso"
+e2e_run "Create ISO (bare-metal)" "aba --dir $STANDARD install"
+e2e_run "Verify ISO created" "ls -l $STANDARD/iso-agent-based/agent.*.iso"
 
 e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
 e2e_run_remote "Verify registry removed" \

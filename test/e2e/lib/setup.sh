@@ -73,7 +73,7 @@ setup_aba_from_scratch() {
 #
 setup_bastion() {
     local clone_name="$1"
-    local template="${2:-${VM_TEMPLATES[${INTERNAL_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
+    local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
     local test_user="${3:-${TEST_USER:-$VM_DEFAULT_USER}}"
 
     echo "=== setup_bastion: clone $template -> $clone_name ==="
@@ -98,7 +98,7 @@ setup_bastion() {
 #
 setup_connected_bastion() {
     local clone_name="$1"
-    local template="${2:-${VM_TEMPLATES[${INTERNAL_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
+    local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
 
     echo "=== setup_connected_bastion: clone $template -> $clone_name ==="
 
@@ -210,9 +210,13 @@ cleanup_all() {
     e2e_run "Reset aba mirror state" \
         "if [ -d mirror ]; then aba reset -f; else echo 'No mirror dir -- nothing to reset'; fi"
 
-    # Remove cluster directories
+    # Remove cluster directories (pool-specific names)
+    local _sno _compact _standard
+    _sno="$(pool_cluster_name sno)"
+    _compact="$(pool_cluster_name compact)"
+    _standard="$(pool_cluster_name standard)"
     e2e_run "Remove cluster directories" \
-        "rm -rfv sno sno2 compact standard"
+        "rm -rfv $_sno $_compact $_standard"
 
     # podman prune/rmi with --force are idempotent (return 0 even when empty).
     e2e_run "Clean podman images" \

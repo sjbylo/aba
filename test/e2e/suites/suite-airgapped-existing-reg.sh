@@ -26,6 +26,10 @@ DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
+# Pool-unique cluster names (avoid VM collisions when pools run in parallel)
+SNO="$(pool_cluster_name sno)"
+COMPACT="$(pool_cluster_name compact)"
+
 # --- Suite ------------------------------------------------------------------
 
 e2e_setup
@@ -62,7 +66,7 @@ setup_aba_from_scratch
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 e2e_run "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
@@ -74,11 +78,11 @@ e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Reset aba" "aba reset -f"
-e2e_run "Clean cluster dirs" "rm -rfv sno compact standard"
+e2e_run "Clean cluster dirs" "rm -rfv $SNO $COMPACT"
 
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
 e2e_run "Re-apply config after reset" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
@@ -187,11 +191,11 @@ test_end
 test_begin "Compact: install and delete cluster"
 
 e2e_run_remote "Create compact cluster (bootstrap only)" \
-    "cd ~/aba && aba cluster -n compact -t compact --starting-ip $(pool_compact_api_vip) --step bootstrap"
+    "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_compact_api_vip) --step bootstrap"
 e2e_run_remote "Delete compact cluster" \
-    "cd ~/aba && aba --dir compact delete"
+    "cd ~/aba && aba --dir $COMPACT delete"
 e2e_run_remote -q "Clean compact dir" \
-    "cd ~/aba && rm -rfv compact"
+    "cd ~/aba && rm -rfv $COMPACT"
 
 test_end
 
@@ -201,11 +205,13 @@ test_end
 test_begin "SNO: install cluster"
 
 e2e_run_remote "Create SNO cluster" \
-    "cd ~/aba && aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
+    "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Verify cluster operators" \
-    "cd ~/aba && aba --dir sno run"
+    "cd ~/aba && aba --dir $SNO run"
+e2e_run_remote -r 180 10 "Wait for all operators fully available" \
+    "cd ~/aba && aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_run_remote "Check cluster operators" \
-    "cd ~/aba && aba --dir sno cmd 'oc get co'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc get co'"
 
 test_end
 
@@ -240,13 +246,13 @@ test_end
 test_begin "ACM: MultiClusterHub"
 
 e2e_run_remote "Install ACM subscription" \
-    "cd ~/aba && aba --dir sno cmd 'oc apply -f test/acm-subs.yaml'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc apply -f test/acm-subs.yaml'"
 e2e_run_remote -r 10 1.5 "Wait for ACM operator" \
-    "cd ~/aba && aba --dir sno cmd 'oc get csv -n open-cluster-management -o name | grep advanced-cluster-management'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc get csv -n open-cluster-management -o name | grep advanced-cluster-management'"
 e2e_run_remote "Install MultiClusterHub" \
-    "cd ~/aba && aba --dir sno cmd 'oc apply -f test/acm-mch.yaml'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc apply -f test/acm-mch.yaml'"
 e2e_run_remote -r 20 1.5 "Wait for MCH ready" \
-    "cd ~/aba && aba --dir sno cmd 'oc get multiclusterhub -n open-cluster-management -o jsonpath={.items[0].status.phase} | grep Running'"
+    "cd ~/aba && aba --dir $SNO cmd 'oc get multiclusterhub -n open-cluster-management -o jsonpath={.items[0].status.phase} | grep Running'"
 
 test_end
 
@@ -256,9 +262,9 @@ test_end
 test_begin "NTP: day2 and chronyc verify"
 
 e2e_run_remote "Apply day2 NTP config" \
-    "cd ~/aba && aba --dir sno day2-ntp"
+    "cd ~/aba && aba --dir $SNO day2-ntp"
 e2e_run_remote -r 3 2 "Verify chronyc sources" \
-    "cd ~/aba && aba --dir sno cmd 'oc debug node/\$(oc get nodes -o name | head -1 | cut -d/ -f2) -- chroot /host chronyc sources' | grep $NTP_IP"
+    "cd ~/aba && aba --dir $SNO cmd 'oc debug node/\$(oc get nodes -o name | head -1 | cut -d/ -f2) -- chroot /host chronyc sources' | grep $NTP_IP"
 
 test_end
 
@@ -268,7 +274,7 @@ test_end
 test_begin "Shutdown cluster"
 
 e2e_run_remote "Shutdown SNO cluster" \
-    "cd ~/aba && yes | aba --dir sno shutdown --wait"
+    "cd ~/aba && yes | aba --dir $SNO shutdown --wait"
 
 test_end
 
