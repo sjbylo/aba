@@ -57,7 +57,40 @@ rm -rf $ASSETS_DIR
 mkdir -p $ASSETS_DIR
 
 aba_debug "Copying install-config.yaml and agent-config.yaml to $ASSETS_DIR"
-cp install-config.yaml agent-config.yaml $ASSETS_DIR 
+cp install-config.yaml agent-config.yaml $ASSETS_DIR
+
+# Copy extra manifests into the ISO if present in openshift/ or manifests/ directories.
+# openshift-install applies these during cluster bootstrap.
+shopt -s nullglob  # Enable nullglob for safe glob expansion
+manifest_dirs_checked=0
+manifest_dirs_with_files=0
+
+for manifest_dir in openshift manifests; do
+	manifest_dirs_checked=$((manifest_dirs_checked + 1))
+
+	if [ -d "$manifest_dir" ]; then
+		# Collect yaml/yml files into array (nullglob returns empty array if no matches)
+		yaml_files=("$manifest_dir"/*.yaml "$manifest_dir"/*.yml)
+
+		if [ ${#yaml_files[@]} -gt 0 ]; then
+			manifest_dirs_with_files=$((manifest_dirs_with_files + 1))
+			file_count=${#yaml_files[@]}
+
+			mkdir -p "$ASSETS_DIR/$manifest_dir"
+			cp "${yaml_files[@]}" "$ASSETS_DIR/$manifest_dir/"
+
+			aba_info "Copied $file_count custom manifest(s) from $manifest_dir/ into the ISO"
+			aba_debug "Custom manifests in $ASSETS_DIR/$manifest_dir/: ${yaml_files[*]}"
+		fi
+	fi
+done
+
+shopt -u nullglob  # Disable nullglob to restore default behavior
+
+# Inform user if no custom manifests were found
+if [ $manifest_dirs_with_files -eq 0 ]; then
+	aba_debug "No custom manifests found in openshift/ or manifests/ directories"
+fi
 
 # It is important to delete the cached image as we MUST use the image from the release payload to build the ISO.
 # Avoid the scenario where we use a working cached image but not a possibly broken image from the payload (like for v4.19.18)
