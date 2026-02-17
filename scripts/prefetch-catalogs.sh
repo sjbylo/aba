@@ -29,7 +29,7 @@ aba_debug "Pre-fetch: stable:latest=$stable_latest (minor: $version_short)"
 download_all_catalogs "$version_short" 86400
 
 # Wait for latest to complete before starting previous (avoid 6 concurrent downloads)
-wait_for_all_catalogs "$version_short" 2>/dev/null
+wait_for_all_catalogs "$version_short" || exit 0
 
 # Then pre-fetch for the previous minor (e.g. 4.21 -> 4.20)
 major="${version_short%%.*}"          # e.g. 4
