@@ -42,8 +42,8 @@ test/e2e/run.sh --all --dry-run
 Baseline defaults for all test runs. Override precedence: CLI flags > pool overrides > `config.env`.
 
 Key parameters:
-- `TEST_CHANNEL` / `VER_OVERRIDE` -- OpenShift channel and version
-- `INTERNAL_BASTION_RHEL_VER` -- RHEL version for internal bastions
+- `TEST_CHANNEL` / `OCP_VERSION` -- OpenShift channel and version
+- `INT_BASTION_RHEL_VER` -- RHEL version for internal bastions
 - `TEST_USER` -- User on internal bastions
 - `VMWARE_CONF` / `VC_FOLDER` / `VM_DATASTORE` -- VMware settings
 - `VM_CLONE_MACS` -- Per-clone MAC addresses (tied to DHCP reservations)
@@ -58,7 +58,7 @@ Defines independent test environments for parallel execution.
 # Format:
 #   POOL_NAME  CONNECTED_HOST  INTERNAL_HOST  INTERNAL_VM_NAME  [KEY=VAL ...]
 
-pool1  con1  dis1  bastion-internal-rhel9   INTERNAL_BASTION_RHEL_VER=rhel9  POOL_NUM=1
+pool1  con1  dis1  bastion-internal-rhel9   INT_BASTION_RHEL_VER=rhel9  POOL_NUM=1
 ```
 
 `POOL_NUM` drives per-pool uniqueness via config.env arrays:

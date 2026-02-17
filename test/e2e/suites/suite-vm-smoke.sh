@@ -35,11 +35,10 @@ source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-TEMPLATE="${VM_TEMPLATES[${INTERNAL_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}"
+TEMPLATE="${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}"
 CLONE_NAME="${CLONE_NAME:-dis1}"
 CLONE_HOST="${CLONE_NAME}.${VM_BASE_DOMAIN:-example.com}"
 DEF_USER="${VM_DEFAULT_USER:-steve}"
-TEST_USER_NAME="${TEST_USER:-steve}"
 VF="${VMWARE_CONF:-~/.vmware.conf}"
 
 # --- Suite ------------------------------------------------------------------
@@ -132,7 +131,7 @@ test_begin "Configure: full internal bastion setup"
 #   _vm_create_test_user -> create 'testy' with SSH key + sudo
 
 e2e_run "Run configure_internal_bastion" \
-    "configure_internal_bastion $CLONE_HOST $DEF_USER $TEST_USER_NAME $CLONE_NAME"
+    "configure_internal_bastion $CLONE_HOST $DEF_USER $TEST_USER $CLONE_NAME"
 
 test_end
 
