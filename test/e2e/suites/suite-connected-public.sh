@@ -113,9 +113,9 @@ test_end
 test_begin "Proxy mode: verify and shutdown"
 
 e2e_run "Verify cluster operators" "aba --dir $SNO run"
-e2e_run -r 180 10 "Wait for all operators fully available" \
+e2e_run -r 30 10 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
-e2e_run "Check cluster operators" "aba --dir $SNO cmd 'oc get co'"
+e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Shutdown cluster" "yes | aba --dir $SNO shutdown --wait"
 
 test_end

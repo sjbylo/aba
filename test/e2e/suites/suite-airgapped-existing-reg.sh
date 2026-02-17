@@ -208,10 +208,10 @@ e2e_run_remote "Create SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Verify cluster operators" \
     "cd ~/aba && aba --dir $SNO run"
-e2e_run_remote -r 180 10 "Wait for all operators fully available" \
+e2e_run_remote -r 30 10 "Wait for all operators fully available" \
     "cd ~/aba && aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
-e2e_run_remote "Check cluster operators" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc get co'"
+e2e_diag_remote "Show cluster operators" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 
 test_end
 
