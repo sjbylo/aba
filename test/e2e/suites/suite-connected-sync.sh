@@ -233,6 +233,9 @@ e2e_run "Clean up previous sno" "rm -rfv sno"
 e2e_run "Create and install SNO cluster" \
     "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Verify cluster operators" "aba --dir sno run"
+e2e_run -r 180 10 "Wait for all operators fully available" \
+    "aba --dir sno run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_run "Show cluster operators" "aba --dir sno cmd 'oc get co'"
 e2e_run "Delete SNO cluster" "aba --dir sno delete"
 
 test_end
@@ -243,8 +246,8 @@ test_end
 test_begin "Save/Load: roundtrip"
 
 e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
-e2e_run "Verify registry removed" \
-    "ssh ${INTERNAL_BASTION} 'podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0$'"
+e2e_run_remote "Verify registry removed" \
+    "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 
 e2e_run -r 3 2 "Save and load images" "aba --dir mirror save load"
 
@@ -295,6 +298,9 @@ e2e_run -r 3 2 "Sync images with testy user config" "aba --dir mirror sync --ret
 e2e_run "Clean sno" "aba --dir sno clean; rm -f sno/cluster.conf"
 e2e_run "Install SNO" "aba cluster -n sno -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Verify operators" "aba --dir sno run"
+e2e_run -r 180 10 "Wait for all operators fully available" \
+    "aba --dir sno run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_run "Show cluster operators" "aba --dir sno cmd 'oc get co'"
 e2e_run "Shutdown cluster" "yes | aba --dir sno shutdown --wait"
 
 test_end
@@ -313,7 +319,7 @@ e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
 
 e2e_run "Clean standard dir" "rm -rfv standard"
 e2e_run "Create agent configs (bare-metal)" \
-    "aba cluster -n standard -t standard -i $(pool_standard_api_vip) -s install"
+    "aba cluster -n standard -t standard -i $(pool_standard_api_vip) -s agentconf"
 e2e_run "Verify cluster.conf" "ls -l standard/cluster.conf"
 e2e_run "Verify agent configs" "ls -l standard/install-config.yaml standard/agent-config.yaml"
 e2e_run "Verify ISO not yet created" "! ls standard/iso-agent-based/agent.*.iso"
@@ -321,8 +327,8 @@ e2e_run "Create ISO (bare-metal)" "aba --dir standard install"
 e2e_run "Verify ISO created" "ls -l standard/iso-agent-based/agent.*.iso"
 
 e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
-e2e_run "Verify registry removed" \
-    "ssh ${INTERNAL_BASTION} 'podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0$'"
+e2e_run_remote "Verify registry removed" \
+    "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 
 test_end
 
