@@ -19,6 +19,9 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
+# Pool-unique cluster names (avoid VM collisions when pools run in parallel)
+SNO="$(pool_cluster_name sno)"
+
 # --- Suite ------------------------------------------------------------------
 
 e2e_setup
@@ -43,7 +46,7 @@ setup_aba_from_scratch
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
@@ -58,10 +61,10 @@ test_end
 # ============================================================================
 test_begin "Direct mode: create SNO config"
 
-e2e_run "Clean sno dir" "rm -rfv sno"
+e2e_run "Clean sno dir" "rm -rfv $SNO"
 e2e_run "Create SNO config with -I direct" \
-    "aba cluster -n sno -t sno -i $(pool_sno_ip) -I direct --step cluster.conf"
-e2e_run "Generate agent config" "aba -d sno agentconf"
+    "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I direct --step cluster.conf"
+e2e_run "Generate agent config" "aba -d $SNO agentconf"
 
 test_end
 
@@ -71,15 +74,15 @@ test_end
 test_begin "Direct mode: verify install-config.yaml"
 
 # Direct mode should NOT have mirror/digest sources or proxy config
-assert_file_exists "sno/install-config.yaml"
+assert_file_exists "$SNO/install-config.yaml"
 e2e_run "Verify no ImageDigestSources in direct mode" \
-    "! grep -q ImageDigestSources sno/install-config.yaml"
+    "! grep -q ImageDigestSources $SNO/install-config.yaml"
 e2e_run "Verify no imageContentSources in direct mode" \
-    "! grep -q imageContentSources sno/install-config.yaml"
+    "! grep -q imageContentSources $SNO/install-config.yaml"
 e2e_run "Verify no additionalTrustBundle in direct mode" \
-    "! grep -q additionalTrustBundle sno/install-config.yaml"
+    "! grep -q additionalTrustBundle $SNO/install-config.yaml"
 e2e_run "Verify public registry references" \
-    "grep -q registry.redhat.io sno/install-config.yaml || grep -q quay.io sno/install-config.yaml"
+    "grep -q registry.redhat.io $SNO/install-config.yaml || grep -q quay.io $SNO/install-config.yaml"
 
 test_end
 
@@ -88,9 +91,9 @@ test_end
 # ============================================================================
 test_begin "Proxy mode: create SNO config"
 
-e2e_run "Clean sno dir" "rm -rfv sno"
+e2e_run "Clean sno dir" "rm -rfv $SNO"
 e2e_run "Create SNO config with -I proxy" \
-    "aba cluster -n sno -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
+    "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 
 test_end
 
@@ -100,7 +103,7 @@ test_end
 test_begin "Proxy mode: install SNO cluster"
 
 e2e_run "Install SNO from public registry (proxy mode)" \
-    "aba -d sno install"
+    "aba -d $SNO install"
 
 test_end
 
@@ -109,9 +112,11 @@ test_end
 # ============================================================================
 test_begin "Proxy mode: verify and shutdown"
 
-e2e_run "Verify cluster operators" "aba --dir sno run"
-e2e_run "Check cluster operators" "aba --dir sno cmd 'oc get co'"
-e2e_run "Shutdown cluster" "yes | aba --dir sno shutdown --wait"
+e2e_run "Verify cluster operators" "aba --dir $SNO run"
+e2e_run -r 180 10 "Wait for all operators fully available" \
+    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
+e2e_run "Check cluster operators" "aba --dir $SNO cmd 'oc get co'"
+e2e_run "Shutdown cluster" "yes | aba --dir $SNO shutdown --wait"
 
 test_end
 

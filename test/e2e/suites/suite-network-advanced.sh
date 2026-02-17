@@ -69,7 +69,7 @@ setup_aba_from_scratch
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-l} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
@@ -242,29 +242,37 @@ _net_test() {
 # 5-10. VLAN tests (GOVC_NETWORK=PRIVATE-DPG)
 # ============================================================================
 
+# Pool-unique cluster names
+_SNO_VLAN="$(pool_cluster_name sno-vlan)"
+_COMPACT_VLAN="$(pool_cluster_name compact-vlan)"
+_STANDARD_VLAN="$(pool_cluster_name standard-vlan)"
+_SNO="$(pool_cluster_name sno)"
+_COMPACT="$(pool_cluster_name compact)"
+_STANDARD="$(pool_cluster_name standard)"
+
 # 5. VLAN SNO: single port
 _net_test "VLAN SNO: single port" \
-    sno sno-vlan 10 "ens160" "ens160: .*state UP"
+    sno "$_SNO_VLAN" 10 "ens160" "ens160: .*state UP"
 
 # 6. VLAN SNO: bonding + balance-xor
 _net_test "VLAN SNO: bonding + balance-xor" \
-    sno sno-vlan 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
+    sno "$_SNO_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
 
 # 7. VLAN compact: single port
 _net_test "VLAN compact: single port" \
-    compact compact-vlan 10 "ens160" "ens160: .*state UP"
+    compact "$_COMPACT_VLAN" 10 "ens160" "ens160: .*state UP"
 
 # 8. VLAN compact: bonding + balance-xor
 _net_test "VLAN compact: bonding + balance-xor" \
-    compact compact-vlan 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
+    compact "$_COMPACT_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
 
 # 9. VLAN standard: single port
 _net_test "VLAN standard: single port" \
-    standard standard-vlan 10 "ens160" "ens160: .*state UP"
+    standard "$_STANDARD_VLAN" 10 "ens160" "ens160: .*state UP"
 
 # 10. VLAN standard: bonding + balance-xor
 _net_test "VLAN standard: bonding + balance-xor" \
-    standard standard-vlan 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
+    standard "$_STANDARD_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
 
 # ============================================================================
 # 11-13. Non-VLAN bonding tests (GOVC_NETWORK=VMNET-DPG)
@@ -273,15 +281,15 @@ _net_test "VLAN standard: bonding + balance-xor" \
 
 # 11. Non-VLAN SNO: bonding + balance-xor
 _net_test "Non-VLAN SNO: bonding + balance-xor" \
-    sno sno "" "ens160,ens192,ens224" "bond0: .* state UP" yes
+    sno "$_SNO" "" "ens160,ens192,ens224" "bond0: .* state UP" yes
 
 # 12. Non-VLAN compact: bonding + balance-xor
 _net_test "Non-VLAN compact: bonding + balance-xor" \
-    compact compact "" "ens160,ens192,ens224" "bond0: .* state UP" yes
+    compact "$_COMPACT" "" "ens160,ens192,ens224" "bond0: .* state UP" yes
 
 # 13. Non-VLAN standard: bonding + balance-xor
 _net_test "Non-VLAN standard: bonding + balance-xor" \
-    standard standard "" "ens160,ens192,ens224" "bond0: .* state UP" yes
+    standard "$_STANDARD" "" "ens160,ens192,ens224" "bond0: .* state UP" yes
 
 # ============================================================================
 # 14. Cleanup

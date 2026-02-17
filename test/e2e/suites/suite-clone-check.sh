@@ -33,7 +33,7 @@ source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-TEMPLATE="${VM_TEMPLATES[${INTERNAL_BASTION_RHEL_VER:-rhel8}]:-bastion-internal-rhel8}"
+TEMPLATE="${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel8}]:-bastion-internal-rhel8}"
 POOL_NUM="${POOL_NUM:-1}"
 CON_NAME="con${POOL_NUM}"
 DIS_NAME="dis${POOL_NUM}"
@@ -311,6 +311,9 @@ expected_node="$(pool_node_ip $POOL_NUM)"
 expected_api="$(pool_api_vip $POOL_NUM)"
 expected_apps="$(pool_apps_vip $POOL_NUM)"
 con_ip="$(pool_con_ip $POOL_NUM)"
+sno_name="$(pool_cluster_name sno $POOL_NUM)"
+compact_name="$(pool_cluster_name compact $POOL_NUM)"
+standard_name="$(pool_cluster_name standard $POOL_NUM)"
 
 e2e_run "$CON_HOST: dnsmasq running" \
     "ssh $DEF_USER@$CON_HOST systemctl is-active dnsmasq"
@@ -318,30 +321,30 @@ e2e_run "$CON_HOST: DNS port 53 open" \
     "ssh $DEF_USER@$CON_HOST sudo firewall-cmd --list-services | grep dns"
 
 # SNO records
-e2e_run "$CON_HOST: api.sno.$pool_dom -> $expected_node" \
-    "ssh $DEF_USER@$CON_HOST dig +short api.sno.$pool_dom @127.0.0.1 | grep -q $expected_node"
-e2e_run "$CON_HOST: *.apps.sno.$pool_dom -> $expected_node" \
-    "ssh $DEF_USER@$CON_HOST dig +short test.apps.sno.$pool_dom @127.0.0.1 | grep -q $expected_node"
+e2e_run "$CON_HOST: api.$sno_name.$pool_dom -> $expected_node" \
+    "ssh $DEF_USER@$CON_HOST dig +short api.$sno_name.$pool_dom @127.0.0.1 | grep -q $expected_node"
+e2e_run "$CON_HOST: *.apps.$sno_name.$pool_dom -> $expected_node" \
+    "ssh $DEF_USER@$CON_HOST dig +short test.apps.$sno_name.$pool_dom @127.0.0.1 | grep -q $expected_node"
 
 # Compact records
-e2e_run "$CON_HOST: api.compact.$pool_dom -> $expected_api" \
-    "ssh $DEF_USER@$CON_HOST dig +short api.compact.$pool_dom @127.0.0.1 | grep -q $expected_api"
-e2e_run "$CON_HOST: *.apps.compact.$pool_dom -> $expected_apps" \
-    "ssh $DEF_USER@$CON_HOST dig +short test.apps.compact.$pool_dom @127.0.0.1 | grep -q $expected_apps"
+e2e_run "$CON_HOST: api.$compact_name.$pool_dom -> $expected_api" \
+    "ssh $DEF_USER@$CON_HOST dig +short api.$compact_name.$pool_dom @127.0.0.1 | grep -q $expected_api"
+e2e_run "$CON_HOST: *.apps.$compact_name.$pool_dom -> $expected_apps" \
+    "ssh $DEF_USER@$CON_HOST dig +short test.apps.$compact_name.$pool_dom @127.0.0.1 | grep -q $expected_apps"
 
 # Standard records
-e2e_run "$CON_HOST: api.standard.$pool_dom -> $expected_api" \
-    "ssh $DEF_USER@$CON_HOST dig +short api.standard.$pool_dom @127.0.0.1 | grep -q $expected_api"
-e2e_run "$CON_HOST: *.apps.standard.$pool_dom -> $expected_apps" \
-    "ssh $DEF_USER@$CON_HOST dig +short test.apps.standard.$pool_dom @127.0.0.1 | grep -q $expected_apps"
+e2e_run "$CON_HOST: api.$standard_name.$pool_dom -> $expected_api" \
+    "ssh $DEF_USER@$CON_HOST dig +short api.$standard_name.$pool_dom @127.0.0.1 | grep -q $expected_api"
+e2e_run "$CON_HOST: *.apps.$standard_name.$pool_dom -> $expected_apps" \
+    "ssh $DEF_USER@$CON_HOST dig +short test.apps.$standard_name.$pool_dom @127.0.0.1 | grep -q $expected_apps"
 
 # Upstream forwarding works
 e2e_run "$CON_HOST: upstream DNS forwarding (google.com)" \
     "ssh $DEF_USER@$CON_HOST dig +short google.com @127.0.0.1 | grep -q '[0-9]'"
 
 # Verify con1's dnsmasq is reachable from the network (run dig locally, targeting con1's IP)
-e2e_run "Network DNS: api.sno.$pool_dom via $CON_NAME ($con_ip)" \
-    "dig +short api.sno.$pool_dom @$con_ip | grep -q $expected_node"
+e2e_run "Network DNS: api.$sno_name.$pool_dom via $CON_NAME ($con_ip)" \
+    "dig +short api.$sno_name.$pool_dom @$con_ip | grep -q $expected_node"
 
 # --- Root SSH ---
 e2e_run "$CON_HOST: root SSH" "ssh root@$CON_HOST whoami | grep root"

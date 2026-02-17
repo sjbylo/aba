@@ -64,7 +64,7 @@ e2e_run -q "Remove oc-mirror caches" \
 
 # Clean up leftover state from previous test runs
 e2e_run -q "Remove old files" \
-    "rm -rfv sno compact standard ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
+    "rm -rfv $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
 # Ensure make is available (needed for aba reset)
 e2e_run -q "Ensure make is installed" \
@@ -84,7 +84,7 @@ test_begin "Setup: install and configure aba"
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-p} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 
 e2e_run -q "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 

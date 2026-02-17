@@ -411,16 +411,16 @@ bind-interfaces
 server=${upstream}
 
 # --- SNO: api + apps -> node IP ---
-address=/api.sno.${domain}/${node_ip}
-address=/.apps.sno.${domain}/${node_ip}
+address=/api.$(pool_cluster_name sno ${pool_num}).${domain}/${node_ip}
+address=/.apps.$(pool_cluster_name sno ${pool_num}).${domain}/${node_ip}
 
 # --- Compact: api -> API VIP, apps -> APPS VIP ---
-address=/api.compact.${domain}/${api_vip}
-address=/.apps.compact.${domain}/${apps_vip}
+address=/api.$(pool_cluster_name compact ${pool_num}).${domain}/${api_vip}
+address=/.apps.$(pool_cluster_name compact ${pool_num}).${domain}/${apps_vip}
 
 # --- Standard: api -> API VIP, apps -> APPS VIP ---
-address=/api.standard.${domain}/${api_vip}
-address=/.apps.standard.${domain}/${apps_vip}
+address=/api.$(pool_cluster_name standard ${pool_num}).${domain}/${api_vip}
+address=/.apps.$(pool_cluster_name standard ${pool_num}).${domain}/${apps_vip}
 DNSEOF
 
     cat <<-SETUPEOF | ssh "${user}@${host}" -- sudo bash
@@ -469,11 +469,13 @@ RESOLVEOF
 	SETUPEOF
 
     # Verify DNS resolution from the bastion itself
-    echo "  [vm] Verifying DNS on $host ..."
+    local sno_name
+    sno_name="$(pool_cluster_name sno ${pool_num})"
+    echo "  [vm] Verifying DNS on $host (cluster name: $sno_name) ..."
     ssh "${user}@${host}" -- bash -c "
         echo '--- Testing cluster DNS ---'
-        dig +short api.sno.${domain} @127.0.0.1
-        dig +short test.apps.sno.${domain} @127.0.0.1
+        dig +short api.${sno_name}.${domain} @127.0.0.1
+        dig +short test.apps.${sno_name}.${domain} @127.0.0.1
         echo '--- Testing upstream forwarding ---'
         dig +short google.com @127.0.0.1 | head -1
     "
@@ -782,7 +784,7 @@ configure_internal_bastion() {
 #
 create_pools() {
     local count="$1"; shift
-    local rhel_ver="${INTERNAL_BASTION_RHEL_VER:-rhel9}"
+    local rhel_ver="${INT_BASTION_RHEL_VER:-rhel9}"
     local connected_only=""
 
     while [ $# -gt 0 ]; do
