@@ -172,8 +172,8 @@ usage() {
 apply_params() {
     # Apply CLI overrides to environment variables
     [ -n "$CLI_CHANNEL" ] && export TEST_CHANNEL="$CLI_CHANNEL"
-    [ -n "$CLI_VERSION" ] && export VER_OVERRIDE="$CLI_VERSION"
-    [ -n "$CLI_RHEL" ]    && export INTERNAL_BASTION_RHEL_VER="$CLI_RHEL"
+    [ -n "$CLI_VERSION" ] && export OCP_VERSION="$CLI_VERSION"
+    [ -n "$CLI_RHEL" ]    && export INT_BASTION_RHEL_VER="$CLI_RHEL"
     [ -n "$CLI_USER" ]    && export TEST_USER="$CLI_USER"
 
     # Interactive mode
@@ -349,7 +349,7 @@ run_suite_local() {
     # Build environment variable exports (same pattern as parallel.sh)
     local env_exports="export E2E_ON_BASTION=1; "
     local var
-    for var in TEST_CHANNEL VER_OVERRIDE INTERNAL_BASTION_RHEL_VER \
+    for var in TEST_CHANNEL OCP_VERSION INT_BASTION_RHEL_VER \
                TEST_USER OC_MIRROR_VER POOL_NUM ABA_TESTING; do
         [ -n "${!var:-}" ] && env_exports+="export $var='${!var}'; "
     done
@@ -432,7 +432,7 @@ main() {
     fi
 
     echo "Suites to run: ${suites_to_run[*]}"
-    echo "Parameters: channel=${TEST_CHANNEL:-?} version=${VER_OVERRIDE:-?} rhel=${INTERNAL_BASTION_RHEL_VER:-?} user=${TEST_USER:-?}"
+    echo "Parameters: channel=${TEST_CHANNEL:-?} version=${OCP_VERSION:-?} rhel=${INT_BASTION_RHEL_VER:-?} user=${TEST_USER:-?}"
     echo ""
 
     # Dry run: just show the plan
