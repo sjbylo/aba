@@ -1798,33 +1798,44 @@ run_once() {
 
 # --- Catalog Download Helpers ---
 
-# Download all 4 operator catalogs in parallel using run_once
+# Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
 # Example: download_all_catalogs "4.19" 86400
 download_all_catalogs() {
 	local version_short="${1}"
 	local ttl="${2:-86400}"  # Default: 1 day (86400 seconds)
-	
+
 	if [[ -z "$version_short" ]]; then
 		echo_red "[ABA] Error: download_all_catalogs requires version (e.g., 4.19)" >&2
 		return 1
 	fi
-	
-	aba_debug "Starting parallel catalog downloads for OCP $version_short (TTL: ${ttl}s)"
-	
-	# Start 3 parallel downloads (run_once backgrounds them automatically)
-	# Each download will skip if already completed within TTL
-	# Note: Scripts use pwd -P to resolve symlinks and find real aba root
-	run_once -i "catalog:${version_short}:redhat-operator" -t "$ttl" -- \
-		scripts/download-catalog-index.sh redhat-operator "$version_short"
-	
-	run_once -i "catalog:${version_short}:certified-operator" -t "$ttl" -- \
-		scripts/download-catalog-index.sh certified-operator "$version_short"
-	
-	run_once -i "catalog:${version_short}:community-operator" -t "$ttl" -- \
-		scripts/download-catalog-index.sh community-operator "$version_short"
-	
-	aba_debug "Catalog download tasks started in background"
+
+	# Max concurrent catalog downloads (default: 3 = all parallel)
+	# User can set CATALOG_MAX_PARALLEL=1 in ~/.aba/config for sequential
+	local max_parallel="${CATALOG_MAX_PARALLEL:-3}"
+	if [[ -f "$HOME/.aba/config" ]]; then
+		source "$HOME/.aba/config"
+		max_parallel="${CATALOG_MAX_PARALLEL:-3}"
+	fi
+
+	local catalogs=(redhat-operator certified-operator community-operator)
+	local running=0
+
+	aba_debug "Starting catalog downloads for OCP $version_short (max_parallel=$max_parallel, TTL: ${ttl}s)"
+
+	for catalog in "${catalogs[@]}"; do
+		# If at max capacity, wait for the earliest to finish before launching next
+		if (( running >= max_parallel )); then
+			local wait_idx=$(( running - max_parallel ))
+			run_once -q -w -i "catalog:${version_short}:${catalogs[$wait_idx]}"
+		fi
+
+		run_once -i "catalog:${version_short}:${catalog}" -t "$ttl" -- \
+			scripts/download-catalog-index.sh "$catalog" "$version_short"
+		(( running++ ))
+	done
+
+	aba_debug "Catalog download tasks started (max_parallel=$max_parallel)"
 }
 
 # Wait for all 3 catalog downloads to complete (all required)
