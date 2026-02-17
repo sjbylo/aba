@@ -25,11 +25,13 @@ stable_latest=$(fetch_latest_version stable 2>/dev/null) || exit 0
 version_short="${stable_latest%.*}"  # e.g. 4.21.0 -> 4.21
 aba_debug "Pre-fetch: stable:latest=$stable_latest (minor: $version_short)"
 
-# Download catalogs for latest minor
+# Download catalogs for latest minor first
 download_all_catalogs "$version_short" 86400
 
-# Also pre-fetch for the previous minor (e.g. 4.21 -> 4.20)
-# Users often pick the previous stable version
+# Wait for latest to complete before starting previous (avoid 6 concurrent downloads)
+wait_for_all_catalogs "$version_short" 2>/dev/null
+
+# Then pre-fetch for the previous minor (e.g. 4.21 -> 4.20)
 major="${version_short%%.*}"          # e.g. 4
 minor="${version_short##*.}"          # e.g. 21
 if (( minor > 0 )); then
