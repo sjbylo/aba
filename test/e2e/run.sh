@@ -124,7 +124,7 @@ usage() {
 	  run.sh --destroy-pools        Power off all pool VMs
 	
 	Suite selection:
-	  --suite NAME          Run suite by name (e.g. connected-sync)
+	  --suite NAME          Run suite by name (e.g. cluster-ops)
 	  --suites N1,N2,...    Run multiple suites (comma-separated)
 	  --all                 Run all suites found in suites/
 	  -l, --list            List available suite names and exit
@@ -155,14 +155,14 @@ usage() {
 	
 	Examples:
 	  run.sh --list                                  # Show available suites
-	  run.sh --suite connected-sync                  # Run one suite
-	  run.sh --suite connected-sync -i               # Interactive: prompt on failure
-	  run.sh --suite connected-sync --resume         # Resume, skip already-passed tests
-	  run.sh --suites connected-sync,network-advanced  # Run two suites
+	  run.sh --suite cluster-ops                     # Run one suite
+	  run.sh --suite cluster-ops -i                  # Interactive: prompt on failure
+	  run.sh --suite cluster-ops --resume            # Resume, skip already-passed tests
+	  run.sh --suites cluster-ops,mirror-sync        # Run two suites
 	  run.sh --all --dry-run                         # Show execution plan
 	  run.sh --all                                   # Run all suites sequentially
 	  run.sh --parallel --all                        # Run all suites across pools
-	  run.sh -c fast -v l --suite connected-sync     # Override channel and version
+	  run.sh -c fast -v l --suite cluster-ops        # Override channel and version
 	
 	USAGE
 }
@@ -214,11 +214,11 @@ all_suites() {
     fi
 
     # Sort: longest suites first for optimal parallel scheduling
-    # Order: airgapped-local-reg, airgapped-existing-reg, connected-sync,
+    # Order: airgapped-local-reg, airgapped-existing-reg, mirror-sync, cluster-ops,
     #        connected-public, network-advanced, create-bundle-to-disk
     local ordered=()
-    for s in airgapped-local-reg airgapped-existing-reg connected-sync \
-             connected-public network-advanced create-bundle-to-disk; do
+    for s in airgapped-local-reg airgapped-existing-reg mirror-sync \
+             cluster-ops connected-public network-advanced create-bundle-to-disk; do
         for found in "${suites[@]}"; do
             [ "$found" = "$s" ] && ordered+=("$found")
         done

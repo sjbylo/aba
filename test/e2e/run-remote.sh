@@ -4,12 +4,12 @@
 # and to stdout (via tee).
 #
 # Usage:  ./run-remote.sh [run.sh args...]
-# Example: ./run-remote.sh --suite connected-sync -r rhel8 --clean
+# Example: ./run-remote.sh --suite cluster-ops -r rhel8 --clean
 
 set -uo pipefail
 
 HOST="steve@con1.example.com"
-ARGS="${*:---suite connected-sync -r rhel8 --clean}"
+ARGS="${*:---suite cluster-ops -r rhel8 --clean}"
 SUITE=$(echo "$ARGS" | grep -oP '(?<=--suite\s)\S+' || echo "e2e")
 LOG="/tmp/e2e-${SUITE}.log"
 ABA_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

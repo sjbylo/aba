@@ -276,7 +276,7 @@ _net_test "VLAN standard: bonding + balance-xor" \
 
 # ============================================================================
 # 11-13. Non-VLAN bonding tests (GOVC_NETWORK=VMNET-DPG)
-#         Single-port non-VLAN is already tested by connected-sync suite.
+#         Single-port non-VLAN is already tested by cluster-ops/mirror-sync suites.
 # ============================================================================
 
 # 11. Non-VLAN SNO: bonding + balance-xor
