@@ -56,9 +56,9 @@ e2e_run "Install aba (needed for version resolution)" "./install"
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 
-# Read the resolved version from aba.conf
-_ocp_version=$(source <(cd ~/aba && scripts/normalize-aba-conf 2>/dev/null) && echo "$ocp_version")
-_ocp_channel=$(source <(cd ~/aba && scripts/normalize-aba-conf 2>/dev/null) && echo "$ocp_channel")
+# Read the resolved x.y.z version from aba.conf
+_ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
+_ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
 
 e2e_run "Ensure pre-populated registry (OCP ${_ocp_channel} ${_ocp_version})" \
     "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
