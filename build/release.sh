@@ -185,11 +185,17 @@ RELEASE_BRANCH_NAME="_release-v$NEW_VERSION"
 # --- Step 1: Pre-commit checks ---
 if [ -n "$REF_COMMIT" ]; then
     echo -e "${YELLOW}[1/$TOTAL] Creating temp branch from $REF_COMMIT and running pre-commit checks...${NC}"
-    # Carry CHANGELOG.md from dev (where [Unreleased] is populated) to the temp branch
-    cp CHANGELOG.md /tmp/_aba_changelog_$$.md
+    # Carry dev versions of files needed on the temp branch:
+    #   CHANGELOG.md        - has the populated [Unreleased] section
+    #   build/*.sh          - may have newer flags (e.g. --release-branch)
+    _tmp="/tmp/_aba_release_$$"
+    mkdir -p "$_tmp"
+    cp CHANGELOG.md "$_tmp/"
+    cp build/pre-commit-checks.sh "$_tmp/"
     git checkout -b "$RELEASE_BRANCH_NAME" "$REF_COMMIT"
-    cp /tmp/_aba_changelog_$$.md CHANGELOG.md
-    rm -f /tmp/_aba_changelog_$$.md
+    cp "$_tmp/CHANGELOG.md" CHANGELOG.md
+    cp "$_tmp/pre-commit-checks.sh" build/pre-commit-checks.sh
+    rm -rf "$_tmp"
     build/pre-commit-checks.sh --release-branch
 else
     echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks...${NC}"
@@ -247,7 +253,7 @@ echo -e "${GREEN}       ✓ CHANGELOG.md updated${NC}\n"
 
 # --- Step 6-7: Commit and tag ---
 echo -e "${YELLOW}[6/$TOTAL] Staging and committing...${NC}"
-git add VERSION CHANGELOG.md README.md scripts/aba.sh install
+git add VERSION CHANGELOG.md README.md scripts/aba.sh install build/pre-commit-checks.sh
 git commit -m "release: Bump version to $NEW_VERSION
 
 $RELEASE_DESC
