@@ -30,6 +30,7 @@ POOL_REG_DIR="$HOME/.e2e-pool-registry"
 REG_PORT=8443
 REG_PW="p4ssw0rd"
 REG_USER="init"
+REG_PATH="/ocp4/openshift4"
 MR_URL="https://mirror.openshift.com/pub/cgw/mirror-registry/latest"
 
 # Operators to sync (one from each catalog)
@@ -198,10 +199,11 @@ else
     echo "[5/5] Syncing images to ${reg_host}:${REG_PORT} (this may take 30+ minutes) ..."
 
     cd "$SYNC_DIR"
+    umask 0022
     oc-mirror --v2 \
         --config imageset-config.yaml \
         --workspace file://. \
-        "docker://${reg_host}:${REG_PORT}" \
+        "docker://${reg_host}:${REG_PORT}${REG_PATH}" \
         --image-timeout 15m \
         --parallel-images 4 \
         --retry-delay 30s \
