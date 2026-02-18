@@ -3,12 +3,12 @@
 # Suite: Cluster Ops
 # =============================================================================
 # Purpose: ABI config generation, YAML validation against known-good examples,
-#          and SNO cluster install/verify. Exercises the cluster-building
-#          pipeline without testing mirroring specifics.
+#          SNO cluster install/verify, and operator availability check.
+#          Uses a pre-populated mirror registry on conN (installed out-of-band)
+#          so tests start immediately without waiting for sync/save/load.
 #
 # Prerequisite: Internet-connected host with aba installed.
-#               Internal bastion VM available for registry install.
-#               (Later: pre-populated registry on conN removes the disN dependency.)
+#               Pre-populated Quay on conN (via setup-pool-registry.sh).
 # =============================================================================
 
 set -u
@@ -22,9 +22,9 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
-INTERNAL_BASTION="$(pool_internal_bastion)"
+CON_HOST="con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
+POOL_REG_DIR="$HOME/.e2e-pool-registry"
 
 SNO="$(pool_cluster_name sno)"
 COMPACT="$(pool_cluster_name compact)"
@@ -35,23 +35,49 @@ STANDARD="$(pool_cluster_name standard)"
 e2e_setup
 
 plan_tests \
+    "Setup: ensure pre-populated registry" \
     "Setup: install aba and configure" \
-    "Setup: reset internal bastion" \
-    "Setup: sync images to registry" \
+    "Setup: configure mirror for local registry" \
     "ABI config: sno/compact/standard" \
     "ABI config: diff against known-good examples" \
-    "SNO: install cluster"
+    "SNO: install cluster" \
+    "SNO: verify operators from all catalogs"
 
 suite_begin "cluster-ops"
 
-preflight_ssh
+# ============================================================================
+# 1. Ensure pre-populated registry on conN
+# ============================================================================
+test_begin "Setup: ensure pre-populated registry"
+
+# Resolve OCP version: use OCP_VERSION env or fall back to "p" (previous)
+# We need the actual x.y.z version for the registry setup script.
+e2e_run "Install aba (needed for version resolution)" "./install"
+e2e_run "Configure aba.conf (temporary, for version resolution)" \
+    "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+
+# Read the resolved version from aba.conf
+_ocp_version=$(source <(cd ~/aba && scripts/normalize-aba-conf 2>/dev/null) && echo "$ocp_version")
+_ocp_channel=$(source <(cd ~/aba && scripts/normalize-aba-conf 2>/dev/null) && echo "$ocp_channel")
+
+e2e_run "Ensure pre-populated registry (OCP ${_ocp_channel} ${_ocp_version})" \
+    "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
+
+test_end
 
 # ============================================================================
-# 1. Setup: install aba and configure
+# 2. Setup: install aba and configure (lightweight -- no registry uninstall)
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-setup_aba_from_scratch
+# Lightweight setup: remove RPMs (test auto-install), clean caches, but
+# do NOT uninstall the pre-populated registry on conN.
+e2e_run "Remove RPMs for clean install test" \
+    "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
+e2e_run "Clean podman images" \
+    "podman system prune --all --force; podman rmi --all --force; sudo rm -rfv ~/.local/share/containers/storage"
+e2e_run "Remove oc-mirror caches" \
+    "find ~/ -type d -name .oc-mirror | xargs rm -rfv"
 
 e2e_run "Install aba" "./install"
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
@@ -82,23 +108,45 @@ e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set
 test_end
 
 # ============================================================================
-# 2. Setup: reset internal bastion
+# 3. Configure mirror to use local pre-populated registry
 # ============================================================================
-test_begin "Setup: reset internal bastion"
+test_begin "Setup: configure mirror for local registry"
 
-reset_internal_bastion
+# Create mirror.conf pointing to conN's local Quay (not disN)
+e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 
-test_end
+# Override mirror.conf to point at the local pre-populated registry
+e2e_run "Set reg_host to local registry" \
+    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
+e2e_run "Clear reg_ssh_key (local registry)" \
+    "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
+e2e_run "Clear reg_ssh_user (local registry)" \
+    "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
 
-# ============================================================================
-# 3. Setup: sync images to registry
-# ============================================================================
-# TODO: Replace with pre-populated registry on conN once available.
-#       This step exists only to populate disN so cluster install has images.
-test_begin "Setup: sync images to registry"
+# Set up regcreds/ with the pre-populated registry's CA and pull secret
+e2e_run "Create regcreds directory" "mkdir -p mirror/regcreds"
+e2e_run "Copy Quay root CA to regcreds" \
+    "cp -v ~/quay-install/quay-rootCA/rootCA.pem mirror/regcreds/"
 
-e2e_run -r 3 2 "Sync images to remote registry" \
-    "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa"
+# Generate pull-secret-mirror.json for the local registry
+e2e_run "Generate mirror pull secret" \
+    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > mirror/regcreds/pull-secret-mirror.json <<EOPS
+{
+  \"auths\": {
+    \"${CON_HOST}:8443\": {
+      \"auth\": \"\$enc_pw\"
+    }
+  }
+}
+EOPS"
+
+e2e_run "Verify mirror registry access" "aba -d mirror verify"
+
+# Link oc-mirror working-dir so day2 can find IDMS/ITMS/CatalogSources
+e2e_run "Link oc-mirror working-dir for day2" \
+    "mkdir -p mirror/sync && ln -sfn ${POOL_REG_DIR}/sync/working-dir mirror/sync/working-dir"
+
+e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
 test_end
 
@@ -168,7 +216,7 @@ done
 test_end
 
 # ============================================================================
-# 6. SNO: install cluster from synced mirror
+# 6. SNO: install cluster from pre-populated registry
 # ============================================================================
 test_begin "SNO: install cluster"
 
@@ -179,6 +227,28 @@ e2e_run "Verify cluster operators" "aba --dir $SNO run"
 e2e_run -r 30 10 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
+
+# Apply day2 (CatalogSources, IDMS/ITMS, trust CA)
+e2e_run "Apply day2 configuration" "aba --dir $SNO day2"
+
+test_end
+
+# ============================================================================
+# 7. SNO: verify operators from all three catalogs
+# ============================================================================
+test_begin "SNO: verify operators from all catalogs"
+
+# After day2 applies CatalogSources, operators should appear in packagemanifests.
+# Allow time for catalog pods to start and index.
+e2e_run -r 20 15 "Wait for cincinnati-operator (redhat catalog)" \
+    "aba --dir $SNO run --cmd 'oc get packagemanifests' | grep cincinnati-operator"
+e2e_run -r 20 15 "Wait for nginx-ingress-operator (certified catalog)" \
+    "aba --dir $SNO run --cmd 'oc get packagemanifests' | grep nginx-ingress-operator"
+e2e_run -r 20 15 "Wait for flux (community catalog)" \
+    "aba --dir $SNO run --cmd 'oc get packagemanifests' | grep flux"
+
+e2e_diag "Show all packagemanifests" "aba --dir $SNO run --cmd 'oc get packagemanifests'"
+
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 
 test_end
