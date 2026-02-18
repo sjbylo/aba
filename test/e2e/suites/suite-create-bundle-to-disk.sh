@@ -43,7 +43,7 @@ plan_tests \
     "All-operators imageset: generate and verify YAML" \
     "run_once: mirror clean clears state"
 
-suite_begin "bundle-disk"
+suite_begin "create-bundle-to-disk"
 
 # ============================================================================
 # 1. Clean slate
@@ -235,4 +235,4 @@ test_end 0
 
 suite_end
 
-echo "SUCCESS: suite-bundle-disk.sh"
+echo "SUCCESS: suite-create-bundle-to-disk.sh"

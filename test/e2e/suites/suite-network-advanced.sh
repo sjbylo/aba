@@ -86,7 +86,7 @@ e2e_run "Set mirror host" \
 test_end
 
 # ============================================================================
-# 2. Reset internal bastion (reuse clone-check's disN)
+# 2. Reset internal bastion (reuse clone-and-check's disN)
 # ============================================================================
 test_begin "Setup: reset internal bastion"
 

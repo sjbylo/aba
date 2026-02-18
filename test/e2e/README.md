@@ -97,20 +97,20 @@ The legacy `test/test[12345]*.sh` scripts use `10.0.1.x` (SNO=.201, compact=.71,
 
 | # | Suite | Purpose | Dependencies |
 |---|-------|---------|--------------|
-| 1 | `bundle-disk` | Bundle creation (no VMs) | Internet, pull-secret |
+| 1 | `create-bundle-to-disk` | Bundle creation (no VMs) | Internet, pull-secret |
 | 2 | `vm-smoke` | VMware/govc validation | govc, template VMs |
-| 3 | `clone-check` | Full pool setup (conN + disN) | govc, VMware |
+| 3 | `clone-and-check` | Full pool setup (conN + disN) | govc, VMware |
 | 4 | `connected-public` | Public registry SNO | VMware (no internal bastion) |
-| 5 | `connected-sync` | Sync to remote registry + SNO | clone-check must run first |
-| 6 | `airgapped-existing-reg` | Air-gap with existing registry | clone-check must run first |
-| 7 | `airgapped-local-reg` | Full air-gap (longest) | clone-check must run first |
-| 8 | `network-advanced` | VLAN and bonding | clone-check first, VLAN infra |
+| 5 | `connected-sync` | Sync to remote registry + SNO | clone-and-check must run first |
+| 6 | `airgapped-existing-reg` | Air-gap with existing registry | clone-and-check must run first |
+| 7 | `airgapped-local-reg` | Full air-gap (longest) | clone-and-check must run first |
+| 8 | `network-advanced` | VLAN and bonding | clone-and-check first, VLAN infra |
 
 ### Suite Details
 
-- **bundle-disk**: Creates light and full bundles, verifies contents. No VMs needed.
+- **create-bundle-to-disk**: Creates light and full bundles, verifies contents. No VMs needed.
 - **vm-smoke**: Clones a single VM, boots it, verifies SSH. Quick VMware sanity check.
-- **clone-check**: Creates conN+disN bastion pair, configures networking/firewall/dnsmasq. Required by most other suites.
+- **clone-and-check**: Creates conN+disN bastion pair, configures networking/firewall/dnsmasq. Required by most other suites.
 - **connected-public**: SNO install using public registry (no mirror). Tests direct + proxy modes.
 - **connected-sync**: Syncs images to remote mirror registry, then installs SNO. Tests save/load path.
 - **airgapped-local-reg**: Full air-gap workflow: bundle, transfer, install Quay+Docker, upgrade, ACM.
@@ -119,7 +119,7 @@ The legacy `test/test[12345]*.sh` scripts use `10.0.1.x` (SNO=.201, compact=.71,
 
 ## Checkpoints and Resume
 
-Each suite writes progress to `.state` files (e.g., `clone-check.state`). Use `--resume` to skip already-passed tests after a failure. Use `--clean` to reset state and start fresh.
+Each suite writes progress to `.state` files (e.g., `clone-and-check.state`). Use `--resume` to skip already-passed tests after a failure. Use `--clean` to reset state and start fresh.
 
 ## Parallel Execution
 

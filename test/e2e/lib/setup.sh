@@ -114,7 +114,7 @@ setup_connected_bastion() {
 # --- reset_internal_bastion -------------------------------------------------
 #
 # Reset the internal (air-gapped) bastion to a clean state WITHOUT re-cloning.
-# Assumes clone-check has already created and configured the disN VM.
+# Assumes clone-and-check has already created and configured the disN VM.
 #
 # Handles two installation scenarios:
 #   - Connected suites: registry was installed on disN remotely FROM conN.

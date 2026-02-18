@@ -17,8 +17,8 @@
 #   ethernet-2 / ens256 = VMNET-EXT-DPG  (internet, DHCP)
 #
 # Usage:
-#   test/e2e/run.sh --suite clone-check
-#   POOL_NUM=2 test/e2e/run.sh --suite clone-check
+#   test/e2e/run.sh --suite clone-and-check
+#   POOL_NUM=2 test/e2e/run.sh --suite clone-and-check
 # =============================================================================
 
 set -u
@@ -103,7 +103,7 @@ plan_tests \
     "Harden: remove RPMs, pull-secret, proxy ($DIS_NAME)" \
     "Verify: full configuration check"
 
-suite_begin "clone-check"
+suite_begin "clone-and-check"
 
 # ============================================================================
 # 1. Prerequisites
