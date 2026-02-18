@@ -163,10 +163,15 @@ test_begin "SNO: bootstrap after save/load"
 
 e2e_run "Clean sno directory" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
 e2e_run "Test small CIDR (pool-local /30)" \
-    "aba cluster -n $SNO -t sno --starting-ip ${POOL_SUBNET:-10.0.2}.201 --machine-network '${POOL_SUBNET:-10.0.2}.200/30' --step iso"
+    "aba cluster -n $SNO -t sno --starting-ip ${POOL_SUBNET:-10.0.2}.201 --machine-network '${POOL_SUBNET:-10.0.2}.200/30' --step cluster.conf"
 e2e_run "Clean and recreate with normal CIDR" "rm -rfv $SNO"
-e2e_run "Create and bootstrap SNO" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step bootstrap --machine-network $(pool_machine_network)"
+e2e_run "Create SNO and generate ISO" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
+e2e_run "Verify cluster operators" "aba --dir $SNO run"
+e2e_run -r 30 10 "Wait for all operators fully available" \
+    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
+e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 
 test_end
 
