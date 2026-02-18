@@ -446,6 +446,53 @@ normalize-cluster-conf()
 	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
 }
 
+# -----------------------------------------------------------------------------
+# IP Address Math Helpers (pure bash, no external dependencies)
+# -----------------------------------------------------------------------------
+
+# Convert dotted-quad IP to a 32-bit integer: ip_to_int 10.0.2.12 => 167772684
+ip_to_int() {
+	local IFS='.'
+	local -a o=($1)
+	echo $(( (o[0] << 24) + (o[1] << 16) + (o[2] << 8) + o[3] ))
+}
+
+# Convert 32-bit integer back to dotted-quad: int_to_ip 167772684 => 10.0.2.12
+int_to_ip() {
+	local n=$1
+	echo "$(( (n >> 24) & 255 )).$(( (n >> 16) & 255 )).$(( (n >> 8) & 255 )).$(( n & 255 ))"
+}
+
+# Check if an IP is within a CIDR: ip_in_cidr 10.0.2.12 10.0.0.0 20
+# Args: IP  NETWORK_ADDR  PREFIX_LEN
+# Returns 0 if IP is within the CIDR, 1 otherwise.
+ip_in_cidr() {
+	local ip_int=$(ip_to_int "$1")
+	local net_int=$(ip_to_int "$2")
+	local prefix=$3
+	local mask=$(( 0xFFFFFFFF << (32 - prefix) & 0xFFFFFFFF ))
+	[[ $(( ip_int & mask )) -eq $(( net_int & mask )) ]]
+}
+
+# Compute the broadcast (last) address of a CIDR: cidr_last_ip 10.0.2.200 30 => 10.0.2.203
+cidr_last_ip() {
+	local net_int=$(ip_to_int "$1")
+	local prefix=$2
+	local host_bits=$(( 32 - prefix ))
+	local last=$(( net_int | ((1 << host_bits) - 1) ))
+	int_to_ip $last
+}
+
+# Return the number of usable host addresses in a CIDR (excludes network + broadcast)
+cidr_host_count() {
+	local prefix=$1
+	if (( prefix >= 31 )); then
+		echo 0
+	else
+		echo $(( (1 << (32 - prefix)) - 2 ))
+	fi
+}
+
 verify-cluster-conf() {
 	[ ! "$verify_conf" ] && return 0
 	[ -f cluster.conf -a ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
@@ -467,6 +514,43 @@ verify-cluster-conf() {
 		echo_red "Warning: Starting IP address needs to be set in $PWD/cluster.conf.  Try using --starting-ip option." >&2
 	else
 		echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: starting_ip is invalid in cluster.conf. Try using --starting-ip option." >&2; ret=1; }
+
+		# Validate starting_ip falls within machine_network CIDR
+		if [[ $ret -eq 0 ]] && echo "$machine_network" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+			if ! ip_in_cidr "$starting_ip" "$machine_network" "$prefix_length"; then
+				echo_red "Error: starting_ip ($starting_ip) is outside the machine_network ($machine_network/$prefix_length)" >&2
+				ret=1
+			fi
+
+			# Validate all nodes fit within the CIDR
+			local total_nodes=$(( num_masters + num_workers ))
+			if (( total_nodes > 0 )); then
+				local start_int=$(ip_to_int "$starting_ip")
+				local last_node_int=$(( start_int + total_nodes - 1 ))
+				local last_node_ip=$(int_to_ip $last_node_int)
+				if ! ip_in_cidr "$last_node_ip" "$machine_network" "$prefix_length"; then
+					echo_red "Error: not all $total_nodes nodes fit in machine_network ($machine_network/$prefix_length)." \
+						"Last node IP would be $last_node_ip" >&2
+					ret=1
+				fi
+			fi
+
+			# For non-SNO: check VIPs are within CIDR too
+			if (( num_masters > 1 )); then
+				if [ -n "${api_vip:-}" ] && echo "$api_vip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+					if ! ip_in_cidr "$api_vip" "$machine_network" "$prefix_length"; then
+						echo_red "Error: api_vip ($api_vip) is outside the machine_network ($machine_network/$prefix_length)" >&2
+						ret=1
+					fi
+				fi
+				if [ -n "${ingress_vip:-}" ] && echo "$ingress_vip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+					if ! ip_in_cidr "$ingress_vip" "$machine_network" "$prefix_length"; then
+						echo_red "Error: ingress_vip ($ingress_vip) is outside the machine_network ($machine_network/$prefix_length)" >&2
+						ret=1
+					fi
+				fi
+			fi
+		fi
 	fi
 
 	echo $hostPrefix | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: hostPrefix is invalid in cluster.conf" >&2; ret=1; }
