@@ -162,8 +162,8 @@ test_end
 test_begin "SNO: bootstrap after save/load"
 
 e2e_run "Clean sno directory" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
-e2e_run "Test small CIDR 10.0.1.200/30" \
-    "aba cluster -n $SNO -t sno --starting-ip 10.0.1.201 --machine-network '10.0.1.200/30' --step iso"
+e2e_run "Test small CIDR (pool-local /30)" \
+    "aba cluster -n $SNO -t sno --starting-ip ${POOL_SUBNET:-10.0.2}.201 --machine-network '${POOL_SUBNET:-10.0.2}.200/30' --step iso"
 e2e_run "Clean and recreate with normal CIDR" "rm -rfv $SNO"
 e2e_run "Create and bootstrap SNO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step bootstrap --machine-network $(pool_machine_network)"
