@@ -281,7 +281,9 @@ power_on_vm() {
 #
 vm_exists() {
     local vm_name="$1"
-    govc vm.info "$vm_name" &>/dev/null
+    # govc vm.info exits 0 even for non-existent VMs (empty output),
+    # so check that output contains at least a "Name:" field.
+    govc vm.info "$vm_name" 2>/dev/null | grep -q "Name:"
 }
 
 # --- setup_ssh_to_root ------------------------------------------------------
