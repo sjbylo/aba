@@ -31,8 +31,14 @@ echo -e "${YELLOW}=== Pre-Commit Checks ===${NC}\n"
 
 # Parse options
 SKIP_VERSION=false
-if [[ "$1" == "--skip-version" ]]; then
-    SKIP_VERSION=true
+RELEASE_BRANCH=false
+for arg in "$@"; do
+    case "$arg" in
+        --skip-version)   SKIP_VERSION=true ;;
+        --release-branch) RELEASE_BRANCH=true ;;
+    esac
+done
+if $SKIP_VERSION; then
     echo -e "${YELLOW}(Skipping VERSION update)${NC}\n"
 fi
 
@@ -95,20 +101,28 @@ fi
 echo -e "${GREEN}      ✓ All $checked shell scripts have valid syntax${NC}\n"
 
 # 4. Verify we're on dev branch
-echo -e "${YELLOW}[4/6] Verifying git branch...${NC}"
-current_branch=$(git branch --show-current)
-if [[ "$current_branch" != "dev" ]]; then
-    echo -e "${RED}      ✗ Not on dev branch (current: $current_branch)${NC}\n"
-    exit 1
+if $RELEASE_BRANCH; then
+    echo -e "${YELLOW}[4/6] Skipping branch check (--release-branch)${NC}\n"
+else
+    echo -e "${YELLOW}[4/6] Verifying git branch...${NC}"
+    current_branch=$(git branch --show-current)
+    if [[ "$current_branch" != "dev" ]]; then
+        echo -e "${RED}      ✗ Not on dev branch (current: $current_branch)${NC}\n"
+        exit 1
+    fi
+    echo -e "${GREEN}      ✓ On dev branch${NC}\n"
 fi
-echo -e "${GREEN}      ✓ On dev branch${NC}\n"
 
 # 5. Pull latest changes
-echo -e "${YELLOW}[5/6] Pulling latest changes...${NC}"
-if git pull --rebase 2>&1 | grep -q "Already up to date"; then
-    echo -e "${GREEN}      ✓ Already up to date${NC}\n"
+if $RELEASE_BRANCH; then
+    echo -e "${YELLOW}[5/6] Skipping git pull (--release-branch)${NC}\n"
 else
-    echo -e "${GREEN}      ✓ Pulled latest changes${NC}\n"
+    echo -e "${YELLOW}[5/6] Pulling latest changes...${NC}"
+    if git pull --rebase 2>&1 | grep -q "Already up to date"; then
+        echo -e "${GREEN}      ✓ Already up to date${NC}\n"
+    else
+        echo -e "${GREEN}      ✓ Pulled latest changes${NC}\n"
+    fi
 fi
 
 echo -e "${GREEN}=== All Pre-Commit Checks Passed! ===${NC}"

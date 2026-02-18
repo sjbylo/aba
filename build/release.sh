@@ -1,13 +1,17 @@
 #!/bin/bash
 # Release script for aba
-# Usage: build/release.sh [--dry-run] <version> "<release description>"
+# Usage: build/release.sh [--dry-run] [--ref <commit>] <version> "<release description>"
 #
 # Examples:
 #   build/release.sh 0.9.4 "Bug fixes and improvements"
 #   build/release.sh --dry-run 0.9.4 "New features"
+#   build/release.sh --ref 87cdf93 0.9.4 "Partial release up to specific commit"
 #
 # Options:
-#   --dry-run   Show what would happen without making any changes.
+#   --dry-run        Show what would happen without making any changes.
+#   --ref <commit>   Release from a specific commit instead of dev HEAD.
+#                    Creates a temporary branch, applies version bump there,
+#                    tags it, then returns to dev.
 #
 # This script runs on the dev branch and:
 # 1. Validates inputs and pre-conditions (CHANGELOG, clean tree, tag, branch)
@@ -21,9 +25,9 @@
 # 9. Verifies the tagged commit has correct version data
 # 10. Shows commands to push and merge to main
 #
-# After running this script, merge dev to main:
-#   git push origin dev && git push origin v<VERSION>
-#   git checkout main && git merge --no-ff dev && git push origin main && git checkout dev
+# After running this script:
+#   Default mode:  merge dev to main
+#   --ref mode:    merge the tag to main, then merge main back to dev
 #
 # Exit codes:
 #   0 = Success
@@ -43,25 +47,34 @@ cd "$(dirname "$0")/.." || exit 1
 ABA_ROOT="$(pwd)"
 
 # --- Parse arguments ---
-# Extract --dry-run flag from anywhere in the argument list
 DRY_RUN=false
+REF_COMMIT=""
 ARGS=()
-for arg in "$@"; do
-    if [ "$arg" = "--dry-run" ]; then
-        DRY_RUN=true
-    else
-        ARGS+=("$arg")
-    fi
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dry-run) DRY_RUN=true ;;
+        --ref)
+            shift
+            if [ -z "$1" ]; then
+                echo -e "${RED}Error: --ref requires a commit argument${NC}"
+                exit 1
+            fi
+            REF_COMMIT="$1"
+            ;;
+        *) ARGS+=("$1") ;;
+    esac
+    shift
 done
 
-# Reassign positional args (without --dry-run)
+# Reassign positional args
 set -- "${ARGS[@]}"
 
 # Validate arguments
 if [ -z "$1" ] || [ -z "$2" ]; then
-    echo -e "${RED}Usage: $0 [--dry-run] <version> \"<release description>\"${NC}"
+    echo -e "${RED}Usage: $0 [--dry-run] [--ref <commit>] <version> \"<release description>\"${NC}"
     echo -e "${YELLOW}Example: $0 0.9.4 \"Bug fixes and improvements\"${NC}"
     echo -e "${YELLOW}Example: $0 --dry-run 0.9.4 \"New features\"${NC}"
+    echo -e "${YELLOW}Example: $0 --ref 87cdf93 0.9.4 \"Partial release\"${NC}"
     exit 1
 fi
 
@@ -76,13 +89,14 @@ if ! echo "$NEW_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
 fi
 
 # --- Header ---
-if $DRY_RUN; then
-    echo -e "${CYAN}=== Aba Release Process (DRY RUN — no changes will be made) ===${NC}\n"
-else
-    echo -e "${CYAN}=== Aba Release Process ===${NC}\n"
-fi
+HEADER_SUFFIX=""
+$DRY_RUN && HEADER_SUFFIX=" (DRY RUN — no changes will be made)"
+[ -n "$REF_COMMIT" ] && HEADER_SUFFIX="$HEADER_SUFFIX (--ref $REF_COMMIT)"
+
+echo -e "${CYAN}=== Aba Release Process${HEADER_SUFFIX} ===${NC}\n"
 echo -e "${YELLOW}New version: $NEW_VERSION${NC}"
 echo -e "${YELLOW}Description: $RELEASE_DESC${NC}"
+[ -n "$REF_COMMIT" ] && echo -e "${YELLOW}Target ref:  $REF_COMMIT${NC}"
 
 # --- Pre-flight checks (read-only, safe for dry-run) ---
 
@@ -91,6 +105,20 @@ CURRENT_BRANCH=$(git branch --show-current)
 if [ "$CURRENT_BRANCH" != "dev" ]; then
     echo -e "${RED}Error: Must be on 'dev' branch (currently on '$CURRENT_BRANCH')${NC}"
     exit 1
+fi
+
+# If --ref given, validate the commit exists and is an ancestor of dev
+if [ -n "$REF_COMMIT" ]; then
+    if ! git rev-parse --verify "$REF_COMMIT" >/dev/null 2>&1; then
+        echo -e "${RED}Error: Ref '$REF_COMMIT' does not exist${NC}"
+        exit 1
+    fi
+    REF_FULL=$(git rev-parse "$REF_COMMIT")
+    if ! git merge-base --is-ancestor "$REF_FULL" HEAD; then
+        echo -e "${RED}Error: Ref '$REF_COMMIT' ($REF_FULL) is not an ancestor of current dev HEAD${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}Ref $REF_COMMIT is a valid ancestor of dev${NC}\n"
 fi
 
 # Check if tag already exists (prevents mid-script failure after changes are committed)
@@ -120,9 +148,12 @@ echo -e "${GREEN}CHANGELOG [Unreleased] section has content${NC}\n"
 if $DRY_RUN; then
     echo -e "${CYAN}--- Dry Run Summary ---${NC}\n"
 
-    echo -e "${YELLOW}  - Pre-commit checks (RPM sync, syntax, pull)${NC}"
-    echo -e "${YELLOW}  - Version-bump commit on dev${NC}"
-    echo -e "${YELLOW}  - Tag v$NEW_VERSION on dev${NC}"
+    echo -e "${YELLOW}  - Pre-commit checks (RPM sync, syntax${REF_COMMIT:+; skip pull})${NC}"
+    if [ -n "$REF_COMMIT" ]; then
+        echo -e "${YELLOW}  - Create temp branch _release-v$NEW_VERSION from $REF_COMMIT${NC}"
+    fi
+    echo -e "${YELLOW}  - Version-bump commit${NC}"
+    echo -e "${YELLOW}  - Tag v$NEW_VERSION${NC}"
 
     echo
     echo -e "${YELLOW}Files that would be modified:${NC}"
@@ -149,10 +180,21 @@ fi
 # =====================================================================
 
 TOTAL=9
+RELEASE_BRANCH_NAME="_release-v$NEW_VERSION"
 
-# --- Step 1: Pre-commit checks (runs BEFORE any file changes, so git pull is safe) ---
-echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks...${NC}"
-build/pre-commit-checks.sh
+# --- Step 1: Pre-commit checks ---
+if [ -n "$REF_COMMIT" ]; then
+    echo -e "${YELLOW}[1/$TOTAL] Creating temp branch from $REF_COMMIT and running pre-commit checks...${NC}"
+    # Carry CHANGELOG.md from dev (where [Unreleased] is populated) to the temp branch
+    cp CHANGELOG.md /tmp/_aba_changelog_$$.md
+    git checkout -b "$RELEASE_BRANCH_NAME" "$REF_COMMIT"
+    cp /tmp/_aba_changelog_$$.md CHANGELOG.md
+    rm -f /tmp/_aba_changelog_$$.md
+    build/pre-commit-checks.sh --release-branch
+else
+    echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks...${NC}"
+    build/pre-commit-checks.sh
+fi
 echo
 
 # --- Step 2-5: Version bump ---
@@ -205,7 +247,7 @@ echo -e "${GREEN}       ✓ CHANGELOG.md updated${NC}\n"
 
 # --- Step 6-7: Commit and tag ---
 echo -e "${YELLOW}[6/$TOTAL] Staging and committing...${NC}"
-git add VERSION CHANGELOG.md README.md scripts/aba.sh
+git add VERSION CHANGELOG.md README.md scripts/aba.sh install
 git commit -m "release: Bump version to $NEW_VERSION
 
 $RELEASE_DESC
@@ -264,25 +306,50 @@ else
     echo -e "${RED}       ✗ Verification FAILED — review the tag before pushing!${NC}\n"
 fi
 
-# --- Step 9: Show next steps ---
+# --- Step 9: Return to dev (if --ref) and show next steps ---
+if [ -n "$REF_COMMIT" ]; then
+    echo -e "${YELLOW}[9/$TOTAL] Returning to dev branch...${NC}"
+    git checkout dev
+    echo -e "${GREEN}       ✓ Back on dev branch${NC}\n"
+fi
+
 echo -e "${GREEN}=== Release v$NEW_VERSION Ready! ===${NC}\n"
 
-echo -e "${CYAN}[9/$TOTAL] Next steps:${NC}"
+echo -e "${CYAN}Next steps:${NC}"
 echo -e "${YELLOW}1. Review the changes:${NC}"
-echo -e "   git show HEAD"
 echo -e "   git show v$NEW_VERSION"
 echo
 
-echo -e "${YELLOW}2. Push dev and tag:${NC}"
-echo -e "   git push origin dev"
-echo -e "   git push origin v$NEW_VERSION"
-echo
+if [ -n "$REF_COMMIT" ]; then
+    echo -e "${YELLOW}2. Push tag:${NC}"
+    echo -e "   git push origin v$NEW_VERSION"
+    echo
 
-echo -e "${YELLOW}3. Merge to main:${NC}"
-echo -e "   git checkout main && git merge --no-ff dev && git push origin main && git checkout dev"
-echo
+    echo -e "${YELLOW}3. Merge tag to main:${NC}"
+    echo -e "   git checkout main && git merge --no-ff v$NEW_VERSION && git push origin main && git checkout dev"
+    echo
 
-echo -e "${YELLOW}4. Create GitHub release:${NC}"
+    echo -e "${YELLOW}4. Sync dev with main (brings version bump into dev):${NC}"
+    echo -e "   git merge main"
+    echo
+
+    echo -e "${YELLOW}5. Delete temp branch:${NC}"
+    echo -e "   git branch -d $RELEASE_BRANCH_NAME"
+    echo
+
+    echo -e "${YELLOW}6. Create GitHub release:${NC}"
+else
+    echo -e "${YELLOW}2. Push dev and tag:${NC}"
+    echo -e "   git push origin dev"
+    echo -e "   git push origin v$NEW_VERSION"
+    echo
+
+    echo -e "${YELLOW}3. Merge to main:${NC}"
+    echo -e "   git checkout main && git merge --no-ff dev && git push origin main && git checkout dev"
+    echo
+
+    echo -e "${YELLOW}4. Create GitHub release:${NC}"
+fi
 echo
 echo -e "   ${CYAN}Automated (recommended, requires 'gh' CLI):${NC}"
 echo -e "   build/create-github-release.sh v$NEW_VERSION"
