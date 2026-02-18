@@ -351,7 +351,7 @@ read -t 60 yn || true
 #rm -rf ~/.oc-mirror  # We need some storage back! # Now done in "go.sh"
 #aba -d mirror load --retry 2 -H $TEST_HOST -k \~/.ssh/id_rsa
 #aba -d mirror -H $TEST_HOST install-docker-registry   # Use this instead of Quay due to quay issues
-aba -d mirror load --retry 2 -H $TEST_HOST
+aba -d mirror load --retry 5 -H $TEST_HOST
 
 # Be sure all CLI files can install and are executable
 scripts/cli-install-all.sh --wait

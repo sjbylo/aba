@@ -8,6 +8,42 @@
 #
 # Usage: source this file from suite scripts or run.sh
 # =============================================================================
+#
+# ===========================  E2E GOLDEN RULES  =============================
+#
+#  1. Tests MUST fail on error.  Never mask underlying issues.
+#     If something breaks, the test must stop and report it.
+#
+#  2. Never use '2>/dev/null' in test commands.
+#     Stderr output is diagnostic gold.  Suppressing it hides root causes.
+#
+#  3. Never use '|| true' in test commands.
+#     If a command can legitimately fail, use 'e2e_diag' or embed an explicit
+#     precondition check (e.g. if [ -f X ]; then ...; fi).
+#
+#  4. When a test fails, check if the fix belongs in ABA code FIRST.
+#     Tests exercise the product -- don't paper over product bugs.
+#
+#  5. Never "fix" a test just to make it pass.
+#     A passing test that hides a real failure is worse than a failing test.
+#
+#  6. Uninstall from the same host that installed.
+#     If the registry was installed from conN, uninstall from conN -- not disN.
+#
+#  7. Never remove tools before operations that need them.
+#     E.g. don't 'dnf remove make' before 'aba reset -f' (which needs make).
+#
+#  8. Verify cleanup actually worked.
+#     After uninstall, assert the service is down (e.g. curl check).
+#     After cleanup, assert the directory is gone.
+#
+#  9. Use 'e2e_diag' for diagnostic/informational commands whose exit code
+#     does not matter.  Never use it for steps that must succeed.
+#
+# 10. Prefer 'aba' commands over raw 'make' / scripts.
+#     Eat your own dog food.  Use the product's CLI for setup and teardown.
+#
+# ============================================================================
 
 # Resolve the directory this library lives in
 _E2E_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,6 +64,7 @@ E2E_RESUME_FILE=""     # If set, skip tests already passed in a previous run
 # Log file for the current suite run
 E2E_LOG_DIR="${_E2E_DIR}/logs"
 E2E_LOG_FILE=""
+E2E_SUMMARY_FILE=""   # Summary log: only test names, PASS/FAIL, commands (no verbose output)
 
 # Current suite / test tracking
 _E2E_SUITE_NAME=""
@@ -46,11 +83,14 @@ declare -a _E2E_PLAN_STATUS=()  # PENDING | RUNNING | PASS | FAIL | SKIP | DONE
 
 _e2e_color() {
     local code="$1"; shift
-    if [ -t 1 ] && [ "${TERM:-}" ]; then
-        printf '\033[%sm%s\033[0m' "$code" "$*"
-    else
-        printf '%s' "$*"
-    fi
+    # Always emit ANSI colors -- output is viewed via 'tail -f' on log files
+    printf '\033[%sm%s\033[0m' "$code" "$*"
+}
+
+# Force ANSI colors regardless of TTY (for log files viewed via tail -f)
+_e2e_color_always() {
+    local code="$1"; shift
+    printf '\033[%sm%s\033[0m' "$code" "$*"
 }
 
 _e2e_red()    { _e2e_color "0;31" "$@"; }
@@ -58,6 +98,13 @@ _e2e_green()  { _e2e_color "0;32" "$@"; }
 _e2e_yellow() { _e2e_color "0;33" "$@"; }
 _e2e_cyan()   { _e2e_color "0;36" "$@"; }
 _e2e_bold()   { _e2e_color "1"    "$@"; }
+
+# Always-colored variants (for summary log, always readable via tail -f)
+_e2e_Red()    { _e2e_color_always "1;31" "$@"; }
+_e2e_Green()  { _e2e_color_always "1;32" "$@"; }
+_e2e_Yellow() { _e2e_color_always "1;33" "$@"; }
+_e2e_Cyan()   { _e2e_color_always "1;36" "$@"; }
+_e2e_Bold()   { _e2e_color_always "1"    "$@"; }
 
 # --- Logging ----------------------------------------------------------------
 
@@ -80,11 +127,25 @@ _e2e_draw_line() {
     printf '%*s\n' "$cols" '' | tr ' ' "$char"
 }
 
+# --- Summary Log ------------------------------------------------------------
+# A tidy summary file showing only test names, commands, PASS/FAIL, and timing.
+# Colors are forced on (ANSI) so "tail -f" is always readable.
+# This mirrors the "test/test.log" pattern from the old test-cmd framework.
+
+_e2e_summary() {
+    # Write a color-coded line to the summary log (always with ANSI colors)
+    [ -z "${E2E_SUMMARY_FILE:-}" ] && return
+    local ts
+    ts="$(date '+%H:%M:%S')"
+    echo "$ts  $*" >> "$E2E_SUMMARY_FILE"
+}
+
 # --- Notification -----------------------------------------------------------
 
 _e2e_notify() {
     if [ -n "$NOTIFY_CMD" ]; then
-        echo "$@" | $NOTIFY_CMD "$@" 2>/dev/null || true
+        # Pass message as args only (not also via stdin, which caused duplicates)
+        $NOTIFY_CMD "$@" < /dev/null 2>/dev/null || true
     fi
 }
 
@@ -126,26 +187,71 @@ _update_plan() {
 _print_progress() {
     [ ${#_E2E_PLAN_NAMES[@]} -eq 0 ] && return
 
+    # Calculate column width from longest test name (min 40, +4 padding)
+    local _col=40
+    for i in "${!_E2E_PLAN_NAMES[@]}"; do
+        local _len=${#_E2E_PLAN_NAMES[$i]}
+        (( _len + 4 > _col )) && _col=$(( _len + 4 ))
+    done
+
+    # Print to screen
     echo ""
     _e2e_draw_line "="
-    printf "  %-50s %s\n" "TEST" "STATUS"
+    printf "  %-${_col}s %s\n" "TEST" "STATUS"
     _e2e_draw_line "-"
 
-    local i status_str
+    local i status_str status_str_color
     for i in "${!_E2E_PLAN_NAMES[@]}"; do
         case "${_E2E_PLAN_STATUS[$i]}" in
-            PASS)    status_str="$(_e2e_green "PASS")" ;;
-            FAIL)    status_str="$(_e2e_red "FAIL")" ;;
-            SKIP)    status_str="$(_e2e_yellow "SKIP")" ;;
-            RUNNING) status_str="$(_e2e_cyan "RUNNING...")" ;;
-            DONE)    status_str="$(_e2e_green "DONE (resumed)")" ;;
-            *)       status_str="  --" ;;
+            PASS)    status_str="$(_e2e_green "PASS")";          status_str_color="$(_e2e_Green "PASS")" ;;
+            FAIL)    status_str="$(_e2e_red "FAIL")";            status_str_color="$(_e2e_Red "FAIL")" ;;
+            SKIP)    status_str="$(_e2e_yellow "SKIP")";         status_str_color="$(_e2e_Yellow "SKIP")" ;;
+            RUNNING) status_str="$(_e2e_cyan "RUNNING...")";     status_str_color="$(_e2e_Cyan "RUNNING...")" ;;
+            DONE)    status_str="$(_e2e_green "DONE (resumed)")"; status_str_color="$(_e2e_Green "DONE (resumed)")" ;;
+            *)       status_str="  --";                          status_str_color="  --" ;;
         esac
-        printf "  %-50s %s\n" "${_E2E_PLAN_NAMES[$i]}" "$status_str"
+        printf "  %-${_col}s %s\n" "${_E2E_PLAN_NAMES[$i]}" "$status_str"
     done
 
     _e2e_draw_line "="
     echo ""
+
+    # Also write the progress table to the summary log (with forced colors for tail -f)
+    local _line
+    printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /=}"
+    _e2e_summary ""
+    _e2e_summary "  $_line"
+    _e2e_summary "  $(printf "%-${_col}s %s" "TEST" "STATUS")"
+    printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /-}"
+    _e2e_summary "  $_line"
+    for i in "${!_E2E_PLAN_NAMES[@]}"; do
+        case "${_E2E_PLAN_STATUS[$i]}" in
+            PASS)    status_str_color="$(_e2e_Green "PASS")" ;;
+            FAIL)    status_str_color="$(_e2e_Red "FAIL")" ;;
+            SKIP)    status_str_color="$(_e2e_Yellow "SKIP")" ;;
+            RUNNING) status_str_color="$(_e2e_Cyan "RUNNING...")" ;;
+            DONE)    status_str_color="$(_e2e_Green "DONE (resumed)")" ;;
+            *)       status_str_color="  --" ;;
+        esac
+        _e2e_summary "  $(printf "%-${_col}s" "${_E2E_PLAN_NAMES[$i]}") $status_str_color"
+    done
+    printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /=}"
+    _e2e_summary "  $_line"
+    _e2e_summary ""
+
+    # Append to the full log too (plain text, no colors)
+    if [ -n "${E2E_LOG_FILE:-}" ]; then
+        {
+            echo ""
+            printf "  %-${_col}s %s\n" "TEST" "STATUS"
+            printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /-}"
+            echo "  $_line"
+            for i in "${!_E2E_PLAN_NAMES[@]}"; do
+                printf "  %-${_col}s %s\n" "${_E2E_PLAN_NAMES[$i]}" "${_E2E_PLAN_STATUS[$i]}"
+            done
+            echo ""
+        } >> "$E2E_LOG_FILE"
+    fi
 }
 
 # --- Suite Lifecycle --------------------------------------------------------
@@ -159,9 +265,20 @@ suite_begin() {
     _E2E_SKIP_COUNT=0
     _E2E_START_TIME=$(date +%s)
 
-    # Set up log file
+    # Set up log files (timestamped for history, symlinks for easy access)
     mkdir -p "$E2E_LOG_DIR"
-    E2E_LOG_FILE="${E2E_LOG_DIR}/${suite_name}-$(date +%Y%m%d-%H%M%S).log"
+    local ts_stamp
+    ts_stamp="$(date +%Y%m%d-%H%M%S)"
+    E2E_LOG_FILE="${E2E_LOG_DIR}/${suite_name}-${ts_stamp}.log"
+    E2E_SUMMARY_FILE="${E2E_LOG_DIR}/${suite_name}-${ts_stamp}-summary.log"
+
+    # Per-suite symlinks: <suite>-latest.log, <suite>-summary.log
+    ln -sf "$(basename "$E2E_LOG_FILE")" "${E2E_LOG_DIR}/${suite_name}-latest.log"
+    ln -sf "$(basename "$E2E_SUMMARY_FILE")" "${E2E_LOG_DIR}/${suite_name}-summary.log"
+
+    # Global symlinks: latest.log, summary.log  (always point to the active suite)
+    ln -sf "$(basename "$E2E_LOG_FILE")" "${E2E_LOG_DIR}/latest.log"
+    ln -sf "$(basename "$E2E_SUMMARY_FILE")" "${E2E_LOG_DIR}/summary.log"
 
     # Initialize state file for checkpointing
     E2E_STATE_FILE="${E2E_LOG_DIR}/${suite_name}.state"
@@ -170,6 +287,7 @@ suite_begin() {
     _e2e_draw_line "="
     _e2e_log_and_print "$(_e2e_bold "SUITE: $suite_name")"
     _e2e_draw_line "="
+    _e2e_summary "$(_e2e_Bold "========== SUITE: $suite_name ==========")"
     _e2e_notify "Suite started: $suite_name ($(date))"
 }
 
@@ -188,9 +306,11 @@ suite_end() {
     _print_progress
 
     if [ "$_E2E_FAIL_COUNT" -gt 0 ]; then
+        _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, ${mins}m ${secs}s) ==========")"
         _e2e_notify "FAILED: $_E2E_SUITE_NAME -- $_E2E_FAIL_COUNT failures ($(date))"
         return 1
     else
+        _e2e_summary "$(_e2e_Green "========== PASSED: $_E2E_SUITE_NAME  (${_E2E_PASS_COUNT} passed, ${mins}m ${secs}s) ==========")"
         _e2e_notify "PASSED: $_E2E_SUITE_NAME -- $_E2E_PASS_COUNT passed (${mins}m ${secs}s)"
         return 0
     fi
@@ -206,6 +326,8 @@ test_begin() {
     _update_plan "$test_name" "RUNNING"
     _e2e_draw_line "-"
     _e2e_log_and_print "$(_e2e_cyan "TEST [$_E2E_TEST_COUNT]: $test_name")"
+    _e2e_summary ""
+    _e2e_summary "$(_e2e_Cyan "--- TEST [$_E2E_TEST_COUNT]: $test_name ---")"
 }
 
 test_end() {
@@ -216,10 +338,12 @@ test_end() {
         (( _E2E_PASS_COUNT++ )) || true
         _update_plan "$test_name" "PASS"
         _e2e_log_and_print "$(_e2e_green "  PASS: $test_name")"
+        _e2e_summary "$(_e2e_Green "  PASS: $test_name")"
     else
         (( _E2E_FAIL_COUNT++ )) || true
         _update_plan "$test_name" "FAIL"
         _e2e_log_and_print "$(_e2e_red "  FAIL: $test_name")"
+        _e2e_summary "$(_e2e_Red "  FAIL: $test_name")"
     fi
 
     _checkpoint_write "$test_name" "$result"
@@ -231,6 +355,7 @@ test_skip() {
     (( _E2E_SKIP_COUNT++ )) || true
     _update_plan "$test_name" "SKIP"
     _e2e_log_and_print "$(_e2e_yellow "  SKIP: $test_name")"
+    _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
     _checkpoint_write "$test_name" "SKIP"
     _E2E_CURRENT_TEST=""
 }
@@ -244,6 +369,7 @@ run_test() {
         (( _E2E_TEST_COUNT++ )) || true
         _update_plan "$test_name" "DONE"
         _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"
+        _e2e_summary "$(_e2e_Green "  DONE (resumed): $test_name")"
         return 0
     fi
 
@@ -341,7 +467,6 @@ _interactive_prompt() {
 # Flags:
 #   -r RETRIES BACKOFF   Retry on failure (default: 5 retries, 1.5x backoff)
 #   -h HOST              Run command on remote HOST via SSH
-#   -i                   Ignore result (return actual exit code, don't fail suite)
 #   -q                   Quiet: log output to file only (don't show on screen)
 #   "description"        First non-flag argument = human-readable description
 #   command...           Remaining arguments = the command to run
@@ -350,7 +475,6 @@ e2e_run() {
     local tot_cnt=5
     local backoff=1.5
     local host=""
-    local ignore_result=""
     local quiet=""
     local mark="L"
 
@@ -359,7 +483,6 @@ e2e_run() {
         case "$1" in
             -r) tot_cnt="$2"; backoff="$3"; shift 3 ;;
             -h) host="$2"; mark="R"; shift 2 ;;
-            -i) ignore_result=1; shift ;;
             -q) quiet=1; shift ;;
             *)  break ;;
         esac
@@ -371,6 +494,9 @@ e2e_run() {
 
     _e2e_draw_line "."
     _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_cyan "($cmd)") $(_e2e_yellow "[$PWD -> ${host:-localhost}]")"
+    # Summary: show command description and the actual command being run
+    _e2e_summary "  ----------------------------------------"
+    _e2e_summary "  $mark $(_e2e_Green "$description") $(_e2e_Cyan "($cmd)")"
 
     # Outer loop: interactive retry wraps the automatic retry loop
     while true; do
@@ -387,15 +513,17 @@ e2e_run() {
                     ssh -t -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
                         >> "$_lf" 2>&1 || ret=$?
                 else
+                    # Use PIPESTATUS to capture ssh exit code, not tee's
                     ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
-                        2>&1 | tee -a "$_lf" || ret=$?
+                        2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
                 fi
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
                     ( eval "$cmd" ) >> "$_lf" 2>&1 || ret=$?
                 else
-                    ( eval "$cmd" ) 2>&1 | tee -a "$_lf" || ret=$?
+                    # Use PIPESTATUS to capture command exit code, not tee's
+                    ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
                 fi
             fi
 
@@ -405,24 +533,21 @@ e2e_run() {
             # Success
             if [ $ret -eq 0 ]; then
                 if [ $attempt -gt 1 ]; then
+                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description"
                     _e2e_notify "Command recovered: $description ($(date))"
                 fi
                 _e2e_log "  OK (attempt $attempt)"
                 return 0
             fi
 
-            # Ignore result mode: return actual exit code
-            if [ -n "$ignore_result" ]; then
-                _e2e_log "  Failed (exit=$ret), returning actual result (-i flag)"
-                return $ret
-            fi
-
             _e2e_log "  Attempt $attempt/$tot_cnt failed (exit=$ret)"
             _e2e_log_and_print "    $(_e2e_yellow "Attempt ($attempt/$tot_cnt) failed (exit=$ret): $description")"
+            _e2e_summary "    $(_e2e_Yellow "Attempt ($attempt/$tot_cnt) failed (exit=$ret)") $description"
 
             # Exhausted retries?
             if [ $attempt -ge $tot_cnt ]; then
                 _e2e_log "  All $tot_cnt attempts exhausted"
+                _e2e_summary "    $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
                 break  # fall through to interactive prompt
             fi
 
@@ -455,9 +580,15 @@ e2e_run() {
             # User chose skip or replacement command succeeded
             return 0
         else
-            # Non-interactive failure or abort
+            # Non-interactive failure or abort -- fail the current test and stop the suite
             _e2e_log "  FAILED: $description (exit=$ret)"
-            return $ret
+            _e2e_log_and_print "  $(_e2e_red "FATAL: $description -- aborting suite")"
+            _e2e_summary "    $(_e2e_Red "FATAL: $description -- aborting suite")"
+            if [ -n "$_E2E_CURRENT_TEST" ]; then
+                test_end "$ret"
+            fi
+            _e2e_notify "FATAL: $description (exit=$ret) -- suite aborted"
+            exit 1
         fi
     done
 }
@@ -469,10 +600,65 @@ e2e_run() {
 #
 e2e_run_remote() {
     if [ -z "${INTERNAL_BASTION:-}" ]; then
-        echo "ERROR: INTERNAL_BASTION not set. Cannot run remote command." >&2
-        return 1
+        _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
+        exit 1
     fi
     e2e_run -h "$INTERNAL_BASTION" "$@"
+}
+
+# --- e2e_diag ---------------------------------------------------------------
+#
+# Run a DIAGNOSTIC command whose exit code does NOT affect the test outcome.
+# Output is logged for troubleshooting, but the suite continues regardless of
+# success or failure.  Use this ONLY for informational checks, never for steps
+# that must succeed for the test to be valid.
+#
+# Flags:
+#   -h HOST   Run on remote HOST via SSH
+#
+# Usage:
+#   e2e_diag "Show firewalld status" "systemctl status firewalld"
+#   e2e_diag -h "$host" "Check disk space" "df -h"
+#
+e2e_diag() {
+    local host=""
+    local mark="L"
+
+    while [[ "${1:-}" == -* ]]; do
+        case "$1" in
+            -h) host="$2"; mark="R"; shift 2 ;;
+            *)  break ;;
+        esac
+    done
+
+    local description="$1"; shift
+    local cmd="$*"
+    local _lf="${E2E_LOG_FILE:-/dev/null}"
+    local ret=0
+
+    _e2e_log_and_print "  $mark $(_e2e_yellow "[diag]") $description $(_e2e_cyan "($cmd)")"
+
+    if [ -n "$host" ]; then
+        ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+            2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+    else
+        ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+    fi
+
+    if [ $ret -ne 0 ]; then
+        _e2e_log "  [diag] $description exited $ret (informational only)"
+    fi
+
+    return 0  # Always succeed -- this is diagnostic only
+}
+
+# Shorthand: e2e_diag on $INTERNAL_BASTION
+e2e_diag_remote() {
+    if [ -z "${INTERNAL_BASTION:-}" ]; then
+        _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
+        exit 1
+    fi
+    e2e_diag -h "$INTERNAL_BASTION" "$@"
 }
 
 # --- e2e_run_must_fail ------------------------------------------------------
@@ -489,16 +675,22 @@ e2e_run_must_fail() {
     _e2e_draw_line "."
     _e2e_log_and_print "  L $description (expect failure)"
     _e2e_log "    CMD (must-fail): $cmd"
+    _e2e_summary "  L $(_e2e_Yellow "$description (expect failure)") $(_e2e_Cyan "($cmd)")"
 
     local ret=0
     ( eval "$cmd" ) >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected (exit=$ret)"
+        _e2e_summary "    $(_e2e_Green "OK: failed as expected (exit=$ret)")"
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
-        return 1
+        _e2e_summary "    $(_e2e_Red "UNEXPECTED SUCCESS: $description -- aborting suite")"
+        if [ -n "$_E2E_CURRENT_TEST" ]; then
+            test_end 1
+        fi
+        exit 1
     fi
 }
 
@@ -511,13 +703,14 @@ e2e_run_must_fail_remote() {
     local cmd="$*"
 
     if [ -z "${INTERNAL_BASTION:-}" ]; then
-        echo "ERROR: INTERNAL_BASTION not set." >&2
-        return 1
+        _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
+        exit 1
     fi
 
     _e2e_draw_line "."
     _e2e_log_and_print "  R $description (expect failure)"
     _e2e_log "    CMD (must-fail on $INTERNAL_BASTION): $cmd"
+    _e2e_summary "  R $(_e2e_Yellow "$description (expect failure)") $(_e2e_Cyan "($cmd)")"
 
     local ret=0
     ssh -t -o LogLevel=ERROR "$INTERNAL_BASTION" -- \
@@ -526,24 +719,40 @@ e2e_run_must_fail_remote() {
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected (exit=$ret)"
+        _e2e_summary "    $(_e2e_Green "OK: failed as expected (exit=$ret)")"
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
-        return 1
+        _e2e_summary "    $(_e2e_Red "UNEXPECTED SUCCESS: $description -- aborting suite")"
+        if [ -n "$_E2E_CURRENT_TEST" ]; then
+            test_end 1
+        fi
+        exit 1
     fi
 }
 
 # --- Assertions -------------------------------------------------------------
+#
+# All assertions abort the suite on failure -- tests must not silently continue
+# past a failed check (rule #1: let them fail).
+
+_assert_fail() {
+    local msg="$1"
+    _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
+    _e2e_summary "    $(_e2e_Red "ASSERT FAIL: $msg -- aborting suite")"
+    if [ -n "${_E2E_CURRENT_TEST:-}" ]; then
+        test_end 1
+    fi
+    exit 1
+}
 
 assert_file_exists() {
     local file="$1"
     local msg="${2:-File should exist: $file}"
     if [ -f "$file" ]; then
         _e2e_log "  ASSERT OK: file exists: $file"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -552,10 +761,8 @@ assert_dir_exists() {
     local msg="${2:-Directory should exist: $dir}"
     if [ -d "$dir" ]; then
         _e2e_log "  ASSERT OK: dir exists: $dir"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -564,10 +771,8 @@ assert_file_not_exists() {
     local msg="${2:-File should not exist: $file}"
     if [ ! -f "$file" ]; then
         _e2e_log "  ASSERT OK: file does not exist: $file"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -577,10 +782,8 @@ assert_contains() {
     local msg="${3:-File $file should contain: $pattern}"
     if grep -q "$pattern" "$file" 2>/dev/null; then
         _e2e_log "  ASSERT OK: '$pattern' found in $file"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -590,10 +793,8 @@ assert_not_contains() {
     local msg="${3:-File $file should NOT contain: $pattern}"
     if ! grep -q "$pattern" "$file" 2>/dev/null; then
         _e2e_log "  ASSERT OK: '$pattern' not found in $file (expected)"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -603,10 +804,8 @@ assert_eq() {
     local msg="${3:-Expected '$expected', got '$actual'}"
     if [ "$actual" = "$expected" ]; then
         _e2e_log "  ASSERT OK: '$actual' == '$expected'"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -616,10 +815,8 @@ assert_ne() {
     local msg="${3:-Expected NOT '$unexpected', but got it}"
     if [ "$actual" != "$unexpected" ]; then
         _e2e_log "  ASSERT OK: '$actual' != '$unexpected'"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -628,10 +825,8 @@ assert_command_exists() {
     local msg="${2:-Command should exist: $cmd_name}"
     if command -v "$cmd_name" &>/dev/null; then
         _e2e_log "  ASSERT OK: command exists: $cmd_name"
-        return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-        return 1
+        _assert_fail "$msg"
     fi
 }
 
@@ -661,6 +856,29 @@ require_ssh() {
         return 1
     fi
     return 0
+}
+
+# Pre-flight SSH connectivity check.  Call at the top of any suite that
+# relies on a remote bastion (INTERNAL_BASTION).  Fails the suite
+# immediately instead of letting dozens of remote commands silently fail.
+#
+# Usage: preflight_ssh           (uses $INTERNAL_BASTION)
+#        preflight_ssh HOST      (explicit host)
+#
+preflight_ssh() {
+    local host="${1:-${INTERNAL_BASTION:-}}"
+    if [ -z "$host" ]; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: INTERNAL_BASTION not set")"
+        exit 1
+    fi
+    _e2e_log "  Preflight: checking SSH to $host ..."
+    if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$host" true 2>/dev/null; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to $host")"
+        _e2e_log_and_print "  $(_e2e_Red "Aborting suite -- remote bastion is unreachable.")"
+        _e2e_notify "PREFLIGHT FAIL: Cannot SSH to $host -- suite aborted"
+        exit 1
+    fi
+    _e2e_log "  Preflight: SSH to $host OK"
 }
 
 require_govc() {
@@ -702,12 +920,25 @@ e2e_setup() {
         source scripts/include_all.sh no-trap 2>/dev/null || true
     fi
 
-    # Log the active parameter set
+    # Log git state so we know exactly what was tested
+    local _git_head _git_dirty
+    _git_head="$(git -C "$aba_root" log -1 --format='%h %s' 2>/dev/null || echo 'unknown')"
+    _git_dirty="$(git -C "$aba_root" status --porcelain 2>/dev/null | head -20)"
+
     _e2e_log "=== E2E Environment ==="
     _e2e_log "  ABA_ROOT=$aba_root"
+    _e2e_log "  GIT_HEAD=$_git_head"
+    if [ -n "$_git_dirty" ]; then
+        _e2e_log "  GIT_STATE=DIRTY (uncommitted changes):"
+        while IFS= read -r _line; do
+            _e2e_log "    $_line"
+        done <<< "$_git_dirty"
+    else
+        _e2e_log "  GIT_STATE=clean"
+    fi
     _e2e_log "  TEST_CHANNEL=${TEST_CHANNEL:-unset}"
-    _e2e_log "  VER_OVERRIDE=${VER_OVERRIDE:-unset}"
-    _e2e_log "  INTERNAL_BASTION_RHEL_VER=${INTERNAL_BASTION_RHEL_VER:-unset}"
+    _e2e_log "  OCP_VERSION=${OCP_VERSION:-unset}"
+    _e2e_log "  INT_BASTION_RHEL_VER=${INT_BASTION_RHEL_VER:-unset}"
     _e2e_log "  TEST_USER=${TEST_USER:-unset}"
     _e2e_log "  OC_MIRROR_VER=${OC_MIRROR_VER:-unset}"
     _e2e_log "  NOTIFY_CMD=${NOTIFY_CMD:-disabled}"

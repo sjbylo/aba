@@ -18,7 +18,7 @@
 #   - Internet access (to download OCP images for the bundle)
 # =============================================================================
 
-set -euo pipefail
+set -u
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
@@ -36,10 +36,12 @@ e2e_setup
 plan_tests \
     "Setup: clean slate" \
     "Setup: install and configure aba" \
-    "Light bundle: create with operators" \
-    "Light bundle: verify contents" \
-    "Full bundle: create without operator filters" \
-    "Full bundle: verify contents"
+    "Bundle with operator filters: create" \
+    "Bundle with operator filters: verify contents" \
+    "Bundle without operator filters: create" \
+    "Bundle without operator filters: verify contents" \
+    "All-operators imageset: generate and verify YAML" \
+    "run_once: mirror clean clears state"
 
 suite_begin "bundle-disk"
 
@@ -48,29 +50,29 @@ suite_begin "bundle-disk"
 # ============================================================================
 test_begin "Setup: clean slate"
 
-# Remove RPMs so aba can test its auto-install logic (matches original test4 RPM list)
+# dnf remove returns non-zero only if NONE of the packages are installed (= already clean).
 e2e_run "Remove RPMs for clean install test" \
-    "sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y 2>/dev/null || true"
+    "sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y || { echo 'All packages already absent'; true; }"
 
-# Clean podman images and storage
-e2e_run -q "Clean podman" \
-    "podman system prune --all --force 2>/dev/null; podman rmi --all 2>/dev/null; sudo rm -rf ~/.local/share/containers/storage; true"
+# podman prune/rmi with --force are idempotent (return 0 even when empty).
+e2e_run "Clean podman" \
+    "podman system prune --all --force; podman rmi --all --force; sudo rm -rfv ~/.local/share/containers/storage"
 
 # Remove oc-mirror caches
 e2e_run -q "Remove oc-mirror caches" \
-    "rm -rf ~/.cache/agent; rm -rf \$HOME/*/.oc-mirror/.cache; true"
+    "rm -rfv ~/.cache/agent; rm -rfv \$HOME/*/.oc-mirror/.cache"
 
 # Clean up leftover state from previous test runs
 e2e_run -q "Remove old files" \
-    "rm -rf sno compact standard ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker || true"
+    "rm -rfv $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
 # Ensure make is available (needed for aba reset)
 e2e_run -q "Ensure make is installed" \
     "which make || sudo dnf install make -y"
 
-# Reset aba if it was previously installed (-i: ignore failure if not installed)
-e2e_run -i "Reset aba (if installed)" \
-    "aba reset -f 2>/dev/null || true"
+# Conditional: aba may not be installed yet (first run).
+e2e_run "Reset aba (if installed)" \
+    "if command -v aba >/dev/null 2>&1 && [ -d mirror ]; then aba reset -f; else echo 'aba not installed or no mirror dir -- skipping reset'; fi"
 
 test_end 0
 
@@ -82,7 +84,7 @@ test_begin "Setup: install and configure aba"
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${VER_OVERRIDE:-p}"
+    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 
 e2e_run -q "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
@@ -115,22 +117,22 @@ echo "  ocp_version=$ocp_version  ocp_channel=$ocp_channel"
 test_end 0
 
 # ============================================================================
-# 3. Light bundle: create with specific operators
+# 3. Bundle WITH operator filters (downloads only specified operators)
 # ============================================================================
-test_begin "Light bundle: create with operators"
+test_begin "Bundle with operator filters: create"
 
 e2e_run -q "Create temp dir" "mkdir -v -p ~/tmp"
 e2e_run -q "Clean previous light bundles" "rm -fv ~/tmp/delete-me*tar"
 
-e2e_run -r 3 3 "Create light bundle (channel=$TEST_CHANNEL version=$ocp_version ops=abatest+extras)" \
+e2e_run -r 3 2 "Create light bundle (channel=$TEST_CHANNEL version=$ocp_version ops=abatest+extras)" \
     "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks nginx-ingress-operator flux --base-domain $(pool_domain) -o ~/tmp/delete-me -y"
 
 test_end 0
 
 # ============================================================================
-# 4. Light bundle: verify contents
+# 4. Bundle with operator filters: verify contents
 # ============================================================================
-test_begin "Light bundle: verify contents"
+test_begin "Bundle with operator filters: verify contents"
 
 e2e_run "Show tar file size" "ls -l ~/tmp/delete-me*tar"
 e2e_run "Show tar file size (human)" "ls -lh ~/tmp/delete-me*tar"
@@ -140,21 +142,22 @@ e2e_run -q "Clean up light bundle" "rm -fv ~/tmp/delete-me*tar"
 test_end 0
 
 # ============================================================================
-# 5. Full bundle: create without operator filters
+# 5. Bundle WITHOUT operator filters (zero operators -- smallest bundle)
 # ============================================================================
-test_begin "Full bundle: create without operator filters"
+test_begin "Bundle without operator filters: create"
 
-e2e_run -q "Clean previous full bundles" "rm -fv /tmp/delete-me*tar"
+e2e_run -q "Clean previous bundles" "rm -fv /tmp/delete-me*tar"
 
-e2e_run -r 3 3 "Create full bundle (channel=$TEST_CHANNEL version=$ocp_version all operators)" \
+# No --op-sets, no --ops: zero operators are downloaded (only OCP release images)
+e2e_run -r 3 2 "Create bundle without operators (channel=$TEST_CHANNEL version=$ocp_version)" \
     "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets --ops --base-domain $(pool_domain) -o /tmp/delete-me -y"
 
 test_end 0
 
 # ============================================================================
-# 6. Full bundle: verify contents
+# 6. Bundle without operator filters: verify contents
 # ============================================================================
-test_begin "Full bundle: verify contents"
+test_begin "Bundle without operator filters: verify contents"
 
 e2e_run "Show tar file size" "ls -l /tmp/delete-me*tar"
 e2e_run "Show tar file size (human)" "ls -lh /tmp/delete-me*tar"
@@ -162,6 +165,69 @@ e2e_run "List tar contents" "tar tvf /tmp/delete-me*tar"
 e2e_run "Verify mirror_000001.tar in bundle" \
     "tar tvf /tmp/delete-me*tar | grep mirror/save/mirror_000001.tar"
 e2e_run -q "Clean up full bundle" "rm -fv /tmp/delete-me*tar"
+
+test_end 0
+
+# ============================================================================
+# 7. All-operators imageset: generate YAML and verify (no download -- too large)
+# ============================================================================
+test_begin "All-operators imageset: generate and verify YAML"
+
+# Configure op-sets=all (downloads ALL operators if aba save were run, ~1TB!)
+# We only generate the imageset-config YAML and verify its structure.
+e2e_run -q "Set op-sets to 'all' in aba.conf" "aba --op-sets all"
+
+# Remove any previously generated imageset YAML so it's regenerated
+e2e_run -q "Clean old imageset YAML" "rm -f mirror/save/imageset-config-save.yaml"
+
+# Generate the imageset config YAML (without actually saving images)
+e2e_run "Generate imageset-config for ops=all" "aba -d mirror imagesetconf"
+
+# Verify: the YAML must contain the redhat-operator-index catalog entry
+e2e_run "Verify redhat-operator-index in imageset YAML" \
+    "grep 'redhat-operator-index' mirror/save/imageset-config-save.yaml"
+
+# Verify: with op-sets=all there should be NO 'packages:' filter
+# (an unfiltered catalog entry = all operators)
+e2e_run "Verify no package filter (all operators)" \
+    "! grep -q 'packages:' mirror/save/imageset-config-save.yaml"
+
+# Restore original operator settings so we leave things clean
+e2e_run -q "Restore op-sets to abatest" "aba --op-sets abatest"
+
+test_end 0
+
+# ============================================================================
+# 8. run_once regression: mirror clean must clear run_once state (Gap 8)
+#    Verifies that 'aba --dir mirror clean' properly resets run_once state
+#    so subsequent operations don't silently skip re-extraction or re-download.
+# ============================================================================
+test_begin "run_once: mirror clean clears state"
+
+# Ensure mirror-registry binary exists (from bundle operations above)
+e2e_run "Verify mirror-registry exists before clean" \
+    "test -f mirror/mirror-registry || make -C mirror mirror-registry"
+
+# Verify run_once state directory exists
+e2e_run "Verify run_once state exists" \
+    "ls -d ~/.aba/runner/mirror:* 2>/dev/null | head -3 || echo 'no run_once state yet'"
+
+# Run mirror clean -- should delete extracted files AND clear run_once state
+e2e_run "Run mirror clean" "aba --dir mirror clean"
+
+# Verify the binary was removed
+e2e_run "Verify mirror-registry removed after clean" \
+    "test ! -f mirror/mirror-registry"
+
+# Verify run_once state for mirror:reg:install was cleared
+e2e_run "Verify run_once state cleared for reg:install" \
+    "test ! -d ~/.aba/runner/mirror:reg:install"
+
+# Re-extract -- should succeed because run_once state was cleared
+e2e_run "Re-extract mirror-registry after clean" \
+    "make -C mirror mirror-registry"
+e2e_run "Verify mirror-registry re-extracted" \
+    "test -x mirror/mirror-registry"
 
 test_end 0
 

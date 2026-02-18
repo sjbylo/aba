@@ -69,12 +69,57 @@ pool_compact_apps_vip()   { pool_apps_vip "$@"; }
 pool_standard_api_vip()   { pool_api_vip "$@"; }
 pool_standard_apps_vip()  { pool_apps_vip "$@"; }
 
+# --- Pool-Unique Cluster Names ------------------------------------------------
+# When parallel pools create VMs, names must not collide in vCenter.
+# Every pool always appends the pool number: sno1, compact1, sno-vlan2, etc.
+#
+# Usage: pool_cluster_name <base_type> [POOL_NUM]
+#   e.g. pool_cluster_name sno        -> "sno1"        (pool 1)
+#        pool_cluster_name sno 2      -> "sno2"        (pool 2)
+#        pool_cluster_name sno-vlan 1 -> "sno-vlan1"   (pool 1)
+pool_cluster_name() {
+    local base="$1"
+    local p="${2:-${POOL_NUM:-1}}"
+    echo "${base}${p}"
+}
+
 # Get starting IP for a cluster type: pool_starting_ip <sno|compact|standard> [POOL_NUM]
 pool_starting_ip() {
     local ctype="$1"
     local p="${2:-${POOL_NUM:-1}}"
     # All types share pool_node_ip as the starting/rendezvous IP
     pool_node_ip "$p"
+}
+
+# Get the VLAN node IP for cluster-on-VLAN tests: pool_vlan_node_ip [POOL_NUM]
+pool_vlan_node_ip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_VLAN_NODE_IP[$p]:-10.10.20.$((200 + p))}"
+}
+
+# Get the VLAN machine network: pool_vlan_network
+pool_vlan_network() {
+    echo "${POOL_VLAN_NETWORK:-10.10.20.0/24}"
+}
+
+# Get the VLAN API VIP for compact/standard on VLAN: pool_vlan_api_vip [POOL_NUM]
+pool_vlan_api_vip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_VLAN_API_VIP[$p]:-10.10.20.$((210 + p))}"
+}
+
+# Get the VLAN APPS VIP for compact/standard on VLAN: pool_vlan_apps_vip [POOL_NUM]
+pool_vlan_apps_vip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_VLAN_APPS_VIP[$p]:-10.10.20.$((220 + p))}"
+}
+
+# Get the VLAN gateway (= disN's VLAN IP, stripped of /prefix): pool_vlan_gateway [POOL_NUM]
+pool_vlan_gateway() {
+    local p="${1:-${POOL_NUM:-1}}"
+    local dis_vlan="${VM_CLONE_VLAN_IPS[dis${p}]:-10.10.20.$((p * 2))/24}"
+    # Strip the /prefix to get just the IP
+    echo "${dis_vlan%%/*}"
 }
 
 # SSH target for the connected bastion: pool_connected_bastion [POOL_NUM]
@@ -100,7 +145,7 @@ pool_internal_bastion() {
 #
 # Options:
 #   --channel CHANNEL      Override channel (default: $TEST_CHANNEL)
-#   --version VERSION      Override version (default: $VER_OVERRIDE)
+#   --version VERSION      Override version (default: $OCP_VERSION)
 #   --platform PLATFORM    Override platform (default: vmw)
 #   --op-sets OPSETS       Set operator sets (default: empty)
 #   --ops OPS              Set individual operators (default: empty)
@@ -108,7 +153,7 @@ pool_internal_bastion() {
 #
 gen_aba_conf() {
     local channel="${TEST_CHANNEL:-stable}"
-    local version="${VER_OVERRIDE:-l}"
+    local version="${OCP_VERSION:-p}"
     local platform="vmw"
     local op_sets=""
     local ops=""
@@ -160,8 +205,8 @@ gen_aba_conf() {
 
     # Set version override if using shorthand
     case "$version" in
-        l|latest)   export VER_OVERRIDE=l ;;
-        p|previous) export VER_OVERRIDE=p ;;
+        l|latest)   export OCP_VERSION=l ;;
+        p|previous) export OCP_VERSION=p ;;
     esac
 
     _e2e_log "  Generated aba.conf: channel=$channel version=$version platform=$platform" 2>/dev/null || true

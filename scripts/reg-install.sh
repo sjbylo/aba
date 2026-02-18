@@ -162,17 +162,29 @@ if [ "$reg_ssh_key" ]; then
 
 	[ "$err" ] && aba_abort "Install 'podman' and 'jq' on the remote host '$reg_host' and try again."
 
-	# Note that the mirror-registry installer does not open the port for us
-	if ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "rpm -q firewalld >/dev/null"; then
-		aba_info "Allowing firewall access to the registry at $reg_host/$reg_port ..."
-
-		if ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "systemctl is-active firewalld >/dev/null"; then
-			ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "$SUDO firewall-cmd --state >/dev/null && \
-				$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent >/dev/null && \
-					$SUDO firewall-cmd --reload >/dev/null"
-		else
-			ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null"
-		fi
+	# The mirror-registry installer does not open the firewall port for us.
+	# Try firewalld on the remote host first; try iptables as best-effort.
+	# If neither works, warn the user with exact commands to run on the remote host.
+	aba_info "Allowing firewall access to the registry at $reg_host/$reg_port ..."
+	if ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null"; then
+		# firewalld is installed and running on remote host
+		ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- \
+			"$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent >/dev/null && \
+				$SUDO firewall-cmd --reload >/dev/null"
+	elif ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- "rpm -q firewalld &>/dev/null"; then
+		# firewalld installed but not running on remote -- use offline mode
+		ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- \
+			"$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null"
+	elif ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host -- \
+		"command -v iptables &>/dev/null && $SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null"; then
+		# iptables worked on remote -- port opened
+		aba_info "firewalld not active on $reg_host, opened port $reg_port via iptables."
+	else
+		# Neither firewalld nor iptables worked on remote -- warn with manual instructions
+		aba_warning "Could not auto-open firewall port $reg_port on $reg_host."
+		aba_warning "If the registry is unreachable, open the port manually on $reg_host, e.g.:"
+		aba_warning "  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept"
+		aba_warning "  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
 	fi
 
 	# Fetch the actual absolute dir path for $reg_root.  "~" on remote host may be diff. to this localhost. Ansible installer does not eval "~"
@@ -276,7 +288,7 @@ else
 	# On the off-chance that ssh does work out-of-the-box to this host using the default key, let's check $reg_host is NOT a remote host!
 	# It's expected that this may fail since there may not be any default ssh key configured. But, if it is and ssh reaches a remote host, then we
 	# can catch that early here and show a warning. 
-	if h=$(ssh -F $ssh_conf_file                  $reg_host touch $flag_file; hostname) >/dev/null 2>&1; then
+	if h=$(ssh -F $ssh_conf_file $reg_host "touch $flag_file && hostname") >/dev/null 2>&1; then
 		if [ ! -f $flag_file ]; then
 
 			aba_warning \
@@ -325,17 +337,34 @@ else
 	ask "Install Quay mirror registry appliance to localhost ($(hostname -s)), accessable via $reg_hostport" || exit 1
 	aba_info "Installing Quay registry on localhost ..."
 
-	# mirror-registry installer does not open the port for us
-	if rpm -q firewalld >/dev/null; then
-		aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
-
-		if systemctl is-active firewalld >/dev/null; then
-			$SUDO firewall-cmd --state && \
-				$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
-					$SUDO firewall-cmd --reload
-		else
-			$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
-		fi
+	# mirror-registry (Quay) installer does not open the firewall port for us.
+	# Try firewalld first; if not available/active, try iptables as best-effort.
+	# If neither works, warn the user with exact commands to run.
+	# On some platforms (e.g. LinuxONE Community Cloud), firewalld is not installed
+	# and iptables may be incompatible (native nft chains).
+	# Additional issues that cannot be auto-fixed (user must handle manually):
+	#   - raw table NOTRACK rules on loopback can break rootless podman (pasta):
+	#       sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT
+	#   - FORWARD chain may need to allow traffic:
+	#       sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD
+	# See: https://github.com/linuxone-community-cloud/technical-resources
+	aba_info "Allowing firewall access to this host at $reg_host/$reg_port ..."
+	if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
+		# firewalld is installed and running
+		$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
+			$SUDO firewall-cmd --reload
+	elif rpm -q firewalld &>/dev/null; then
+		# firewalld installed but not running -- use offline mode
+		$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
+	elif command -v iptables &>/dev/null && $SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null; then
+		# iptables worked -- port opened
+		aba_info "firewalld not active, opened port $reg_port via iptables."
+	else
+		# Neither firewalld nor iptables worked -- warn with manual instructions
+		aba_warning "Could not auto-open firewall port $reg_port."
+		aba_warning "If the registry is unreachable, open the port manually, e.g.:"
+		aba_warning "  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept"
+		aba_warning "  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
 	fi
 
 	# Create random password

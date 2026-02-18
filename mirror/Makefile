@@ -10,6 +10,21 @@ force     ?= no
 bg        ?=
 ##catalog-name   ?=
 
+# Detect host architecture for mirror-registry download.
+# Maps uname -m to the naming used by mirror.openshift.com:
+#   x86_64 -> amd64, aarch64 -> arm64, s390x/ppc64le stay as-is.
+# Note: arm64 build may not exist yet. The download rule handles that
+# gracefully with a clear error and workaround suggestion.
+arch   := $(strip $(shell uname -m))
+ifeq ($(arch),x86_64)
+  MR_ARCH := amd64
+else ifeq ($(arch),aarch64)
+  MR_ARCH := arm64
+else
+  MR_ARCH := $(arch)
+endif
+MR_TARBALL := mirror-registry-$(MR_ARCH).tar.gz
+
 ##########################
 # Allow env variable to force plain output (e.g., PLAIN_OUTPUT=1)
 # Otherwise auto-detect from TTY
@@ -59,7 +74,7 @@ init: .init
 #cli-oc-mirror:
 #	@make -sC ../cli ~/bin/oc-mirror
 
-imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the intial image set config file with all provided values and operators
+imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the initial image set config file with all provided values and operators
 isconf: imagesetconf ## Same as imagesetconf
 
 sync/imageset-config-sync.yaml: ../aba.conf catalogs-download catalogs-wait
@@ -71,7 +86,6 @@ save/imageset-config-save.yaml: ../aba.conf catalogs-download catalogs-wait
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 .PHONY: sync
-#sync: .init .rpmsint ~/.pull-secret.json index cli-oc-mirror install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 sync: .init .rpmsint ~/.pull-secret.json                     install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
 
@@ -80,12 +94,11 @@ sync: .init .rpmsint ~/.pull-secret.json                     install verify sync
 
 .PHONY: save
 # Note that for a connected workstation or bastion there is no need to install all the required packages, only 'rpmsext' is needed.
-# mirror-registry-amd64.tar.gz is downloaded *in case* the registry needs to be installed on the internal network (which we don't know yet)
-# Same with docker-reg-image.tgz (via download-registries)
-# download-registries is executed last in case docker.io is inaccessible 
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
 # Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
-save: .init .rpmsext ~/.pull-secret.json              download-registries                     save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar and download 'mirror-registry-amd64.tar.gz' and 'docker-reg-image.tgz' for later installation into your disconnected env. Use --retry [count] to retry after failure.
+# Registry binaries are downloaded best-effort (non-fatal) so the bundle includes them if possible.
+save: .init .rpmsext ~/.pull-secret.json                                                     save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar. Use --retry [count] to retry after failure.
+	@$(MAKE) download-registries 2>&1 || echo "[ABA] Warning: Registry binary download failed (non-fatal). You can download it later or use a Docker registry."
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
 # oc-mirror is idempotent so no need for 'dot' flag files
@@ -107,19 +120,29 @@ testload: save install load     # Test the save, install, load process on a conn
 rpmsclean:
 	@rm -f .rpms*
 
-mirror-registry: mirror-registry-amd64.tar.gz ## Extract the mirror-registry binary 
-	@echo [ABA] Extracting mirror-registry-amd64.tar.gz into $$PWD
-	tar xmvzf mirror-registry-amd64.tar.gz
+mirror-registry: $(MR_TARBALL) ## Extract the mirror-registry binary 
+	@echo [ABA] Extracting $(MR_TARBALL) into $$PWD
+	tar xmvzf $(MR_TARBALL)
 
 .PHONY: download-registries
-download-registries: mirror-registry-amd64.tar.gz docker-reg-image.tgz
+download-registries: $(MR_TARBALL) docker-reg-image.tgz
 
 mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/latest
 
-mirror-registry-amd64.tar.gz: ## Download the mirror-registry tarball (note: no arm64 version available as of Dec 25)
-	echo [ABA] "Downloading $(mirror_registry_url)/mirror-registry-amd64.tar.gz ..."
-	curl $(CURL_PROGRESS) -OL $(mirror_registry_url)/mirror-registry-amd64.tar.gz
-	file mirror-registry-amd64.tar.gz | grep -q "gzip compressed data"
+$(MR_TARBALL): ## Download the mirror-registry tarball for $(MR_ARCH)
+	echo [ABA] "Downloading $(mirror_registry_url)/$(MR_TARBALL) ..."
+ifeq ($(arch),aarch64)
+	curl -f $(CURL_PROGRESS) -OL $(mirror_registry_url)/$(MR_TARBALL) || { \
+		echo "[ABA] ERROR: Failed to download $(MR_TARBALL)" ; \
+		echo "[ABA] The mirror-registry binary for arm64 may not be available yet." ; \
+		echo "[ABA] Check $(mirror_registry_url) for available builds." ; \
+		echo "[ABA] Workaround: use a Docker registry instead -- run 'aba -d mirror install-docker-registry'" ; \
+		exit 1 ; \
+	}
+else
+	curl -f $(CURL_PROGRESS) -OL $(mirror_registry_url)/$(MR_TARBALL)
+endif
+	file $(MR_TARBALL) | grep -q "gzip compressed data"
 	@echo -n "[ABA] Verifying checksum for $(@): "
 	curl -f --retry 8 -sL $(CURL_PROGRESS) -o mirror-registry-sha256sum.txt $(mirror_registry_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" mirror-registry-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
 	echo "valid!"
@@ -137,8 +160,6 @@ $(DOCKER_REG_FILE):
 		echo [ABA] "Could not reach $(DOCKER_REG_IMAGE). Skipping fallback creation."; \
 		rm -f $(DOCKER_REG_FILE); \
 	fi
-
-#		podman rmi $(DOCKER_REG_IMAGE); \
 
 .PHONY: install-docker-registry
 install-docker-registry:
@@ -169,7 +190,7 @@ install: .installed
 installclean:
 	@rm -f .installed
 
-.PHONEY: password pw
+.PHONY: password pw
 password: pw
 pw: 
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh
@@ -192,7 +213,7 @@ tar:   ## Create a full tar backup of ~/aba & ~/bin, ready to be transported to 
 tarrepo:   ## Same as 'make tar' but excludes all 'mirror_000*.tar' files under aba/mirror/save/.
 	@make -sC .. tarrepo $(out)
 
-# This will be depricated!
+# This will be deprecated!
 .PHONY: inc
 inc:   ## Same as 'make tar' except a timestamp file is used to only backup files that have changed since the last 'make inc' was run.
 	@make -sC .. inc $(out)
@@ -239,14 +260,15 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 	rm -f  save/oc-mirror-workspace 
 	rm -f  save/publish 
 
-# Note that 'mirror-registry-amd64.tar.gz' is needed to 'uninstall' the registry.
+# Note that the mirror-registry tarball ($(MR_TARBALL)) is needed to 'uninstall' the registry.
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
 clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
 	@[ -f .installed ] && echo [ABA] "Important: to uninstall the registry, run 'aba -d mirror uninstall'!" || true
 	rm -rf *.tar mirror-registry
-#	These need resetting FIXME
+	# Reset run_once state for mirror-registry extraction (since we just deleted the binary)
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install" 2>/dev/null || true
 	rm -f templates scripts
 	rm -f aba.conf  # remove link only
 	rm -f .init 
@@ -255,8 +277,8 @@ clean:  ## Clean up temporary files only, keeping your configuration files, e.g.
 	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh # Only clean up the created scripts, not the script needed to uninstall the reg.
 	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 
-	@[ -d save ] && [ save/.created -nt save/imageset-config*yaml ] && rm -rf save || true  # Delete only if not edited
-	@[ -d sync ] && [ sync/.created -nt sync/imageset-config*yaml ] && rm -rf sync || true  # Delete only if not edited
+	@[ -d save ] && [ save/.created -nt "save/imageset-config-save.yaml" ] && rm -rf save || true  # Delete only if not edited
+	@[ -d sync ] && [ sync/.created -nt "sync/imageset-config-sync.yaml" ] && rm -rf sync || true  # Delete only if not edited
 	rm -f .cmd.out
 	rm -f *sha256sum.txt
 
@@ -271,10 +293,11 @@ reset:                # Clean up all files. Only use if you know what you're doi
 	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo [ABA] aba/mirror/mirror.conf backed up to mirror.conf.bk || true
 	@#rm -rf *.tar.gz oc-mirror-workspace   # Leave this so the mirror can be uninstalled with reg-uninstall.sh 
 	rm -rf          oc-mirror-workspace 
-#	These need resetting FIXME
 	rm -f $(DOCKER_REG_FILE)
-#	These need resetting FIXME
-	rm -rf mirror-registry-amd64.tar.gz
+	rm -rf mirror-registry-*.tar.gz
+	# Reset run_once state for mirror-registry and docker-reg downloads (since we just deleted the tarballs)
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:download:docker-reg-image.tgz" 2>/dev/null || true
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
