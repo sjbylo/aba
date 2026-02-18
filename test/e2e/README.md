@@ -26,10 +26,10 @@ test/e2e/go.sh
 test/e2e/run.sh --all
 
 # Resume from last checkpoint after a failure
-test/e2e/run.sh --suite connected-sync --resume
+test/e2e/run.sh --suite cluster-ops --resume
 
 # Clean state files and start fresh
-test/e2e/run.sh --suite connected-sync --clean
+test/e2e/run.sh --suite cluster-ops --clean
 
 # Dry run (show what would execute)
 test/e2e/run.sh --all --dry-run
@@ -101,10 +101,11 @@ The legacy `test/test[12345]*.sh` scripts use `10.0.1.x` (SNO=.201, compact=.71,
 | 2 | `vm-smoke` | VMware/govc validation | govc, template VMs |
 | 3 | `clone-and-check` | Full pool setup (conN + disN) | govc, VMware |
 | 4 | `connected-public` | Public registry SNO | VMware (no internal bastion) |
-| 5 | `connected-sync` | Sync to remote registry + SNO | clone-and-check must run first |
-| 6 | `airgapped-existing-reg` | Air-gap with existing registry | clone-and-check must run first |
-| 7 | `airgapped-local-reg` | Full air-gap (longest) | clone-and-check must run first |
-| 8 | `network-advanced` | VLAN and bonding | clone-and-check first, VLAN infra |
+| 5 | `cluster-ops` | ABI config validation + SNO install | clone-and-check must run first |
+| 6 | `mirror-sync` | Mirror sync/save/load + firewalld | clone-and-check must run first |
+| 7 | `airgapped-existing-reg` | Air-gap with existing registry | clone-and-check must run first |
+| 8 | `airgapped-local-reg` | Full air-gap (longest) | clone-and-check must run first |
+| 9 | `network-advanced` | VLAN and bonding | clone-and-check first, VLAN infra |
 
 ### Suite Details
 
@@ -112,7 +113,8 @@ The legacy `test/test[12345]*.sh` scripts use `10.0.1.x` (SNO=.201, compact=.71,
 - **vm-smoke**: Clones a single VM, boots it, verifies SSH. Quick VMware sanity check.
 - **clone-and-check**: Creates conN+disN bastion pair, configures networking/firewall/dnsmasq. Required by most other suites.
 - **connected-public**: SNO install using public registry (no mirror). Tests direct + proxy modes.
-- **connected-sync**: Syncs images to remote mirror registry, then installs SNO. Tests save/load path.
+- **cluster-ops**: ABI config generation, YAML diff against known-good examples, SNO cluster install/verify.
+- **mirror-sync**: Sync to remote registry with firewalld, save/load roundtrip, testy user re-sync, bare-metal ISO.
 - **airgapped-local-reg**: Full air-gap workflow: bundle, transfer, install Quay+Docker, upgrade, ACM.
 - **airgapped-existing-reg**: Air-gap with pre-existing registry. Tests existing-registry detection.
 - **network-advanced**: VLAN-based and bonded cluster installs. Needs VLAN-capable switch.

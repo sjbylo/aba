@@ -1037,7 +1037,7 @@ documented at the top of `test/e2e/lib/framework.sh`.
 - 🌐 Requires VMware vCenter, template VMs, network infrastructure
 - 📝 Pool-based isolation for parallel execution
 
-**Key suites**: `clone-and-check`, `create-bundle-to-disk`, `connected-sync`, `airgapped-local-reg`, `network-advanced`
+**Key suites**: `clone-and-check`, `create-bundle-to-disk`, `cluster-ops`, `mirror-sync`, `airgapped-local-reg`, `network-advanced`
 
 **When to Run**:
 - Before releases
@@ -1049,7 +1049,7 @@ documented at the top of `test/e2e/lib/framework.sh`.
 test/e2e/run.sh --suite vm-smoke           # Quick VMware sanity check
 test/e2e/run.sh --suite clone-and-check    # Set up bastion pair
 test/e2e/run.sh --all                      # Run everything
-test/e2e/run.sh --suite connected-sync --resume  # Resume after failure
+test/e2e/run.sh --suite cluster-ops --resume  # Resume after failure
 ```
 
 See `test/e2e/README.md` for full documentation including IP/domain allocation, pool configuration, and how to write new suites.
