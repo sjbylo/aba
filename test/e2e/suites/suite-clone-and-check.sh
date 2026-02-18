@@ -49,7 +49,7 @@ clone_with_macs() {
 
     # VM may not exist on first run -- check before attempting destroy
     e2e_run -q "Destroy old $clone (if exists)" \
-        "if govc vm.info $clone >/dev/null 2>&1; then govc vm.power -off $clone 2>&1; govc vm.destroy $clone; else echo 'VM $clone not found -- skipping'; fi"
+        "if vm_exists $clone; then govc vm.power -off $clone 2>&1 || true; govc vm.destroy $clone; else echo 'VM $clone not found -- skipping'; fi"
 
     # power-off may fail if template is already off -- that's fine
     e2e_run "Revert template to snapshot" \
