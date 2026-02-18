@@ -71,11 +71,9 @@ test_end
 test_begin "Setup: install aba and configure"
 
 # Lightweight setup: remove RPMs (test auto-install), clean caches, but
-# do NOT uninstall the pre-populated registry on conN.
+# do NOT touch podman/containers -- the pre-populated Quay must stay alive.
 e2e_run "Remove RPMs for clean install test" \
     "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
-e2e_run "Clean podman images" \
-    "podman system prune --all --force; podman rmi --all --force; sudo rm -rfv ~/.local/share/containers/storage"
 e2e_run "Remove oc-mirror caches" \
     "find ~/ -type d -name .oc-mirror | xargs rm -rfv"
 
