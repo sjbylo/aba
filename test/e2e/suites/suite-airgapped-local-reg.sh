@@ -119,7 +119,7 @@ e2e_run "Show configured version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 test_end
 
 # ============================================================================
-# 3. Setup: reset internal bastion (reuse clone-check's disN)
+# 3. Setup: reset internal bastion (reuse clone-and-check's disN)
 # ============================================================================
 test_begin "Setup: reset internal bastion"
 

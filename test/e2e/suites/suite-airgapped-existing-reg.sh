@@ -93,7 +93,7 @@ e2e_run "Set operator sets (re-apply)" \
 test_end
 
 # ============================================================================
-# 2. Setup: reset internal bastion (reuse clone-check's disN)
+# 2. Setup: reset internal bastion (reuse clone-and-check's disN)
 # ============================================================================
 test_begin "Setup: reset internal bastion"
 

@@ -215,10 +215,10 @@ all_suites() {
 
     # Sort: longest suites first for optimal parallel scheduling
     # Order: airgapped-local-reg, airgapped-existing-reg, connected-sync,
-    #        connected-public, network-advanced, bundle-disk
+    #        connected-public, network-advanced, create-bundle-to-disk
     local ordered=()
     for s in airgapped-local-reg airgapped-existing-reg connected-sync \
-             connected-public network-advanced bundle-disk; do
+             connected-public network-advanced create-bundle-to-disk; do
         for found in "${suites[@]}"; do
             [ "$found" = "$s" ] && ordered+=("$found")
         done
@@ -262,7 +262,7 @@ run_suite_local() {
     suite_file="$(resolve_suite_file "$suite_name")" || return 1
 
     # --- Guard: coordinator-only suite? Run locally. -----------------------
-    # Suites like clone-check create VMs and need govc on the coordinator.
+    # Suites like clone-and-check create VMs and need govc on the coordinator.
     if grep -q '^E2E_COORDINATOR_ONLY=true' "$suite_file" 2>/dev/null; then
         echo ""
         echo "========================================"
