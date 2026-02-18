@@ -51,6 +51,7 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
   - [Q: How can I determine the network interface names of my bare-metal servers?](#q-how-can-i-determine-the-network-interface-names-of-my-bare-metal-servers)
   - [Q: Can ABA run inside a container?](#q-can-aba-run-inside-a-container)
   - [Q: Does ABA support ARM, s390x, or ppc64le?](#q-does-aba-support-arm-s390x-or-ppc64le)
+  - [Q: How do I run ABA on LinuxONE Community Cloud?](#q-how-do-i-run-aba-on-linuxone-community-cloud)
   - [Q: How much disk space do I need when using ABA?](#q-how-much-disk-space-do-i-need-when-using-aba)
   - [Q: Can I install Operators from community catalogs?](#q-can-i-install-operators-from-community-catalogs)
   - [Q: Where are cluster types (SNO, compact, standard) configured?](#q-where-are-cluster-types-sno-compact-standard-configured)
@@ -271,16 +272,16 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
 # Download and install a stable release (recommended)
-wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.3.tar.gz
-tar xzf v0.9.3.tar.gz
-cd aba-0.9.3
+wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.4.tar.gz
+tar xzf v0.9.4.tar.gz
+cd aba-0.9.4
 ./install
 aba
 ```
 
 Or clone a specific release tag:
 ```bash
-git clone --branch v0.9.3 https://github.com/sjbylo/aba.git
+git clone --branch v0.9.4 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -895,8 +896,8 @@ ABA supports the following architectures, automatically detecting the host and d
 |---|---|---|
 | Intel/AMD | `x86_64` | Fully tested |
 | ARM | `aarch64` | Tested (see notes below) |
-| IBM Z (System Z) | `s390x` | Supported |
-| IBM Power | `ppc64le` | Supported |
+| IBM Z (System Z) | `s390x` | Testing in progress! |
+| IBM Power | `ppc64le` | Supported - should work |
 
 ### Notes on arm64
 
@@ -1188,6 +1189,29 @@ Boot your servers using the Red Hat CoreOS live DVD and check the output of the 
 ## Q: Does ABA support ARM, s390x, or ppc64le?
 
 **Yes.** ABA supports x86_64, aarch64 (ARM), s390x (IBM Z), and ppc64le (IBM Power) architectures. ABA automatically detects the host architecture and downloads the correct OpenShift binaries. For ARM, since there is no official Quay installer, use an existing registry or the Docker registry instead (see the FAQ for how to use the docker registry instead of Quay).
+
+---
+
+## Q: How do I run ABA on LinuxONE Community Cloud?
+
+The [LinuxONE Community Cloud](https://github.com/linuxone-community-cloud/technical-resources) ships with iptables rules that only allow SSH by default, and firewalld is not running. ABA's automatic firewall configuration requires firewalld, so you must manually open the registry port and fix a networking issue before installing a mirror registry:
+
+```bash
+# Open the registry port (default 8443)
+sudo iptables -I INPUT 1 -p tcp --dport 8443 -j ACCEPT
+
+# Flush raw table NOTRACK rules that break rootless podman (pasta networking)
+sudo nft flush chain ip raw PREROUTING
+sudo nft flush chain ip raw OUTPUT
+
+# Allow FORWARD chain traffic (needed by pasta)
+sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD
+
+# Save changes permanently
+sudo bash -c "iptables-save > /etc/sysconfig/iptables.save"
+```
+
+See `scripts/reg-docker-install.sh` and `scripts/reg-install.sh` for details.
 
 ---
 

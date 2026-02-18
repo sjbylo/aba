@@ -34,7 +34,7 @@ hosts:
       routes:
         config:
           - destination: 0.0.0.0/0
-            next-hop-address: 10.0.1.1
+            next-hop-address: 10.0.0.1
             next-hop-interface: ens160
   - hostname: master2
     role: master
@@ -64,7 +64,7 @@ hosts:
       routes:
         config:
           - destination: 0.0.0.0/0
-            next-hop-address: 10.0.1.1
+            next-hop-address: 10.0.0.1
             next-hop-interface: ens160
   - hostname: master3
     role: master
@@ -94,7 +94,7 @@ hosts:
       routes:
         config:
           - destination: 0.0.0.0/0
-            next-hop-address: 10.0.1.1
+            next-hop-address: 10.0.0.1
             next-hop-interface: ens160
   - hostname: worker1
     role: worker
@@ -124,7 +124,7 @@ hosts:
       routes:
         config:
           - destination: 0.0.0.0/0
-            next-hop-address: 10.0.1.1
+            next-hop-address: 10.0.0.1
             next-hop-interface: ens160
   - hostname: worker2
     role: worker
@@ -154,7 +154,7 @@ hosts:
       routes:
         config:
           - destination: 0.0.0.0/0
-            next-hop-address: 10.0.1.1
+            next-hop-address: 10.0.0.1
             next-hop-interface: ens160
   - hostname: worker3
     role: worker
@@ -184,5 +184,5 @@ hosts:
       routes:
         config:
           - destination: 0.0.0.0/0
-            next-hop-address: 10.0.1.1
+            next-hop-address: 10.0.0.1
             next-hop-interface: ens160

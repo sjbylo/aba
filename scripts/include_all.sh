@@ -1169,7 +1169,7 @@ get_domain() {
 
 # Get the default gateway / next hop (best guess for install interface, not system default)
 get_next_hop() {
-	local gw ifc cidr ip prefix net first_three
+	local gw ifc cidr ip prefix a b c d ip_int mask net_int gw_int
 
 	ifc=$(_pick_install_iface 2>/dev/null || true)
 
@@ -1179,16 +1179,20 @@ get_next_hop() {
 			| awk '/default/ {for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
 	fi
 
-	# 2) If no default route for that iface, guess .1 from the iface subnet (weak heuristic)
+	# 2) No default route: compute network_base+1 from iface CIDR (subnet-aware)
 	if [[ -z "${gw:-}" ]] && [[ -n "${ifc:-}" ]]; then
 		cidr=$(ip -o -4 addr show dev "$ifc" 2>/dev/null | awk '{print $4; exit}')
 		ip=${cidr%/*}
 		prefix=${cidr#*/}
 
-		# If it's an RFC1918-ish address, guess x.x.x.1 (common gateway convention)
-		if echo "$ip" | grep -q -E '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)'; then
-			first_three=$(echo "$ip" | awk -F. '{print $1"."$2"."$3}')
-			gw="${first_three}.1"
+		if [[ -n "$ip" && -n "$prefix" ]]; then
+			# Convert IP to 32-bit integer, mask to network base, add 1
+			IFS=. read -r a b c d <<< "$ip"
+			ip_int=$(( (a << 24) + (b << 16) + (c << 8) + d ))
+			mask=$(( 0xFFFFFFFF << (32 - prefix) & 0xFFFFFFFF ))
+			net_int=$(( ip_int & mask ))
+			gw_int=$(( net_int + 1 ))
+			gw="$(( (gw_int >> 24) & 0xFF )).$(( (gw_int >> 16) & 0xFF )).$(( (gw_int >> 8) & 0xFF )).$(( gw_int & 0xFF ))"
 		fi
 	fi
 
@@ -1614,6 +1618,9 @@ run_once() {
 			fi
 
 			# Background: log.out gets stdout+stderr, log.err gets only stderr
+			# Close inherited stdout/stderr first so this background subshell
+			# doesn't hold a parent pipeline (e.g. `cmd | tee`) open.
+			exec >/dev/null 2>&1
 			setsid "${command[@]}" 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
 			echo $! >"$pid_file"
 		chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
@@ -1791,33 +1798,44 @@ run_once() {
 
 # --- Catalog Download Helpers ---
 
-# Download all 4 operator catalogs in parallel using run_once
+# Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
 # Example: download_all_catalogs "4.19" 86400
 download_all_catalogs() {
 	local version_short="${1}"
 	local ttl="${2:-86400}"  # Default: 1 day (86400 seconds)
-	
+
 	if [[ -z "$version_short" ]]; then
 		echo_red "[ABA] Error: download_all_catalogs requires version (e.g., 4.19)" >&2
 		return 1
 	fi
-	
-	aba_debug "Starting parallel catalog downloads for OCP $version_short (TTL: ${ttl}s)"
-	
-	# Start 3 parallel downloads (run_once backgrounds them automatically)
-	# Each download will skip if already completed within TTL
-	# Note: Scripts use pwd -P to resolve symlinks and find real aba root
-	run_once -i "catalog:${version_short}:redhat-operator" -t "$ttl" -- \
-		scripts/download-catalog-index.sh redhat-operator "$version_short"
-	
-	run_once -i "catalog:${version_short}:certified-operator" -t "$ttl" -- \
-		scripts/download-catalog-index.sh certified-operator "$version_short"
-	
-	run_once -i "catalog:${version_short}:community-operator" -t "$ttl" -- \
-		scripts/download-catalog-index.sh community-operator "$version_short"
-	
-	aba_debug "Catalog download tasks started in background"
+
+	# Max concurrent catalog downloads (default: 3 = all parallel)
+	# User can set CATALOG_MAX_PARALLEL=1 in ~/.aba/config for sequential
+	local max_parallel="${CATALOG_MAX_PARALLEL:-3}"
+	if [[ -f "$HOME/.aba/config" ]]; then
+		source "$HOME/.aba/config"
+		max_parallel="${CATALOG_MAX_PARALLEL:-3}"
+	fi
+
+	local catalogs=(redhat-operator certified-operator community-operator)
+	local running=0
+
+	aba_debug "Starting catalog downloads for OCP $version_short (max_parallel=$max_parallel, TTL: ${ttl}s)"
+
+	for catalog in "${catalogs[@]}"; do
+		# If at max capacity, wait for the earliest to finish before launching next
+		if (( running >= max_parallel )); then
+			local wait_idx=$(( running - max_parallel ))
+			run_once -q -w -i "catalog:${version_short}:${catalogs[$wait_idx]}"
+		fi
+
+		run_once -i "catalog:${version_short}:${catalog}" -t "$ttl" -- \
+			scripts/download-catalog-index.sh "$catalog" "$version_short"
+		(( ++running ))
+	done
+
+	aba_debug "Catalog download tasks started (max_parallel=$max_parallel)"
 }
 
 # Wait for all 3 catalog downloads to complete (all required)

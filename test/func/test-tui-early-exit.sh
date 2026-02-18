@@ -73,11 +73,11 @@ fi
 send Enter
 sleep 2
 
-log_info "Test 2: Channel dialog (resume skipped)"
-if wait_for "$TUI_TITLE_CHANNEL" 20; then
-	log_pass "Channel dialog appeared (fresh start, no resume)"
+log_info "Test 2: Pull secret dialog (resume skipped)"
+if wait_for "$TUI_TITLE_PULL_SECRET" 20; then
+	log_pass "Pull secret dialog appeared (fresh start, no resume)"
 else
-	log_fail "Channel dialog did not appear"
+	log_fail "Pull secret dialog did not appear"
 	exit 1
 fi
 
@@ -94,10 +94,10 @@ else
 fi
 
 # ============================================================
-# Test 4: Quit early (ESC from channel dialog)
+# Test 4: Quit early (ESC from pull secret dialog)
 # ============================================================
 
-log_info "Test 4: Quit early from channel dialog (ESC)"
+log_info "Test 4: Quit early from pull secret dialog (ESC)"
 send Escape
 sleep 1
 

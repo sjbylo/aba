@@ -627,13 +627,13 @@ show_resume_dialog() {
 	# Skip resume dialog if aba.conf was just created in this session
 	if [[ "${_TUI_FRESH_CONF:-}" == "1" ]]; then
 		log "Config freshly created this session, running wizard"
-		STEP="channel"
+		STEP="pull_secret"
 		return
 	fi
 
 	if ! config_is_complete; then
 		log "Config incomplete, running full wizard"
-		STEP="channel"
+		STEP="pull_secret"
 		return
 	fi
 	
@@ -681,7 +681,7 @@ Press \ZbReconfigure\Zn to run the setup wizard again." 0 0
 		3)
 			# Extra button - Reconfigure
 			log "User chose to reconfigure"
-			STEP="channel"
+			STEP="pull_secret"
 			;;
 		1|255)
 			# Cancel/ESC - Exit
@@ -693,7 +693,7 @@ Press \ZbReconfigure\Zn to run the setup wizard again." 0 0
 }
 
 # -----------------------------------------------------------------------------
-# Step 1: Select OpenShift channel
+# Step 2: Select OpenShift channel
 # -----------------------------------------------------------------------------
 select_ocp_channel() {
 	DIALOG_RC=""
@@ -778,7 +778,7 @@ See: https://docs.openshift.com/container-platform/latest/updating/understanding
 }
 
 # -----------------------------------------------------------------------------
-# Step 2: Select OpenShift version
+# Step 3: Select OpenShift version
 # -----------------------------------------------------------------------------
 select_ocp_version() {
 	DIALOG_RC=""
@@ -1240,12 +1240,14 @@ Try again." 0 0 || true
 		log "Starting all CLI downloads (aba.conf now has ocp_version)"
 		"$ABA_ROOT/scripts/cli-download-all.sh" >>"$LOG_FILE" 2>&1
 		
-		# Start catalog downloads (oc-mirror already downloading from early in startup)
+		# Start catalog downloads for this version (immediate, non-blocking)
 		log "Starting parallel catalog downloads for OCP ${OCP_VERSION} (${version_short})"
-		# Use helper function with 1-day TTL (86400 seconds)
-		# Suppress stdout/stderr to prevent flash (errors go to log file)
 		download_all_catalogs "$version_short" 86400 >>"$LOG_FILE" 2>&1
-			
+		
+		# Also trigger full prefetch (handles previous minor version too)
+		log "Triggering catalog prefetch for selected version + previous minor"
+		run_once -S -i "tui:prefetch:catalogs:t2" -- "$ABA_ROOT/scripts/prefetch-catalogs.sh" >>"$LOG_FILE" 2>&1
+		
 			DIALOG_RC="next"
 			;;
 		1|255)
@@ -1260,7 +1262,7 @@ Try again." 0 0 || true
 }
 
 # -----------------------------------------------------------------------------
-# Step 3: Pull Secret Validation
+# Step 1: Pull Secret Validation
 # -----------------------------------------------------------------------------
 select_pull_secret() {
 	local allow_skip="${1:-}"
@@ -1777,7 +1779,7 @@ Leave blank to use auto-detected values." 0 0 || true
 }
 
 # -----------------------------------------------------------------------------
-# Step 4: Select Operators
+# Step 5: Select Operators
 # -----------------------------------------------------------------------------
 # Basket helpers (simple model)
 # - OP_BASKET: operators in the basket
@@ -2652,7 +2654,14 @@ handle_action_local_docker() {
 		log "Using global auto-answer: -y flag disabled"
 	fi
 	
-	log "Local Docker config: host=$reg_host, user=$reg_user, path=$reg_path, data_dir=$data_dir, y_flag=$y_flag"
+	# Use global retry count
+	local retry_flag=""
+	if [[ "$RETRY_COUNT" != "off" ]]; then
+		retry_flag="--retry $RETRY_COUNT"
+		log "Using retry count: $RETRY_COUNT"
+	fi
+
+	log "Local Docker config: host=$reg_host, user=$reg_user, path=$reg_path, data_dir=$data_dir, y_flag=$y_flag, retry=$RETRY_COUNT"
 	
 	# Save to mirror.conf
 	replace-value-conf -q -n reg_host -v "$reg_host" -f mirror/mirror.conf
@@ -2668,7 +2677,7 @@ handle_action_local_docker() {
 	log "Cleared SSH parameters for local registry installation"
 	
 	# Build command (install-docker-registry + sync in one)
-	local cmd="aba -d mirror install-docker-registry -H '$reg_host' sync $y_flag"
+	local cmd="aba -d mirror install-docker-registry $retry_flag -H '$reg_host' sync $y_flag"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -2895,10 +2904,20 @@ Use 'Run in Terminal' if you need to interact with the command." 0 0 || true
 		# Strip ANSI color codes (sed -u for unbuffered/line-by-line output) before showing in dialog
 		# This prevents control characters from displaying literally
 		# Set ASK_OVERRIDE=1 to skip interactive prompts (TUI is non-interactive)
+		#
+		# Handle SIGINT in the parent shell while the pipeline runs.
+		# Without this, Ctrl-C kills the pipeline processes AND the parent
+		# bash (cooperative exit), crashing the entire TUI.
+		# IMPORTANT: use 'trap : INT' (command trap), NOT 'trap "" INT' (ignore).
+		# An ignore trap is inherited by child processes, making Ctrl-C useless.
+		# A command trap is NOT inherited, so pipeline processes still die on
+		# SIGINT while the parent shell survives and shows the failure dialog.
+		trap : INT
 		ASK_OVERRIDE=1 bash -c "$tui_cmd" 2>&1 | tee "$output_file" | \
 			sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
 			dialog --backtitle "$(ui_backtitle)" --title "Executing: $tui_cmd" \
 				--progressbox $box_height $box_width
+		trap - INT
 				
 			# Get exit code from the command (via PIPESTATUS before pipe)
 			local exit_code=${PIPESTATUS[0]}
@@ -3012,7 +3031,7 @@ Use 'Run in Terminal' if you need to interact with the command." 0 0 || true
 }
 
 # -----------------------------------------------------------------------------
-# Step 5: Summary / Apply
+# Step 6: Summary / Apply
 # -----------------------------------------------------------------------------
 summary_apply() {
 	log "Entering summary_apply"
@@ -3309,6 +3328,13 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 	while :; do
 		local ADVANCED_EXIT=""
 		
+		# Build compact settings summary for the Settings menu item
+		local _s_answer _s_reg _s_retry
+		if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then _s_answer="-y"; else _s_answer="ask"; fi
+		_s_reg="$ABA_REGISTRY_TYPE"
+		_s_retry="$RETRY_COUNT"
+		local _settings_label="Settings...  (\Z6${_s_answer}, ${_s_reg}, retry=${_s_retry}\Zn)"
+		
 		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_ACTION_MENU" \
 		--cancel-label "Exit" \
 		--help-button \
@@ -3329,7 +3355,7 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 		"" " " \
 		"" "──── Other ──────────────────────────────" \
 		$TUI_ACTION_RERUN_WIZARD "$TUI_ACTION_LABEL_RERUN_WIZARD" \
-		$TUI_ACTION_SETTINGS "$TUI_ACTION_LABEL_SETTINGS" \
+		$TUI_ACTION_SETTINGS "$_settings_label" \
 		$TUI_ACTION_ADVANCED "$TUI_ACTION_LABEL_ADVANCED" \
 		$TUI_ACTION_EXIT "$TUI_ACTION_LABEL_EXIT" \
 		2>"$TMP"
@@ -3552,10 +3578,14 @@ log "oc-mirror download started"
 # so that aba.conf exists when background catalog scripts try to read it)
 resume_from_conf
 
-# Pre-fetch catalogs for stable:latest in background
-log "Starting background catalog pre-fetch"
-run_once -S -i "tui:prefetch:catalogs" -- "$ABA_ROOT/scripts/prefetch-catalogs.sh"
-log "Background catalog pre-fetch started"
+# Pre-fetch catalogs in background (only if pull secret exists)
+if [[ -f ~/.pull-secret.json ]]; then
+	log "Starting background catalog pre-fetch (pull secret found)"
+	run_once -S -i "tui:prefetch:catalogs" -- "$ABA_ROOT/scripts/prefetch-catalogs.sh"
+	log "Background catalog pre-fetch started"
+else
+	log "Skipping catalog pre-fetch (no pull secret yet)"
+fi
 
 # Show header
 ui_header
@@ -3571,38 +3601,8 @@ show_resume_dialog
 while :; do
 	log "Current step: $STEP"
 	case "$STEP" in
-		channel)
-			select_ocp_channel
-			if [[ "$DIALOG_RC" == "repeat" ]]; then
-				continue  # Stay on same step, show again
-			elif [[ "$DIALOG_RC" == "next" ]]; then
-				STEP="version"
-			elif [[ "$DIALOG_RC" == "back" ]]; then
-				# First screen, confirm quit
-			if confirm_quit; then
-				log "User quit from channel selection"
-				clear
-				_show_exit_summary
-				break
-				else
-					log "User cancelled quit, staying on channel"
-					continue
-				fi
-			fi
-			;;
-	version)
-		select_ocp_version
-		if [[ "$DIALOG_RC" == "repeat" ]]; then
-			continue  # Stay on same step
-		elif [[ "$DIALOG_RC" == "next" ]]; then
-			STEP="pull_secret"
-		elif [[ "$DIALOG_RC" == "back" ]]; then
-			STEP="channel"
-		fi
-		;;
 	pull_secret)
 		log "=== STEP: pull_secret, CALLING select_pull_secret() ==="
-		# Don't auto-skip if we got here from a back action
 		if [[ "${CAME_FROM_BACK:-}" == "1" ]]; then
 			select_pull_secret "no_skip"
 			CAME_FROM_BACK=""
@@ -3611,13 +3611,40 @@ while :; do
 		fi
 		log "=== RETURNED FROM select_pull_secret, DIALOG_RC=$DIALOG_RC ==="
 		if [[ "$DIALOG_RC" == "next" ]]; then
-			log "=== MOVING TO STEP: platform ==="
-			STEP="platform"
+			STEP="channel"
 		elif [[ "$DIALOG_RC" == "back" ]]; then
-			log "=== MOVING TO STEP: version ==="
-			STEP="version"
+			if confirm_quit; then
+				log "User quit from pull secret (first step)"
+				clear
+				_show_exit_summary
+				break
+			else
+				log "User cancelled quit, staying on pull secret"
+				continue
+			fi
 		else
 			log "=== WARNING: UNEXPECTED DIALOG_RC=$DIALOG_RC ==="
+		fi
+		;;
+	channel)
+		select_ocp_channel
+		if [[ "$DIALOG_RC" == "repeat" ]]; then
+			continue
+		elif [[ "$DIALOG_RC" == "next" ]]; then
+			STEP="version"
+		elif [[ "$DIALOG_RC" == "back" ]]; then
+			CAME_FROM_BACK="1"
+			STEP="pull_secret"
+		fi
+		;;
+	version)
+		select_ocp_version
+		if [[ "$DIALOG_RC" == "repeat" ]]; then
+			continue
+		elif [[ "$DIALOG_RC" == "next" ]]; then
+			STEP="platform"
+		elif [[ "$DIALOG_RC" == "back" ]]; then
+			STEP="channel"
 		fi
 		;;
 	platform)
@@ -3627,38 +3654,30 @@ while :; do
 			STEP="operators"
 			log "Moving to operators"
 		elif [[ "$DIALOG_RC" == "back" ]]; then
-			# Check if pull secret is valid - if so, skip directly to version
-			if [[ -f ~/.pull-secret.json ]] && validate_pull_secret ~/.pull-secret.json >/dev/null 2>&1; then
-				STEP="version"
-				log "Moving back to version (skipping pull secret - already valid)"
-			else
-				# Pull secret missing or invalid - go to entry screen
-				CAME_FROM_BACK="1"
-				STEP="pull_secret"
-				log "Moving back to pull_secret (needs entry/fix)"
-			fi
+			STEP="version"
+			log "Moving back to version"
 		else
 			log "WARNING: Unexpected DIALOG_RC value: $DIALOG_RC"
 		fi
 		;;
-		operators)
-			select_operators
-			[[ "$DIALOG_RC" == "next" ]] && STEP="summary"
-			[[ "$DIALOG_RC" == "back" ]] && STEP="platform"
-			;;
+	operators)
+		select_operators
+		[[ "$DIALOG_RC" == "next" ]] && STEP="summary"
+		[[ "$DIALOG_RC" == "back" ]] && STEP="platform"
+		;;
 	summary)
 		RERUN_WIZARD=false
 		if summary_apply; then
 			if [[ "$RERUN_WIZARD" == "true" ]]; then
-				log "Rerunning wizard from channel selection"
-				STEP="channel"
+				log "Rerunning wizard from pull secret"
+				STEP="pull_secret"
 			else
 				break
 			fi
 		else
 			STEP="operators"
 		fi
-			;;
+		;;
 	esac
 done
 

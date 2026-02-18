@@ -196,6 +196,152 @@ save/imageset-config-save.yaml: ../aba.conf catalogs-download
 
 ---
 
+## run_once vs Make File Dependencies
+
+### Design Constraint: run_once State is Independent of Output Files
+**Date:** Feb 2026  
+**Status:** Known limitation, mitigated
+
+**The Tension:**
+
+Make's dependency model is file-based and self-healing: if a target file is
+deleted, Make re-runs the rule to recreate it. The `run_once` mechanism is
+state-based (`~/.aba/runner/<task-id>/`): once a task is marked "done", the
+wrapper short-circuits and never invokes Make at all.
+
+When `run_once` wraps a Make target, it **overrides Make's dependency tracking**.
+If the output file is deleted manually (`rm mirror-registry`), Make would rebuild
+it, but `run_once` says "already done" and silently skips.
+
+**Scope of the Problem:**
+
+Plain `make` is NOT affected. `make mirror-registry` after `rm mirror-registry`
+works perfectly -- Make sees the missing file and re-runs the rule.
+
+The issue only arises through `run_once`-wrapped code paths:
+- Bundle mode (`scripts/aba.sh`): `run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry`
+- `ensure_quay_registry()`: `run_once -w -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry`
+
+**Current Mitigation:**
+
+Every `rm` in `make clean` / `make reset` is paired with a `run_once -r` call
+to reset the corresponding task state. This ensures the official cleanup paths
+work correctly.
+
+**Remaining Risk:**
+
+If a user deletes files manually with `rm` (bypassing `make clean`), `run_once`
+state becomes stale and subsequent operations silently skip. This is acceptable
+because:
+1. Users should use `make clean` / `make reset` / `aba clean` -- never raw `rm`
+2. Plain `make` (without `run_once`) is unaffected
+3. `aba reset -f` does a global `run_once -G` cleanup as a last resort
+
+**Possible Future Fix:**
+
+Add an optional `-o <output_file>` flag to `run_once`. If the output file is
+missing, treat the task as not-done even if state says "done". This would make
+`run_once` self-healing like Make. Low priority since current mitigation works.
+
+---
+
+## Why run_once Cannot Be Replaced by make -j
+
+### Question: Can `make -j` (parallel make) fully replace `run_once`?
+**Date:** Feb 2026  
+**Answer:** No. `make -j` covers ~30-40% of what `run_once` does. They solve different problems.
+
+### What make -j CAN replace
+
+**Simple file-producing tasks** (downloads, extractions) within a single Make
+invocation. If all targets are in the Makefile with proper dependencies,
+`make -j4` downloads tarballs in parallel and extracts them. Make's file-based
+tracking handles "already done" for free. Example:
+
+```makefile
+oc.tar.gz:
+	curl -OL $(mirror_url)/oc.tar.gz
+~/bin/oc: oc.tar.gz
+	tar xzf oc.tar.gz -C ~/bin
+```
+
+Plain `make -j` would parallelize this correctly.
+
+### What make -j CANNOT replace
+
+**1. Cross-process coordination (start early, wait later)**
+
+This is the main reason `run_once` exists. The core pattern in `aba.sh`:
+
+```bash
+# scripts/aba.sh line ~872: Start extraction NOW (background, non-blocking)
+run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
+
+# ... hundreds of lines of other work happen ...
+
+# scripts/include_all.sh (ensure_quay_registry): Wait when actually needed
+run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- ...
+```
+
+These are separate processes. `make -j` runs targets within a single `make`
+invocation -- it cannot coordinate "start in script A, wait in script B."
+Replacing this would require restructuring the entire orchestration into a
+single Makefile (massive rewrite).
+
+**2. Non-file-producing tasks**
+
+```bash
+# Version fetches (cached values, not files)
+run_once -i ocp:stable:latest_version -- bash -lc 'fetch_latest_version stable'
+
+# Connectivity checks with TTL
+run_once -i cli:check:api.openshift.com -t 600 -- curl -sL https://api.openshift.com/
+```
+
+Make's model is "does the target file exist?" -- no file here, so Make
+cannot cache these results.
+
+**3. TTL-based caching**
+
+`run_once -t 600` expires results after 10 minutes. Make has no TTL concept --
+it only checks file modification times.
+
+**4. Wait timeouts and user-facing messages**
+
+```bash
+run_once -w -W 300 -m "Waiting for redhat-operator catalog" -i "catalog:4.19:redhat-operator"
+```
+
+Custom wait messages (`-m`), timeouts (`-W`), and quiet mode (`-q`) are UX
+features that Make does not provide.
+
+**5. Error capture across invocations**
+
+`run_once -e -i <task>` retrieves stderr from a previous run. Make either
+rebuilds or doesn't -- it does not cache error information.
+
+### Summary
+
+| Capability                        | make -j | run_once |
+|-----------------------------------|---------|----------|
+| Parallel file-producing tasks     | Yes     | Yes      |
+| File-based "already done" check   | Yes     | No (state-based) |
+| Cross-process start/wait          | No      | Yes      |
+| TTL-based caching                 | No      | Yes      |
+| Non-file result caching           | No      | Yes      |
+| Custom wait messages/timeouts     | No      | Yes      |
+| Error capture across invocations  | No      | Yes      |
+
+### Conclusion
+
+`make -j` is great for what Make does (file dependencies within a single build).
+`run_once` solves a different problem (cross-process task coordination with
+caching). They are complementary, not interchangeable. The current architecture
+is script-centric (bash scripts orchestrate the flow, Make handles individual
+build steps, `run_once` bridges the gap with cross-process coordination).
+
+---
+
 ## Notes for AI Assistants
 
 - **Read this file at the start of each session**

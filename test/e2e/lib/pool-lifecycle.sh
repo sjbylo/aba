@@ -48,8 +48,8 @@ if ! declare -p VM_CLONE_MACS &>/dev/null 2>&1; then
 fi
 
 # --- Clone VLAN IPs (static) -----------------------------------------------
-# The 10.10.10.0/24 VLAN has no DHCP. Each clone's ens224.10 IP is defined
-# here. Used by _vm_setup_network.
+# The 10.10.20.0/24 VLAN has no DHCP. Each clone's ens224.10 IP is defined
+# in config.env (VM_CLONE_VLAN_IPS). Used by _vm_setup_network.
 if ! declare -p VM_CLONE_VLAN_IPS &>/dev/null 2>&1; then
     declare -A VM_CLONE_VLAN_IPS=()
 fi
@@ -224,8 +224,11 @@ _vm_setup_network_connected() {
 		nmcli connection up ens192
 
 		# --- ens256: internet (IS the default route) ---
+		# ignore-auto-dns: the DHCP-provided DNS on this NIC (gateway IP)
+		# does not know about example.com zones; use only the lab DNS (ens192).
 		nmcli connection modify ens256 \
 		    ipv4.never-default no \
+		    ipv4.ignore-auto-dns yes \
 		    ipv6.method disabled
 		nmcli connection up ens256
 
@@ -408,16 +411,16 @@ bind-interfaces
 server=${upstream}
 
 # --- SNO: api + apps -> node IP ---
-address=/api.sno.${domain}/${node_ip}
-address=/.apps.sno.${domain}/${node_ip}
+address=/api.$(pool_cluster_name sno ${pool_num}).${domain}/${node_ip}
+address=/.apps.$(pool_cluster_name sno ${pool_num}).${domain}/${node_ip}
 
 # --- Compact: api -> API VIP, apps -> APPS VIP ---
-address=/api.compact.${domain}/${api_vip}
-address=/.apps.compact.${domain}/${apps_vip}
+address=/api.$(pool_cluster_name compact ${pool_num}).${domain}/${api_vip}
+address=/.apps.$(pool_cluster_name compact ${pool_num}).${domain}/${apps_vip}
 
 # --- Standard: api -> API VIP, apps -> APPS VIP ---
-address=/api.standard.${domain}/${api_vip}
-address=/.apps.standard.${domain}/${apps_vip}
+address=/api.$(pool_cluster_name standard ${pool_num}).${domain}/${api_vip}
+address=/.apps.$(pool_cluster_name standard ${pool_num}).${domain}/${apps_vip}
 DNSEOF
 
     cat <<-SETUPEOF | ssh "${user}@${host}" -- sudo bash
@@ -435,9 +438,18 @@ CONFEOF
 		systemctl disable --now systemd-resolved 2>/dev/null || true
 
 		# Ensure /etc/resolv.conf points to localhost so the bastion itself
-		# uses its own dnsmasq (and through it, the upstream)
+		# uses its own dnsmasq (and through it, the upstream).
+		# Tell NetworkManager not to manage resolv.conf, otherwise it
+		# regenerates it from DHCP and overwrites our 127.0.0.1 entry.
+		cat > /etc/NetworkManager/conf.d/no-dns.conf << 'NMEOF'
+[main]
+dns=none
+NMEOF
+		systemctl reload NetworkManager
+
 		cat > /etc/resolv.conf << 'RESOLVEOF'
-# Managed by E2E dnsmasq setup
+# Managed by E2E dnsmasq setup -- NetworkManager dns=none
+search example.com
 nameserver 127.0.0.1
 RESOLVEOF
 
@@ -457,11 +469,13 @@ RESOLVEOF
 	SETUPEOF
 
     # Verify DNS resolution from the bastion itself
-    echo "  [vm] Verifying DNS on $host ..."
+    local sno_name
+    sno_name="$(pool_cluster_name sno ${pool_num})"
+    echo "  [vm] Verifying DNS on $host (cluster name: $sno_name) ..."
     ssh "${user}@${host}" -- bash -c "
         echo '--- Testing cluster DNS ---'
-        dig +short api.sno.${domain} @127.0.0.1
-        dig +short test.apps.sno.${domain} @127.0.0.1
+        dig +short api.${sno_name}.${domain} @127.0.0.1
+        dig +short test.apps.${sno_name}.${domain} @127.0.0.1
         echo '--- Testing upstream forwarding ---'
         dig +short google.com @127.0.0.1 | head -1
     "
@@ -481,8 +495,8 @@ _vm_cleanup_caches() {
 		rm -vrf ~/.cache/agent/
 		rm -vrf ~/bin/*
 		rm -f \$HOME/.ssh/quay_installer*
-		rm -rf \$HOME/.oc-mirror/.cache
-		rm -rf \$HOME/*/.oc-mirror/.cache
+		rm -rfv \$HOME/.oc-mirror/.cache
+		rm -rfv \$HOME/*/.oc-mirror/.cache
 		# Ensure test VMs are located together
 		[ -s ~/.vmware.conf ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g" ~/.vmware.conf || true
 	CACHEEOF
@@ -501,8 +515,8 @@ _vm_cleanup_podman() {
         which podman 2>/dev/null || sudo dnf install podman -y
         podman system prune --all --force
         podman rmi --all 2>/dev/null || true
-        sudo rm -rf ~/.local/share/containers/storage
-        rm -rf ~/test
+        sudo rm -rfv ~/.local/share/containers/storage
+        rm -rfv ~/test
     "
 }
 
@@ -770,7 +784,7 @@ configure_internal_bastion() {
 #
 create_pools() {
     local count="$1"; shift
-    local rhel_ver="${INTERNAL_BASTION_RHEL_VER:-rhel9}"
+    local rhel_ver="${INT_BASTION_RHEL_VER:-rhel9}"
     local connected_only=""
 
     while [ $# -gt 0 ]; do

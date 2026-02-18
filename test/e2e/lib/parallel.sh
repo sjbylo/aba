@@ -102,7 +102,7 @@ _build_remote_cmd() {
 
     # Pass current env vars that aren't already in overrides
     local pass_vars=""
-    for var in TEST_CHANNEL VER_OVERRIDE INTERNAL_BASTION_RHEL_VER TEST_USER OC_MIRROR_VER; do
+    for var in TEST_CHANNEL OCP_VERSION INT_BASTION_RHEL_VER TEST_USER OC_MIRROR_VER; do
         if [ -n "${!var:-}" ] && ! echo "$overrides" | grep -q "^${var}="; then
             pass_vars+="export $var='${!var}'; "
         fi

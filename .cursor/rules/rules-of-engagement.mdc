@@ -60,4 +60,14 @@ alwaysApply: true
 - Use `ensure_*()` functions for CLI tool installation
 - Symlinks handle cross-directory access (scripts use same paths everywhere)
 
+## E2E test golden rules
+
+- Tests MUST fail on error -- never mask underlying issues
+- Never use `2>/dev/null` or `|| true` in test commands (use `e2e_diag` for diagnostic-only commands, or explicit precondition checks)
+- When a test fails, check if the fix belongs in ABA code FIRST -- never "fix" a test just to make it pass
+- Uninstall from the same host that installed (e.g. registry installed from conN must be uninstalled from conN)
+- Never remove tools before operations that need them (e.g. `dnf remove make` before `aba reset`)
+- Verify cleanup actually worked (assert service is down, directory is gone)
+- Prefer `aba` commands over raw `make` / scripts -- eat your own dog food
+
 ## For full details see `ai/RULES_OF_ENGAGEMENT.md`

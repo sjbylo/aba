@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Suite: VM Smoke Test
+# Suite: VM clone lifecycle and internal bastion configuration (~15 min)
 # =============================================================================
 # Purpose: Quick validation of VM clone lifecycle and configuration code.
 #          No images, no mirrors, no bundles, no clusters.
@@ -26,7 +26,7 @@
 # Runtime: ~10-15 minutes (mostly dnf update + reboot)
 # =============================================================================
 
-set -euo pipefail
+set -u
 
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
@@ -35,11 +35,10 @@ source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-TEMPLATE="${VM_TEMPLATES[${INTERNAL_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}"
+TEMPLATE="${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}"
 CLONE_NAME="${CLONE_NAME:-dis1}"
 CLONE_HOST="${CLONE_NAME}.${VM_BASE_DOMAIN:-example.com}"
 DEF_USER="${VM_DEFAULT_USER:-steve}"
-TEST_USER_NAME="${TEST_USER:-steve}"
 VF="${VMWARE_CONF:-~/.vmware.conf}"
 
 # --- Suite ------------------------------------------------------------------
@@ -62,7 +61,7 @@ suite_begin "vm-smoke"
 test_begin "Prereqs: govc and VMware connectivity"
 
 # Ensure we have aba installed (needed for govc download)
-e2e_run -q "Install aba (if needed)" "./install 2>/dev/null || true"
+e2e_run -q "Install aba (if needed)" "./install"
 
 # Copy vmware.conf so govc can authenticate
 e2e_run "Copy vmware.conf" "cp -v $VF vmware.conf"
@@ -70,7 +69,7 @@ e2e_run -q "Set VC_FOLDER" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
 
 # Source vmware.conf to set GOVC_* env vars
-source <(normalize-vmware-conf 2>/dev/null) || true
+source <(normalize-vmware-conf) || { echo "WARNING: normalize-vmware-conf failed" >&2; }
 _e2e_log "GOVC vars loaded from vmware.conf"
 
 # Install govc binary
@@ -80,7 +79,7 @@ e2e_run "Install govc" "aba --dir cli ~/bin/govc"
 e2e_run "List VMs in vCenter" "govc ls vm"
 e2e_run "Verify template VM exists: $TEMPLATE" "govc vm.info $TEMPLATE"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 2. Clone: destroy old clone, clone template -> dis1
@@ -93,7 +92,7 @@ e2e_run "Clone VM from template" \
 # Verify the clone was created
 e2e_run "Verify clone exists" "govc vm.info $CLONE_NAME"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 3. Boot: wait for SSH via DHCP/DNS
@@ -109,7 +108,7 @@ e2e_run "Verify SSH: hostname" "ssh -o StrictHostKeyChecking=no $DEF_USER@$CLONE
 e2e_run "Verify SSH: date" "ssh $DEF_USER@$CLONE_HOST date"
 e2e_run "Show OS version" "ssh $DEF_USER@$CLONE_HOST cat /etc/redhat-release"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 4. Configure: run the full configure_internal_bastion pipeline
@@ -132,9 +131,9 @@ test_begin "Configure: full internal bastion setup"
 #   _vm_create_test_user -> create 'testy' with SSH key + sudo
 
 e2e_run "Run configure_internal_bastion" \
-    "configure_internal_bastion $CLONE_HOST $DEF_USER $TEST_USER_NAME $CLONE_NAME"
+    "configure_internal_bastion $CLONE_HOST $DEF_USER $TEST_USER $CLONE_NAME"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 5. Verify: check that everything was configured correctly
@@ -189,7 +188,7 @@ e2e_run "Verify proxy disabled in .bashrc" \
 e2e_run "Verify vmware.conf on VM" \
     "ssh $DEF_USER@$CLONE_HOST 'test -s ~/.vmware.conf'"
 
-test_end 0
+test_end
 
 # ============================================================================
 # 6. Cleanup: destroy the clone
@@ -203,7 +202,7 @@ e2e_run "Destroy clone $CLONE_NAME" \
 e2e_run "Verify clone destroyed" \
     "! govc vm.info $CLONE_NAME 2>/dev/null"
 
-test_end 0
+test_end
 
 # ============================================================================
 

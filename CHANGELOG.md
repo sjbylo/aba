@@ -1,17 +1,37 @@
 ## [Unreleased]
 
+---
+
+## [0.9.4] - 2026-02-18
+
+Catalog download fixes, TUI improvements, and reliability bug fixes
+
+
+### New Features
+- **Catalog download throttling** - New `CATALOG_MAX_PARALLEL` setting (default 3) controls parallel operator catalog downloads, preventing 401 authentication errors and timeouts with registry.redhat.io
+- **TUI pull-secret-first wizard** - Pull secret moved to the first wizard step, enabling operator catalog prefetch to begin as early as possible
+
 ### Improvements
-- **Release script `--dry-run` flag** - Preview releases safely without making any changes
-- **Release post-tag verification** - Automated checks that VERSION, ABA_VERSION, CHANGELOG, and README are correct in the tagged commit
-- **Release workflow docs rewritten** - Documents both HEAD and ref-based flows, dry-run usage, common pitfalls, and quick reference
-- **Install `gh` CLI** - GitHub CLI now available for automated GitHub release creation
-- **README cleanup** - Removed stale content, fixed inconsistencies, broadened architecture references, improved install description
+- **First-install congratulations banner** - Improved visual presentation with colored box on successful first install
+- **TUI settings display** - Current settings shown inline on the Settings menu item
+- **Network configuration display** - Show network configuration during cluster setup
+- **Image load retries** - Increased retry count for image loading reliability
 
 ### Bug Fixes
-- **s390x/ppc64le architecture support** - Fixed architecture mapping that caused x86 or arm64 binaries to be downloaded on s390x (System Z) and ppc64le (Power) systems
-- **Install update detection** - Uses `diff` to compare file contents instead of timestamp comparison, fixing false "up-to-date" when switching between dev and release builds
-- **Test SSH scripts** - Added `exit 0` to prevent spurious failures when final informational SSH call times out
-- **Duplicate RPM packages in install script** - Deduplicated the package list to avoid redundant entries in the install output
+- **Catalog download crash** - Fixed arithmetic evaluation (`running++` with `set -e`) that silently aborted catalog downloads after the first catalog, causing "ImageSet configuration file not found" errors
+- **Catalog prefetch visibility** - Removed silent `2>/dev/null` suppression from catalog prefetch; errors now visible for debugging
+- **Bundle/save without registry** - `aba bundle` and `aba save` no longer fail when the registry binary download is unavailable; the download is attempted but non-fatal
+- **Gateway detection** - `get_next_hop()` now correctly identifies the gateway for subnets where the common gateway IP is outside the local range
+- **Misleading "Creating cluster.conf"** - No longer shows "Creating" message when `cluster.conf` already exists on retry
+- **TUI SIGINT crash** - Ctrl-C during command execution no longer crashes the TUI
+- **run_once file descriptor leak** - Closed inherited file descriptors to prevent `tee` blocking on subprocess exit
+- **iptables fallback** - Firewall rules now work on systems without firewalld (falls back to iptables directly)
+- **Docker registry sync retry** - Added missing retry flag for TUI Docker registry sync operations
+- **Docker registry connectivity check** - Early connectivity check prevents cryptic failures during Docker registry install
+- **Mirror clean state reset** - `run_once` task state properly reset during mirror clean/reset
+- **arm64 mirror-registry** - mirror-registry download now fails gracefully on arm64 instead of downloading the wrong architecture binary
+- **Architecture-aware downloads** - Fixed mirror-registry download and SSH check for non-x86 architectures
+- **Mirror Makefile cleanup** - Fixed glob bug, typos, and removed dead code
 
 ---
 
@@ -141,7 +161,8 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/sjbylo/aba/releases/tag/v0.9.4
 [0.9.3]: https://github.com/sjbylo/aba/releases/tag/v0.9.3
 [0.9.2]: https://github.com/sjbylo/aba/releases/tag/v0.9.2
 [0.9.1]: https://github.com/sjbylo/aba/releases/tag/v0.9.1
