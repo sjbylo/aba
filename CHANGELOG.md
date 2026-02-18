@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+---
+
+## [0.9.4] - 2026-02-18
+
+Catalog download fixes, TUI improvements, and reliability bug fixes
+
+
 ### New Features
 - **Catalog download throttling** - New `CATALOG_MAX_PARALLEL` setting (default 3) controls parallel operator catalog downloads, preventing 401 authentication errors and timeouts with registry.redhat.io
 - **TUI pull-secret-first wizard** - Pull secret moved to the first wizard step, enabling operator catalog prefetch to begin as early as possible
@@ -154,7 +161,8 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/sjbylo/aba/releases/tag/v0.9.4
 [0.9.3]: https://github.com/sjbylo/aba/releases/tag/v0.9.3
 [0.9.2]: https://github.com/sjbylo/aba/releases/tag/v0.9.2
 [0.9.1]: https://github.com/sjbylo/aba/releases/tag/v0.9.1
