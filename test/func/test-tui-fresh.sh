@@ -73,17 +73,60 @@ send Enter
 sleep 2
 
 # ============================================================
-# Test 2: Channel selection (fresh — no resume possible)
+# Test 2: Pull secret instructions (first wizard step)
 # ============================================================
 
-log_info "Test 2: Channel selection"
-if wait_for "$TUI_TITLE_CHANNEL" 20; then
-	log_pass "Channel dialog appeared (fresh start)"
-	screenshot "channel"
+log_info "Test 2: Pull secret instructions (fresh — no resume possible)"
+if wait_for "$TUI_TITLE_PULL_SECRET" 20; then
+	log_pass "Pull secret instructions appeared (fresh start)"
+	screenshot "pull-secret-instructions"
 else
-	log_fail "Channel dialog did not appear"
+	log_fail "Pull secret instructions did not appear"
 	log_info "Screen dump:"
 	capture
+	exit 1
+fi
+
+# Press Continue
+send Enter
+sleep 1
+
+# ============================================================
+# Test 3: Pull secret paste
+# ============================================================
+
+log_info "Test 3: Pull secret paste (editbox)"
+if wait_for "$TUI_TITLE_PULL_SECRET_PASTE" 5; then
+	log_pass "Pull secret editbox appeared"
+	screenshot "pull-secret-editbox"
+else
+	log_fail "Pull secret editbox did not appear"
+	exit 1
+fi
+
+log_info "Pasting pull secret via tmux buffer..."
+paste_pull_secret "$_PS_BACKUP"
+
+# Tab to OK/Next button, Enter
+send Tab Enter
+sleep 2
+
+# ============================================================
+# Test 4: Pull secret validation -> Channel selection
+# ============================================================
+
+log_info "Test 4: Pull secret validation -> Channel selection"
+if wait_for "$TUI_TITLE_CHANNEL" 45; then
+	log_pass "Reached Channel screen (pull secret validated)"
+	screenshot "channel"
+else
+	if capture | grep -qi "failed\|error\|invalid"; then
+		log_fail "Pull secret validation failed"
+		log_info "Screen:"
+		capture | head -20
+		exit 1
+	fi
+	log_fail "Did not reach Channel screen"
 	exit 1
 fi
 
@@ -94,10 +137,10 @@ send Enter
 sleep 1
 
 # ============================================================
-# Test 3: Version selection (may be slow — fetching from API)
+# Test 5: Version selection (may be slow — fetching from API)
 # ============================================================
 
-log_info "Test 3: Version selection (may take time — fetching from Red Hat)"
+log_info "Test 5: Version selection (may take time — fetching from Red Hat)"
 
 # Might see "Fetching" or "Please wait" first
 if wait_for "$TUI_TITLE_VERSION" 60; then
@@ -117,10 +160,10 @@ send Enter
 sleep 2
 
 # ============================================================
-# Test 4: Version confirmation
+# Test 6: Version confirmation
 # ============================================================
 
-log_info "Test 4: Version confirmation"
+log_info "Test 6: Version confirmation"
 # Version verification might take time on fresh start
 if wait_for "$TUI_TITLE_CONFIRM" 45; then
 	log_pass "Version confirmation appeared"
@@ -146,65 +189,22 @@ send Enter
 sleep 2
 
 # ============================================================
-# Test 5: Pull secret instructions
+# Test 7: Platform & Network
 # ============================================================
 
-log_info "Test 5: Pull secret instructions"
-if wait_for "$TUI_TITLE_PULL_SECRET" 10; then
-	log_pass "Pull secret instructions appeared"
-	screenshot "pull-secret-instructions"
+log_info "Test 7: Platform & Network"
+if wait_for "$TUI_TITLE_PLATFORM" 10; then
+	log_pass "Reached Platform screen"
 else
-	log_fail "Pull secret instructions did not appear"
-	exit 1
-fi
-
-# Press Continue
-send Enter
-sleep 1
-
-# ============================================================
-# Test 6: Pull secret paste
-# ============================================================
-
-log_info "Test 6: Pull secret paste (editbox)"
-if wait_for "$TUI_TITLE_PULL_SECRET_PASTE" 5; then
-	log_pass "Pull secret editbox appeared"
-	screenshot "pull-secret-editbox"
-else
-	log_fail "Pull secret editbox did not appear"
-	exit 1
-fi
-
-log_info "Pasting pull secret via tmux buffer..."
-paste_pull_secret "$_PS_BACKUP"
-
-# Tab to OK/Next button, Enter
-send Tab Enter
-sleep 2
-
-# ============================================================
-# Test 7: Pull secret validation
-# ============================================================
-
-log_info "Test 7: Pull secret validation"
-if wait_for "$TUI_TITLE_PLATFORM" 45; then
-	log_pass "Reached Platform screen (pull secret validated)"
-else
-	if capture | grep -qi "failed\|error\|invalid"; then
-		log_fail "Pull secret validation failed"
-		log_info "Screen:"
-		capture | head -20
-		exit 1
-	fi
-	log_fail "Did not reach Platform screen"
+	log_fail "Did not reach Platform screen after version confirmation"
 	exit 1
 fi
 
 # ============================================================
-# Test 8: Platform & Network
+# Test 8: Platform & Network (details)
 # ============================================================
 
-log_info "Test 8: Platform & Network"
+log_info "Test 8: Platform & Network details"
 screenshot "platform"
 assert_screen "$TUI_TITLE_PLATFORM" "Platform & Network dialog present"
 assert_screen "Base Domain" "Shows Base Domain field"

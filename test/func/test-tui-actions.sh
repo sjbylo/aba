@@ -359,13 +359,13 @@ log_info "Test 6: Rerun Wizard"
 ensure_action_menu
 select_action "$TUI_ACTION_RERUN_WIZARD"
 
-# Rerun Wizard restarts the wizard — Channel dialog should appear
-if wait_for "$TUI_TITLE_CHANNEL" 10; then
-	log_pass "Rerun Wizard: Channel dialog appeared"
-	screenshot "rerun-wizard-channel"
+# Rerun Wizard restarts the wizard — Pull secret dialog should appear (first step)
+if wait_for "$TUI_TITLE_PULL_SECRET" 10; then
+	log_pass "Rerun Wizard: Pull secret dialog appeared"
+	screenshot "rerun-wizard-pull-secret"
 else
-	log_fail "Rerun Wizard: Channel dialog did not appear"
-	screenshot "rerun-wizard-no-channel"
+	log_fail "Rerun Wizard: Pull secret dialog did not appear"
+	screenshot "rerun-wizard-no-pull-secret"
 fi
 
 # Escape out -> confirm quit

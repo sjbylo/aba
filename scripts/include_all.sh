@@ -1832,7 +1832,7 @@ download_all_catalogs() {
 
 		run_once -i "catalog:${version_short}:${catalog}" -t "$ttl" -- \
 			scripts/download-catalog-index.sh "$catalog" "$version_short"
-		(( running++ ))
+		(( ++running ))
 	done
 
 	aba_debug "Catalog download tasks started (max_parallel=$max_parallel)"

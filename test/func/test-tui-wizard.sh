@@ -81,17 +81,63 @@ send Enter
 sleep 2
 
 # ============================================================
-# Test 2: Channel selection (no resume — config incomplete)
+# Test 2: Pull secret instructions (first wizard step)
 # ============================================================
 
-log_info "Test 2: Channel selection (should skip resume)"
-if wait_for "$TUI_TITLE_CHANNEL" 15; then
-	log_pass "Channel dialog appeared (resume skipped — config incomplete)"
-	screenshot "channel"
+log_info "Test 2: Pull secret instructions (should skip resume)"
+if wait_for "$TUI_TITLE_PULL_SECRET" 15; then
+	log_pass "Pull secret instructions appeared (resume skipped — config incomplete)"
+	screenshot "pull-secret-instructions"
 else
-	log_fail "Channel dialog did not appear"
+	log_fail "Pull secret instructions did not appear"
 	log_info "Screen dump:"
 	capture
+	exit 1
+fi
+
+assert_screen "pull secret" "Instructions mention pull secret"
+
+# Press Continue
+send Enter
+sleep 1
+
+# ============================================================
+# Test 3: Pull secret paste (editbox)
+# ============================================================
+
+log_info "Test 3: Pull secret paste"
+if wait_for "$TUI_TITLE_PULL_SECRET_PASTE" 5; then
+	log_pass "Pull secret editbox appeared"
+	screenshot "pull-secret-editbox"
+else
+	log_fail "Pull secret editbox did not appear"
+	exit 1
+fi
+
+# Paste pull secret from backup via tmux buffer
+log_info "Pasting pull secret via tmux buffer..."
+paste_pull_secret "$_PS_BACKUP"
+
+# Tab to OK/Next button, then press Enter
+send Tab Enter
+sleep 2
+
+# ============================================================
+# Test 4: Pull secret validation -> Channel selection
+# ============================================================
+
+log_info "Test 4: Pull secret validation -> Channel selection"
+if wait_for "$TUI_TITLE_CHANNEL" 30; then
+	log_pass "Reached Channel screen (pull secret validated)"
+	screenshot "channel"
+else
+	if capture | grep -qi "failed\|error\|invalid"; then
+		log_fail "Pull secret validation failed"
+		log_info "Screen:"
+		capture | head -20
+		exit 1
+	fi
+	log_fail "Did not reach Channel screen after pull secret"
 	exit 1
 fi
 
@@ -105,10 +151,10 @@ send Enter
 sleep 1
 
 # ============================================================
-# Test 3: Version selection
+# Test 5: Version selection
 # ============================================================
 
-log_info "Test 3: Version selection"
+log_info "Test 5: Version selection"
 if wait_for "$TUI_TITLE_VERSION" 20; then
 	log_pass "Version dialog appeared"
 	screenshot "version"
@@ -126,10 +172,10 @@ send Enter
 sleep 2
 
 # ============================================================
-# Test 4: Version confirmation
+# Test 6: Version confirmation
 # ============================================================
 
-log_info "Test 4: Version confirmation"
+log_info "Test 6: Version confirmation"
 if wait_for "$TUI_TITLE_CONFIRM" 10; then
 	log_pass "Version confirmation dialog appeared"
 	screenshot "version-confirm"
@@ -158,71 +204,17 @@ send Enter
 sleep 2
 
 # ============================================================
-# Test 5: Pull secret instructions
+# Test 7: Platform & Network (version next goes directly to platform)
 # ============================================================
 
-log_info "Test 5: Pull secret instructions"
-if wait_for "$TUI_TITLE_PULL_SECRET" 10; then
-	log_pass "Pull secret instructions appeared"
-	screenshot "pull-secret-instructions"
+log_info "Test 7: Platform & Network"
+if wait_for "$TUI_TITLE_PLATFORM" 10; then
+	log_pass "Reached Platform screen"
 else
-	log_fail "Pull secret instructions did not appear"
+	log_fail "Did not reach Platform screen after version confirmation"
 	exit 1
 fi
 
-assert_screen "pull secret" "Instructions mention pull secret"
-
-# Press Continue
-send Enter
-sleep 1
-
-# ============================================================
-# Test 6: Pull secret paste (editbox)
-# ============================================================
-
-log_info "Test 6: Pull secret paste"
-if wait_for "$TUI_TITLE_PULL_SECRET_PASTE" 5; then
-	log_pass "Pull secret editbox appeared"
-	screenshot "pull-secret-editbox"
-else
-	log_fail "Pull secret editbox did not appear"
-	exit 1
-fi
-
-# Paste pull secret from backup via tmux buffer
-log_info "Pasting pull secret via tmux buffer..."
-paste_pull_secret "$_PS_BACKUP"
-
-# Tab to OK/Next button, then press Enter
-send Tab Enter
-sleep 2
-
-# ============================================================
-# Test 7: Pull secret validation
-# ============================================================
-
-log_info "Test 7: Pull secret validation"
-# May see "Validating" briefly, then auto-proceeds to Platform
-# Wait for either the success flash or the Platform screen
-if wait_for "$TUI_TITLE_PLATFORM" 30; then
-	log_pass "Reached Platform screen (pull secret validated)"
-else
-	# Check if validation failed
-	if capture | grep -qi "failed\|error\|invalid"; then
-		log_fail "Pull secret validation failed"
-		log_info "Screen:"
-		capture | head -20
-		exit 1
-	fi
-	log_fail "Did not reach Platform screen after pull secret"
-	exit 1
-fi
-
-# ============================================================
-# Test 8: Platform & Network
-# ============================================================
-
-log_info "Test 8: Platform & Network"
 screenshot "platform"
 assert_screen "$TUI_TITLE_PLATFORM" "Platform & Network dialog present"
 assert_screen "Base Domain" "Shows Base Domain field"
@@ -233,10 +225,10 @@ send Tab Enter
 sleep 2
 
 # ============================================================
-# Test 9: Operators
+# Test 8: Operators
 # ============================================================
 
-log_info "Test 9: Operators"
+log_info "Test 8: Operators"
 if wait_for "$TUI_TITLE_OPERATORS" 10; then
 	log_pass "Operators dialog appeared"
 	screenshot "operators"
@@ -252,10 +244,10 @@ send Tab Enter
 sleep 1
 
 # ============================================================
-# Test 10: Empty basket warning
+# Test 9: Empty basket warning
 # ============================================================
 
-log_info "Test 10: Empty basket warning"
+log_info "Test 9: Empty basket warning"
 if wait_for "$TUI_TITLE_EMPTY_BASKET" 5; then
 	log_pass "Empty basket warning appeared"
 	screenshot "empty-basket"
@@ -273,10 +265,10 @@ send Enter
 sleep 2
 
 # ============================================================
-# Test 11: Action menu appears
+# Test 10: Action menu appears
 # ============================================================
 
-log_info "Test 11: Action menu"
+log_info "Test 10: Action menu"
 if wait_for "$TUI_TITLE_ACTION_MENU" 20; then
 	log_pass "Action menu appeared — full wizard complete!"
 	screenshot "action-menu"
@@ -293,10 +285,10 @@ for item in "$TUI_ACTION_LABEL_VIEW_IMAGESET" "Air-Gapped" "Connected" "$TUI_ACT
 done
 
 # ============================================================
-# Test 12: Network values remain empty (auto-detect preserved)
+# Test 11: Network values remain empty (auto-detect preserved)
 # ============================================================
 
-log_info "Test 12: Verify network values stayed empty in aba.conf"
+log_info "Test 11: Verify network values stayed empty in aba.conf"
 if [[ -f aba.conf ]]; then
 	# After wizard completion with auto-detect, network values should be empty.
 	# aba.conf format: key=VALUE  # comment — strip inline comments before checking.
@@ -316,10 +308,10 @@ else
 fi
 
 # ============================================================
-# Test 13: Exit TUI cleanly
+# Test 12: Exit TUI cleanly
 # ============================================================
 
-log_info "Test 13: Exit TUI cleanly"
+log_info "Test 12: Exit TUI cleanly"
 send "$TUI_ACTION_EXIT" Enter
 sleep 2
 
