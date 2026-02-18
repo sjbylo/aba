@@ -163,9 +163,41 @@ govc snapshot.create -vm "$CON_NAME" e2e-configured
 govc snapshot.create -vm "$DIS_NAME" e2e-configured
 ```
 
+### 4. Evaluate Selective `set -euo pipefail` Adoption
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Very Large  
+**Created:** 2026-02-18
+
+**Problem:**
+ABA core scripts do not use strict bash mode (`set -euo pipefail`). This means unhandled errors, unset variables, and broken pipelines can silently produce wrong results. However, enabling it globally is high-risk for existing code.
+
+**Assessment:**
+- `set -e` (errexit): HIGH RISK. Hundreds of patterns would break: `grep -q` returning 1 on no match, `(( counter++ ))` returning 1 when counter is 0, `diff` returning 1 on differences, etc. Many bash experts advise against global `-e`.
+- `set -u` (nounset): MODERATE RISK. ABA uses many optional config variables that may be unset. Every `$var` reference would need `${var:-}` or `${var:-default}`.
+- `set -o pipefail`: LOW RISK. Safest option, but patterns like `grep | head` would need review.
+
+**Recommendation -- Incremental approach (do NOT enable globally):**
+1. Use `set -euo pipefail` in all NEW scripts (already done for `setup-pool-registry.sh`)
+2. Add `set -u` to core scripts incrementally, fixing unset variable references
+3. Add `set -o pipefail` to core scripts incrementally
+4. Add explicit error handling (`|| exit 1`, `|| return 1`) at critical points instead of relying on `-e`
+5. Run ShellCheck on all scripts for static analysis (catches real bugs without `-e` foot-guns)
+
+**Do NOT:**
+- Enable `set -e` globally in `include_all.sh`
+- Bulk-convert existing scripts without individual testing
+
+**References:**
+- http://mywiki.wooledge.org/BashFAQ/105 (why `set -e` is unreliable)
+- The `(( running++ ))` bug in `download_all_catalogs()` was caused by `set -e` + post-increment returning 0
+
+---
+
 ## Low Priority
 
-### 4. Improve vmw-create.sh Output Formatting
+### 5. Improve vmw-create.sh Output Formatting (was #4)
 
 **Status:** Backlog  
 **Priority:** Low  
@@ -199,29 +231,11 @@ Format the VM creation output to be more readable, e.g.:
 
 ---
 
-### 5. Validate starting_ip Is Within machine_network CIDR
-
-**Status:** Backlog  
-**Priority:** Low  
-**Estimated Effort:** Small  
-**Created:** 2026-02-14
-
-**Problem:**
-ABA does not check whether `starting_ip` (from cluster config) falls within the `machine_network` CIDR. If a user sets an IP outside the CIDR, the cluster install will fail late with a cryptic error rather than failing early with a clear message.
-
-**Proposed Solution:**
-Add an early validation (e.g., in `verify-aba-conf` or cluster config normalization) that parses the CIDR and checks the starting IP is within it. Pure bash approach: convert IP and network to integers, apply the mask, and compare. Alternatively, use `ipcalc` or Python one-liner if available.
-
-**Where:**
-- `scripts/include_all.sh` (in `verify-aba-conf` or a new `verify-cluster-conf`)
-- Potentially also in the TUI when the user enters `starting_ip`
-
-**Benefits:**
-- Fail early with a clear error message
-- Prevent wasted time on doomed installs
-
 ---
 
 ## Completed
 
-*(Move completed items here with completion date)*
+### Validate starting_ip Is Within machine_network CIDR
+**Completed:** 2026-02-18 (commit d190310)  
+Added `ip_to_int`, `int_to_ip`, `ip_in_cidr` helpers to `scripts/include_all.sh`.  
+`verify-cluster-conf()` now checks: starting_ip within CIDR, all nodes fit, VIPs within CIDR (non-SNO).

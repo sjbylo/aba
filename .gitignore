@@ -75,3 +75,4 @@ bundles/work
 test/e2e/LAB-NETWORK.md
 test/e2e/SESSION-NOTES.md
 test/func/screenshots/
+vmware.conf.bk
