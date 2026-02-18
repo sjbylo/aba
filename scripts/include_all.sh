@@ -517,8 +517,12 @@ verify-cluster-conf() {
 
 		# Validate starting_ip falls within machine_network CIDR
 		if [[ $ret -eq 0 ]] && echo "$machine_network" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+			local cidr_first_ip=$(int_to_ip $(( $(ip_to_int "$machine_network") + 1 )))
+			local cidr_last=$(cidr_last_ip "$machine_network" "$prefix_length")
+			local cidr_range="Valid range: $cidr_first_ip - $cidr_last"
+
 			if ! ip_in_cidr "$starting_ip" "$machine_network" "$prefix_length"; then
-				echo_red "Error: starting_ip ($starting_ip) is outside the machine_network ($machine_network/$prefix_length)" >&2
+				echo_red "Error: starting_ip ($starting_ip) is outside the machine_network ($machine_network/$prefix_length). $cidr_range" >&2
 				ret=1
 			fi
 
@@ -530,7 +534,7 @@ verify-cluster-conf() {
 				local last_node_ip=$(int_to_ip $last_node_int)
 				if ! ip_in_cidr "$last_node_ip" "$machine_network" "$prefix_length"; then
 					echo_red "Error: not all $total_nodes nodes fit in machine_network ($machine_network/$prefix_length)." \
-						"Last node IP would be $last_node_ip" >&2
+						"Last node IP would be $last_node_ip. $cidr_range" >&2
 					ret=1
 				fi
 			fi
@@ -539,13 +543,13 @@ verify-cluster-conf() {
 			if (( num_masters > 1 )); then
 				if [ -n "${api_vip:-}" ] && echo "$api_vip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 					if ! ip_in_cidr "$api_vip" "$machine_network" "$prefix_length"; then
-						echo_red "Error: api_vip ($api_vip) is outside the machine_network ($machine_network/$prefix_length)" >&2
+						echo_red "Error: api_vip ($api_vip) is outside the machine_network ($machine_network/$prefix_length). $cidr_range" >&2
 						ret=1
 					fi
 				fi
 				if [ -n "${ingress_vip:-}" ] && echo "$ingress_vip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 					if ! ip_in_cidr "$ingress_vip" "$machine_network" "$prefix_length"; then
-						echo_red "Error: ingress_vip ($ingress_vip) is outside the machine_network ($machine_network/$prefix_length)" >&2
+						echo_red "Error: ingress_vip ($ingress_vip) is outside the machine_network ($machine_network/$prefix_length). $cidr_range" >&2
 						ret=1
 					fi
 				fi
