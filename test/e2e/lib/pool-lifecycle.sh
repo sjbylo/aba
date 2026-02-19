@@ -602,6 +602,31 @@ _vm_remove_proxy() {
         "if [ -f ~/.bashrc ]; then sed -i 's|^source ~/.proxy-set.sh|# aba-test # source ~/.proxy-set.sh|g' ~/.bashrc; fi"
 }
 
+# --- _vm_disconnect_internet ------------------------------------------------
+# Remove the default route on a disconnected bastion so it is truly airgapped.
+# The VLAN route to conN stays (direct 10.10.20.0/24 link), and the lab
+# network route stays (10.0.0.0/20 via ens192), but there is no path to
+# the internet. Call this AFTER _vm_dnf_update has finished.
+#
+_vm_disconnect_internet() {
+    local host="$1"
+    local user="${2:-$VM_DEFAULT_USER}"
+
+    echo "  [vm] Disconnecting internet on $host (removing default route) ..."
+
+    ssh "${user}@${host}" -- sudo bash -c "
+        set -ex
+        # Remove the default gateway from the VLAN connection
+        nmcli connection modify ens224.10 ipv4.gateway ''
+        nmcli connection up ens224.10
+
+        echo '=== Routes after disconnect ==='
+        ip route
+        echo '=== Verify no internet ==='
+        ! ping -c 1 -W 3 8.8.8.8 && echo 'GOOD: no internet access' || { echo 'ERROR: internet still reachable'; exit 1; }
+    "
+}
+
 # --- _vm_create_test_user ---------------------------------------------------
 # Create the "testy" user with SSH key access and sudo privileges.
 #
@@ -784,6 +809,10 @@ configure_internal_bastion() {
     # Create test user
     _vm_create_test_user "$host" "$user"
     _vm_set_aba_testing "$host" "$user"
+
+    # Cut off internet: remove default route so disN is truly airgapped.
+    # The VLAN route to conN (10.10.20.0/24) stays for direct communication.
+    _vm_disconnect_internet "$host" "$user"
 
     echo "=== Internal bastion ready: $host ==="
 }
