@@ -122,6 +122,8 @@ e2e_run "Show firewalld status (should be up)" \
     "ssh ${INTERNAL_BASTION} 'sudo systemctl status firewalld'"
 e2e_run "Verify port 8443 is open" \
     "ssh ${INTERNAL_BASTION} 'sudo firewall-cmd --list-all | grep \"ports: .*8443/tcp\"'"
+e2e_run "Verify registry reachable through firewall" \
+    "curl -sk --connect-timeout 10 https://${DIS_HOST}:8443/health/instance"
 
 test_end
 
