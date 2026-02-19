@@ -182,33 +182,10 @@ test_begin "ABI config: diff against known-good examples"
 for ctype in sno compact standard; do
     cname="$(pool_cluster_name $ctype)"
     e2e_run "Diff $cname install-config.yaml against example" \
-        "diff <(python3 -c \"
-import yaml, sys
-d = yaml.safe_load(open('$cname/install-config.yaml'))
-for k in ('additionalTrustBundle', 'pullSecret'):
-    d.pop(k, None)
-vs = d.get('platform', {}).get('vsphere', {})
-for vc in vs.get('vcenters', []):
-    vc.pop('password', None)
-fds = vs.get('failureDomains', [])
-if fds:
-    for k in ('name', 'region', 'zone'):
-        fds[0].pop(k, None)
-    fds[0].get('topology', {}).pop('datastore', None)
-yaml.dump(d, sys.stdout, default_flow_style=False, sort_keys=False)
-\") <(python3 -c \"
-import yaml, sys
-yaml.dump(yaml.safe_load(open('test/$ctype/install-config.yaml.example')), sys.stdout, default_flow_style=False, sort_keys=False)
-\")"
+        "yaml_diff $cname/install-config.yaml test/$ctype/install-config.yaml.example --strip-secrets"
 
     e2e_run "Diff $cname agent-config.yaml against example" \
-        "diff <(python3 -c \"
-import yaml, sys
-yaml.dump(yaml.safe_load(open('$cname/agent-config.yaml')), sys.stdout, default_flow_style=False, sort_keys=False)
-\") <(python3 -c \"
-import yaml, sys
-yaml.dump(yaml.safe_load(open('test/$ctype/agent-config.yaml.example')), sys.stdout, default_flow_style=False, sort_keys=False)
-\")"
+        "yaml_diff $cname/agent-config.yaml test/$ctype/agent-config.yaml.example"
 done
 
 test_end
