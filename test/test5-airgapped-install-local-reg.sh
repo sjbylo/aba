@@ -25,7 +25,7 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
-[ ! "$TEST_USER" ] && export TEST_USER=$(whoami)
+[ ! "$DIS_SSH_USER" ] && export DIS_SSH_USER=$(whoami)
 
 # Try to fix "out of space" error when generating the op. index
 cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
@@ -179,13 +179,13 @@ test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" aba --op-sets abat
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
 
-init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
+init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $DIS_SSH_USER
 
 #################################
 
 source <(cd mirror && normalize-mirror-conf)
 
-reg_ssh_user=$TEST_USER
+reg_ssh_user=$DIS_SSH_USER
 
 mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 
@@ -371,18 +371,18 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 #### DONE ABOVE NOW !!! test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing $cluster_type cluster, ready to deploy test app" "aba --dir $subdir/aba $cluster_type"
 
 mylog "Deploying test vote-app from: $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app"
-test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo || true'" 
-test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc rollout status deployment vote-app -n demo'"
+test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo || true'" 
+test-cmd -r 4 20 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc rollout status deployment vote-app -n demo'"
 
 mylog "Deploying test vote-app from: quay.io/sjbylo/flask-vote-app:latest using ImageDigestMirrorSet"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo'" 
-test-cmd -r 4 20 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo'" 
+test-cmd -r 4 20 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
 
-mylog "Applying ImageDigestMirrorSet for quay.io/sjbylo at $TEST_USER@$int_bastion_hostname"
+mylog "Applying ImageDigestMirrorSet for quay.io/sjbylo at $DIS_SSH_USER@$int_bastion_hostname"
 # This is also needed
-test-cmd -m "Applying ImageDigestMirrorSet" -h $TEST_USER@$int_bastion_hostname "aba --dir subdir/aba/sno run --cmd 'oc apply -f -'" <<END
+test-cmd -m "Applying ImageDigestMirrorSet" -h $DIS_SSH_USER@$int_bastion_hostname "aba --dir subdir/aba/sno run --cmd 'oc apply -f -'" <<END
 apiVersion: config.openshift.io/v1
 kind: ImageDigestMirrorSet
 metadata:
@@ -394,7 +394,7 @@ spec:
     source: quay.io/sjbylo
 END
 
-#ssh $TEST_USER@$int_bastion_hostname "aba --dir subdir/aba/sno run --cmd 'oc apply -f -'" <<END
+#ssh $DIS_SSH_USER@$int_bastion_hostname "aba --dir subdir/aba/sno run --cmd 'oc apply -f -'" <<END
 #apiVersion: config.openshift.io/v1
 #kind: ImageDigestMirrorSet
 #metadata:
@@ -408,9 +408,9 @@ END
 
 test-cmd -m "Wait 30s for ImageDigestMirrorSet to process" "read -t 30 xy||true"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc rollout status deployment vote-app -n demo'"
-test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo'" 
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc rollout status deployment vote-app -n demo'"
+test-cmd -r 2 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo'" 
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -582,7 +582,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing cluster operator status" aba --dir $subdir/aba/$cluster_type run 
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/$cluster_type login)"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/$cluster_type login)"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
@@ -625,7 +625,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Check update  $ocp_version_d
 #### Do upgrade done
 
 # Needed for acm-subs.yaml
-test-cmd -m "Copy over test dir for the deploy-mesh.sh file" scp -rp test $TEST_USER@$int_bastion_hostname:$subdir/aba
+test-cmd -m "Copy over test dir for the deploy-mesh.sh file" scp -rp test $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba
 # FIXME: 
 
 ###  THIS STOPPED WORKING ### test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Deploying service mesh with test app" "$subdir/aba/test/deploy-mesh.sh"
@@ -764,10 +764,10 @@ build_and_test_cluster() {
 	test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting forever for all co available?" "aba --dir $subdir/aba/$cluster_name run; until aba --dir $subdir/aba/$cluster_name run | tail -n +2 |awk '{print \$3}' |tail -n +2 |grep ^False$ |wc -l |grep ^0$; do sleep 10; echo -n .; done"
 
 	# Deploy test app
-	test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc delete project demo || true'"
-	test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-project demo'" || true
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc rollout status deployment vote-app -n demo'"
+	test-cmd -r 2 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc delete project demo || true'"
+	test-cmd -r 4 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-project demo'" || true
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc rollout status deployment vote-app -n demo'"
 }
 
 #for c in sno compact standard
@@ -856,10 +856,10 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "If cluster up, shutting clus
 # keep it # aba --dir ~/aba reset --force
 # keep it # mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 
-##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete the registry" "aba --dir $subdir/aba/mirror uninstall"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete the registry (docker)" "aba --dir $subdir/aba/mirror uninstall-docker-registry"  # We now test this guy!
-#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e docker.*registry -e CONTAINER | wc -l | grep ^0$"
+##test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete the registry" "aba --dir $subdir/aba/mirror uninstall"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete the registry (docker)" "aba --dir $subdir/aba/mirror uninstall-docker-registry"  # We now test this guy!
+#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e docker.*registry -e CONTAINER | wc -l | grep ^0$"
 
 mylog "===> Completed test $0"
 

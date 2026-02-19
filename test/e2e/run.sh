@@ -141,7 +141,7 @@ usage() {
 	  -c, --channel CHAN    Channel: stable, fast, candidate
 	  -v, --version VER     Version: l (latest), p (previous), or x.y.z
 	  -r, --rhel VER        RHEL version: rhel8, rhel9, rhel10
-	  -u, --user USER       Test user on internal bastion
+	  -u, --user USER       DIS_SSH_USER (user on disconnected bastion)
 	
 	Execution modes:
 	  -i, --interactive     Prompt on failure: retry, skip, or abort
@@ -174,7 +174,7 @@ apply_params() {
     [ -n "$CLI_CHANNEL" ] && export TEST_CHANNEL="$CLI_CHANNEL"
     [ -n "$CLI_VERSION" ] && export OCP_VERSION="$CLI_VERSION"
     [ -n "$CLI_RHEL" ]    && export INT_BASTION_RHEL_VER="$CLI_RHEL"
-    [ -n "$CLI_USER" ]    && export TEST_USER="$CLI_USER"
+    [ -n "$CLI_USER" ]    && export DIS_SSH_USER="$CLI_USER"
 
     # Interactive mode
     if [ -n "$CLI_CI" ]; then
@@ -311,6 +311,7 @@ run_suite_local() {
 
     local con_host
     con_host="$(pool_connected_bastion)"
+    local ssh_target="${CON_SSH_USER:+${CON_SSH_USER}@}${con_host}"
 
     echo ""
     echo "========================================"
@@ -343,21 +344,21 @@ run_suite_local() {
         --exclude='sno2/' \
         --exclude='compact/' \
         --exclude='standard/' \
-        "$_ABA_ROOT/" "$con_host:~/aba/"
+        "$_ABA_ROOT/" "$ssh_target:~/aba/"
 
     # Sync notify helper to conN (if it exists on coordinator)
     local _notify_src
     _notify_src="$(eval echo "$NOTIFY_CMD" 2>/dev/null)"
     if [ -n "$_notify_src" ] && [ -x "$_notify_src" ]; then
         echo "  Syncing $(basename "$_notify_src") to $con_host ..."
-        rsync -az "$_notify_src" "$con_host:$(dirname "$_notify_src")/"
+        rsync -az "$_notify_src" "$ssh_target:$(dirname "$_notify_src")/"
     fi
 
     # Build environment variable exports (same pattern as parallel.sh)
     local env_exports="export E2E_ON_BASTION=1; "
     local var
     for var in TEST_CHANNEL OCP_VERSION INT_BASTION_RHEL_VER \
-               TEST_USER OC_MIRROR_VER POOL_NUM ABA_TESTING; do
+               DIS_SSH_USER OC_MIRROR_VER POOL_NUM ABA_TESTING; do
         [ -n "${!var:-}" ] && env_exports+="export $var='${!var}'; "
     done
 
@@ -371,7 +372,7 @@ run_suite_local() {
 
     # Dispatch to conN via SSH (-t for TTY, needed for interactive mode)
     echo "  Dispatching suite '$suite_name' to $con_host ..."
-    ssh -t -o LogLevel=ERROR -o ConnectTimeout=30 "$con_host" -- \
+    ssh -t -o LogLevel=ERROR -o ConnectTimeout=30 "$ssh_target" -- \
         "${env_exports}cd ~/aba && test/e2e/run.sh --suite $suite_name $extra_flags"
 }
 
@@ -439,7 +440,7 @@ main() {
     fi
 
     echo "Suites to run: ${suites_to_run[*]}"
-    echo "Parameters: channel=${TEST_CHANNEL:-?} version=${OCP_VERSION:-?} rhel=${INT_BASTION_RHEL_VER:-?} user=${TEST_USER:-?}"
+    echo "Parameters: channel=${TEST_CHANNEL:-?} version=${OCP_VERSION:-?} rhel=${INT_BASTION_RHEL_VER:-?} con_user=${CON_SSH_USER:-?} dis_user=${DIS_SSH_USER:-?}"
     echo ""
 
     # Dry run: just show the plan

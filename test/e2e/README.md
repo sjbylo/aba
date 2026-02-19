@@ -44,7 +44,8 @@ Baseline defaults for all test runs. Override precedence: CLI flags > pool overr
 Key parameters:
 - `TEST_CHANNEL` / `OCP_VERSION` -- OpenShift channel and version
 - `INT_BASTION_RHEL_VER` -- RHEL version for internal bastions
-- `TEST_USER` -- User on internal bastions
+- `CON_SSH_USER` -- SSH user for connected bastion (con1/con2)
+- `DIS_SSH_USER` -- SSH user for disconnected bastion (dis1/dis2)
 - `VMWARE_CONF` / `VC_FOLDER` / `VM_DATASTORE` -- VMware settings
 - `VM_CLONE_MACS` -- Per-clone MAC addresses (tied to DHCP reservations)
 - `VM_CLONE_VLAN_IPS` -- Static VLAN IPs for bastion clones

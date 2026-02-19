@@ -105,7 +105,7 @@ _build_remote_cmd() {
 
     # Pass current env vars that aren't already in overrides
     local pass_vars=""
-    for var in TEST_CHANNEL OCP_VERSION INT_BASTION_RHEL_VER TEST_USER OC_MIRROR_VER; do
+    for var in TEST_CHANNEL OCP_VERSION INT_BASTION_RHEL_VER CON_SSH_USER DIS_SSH_USER OC_MIRROR_VER; do
         if [ -n "${!var:-}" ] && ! echo "$overrides" | grep -q "^${var}="; then
             pass_vars+="export $var='${!var}'; "
         fi
@@ -115,10 +115,17 @@ _build_remote_cmd() {
     local notify_flag=""
     [ -n "${NOTIFY_CMD:-}" ] && notify_flag="--notify"
 
+    # Determine SSH user for the connected bastion (per-pool override or global)
+    local ssh_user="${CON_SSH_USER:-}"
+    for override in $overrides; do
+        case "$override" in CON_SSH_USER=*) ssh_user="${override#CON_SSH_USER=}" ;; esac
+    done
+    local ssh_target="${ssh_user:+${ssh_user}@}${host}"
+
     # The remote command
     local remote_cmd="${env_exports}${pass_vars}cd ~/aba && test/e2e/run.sh --suite $suite --ci $notify_flag"
 
-    echo "ssh -o LogLevel=ERROR -o ConnectTimeout=30 $host -- '$remote_cmd'"
+    echo "ssh -o LogLevel=ERROR -o ConnectTimeout=30 $ssh_target -- '$remote_cmd'"
 }
 
 # --- _dispatch_job ----------------------------------------------------------

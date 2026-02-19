@@ -29,9 +29,9 @@ export VER_OVERRIDE=l # Uncomment to use the 'latest' version of OpenShift in th
 export internal_bastion_rhel_ver=rhel9
 #export internal_bastion_rhel_ver=rhel8
 
-export TEST_USER=$(whoami)   # Test user on bastion.  This can be any user or $(whoami) 
-#export TEST_USER=root   # This can be any user or $(whoami) 
-#export TEST_USER=steve   # This can be any user or $(whoami) 
+export DIS_SSH_USER=$(whoami)   # Test user on bastion.  This can be any user or $(whoami) 
+#export DIS_SSH_USER=root   # This can be any user or $(whoami) 
+#export DIS_SSH_USER=steve   # This can be any user or $(whoami) 
 
 #export oc_mirror_ver_override=v1   # oc-mirror version to use (v1 now deprecated) 
 export oc_mirror_ver_override=v2   # Default is no v2
@@ -76,7 +76,7 @@ echo "START TESTS @ $(date)" 								>> test/test.log
 echo "==========================================================================" 	>> test/test.log
 
 echo Starting tests: $all_tests
-echo "$all_tests [$TEST_CHANNEL] [$VER_OVERRIDE] [$internal_bastion_rhel_ver] [$(whoami) -> $TEST_USER] [$oc_mirror_ver_override]" | tee -a test/test.log | notify.sh Starting tests:
+echo "$all_tests [$TEST_CHANNEL] [$VER_OVERRIDE] [$internal_bastion_rhel_ver] [$(whoami) -> $DIS_SSH_USER] [$oc_mirror_ver_override]" | tee -a test/test.log | notify.sh Starting tests:
 
 time for t in $all_tests
 do

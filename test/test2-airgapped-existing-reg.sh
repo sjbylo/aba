@@ -25,7 +25,7 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
-[ ! "$TEST_USER" ] && export TEST_USER=$(whoami)
+[ ! "$DIS_SSH_USER" ] && export DIS_SSH_USER=$(whoami)
 
 cd `dirname $0`
 cd ..  # Change into "aba" dir
@@ -131,7 +131,7 @@ if [ ! "$1" ]; then
 	#################################
 	source <(normalize-vmware-conf)  # Needed for govc below
 
-	init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
+	init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $DIS_SSH_USER
 
 	#####
 
@@ -140,7 +140,7 @@ if [ ! "$1" ]; then
 	cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
 
 
-	ssh $TEST_USER@$int_bastion_hostname "rpm -q make  || sudo yum install make -y"
+	ssh $DIS_SSH_USER@$int_bastion_hostname "rpm -q make  || sudo yum install make -y"
 
 	##mylog "Install 'existing' test mirror registry on internal bastion: $int_bastion_hostname"
 	test-cmd -m "Install 'existing' test mirror registry on internal bastion: $int_bastion_hostname" test/reg-test-install-remote.sh $int_bastion_hostname
@@ -197,46 +197,46 @@ test-cmd -m "Checking cache dir was created!" test -d $OC_MIRROR_CACHE/.oc-mirro
 
 test-cmd -m "Checking existance of file mirror/save/mirror_*000000.tar" "ls -lh mirror/save/mirror_*\.tar"
 
-mylog "Use 'aba tar' and copy (ssh) files over to internal bastion @ $TEST_USER@$int_bastion_hostname"
-test-cmd -m "Create 'subdir' on host $int_bastion_hostname" "ssh $TEST_USER@$int_bastion_hostname -- mkdir -v -p $subdir"
-test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname" "aba -d mirror tar --out - | ssh $TEST_USER@$int_bastion_hostname -- tar -C $subdir -xvf -"
+mylog "Use 'aba tar' and copy (ssh) files over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
+test-cmd -m "Create 'subdir' on host $int_bastion_hostname" "ssh $DIS_SSH_USER@$int_bastion_hostname -- mkdir -v -p $subdir"
+test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname" "aba -d mirror tar --out - | ssh $DIS_SSH_USER@$int_bastion_hostname -- tar -C $subdir -xvf -"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
-###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Activating shortcuts.conf on remote host" "cd $subdir/aba; cp -f .shortcuts.conf shortcuts.conf"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
+###test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Activating shortcuts.conf on remote host" "cd $subdir/aba; cp -f .shortcuts.conf shortcuts.conf"
 
 # FIXME: Is this needed since we use "full tar" copy above?
-###test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+###test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 # This user's action is expected to fail since there are no login credentials for the "existing reg."
-test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
+test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
 
 # But, now regcreds/ is created...
-mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $TEST_USER@$int_bastion_hostname"
+mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $DIS_SSH_USER@$int_bastion_hostname"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror"  
-test-cmd -h $TEST_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror/regcreds"  
-test-cmd -h $TEST_USER@$int_bastion_hostname "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
-test-cmd -h $TEST_USER@$int_bastion_hostname "cp -v ~/.containers/auth.json $subdir/aba/mirror/regcreds/pull-secret-mirror.json"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror"  
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror/regcreds"  
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "cp -v ~/.containers/auth.json $subdir/aba/mirror/regcreds/pull-secret-mirror.json"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to the mirror registry $reg_host:$reg_port now succeeds" "aba --dir $subdir/aba/mirror verify"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying access to the mirror registry $reg_host:$reg_port now succeeds" "aba --dir $subdir/aba/mirror verify"
 
 ######################
 
 # Now, this works
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load --retry"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load --retry"
 
 test-cmd                                             -m "Delete loaded image set 1 file" "rm -v mirror/save/mirror_*.tar"
-test-cmd -h $TEST_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/save/mirror_*.tar"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/save/mirror_*.tar"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
-#test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $TEST_USER@$int_bastion_hostname:$subdir/aba/shortcuts.conf
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
+#test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/shortcuts.conf
 #	[ "$cname" = "sno" ] && starting_ip=10.0.1.201
 #	[ "$cname" = "compact" ] && starting_ip=10.0.1.71
 #	[ "$cname" = "standard" ] && starting_ip=10.0.1.81
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba cluster -n compact -i 10.0.1.71 -t compact --step $default_target" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)" "aba --dir $subdir/aba/compact delete" 
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Install compact cluster with default_target=[$default_target]" "aba --dir $subdir/aba cluster -n compact -i 10.0.1.71 -t compact --step $default_target" 
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)" "aba --dir $subdir/aba/compact delete" 
 
 #############
 ### Tests for standard cluster configs, e.g. bonding and vlan
@@ -245,7 +245,7 @@ test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting cluster (if it exists)
 
 mylog "Starting tests for all combinations of config files for various cluster types, e.g. sno, compact, standard with no bonding/bonding/vlan"
 
-test-cmd -m "Copy test scripts" scp test/misc/test_ssh_*.sh $TEST_USER@$int_bastion_hostname:
+test-cmd -m "Copy test scripts" scp test/misc/test_ssh_*.sh $DIS_SSH_USER@$int_bastion_hostname:
 
 for vlan in 10 ""
 do
@@ -254,7 +254,7 @@ do
 		if [ "$vlan" = 10 ]; then
 			next_hop_address=10.10.10.1
 			machine_network=10.10.10.0/24
-			test-cmd -h $TEST_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=PRIVATE-DPG /g' $subdir/aba/vmware.conf"
+			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=PRIVATE-DPG /g' $subdir/aba/vmware.conf"
 			case "$ctype" in
 				sno)
 					start_ip=10.10.10.10
@@ -272,7 +272,7 @@ do
 		else
 			next_hop_address=10.0.1.1
 			machine_network=10.0.0.0/20
-			test-cmd -h $TEST_USER@$int_bastion_hostname -m "Set non-vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=VMNET-DPG /g' $subdir/aba/vmware.conf"
+			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set non-vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=VMNET-DPG /g' $subdir/aba/vmware.conf"
 			case "$ctype" in
 				sno)
 					start_ip=10.0.1.201
@@ -291,123 +291,123 @@ do
 
 	mylog "Running tests: cname=$cname ctype=$ctype next_hop_address=$next_hop_address machine_network=$machine_network start_ip=$start_ip"
 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create ssh test script" "echo until aba --dir $subdir/aba/$cname ssh --cmd hostname\; do sleep 10\; done > test_ssh.sh"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Create ssh test script" "echo until aba --dir $subdir/aba/$cname ssh --cmd hostname\; do sleep 10\; done > test_ssh.sh"
 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete $cname dir: $subdir/aba/$cname" rm -rf $subdir/aba/$cname
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete $cname dir: $subdir/aba/$cname" rm -rf $subdir/aba/$cname
 
 	# Init
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster -i $start_ip --name $cname --type $ctype --step cluster.conf"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $subdir/aba/$cname/cluster.conf"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting next_hop_address" "sed -i \"s/^.*next_hop_address=.*/next_hop_address=$next_hop_address /g\" $subdir/aba/$cname/cluster.conf"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster -i $start_ip --name $cname --type $ctype --step cluster.conf"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $subdir/aba/$cname/cluster.conf"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting next_hop_address" "sed -i \"s/^.*next_hop_address=.*/next_hop_address=$next_hop_address /g\" $subdir/aba/$cname/cluster.conf"
 
 	# Standard config (no bonding) 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting ports" "sed -i 's/^.*ports=.*/ports=ens160 /g' $subdir/aba/$cname/cluster.conf"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $subdir/aba/$cname/cluster.conf"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting ports" "sed -i 's/^.*ports=.*/ports=ens160 /g' $subdir/aba/$cname/cluster.conf"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $subdir/aba/$cname/cluster.conf"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
 
 	# exec
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/$cname iso" 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$cname upload" 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname refresh" 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/$cname iso" 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$cname upload" 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname refresh" 
 
 	# Test node0 is accessible
 	test-cmd -m "Pausing ..." "read -t 60 yn || true"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 	test-cmd -m "Pausing" "read -t 60 yn || true"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd \"ip a\"|grep 'ens160: .*state UP '"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface ens160" "time timeout -v 8m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'ens160: .*state UP '"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd \"ip a\"|grep 'ens160: .*state UP '"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface ens160" "time timeout -v 8m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'ens160: .*state UP '"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
 	# Clean up
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname delete" 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$cname clean
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname delete" 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$cname clean
 
 	# Test basic bonding
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, port1=ens192 (deprecated!)" "sed -i 's/^.*port1=.*/port1=ens192 /g' $subdir/aba/$cname/cluster.conf"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/$cname/cluster.conf"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $subdir/aba/$cname/cluster.conf"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, port1=ens192 (deprecated!)" "sed -i 's/^.*port1=.*/port1=ens192 /g' $subdir/aba/$cname/cluster.conf"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/$cname/cluster.conf"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $subdir/aba/$cname/cluster.conf"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
 
 	# Set balance-xor, if mode available
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create agent config file" "aba --dir $subdir/aba/$cname agent-config.yaml" 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting mode" "sed -i \"s/mode: active-backup/mode: balance-xor/g\" $subdir/aba/$cname/agent-config.yaml"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Create agent config file" "aba --dir $subdir/aba/$cname agent-config.yaml" 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting mode" "sed -i \"s/mode: active-backup/mode: balance-xor/g\" $subdir/aba/$cname/agent-config.yaml"
 
 	# exec
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/$cname iso" 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$cname upload" 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname refresh" 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/$cname iso" 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$cname upload" 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname refresh" 
 
 	# Test node0 is accessible
 	test-cmd -m "Pausing ..." "read -t 60 yn || true"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 	test-cmd -m "Pausing" sleep 120  
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 10 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd \"ip a\"|grep 'bond0: .* state UP '"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface" "time timeout -v 8m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'bond0: .* state UP '"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 5 10 -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd \"ip a\"|grep 'bond0: .* state UP '"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface" "time timeout -v 8m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'bond0: .* state UP '"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
 	# Test node0 is accessible
 	test-cmd -m "Pausing ..." "read -t 60 yn || true"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$cname ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$cname ssh --cmd \"chronyc sources | grep $ntp_ip_grep\"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname delete" 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname delete" 
 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$cname clean
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$cname clean
 
 
 	## Test with bond
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
 
-	####test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting starting IP" aba -d $subdir/aba/$cname/ -i 10.10.10.10 ## -n standard-vlan -t standard
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*cluster_name=.*/cluster_name=$cname /g\" $subdir/aba/$cname/cluster.conf"
-	##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan=.*/vlan=10 /g' $subdir/aba/$cname/cluster.conf"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*next_hop_address=.*/next_hop_address=$next_hop_address /g\" $subdir/aba/$cname/cluster.conf"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $subdir/aba/$cname/cluster.conf"
-	##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=PRIVATE-DPG /g' $subdir/aba/vmware.conf"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Setting ports" "sed -i 's/^.*ports=.*/ports=ens160,ens192 /g' $subdir/aba/$cname/cluster.conf"
+	####test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting starting IP" aba -d $subdir/aba/$cname/ -i 10.10.10.10 ## -n standard-vlan -t standard
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*cluster_name=.*/cluster_name=$cname /g\" $subdir/aba/$cname/cluster.conf"
+	##test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan=.*/vlan=10 /g' $subdir/aba/$cname/cluster.conf"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*next_hop_address=.*/next_hop_address=$next_hop_address /g\" $subdir/aba/$cname/cluster.conf"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $subdir/aba/$cname/cluster.conf"
+	##test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=PRIVATE-DPG /g' $subdir/aba/vmware.conf"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting ports" "sed -i 's/^.*ports=.*/ports=ens160,ens192 /g' $subdir/aba/$cname/cluster.conf"
 
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
 
 	## exec
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$cname upload" 
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs (cannot test VLAN)" "aba --dir $subdir/aba/$cname refresh" 
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$cname upload" 
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Refresh VMs (cannot test VLAN)" "aba --dir $subdir/aba/$cname refresh" 
 
 	#test-cmd -m "Pausing ..." "read -t 60 yn || true"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
-	###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep '\.10'"
+	###test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep '\.10'"
 	###test-cmd -m "Pausing" "read -t 60 yn || true"
-	###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'| grep 'bond0: .* state UP '"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$cname ssh --cmd "chronyc sources | grep $ntp_ip_grep"
+	###test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'| grep 'bond0: .* state UP '"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$cname ssh --cmd "chronyc sources | grep $ntp_ip_grep"
 
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$cname clean
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$cname clean
 
 
 	## Test vlan, no bond (cannot start VMs without vlan switch)
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface, port1=" "sed -i 's/^port1=.*/#port1= /g' $subdir/aba/$cname/cluster.conf"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Remove 2nd interface from ports" "sed -i 's/^ports=.*/ports=ens160 /g' $subdir/aba/$cname/cluster.conf"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "create iso" "aba --dir $subdir/aba/$cname iso" 
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$cname upload" 
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname refresh" 
-	####test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep 'ens160.10@ens160'"
-	####test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP connect ..." "aba --dir $subdir/aba/$cname ssh --cmd 'chronyc sources' | grep $ntp_ip_grep"
-	##test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$cname ssh --cmd "chronyc sources | grep $ntp_ip_grep"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Remove 2nd interface, port1=" "sed -i 's/^port1=.*/#port1= /g' $subdir/aba/$cname/cluster.conf"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Remove 2nd interface from ports" "sed -i 's/^ports=.*/ports=ens160 /g' $subdir/aba/$cname/cluster.conf"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "create iso" "aba --dir $subdir/aba/$cname iso" 
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$cname upload" 
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname refresh" 
+	####test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd 'ip a'|grep 'ens160.10@ens160'"
+	####test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Check NTP connect ..." "aba --dir $subdir/aba/$cname ssh --cmd 'chronyc sources' | grep $ntp_ip_grep"
+	##test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" aba --dir $subdir/aba/$cname ssh --cmd "chronyc sources | grep $ntp_ip_grep"
 
 	#test-cmd -m "Pausing ..." "read -t 60 yn || true"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 	#
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Reset vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=VMNET-DPG /g' $subdir/aba/vmware.conf"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Reset vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=VMNET-DPG /g' $subdir/aba/vmware.conf"
 	#
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname delete" 
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname delete" 
 	#
-	#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$cname clean
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Clean up" aba -d $subdir/aba/$cname clean
 
 	done
 done
@@ -416,21 +416,21 @@ done
 mylog "Completed tests to check out agent config files for various cluster configs, e.g. bonding and vlan"
 #############
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Cleaning up $subdir/aba/sno" "rm -rf $subdir/aba/sno" 
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Cleaning up $subdir/aba/sno" "rm -rf $subdir/aba/sno" 
 
 #### TESTING ACM + MCH 
 # Adjust size of SNO cluster for ACM install 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster -i 10.0.1.201 --name sno --type sno --step cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check cluster.conf exists" "test -s $subdir/aba/sno/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/master_mem=40/g' $subdir/aba/sno/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Generate cluster.conf" "aba --dir $subdir/aba cluster -i 10.0.1.201 --name sno --type sno --step cluster.conf"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Check cluster.conf exists" "test -s $subdir/aba/sno/cluster.conf"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Upgrade cluster.conf" "sed -i 's/^master_mem=.*/master_mem=40/g' $subdir/aba/sno/cluster.conf"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Upgrade cluster.conf" "sed -i 's/^master_cpu_count=.*/master_cpu_count=24/g' $subdir/aba/sno/cluster.conf"
 #### TESTING ACM + MCH 
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, port1=ens192 (deprecated!)" "sed -i 's/^.*port1=.*/port1=ens192/g' $subdir/aba/sno/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, ports=ens160,ens192,ens224" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/standard/cluster.conf"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8/g' $subdir/aba/sno/cluster.conf"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, port1=ens192 (deprecated!)" "sed -i 's/^.*port1=.*/port1=ens192/g' $subdir/aba/sno/cluster.conf"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding 2nd interface for bonding, ports=ens160,ens192,ens224" "sed -i 's/^.*ports=.*/ports=ens160,ens192,ens224 /g' $subdir/aba/standard/cluster.conf"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding 2nd dns ip addr" "sed -i 's/^dns_servers=.*/dns_servers=10.0.1.8,10.0.1.8/g' $subdir/aba/sno/cluster.conf"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Install sno cluster" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target" 
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Install sno cluster" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target" 
 
 
 ######################
@@ -465,65 +465,65 @@ test-cmd -r 15 1 -m "Saving 'vote-app' image to local disk" "aba --dir mirror sa
 
 test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh mirror/save/mirror_*\.tar"
 
-#mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_*.tar' file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
+#mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_*.tar' file from `hostname` over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
 
 #test-cmd -m "Create tmp dir" mkdir -v -p ~/tmp
 #test-cmd -m "Delete any old tar file (if any)" rm -fv ~/tmp/file.tar
 #test-cmd -m "Create the tar file.  Should only contain (more-or-less) the 'image set' archive file" aba --dir mirror inc out=~/tmp/file.tar
 #test-cmd -m "Check size of tar file" "ls -l ~/tmp/file.tar"
-#test-cmd -m "Copy tar file over to $int_bastion_hostname" scp ~/tmp/file.tar $TEST_USER@$int_bastion_hostname:
+#test-cmd -m "Copy tar file over to $int_bastion_hostname" scp ~/tmp/file.tar $DIS_SSH_USER@$int_bastion_hostname:
 #test-cmd -m "Remove local tar file" rm -v ~/tmp/file.tar  # Remove file on client side
 
-test-cmd -m "Copy over mirror archive and image set config file" scp mirror/save/mirror_*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save/
+test-cmd -m "Copy over mirror archive and image set config file" scp mirror/save/mirror_*.tar $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save/
 
 #mylog "The following untar command should unpack the file aba/mirror/save/mirror_*.tar only"
-#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
-#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Removing tar file" "rm -v file.tar"
+#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
+#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Removing tar file" "rm -v file.tar"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying access to mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying access to mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
-test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 ^test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load --retry"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load --retry"
 
 test-cmd                                     -m "Delete loaded image set 2 file" rm -v mirror/save/mirror_*.tar
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded image set 2 file on registry" rm -v $subdir/aba/mirror/save/mirror_*.tar
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete loaded image set 2 file on registry" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
 # Is the cluster can be reached ... use existing cluster
-#if test-cmd -i -h $TEST_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno run --cmd 'oc get clusterversion'"; then
+#if test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno run --cmd 'oc get clusterversion'"; then
 # Do not use test-cmd here since that will never retiurn the true result!
 mylog "Cecking if cluster was installed or not, if error, then not!"
-if ssh $TEST_USER@$int_bastion_hostname "aba --dir $subdir/aba/sno run --cmd 'oc get clusterversion'"; then
+if ssh $DIS_SSH_USER@$int_bastion_hostname "aba --dir $subdir/aba/sno run --cmd 'oc get clusterversion'"; then
 	mylog "Using existing sno cluster"
 else
 	mylog "Creating the sno cluster"
 
 	# Run 'aba --dir mirror clean' here since we (might be) are re-installing another cluster *with the same mac addresses*! So, install might fail.
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Cleaning sno dir" "aba --dir $subdir/aba/sno clean"  # This does not remove the cluster.conf file, so cluster can be re-installed 
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Installing sno cluster" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --mmem 24 --mcpu 12 -s install"   
-	test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Check cluster operator status" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get co"
-	test-cmd -h $TEST_USER@$int_bastion_hostname -m "Checking cluster operators" aba --dir $subdir/aba/sno run
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Cleaning sno dir" "aba --dir $subdir/aba/sno clean"  # This does not remove the cluster.conf file, so cluster can be re-installed 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Installing sno cluster" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --mmem 24 --mcpu 12 -s install"   
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 3 -m "Check cluster operator status" "cd $subdir; oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get co"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Checking cluster operators" aba --dir $subdir/aba/sno run
 fi
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Checking cluster operator status on cluster sno" "aba --dir $subdir/aba/sno run"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Checking cluster operator status on cluster sno" "aba --dir $subdir/aba/sno run"
 
 ######################
 
-###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deploying vote-app on cluster" $subdir/aba/test/deploy-test-app.sh $subdir
-test-cmd -r 2 10 -h $TEST_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo || true'"
-test-cmd -r 4 10 -h $TEST_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc new-project demo'"
+###test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Deploying vote-app on cluster" $subdir/aba/test/deploy-test-app.sh $subdir
+test-cmd -r 2 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo || true'"
+test-cmd -r 4 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc new-project demo'"
 
 test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" "read -t 30 xy||true"
 # error: Post "https://api.sno.example.com:6443/api/v1/namespaces/demo/services": dial tcp 10.0.1.201:6443: connect: connection refused
-test-cmd -r 5 10 -h $TEST_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+test-cmd -r 5 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for vote-app rollout" "aba --dir $subdir/aba/sno run --cmd 'oc rollout status deployment vote-app -n demo'"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo'"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for vote-app rollout" "aba --dir $subdir/aba/sno run --cmd 'oc rollout status deployment vote-app -n demo'"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Deleting vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo'"
 
 mylog "Adding advanced-cluster-management operator images to mirror/save/imageset-config-save.yaml file on `hostname`"
 
@@ -566,61 +566,61 @@ test-cmd -m "Adding multicluster-engine          operator to mirror/save/imagese
 test-cmd -r 15 1 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save  --retry"
 
 test-cmd -m "Listing image set files created" "ls -lh mirror/save/mirror_*.tar"
-mylog "Use 'scp' to copy mirror/save/mirror_*.tar file from `hostname` over to internal bastion @ $TEST_USER@$int_bastion_hostname"
-test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/save/mirror_*.tar $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save"
+mylog "Use 'scp' to copy mirror/save/mirror_*.tar file from `hostname` over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
+test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/save/mirror_*.tar $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*\.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*\.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
-test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $TEST_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load --retry"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load --retry"
 
 test-cmd                                     -m "Delete loaded image set 3 file" rm -v mirror/save/mirror_*.tar
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Delete loaded image set 3 file on registry" rm -v $subdir/aba/mirror/save/mirror_*.tar
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete loaded image set 3 file on registry" rm -v $subdir/aba/mirror/save/mirror_*.tar
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
 
 test-cmd -m "Pausing 30s" "read -t 30 xy||true"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 15 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 3 -m "Checking available Operators on sno cluster" "aba --dir $subdir/aba/sno run --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
 
 # Needed for acm-subs.yaml
-test-cmd -m "Copy over test dir for the acm-*.yaml files" scp -rp test $TEST_USER@$int_bastion_hostname:$subdir/aba
+test-cmd -m "Copy over test dir for the acm-*.yaml files" scp -rp test $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba
 
 # Need to fetch the actual channel name from the operator catalog that's in use
 acm_channel=$(cat mirror/.index/redhat-operator-index-v$ocp_ver_major | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
-[ "$acm_channel" ] && test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" $subdir/aba/test/acm-subs.yaml"
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Install ACM Operator" "i=0; until oc apply -f $subdir/aba/test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done"
+[ "$acm_channel" ] && test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 5 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" $subdir/aba/test/acm-subs.yaml"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 3 3 -m "Install ACM Operator" "i=0; until oc apply -f $subdir/aba/test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done"
 
 ###test-cmd "read -t 60 xy||true"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Install Multiclusterhub" "i=0; until oc apply -f $subdir/aba/test/acm-mch.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 3 3 -m "Install Multiclusterhub" "i=0; until oc apply -f $subdir/aba/test/acm-mch.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done"
 
 test-cmd -m "Leave time for ACM to deploy ..." "read -t 30 xy||true"
 
 # Need 'cd' here due to '=$subdir' not 'resolving' ok
 # cd $subdir only works in "" .. and will work for root or user
-test-cmd -h $TEST_USER@$int_bastion_hostname -r 3 3 -m "Waiting up to 8 mins for acm hub status is 'Running'" "cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=\$i+1; [ \$i -gt 48 ] && exit 1; sleep 10; done"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 3 3 -m "Waiting up to 8 mins for acm hub status is 'Running'" "cd $subdir; i=0; while ! oc --kubeconfig=aba/sno/iso-agent-based/auth/kubeconfig get multiclusterhub multiclusterhub -n open-cluster-management -o jsonpath={.status.phase}| grep -i running; do echo -n .; let i=\$i+1; [ \$i -gt 48 ] && exit 1; sleep 10; done"
 #### TESTING ACM + MCH 
 
 # Apply NTP config, but don't wait for it to complete!
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check status of NTP config" "aba --dir $subdir/aba/sno ssh --cmd 'chronyc sources'"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Check status of NTP config" "aba --dir $subdir/aba/sno ssh --cmd 'chronyc sources'"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Initiate NTP config" "aba --dir $subdir/aba/sno day2-ntp"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Initiate NTP config" "aba --dir $subdir/aba/sno day2-ntp"
 test-cmd -m "Pausing 30s" "read -t 60 xy||true"
-###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config" "until aba --dir $subdir/aba/sno ssh --cmd \"sudo chronyc sources | grep $ntp_ip_grep\"; do sleep 10; done"
-###test-cmd -h $TEST_USER@$int_bastion_hostname -m "Check NTP config (loop)" "until bash -x test_ssh_ntp.sh $subdir/aba/sno $ntp_ip_grep; do sleep 10; done"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/sno '$ntp_ip_grep'"
+###test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Check NTP config" "until aba --dir $subdir/aba/sno ssh --cmd \"sudo chronyc sources | grep $ntp_ip_grep\"; do sleep 10; done"
+###test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Check NTP config (loop)" "until bash -x test_ssh_ntp.sh $subdir/aba/sno $ntp_ip_grep; do sleep 10; done"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/sno '$ntp_ip_grep'"
 # matches ^* 10.0.1.8    
 # for i in {100..105}; do echo $i:;ssh -o LogLevel=ERROR core@10.0.1.$i "sudo chronyc sources | grep ^\^" ; done
 test-cmd -m "Pausing 5s ..." "read -t 5 yn || true"
 
-# Keep it # test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting sno cluster" "aba --dir $subdir/aba/sno delete" 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "If cluster up, stopping cluster" "cd $subdir/aba/;. <(aba -d sno shell) && . <(aba --dir sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
+# Keep it # test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Deleting sno cluster" "aba --dir $subdir/aba/sno delete" 
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "If cluster up, stopping cluster" "cd $subdir/aba/;. <(aba -d sno shell) && . <(aba --dir sno login) && yes|aba --dir sno shutdown || echo cluster shutdown failure"
 
 
 test-cmd -m "Uninstall 'existing' test mirror registry on internal bastion: $int_bastion_hostname" test/reg-test-uninstall-remote.sh $int_bastion_hostname
