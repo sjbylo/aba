@@ -14,9 +14,9 @@ PasswordAuthentication=no
 LogLevel=ERROR
 END
 
-reg_host=$1
+reg_host=${1:?Usage: $0 REGISTRY_HOST}
 
-reg_ssh_user=$TEST_USER
+reg_ssh_user=${TEST_USER:-steve}
 
 rsync --progress --partial -avz reg-install.sh mirror-registry-amd64.tar.gz  $reg_ssh_user@$reg_host:test
 
