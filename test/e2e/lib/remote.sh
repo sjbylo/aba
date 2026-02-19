@@ -154,7 +154,7 @@ _get_nic_network() {
 #
 # Before cloning, the source VM is reverted to its snapshot (default:
 # "aba-test") to ensure the clone is always from a known-clean state.
-# The source VMs (e.g. bastion-internal-rhel9) are regular VMs with a
+# The source VMs (e.g. aba-e2e-template-rhel8) are regular VMs with a
 # clean snapshot -- not VMware "template" objects.
 #
 # After cloning (while still powered off), MAC addresses are set on the
@@ -173,7 +173,7 @@ _get_nic_network() {
 #
 # Usage: clone_vm SOURCE_VM CLONE_NAME [FOLDER] [SNAPSHOT]
 #
-# Example: clone_vm bastion-internal-rhel9 dis1
+# Example: clone_vm aba-e2e-template-rhel8 dis1
 #
 clone_vm() {
     local source_vm="$1"
@@ -181,7 +181,7 @@ clone_vm() {
     local folder="${3:-${VC_FOLDER:-/Datacenter/vm/abatesting}}"
     local snapshot="${4:-${VM_SNAPSHOT:-aba-test}}"
 
-    echo "  Cloning VM: $source_vm -> $clone_name (folder: $folder) ..."
+    echo "  Cloning VM: $source_vm -> $clone_name (folder: $folder, snapshot: $snapshot) ..."
 
     # Destroy existing clone if present (clones are disposable)
     if vm_exists "$clone_name"; then
@@ -190,15 +190,13 @@ clone_vm() {
         govc vm.destroy "$clone_name" || true
     fi
 
-    # Revert source VM to clean snapshot before cloning
-    echo "  Reverting '$source_vm' to snapshot '$snapshot' ..."
-    govc vm.power -off "$source_vm" 2>/dev/null || true
-    govc snapshot.revert -vm "$source_vm" "$snapshot" || return 1
-
-    # Clone from source (powered off initially)
+    # Clone directly from the named snapshot. The template is a read-only
+    # golden image that is never modified, so no revert is needed. This
+    # allows multiple clones from the same template to run in parallel.
     local ds_flag=""
     [ -n "${VM_DATASTORE:-}" ] && ds_flag="-ds=$VM_DATASTORE"
-    govc vm.clone -vm "$source_vm" -folder "$folder" $ds_flag -on=false "$clone_name" || return 1
+    govc vm.clone -vm "$source_vm" -snapshot "$snapshot" \
+        -folder "$folder" $ds_flag -on=false "$clone_name" || return 1
 
     # --- Set MAC addresses on the clone's NICs (before power-on) -----------
     # The clone inherits the source's MACs which won't match DHCP

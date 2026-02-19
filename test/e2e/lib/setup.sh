@@ -69,11 +69,11 @@ setup_aba_from_scratch() {
 #
 # Usage: setup_bastion CLONE_NAME [TEMPLATE] [DIS_SSH_USER]
 #
-# Example: setup_bastion dis1 bastion-internal-rhel9 steve
+# Example: setup_bastion dis1 aba-e2e-template-rhel8 steve
 #
 setup_bastion() {
     local clone_name="$1"
-    local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
+    local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel8}]:-aba-e2e-template-rhel8}}"
     local test_user="${3:-${DIS_SSH_USER:-$VM_DEFAULT_USER}}"
 
     echo "=== setup_bastion: clone $template -> $clone_name ==="
@@ -98,7 +98,7 @@ setup_bastion() {
 #
 setup_connected_bastion() {
     local clone_name="$1"
-    local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
+    local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel8}]:-aba-e2e-template-rhel8}}"
 
     echo "=== setup_connected_bastion: clone $template -> $clone_name ==="
 
