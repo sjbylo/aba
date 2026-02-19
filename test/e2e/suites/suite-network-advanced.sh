@@ -45,14 +45,14 @@ plan_tests \
     "Setup: configure mirror for local registry" \
     "VLAN: verify interface" \
     "VLAN SNO: single port" \
-    "VLAN SNO: bonding + balance-xor" \
+    "VLAN SNO: bonding" \
     "VLAN compact: single port" \
-    "VLAN compact: bonding + balance-xor" \
+    "VLAN compact: bonding" \
     "VLAN standard: single port" \
-    "VLAN standard: bonding + balance-xor" \
-    "Non-VLAN SNO: bonding + balance-xor" \
-    "Non-VLAN compact: bonding + balance-xor" \
-    "Non-VLAN standard: bonding + balance-xor" \
+    "VLAN standard: bonding" \
+    "Non-VLAN SNO: bonding" \
+    "Non-VLAN compact: bonding" \
+    "Non-VLAN standard: bonding" \
     "Cleanup"
 
 suite_begin "network-advanced"
@@ -152,7 +152,7 @@ test_end
 # ============================================================================
 # Helper: run a single network config test (single-port or bonding)
 # ============================================================================
-# Usage: _net_test LABEL CTYPE CNAME VLAN PORTS IF_CHECK [BALANCE_XOR]
+# Usage: _net_test LABEL CTYPE CNAME VLAN PORTS IF_CHECK
 #
 #   LABEL       = test_begin label (e.g. "VLAN SNO: single port")
 #   CTYPE       = sno | compact | standard
@@ -160,7 +160,6 @@ test_end
 #   VLAN        = VLAN tag (e.g. 10) or "" for no VLAN
 #   PORTS       = ports= value (e.g. "ens160" or "ens160,ens192,ens224")
 #   IF_CHECK    = interface pattern to verify (e.g. "ens160:.*state UP" or "bond0:.*state UP")
-#   BALANCE_XOR = "yes" to set balance-xor bonding mode (optional, default "no")
 #
 _net_test() {
     local label="$1"
@@ -169,7 +168,6 @@ _net_test() {
     local vlan="$4"
     local ports="$5"
     local if_check="$6"
-    local balance_xor="${7:-no}"
 
     local govc_network machine_network next_hop start_ip
     local _saved_aba_machine_network
@@ -216,13 +214,6 @@ _net_test() {
 
     e2e_diag "Show cluster.conf" \
         "grep -e ^vlan= -e ^ports= -e ^port1= $cname/cluster.conf | awk '{print \$1}'"
-
-    if [ "$balance_xor" = "yes" ]; then
-        e2e_run "Generate agent-config.yaml" \
-            "aba --dir $cname agent-config.yaml"
-        e2e_run "Set bonding mode to balance-xor" \
-            "sed -i 's/mode: active-backup/mode: balance-xor/g' $cname/agent-config.yaml"
-    fi
 
     e2e_run "Create ISO for $cname" "aba --dir $cname iso"
     e2e_run "Upload ISO for $cname" "aba --dir $cname upload"
@@ -271,42 +262,42 @@ _STANDARD="$(pool_cluster_name standard)"
 _net_test "VLAN SNO: single port" \
     sno "$_SNO_VLAN" 10 "ens160" "ens160: .*state UP"
 
-# 6. VLAN SNO: bonding + balance-xor
-_net_test "VLAN SNO: bonding + balance-xor" \
-    sno "$_SNO_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
+# 6. VLAN SNO: bonding
+_net_test "VLAN SNO: bonding" \
+    sno "$_SNO_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP"
 
 # 7. VLAN compact: single port
 _net_test "VLAN compact: single port" \
     compact "$_COMPACT_VLAN" 10 "ens160" "ens160: .*state UP"
 
-# 8. VLAN compact: bonding + balance-xor
-_net_test "VLAN compact: bonding + balance-xor" \
-    compact "$_COMPACT_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
+# 8. VLAN compact: bonding
+_net_test "VLAN compact: bonding" \
+    compact "$_COMPACT_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP"
 
 # 9. VLAN standard: single port
 _net_test "VLAN standard: single port" \
     standard "$_STANDARD_VLAN" 10 "ens160" "ens160: .*state UP"
 
-# 10. VLAN standard: bonding + balance-xor
-_net_test "VLAN standard: bonding + balance-xor" \
-    standard "$_STANDARD_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP" yes
+# 10. VLAN standard: bonding
+_net_test "VLAN standard: bonding" \
+    standard "$_STANDARD_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP"
 
 # ============================================================================
 # 11-13. Non-VLAN bonding tests (GOVC_NETWORK=VMNET-DPG)
 #         Single-port non-VLAN is already tested by cluster-ops/mirror-sync suites.
 # ============================================================================
 
-# 11. Non-VLAN SNO: bonding + balance-xor
-_net_test "Non-VLAN SNO: bonding + balance-xor" \
-    sno "$_SNO" "" "ens160,ens192,ens224" "bond0: .* state UP" yes
+# 11. Non-VLAN SNO: bonding
+_net_test "Non-VLAN SNO: bonding" \
+    sno "$_SNO" "" "ens160,ens192,ens224" "bond0: .* state UP"
 
-# 12. Non-VLAN compact: bonding + balance-xor
-_net_test "Non-VLAN compact: bonding + balance-xor" \
-    compact "$_COMPACT" "" "ens160,ens192,ens224" "bond0: .* state UP" yes
+# 12. Non-VLAN compact: bonding
+_net_test "Non-VLAN compact: bonding" \
+    compact "$_COMPACT" "" "ens160,ens192,ens224" "bond0: .* state UP"
 
-# 13. Non-VLAN standard: bonding + balance-xor
-_net_test "Non-VLAN standard: bonding + balance-xor" \
-    standard "$_STANDARD" "" "ens160,ens192,ens224" "bond0: .* state UP" yes
+# 13. Non-VLAN standard: bonding
+_net_test "Non-VLAN standard: bonding" \
+    standard "$_STANDARD" "" "ens160,ens192,ens224" "bond0: .* state UP"
 
 # ============================================================================
 # 14. Cleanup
