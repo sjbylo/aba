@@ -409,8 +409,13 @@ _vm_setup_dnsmasq() {
     local apps_vip
     apps_vip="${POOL_APPS_VIP[$pool_num]:-${POOL_SUBNET:-10.0.2}.$((pool_num * 10 + 4))}"
 
+    # Registry record: registry.pN.example.com -> disN's lab IP
+    local dis_lab_ip
+    dis_lab_ip="$(pool_dis_ip "$pool_num")"
+
     echo "  [vm] Setting up dnsmasq on $host for pool $pool_num ($domain) ..."
     echo "  [vm]   node=$node_ip  api_vip=$api_vip  apps_vip=$apps_vip  upstream=$upstream"
+    echo "  [vm]   registry -> $dis_lab_ip (dis${pool_num} lab IP)"
 
     # Build the dnsmasq config
     local dnsmasq_conf
@@ -426,6 +431,9 @@ bind-interfaces
 
 # Forward non-cluster queries to upstream lab DNS
 server=${upstream}
+
+# --- Registry: registry.pN.example.com -> disN lab IP ---
+address=/registry.${domain}/${dis_lab_ip}
 
 # --- SNO: api + apps -> node IP ---
 address=/api.$(pool_cluster_name sno ${pool_num}).${domain}/${node_ip}
@@ -492,6 +500,8 @@ RESOLVEOF
     sno_name="$(pool_cluster_name sno ${pool_num})"
     echo "  [vm] Verifying DNS on $host (cluster name: $sno_name) ..."
     ssh "${user}@${host}" -- bash -c "
+        echo '--- Testing registry DNS ---'
+        dig +short registry.${domain} @127.0.0.1
         echo '--- Testing cluster DNS ---'
         dig +short api.${sno_name}.${domain} @127.0.0.1
         dig +short test.apps.${sno_name}.${domain} @127.0.0.1

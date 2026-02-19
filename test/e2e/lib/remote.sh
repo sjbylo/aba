@@ -293,7 +293,15 @@ vm_exists() {
 #
 setup_ssh_to_root() {
     local def_user="${1:-steve}"
+    local user_ssh_dir
+    user_ssh_dir="$(eval echo "~${def_user}")/.ssh"
+
     mkdir -p /root/.ssh
-    eval cp ~${def_user}/.ssh/config /root/.ssh/ 2>/dev/null || true
-    eval cp ~${def_user}/.ssh/id_rsa* /root/.ssh/ 2>/dev/null || true
+    if [ -f "${user_ssh_dir}/config" ]; then
+        cp "${user_ssh_dir}/config" /root/.ssh/
+    fi
+    # Copy id_rsa keypair if present
+    for f in "${user_ssh_dir}"/id_rsa*; do
+        [ -f "$f" ] && cp "$f" /root/.ssh/
+    done
 }
