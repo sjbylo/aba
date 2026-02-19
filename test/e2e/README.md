@@ -9,7 +9,7 @@ End-to-end tests that validate ABA against real VMware infrastructure and OpenSh
 | VMware vCenter | Access to ESXi/vCenter with `govc` CLI |
 | `~/.vmware.conf` | govc configuration (or set `VMWARE_CONF` in `config.env`) |
 | `~/.pull-secret.json` | Red Hat pull secret for mirror and bundle tests |
-| Template VMs | `bastion-internal-rhel9` (and optionally rhel8/rhel10) with snapshot `aba-test` |
+| Template VMs | `aba-e2e-template-rhel8` (and optionally rhel9/rhel10) with snapshot `aba-test` |
 | Network | DHCP + DNS for `*.example.com`, VLAN-capable switch for network-advanced suite |
 | SSH | Key-based access to bastion hosts |
 
@@ -59,7 +59,7 @@ Defines independent test environments for parallel execution.
 # Format:
 #   POOL_NAME  CONNECTED_HOST  INTERNAL_HOST  INTERNAL_VM_NAME  [KEY=VAL ...]
 
-pool1  con1  dis1  bastion-internal-rhel9   INT_BASTION_RHEL_VER=rhel9  POOL_NUM=1
+pool1  con1  dis1  aba-e2e-template-rhel8   INT_BASTION_RHEL_VER=rhel8  POOL_NUM=1
 ```
 
 `POOL_NUM` drives per-pool uniqueness via config.env arrays:

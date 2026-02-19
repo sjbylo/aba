@@ -26,9 +26,9 @@ fi
 
 # VM templates by RHEL version (minimal RHEL installs, never modified)
 declare -A VM_TEMPLATES=(
-    [rhel8]="bastion-internal-rhel8"
-    [rhel9]="bastion-internal-rhel9"
-    [rhel10]="bastion-internal-rhel10"
+    [rhel8]="aba-e2e-template-rhel8"
+    [rhel9]="aba-e2e-template-rhel9"
+    [rhel10]="aba-e2e-template-rhel10"
 )
 
 # --- Clone MAC Addresses ----------------------------------------------------
@@ -864,53 +864,165 @@ configure_internal_bastion() {
 # Create N VM pools by cloning from template VMs and configuring them.
 #
 # Usage: create_pools N [--rhel rhel8|rhel9|rhel10] [--connected-only]
+#                       [--start M]
 #
 # Each pool gets:
 #   - A connected bastion clone (conN) from the template
 #   - Optionally a paired disconnected bastion clone (disN) from the template
 #
-# Templates are never modified. Previous clones are destroyed and re-cloned
-# fresh every time.
+# Execution is two-phase for speed:
+#   Phase 1 (parallel):  Clone all VMs from the template snapshot.
+#           clone_vm uses govc vm.clone -snapshot, so the template is
+#           read-only and multiple clones can run concurrently.
+#   Phase 2 (parallel):  Configure all VMs concurrently. Each disN waits
+#           for its conN's firewall/dnsmasq before starting NTP, using a
+#           signal-file handshake.
+#
+# --start M  Begin numbering at M instead of 1 (e.g. --start 3 creates
+#            only pool 3 when count=1).
 #
 create_pools() {
     local count="$1"; shift
     local rhel_ver="${INT_BASTION_RHEL_VER:-rhel9}"
     local connected_only=""
+    local start_at=1
 
     while [ $# -gt 0 ]; do
         case "$1" in
             --rhel) rhel_ver="$2"; shift 2 ;;
             --connected-only) connected_only=1; shift ;;
+            --start) start_at="$2"; shift 2 ;;
             *) echo "create_pools: unknown flag: $1" >&2; return 1 ;;
         esac
     done
 
     local vm_template="${VM_TEMPLATES[$rhel_ver]:-bastion-internal-$rhel_ver}"
+    local end_at=$(( start_at + count - 1 ))
+    local signal_dir
+    signal_dir=$(mktemp -d /tmp/e2e-pool-signals.XXXXXX)
 
-    echo "=== Creating $count pool(s) by cloning template $vm_template ==="
+    echo "=== Creating pool(s) ${start_at}..${end_at} from template $vm_template ==="
+    echo "  Signal dir: $signal_dir"
 
+    # --- Phase 1: Clone all VMs in parallel from snapshot --------------------
+    echo ""
+    echo "--- Phase 1: Cloning VMs (parallel) ---"
+
+    local -a clone_pids=()
+    local -a clone_labels=()
     local i
-    for (( i=1; i<=count; i++ )); do
-        echo ""
-        echo "--- Pool $i ---"
 
-        # Clone connected bastion: template -> conN
-        local conn_vm="con${i}"
-        echo "  Cloning connected bastion: $vm_template -> $conn_vm"
-        clone_vm "$vm_template" "$conn_vm"
-        configure_connected_bastion "$conn_vm" "$VM_DEFAULT_USER" "$conn_vm"
+    for (( i=start_at; i<=end_at; i++ )); do
+        clone_vm "$vm_template" "con${i}" &
+        clone_pids+=($!)
+        clone_labels+=("clone con${i}")
 
-        # Clone disconnected bastion: template -> disN (if not --connected-only)
         if [ -z "$connected_only" ]; then
-            local int_vm="dis${i}"
-            echo "  Cloning disconnected bastion: $vm_template -> $int_vm"
-            clone_vm "$vm_template" "$int_vm"
-            configure_internal_bastion "$int_vm"
+            clone_vm "$vm_template" "dis${i}" &
+            clone_pids+=($!)
+            clone_labels+=("clone dis${i}")
         fi
     done
 
+    local clone_failed=0
+    for idx in "${!clone_pids[@]}"; do
+        if wait "${clone_pids[$idx]}"; then
+            echo "  OK: ${clone_labels[$idx]}"
+        else
+            echo "  FAILED: ${clone_labels[$idx]} (exit=$?)" >&2
+            clone_failed=$(( clone_failed + 1 ))
+        fi
+    done
+
+    if [ $clone_failed -gt 0 ]; then
+        echo "--- Phase 1 FAILED: $clone_failed clone(s) failed ---"
+        rm -rf "$signal_dir"
+        return 1
+    fi
+    echo "--- Phase 1 complete: all clones booting ---"
+
+    # --- Phase 2: Configure all VMs in parallel -----------------------------
     echo ""
-    echo "=== $count pool(s) created ==="
+    echo "--- Phase 2: Configuring VMs (parallel) ---"
+
+    local -a pids=()
+    local -a labels=()
+
+    for (( i=start_at; i<=end_at; i++ )); do
+        local conn_vm="con${i}"
+        local user="${VM_DEFAULT_USER}"
+
+        # Connected bastion: configure, then signal dis that firewall is ready
+        (
+            configure_connected_bastion "$conn_vm" "$user" "$conn_vm"
+            touch "${signal_dir}/${conn_vm}.ready"
+        ) &
+        pids+=($!)
+        labels+=("configure $conn_vm")
+
+        # Disconnected bastion: wait for con's firewall, then configure
+        if [ -z "$connected_only" ]; then
+            local int_vm="dis${i}"
+            (
+                # dis can do SSH + network while waiting for con's firewall
+                _vm_wait_ssh "$int_vm" "$user"
+                _vm_setup_ssh_keys "$int_vm" "$user"
+                _vm_setup_network "$int_vm" "$user" "$int_vm"
+                _vm_setup_firewall "$int_vm" "$user"
+
+                # Wait for con's masquerade+dnsmasq before NTP and updates
+                echo "  [$int_vm] Waiting for $conn_vm firewall+dnsmasq ..."
+                local waited=0
+                while [ ! -f "${signal_dir}/${conn_vm}.ready" ]; do
+                    sleep 5
+                    waited=$(( waited + 5 ))
+                    if [ $waited -ge 600 ]; then
+                        echo "  [$int_vm] ERROR: Timed out waiting for $conn_vm (${waited}s)" >&2
+                        return 1
+                    fi
+                done
+                echo "  [$int_vm] $conn_vm is ready (waited ${waited}s), continuing ..."
+
+                _vm_setup_time "$int_vm" "$user"
+                _vm_dnf_update "$int_vm" "$user"
+                _vm_wait_ssh "$int_vm" "$user"
+                _vm_cleanup_caches "$int_vm" "$user"
+                _vm_cleanup_podman "$int_vm" "$user"
+                _vm_cleanup_home "$int_vm" "$user"
+                _vm_setup_vmware_conf "$int_vm" "$user"
+                _vm_remove_rpms "$int_vm" "$user"
+                _vm_remove_pull_secret "$int_vm" "$user"
+                _vm_remove_proxy "$int_vm" "$user"
+                _vm_create_test_user "$int_vm" "$user"
+                _vm_set_aba_testing "$int_vm" "$user"
+                _vm_disconnect_internet "$int_vm" "$user"
+                echo "=== Internal bastion ready: $int_vm ==="
+            ) &
+            pids+=($!)
+            labels+=("configure $int_vm")
+        fi
+    done
+
+    # Wait for all background jobs and report results
+    echo "  Waiting for ${#pids[@]} configuration jobs ..."
+    local failed=0
+    for idx in "${!pids[@]}"; do
+        if wait "${pids[$idx]}"; then
+            echo "  OK: ${labels[$idx]}"
+        else
+            echo "  FAILED: ${labels[$idx]} (exit=$?)" >&2
+            failed=$(( failed + 1 ))
+        fi
+    done
+
+    rm -rf "$signal_dir"
+
+    echo ""
+    if [ $failed -gt 0 ]; then
+        echo "=== $failed configuration(s) FAILED ==="
+        return 1
+    fi
+    echo "=== Pool(s) ${start_at}..${end_at} created ==="
 }
 
 # --- destroy_pools ----------------------------------------------------------

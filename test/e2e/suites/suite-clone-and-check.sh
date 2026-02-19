@@ -33,7 +33,7 @@ source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-TEMPLATE="${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel8}]:-bastion-internal-rhel8}"
+TEMPLATE="${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel8}]:-aba-e2e-template-rhel8}"
 POOL_NUM="${POOL_NUM:-1}"
 CON_NAME="con${POOL_NUM}"
 DIS_NAME="dis${POOL_NUM}"
