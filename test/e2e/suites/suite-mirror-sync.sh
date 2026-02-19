@@ -228,11 +228,11 @@ e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"
 e2e_run "Verify agent configs" "ls -l $STANDARD/install-config.yaml $STANDARD/agent-config.yaml"
 e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso"
 e2e_run "First aba install (generates configs, stops for MAC review)" \
-    "aba --dir $STANDARD install"
+    "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep -q 'Check & edit' /tmp/bm-phase1.out"
 e2e_run "Verify .bm-message exists" "test -f $STANDARD/.bm-message"
 e2e_run "Verify ISO not yet created (still)" "! ls $STANDARD/iso-agent-based/agent.*.iso"
 e2e_run "Second aba install (creates ISO, stops for server boot)" \
-    "aba --dir $STANDARD install"
+    "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase2.out && grep -q 'Boot your servers' /tmp/bm-phase2.out"
 e2e_run "Verify .bm-nextstep exists" "test -f $STANDARD/.bm-nextstep"
 e2e_run "Verify ISO created" "ls -l $STANDARD/iso-agent-based/agent.*.iso"
 
