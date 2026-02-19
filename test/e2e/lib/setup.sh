@@ -57,7 +57,7 @@ setup_aba_from_scratch() {
 
     # Remove oc-mirror caches
     e2e_run "Remove oc-mirror caches" \
-        "find ~/ -type d -name .oc-mirror | xargs rm -rfv"
+        "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
 
     echo "=== setup_aba_from_scratch complete ==="
 }
@@ -224,7 +224,7 @@ cleanup_all() {
 
     # Remove caches
     e2e_run "Remove oc-mirror caches" \
-        "find ~/ -type d -name .oc-mirror | xargs rm -rfv"
+        "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
 
     echo "=== cleanup_all complete ==="
 }
