@@ -3,9 +3,9 @@
 # Suite: Network Advanced (VLAN + bonding matrix)
 # =============================================================================
 # Purpose: VLAN and bonding network configuration tests for all cluster types.
-#          Replicates the old test2 VLAN/bonding matrix using the E2E framework.
+#          Uses the pre-populated Quay registry on conN (no save/load needed).
 #
-# Test matrix (matching old test2-airgapped-existing-reg.sh):
+# Test matrix:
 #   for vlan in 10 ""; do
 #     for ctype in sno compact standard; do
 #       1. Single port (ports=ens160, vlan=$vlan) -- ISO, boot, verify ens160 UP
@@ -28,21 +28,22 @@ source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
-# L commands run on conN (this host). R commands SSH to disN.
 
+CON_HOST="con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
 DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
+POOL_REG_DIR="$HOME/.e2e-pool-registry"
 
 # --- Suite ------------------------------------------------------------------
 
 e2e_setup
 
 plan_tests \
+    "Setup: ensure pre-populated registry" \
     "Setup: install aba and configure" \
-    "Setup: reset internal bastion" \
-    "Setup: save and load images" \
-    "VLAN: verify interface on bastion" \
+    "Setup: configure mirror for local registry" \
+    "VLAN: verify interface" \
     "VLAN SNO: single port" \
     "VLAN SNO: bonding + balance-xor" \
     "VLAN compact: single port" \
@@ -56,15 +57,32 @@ plan_tests \
 
 suite_begin "network-advanced"
 
-# Pre-flight: abort immediately if the internal bastion (disN) is unreachable
-preflight_ssh
+# ============================================================================
+# 1. Ensure pre-populated registry on conN
+# ============================================================================
+test_begin "Setup: ensure pre-populated registry"
+
+e2e_run "Install aba (needed for version resolution)" "./install"
+e2e_run "Configure aba.conf (temporary, for version resolution)" \
+    "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+
+_ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
+_ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
+
+e2e_run "Ensure pre-populated registry (OCP ${_ocp_channel} ${_ocp_version})" \
+    "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
+
+test_end
 
 # ============================================================================
-# 1. Setup
+# 2. Setup: install aba and configure
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-setup_aba_from_scratch
+e2e_run "Remove RPMs for clean install test" \
+    "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
+e2e_run "Remove oc-mirror caches" \
+    "find ~/ -type d -name .oc-mirror | xargs rm -rfv"
 
 e2e_run "Install aba" "./install"
 
@@ -79,49 +97,55 @@ e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
+test_end
+
+# ============================================================================
+# 3. Configure mirror to use local pre-populated registry
+# ============================================================================
+test_begin "Setup: configure mirror for local registry"
+
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-e2e_run "Set mirror host" \
-    "sed -i 's/registry.example.com/${DIS_HOST} /g' ./mirror/mirror.conf"
 
-test_end
+e2e_run "Set reg_host to local registry" \
+    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
+e2e_run "Clear reg_ssh_key (local registry)" \
+    "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
+e2e_run "Clear reg_ssh_user (local registry)" \
+    "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
 
-# ============================================================================
-# 2. Reset internal bastion (reuse clone-and-check's disN)
-# ============================================================================
-test_begin "Setup: reset internal bastion"
+e2e_run "Create regcreds directory" "mkdir -p mirror/regcreds"
+e2e_run "Copy Quay root CA to regcreds" \
+    "cp -v ~/quay-install/quay-rootCA/rootCA.pem mirror/regcreds/"
 
-reset_internal_bastion
+e2e_run "Generate mirror pull secret" \
+    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > mirror/regcreds/pull-secret-mirror.json <<EOPS
+{
+  \"auths\": {
+    \"${CON_HOST}:8443\": {
+      \"auth\": \"\$enc_pw\"
+    }
+  }
+}
+EOPS"
 
-test_end
+e2e_run "Verify mirror registry access" "aba -d mirror verify"
 
-# ============================================================================
-# 3. Save, transfer, and load images
-# ============================================================================
-test_begin "Setup: save and load images"
+e2e_run "Link oc-mirror working-dir" \
+    "mkdir -p mirror/sync && ln -sfn ${POOL_REG_DIR}/sync/working-dir mirror/sync/working-dir"
 
-e2e_run -r 3 2 "Save images" "aba -d mirror save --retry"
-e2e_run -r 3 2 "Transfer to bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'mkdir -p ~/aba && cd ~/aba && tar xf -'"
-e2e_run_remote "Install aba on bastion" \
-    "cd ~/aba && ./install"
-e2e_run_remote "Install registry" \
-    "cd ~/aba && aba -d mirror install"
-e2e_run_remote -r 3 2 "Load images" \
-    "cd ~/aba && aba -d mirror load --retry"
+e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
 test_end
 
 # ============================================================================
 # 4. VLAN: verify interface on bastion
 # ============================================================================
-test_begin "VLAN: verify interface on bastion"
+test_begin "VLAN: verify interface"
 
-e2e_run_remote "Verify VLAN interface ens224.10 exists" \
+e2e_run_remote "Verify VLAN interface ens224.10 exists on disN" \
     "ip addr show ens224.10"
-e2e_run_remote "Verify VLAN IP $(pool_vlan_gateway)" \
+e2e_run_remote "Verify VLAN IP $(pool_vlan_gateway) on disN" \
     "ip addr show ens224.10 | grep '$(pool_vlan_gateway)'"
-e2e_run_remote "Check VLAN connection details" \
-    "nmcli -f GENERAL,IP4 connection show ens224.10"
 
 test_end
 
@@ -153,11 +177,7 @@ _net_test() {
         govc_network="PRIVATE-DPG"
         machine_network="$(pool_vlan_network)"
         next_hop="$(pool_vlan_gateway)"
-        case "$ctype" in
-            sno)      start_ip="$(pool_vlan_node_ip)" ;;
-            compact)  start_ip="$(pool_vlan_node_ip)" ;;
-            standard) start_ip="$(pool_vlan_node_ip)" ;;
-        esac
+        start_ip="$(pool_vlan_node_ip)"
     else
         govc_network="VMNET-DPG"
         machine_network="$(pool_machine_network)"
@@ -167,73 +187,57 @@ _net_test() {
 
     test_begin "$label"
 
-    # Switch GOVC_NETWORK on disN
-    e2e_run_remote "Set GOVC_NETWORK=$govc_network" \
-        "cd ~/aba && sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=$govc_network /g' vmware.conf"
+    e2e_run "Set GOVC_NETWORK=$govc_network" \
+        "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=$govc_network /g' vmware.conf"
 
-    # Clean previous cluster dir
-    e2e_run_remote "Clean $cname dir" "cd ~/aba && rm -rfv $cname"
+    e2e_run "Clean $cname dir" "rm -rfv $cname"
 
-    # Generate cluster.conf
-    e2e_run_remote "Generate cluster.conf for $cname" \
-        "cd ~/aba && aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
+    e2e_run "Generate cluster.conf for $cname" \
+        "aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
 
-    # Set machine_network and next_hop_address
-    e2e_run_remote "Set machine_network=$machine_network" \
-        "cd ~/aba && sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $cname/cluster.conf"
-    e2e_run_remote "Set next_hop_address=$next_hop" \
-        "cd ~/aba && sed -i \"s/^.*next_hop_address=.*/next_hop_address=$next_hop /g\" $cname/cluster.conf"
+    e2e_run "Set machine_network=$machine_network" \
+        "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $cname/cluster.conf"
+    e2e_run "Set next_hop_address=$next_hop" \
+        "sed -i \"s/^.*next_hop_address=.*/next_hop_address=$next_hop /g\" $cname/cluster.conf"
 
-    # Set ports
-    e2e_run_remote "Set ports=$ports" \
-        "cd ~/aba && sed -i 's/^.*ports=.*/ports=$ports /g' $cname/cluster.conf"
+    e2e_run "Set ports=$ports" \
+        "sed -i 's/^.*ports=.*/ports=$ports /g' $cname/cluster.conf"
 
-    # Set vlan (empty string clears it)
-    e2e_run_remote "Set vlan=$vlan" \
-        "cd ~/aba && sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $cname/cluster.conf"
+    e2e_run "Set vlan=$vlan" \
+        "sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $cname/cluster.conf"
 
-    # Show config for debugging
-    e2e_diag_remote "Show cluster.conf" \
-        "cd ~/aba && grep -e ^vlan= -e ^ports= -e ^port1= $cname/cluster.conf | awk '{print \$1}'"
+    e2e_diag "Show cluster.conf" \
+        "grep -e ^vlan= -e ^ports= -e ^port1= $cname/cluster.conf | awk '{print \$1}'"
 
-    # For bonding with balance-xor: generate agent-config.yaml first, then edit mode
     if [ "$balance_xor" = "yes" ]; then
-        e2e_run_remote "Generate agent-config.yaml" \
-            "cd ~/aba && aba --dir $cname agent-config.yaml"
-        e2e_run_remote "Set bonding mode to balance-xor" \
-            "cd ~/aba && sed -i 's/mode: active-backup/mode: balance-xor/g' $cname/agent-config.yaml"
+        e2e_run "Generate agent-config.yaml" \
+            "aba --dir $cname agent-config.yaml"
+        e2e_run "Set bonding mode to balance-xor" \
+            "sed -i 's/mode: active-backup/mode: balance-xor/g' $cname/agent-config.yaml"
     fi
 
-    # Create ISO, upload, boot
-    e2e_run_remote "Create ISO for $cname" "cd ~/aba && aba --dir $cname iso"
-    e2e_run_remote "Upload ISO for $cname" "cd ~/aba && aba --dir $cname upload"
-    e2e_run_remote "Boot VMs for $cname" "cd ~/aba && aba --dir $cname refresh"
+    e2e_run "Create ISO for $cname" "aba --dir $cname iso"
+    e2e_run "Upload ISO for $cname" "aba --dir $cname upload"
+    e2e_run "Boot VMs for $cname" "aba --dir $cname refresh"
 
-    # Wait for node SSH
-    e2e_run_remote -r 1 1 "Wait for node0 SSH ($cname)" \
-        "cd ~/aba && timeout 8m bash -c 'until aba --dir $cname ssh --cmd hostname; do sleep 10; done'"
+    e2e_run -r 1 1 "Wait for node0 SSH ($cname)" \
+        "timeout 8m bash -c 'until aba --dir $cname ssh --cmd hostname; do sleep 10; done'"
 
-    # For bonding, wait for bond to settle
     if echo "$if_check" | grep -q bond0; then
         e2e_run -q "Wait for bond0 to settle" "sleep 30"
     fi
 
-    # Show ip a for debugging
-    e2e_diag_remote "Show ip a on $cname node" \
-        "cd ~/aba && aba --dir $cname ssh --cmd 'ip a'"
+    e2e_diag "Show ip a on $cname node" \
+        "aba --dir $cname ssh --cmd 'ip a'"
 
-    # Verify expected interface is UP
-    e2e_run_remote "Verify $if_check on $cname" \
-        "cd ~/aba && timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"ip a\" | grep \"$if_check\"; do sleep 10; done'"
+    e2e_run "Verify $if_check on $cname" \
+        "timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"ip a\" | grep \"$if_check\"; do sleep 10; done'"
 
-    # Verify NTP
-    e2e_run_remote "Verify NTP on $cname" \
-        "cd ~/aba && timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
+    e2e_run "Verify NTP on $cname" \
+        "timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
 
-    # Cleanup: delete VMs, clean dir
-    e2e_run_remote "Delete $cname VMs" \
-        "cd ~/aba && aba --dir $cname delete"
-    e2e_run_remote "Clean $cname dir" "cd ~/aba && aba -d $cname clean"
+    e2e_run "Delete $cname VMs" "aba --dir $cname delete"
+    e2e_run "Clean $cname dir" "aba -d $cname clean"
 
     test_end
 }
@@ -296,8 +300,7 @@ _net_test "Non-VLAN standard: bonding + balance-xor" \
 # ============================================================================
 test_begin "Cleanup"
 
-e2e_run_remote "Uninstall registry" \
-    "cd ~/aba && aba -d mirror uninstall"
+e2e_diag "Show remaining cluster dirs" "ls -d sno* compact* standard* 2>/dev/null || echo 'none'"
 
 test_end
 

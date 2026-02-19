@@ -1025,6 +1025,22 @@ documented at the top of `test/e2e/lib/framework.sh`.
 10. **Prefer `aba` commands over raw `make` / scripts.**
     Eat your own dog food.  Use the product's CLI for setup and teardown.
 
+### E2E Log Monitoring and Fix Scope
+
+**During test runs, continuously monitor ALL logs** from the current E2E run and
+investigate any failures.
+
+**Fix scope rules:**
+- ✅ **Fix test code freely** — test suites, helpers, framework, config
+- ❌ **Do NOT change ABA core code** (scripts/, Makefiles, tui/) unless a major
+  product bug is found
+- ⚠️ If ABA core needs changing, **describe what and why**, then **wait for
+  explicit user permission** before making any edits
+
+**Why:** E2E failures almost always stem from test assumptions (wrong IPs,
+hardcoded values, missing setup) rather than product bugs. Fixing the test
+preserves the integrity of the product code and avoids unintended regressions.
+
 ### Three Levels of Tests
 
 #### E2E Tests in `test/e2e/` (Full Infrastructure)
