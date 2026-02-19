@@ -101,18 +101,19 @@ _vm_setup_ssh_keys() {
 
     echo "  [vm] Setting up SSH keys on $host ..."
 
-    # Copy SSH config to root on the remote host
-    if [ "$user" != "root" ]; then
-        scp -o StrictHostKeyChecking=no ~/.ssh/config "root@${host}:.ssh/config" 2>/dev/null || true
-    fi
-
-    # Add public key to root's authorized_keys
+    # Add public key to root's authorized_keys (via sudo from $user)
     cat <<-SSHEOF | ssh "${user}@${host}" -- sudo bash
 		set -ex
 		mkdir -p /root/.ssh
+		chmod 700 /root/.ssh
 		echo "$pub_key" > /root/.ssh/authorized_keys
 		chmod 600 /root/.ssh/authorized_keys
 	SSHEOF
+
+    # Now that root has key access, copy SSH config
+    if [ "$user" != "root" ] && [ -f ~/.ssh/config ]; then
+        scp -o StrictHostKeyChecking=no ~/.ssh/config "root@${host}:.ssh/config"
+    fi
 }
 
 # --- _vm_setup_time ---------------------------------------------------------
@@ -128,11 +129,11 @@ _vm_setup_time() {
 
     cat <<-TIMEEOF | ssh "${user}@${host}" -- sudo bash
 		set -ex
-		dnf install chrony -y 2>/dev/null || true
+		dnf install chrony -y
 		systemctl start chronyd
 		sleep 1
 		chronyc sources -v
-		chronyc add server $ntp_server iburst || true
+		chronyc add server $ntp_server iburst
 		timedatectl set-timezone $timezone
 		chronyc -a makestep
 		sleep 3
@@ -213,8 +214,10 @@ _vm_setup_network_connected() {
 
 		# --- Rename default nmcli connections to match interface names ---
 		nmcli connection show
-		nmcli connection modify "Wired connection 1" connection.id ens224 2>/dev/null || true
-		nmcli connection modify "Wired connection 2" connection.id ens256 2>/dev/null || true
+		nmcli -g NAME connection show | grep -q "^Wired connection 1$" && \
+		    nmcli connection modify "Wired connection 1" connection.id ens224
+		nmcli -g NAME connection show | grep -q "^Wired connection 2$" && \
+		    nmcli connection modify "Wired connection 2" connection.id ens256
 
 		# --- ens192: lab network (NOT default route) ---
 		nmcli connection modify ens192 \
@@ -241,7 +244,8 @@ _vm_setup_network_connected() {
 		nmcli connection up ens224
 
 		# --- ens224.10: VLAN to disconnected bastion ---
-		nmcli connection delete ens224.10 2>/dev/null || true
+		nmcli -g NAME connection show | grep -q "^ens224\.10$" && \
+		    nmcli connection delete ens224.10
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
 		    id 10 ipv4.method manual ipv4.addresses $vlan_ip ipv4.never-default yes
 
@@ -280,15 +284,17 @@ _vm_setup_network_disconnected() {
 
 		# --- Rename default nmcli connections to match interface names ---
 		nmcli connection show
-		nmcli connection modify "Wired connection 1" connection.id ens224 2>/dev/null || true
-		nmcli connection modify "Wired connection 2" connection.id ens256 2>/dev/null || true
+		nmcli -g NAME connection show | grep -q "^Wired connection 1$" && \
+		    nmcli connection modify "Wired connection 1" connection.id ens224
+		nmcli -g NAME connection show | grep -q "^Wired connection 2$" && \
+		    nmcli connection modify "Wired connection 2" connection.id ens256
 
 		# --- ens256: DISABLE (disconnected host has no direct internet) ---
 		nmcli connection modify ens256 \
 		    autoconnect no \
 		    ipv4.method disabled \
 		    ipv6.method disabled
-		nmcli connection down ens256 2>/dev/null || true
+		nmcli connection down ens256 || echo "ens256 already down"
 		ip link set ens256 down
 
 		# --- ens192: lab network (NOT the default route) ---
@@ -308,7 +314,8 @@ _vm_setup_network_disconnected() {
 
 		# --- ens224.10: VLAN to connected bastion ---
 		# Gateway = con#'s VLAN IP -> all internet traffic goes via masquerade
-		nmcli connection delete ens224.10 2>/dev/null || true
+		nmcli -g NAME connection show | grep -q "^ens224\.10$" && \
+		    nmcli connection delete ens224.10
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
 		    id 10 ipv4.method manual ipv4.addresses $vlan_ip \
 		    ipv4.gateway $gateway_ip
@@ -338,9 +345,11 @@ _vm_setup_firewall() {
 
     cat <<-FWEOF | ssh "${user}@${host}" -- sudo bash
 		set -ex
-		# Remove legacy iptables-services
-		systemctl disable --now iptables 2>/dev/null || true
-		dnf remove -y iptables-services 2>/dev/null || true
+		# Remove legacy iptables-services (may not be installed)
+		rpm -q iptables-services && {
+		    systemctl disable --now iptables
+		    dnf remove -y iptables-services
+		} || echo "iptables-services not installed -- skipping"
 
 		# Enable firewalld
 		systemctl enable --now firewalld
@@ -435,7 +444,9 @@ ${dnsmasq_conf}
 CONFEOF
 
 		# Disable systemd-resolved if it's running (conflicts with port 53)
-		systemctl disable --now systemd-resolved 2>/dev/null || true
+		if systemctl is-active --quiet systemd-resolved; then
+		    systemctl disable --now systemd-resolved
+		fi
 
 		# Ensure /etc/resolv.conf points to localhost so the bastion itself
 		# uses its own dnsmasq (and through it, the upstream).
@@ -498,7 +509,9 @@ _vm_cleanup_caches() {
 		rm -rfv \$HOME/.oc-mirror/.cache
 		rm -rfv \$HOME/*/.oc-mirror/.cache
 		# Ensure test VMs are located together
-		[ -s ~/.vmware.conf ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g" ~/.vmware.conf || true
+		if [ -s ~/.vmware.conf ]; then
+		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g" ~/.vmware.conf
+		fi
 	CACHEEOF
 }
 
@@ -512,9 +525,10 @@ _vm_cleanup_podman() {
     echo "  [vm] Cleaning podman on $host ..."
 
     ssh "${user}@${host}" -- bash -c "
-        which podman 2>/dev/null || sudo dnf install podman -y
+        set -e
+        command -v podman || sudo dnf install podman -y
         podman system prune --all --force
-        podman rmi --all 2>/dev/null || true
+        podman rmi --all --force
         sudo rm -rfv ~/.local/share/containers/storage
         rm -rfv ~/test
     "
@@ -541,7 +555,7 @@ _vm_setup_vmware_conf() {
 
     echo "  [vm] Copying vmware.conf to $host ..."
     if [ -f "$vf" ]; then
-        scp "$vf" "${user}@${host}:" 2>/dev/null || true
+        scp "$vf" "${user}@${host}:"
     fi
 }
 
@@ -554,7 +568,7 @@ _vm_remove_rpms() {
 
     echo "  [vm] Removing RPMs (git, make, jq, etc.) on $host ..."
     ssh "${user}@${host}" -- \
-        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y 2>/dev/null || true"
+        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
 }
 
 # --- _vm_remove_pull_secret -------------------------------------------------
@@ -577,7 +591,7 @@ _vm_remove_proxy() {
 
     echo "  [vm] Disabling proxy on $host ..."
     ssh "${user}@${host}" -- \
-        "sed -i 's|^source ~/.proxy-set.sh|# aba-test # source ~/.proxy-set.sh|g' ~/.bashrc 2>/dev/null || true"
+        "if [ -f ~/.bashrc ]; then sed -i 's|^source ~/.proxy-set.sh|# aba-test # source ~/.proxy-set.sh|g' ~/.bashrc; fi"
 }
 
 # --- _vm_create_test_user ---------------------------------------------------
@@ -602,7 +616,7 @@ _vm_create_test_user() {
 
     cat <<-USEREOF | ssh "${def_user}@${host}" -- sudo bash
 		set -ex
-		userdel $test_user_name -r -f 2>/dev/null || true
+		id $test_user_name && userdel $test_user_name -r -f || true
 		useradd $test_user_name -p not-used
 		mkdir -p ~${test_user_name}/.ssh
 		chmod 700 ~${test_user_name}/.ssh
@@ -618,33 +632,30 @@ _vm_create_test_user() {
 }
 
 # --- _vm_set_aba_testing ----------------------------------------------------
-# Add 'ABA_TESTING=1' to /etc/environment (system-wide, all users) and also
-# to ~/.bashrc for root, the default user (steve), and the test user (testy).
-# Belt-and-suspenders: /etc/environment covers PAM logins; .bashrc covers
-# interactive shells that may not read /etc/environment.
+# Add 'export ABA_TESTING=1' to ~/.bashrc for root, the default user (steve),
+# and the test user (testy). This disables usage tracking during E2E runs.
 #
 _vm_set_aba_testing() {
     local host="$1"
     local def_user="${2:-$VM_DEFAULT_USER}"
 
-    echo "  [vm] Setting ABA_TESTING=1 on $host (/etc/environment + .bashrc for root, $def_user, testy) ..."
+    echo "  [vm] Setting ABA_TESTING=1 on $host (root, $def_user, testy) ..."
 
     cat <<-'TESTEOF' | ssh "${def_user}@${host}" -- sudo bash
 		set -e
-		# System-wide via /etc/environment (read by PAM for all users)
-		sed -i '/^ABA_TESTING=/d' /etc/environment
-		echo 'ABA_TESTING=1' >> /etc/environment
-
-		# Per-user via .bashrc (belt-and-suspenders)
 		for home_dir in /root "/home/$SUDO_USER" /home/testy; do
 		    [ -d "$home_dir" ] || continue
 		    rc="$home_dir/.bashrc"
+		    # Ensure .bashrc exists
 		    touch "$rc"
+		    # Remove any existing ABA_TESTING lines to avoid duplicates
 		    sed -i '/^export ABA_TESTING=/d' "$rc"
+		    # Append the export
 		    echo 'export ABA_TESTING=1' >> "$rc"
+		    # Fix ownership (testy's home must be owned by testy, etc.)
 		    user_name=$(basename "$home_dir")
 		    [ "$home_dir" = "/root" ] && user_name=root
-		    chown "$user_name":"$user_name" "$rc" 2>/dev/null || true
+		    chown "$user_name":"$user_name" "$rc"
 		done
 	TESTEOF
 }
@@ -660,7 +671,7 @@ _vm_install_aba() {
     echo "  [vm] Installing aba on ${user}@${host} ..."
 
     # Ensure rsync is available on the remote host
-    ssh "${user}@${host}" -- "which rsync 2>/dev/null || sudo dnf install -y rsync"
+    ssh "${user}@${host}" -- "command -v rsync || sudo dnf install -y rsync"
 
     rsync -az --no-perms --exclude='.git' --exclude='cli/*.tar.gz' \
         "$aba_root/" "${user}@${host}:~/aba/"
@@ -722,14 +733,14 @@ configure_connected_bastion() {
 # network hardening, firewall/NAT, RPM removal, proxy removal, etc.
 # This is the modular equivalent of the old init_bastion() in test/include.sh.
 #
-# Usage: configure_internal_bastion HOST [USER] [DIS_SSH_USER] [CLONE_NAME]
+# Usage: configure_internal_bastion HOST [USER] [TEST_USER] [CLONE_NAME]
 #   CLONE_NAME is used to look up the VLAN IP from VM_CLONE_VLAN_IPS.
 #   If omitted, defaults to HOST (works when hostname = clone name).
 #
 configure_internal_bastion() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
-    local test_user="${3:-${DIS_SSH_USER:-$VM_DEFAULT_USER}}"
+    local test_user="${3:-${TEST_USER:-$VM_DEFAULT_USER}}"
     local clone_name="${4:-$host}"
 
     echo "=== Configuring internal bastion: $host (clone: $clone_name) ==="
@@ -848,8 +859,8 @@ destroy_pools() {
         # Destroy conN and disN clones (try 1..10)
         local i
         for (( i=1; i<=10; i++ )); do
-            destroy_vm "con${i}" 2>/dev/null
-            destroy_vm "dis${i}" 2>/dev/null
+            destroy_vm "con${i}"
+            destroy_vm "dis${i}"
         done
     else
         for pool in "${pools[@]}"; do
