@@ -413,9 +413,13 @@ _vm_setup_dnsmasq() {
     local dis_lab_ip
     dis_lab_ip="$(pool_dis_ip "$pool_num")"
 
+    # VLAN node IP for network-advanced VLAN clusters
+    local vlan_node_ip
+    vlan_node_ip="${POOL_VLAN_NODE_IP[$pool_num]:-10.10.20.$((200 + pool_num))}"
+
     echo "  [vm] Setting up dnsmasq on $host for pool $pool_num ($domain) ..."
     echo "  [vm]   node=$node_ip  api_vip=$api_vip  apps_vip=$apps_vip  upstream=$upstream"
-    echo "  [vm]   registry -> $dis_lab_ip (dis${pool_num} lab IP)"
+    echo "  [vm]   vlan_node=$vlan_node_ip  registry -> $dis_lab_ip (dis${pool_num} lab IP)"
 
     # Build the dnsmasq config
     local dnsmasq_conf
@@ -446,6 +450,14 @@ address=/.apps.$(pool_cluster_name compact ${pool_num}).${domain}/${apps_vip}
 # --- Standard: api -> API VIP, apps -> APPS VIP ---
 address=/api.$(pool_cluster_name standard ${pool_num}).${domain}/${api_vip}
 address=/.apps.$(pool_cluster_name standard ${pool_num}).${domain}/${apps_vip}
+
+# --- VLAN clusters (network-advanced suite): all types -> VLAN node IP ---
+address=/api.$(pool_cluster_name sno-vlan ${pool_num}).${domain}/${vlan_node_ip}
+address=/.apps.$(pool_cluster_name sno-vlan ${pool_num}).${domain}/${vlan_node_ip}
+address=/api.$(pool_cluster_name compact-vlan ${pool_num}).${domain}/${vlan_node_ip}
+address=/.apps.$(pool_cluster_name compact-vlan ${pool_num}).${domain}/${vlan_node_ip}
+address=/api.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_node_ip}
+address=/.apps.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_node_ip}
 DNSEOF
 
     cat <<-SETUPEOF | ssh "${user}@${host}" -- sudo bash
