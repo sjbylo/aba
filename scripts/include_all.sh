@@ -296,7 +296,7 @@ normalize-aba-conf() {
 		sed	-e "s/^/export /g";
 
 			#-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	[ "$ASK_OVERRIDE" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
+	[ "${ASK_OVERRIDE:-}" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
 	# "true" needed, otherwise this function returns non-zero (error)
 }
 
@@ -660,13 +660,13 @@ install_rpms() {
 }
 
 ask() {
-	aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
+	aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=${ASK_OVERRIDE:-}
 	local ret_default=
 
 	if [ ! "$ASK_ALWAYS" ]; then  # FIXME: Simplify all this!
-		[ "$ASK_OVERRIDE" ] && ret_default="-y" #return 0  # reply "default reply"
+		[ "${ASK_OVERRIDE:-}" ] && ret_default="-y" #return 0  # reply "default reply"
 		source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
-		aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE
+		aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=${ASK_OVERRIDE:-}
 		[ ! "$ret_default" ] && [ ! "$ask" ] && ret_default="aba.conf:ask=false" #return 0  # reply "default reply"
 	fi
 
