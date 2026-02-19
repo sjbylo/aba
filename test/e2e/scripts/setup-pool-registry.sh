@@ -178,11 +178,19 @@ echo "  Imageset config written to $SYNC_DIR/imageset-config.yaml"
 
 # --- Step 4: Run oc-mirror sync ---------------------------------------------
 
-# Skip if already synced for this version
+# Skip if already synced for this version AND the images are still there.
+# Quay reinstall wipes images but the done-marker file persists on disk.
 DONE_MARKER="$SYNC_DIR/.synced-${version}"
 if [[ -f "$DONE_MARKER" ]]; then
-    echo "[4/4] Already synced for ${version} -- skipping"
-else
+    if skopeo inspect "docker://${reg_host}:${REG_PORT}${REG_PATH}/openshift/release-images:${version}-$(uname -m)" &>/dev/null; then
+        echo "[4/4] Already synced for ${version} (verified) -- skipping"
+    else
+        echo "[4/4] Done-marker exists but release image not found -- re-syncing"
+        rm -f "$DONE_MARKER"
+    fi
+fi
+
+if [[ ! -f "$DONE_MARKER" ]]; then
     echo "[4/4] Syncing images to ${reg_host}:${REG_PORT} (this may take 30+ minutes) ..."
 
     [[ -x "$HOME/bin/oc-mirror" ]] && export PATH="$HOME/bin:$PATH"
