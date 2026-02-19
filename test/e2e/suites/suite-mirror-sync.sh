@@ -164,11 +164,10 @@ test_end
 test_begin "SNO: bootstrap after save/load"
 
 e2e_run "Clean sno directory" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
-# Small CIDR that still contains pool SNO IP so DNS resolves; validates CIDR and that ISO can be created
 e2e_run "Test small CIDR (cluster.conf)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '${POOL_SUBNET:-10.0.2}.8/29' --step cluster.conf"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step cluster.conf"
 e2e_run "Test small CIDR (ISO creation)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '${POOL_SUBNET:-10.0.2}.8/29' --step iso"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step iso"
 e2e_run "Clean and recreate with normal CIDR" "rm -rfv $SNO"
 e2e_run "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
