@@ -328,13 +328,29 @@ _vm_setup_network_disconnected() {
 		    id 10 ipv4.method manual ipv4.addresses $vlan_ip \
 		    ipv4.gateway $gateway_ip
 
+		# --- DNS: point at connected bastion's dnsmasq ---
+		# conN runs dnsmasq with pool-specific records (registry, api, apps).
+		# NetworkManager dns=none prevents DHCP from overwriting resolv.conf.
+		cat > /etc/NetworkManager/conf.d/no-dns.conf << 'NMEOF'
+[main]
+dns=none
+NMEOF
+		systemctl reload NetworkManager
+
+		cat > /etc/resolv.conf << RESOLVEOF
+search example.com
+nameserver $gateway_ip
+RESOLVEOF
+
 		# --- Hostname ---
 		hostnamectl set-hostname $clone_name
 
 		echo "=== Network configured (disconnected) ==="
 		echo "Default gateway: $gateway_ip (via VLAN to $con_name)"
+		echo "DNS: $gateway_ip (dnsmasq on $con_name)"
 		ip -br addr
 		ip route
+		cat /etc/resolv.conf
 	NETEOF
 }
 
