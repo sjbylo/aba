@@ -845,7 +845,81 @@ It also ensures that OperatorHub continues to work properly, even when the clust
 
 **Important:**  
 Re-run this command whenever new Operators are added or updated in your mirror registry — for example, after running `aba -d mirror load` or `aba -d mirror sync` again.  
-This step refreshes OpenShift’s OperatorHub configuration (catalog) so it includes the latest mirrored Operators.
+This step refreshes OpenShift's OperatorHub configuration (catalog) so it includes the latest mirrored Operators.
+
+
+## Custom Manifests for Day-2
+
+You can automatically apply your own Kubernetes manifests during `aba day2` by placing them in the `day2-custom-manifests/` directory within your cluster folder.
+
+### Usage
+
+1. Create the directory in your cluster folder:
+```bash
+cd <cluster-name>
+mkdir day2-custom-manifests
+```
+
+2. Add your manifest files (`.yaml` or `.yml`):
+```bash
+cat > day2-custom-manifests/my-resource.yaml <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-custom-config
+  namespace: default
+data:
+  message: "Hello from custom manifest"
+EOF
+```
+
+3. Run day2 as normal:
+```bash
+aba day2
+```
+
+The manifests will be applied automatically after the oc-mirror resources (IDMS, ITMS, CatalogSources, signatures).
+
+### Hello World Example
+
+```bash
+cd mycluster
+
+# Create the directory
+mkdir -p day2-custom-manifests
+
+# Create a simple ConfigMap
+cat > day2-custom-manifests/hello-world.yaml <<'EOF'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hello-world
+  namespace: default
+data:
+  greeting: "Hello from ABA custom manifests"
+  timestamp: "2024-01-01"
+EOF
+
+# Run day2
+aba day2
+
+# Verify the ConfigMap was created
+oc get configmap hello-world -n default
+```
+
+### Why Use This Feature?
+
+Deploy any Kubernetes resources you need as part of the Day-2 workflow. The key benefit is that your manifests are applied **after** the internal mirror registry is already configured, so you can reference images from your mirror in your custom resources.
+
+You can deploy whatever resources your cluster needs - the `day2-custom-manifests/` directory gives you complete flexibility to apply any Kubernetes manifests during the Day-2 process.
+
+### Notes
+
+- The `day2-custom-manifests/` directory is optional - if it doesn't exist, day2 runs normally
+- Files are applied in alphabetical order
+- Empty files are skipped with a warning
+- If a manifest fails to apply, day2 continues with remaining files
+- Manifests are applied after the internal mirror registry is configured, so they can reference mirrored images
 
 
 ## Synchronize NTP Across Cluster Nodes
