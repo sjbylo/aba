@@ -276,6 +276,20 @@ run_suite_local() {
         echo "  Running suite: $suite_name (coordinator-only, running locally)"
         echo "========================================"
         echo ""
+
+        if [ -n "$CLI_RESUME" ]; then
+            local state_file="${E2E_LOG_DIR}/${suite_name}.state"
+            if [ -f "$state_file" ]; then
+                export E2E_RESUME_FILE="$state_file"
+                echo "  Resuming from checkpoint: $state_file"
+            fi
+        fi
+
+        if [ -n "$CLI_CLEAN" ]; then
+            rm -f "${E2E_LOG_DIR}/${suite_name}.state"
+            echo "  Cleaned checkpoint state for $suite_name"
+        fi
+
         bash "$suite_file"
         return $?
     fi
