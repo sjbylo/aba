@@ -247,6 +247,13 @@ resolve_suite_file() {
     fi
 }
 
+# Returns 0 if the suite must run on the coordinator (e.g. clone-and-check with govc).
+suite_is_coordinator_only() {
+    local name="$1"
+    local file="$_RUN_DIR/suites/suite-${name}.sh"
+    [ -f "$file" ] && grep -q '^E2E_COORDINATOR_ONLY=true' "$file" 2>/dev/null
+}
+
 # --- Run a Suite on the Connected Bastion -----------------------------------
 #
 # Dispatches the suite to conN via SSH. The coordinator only orchestrates;
@@ -444,12 +451,31 @@ main() {
         exit 0
     fi
 
-    # Parallel mode
+    # Parallel mode: run coordinator-only suites locally, dispatch the rest to pools
     if [ -n "$CLI_PARALLEL" ]; then
-        # Source parallel library
         source "$_RUN_DIR/lib/parallel.sh"
-        dispatch_all "$CLI_POOLS_FILE" "${suites_to_run[@]}"
-        exit $?
+        local coordinator_suites=()
+        local pool_suites=()
+        local s
+        for s in "${suites_to_run[@]}"; do
+            if suite_is_coordinator_only "$s"; then
+                coordinator_suites+=("$s")
+            else
+                pool_suites+=("$s")
+            fi
+        done
+        local overall_rc=0
+        if [ ${#coordinator_suites[@]} -gt 0 ]; then
+            echo "Running coordinator-only suites locally: ${coordinator_suites[*]}"
+            for s in "${coordinator_suites[@]}"; do
+                run_suite_local "$s" || overall_rc=1
+            done
+            echo ""
+        fi
+        if [ ${#pool_suites[@]} -gt 0 ]; then
+            dispatch_all "$CLI_POOLS_FILE" "${pool_suites[@]}" || overall_rc=1
+        fi
+        exit $overall_rc
     fi
 
     # Local sequential mode

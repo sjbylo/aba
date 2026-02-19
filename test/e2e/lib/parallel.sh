@@ -94,8 +94,11 @@ _build_remote_cmd() {
     local host="${_POOL_CONN_HOSTS[$pool_idx]}"
     local overrides="${_POOL_OVERRIDES[$pool_idx]}"
 
-    # Build environment variable exports from overrides
-    local env_exports=""
+    # Remote must know it's on the bastion so run.sh runs the suite directly (no re-dispatch).
+    local env_exports="export E2E_ON_BASTION=1; "
+    [ -n "${ABA_TESTING:-}" ] && env_exports+="export ABA_TESTING=1; "
+
+    # Per-pool overrides from pools.conf
     for override in $overrides; do
         env_exports+="export $override; "
     done
@@ -113,7 +116,7 @@ _build_remote_cmd() {
     [ -n "${NOTIFY_CMD:-}" ] && notify_flag="--notify"
 
     # The remote command
-    local remote_cmd="${pass_vars}${env_exports}cd ~/aba && test/e2e/run.sh --suite $suite --ci $notify_flag"
+    local remote_cmd="${env_exports}${pass_vars}cd ~/aba && test/e2e/run.sh --suite $suite --ci $notify_flag"
 
     echo "ssh -o LogLevel=ERROR -o ConnectTimeout=30 $host -- '$remote_cmd'"
 }
