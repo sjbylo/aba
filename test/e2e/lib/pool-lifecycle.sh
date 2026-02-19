@@ -130,10 +130,18 @@ _vm_setup_time() {
     cat <<-TIMEEOF | ssh "${user}@${host}" -- sudo bash
 		set -ex
 		dnf install chrony -y
-		systemctl start chronyd
-		sleep 1
-		chronyc sources -v
-		chronyc add server $ntp_server iburst
+
+		# Replace chrony.conf to use ONLY the specified NTP server
+		# (removes any internet NTP sources from the default config)
+		cat > /etc/chrony.conf <<-CHRONYEOF
+		server $ntp_server iburst
+		driftfile /var/lib/chrony/drift
+		makestep 1.0 3
+		rtcsync
+		logdir /var/log/chrony
+		CHRONYEOF
+
+		systemctl restart chronyd
 		timedatectl set-timezone $timezone
 		chronyc -a makestep
 		sleep 3
