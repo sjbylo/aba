@@ -57,8 +57,7 @@ plan_tests \
     "Incremental: mesh operators" \
     "Upgrade: OSUS and cluster upgrade" \
     "Lifecycle: shutdown/startup" \
-    "Standard: cluster with macs.conf" \
-    "Cleanup: uninstall registry"
+    "Standard: cluster with macs.conf"
 
 suite_begin "airgapped-local-reg"
 
@@ -385,15 +384,9 @@ e2e_run_remote "Delete standard cluster" \
 test_end
 
 # ============================================================================
-# 17. Cleanup
-# ============================================================================
-test_begin "Cleanup: uninstall registry"
-
-e2e_run_remote "Uninstall Docker registry" \
-    "cd ~/aba && aba -d mirror uninstall-docker-registry || aba -d mirror uninstall"
-
-test_end
-
+# NOTE: No end-of-suite cleanup.  reset_internal_bastion at the START of
+# the next run handles teardown.  Leaving resources alive lets operators
+# inspect state after failures.
 # ============================================================================
 
 suite_end

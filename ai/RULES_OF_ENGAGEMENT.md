@@ -1025,6 +1025,19 @@ documented at the top of `test/e2e/lib/framework.sh`.
 10. **Prefer `aba` commands over raw `make` / scripts.**
     Eat your own dog food.  Use the product's CLI for setup and teardown.
 
+11. **Never destroy resources at the END of a suite.**
+    VMs, registries, clusters, etc. must be left alive so operators can inspect
+    state after a failure.  Cleanup belongs at the **start** of the next run
+    (e.g. `clone_vm` destroys a previous clone before creating a new one,
+    `reset_internal_bastion` wipes disN at suite start).  Explicit cleanup is
+    available via `--clean` or a dedicated destroy command.
+
+12. **Suites must be self-sufficient after clone-and-check.**
+    Every suite (except `clone-and-check` itself) must be runnable independently
+    after the pool VMs exist.  No suite may assume another suite has already run.
+    Use idempotent setup helpers (e.g. `setup-pool-registry.sh`) for shared
+    prerequisites.
+
 ### E2E Log Monitoring and Fix Scope
 
 **During test runs, continuously monitor ALL logs** from the current E2E run and

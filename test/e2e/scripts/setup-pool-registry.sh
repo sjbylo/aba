@@ -11,7 +11,6 @@
 # Prerequisites:
 #   - ~/.pull-secret.json
 #   - Internet access (to download images from registry.redhat.io)
-#   - oc-mirror in PATH or ~/bin/
 #
 # Operators synced (one per catalog):
 #   - cincinnati-operator        (redhat-operator)
@@ -80,24 +79,12 @@ fi
 
 mkdir -p "$POOL_REG_DIR"
 
-# --- Step 1: Ensure oc-mirror is available ----------------------------------
-
-if ! command -v oc-mirror &>/dev/null && [[ ! -x ~/bin/oc-mirror ]]; then
-    echo "ERROR: oc-mirror not found in PATH or ~/bin/" >&2
-    echo "Install it first: aba --dir cli ~/bin/oc-mirror" >&2
-    exit 1
-fi
-# Prefer ~/bin if not in PATH
-[[ ! -x "$(command -v oc-mirror 2>/dev/null)" ]] && export PATH="$HOME/bin:$PATH"
-
-echo "[1/5] oc-mirror found: $(command -v oc-mirror)"
-
-# --- Step 2: Install Quay (idempotent) -------------------------------------
+# --- Step 1: Install Quay (idempotent) --------------------------------------
 
 if curl --retry 3 -fSkIL -o /dev/null "https://${reg_host}:${REG_PORT}/health/instance" 2>/dev/null; then
-    echo "[2/5] Quay already running on ${reg_host}:${REG_PORT} -- skipping install"
+    echo "[1/4] Quay already running on ${reg_host}:${REG_PORT} -- skipping install"
 else
-    echo "[2/5] Installing Quay on ${reg_host}:${REG_PORT} ..."
+    echo "[1/4] Installing Quay on ${reg_host}:${REG_PORT} ..."
 
     if ! rpm -q podman &>/dev/null; then
         sudo dnf install -y podman
@@ -131,9 +118,9 @@ else
     echo "  Quay installed successfully"
 fi
 
-# --- Step 3: Merge auth (pull-secret + local Quay creds) -------------------
+# --- Step 2: Merge auth (pull-secret + local Quay creds) -------------------
 
-echo "[3/5] Setting up container auth ..."
+echo "[2/4] Setting up container auth ..."
 
 enc_password=$(echo -n "${REG_USER}:${REG_PW}" | base64 -w0)
 
@@ -157,9 +144,9 @@ podman login -u "$REG_USER" -p "$REG_PW" "https://${reg_host}:${REG_PORT}" --tls
 
 echo "  Auth configured for ${reg_host}:${REG_PORT} + registry.redhat.io"
 
-# --- Step 4: Create imageset config ----------------------------------------
+# --- Step 3: Create imageset config -----------------------------------------
 
-echo "[4/5] Creating imageset config ..."
+echo "[3/4] Creating imageset config ..."
 
 SYNC_DIR="$POOL_REG_DIR/sync"
 mkdir -p "$SYNC_DIR"
@@ -189,14 +176,24 @@ EOF
 
 echo "  Imageset config written to $SYNC_DIR/imageset-config.yaml"
 
-# --- Step 5: Run oc-mirror sync --------------------------------------------
+# --- Step 4: Run oc-mirror sync ---------------------------------------------
 
 # Skip if already synced for this version
 DONE_MARKER="$SYNC_DIR/.synced-${version}"
 if [[ -f "$DONE_MARKER" ]]; then
-    echo "[5/5] Already synced for ${version} -- skipping"
+    echo "[4/4] Already synced for ${version} -- skipping"
 else
-    echo "[5/5] Syncing images to ${reg_host}:${REG_PORT} (this may take 30+ minutes) ..."
+    echo "[4/4] Syncing images to ${reg_host}:${REG_PORT} (this may take 30+ minutes) ..."
+
+    [[ -x "$HOME/bin/oc-mirror" ]] && export PATH="$HOME/bin:$PATH"
+
+    _oc_mirror_tmp_installed=""
+    if ! command -v oc-mirror &>/dev/null; then
+        echo "  Installing oc-mirror via aba cli Makefile ..."
+        make -C "$ABA_ROOT/cli" ~/bin/oc-mirror
+        export PATH="$HOME/bin:$PATH"
+        _oc_mirror_tmp_installed=1
+    fi
 
     cd "$SYNC_DIR"
     umask 0022
@@ -211,6 +208,11 @@ else
 
     touch "$DONE_MARKER"
     echo "  Sync complete"
+
+    if [[ -n "$_oc_mirror_tmp_installed" ]]; then
+        echo "  Removing temporarily installed oc-mirror ..."
+        rm -f ~/bin/oc-mirror
+    fi
 fi
 
 echo ""
