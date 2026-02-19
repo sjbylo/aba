@@ -106,7 +106,8 @@ echo
 parallel_images=8
 retry_delay=2
 retry_times=2
-aba_debug "Initial tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
+image_timeout="${OC_MIRROR_IMAGE_TIMEOUT:-30m}"
+aba_debug "Initial tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times image_timeout=$image_timeout"
 
 # This loop is based on the "retry=?" value
 try=1
@@ -118,7 +119,7 @@ do
 	# Set up the command in a script which can be run manually if needed.
 	# Wait for oc-mirror to be available!
 	#run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
-	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 	echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 	aba_debug "Created load-mirror.sh script" 
 
