@@ -82,7 +82,7 @@ test_begin "Setup: install aba and configure"
 e2e_run "Remove RPMs for clean install test" \
     "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
 e2e_run "Remove oc-mirror caches" \
-    "find ~/ -type d -name .oc-mirror | xargs rm -rfv"
+    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
 
 e2e_run "Install aba" "./install"
 
