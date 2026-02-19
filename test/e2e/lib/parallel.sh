@@ -127,7 +127,7 @@ _build_remote_cmd() {
     # The remote command
     local remote_cmd="${env_exports}${pass_vars}cd ~/aba && test/e2e/run.sh --suite $suite --ci${extra_flags}"
 
-    echo "ssh -o LogLevel=ERROR -o ConnectTimeout=30 $ssh_target -- '$remote_cmd'"
+    echo "ssh -o LogLevel=ERROR -o ConnectTimeout=30 -o ServerAliveInterval=60 -o ServerAliveCountMax=10 $ssh_target -- '$remote_cmd'"
 }
 
 # --- _dispatch_job ----------------------------------------------------------
