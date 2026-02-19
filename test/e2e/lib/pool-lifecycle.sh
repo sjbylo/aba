@@ -618,27 +618,30 @@ _vm_create_test_user() {
 }
 
 # --- _vm_set_aba_testing ----------------------------------------------------
-# Add 'export ABA_TESTING=1' to ~/.bashrc for root, the default user (steve),
-# and the test user (testy). This disables usage tracking during E2E runs.
+# Add 'ABA_TESTING=1' to /etc/environment (system-wide, all users) and also
+# to ~/.bashrc for root, the default user (steve), and the test user (testy).
+# Belt-and-suspenders: /etc/environment covers PAM logins; .bashrc covers
+# interactive shells that may not read /etc/environment.
 #
 _vm_set_aba_testing() {
     local host="$1"
     local def_user="${2:-$VM_DEFAULT_USER}"
 
-    echo "  [vm] Setting ABA_TESTING=1 on $host (root, $def_user, testy) ..."
+    echo "  [vm] Setting ABA_TESTING=1 on $host (/etc/environment + .bashrc for root, $def_user, testy) ..."
 
     cat <<-'TESTEOF' | ssh "${def_user}@${host}" -- sudo bash
 		set -e
+		# System-wide via /etc/environment (read by PAM for all users)
+		sed -i '/^ABA_TESTING=/d' /etc/environment
+		echo 'ABA_TESTING=1' >> /etc/environment
+
+		# Per-user via .bashrc (belt-and-suspenders)
 		for home_dir in /root "/home/$SUDO_USER" /home/testy; do
 		    [ -d "$home_dir" ] || continue
 		    rc="$home_dir/.bashrc"
-		    # Ensure .bashrc exists
 		    touch "$rc"
-		    # Remove any existing ABA_TESTING lines to avoid duplicates
 		    sed -i '/^export ABA_TESTING=/d' "$rc"
-		    # Append the export
 		    echo 'export ABA_TESTING=1' >> "$rc"
-		    # Fix ownership (testy's home must be owned by testy, etc.)
 		    user_name=$(basename "$home_dir")
 		    [ "$home_dir" = "/root" ] && user_name=root
 		    chown "$user_name":"$user_name" "$rc" 2>/dev/null || true
