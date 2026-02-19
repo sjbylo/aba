@@ -115,7 +115,7 @@ e2e_run "Set mirror host" \
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
 
 e2e_run "Install test registry on bastion" \
-    "test/reg-test-install-remote.sh ${TEST_USER:-steve} ${DIS_HOST}"
+    "test/reg-test-install-remote.sh ${DIS_HOST}"
 
 test_end
 
