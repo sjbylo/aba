@@ -10,3 +10,6 @@ CATALOG_DOWNLOAD_TIMEOUT_MINS=20
 # How long to cache downloaded catalog indexes before re-downloading
 CATALOG_CACHE_TTL_SECS=86400
 
+# oc-mirror --image-timeout value (default: 30m)
+# Increase for slow networks or large operator images
+# OC_MIRROR_IMAGE_TIMEOUT=30m
