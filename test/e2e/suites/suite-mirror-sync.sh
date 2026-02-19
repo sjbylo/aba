@@ -162,8 +162,11 @@ test_end
 test_begin "SNO: bootstrap after save/load"
 
 e2e_run "Clean sno directory" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
-e2e_run "Test small CIDR (pool-local /30)" \
-    "aba cluster -n $SNO -t sno --starting-ip ${POOL_SUBNET:-10.0.2}.201 --machine-network '${POOL_SUBNET:-10.0.2}.200/30' --step cluster.conf"
+# Small CIDR that still contains pool SNO IP so DNS resolves; validates CIDR and that ISO can be created
+e2e_run "Test small CIDR (cluster.conf)" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '${POOL_SUBNET:-10.0.2}.8/29' --step cluster.conf"
+e2e_run "Test small CIDR (ISO creation)" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '${POOL_SUBNET:-10.0.2}.8/29' --step iso"
 e2e_run "Clean and recreate with normal CIDR" "rm -rfv $SNO"
 e2e_run "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
@@ -222,7 +225,13 @@ e2e_run "Create agent configs (bare-metal)" \
 e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"
 e2e_run "Verify agent configs" "ls -l $STANDARD/install-config.yaml $STANDARD/agent-config.yaml"
 e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso"
-e2e_run "Create ISO (bare-metal)" "aba --dir $STANDARD install"
+e2e_run "First aba install (generates configs, stops for MAC review)" \
+    "aba --dir $STANDARD install"
+e2e_run "Verify .bm-message exists" "test -f $STANDARD/.bm-message"
+e2e_run "Verify ISO not yet created (still)" "! ls $STANDARD/iso-agent-based/agent.*.iso"
+e2e_run "Second aba install (creates ISO, stops for server boot)" \
+    "aba --dir $STANDARD install"
+e2e_run "Verify .bm-nextstep exists" "test -f $STANDARD/.bm-nextstep"
 e2e_run "Verify ISO created" "ls -l $STANDARD/iso-agent-based/agent.*.iso"
 
 e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
