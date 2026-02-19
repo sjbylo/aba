@@ -171,8 +171,10 @@ _net_test() {
     local if_check="$6"
     local balance_xor="${7:-no}"
 
-    # Determine network parameters based on VLAN
     local govc_network machine_network next_hop start_ip
+    local _saved_aba_machine_network
+    _saved_aba_machine_network="$(grep '^machine_network=' aba.conf | cut -d= -f2 | awk '{print $1}')"
+
     if [ -n "$vlan" ]; then
         govc_network="PRIVATE-DPG"
         machine_network="$(pool_vlan_network)"
@@ -190,18 +192,16 @@ _net_test() {
     e2e_run "Set GOVC_NETWORK=$govc_network" \
         "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=$govc_network /g' vmware.conf"
 
+    if [ -n "$vlan" ]; then
+        # aba validates starting_ip against aba.conf's machine_network during iso/refresh
+        e2e_run "Set aba.conf machine_network for VLAN ($machine_network)" \
+            "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" aba.conf"
+    fi
+
     e2e_run "Clean $cname dir" "rm -rfv $cname"
 
-    if [ -n "$vlan" ]; then
-        # VLAN: generate without --starting-ip (aba validates against non-VLAN machine_network)
-        e2e_run "Generate cluster.conf for $cname" \
-            "aba cluster -n $cname -t $ctype --step cluster.conf"
-        e2e_run "Set starting_ip=$start_ip" \
-            "sed -i \"s/^starting_ip=.*/starting_ip=$start_ip /g\" $cname/cluster.conf"
-    else
-        e2e_run "Generate cluster.conf for $cname" \
-            "aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
-    fi
+    e2e_run "Generate cluster.conf for $cname" \
+        "aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
 
     e2e_run "Set machine_network=$machine_network" \
         "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $cname/cluster.conf"
@@ -246,6 +246,11 @@ _net_test() {
 
     e2e_run "Delete $cname VMs" "aba --dir $cname delete"
     e2e_run "Clean $cname dir" "aba -d $cname clean"
+
+    if [ -n "$vlan" ]; then
+        e2e_run "Restore aba.conf machine_network ($_saved_aba_machine_network)" \
+            "sed -i \"s#^machine_network=.*#machine_network=$_saved_aba_machine_network #g\" aba.conf"
+    fi
 
     test_end
 }
