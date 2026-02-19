@@ -313,6 +313,7 @@ pool_dom="$(pool_domain $POOL_NUM)"
 expected_node="$(pool_node_ip $POOL_NUM)"
 expected_api="$(pool_api_vip $POOL_NUM)"
 expected_apps="$(pool_apps_vip $POOL_NUM)"
+expected_reg="$(pool_dis_ip $POOL_NUM)"
 con_ip="$(pool_con_ip $POOL_NUM)"
 sno_name="$(pool_cluster_name sno $POOL_NUM)"
 compact_name="$(pool_cluster_name compact $POOL_NUM)"
@@ -322,6 +323,10 @@ e2e_run "$CON_HOST: dnsmasq running" \
     "ssh $DEF_USER@$CON_HOST systemctl is-active dnsmasq"
 e2e_run "$CON_HOST: DNS port 53 open" \
     "ssh $DEF_USER@$CON_HOST sudo firewall-cmd --list-services | grep dns"
+
+# Registry record
+e2e_run "$CON_HOST: registry.$pool_dom -> $expected_reg" \
+    "ssh $DEF_USER@$CON_HOST dig +short registry.$pool_dom @127.0.0.1 | grep -q $expected_reg"
 
 # SNO records
 e2e_run "$CON_HOST: api.$sno_name.$pool_dom -> $expected_node" \

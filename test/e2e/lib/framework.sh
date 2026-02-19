@@ -75,6 +75,9 @@ _E2E_FAIL_COUNT=0
 _E2E_SKIP_COUNT=0
 _E2E_START_TIME=""
 
+# Resume skip-block: when set, test_begin/e2e_run skip commands until test_end
+_E2E_SKIP_BLOCK=""
+
 # Progress plan -- parallel arrays
 declare -a _E2E_PLAN_NAMES=()
 declare -a _E2E_PLAN_STATUS=()  # PENDING | RUNNING | PASS | FAIL | SKIP | DONE
@@ -282,6 +285,15 @@ suite_begin() {
 
     # Initialize state file for checkpointing
     E2E_STATE_FILE="${E2E_LOG_DIR}/${suite_name}.state"
+
+    # Bug 2 fix: if resuming and the resume file IS our state file, copy it
+    # to a .resume backup so truncating the state file doesn't destroy it
+    if [ -n "$E2E_RESUME_FILE" ] && [ -f "$E2E_RESUME_FILE" ]; then
+        local resume_backup="${E2E_STATE_FILE}.resume"
+        cp "$E2E_RESUME_FILE" "$resume_backup"
+        E2E_RESUME_FILE="$resume_backup"
+    fi
+
     : > "$E2E_STATE_FILE"
 
     _e2e_draw_line "="
@@ -323,6 +335,16 @@ test_begin() {
     _E2E_CURRENT_TEST="$test_name"
     (( _E2E_TEST_COUNT++ )) || true
 
+    # Bug 3 fix: check resume checkpoint for test_begin/test_end pattern
+    if should_skip_checkpoint "$test_name"; then
+        _E2E_SKIP_BLOCK=1
+        _update_plan "$test_name" "DONE"
+        _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"
+        _e2e_summary "$(_e2e_Green "  DONE (resumed): $test_name")"
+        return 0
+    fi
+
+    _E2E_SKIP_BLOCK=""
     _update_plan "$test_name" "RUNNING"
     _e2e_draw_line "-"
     _e2e_log_and_print "$(_e2e_cyan "TEST [$_E2E_TEST_COUNT]: $test_name")"
@@ -333,6 +355,13 @@ test_begin() {
 test_end() {
     local result="${1:-0}"  # 0 = pass, non-zero = fail
     local test_name="$_E2E_CURRENT_TEST"
+
+    # Bug 3 fix: if this test was skipped via resume, just clear state and return
+    if [ -n "$_E2E_SKIP_BLOCK" ]; then
+        _E2E_SKIP_BLOCK=""
+        _E2E_CURRENT_TEST=""
+        return 0
+    fi
 
     if [ "$result" -eq 0 ]; then
         (( _E2E_PASS_COUNT++ )) || true
@@ -393,7 +422,7 @@ should_skip_checkpoint() {
     local test_name="$1"
     # Only skip if we are in resume mode and test previously passed
     if [ -n "$E2E_RESUME_FILE" ] && [ -f "$E2E_RESUME_FILE" ]; then
-        if grep -q "^0 ${test_name}$" "$E2E_RESUME_FILE" 2>/dev/null; then
+        if grep -q "^0 ${test_name}$" "$E2E_RESUME_FILE"; then
             return 0  # yes, skip
         fi
     fi
@@ -489,6 +518,11 @@ _e2e_exit_info() {
 #   command...           Remaining arguments = the command to run
 #
 e2e_run() {
+    # Bug 3 fix: skip commands inside a resumed test block
+    if [ -n "$_E2E_SKIP_BLOCK" ]; then
+        return 0
+    fi
+
     local tot_cnt=5
     local backoff=1.5
     local host=""
@@ -618,6 +652,7 @@ e2e_run() {
 # The INTERNAL_BASTION variable must be set by the suite or config.
 #
 e2e_run_remote() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
     if [ -z "${INTERNAL_BASTION:-}" ]; then
         _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
         exit 1
@@ -640,6 +675,8 @@ e2e_run_remote() {
 #   e2e_diag -h "$host" "Check disk space" "df -h"
 #
 e2e_diag() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+
     local host=""
     local mark="L"
 
@@ -673,6 +710,7 @@ e2e_diag() {
 
 # Shorthand: e2e_diag on $INTERNAL_BASTION
 e2e_diag_remote() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
     if [ -z "${INTERNAL_BASTION:-}" ]; then
         _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
         exit 1
@@ -688,6 +726,8 @@ e2e_diag_remote() {
 # Usage: e2e_run_must_fail "description" command...
 #
 e2e_run_must_fail() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+
     local description="$1"; shift
     local cmd="$*"
 
@@ -718,6 +758,8 @@ e2e_run_must_fail() {
 # Like e2e_run_must_fail but runs on INTERNAL_BASTION
 #
 e2e_run_must_fail_remote() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+
     local description="$1"; shift
     local cmd="$*"
 
@@ -799,7 +841,11 @@ assert_contains() {
     local file="$1"
     local pattern="$2"
     local msg="${3:-File $file should contain: $pattern}"
-    if grep -q "$pattern" "$file" 2>/dev/null; then
+    if [ ! -f "$file" ]; then
+        _assert_fail "File does not exist: $file (expected to contain: $pattern)"
+        return
+    fi
+    if grep -q "$pattern" "$file"; then
         _e2e_log "  ASSERT OK: '$pattern' found in $file"
     else
         _assert_fail "$msg"
@@ -810,7 +856,11 @@ assert_not_contains() {
     local file="$1"
     local pattern="$2"
     local msg="${3:-File $file should NOT contain: $pattern}"
-    if ! grep -q "$pattern" "$file" 2>/dev/null; then
+    if [ ! -f "$file" ]; then
+        _assert_fail "File does not exist: $file (checking for absence of: $pattern)"
+        return
+    fi
+    if ! grep -q "$pattern" "$file"; then
         _e2e_log "  ASSERT OK: '$pattern' not found in $file (expected)"
     else
         _assert_fail "$msg"
@@ -1006,7 +1056,7 @@ e2e_setup() {
 
     # Source aba's own include files if available
     if [ -f "scripts/include_all.sh" ]; then
-        source scripts/include_all.sh no-trap 2>/dev/null || true
+        source scripts/include_all.sh no-trap
     fi
 
     # Log git state so we know exactly what was tested

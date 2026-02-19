@@ -111,9 +111,11 @@ _build_remote_cmd() {
         fi
     done
 
-    # Build notify flag
-    local notify_flag=""
-    [ -n "${NOTIFY_CMD:-}" ] && notify_flag="--notify"
+    # Build extra flags (notify, resume, clean)
+    local extra_flags=""
+    [ -n "${NOTIFY_CMD:-}" ] && extra_flags+=" --notify"
+    [ -n "${CLI_RESUME:-}" ] && extra_flags+=" --resume"
+    [ -n "${CLI_CLEAN:-}" ] && extra_flags+=" --clean"
 
     # Determine SSH user for the connected bastion (per-pool override or global)
     local ssh_user="${CON_SSH_USER:-}"
@@ -123,7 +125,7 @@ _build_remote_cmd() {
     local ssh_target="${ssh_user:+${ssh_user}@}${host}"
 
     # The remote command
-    local remote_cmd="${env_exports}${pass_vars}cd ~/aba && test/e2e/run.sh --suite $suite --ci $notify_flag"
+    local remote_cmd="${env_exports}${pass_vars}cd ~/aba && test/e2e/run.sh --suite $suite --ci${extra_flags}"
 
     echo "ssh -o LogLevel=ERROR -o ConnectTimeout=30 $ssh_target -- '$remote_cmd'"
 }
