@@ -35,9 +35,11 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
 - [Day 2 Operations](#day-2-operations)
   - [Login and Verify Cluster State](#login-and-verify-cluster-state)
   - [Connect OperatorHub to Internal Mirror Registry](#connect-operatorhub-to-internal-mirror-registry)
+  - [Custom Manifests for Day-2](#custom-manifests-for-day-2)
   - [Synchronize NTP Across Cluster Nodes](#synchronize-ntp-across-cluster-nodes)
   - [Enable OpenShift Update Service (OSUS)](#enable-openshift-update-service-osus)
 - [Advanced Use](#advanced-use)
+  - [User Configuration (\`~/.aba/config\`)](#user-configuration-abaconfig)
   - [Supported Architectures](#supported-architectures)
   - [Running ABA in a container](#running-aba-in-a-container)
   - [Creating an Install bundle on a restricted VM or Laptop](#creating-an-install-bundle-on-a-restricted-vm-or-laptop)
@@ -1013,6 +1015,28 @@ In a partially disconnected environment, the following workflow can be used:
 
 
 # Advanced Use
+
+## User Configuration (`~/.aba/config`)
+
+ABA creates a user-level configuration file at `~/.aba/config` during installation.
+Settings here apply system-wide for the current user.
+Values are commented out by default; uncomment and edit to override.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `CATALOG_DOWNLOAD_TIMEOUT_MINS` | `20` | Timeout (minutes) for downloading operator catalog indexes. Increase on slow networks. |
+| `CATALOG_CACHE_TTL_SECS` | `86400` | How long (seconds) to cache downloaded catalog indexes before re-downloading (default 24 hours). |
+| `OC_MIRROR_IMAGE_TIMEOUT` | `30m` | Per-image timeout passed to `oc-mirror --image-timeout`. Increase for large operator images or slow connections (e.g. `60m`). |
+
+Example — increase the image timeout to 60 minutes:
+
+```bash
+# Edit (or create) the config file
+vi ~/.aba/config
+
+# Uncomment or add:
+OC_MIRROR_IMAGE_TIMEOUT=60m
+```
 
 ## Supported Architectures
 
