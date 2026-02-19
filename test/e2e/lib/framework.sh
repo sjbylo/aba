@@ -200,6 +200,7 @@ _print_progress() {
     # Print to screen
     echo ""
     _e2e_draw_line "="
+    [ -n "${_E2E_SUITE_NAME:-}" ] && printf "  %s\n" "$(_e2e_bold "Suite: $_E2E_SUITE_NAME")"
     printf "  %-${_col}s %s\n" "TEST" "STATUS"
     _e2e_draw_line "-"
 
@@ -224,6 +225,7 @@ _print_progress() {
     printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /=}"
     _e2e_summary ""
     _e2e_summary "  $_line"
+    [ -n "${_E2E_SUITE_NAME:-}" ] && _e2e_summary "  $(_e2e_Bold "Suite: $_E2E_SUITE_NAME")"
     _e2e_summary "  $(printf "%-${_col}s %s" "TEST" "STATUS")"
     printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /-}"
     _e2e_summary "  $_line"
@@ -246,6 +248,7 @@ _print_progress() {
     if [ -n "${E2E_LOG_FILE:-}" ]; then
         {
             echo ""
+            [ -n "${_E2E_SUITE_NAME:-}" ] && echo "  Suite: $_E2E_SUITE_NAME"
             printf "  %-${_col}s %s\n" "TEST" "STATUS"
             printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /-}"
             echo "  $_line"
@@ -544,10 +547,12 @@ e2e_run() {
     local _lf="${E2E_LOG_FILE:-/dev/null}"
 
     _e2e_draw_line "."
-    _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_cyan "($cmd)") $(_e2e_yellow "[$PWD -> ${host:-localhost}]")"
+    _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_yellow "[$PWD -> ${host:-localhost}]")"
+    _e2e_log_and_print "    $(_e2e_cyan "($cmd)")"
     # Summary: show command description and the actual command being run
     _e2e_summary "  ----------------------------------------"
-    _e2e_summary "  $mark $(_e2e_Green "$description") $(_e2e_Cyan "($cmd)")"
+    _e2e_summary "  $mark $(_e2e_Green "$description")"
+    _e2e_summary "    $(_e2e_Cyan "($cmd)")"
 
     # Outer loop: interactive retry wraps the automatic retry loop
     while true; do
@@ -692,7 +697,8 @@ e2e_diag() {
     local _lf="${E2E_LOG_FILE:-/dev/null}"
     local ret=0
 
-    _e2e_log_and_print "  $mark $(_e2e_yellow "[diag]") $description $(_e2e_cyan "($cmd)")"
+    _e2e_log_and_print "  $mark $(_e2e_yellow "[diag]") $description"
+    _e2e_log_and_print "    $(_e2e_cyan "($cmd)")"
 
     if [ -n "$host" ]; then
         ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
@@ -733,8 +739,10 @@ e2e_run_must_fail() {
 
     _e2e_draw_line "."
     _e2e_log_and_print "  L $description (expect failure)"
+    _e2e_log_and_print "    $(_e2e_cyan "($cmd)")"
     _e2e_log "    CMD (must-fail): $cmd"
-    _e2e_summary "  L $(_e2e_Yellow "$description (expect failure)") $(_e2e_Cyan "($cmd)")"
+    _e2e_summary "  L $(_e2e_Yellow "$description (expect failure)")"
+    _e2e_summary "    $(_e2e_Cyan "($cmd)")"
 
     local ret=0
     ( eval "$cmd" ) >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
@@ -770,8 +778,10 @@ e2e_run_must_fail_remote() {
 
     _e2e_draw_line "."
     _e2e_log_and_print "  R $description (expect failure)"
+    _e2e_log_and_print "    $(_e2e_cyan "($cmd)")"
     _e2e_log "    CMD (must-fail on $INTERNAL_BASTION): $cmd"
-    _e2e_summary "  R $(_e2e_Yellow "$description (expect failure)") $(_e2e_Cyan "($cmd)")"
+    _e2e_summary "  R $(_e2e_Yellow "$description (expect failure)")"
+    _e2e_summary "    $(_e2e_Cyan "($cmd)")"
 
     local ret=0
     ssh -t -o LogLevel=ERROR "$INTERNAL_BASTION" -- \
