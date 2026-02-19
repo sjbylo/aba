@@ -45,8 +45,8 @@ if [ -z "${NO_MAC_CHECK:-}" ]; then
 	scripts/check-macs.sh || exit 1
 fi
 
-source <(normalize-cluster-conf)
 source <(normalize-aba-conf)
+source <(normalize-cluster-conf)
 
 verify-cluster-conf || exit 1
 verify-aba-conf || exit 1
