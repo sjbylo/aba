@@ -898,6 +898,33 @@ require_var() {
     return 0
 }
 
+# --- SSH config ownership fix -----------------------------------------------
+# OpenSSH refuses to use system config files not owned by root (exit 255).
+# Container/sandbox environments sometimes map /etc as nobody:nobody.
+# This fix is idempotent and only runs sudo when needed.
+_e2e_fix_ssh_config_ownership() {
+    local dir="/etc/ssh/ssh_config.d"
+    [ -d "$dir" ] || return 0
+    local needs_fix=""
+    for f in "$dir" "$dir"/*.conf; do
+        [ -e "$f" ] || continue
+        if [ "$(stat -c '%u' "$f" 2>/dev/null)" != "0" ]; then
+            needs_fix=1
+            break
+        fi
+    done
+    if [ -n "$needs_fix" ]; then
+        echo "  Fixing SSH config ownership in $dir ..."
+        sudo chown root:root "$dir" 2>/dev/null || true
+        sudo chmod 755 "$dir" 2>/dev/null || true
+        for f in "$dir"/*.conf; do
+            [ -f "$f" ] || continue
+            sudo chown root:root "$f" 2>/dev/null || true
+            sudo chmod 644 "$f" 2>/dev/null || true
+        done
+    fi
+}
+
 # --- Environment Setup (called by run.sh or suites directly) ---------------
 
 e2e_setup() {
@@ -908,6 +935,11 @@ e2e_setup() {
 
     export ABA_TESTING=1
     hash -r  # Forget cached command paths
+
+    # Fix SSH config ownership -- RHEL/Fedora ssh_config.d files must be root:root
+    # or SSH refuses to run (exit 255). Container/sandbox environments sometimes
+    # reset ownership to nobody:nobody.
+    _e2e_fix_ssh_config_ownership
 
     # Load config.env defaults (if it exists)
     # Source it directly so declare -A and multi-line constructs work.
