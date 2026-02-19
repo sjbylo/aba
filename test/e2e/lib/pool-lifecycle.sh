@@ -545,9 +545,10 @@ _vm_cleanup_caches() {
 		rm -f \$HOME/.ssh/quay_installer*
 		rm -rfv \$HOME/.oc-mirror/.cache
 		rm -rfv \$HOME/*/.oc-mirror/.cache
-		# Ensure test VMs are located together
+		# Ensure test VMs are located together and on the pool's datastore
 		if [ -s ~/.vmware.conf ]; then
 		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g" ~/.vmware.conf
+		    [ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
 		fi
 	CACHEEOF
 }
