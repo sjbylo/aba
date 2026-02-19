@@ -11,7 +11,15 @@ Fixing and hardening the E2E test framework in `test/e2e/`. The primary directiv
 
 ## Current Backlog (Priority Order)
 
-### 1. `--resume` Fix (3 remaining bugs of 4)
+### 1. Deploy updated code and re-run failed suites
+
+- rsync updated `~/aba/` to con1 and con2 (with proper excludes: `mirror/`, `cli/` binaries/tarballs)
+- Re-run previously failed suites **without** `--clean`:
+  - con1: `network-advanced` (was failing due to missing oc-mirror -- now self-managed)
+  - con2: `mirror-sync` (was failing due to CIDR bug -- now fixed)
+  - Investigate `create-bundle-to-disk` on con2 if it also failed
+
+### 2. `--resume` Fix (3 remaining bugs of 4)
 
 Bug 1 is done (committed). Bugs 2-4 remain:
 
@@ -33,13 +41,13 @@ Bug 1 is done (committed). Bugs 2-4 remain:
 - `_build_remote_cmd` never includes `--resume` in the remote SSH command.
 - Fix: Append `--resume` when `CLI_RESUME` is set.
 
-### 2. dnsmasq Registry DNS Record
+### 3. dnsmasq Registry DNS Record
 
 - `dig registry.p1.example.com +short` returns nothing on con1
 - `_vm_setup_dnsmasq` in `test/e2e/lib/pool-lifecycle.sh` doesn't add a record for `registry.pN.example.com`
 - There is a **stashed** incomplete fix: `git stash list` will show it. It started adding `dis_vlan_ip` but didn't add the actual DNS record to the dnsmasq config.
 
-### 3. Error Suppression Audit (remaining files)
+### 4. Error Suppression Audit (remaining files)
 
 User directive: "Stop silently swallowing failures in TEST SUITES!!!! OMG!"
 
@@ -47,9 +55,17 @@ User directive: "Stop silently swallowing failures in TEST SUITES!!!! OMG!"
 - `test/e2e/lib/framework.sh`, `parallel.sh`, `config-helpers.sh` -- review suppressions
 - `pool-lifecycle.sh` was already cleaned up in a prior session
 
-### 4. Bare-metal Output Assertion (done, committed)
+### 5. Bare-metal Output Assertion (done, committed)
 
 Already committed: `suite-mirror-sync.sh` now captures `aba install` output and greps for expected messages ("Check & edit", "Boot your servers") instead of just checking flag files.
+
+### 6. Pool affinity for parallel dispatch (future optimization)
+
+Currently the work-queue dispatcher assigns the next suite to whichever pool becomes free first. Suites that share a prerequisite (e.g. `cluster-ops` and `network-advanced` both use `setup-pool-registry.sh`) may land on different pools, causing redundant Quay installs + oc-mirror syncs.
+
+Option B (preferred): add lightweight chaining hints so the dispatcher prefers dispatching `network-advanced` to the same pool that already ran `cluster-ops`. Preserves suite independence while maximizing registry reuse.
+
+Low priority -- current overhead is ~30 min extra per parallel run. Worth revisiting when scaling to 3-4 pools.
 
 ## Key Rules & Decisions
 

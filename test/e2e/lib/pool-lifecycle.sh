@@ -716,7 +716,16 @@ _vm_install_aba() {
     # Ensure rsync is available on the remote host
     ssh "${user}@${host}" -- "command -v rsync || sudo dnf install -y rsync"
 
-    rsync -az --no-perms --exclude='.git' --exclude='cli/*.tar.gz' \
+    rsync -az --no-perms \
+        --exclude='.git' \
+        --exclude='mirror/' \
+        --exclude='cli/*.tar.gz' \
+        --exclude='cli/oc' \
+        --exclude='cli/oc-mirror*' \
+        --exclude='cli/openshift-install' \
+        --exclude='cli/govc' \
+        --exclude='cli/kubectl' \
+        --exclude='cli/butane' \
         "$aba_root/" "${user}@${host}:~/aba/"
 
     ssh "${user}@${host}" -- "cd ~/aba && ./install"
