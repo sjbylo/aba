@@ -420,7 +420,7 @@ _interactive_prompt() {
 
     while true; do
         echo ""
-        _e2e_log_and_print "COMMAND FAILED (exit=$ret): $cmd"
+        _e2e_log_and_print "COMMAND FAILED ($(_e2e_exit_info $ret)): $cmd"
         printf "%s" "$(_e2e_red "[r] Retry  [s] Skip  [a] Abort  [or type a new command] > ")"
         read -r ans </dev/tty
 
@@ -455,6 +455,23 @@ _interactive_prompt() {
                 ;;
         esac
     done
+}
+
+# Format an exit code for display: appends signal name for codes > 128.
+#   _e2e_exit_info 141  =>  "exit=141/SIGPIPE"
+#   _e2e_exit_info 1    =>  "exit=1"
+_e2e_exit_info() {
+    local rc="$1"
+    if [ "$rc" -gt 128 ] 2>/dev/null; then
+        local sig=$((rc - 128))
+        local name
+        name=$(kill -l "$sig" 2>/dev/null) || name=""
+        if [ -n "$name" ]; then
+            echo "exit=${rc}/SIG${name}"
+            return
+        fi
+    fi
+    echo "exit=${rc}"
 }
 
 # --- Core Execution: e2e_run -----------------------------------------------
@@ -540,9 +557,10 @@ e2e_run() {
                 return 0
             fi
 
-            _e2e_log "  Attempt $attempt/$tot_cnt failed (exit=$ret)"
-            _e2e_log_and_print "    $(_e2e_yellow "Attempt ($attempt/$tot_cnt) failed (exit=$ret): $description")"
-            _e2e_summary "    $(_e2e_Yellow "Attempt ($attempt/$tot_cnt) failed (exit=$ret)") $description"
+            local _exi; _exi="$(_e2e_exit_info $ret)"
+            _e2e_log "  Attempt $attempt/$tot_cnt failed ($_exi)"
+            _e2e_log_and_print "    $(_e2e_yellow "Attempt ($attempt/$tot_cnt) failed ($_exi): $description")"
+            _e2e_summary "    $(_e2e_Yellow "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description"
 
             # Exhausted retries?
             if [ $attempt -ge $tot_cnt ]; then
@@ -581,13 +599,14 @@ e2e_run() {
             return 0
         else
             # Non-interactive failure or abort -- fail the current test and stop the suite
-            _e2e_log "  FAILED: $description (exit=$ret)"
-            _e2e_log_and_print "  $(_e2e_red "FATAL: $description -- aborting suite")"
-            _e2e_summary "    $(_e2e_Red "FATAL: $description -- aborting suite")"
+            local _exf; _exf="$(_e2e_exit_info $ret)"
+            _e2e_log "  FAILED: $description ($_exf)"
+            _e2e_log_and_print "  $(_e2e_red "FATAL: $description ($_exf) -- aborting suite")"
+            _e2e_summary "    $(_e2e_Red "FATAL: $description ($_exf) -- aborting suite")"
             if [ -n "$_E2E_CURRENT_TEST" ]; then
                 test_end "$ret"
             fi
-            _e2e_notify "FATAL: $description (exit=$ret) -- suite aborted"
+            _e2e_notify "FATAL: $description ($_exf) -- suite aborted"
             exit 1
         fi
     done
@@ -681,8 +700,8 @@ e2e_run_must_fail() {
     ( eval "$cmd" ) >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
 
     if [ $ret -ne 0 ]; then
-        _e2e_log "  OK: command failed as expected (exit=$ret)"
-        _e2e_summary "    $(_e2e_Green "OK: failed as expected (exit=$ret)")"
+        _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
+        _e2e_summary "    $(_e2e_Green "OK: failed as expected ($(_e2e_exit_info $ret))")"
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
@@ -718,8 +737,8 @@ e2e_run_must_fail_remote() {
         >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
 
     if [ $ret -ne 0 ]; then
-        _e2e_log "  OK: command failed as expected (exit=$ret)"
-        _e2e_summary "    $(_e2e_Green "OK: failed as expected (exit=$ret)")"
+        _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
+        _e2e_summary "    $(_e2e_Green "OK: failed as expected ($(_e2e_exit_info $ret))")"
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
@@ -828,6 +847,44 @@ assert_command_exists() {
     else
         _assert_fail "$msg"
     fi
+}
+
+# --- YAML helpers -----------------------------------------------------------
+
+# Normalize a YAML file (sort-free pretty-print) and write to stdout.
+# Optionally strips secrets/environment-specific fields from install-config.
+#   Usage: yaml_normalize FILE [--strip-secrets]
+yaml_normalize() {
+    local file="$1" strip="${2:-}"
+    if [ "$strip" = "--strip-secrets" ]; then
+        python3 -c "
+import yaml, sys
+d = yaml.safe_load(open('$file'))
+for k in ('additionalTrustBundle', 'pullSecret'):
+    d.pop(k, None)
+vs = d.get('platform', {}).get('vsphere', {})
+for vc in vs.get('vcenters', []):
+    vc.pop('password', None)
+fds = vs.get('failureDomains', [])
+if fds:
+    for k in ('name', 'region', 'zone'):
+        fds[0].pop(k, None)
+    fds[0].get('topology', {}).pop('datastore', None)
+yaml.dump(d, sys.stdout, default_flow_style=False, sort_keys=False)
+"
+    else
+        python3 -c "
+import yaml, sys
+yaml.dump(yaml.safe_load(open('$file')), sys.stdout, default_flow_style=False, sort_keys=False)
+"
+    fi
+}
+
+# Diff two YAML files after normalizing.  Returns non-zero on differences.
+#   Usage: yaml_diff FILE_A FILE_B [--strip-secrets]
+yaml_diff() {
+    local file_a="$1" file_b="$2" strip="${3:-}"
+    diff <(yaml_normalize "$file_a" $strip) <(yaml_normalize "$file_b" $strip)
 }
 
 # --- Guards -----------------------------------------------------------------
