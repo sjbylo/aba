@@ -171,7 +171,7 @@ _net_test() {
 
     local govc_network machine_network next_hop start_ip
     local _saved_aba_machine_network
-    _saved_aba_machine_network="$(grep '^machine_network=' aba.conf | cut -d= -f2 | awk '{print $1}')"
+    _saved_aba_machine_network="$(pool_machine_network)"
 
     if [ -n "$vlan" ]; then
         govc_network="PRIVATE-DPG"
