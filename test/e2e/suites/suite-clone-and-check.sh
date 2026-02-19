@@ -234,6 +234,9 @@ e2e_run "Copy vmware.conf to $DIS_NAME" "_vm_setup_vmware_conf $DIS_HOST $DEF_US
 e2e_run "Create test user on $CON_NAME" "_vm_create_test_user $CON_HOST $DEF_USER"
 e2e_run "Create test user on $DIS_NAME" "_vm_create_test_user $DIS_HOST $DEF_USER"
 
+e2e_run "Set ABA_TESTING on $CON_NAME" "_vm_set_aba_testing $CON_HOST $DEF_USER"
+e2e_run "Set ABA_TESTING on $DIS_NAME" "_vm_set_aba_testing $DIS_HOST $DEF_USER"
+
 e2e_run "Install aba on $CON_NAME" "_vm_install_aba $CON_HOST $DEF_USER"
 
 test_end
