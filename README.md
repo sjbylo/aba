@@ -687,6 +687,58 @@ As an example, you could edit `agent-config.yaml` to include the following to di
       deviceName: /dev/sdb
 ```
 
+### Embedding Custom Manifests in the ISO (Day-0)
+
+You can embed custom Kubernetes manifests directly into the agent-based ISO. These manifests are automatically applied by `openshift-install` during cluster bootstrap, before Day-2 operations.
+
+**Supported directories:**
+- `openshift/` - Standard OpenShift manifest directory
+- `manifests/` - Alternative manifest directory
+
+Both directories are checked automatically during ISO generation. You can use either one, or both.
+
+#### Hello World Example
+
+```bash
+cd mycluster
+
+# Create the manifest directory
+mkdir -p openshift
+
+# Create a simple ConfigMap
+cat > openshift/hello-world.yaml <<'EOF'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bootstrap-config
+  namespace: openshift-config
+data:
+  message: "Hello from Day-0 custom manifests"
+  created-by: "ABA agent-based installer"
+EOF
+
+# Generate the ISO (manifest is automatically embedded)
+aba iso
+
+# After cluster bootstrap completes, verify the ConfigMap exists
+oc get configmap bootstrap-config -n openshift-config
+oc get configmap bootstrap-config -n openshift-config -o yaml
+```
+
+#### Use Cases
+
+You can embed any Kubernetes manifests that need to be present at cluster bootstrap time.
+
+#### Notes
+
+- The `openshift/` and `manifests/` directories are optional - if they don't exist, ISO generation proceeds normally
+- Both `.yaml` and `.yml` file extensions are supported
+- Files are applied in alphabetical order during cluster bootstrap
+- Manifests are embedded in the ISO and applied during cluster creation (Day-0), not during Day-2
+- Empty directories are silently skipped
+- Use `aba -D iso` for debug output showing which manifests were embedded
+- **Important**: Day-0 manifests are applied before the internal mirror registry is attached to the cluster. Resources that reference images from your internal registry may not work until Day-2 (`aba day2`) connects the cluster to the mirror registry
+
 The following optional command can be used to extract cluster configuration details from the `agent-config.yaml` files.  
 You can run this command to verify that the correct information can be retrieved and used to create the VMs (if using platform=vmw in aba.conf).
 
