@@ -17,7 +17,7 @@ End-to-end tests that validate ABA against real VMware infrastructure and OpenSh
 
 ```bash
 # Run a single suite (recommended to start here)
-test/e2e/run.sh --suite vm-smoke
+test/e2e/run.sh --suite cluster-ops
 
 # Run all suites sequentially with interactive retry on failure
 test/e2e/go.sh
@@ -99,19 +99,17 @@ The legacy `test/test[12345]*.sh` scripts use `10.0.1.x` (SNO=.201, compact=.71,
 | # | Suite | Purpose | Dependencies |
 |---|-------|---------|--------------|
 | 1 | `create-bundle-to-disk` | Bundle creation (no VMs) | Internet, pull-secret |
-| 2 | `vm-smoke` | VMware/govc validation | govc, template VMs |
-| 3 | `clone-and-check` | Full pool setup (conN + disN) | govc, VMware |
-| 4 | `connected-public` | Public registry SNO | VMware (no internal bastion) |
-| 5 | `cluster-ops` | ABI config validation + SNO install | clone-and-check must run first |
-| 6 | `mirror-sync` | Mirror sync/save/load + firewalld | clone-and-check must run first |
-| 7 | `airgapped-existing-reg` | Air-gap with existing registry | clone-and-check must run first |
-| 8 | `airgapped-local-reg` | Full air-gap (longest) | clone-and-check must run first |
-| 9 | `network-advanced` | VLAN and bonding | clone-and-check first, VLAN infra |
+| 2 | `clone-and-check` | Full pool setup (conN + disN) | govc, VMware |
+| 3 | `connected-public` | Public registry SNO | VMware (no internal bastion) |
+| 4 | `cluster-ops` | ABI config validation + SNO install | clone-and-check must run first |
+| 5 | `mirror-sync` | Mirror sync/save/load + firewalld | clone-and-check must run first |
+| 6 | `airgapped-existing-reg` | Air-gap with existing registry | clone-and-check must run first |
+| 7 | `airgapped-local-reg` | Full air-gap (longest) | clone-and-check must run first |
+| 8 | `network-advanced` | VLAN and bonding | clone-and-check first, VLAN infra |
 
 ### Suite Details
 
 - **create-bundle-to-disk**: Creates light and full bundles, verifies contents. No VMs needed.
-- **vm-smoke**: Clones a single VM, boots it, verifies SSH. Quick VMware sanity check.
 - **clone-and-check**: Creates conN+disN bastion pair, configures networking/firewall/dnsmasq. Required by most other suites.
 - **connected-public**: SNO install using public registry (no mirror). Tests direct + proxy modes.
 - **cluster-ops**: ABI config generation, YAML diff against known-good examples, SNO cluster install/verify.
