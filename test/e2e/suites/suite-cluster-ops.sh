@@ -80,6 +80,14 @@ e2e_run "Remove oc-mirror caches" \
 e2e_run "Install aba" "./install"
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
+# GAP 2: Verify aba auto-update mechanism (modifying scripts/aba.sh triggers re-install)
+e2e_run "Auto-update: bump ABA_BUILD timestamp" \
+    "new_v=\$(date +%Y%m%d%H%M%S) && sed -i \"s/^ABA_BUILD=.*/ABA_BUILD=\$new_v/g\" scripts/aba.sh && echo \$new_v > /tmp/e2e-aba-build-stamp"
+e2e_run "Auto-update: run aba (triggers update)" \
+    "aba -h | head -8"
+e2e_run "Auto-update: verify installed binary has new build stamp" \
+    "grep ^ABA_BUILD=\$(cat /tmp/e2e-aba-build-stamp) \$(which aba)"
+
 e2e_run "Configure aba.conf" "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"

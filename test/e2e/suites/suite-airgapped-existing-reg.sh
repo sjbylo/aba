@@ -128,6 +128,9 @@ test_begin "Must-fail checks"
 e2e_run_must_fail "Sync to unknown host should fail" \
     "aba -d mirror sync -H unknown.example.com --retry"
 
+e2e_run_must_fail "Install mirror to host where mirror already exists should fail" \
+    "aba -d mirror -k ~/.ssh/id_rsa -H $DIS_HOST install"
+
 e2e_run_must_fail "Install to localhost (no mirror on localhost) should fail" \
     "aba -d mirror install"
 
