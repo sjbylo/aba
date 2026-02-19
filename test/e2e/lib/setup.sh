@@ -67,14 +67,14 @@ setup_aba_from_scratch() {
 # Initialize an internal (air-gapped) bastion VM by cloning from template.
 # Clones the template, powers on, and applies configure_internal_bastion.
 #
-# Usage: setup_bastion CLONE_NAME [TEMPLATE] [TEST_USER]
+# Usage: setup_bastion CLONE_NAME [TEMPLATE] [DIS_SSH_USER]
 #
 # Example: setup_bastion dis1 bastion-internal-rhel9 steve
 #
 setup_bastion() {
     local clone_name="$1"
     local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
-    local test_user="${3:-${TEST_USER:-$VM_DEFAULT_USER}}"
+    local test_user="${3:-${DIS_SSH_USER:-$VM_DEFAULT_USER}}"
 
     echo "=== setup_bastion: clone $template -> $clone_name ==="
 

@@ -131,7 +131,7 @@ test_begin "Configure: full internal bastion setup"
 #   _vm_create_test_user -> create 'testy' with SSH key + sudo
 
 e2e_run "Run configure_internal_bastion" \
-    "configure_internal_bastion $CLONE_HOST $DEF_USER $TEST_USER $CLONE_NAME"
+    "configure_internal_bastion $CLONE_HOST $DEF_USER $DIS_SSH_USER $CLONE_NAME"
 
 test_end
 

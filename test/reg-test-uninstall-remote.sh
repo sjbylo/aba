@@ -16,7 +16,7 @@ END
 
 reg_host=${1:?Usage: $0 REGISTRY_HOST}
 
-reg_ssh_user=${TEST_USER:-steve}
+reg_ssh_user=${DIS_SSH_USER:-steve}
 
 rsync --progress --partial -avz reg-install.sh mirror-registry-amd64.tar.gz  $reg_ssh_user@$reg_host:test
 

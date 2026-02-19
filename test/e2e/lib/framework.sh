@@ -1028,7 +1028,7 @@ e2e_setup() {
     _e2e_log "  TEST_CHANNEL=${TEST_CHANNEL:-unset}"
     _e2e_log "  OCP_VERSION=${OCP_VERSION:-unset}"
     _e2e_log "  INT_BASTION_RHEL_VER=${INT_BASTION_RHEL_VER:-unset}"
-    _e2e_log "  TEST_USER=${TEST_USER:-unset}"
+    _e2e_log "  DIS_SSH_USER=${DIS_SSH_USER:-unset}"
     _e2e_log "  OC_MIRROR_VER=${OC_MIRROR_VER:-unset}"
     _e2e_log "  NOTIFY_CMD=${NOTIFY_CMD:-disabled}"
     _e2e_log "  _E2E_INTERACTIVE=${_E2E_INTERACTIVE:-off}"

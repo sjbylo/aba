@@ -289,7 +289,7 @@ vm_exists() {
 # --- setup_ssh_to_root ------------------------------------------------------
 #
 # Copy the current user's SSH config and keys to /root/.ssh so that
-# root can also SSH to test hosts (needed when TEST_USER=root).
+# root can also SSH to test hosts (needed when DIS_SSH_USER=root).
 #
 setup_ssh_to_root() {
     local def_user="${1:-steve}"

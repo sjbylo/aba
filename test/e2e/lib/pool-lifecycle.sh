@@ -719,14 +719,14 @@ configure_connected_bastion() {
 # network hardening, firewall/NAT, RPM removal, proxy removal, etc.
 # This is the modular equivalent of the old init_bastion() in test/include.sh.
 #
-# Usage: configure_internal_bastion HOST [USER] [TEST_USER] [CLONE_NAME]
+# Usage: configure_internal_bastion HOST [USER] [DIS_SSH_USER] [CLONE_NAME]
 #   CLONE_NAME is used to look up the VLAN IP from VM_CLONE_VLAN_IPS.
 #   If omitted, defaults to HOST (works when hostname = clone name).
 #
 configure_internal_bastion() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
-    local test_user="${3:-${TEST_USER:-$VM_DEFAULT_USER}}"
+    local test_user="${3:-${DIS_SSH_USER:-$VM_DEFAULT_USER}}"
     local clone_name="${4:-$host}"
 
     echo "=== Configuring internal bastion: $host (clone: $clone_name) ==="

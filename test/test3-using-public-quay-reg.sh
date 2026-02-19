@@ -21,7 +21,7 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
-[ ! "$TEST_USER" ] && export TEST_USER=$(whoami)
+[ ! "$DIS_SSH_USER" ] && export DIS_SSH_USER=$(whoami)
 
 # Try to fix "out of space" error when generating the op. index
 cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
@@ -98,7 +98,7 @@ echo Check aba.conf:
 normalize-aba-conf
 
 #reg_ssh_user=$(whoami)
-reg_ssh_user=$TEST_USER
+reg_ssh_user=$DIS_SSH_USER
 
 aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
