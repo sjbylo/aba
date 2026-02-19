@@ -133,7 +133,7 @@ test_end
 test_begin "Bundle: create with older version"
 
 e2e_run -r 3 2 "Create bundle and pipe to bastion" \
-    "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel ${TEST_CHANNEL:-stable} --op-sets abatest --ops web-terminal --base-domain $(pool_domain) -o - -y | ssh ${INTERNAL_BASTION} 'tar xf - -C ~'"
+    "source <(normalize-aba-conf) && aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel ${TEST_CHANNEL:-stable} --version \$ocp_version --op-sets abatest --ops web-terminal --base-domain $(pool_domain) -o - -y | ssh ${INTERNAL_BASTION} 'tar xf - -C ~'"
 
 test_end
 
@@ -329,8 +329,24 @@ test_begin "Lifecycle: shutdown/startup"
 
 e2e_run_remote "Shutdown cluster" \
     "cd ~/aba && yes | aba --dir $SNO shutdown --wait"
+
+# GAP 3: Verify 'aba ls' shows node power state after shutdown
+e2e_run_remote "Verify 'aba ls' shows poweredOff" \
+    "cd ~/aba && aba --dir $SNO ls | grep -i poweredOff"
+
 e2e_run_remote "Startup cluster" \
     "cd ~/aba && aba --dir $SNO startup --wait"
+
+# GAP 3: Verify 'aba ls' shows node power state after startup
+e2e_run_remote "Verify 'aba ls' shows poweredOn" \
+    "cd ~/aba && aba --dir $SNO ls | grep -i poweredOn"
+
+# GAP 4: Verify 'aba login' and 'aba shell' set up kubeconfig correctly
+e2e_run_remote "Verify 'aba login' sets kubeconfig" \
+    "cd ~/aba && eval \"\$(aba --dir $SNO login)\" && oc get nodes"
+e2e_run_remote "Verify 'aba shell' exports work" \
+    "cd ~/aba && eval \"\$(aba --dir $SNO shell)\" && oc get clusterversion"
+
 e2e_run_remote "Verify cluster healthy after restart" \
     "cd ~/aba && aba --dir $SNO run"
 
