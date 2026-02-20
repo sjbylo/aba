@@ -114,6 +114,14 @@ _vm_setup_ssh_keys() {
     if [ "$user" != "root" ] && [ -f ~/.ssh/config ]; then
         scp -o StrictHostKeyChecking=no ~/.ssh/config "root@${host}:.ssh/config"
     fi
+
+    # Keep long-running SSH sessions alive (matches bastion client config)
+    ssh "root@${host}" -- bash -c '
+        sed -i "/^ClientAliveInterval/d; /^ClientAliveCountMax/d" /etc/ssh/sshd_config
+        echo "ClientAliveInterval 60"  >> /etc/ssh/sshd_config
+        echo "ClientAliveCountMax 5"   >> /etc/ssh/sshd_config
+        systemctl restart sshd
+    '
 }
 
 # --- _vm_setup_time ---------------------------------------------------------
