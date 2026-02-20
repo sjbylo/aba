@@ -86,6 +86,10 @@ e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 
+# Simulate manual edit: set dns_servers to pool dnsmasq host
+e2e_run "Set dns_servers via sed" \
+    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
+
 e2e_run -q "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
 # Copy vmware.conf and set the test VM folder

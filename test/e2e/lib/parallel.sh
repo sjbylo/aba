@@ -306,45 +306,6 @@ dispatch_all() {
     # Ensure log directory exists
     mkdir -p "${_E2E_DIR_PA}/logs"
 
-    # Sync latest code to all pool hosts before dispatching.
-    # conN hosts don't have .git, so we rsync the working tree.
-    local _aba_root
-    _aba_root="$(cd "$_E2E_DIR_PA/../.." && pwd)"
-    echo "Syncing code to pool hosts ..."
-    local _i
-    for _i in "${!_POOL_NAMES[@]}"; do
-        local _host="${_POOL_CONN_HOSTS[$_i]}"
-        local _overrides="${_POOL_OVERRIDES[$_i]}"
-        local _ssh_user="${CON_SSH_USER:-}"
-        local _o
-        for _o in $_overrides; do
-            case "$_o" in CON_SSH_USER=*) _ssh_user="${_o#CON_SSH_USER=}" ;; esac
-        done
-        local _target="${_ssh_user:+${_ssh_user}@}${_host}"
-        echo "  Syncing to $_host ..."
-        rsync -az --no-perms --delete \
-            --exclude='.git/' \
-            --exclude='mirror/save/' \
-            --exclude='mirror/sync/' \
-            --exclude='mirror/.oc-mirror/' \
-            --exclude='mirror/*.tar' \
-            --exclude='mirror/*.tar.gz' \
-            --exclude='mirror/mirror-registry' \
-            --exclude='mirror/oc-mirror-workspace/' \
-            --exclude='cli/*.tar.gz' \
-            --exclude='cli/oc' \
-            --exclude='cli/oc-mirror*' \
-            --exclude='cli/openshift-install' \
-            --exclude='cli/govc' \
-            --exclude='cli/kubectl' \
-            --exclude='cli/butane' \
-            --exclude='sno*/' \
-            --exclude='compact*/' \
-            --exclude='standard*/' \
-            "$_aba_root/" "$_target:~/aba/" || echo "  WARNING: rsync to $_host failed"
-    done
-    echo ""
-
     # Dispatch loop: assign work to free pools
     while [ $queue_idx -lt ${#work_queue[@]} ] || [ ${#_JOB_PIDS[@]} -gt 0 ]; do
 

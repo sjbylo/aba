@@ -76,6 +76,11 @@ e2e_run "Install aba" "./install"
 # Use OCP_VERSION=p for upgrade testing (we'll reduce version further below)
 e2e_run "Configure aba.conf with previous version" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version p --base-domain $(pool_domain)"
+
+# Simulate manual edit: set dns_servers to pool dnsmasq host
+e2e_run "Set dns_servers via sed" \
+    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
+
 e2e_run "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
