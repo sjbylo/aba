@@ -711,8 +711,8 @@ _vm_create_test_user() {
 }
 
 # --- _vm_set_aba_testing ----------------------------------------------------
-# Add 'export ABA_TESTING=1' to ~/.bashrc for root, the default user (steve),
-# and the test user (testy). This disables usage tracking during E2E runs.
+# Set ABA_TESTING=1 system-wide via /etc/environment (applies to all sessions
+# including non-interactive SSH) and in ~/.bashrc for interactive shells.
 #
 _vm_set_aba_testing() {
     local host="$1"
@@ -722,16 +722,17 @@ _vm_set_aba_testing() {
 
     cat <<-'TESTEOF' | ssh "${def_user}@${host}" -- sudo bash
 		set -e
+
+		# System-wide: /etc/environment is read by PAM for all login sessions
+		sed -i '/^ABA_TESTING=/d' /etc/environment
+		echo 'ABA_TESTING=1' >> /etc/environment
+
 		for home_dir in /root "/home/$SUDO_USER" /home/testy; do
 		    [ -d "$home_dir" ] || continue
 		    rc="$home_dir/.bashrc"
-		    # Ensure .bashrc exists
 		    touch "$rc"
-		    # Remove any existing ABA_TESTING lines to avoid duplicates
 		    sed -i '/^export ABA_TESTING=/d' "$rc"
-		    # Append the export
 		    echo 'export ABA_TESTING=1' >> "$rc"
-		    # Fix ownership (testy's home must be owned by testy, etc.)
 		    user_name=$(basename "$home_dir")
 		    [ "$home_dir" = "/root" ] && user_name=root
 		    chown "$user_name":"$user_name" "$rc"
@@ -917,8 +918,17 @@ create_pools() {
     local signal_dir
     signal_dir=$(mktemp -d /tmp/e2e-pool-signals.XXXXXX)
 
+    local base_folder="${VC_FOLDER:-/Datacenter/vm/abatesting}"
+
     echo "=== Creating pool(s) ${start_at}..${end_at} from template $vm_template ==="
     echo "  Signal dir: $signal_dir"
+
+    # --- Create per-pool subfolders -----------------------------------------
+    for (( i=start_at; i<=end_at; i++ )); do
+        local pool_folder="${base_folder}/pool${i}"
+        echo "  Creating folder: $pool_folder"
+        govc folder.create "$pool_folder" 2>/dev/null || true
+    done
 
     # --- Phase 1: Clone all VMs in parallel from snapshot --------------------
     echo ""
@@ -929,12 +939,13 @@ create_pools() {
     local i
 
     for (( i=start_at; i<=end_at; i++ )); do
-        clone_vm "$vm_template" "con${i}" &
+        local pool_folder="${base_folder}/pool${i}"
+        clone_vm "$vm_template" "con${i}" "$pool_folder" &
         clone_pids+=($!)
         clone_labels+=("clone con${i}")
 
         if [ -z "$connected_only" ]; then
-            clone_vm "$vm_template" "dis${i}" &
+            clone_vm "$vm_template" "dis${i}" "$pool_folder" &
             clone_pids+=($!)
             clone_labels+=("clone dis${i}")
         fi
@@ -967,9 +978,11 @@ create_pools() {
     for (( i=start_at; i<=end_at; i++ )); do
         local conn_vm="con${i}"
         local user="${VM_DEFAULT_USER}"
+        local pool_folder="${base_folder}/pool${i}"
 
         # Connected bastion: configure, then signal dis that firewall is ready
         (
+            export VC_FOLDER="$pool_folder"
             configure_connected_bastion "$conn_vm" "$user" "$conn_vm"
             touch "${signal_dir}/${conn_vm}.ready"
         ) &
@@ -980,6 +993,7 @@ create_pools() {
         if [ -z "$connected_only" ]; then
             local int_vm="dis${i}"
             (
+                export VC_FOLDER="$pool_folder"
                 # dis can do SSH + network while waiting for con's firewall
                 _vm_wait_ssh "$int_vm" "$user"
                 _vm_setup_ssh_keys "$int_vm" "$user"
