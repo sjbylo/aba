@@ -35,15 +35,15 @@ setup_aba_from_scratch() {
     echo "=== setup_aba_from_scratch ==="
 
     # Uninstall any existing registry using aba's own uninstall command.
-    # Skip if no mirror dir or no aba.conf (fresh VM from template).
+    # Skip if no registry marker exists (fresh VM or already cleaned).
     # Rule 6: uninstall from the same host that installed.
     e2e_run "Uninstall registry (local or remote)" \
-        "cd $aba_root && if [ -f aba.conf ] && [ -d mirror ]; then aba -d mirror uninstall; else echo 'No aba.conf or mirror dir -- skipping uninstall'; fi"
+        "cd $aba_root && if [ -f mirror/.installed ]; then aba -d mirror uninstall; else echo 'No mirror/.installed -- skipping uninstall'; fi"
 
     # Reset aba BEFORE removing RPMs -- 'aba reset' needs 'make' which is
     # removed in the RPM removal step below (Rule 7).
     e2e_run "Reset aba" \
-        "cd $aba_root && if [ -f aba.conf ] && [ -d mirror ]; then aba reset -f; else echo 'No aba.conf or mirror dir -- nothing to reset'; fi"
+        "cd $aba_root && if [ -f aba.conf ] && [ -f mirror/mirror.conf ]; then aba reset -f; else echo 'Nothing to reset -- skipping'; fi"
 
     # Remove RPMs so aba can test auto-install (removes make, git, etc.)
     e2e_run "Remove RPMs for clean install test" \
