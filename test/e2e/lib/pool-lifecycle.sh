@@ -685,7 +685,7 @@ _vm_disconnect_internet() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
 
-    echo "  [vm] Disconnecting internet on $host (removing default route) ..."
+    echo "  [vm] Disconnecting internet on $host ..."
 
     ssh "${user}@${host}" -- sudo bash -c "
         set -ex
@@ -693,8 +693,14 @@ _vm_disconnect_internet() {
         nmcli connection modify ens224.10 ipv4.gateway ''
         nmcli connection up ens224.10
 
+        # Ensure ens256 is down (may have come back after dnf reboot)
+        nmcli connection down ens256 2>/dev/null || true
+        ip link set ens256 down 2>/dev/null || true
+
         echo '=== Routes after disconnect ==='
         ip route
+        echo '=== Verify ens256 is DOWN ==='
+        ip link show ens256 | grep -q 'state DOWN' && echo 'GOOD: ens256 is DOWN' || echo 'WARNING: ens256 not in DOWN state'
         echo '=== Verify no internet ==='
         ! ping -c 1 -W 3 8.8.8.8 && echo 'GOOD: no internet access' || { echo 'ERROR: internet still reachable'; exit 1; }
     "

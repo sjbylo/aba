@@ -89,6 +89,10 @@ e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 
+# Simulate manual edit: override dns_servers to point to pool dnsmasq
+e2e_run "Set dns_servers via sed" \
+    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
+
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"

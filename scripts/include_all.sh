@@ -21,6 +21,9 @@ export ARCH=$(uname -m)
 [ "$ARCH" = "x86_64" ] && export ARCH=amd64   # Intel
 # s390x and ppc64le: no mapping needed — OpenShift uses the raw uname -m value
 
+# Source user overrides (e.g. OC_MIRROR_IMAGE_TIMEOUT) if present
+[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
+
 # ===========================
 # Color Echo Functions
 # ===========================
