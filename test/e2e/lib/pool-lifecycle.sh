@@ -962,20 +962,25 @@ create_pools() {
 
     local base_folder="${VC_FOLDER:-/Datacenter/vm/abatesting}"
 
-    # --- Parse per-pool VM_DATASTORE from pools.conf ------------------------
+    # --- Parse per-pool overrides from pools.conf ---------------------------
     local -A _pool_datastores=()
+    local -A _pool_folders=()
     if [ -n "$pools_file" ] && [ -f "$pools_file" ]; then
         while IFS= read -r _line; do
             [[ "$_line" =~ ^[[:space:]]*# ]] && continue
             [[ -z "${_line// }" ]] && continue
-            local _pnum="" _pds=""
+            local _pnum="" _pds="" _pfolder=""
             for _token in $_line; do
                 case "$_token" in
                     POOL_NUM=*)      _pnum="${_token#POOL_NUM=}" ;;
                     VM_DATASTORE=*)  _pds="${_token#VM_DATASTORE=}" ;;
+                    VC_FOLDER=*)     _pfolder="${_token#VC_FOLDER=}" ;;
                 esac
             done
-            [ -n "$_pnum" ] && [ -n "$_pds" ] && _pool_datastores[$_pnum]="$_pds"
+            if [ -n "$_pnum" ]; then
+                [ -n "$_pds" ] && _pool_datastores[$_pnum]="$_pds"
+                [ -n "$_pfolder" ] && _pool_folders[$_pnum]="$_pfolder"
+            fi
         done < "$pools_file"
     fi
 
@@ -984,7 +989,7 @@ create_pools() {
 
     # --- Create per-pool subfolders -----------------------------------------
     for (( i=start_at; i<=end_at; i++ )); do
-        local pool_folder="${base_folder}/pool${i}"
+        local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
         echo "  Creating folder: $pool_folder"
         govc folder.create "$pool_folder" 2>/dev/null || true
     done
@@ -998,7 +1003,7 @@ create_pools() {
     local i
 
     for (( i=start_at; i<=end_at; i++ )); do
-        local pool_folder="${base_folder}/pool${i}"
+        local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
         local pool_ds="${_pool_datastores[$i]:-$VM_DATASTORE}"
         VM_DATASTORE="$pool_ds" clone_vm "$vm_template" "con${i}" "$pool_folder" &
         clone_pids+=($!)
@@ -1038,7 +1043,7 @@ create_pools() {
     for (( i=start_at; i<=end_at; i++ )); do
         local conn_vm="con${i}"
         local user="${VM_DEFAULT_USER}"
-        local pool_folder="${base_folder}/pool${i}"
+        local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
 
         # Connected bastion: configure, then signal dis that firewall is ready
         (
