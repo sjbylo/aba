@@ -103,7 +103,7 @@ echo
 [[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && eval mkdir -p $OC_MIRROR_CACHE && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
 
 # oc-mirror v2 tuning params
-parallel_images=8
+parallel_images="${OC_MIRROR_PARALLEL_IMAGES:-8}"
 retry_delay=2
 retry_times=2
 image_timeout="${OC_MIRROR_IMAGE_TIMEOUT:-30m}"
