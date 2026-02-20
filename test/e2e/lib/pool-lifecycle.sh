@@ -943,12 +943,14 @@ create_pools() {
     local rhel_ver="${INT_BASTION_RHEL_VER:-rhel9}"
     local connected_only=""
     local start_at=1
+    local pools_file=""
 
     while [ $# -gt 0 ]; do
         case "$1" in
             --rhel) rhel_ver="$2"; shift 2 ;;
             --connected-only) connected_only=1; shift ;;
             --start) start_at="$2"; shift 2 ;;
+            --pools-file) pools_file="$2"; shift 2 ;;
             *) echo "create_pools: unknown flag: $1" >&2; return 1 ;;
         esac
     done
@@ -959,6 +961,23 @@ create_pools() {
     signal_dir=$(mktemp -d /tmp/e2e-pool-signals.XXXXXX)
 
     local base_folder="${VC_FOLDER:-/Datacenter/vm/abatesting}"
+
+    # --- Parse per-pool VM_DATASTORE from pools.conf ------------------------
+    local -A _pool_datastores=()
+    if [ -n "$pools_file" ] && [ -f "$pools_file" ]; then
+        while IFS= read -r _line; do
+            [[ "$_line" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "${_line// }" ]] && continue
+            local _pnum="" _pds=""
+            for _token in $_line; do
+                case "$_token" in
+                    POOL_NUM=*)      _pnum="${_token#POOL_NUM=}" ;;
+                    VM_DATASTORE=*)  _pds="${_token#VM_DATASTORE=}" ;;
+                esac
+            done
+            [ -n "$_pnum" ] && [ -n "$_pds" ] && _pool_datastores[$_pnum]="$_pds"
+        done < "$pools_file"
+    fi
 
     echo "=== Creating pool(s) ${start_at}..${end_at} from template $vm_template ==="
     echo "  Signal dir: $signal_dir"
@@ -980,12 +999,13 @@ create_pools() {
 
     for (( i=start_at; i<=end_at; i++ )); do
         local pool_folder="${base_folder}/pool${i}"
-        clone_vm "$vm_template" "con${i}" "$pool_folder" &
+        local pool_ds="${_pool_datastores[$i]:-$VM_DATASTORE}"
+        VM_DATASTORE="$pool_ds" clone_vm "$vm_template" "con${i}" "$pool_folder" &
         clone_pids+=($!)
         clone_labels+=("clone con${i}")
 
         if [ -z "$connected_only" ]; then
-            clone_vm "$vm_template" "dis${i}" "$pool_folder" &
+            VM_DATASTORE="$pool_ds" clone_vm "$vm_template" "dis${i}" "$pool_folder" &
             clone_pids+=($!)
             clone_labels+=("clone dis${i}")
         fi
