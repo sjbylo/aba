@@ -425,13 +425,26 @@ main() {
 
     # Destroy pools and exit if requested
     if [ -n "$CLI_DESTROY_POOLS" ]; then
+        local _vmconf
+        _vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+        if [ -f "$_vmconf" ]; then
+            set -a; source "$_vmconf"; set +a
+        fi
         destroy_pools --all
         exit 0
     fi
 
     # Create pools if requested
     if [ -n "$CLI_CREATE_POOLS" ]; then
-        create_pools "$CLI_CREATE_POOLS"
+        local _vmconf
+        _vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+        if [ -f "$_vmconf" ]; then
+            set -a; source "$_vmconf"; set +a
+        else
+            echo "ERROR: VMware config not found: $_vmconf" >&2
+            exit 1
+        fi
+        create_pools "$CLI_CREATE_POOLS" || { echo "ERROR: create_pools failed" >&2; exit 1; }
     fi
 
     # Determine which suites to run
