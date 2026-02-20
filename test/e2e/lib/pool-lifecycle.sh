@@ -1064,11 +1064,33 @@ create_pools() {
 
         echo "  Pool ${i} log: $pool_log"
 
-        # Connected bastion: configure, then signal dis that firewall is ready
+        # Connected bastion: signal dis as soon as firewall+dnsmasq are up,
+        # then continue with the slower cleanup/install steps.
         (
             export VC_FOLDER="$pool_folder"
-            configure_connected_bastion "$conn_vm" "$user" "$conn_vm"
+
+            echo "=== Configuring connected bastion: $conn_vm ==="
+
+            _vm_wait_ssh "$conn_vm" "$user"
+            _vm_setup_ssh_keys "$conn_vm" "$user"
+            _vm_fix_proxy_noproxy "$conn_vm" "$user"
+            _vm_setup_network "$conn_vm" "$user" "$conn_vm"
+            _vm_setup_firewall "$conn_vm" "$user"
+            _vm_setup_dnsmasq "$conn_vm" "$user" "$conn_vm"
+
+            # disN can now proceed -- firewall masquerade + dnsmasq are up
             touch "${signal_dir}/${conn_vm}.ready"
+
+            _vm_setup_time "$conn_vm" "$user"
+            _vm_cleanup_caches "$conn_vm" "$user"
+            _vm_cleanup_podman "$conn_vm" "$user"
+            _vm_cleanup_home "$conn_vm" "$user"
+            _vm_setup_vmware_conf "$conn_vm" "$user"
+            _vm_create_test_user "$conn_vm" "$user"
+            _vm_set_aba_testing "$conn_vm" "$user"
+            _vm_install_aba "$conn_vm" "$user"
+
+            echo "=== Connected bastion ready: $conn_vm ==="
         ) >> "$pool_log" 2>&1 &
         pids+=($!)
         labels+=("configure $conn_vm")
@@ -1078,13 +1100,16 @@ create_pools() {
             local int_vm="dis${i}"
             (
                 export VC_FOLDER="$pool_folder"
-                # dis can do SSH + network while waiting for con's firewall
+                # dis can do SSH, network, firewall and NTP config while
+                # waiting for con's firewall -- chrony syncs once the
+                # NTP server becomes reachable.
                 _vm_wait_ssh "$int_vm" "$user"
                 _vm_setup_ssh_keys "$int_vm" "$user"
                 _vm_setup_network "$int_vm" "$user" "$int_vm"
                 _vm_setup_firewall "$int_vm" "$user"
+                _vm_setup_time "$int_vm" "$user"
 
-                # Wait for con's masquerade+dnsmasq before NTP and updates
+                # Wait for con's masquerade+dnsmasq before dnf update
                 echo "  [$int_vm] Waiting for $conn_vm firewall+dnsmasq ..."
                 local waited=0
                 while [ ! -f "${signal_dir}/${conn_vm}.ready" ]; do
@@ -1097,7 +1122,6 @@ create_pools() {
                 done
                 echo "  [$int_vm] $conn_vm is ready (waited ${waited}s), continuing ..."
 
-                _vm_setup_time "$int_vm" "$user"
                 _vm_dnf_update "$int_vm" "$user"
                 _vm_wait_ssh "$int_vm" "$user"
                 _vm_cleanup_caches "$int_vm" "$user"
