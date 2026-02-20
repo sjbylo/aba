@@ -116,12 +116,12 @@ _vm_setup_ssh_keys() {
     fi
 
     # Keep long-running SSH sessions alive (matches bastion client config)
-    ssh "root@${host}" -- bash -c '
-        sed -i "/^ClientAliveInterval/d; /^ClientAliveCountMax/d" /etc/ssh/sshd_config
-        echo "ClientAliveInterval 60"  >> /etc/ssh/sshd_config
-        echo "ClientAliveCountMax 5"   >> /etc/ssh/sshd_config
-        systemctl restart sshd
-    '
+    cat <<-'SSHDEOF' | ssh "root@${host}" -- bash
+		sed -i "/^ClientAliveInterval/d; /^ClientAliveCountMax/d" /etc/ssh/sshd_config
+		echo "ClientAliveInterval 60"  >> /etc/ssh/sshd_config
+		echo "ClientAliveCountMax 5"   >> /etc/ssh/sshd_config
+		systemctl restart sshd
+	SSHDEOF
 }
 
 # --- _vm_setup_time ---------------------------------------------------------
@@ -542,15 +542,15 @@ RESOLVEOF
     local sno_name
     sno_name="$(pool_cluster_name sno ${pool_num})"
     echo "  [vm] Verifying DNS on $host (cluster name: $sno_name) ..."
-    ssh "${user}@${host}" -- bash -c "
-        echo '--- Testing registry DNS ---'
-        dig +short registry.${domain} @127.0.0.1
-        echo '--- Testing cluster DNS ---'
-        dig +short api.${sno_name}.${domain} @127.0.0.1
-        dig +short test.apps.${sno_name}.${domain} @127.0.0.1
-        echo '--- Testing upstream forwarding ---'
-        dig +short google.com @127.0.0.1 | head -1
-    "
+    cat <<-DNSEOF | ssh "${user}@${host}" -- bash
+		echo '--- Testing registry DNS ---'
+		dig +short registry.${domain} @127.0.0.1
+		echo '--- Testing cluster DNS ---'
+		dig +short api.${sno_name}.${domain} @127.0.0.1
+		dig +short test.apps.${sno_name}.${domain} @127.0.0.1
+		echo '--- Testing upstream forwarding ---'
+		dig +short google.com @127.0.0.1 | head -1
+	DNSEOF
 }
 
 # --- _vm_cleanup_caches -----------------------------------------------------
@@ -586,14 +586,14 @@ _vm_cleanup_podman() {
 
     echo "  [vm] Cleaning podman on $host ..."
 
-    ssh "${user}@${host}" -- bash -c "
-        set -e
-        command -v podman || sudo dnf install podman -y
-        podman system prune --all --force
-        podman rmi --all --force
-        sudo rm -rfv ~/.local/share/containers/storage
-        rm -rfv ~/test
-    "
+    cat <<-'PODMEOF' | ssh "${user}@${host}" -- bash
+		set -e
+		command -v podman || sudo dnf install podman -y
+		podman system prune --all --force
+		podman rmi --all --force
+		sudo rm -rfv ~/.local/share/containers/storage
+		rm -rfv ~/test
+	PODMEOF
 }
 
 # --- _vm_cleanup_home -------------------------------------------------------
@@ -655,12 +655,12 @@ _vm_fix_proxy_noproxy() {
 
     echo "  [vm] Fixing no_proxy in ~/.proxy-set.sh on $host ..."
 
-    ssh "${user}@${host}" -- bash -c '
-        if [ -f ~/.proxy-set.sh ]; then
-            sed -i "s|^export no_proxy=.*|export no_proxy=localhost,127.0.0.1,.lan,.example.com,10.0.0.0/8,192.168.0.0/16|" ~/.proxy-set.sh
-            sed -i "s|^export NO_PROXY=.*|export NO_PROXY=localhost,127.0.0.1,.lan,.example.com,10.0.0.0/8,192.168.0.0/16|" ~/.proxy-set.sh
-        fi
-    '
+    cat <<-'PROXYEOF' | ssh "${user}@${host}" -- bash
+		if [ -f ~/.proxy-set.sh ]; then
+		    sed -i "s|^export no_proxy=.*|export no_proxy=localhost,127.0.0.1,.lan,.example.com,10.0.0.0/8,192.168.0.0/16|" ~/.proxy-set.sh
+		    sed -i "s|^export NO_PROXY=.*|export NO_PROXY=localhost,127.0.0.1,.lan,.example.com,10.0.0.0/8,192.168.0.0/16|" ~/.proxy-set.sh
+		fi
+	PROXYEOF
 }
 
 # --- _vm_remove_proxy -------------------------------------------------------
@@ -687,23 +687,23 @@ _vm_disconnect_internet() {
 
     echo "  [vm] Disconnecting internet on $host ..."
 
-    ssh "${user}@${host}" -- sudo bash -c "
-        set -ex
-        # Remove the default gateway from the VLAN connection
-        nmcli connection modify ens224.10 ipv4.gateway ''
-        nmcli connection up ens224.10
+    cat <<-'DISCEOF' | ssh "${user}@${host}" -- sudo bash
+		set -ex
+		# Remove the default gateway from the VLAN connection
+		nmcli connection modify ens224.10 ipv4.gateway ''
+		nmcli connection up ens224.10
 
-        # Ensure ens256 is down (may have come back after dnf reboot)
-        nmcli connection down ens256 2>/dev/null || true
-        ip link set ens256 down 2>/dev/null || true
+		# Ensure ens256 is down (may have come back after dnf reboot)
+		nmcli connection down ens256 2>/dev/null || true
+		ip link set ens256 down 2>/dev/null || true
 
-        echo '=== Routes after disconnect ==='
-        ip route
-        echo '=== Verify ens256 is DOWN ==='
-        ip link show ens256 | grep -q 'state DOWN' && echo 'GOOD: ens256 is DOWN' || echo 'WARNING: ens256 not in DOWN state'
-        echo '=== Verify no internet ==='
-        ! ping -c 1 -W 3 8.8.8.8 && echo 'GOOD: no internet access' || { echo 'ERROR: internet still reachable'; exit 1; }
-    "
+		echo '=== Routes after disconnect ==='
+		ip route
+		echo '=== Verify ens256 is DOWN ==='
+		ip link show ens256 | grep -q 'state DOWN' && echo 'GOOD: ens256 is DOWN' || echo 'WARNING: ens256 not in DOWN state'
+		echo '=== Verify no internet ==='
+		! ping -c 1 -W 3 8.8.8.8 && echo 'GOOD: no internet access' || { echo 'ERROR: internet still reachable'; exit 1; }
+	DISCEOF
 }
 
 # --- _vm_create_test_user ---------------------------------------------------
@@ -1033,9 +1033,25 @@ create_pools() {
     fi
     echo "--- Phase 1 complete: all clones booting ---"
 
+    # --- Snapshot all clones (rollback point before configuration) ----------
+    echo ""
+    echo "--- Creating post-clone snapshots ---"
+    for (( i=start_at; i<=end_at; i++ )); do
+        local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
+        govc snapshot.create -vm "${pool_folder}/con${i}" "post-clone" &
+        if [ -z "$connected_only" ]; then
+            govc snapshot.create -vm "${pool_folder}/dis${i}" "post-clone" &
+        fi
+    done
+    wait
+    echo "--- Snapshots created ---"
+
     # --- Phase 2: Configure all VMs in parallel -----------------------------
     echo ""
     echo "--- Phase 2: Configuring VMs (parallel) ---"
+
+    local pool_log_dir="${E2E_LOG_DIR:-${_E2E_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/logs}"
+    mkdir -p "$pool_log_dir"
 
     local -a pids=()
     local -a labels=()
@@ -1044,13 +1060,16 @@ create_pools() {
         local conn_vm="con${i}"
         local user="${VM_DEFAULT_USER}"
         local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
+        local pool_log="${pool_log_dir}/create-pool${i}.log"
+
+        echo "  Pool ${i} log: $pool_log"
 
         # Connected bastion: configure, then signal dis that firewall is ready
         (
             export VC_FOLDER="$pool_folder"
             configure_connected_bastion "$conn_vm" "$user" "$conn_vm"
             touch "${signal_dir}/${conn_vm}.ready"
-        ) &
+        ) >> "$pool_log" 2>&1 &
         pids+=($!)
         labels+=("configure $conn_vm")
 
@@ -1071,7 +1090,7 @@ create_pools() {
                 while [ ! -f "${signal_dir}/${conn_vm}.ready" ]; do
                     sleep 5
                     waited=$(( waited + 5 ))
-                    if [ $waited -ge 600 ]; then
+                    if [ $waited -ge 1200 ]; then
                         echo "  [$int_vm] ERROR: Timed out waiting for $conn_vm (${waited}s)" >&2
                         return 1
                     fi
@@ -1092,7 +1111,7 @@ create_pools() {
                 _vm_set_aba_testing "$int_vm" "$user"
                 _vm_disconnect_internet "$int_vm" "$user"
                 echo "=== Internal bastion ready: $int_vm ==="
-            ) &
+            ) >> "$pool_log" 2>&1 &
             pids+=($!)
             labels+=("configure $int_vm")
         fi

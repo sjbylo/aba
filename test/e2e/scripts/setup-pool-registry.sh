@@ -81,7 +81,7 @@ mkdir -p "$POOL_REG_DIR"
 
 # --- Step 1: Install Quay (idempotent) --------------------------------------
 
-if curl --retry 3 -fSkIL -o /dev/null "https://${reg_host}:${REG_PORT}/health/instance" 2>/dev/null; then
+if curl --retry 3 -sfSIL -o /dev/null "https://${reg_host}:${REG_PORT}/health/instance"; then
     echo "[1/4] Quay already running on ${reg_host}:${REG_PORT} -- skipping install"
 else
     echo "[1/4] Installing Quay on ${reg_host}:${REG_PORT} ..."
@@ -139,8 +139,7 @@ mkdir -p ~/.docker ~/.containers
 echo "$merged_auth" > ~/.docker/config.json
 cp ~/.docker/config.json ~/.containers/auth.json
 
-podman login -u "$REG_USER" -p "$REG_PW" "https://${reg_host}:${REG_PORT}" --tls-verify=false 2>/dev/null || \
-    podman login -u "$REG_USER" -p "$REG_PW" "https://${reg_host}:${REG_PORT}"
+podman login -u "$REG_USER" -p "$REG_PW" "https://${reg_host}:${REG_PORT}"
 
 echo "  Auth configured for ${reg_host}:${REG_PORT} + registry.redhat.io"
 
