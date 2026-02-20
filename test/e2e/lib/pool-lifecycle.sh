@@ -782,7 +782,13 @@ _vm_install_aba() {
 
     rsync -az --no-perms \
         --exclude='.git' \
-        --exclude='mirror/' \
+        --exclude='mirror/save/' \
+        --exclude='mirror/sync/' \
+        --exclude='mirror/.oc-mirror/' \
+        --exclude='mirror/*.tar' \
+        --exclude='mirror/*.tar.gz' \
+        --exclude='mirror/mirror-registry' \
+        --exclude='mirror/oc-mirror-workspace/' \
         --exclude='cli/*.tar.gz' \
         --exclude='cli/oc' \
         --exclude='cli/oc-mirror*' \

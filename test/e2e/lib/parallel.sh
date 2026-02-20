@@ -324,7 +324,13 @@ dispatch_all() {
         echo "  Syncing to $_host ..."
         rsync -az --no-perms --delete \
             --exclude='.git/' \
-            --exclude='mirror/' \
+            --exclude='mirror/save/' \
+            --exclude='mirror/sync/' \
+            --exclude='mirror/.oc-mirror/' \
+            --exclude='mirror/*.tar' \
+            --exclude='mirror/*.tar.gz' \
+            --exclude='mirror/mirror-registry' \
+            --exclude='mirror/oc-mirror-workspace/' \
             --exclude='cli/*.tar.gz' \
             --exclude='cli/oc' \
             --exclude='cli/oc-mirror*' \
