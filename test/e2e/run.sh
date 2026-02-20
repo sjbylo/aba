@@ -444,7 +444,7 @@ main() {
             echo "ERROR: VMware config not found: $_vmconf" >&2
             exit 1
         fi
-        create_pools "$CLI_CREATE_POOLS" || { echo "ERROR: create_pools failed" >&2; exit 1; }
+        create_pools "$CLI_CREATE_POOLS" --pools-file "$CLI_POOLS_FILE" || { echo "ERROR: create_pools failed" >&2; exit 1; }
     fi
 
     # Determine which suites to run
