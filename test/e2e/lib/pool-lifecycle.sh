@@ -644,6 +644,25 @@ _vm_remove_pull_secret() {
     ssh "${user}@${host}" -- "rm -fv ~/.pull-secret.json"
 }
 
+# --- _vm_fix_proxy_noproxy ---------------------------------------------------
+# Ensure ~/.proxy-set.sh has a comprehensive no_proxy that covers all local
+# subnets (management, VLAN, cluster nodes). Prevents proxy from intercepting
+# local traffic to registries, rendezvous hosts, and cluster APIs.
+#
+_vm_fix_proxy_noproxy() {
+    local host="$1"
+    local user="${2:-$VM_DEFAULT_USER}"
+
+    echo "  [vm] Fixing no_proxy in ~/.proxy-set.sh on $host ..."
+
+    ssh "${user}@${host}" -- bash -c '
+        if [ -f ~/.proxy-set.sh ]; then
+            sed -i "s|^export no_proxy=.*|export no_proxy=localhost,127.0.0.1,.lan,.example.com,10.0.0.0/8,192.168.0.0/16|" ~/.proxy-set.sh
+            sed -i "s|^export NO_PROXY=.*|export NO_PROXY=localhost,127.0.0.1,.lan,.example.com,10.0.0.0/8,192.168.0.0/16|" ~/.proxy-set.sh
+        fi
+    '
+}
+
 # --- _vm_remove_proxy -------------------------------------------------------
 # Disable proxy configuration in .bashrc (for fully disconnected testing).
 #
@@ -801,6 +820,7 @@ configure_connected_bastion() {
 
     _vm_wait_ssh "$host" "$user"
     _vm_setup_ssh_keys "$host" "$user"
+    _vm_fix_proxy_noproxy "$host" "$user"
 
     # Network + firewall first (NTP needs internet via ens256)
     _vm_setup_network "$host" "$user" "$clone_name"

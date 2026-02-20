@@ -12,7 +12,7 @@ if ! rpm -q podman || ! rpm -q rsync; then
 	sudo dnf install podman rsync -y
 fi
 
-if [ ! -x ./mirror-registry ]; then
+if [ ! -x ./mirror-registry ] || [ ! -f ./execution-environment.tar ]; then
 	if file mirror-registry-amd64.tar.gz | grep -i "gzip compressed data"; then
 		tar xvmzf mirror-registry-amd64.tar.gz 
 	else

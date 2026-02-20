@@ -28,7 +28,7 @@ rsync --progress --partial -avz reg-install.sh mirror-registry-amd64.tar.gz  $re
 
 ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "bash -e test/reg-install.sh"
 
-# FIXME: do this, but fix reg-test-uninstall-remote.sh
-#ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "rm -rf test"  # Just so we don't run out of disk space during tests! 
-ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "rm -vf test/*.tar test/*.gz"  # Just so we don't run out of disk space during tests! 
+# Clean up large files to save disk space. Also remove the mirror-registry
+# binary so the next run re-extracts everything from the tarball cleanly.
+ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "rm -vf test/*.tar test/*.gz test/mirror-registry"
 
