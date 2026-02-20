@@ -51,14 +51,9 @@ clone_with_macs() {
     e2e_run -q "Destroy old $clone (if exists)" \
         "if vm_exists $clone; then govc vm.power -off $clone 2>&1 || true; govc vm.destroy $clone; else echo 'VM $clone not found -- skipping'; fi"
 
-    # power-off may fail if template is already off -- that's fine
-    e2e_run "Revert template to snapshot" \
-        "govc vm.power -off $TEMPLATE 2>&1; govc snapshot.revert -vm $TEMPLATE ${VM_SNAPSHOT:-aba-test}"
-
-    local ds_flag=""
-    [ -n "${VM_DATASTORE:-}" ] && ds_flag="-ds=${VM_DATASTORE}"
+    # Use clone_vm which handles templates with or without snapshots
     e2e_run "Clone $TEMPLATE -> $clone (powered off)" \
-        "govc vm.clone -vm $TEMPLATE -folder ${VC_FOLDER:-/Datacenter/vm/abatesting} $ds_flag -on=false $clone"
+        "clone_vm $TEMPLATE $clone ${VC_FOLDER:-/Datacenter/vm/abatesting} ${VM_SNAPSHOT:-aba-test}"
 
     local mac_entry="${VM_CLONE_MACS[$clone]:-}"
     if [ -n "$mac_entry" ]; then
