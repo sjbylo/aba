@@ -1027,6 +1027,7 @@ Values are commented out by default; uncomment and edit to override.
 | `CATALOG_DOWNLOAD_TIMEOUT_MINS` | `20` | Timeout (minutes) for downloading operator catalog indexes. Increase on slow networks. |
 | `CATALOG_CACHE_TTL_SECS` | `86400` | How long (seconds) to cache downloaded catalog indexes before re-downloading (default 24 hours). |
 | `OC_MIRROR_IMAGE_TIMEOUT` | `30m` | Per-image timeout passed to `oc-mirror --image-timeout`. Increase for large operator images or slow connections (e.g. `60m`). |
+| `OC_MIRROR_PARALLEL_IMAGES` | `8` | Number of images to mirror concurrently via `oc-mirror --parallel-images`. Reduce on slow or unreliable networks. |
 
 Example — increase the image timeout to 60 minutes:
 
@@ -1036,6 +1037,15 @@ vi ~/.aba/config
 
 # Uncomment or add:
 OC_MIRROR_IMAGE_TIMEOUT=60m
+```
+
+Example — reduce parallel image downloads to 4:
+
+```bash
+vi ~/.aba/config
+
+# Uncomment or add:
+OC_MIRROR_PARALLEL_IMAGES=4
 ```
 
 ## Supported Architectures

@@ -13,3 +13,7 @@ CATALOG_CACHE_TTL_SECS=86400
 # oc-mirror --image-timeout value (default: 30m)
 # Increase for slow networks or large operator images
 # OC_MIRROR_IMAGE_TIMEOUT=30m
+
+# oc-mirror --parallel-images value (default: 8)
+# Number of images to mirror concurrently. Reduce on slow or unreliable networks.
+# OC_MIRROR_PARALLEL_IMAGES=8

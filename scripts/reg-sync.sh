@@ -111,7 +111,7 @@ echo
 [[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && eval mkdir -p $TMPDIR
 
 # oc-mirror v2 tuning params
-parallel_images=8
+parallel_images="${OC_MIRROR_PARALLEL_IMAGES:-8}"
 retry_delay=2
 retry_times=2
 image_timeout="${OC_MIRROR_IMAGE_TIMEOUT:-30m}"
