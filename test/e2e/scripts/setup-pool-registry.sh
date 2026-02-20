@@ -110,9 +110,9 @@ else
 
     ./mirror-registry install --quayHostname "$reg_host" --initPassword "$REG_PW"
 
-    # Trust the CA
+    # Trust the CA (install with 644 so non-root users/tools can read it)
     reg_root="$HOME/quay-install"
-    sudo cp "$reg_root/quay-rootCA/rootCA.pem" /etc/pki/ca-trust/source/anchors/pool-registry-rootCA.pem
+    sudo install -m 644 "$reg_root/quay-rootCA/rootCA.pem" /etc/pki/ca-trust/source/anchors/pool-registry-rootCA.pem
     sudo update-ca-trust extract
 
     echo "  Quay installed successfully"

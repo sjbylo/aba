@@ -1412,7 +1412,7 @@ trust_root_ca() {
 		if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
 			aba_info "$1 already in system trust"
 		else
-			$SUDO cp $1 /etc/pki/ca-trust/source/anchors/ 
+			$SUDO install -m 644 $1 /etc/pki/ca-trust/source/anchors/ 
 			$SUDO update-ca-trust extract
 			aba_info "Cert 'regcreds/rootCA.pem' updated in system trust"
 		fi
