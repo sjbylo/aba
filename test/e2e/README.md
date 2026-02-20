@@ -16,6 +16,12 @@ End-to-end tests that validate ABA against real VMware infrastructure and OpenSh
 ## Quick Start
 
 ```bash
+# Provision pool(s) from scratch (golden VM + clones)
+test/e2e/run.sh --create-pools 1
+
+# Force-rebuild the golden VM even if the snapshot is fresh
+test/e2e/run.sh --create-pools 1 --rebuild-golden
+
 # Run a single suite (recommended to start here)
 test/e2e/run.sh --suite cluster-ops
 
@@ -35,6 +41,66 @@ test/e2e/run.sh --suite cluster-ops --clean
 test/e2e/run.sh --all --dry-run
 ```
 
+## Golden VM Provisioning
+
+Pool creation uses a **golden VM** pattern to avoid repeating expensive setup
+steps (SSH keys, firewall, NTP, `dnf update`, test user, etc.) for every clone.
+
+### How it works
+
+```
+Template VM                Golden VM                   Pool VMs
+(aba-e2e-template-rhel8)   (aba-e2e-golden-rhel8)      (con1, dis1, con2, ...)
+        |                         |                          |
+        |   Phase 0: clone +      |                          |
+        |   full setup + snapshot  |                          |
+        +------------------------>|                          |
+                                  |  Phase 1: linked-clone   |
+                                  |  from golden snapshot    |
+                                  +------------------------->|
+                                                             |
+                                              Phase 2: lightweight
+                                              per-pool config only
+                                              (network, dnsmasq, aba)
+```
+
+**Phase 0 -- `prepare_golden_vm`**: Clones the raw template, applies all common
+configuration (SSH keys, proxy, firewall, NTP/chrony, `dnf update`, podman
+cleanup, test user `testy`, `ABA_TESTING=1`), verifies the result, powers off,
+and creates a `golden-ready` snapshot. A timestamp is written to
+`~/.cache/aba-e2e/<name>.stamp` so the golden VM can be reused across runs.
+
+**Phase 1 -- Clone**: Each pool's `conN`/`disN` VMs are cloned in parallel from
+the golden snapshot. This takes ~15 seconds per clone instead of minutes.
+
+**Phase 2 -- Per-pool config**: Only lightweight, pool-specific steps run on
+each clone: network setup (`_vm_setup_network`), `dnsmasq`, `vmware.conf`,
+and ABA installation. `disN` bastions additionally have RPMs removed, proxy
+stripped, and internet disconnected.
+
+### Staleness and refresh
+
+The golden snapshot is reused if it is less than `GOLDEN_MAX_AGE_HOURS` old
+(default: 24h). When stale, the golden VM is reverted to its snapshot, booted,
+updated (`dnf clean all && dnf update`), re-verified, and re-snapshotted.
+
+Use `--rebuild-golden` to force a full teardown and rebuild from the raw
+template regardless of age.
+
+### Error handling (`set -e` in bash conditionals)
+
+`prepare_golden_vm` uses `set -e` for strict error handling. A subtle bash
+quirk means `set -e` is suppressed inside subshells that are part of
+conditional constructs (`if cmd`, `cmd || handler`, `cmd && next`). To work
+around this, `create_pools` runs the golden VM subshell **outside** any
+conditional context and captures `$?` on the next line:
+
+```bash
+( prepare_golden_vm ... ) >> "$log" 2>&1
+local rc=$?
+if [ "$rc" -ne 0 ]; then ...
+```
+
 ## Configuration
 
 ### `config.env`
@@ -49,6 +115,7 @@ Key parameters:
 - `VMWARE_CONF` / `VC_FOLDER` / `VM_DATASTORE` -- VMware settings
 - `VM_CLONE_MACS` -- Per-clone MAC addresses (tied to DHCP reservations)
 - `VM_CLONE_VLAN_IPS` -- Static VLAN IPs for bastion clones
+- `GOLDEN_MAX_AGE_HOURS` -- Hours before the golden snapshot is refreshed (default: 24)
 - `POOL_*` arrays -- Per-pool cluster IPs, domains, VIPs
 
 ### `pools.conf`
@@ -165,3 +232,7 @@ Each pool runs suites independently on its own bastion pair.
 ## Logs
 
 Suite output is written to stdout/stderr. Use `--notify` with a notification command to get alerts on completion/failure.
+
+Pool provisioning logs:
+- `logs/golden-<rhel_ver>.log` -- Golden VM build/refresh output
+- `logs/create-pool<N>.log` -- Per-pool clone + configuration output
