@@ -152,10 +152,9 @@ _get_nic_network() {
 # Clone a VM from a source VM. If a clone with the same name already
 # exists, it is destroyed first (always-fresh strategy).
 #
-# Before cloning, the source VM is reverted to its snapshot (default:
-# "aba-test") to ensure the clone is always from a known-clean state.
-# The source VMs (e.g. aba-e2e-template-rhel8) are regular VMs with a
-# clean snapshot -- not VMware "template" objects.
+# If the source has snapshots, clones from the named snapshot (default:
+# "aba-test") for linked clones. If no snapshots exist (e.g. VMware
+# template objects), performs a full clone instead.
 #
 # After cloning (while still powered off), MAC addresses are set on the
 # clone's NICs so DHCP assigns the correct IP addresses. The port group
@@ -190,12 +189,17 @@ clone_vm() {
         govc vm.destroy "$clone_name" || true
     fi
 
-    # Clone directly from the named snapshot. The template is a read-only
-    # golden image that is never modified, so no revert is needed. This
-    # allows multiple clones from the same template to run in parallel.
     local ds_flag=""
     [ -n "${VM_DATASTORE:-}" ] && ds_flag="-ds=$VM_DATASTORE"
-    govc vm.clone -vm "$source_vm" -snapshot "$snapshot" \
+
+    # Use -snapshot for linked clones when the source has snapshots.
+    # VMware templates and VMs without snapshots require a full clone.
+    local snap_flag=""
+    if govc snapshot.tree -vm "$source_vm" 2>/dev/null | grep -q .; then
+        snap_flag="-snapshot=$snapshot"
+    fi
+
+    govc vm.clone -vm "$source_vm" $snap_flag \
         -folder "$folder" $ds_flag -on=false "$clone_name" || return 1
 
     # --- Set MAC addresses on the clone's NICs (before power-on) -----------
