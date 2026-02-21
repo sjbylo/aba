@@ -73,7 +73,7 @@ test_begin "Setup: install aba and configure"
 # Lightweight setup: remove RPMs (test auto-install), clean caches, but
 # do NOT touch podman/containers -- the pre-populated Quay must stay alive.
 e2e_run "Remove RPMs for clean install test" \
-    "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
+    "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y --disableplugin=subscription-manager"
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
 

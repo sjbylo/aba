@@ -52,7 +52,7 @@ test_begin "Setup: clean slate"
 
 # dnf remove returns non-zero only if NONE of the packages are installed (= already clean).
 e2e_run "Remove RPMs for clean install test" \
-    "sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y || { echo 'All packages already absent'; true; }"
+    "sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y --disableplugin=subscription-manager || { echo 'All packages already absent'; true; }"
 
 # podman prune/rmi with --force are idempotent (return 0 even when empty).
 e2e_run "Clean podman" \

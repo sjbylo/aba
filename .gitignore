@@ -2,7 +2,6 @@ cli/.init
 cli/*tar.gz
 cli/butane-binary
 cli/*-download
-compact*
 *.md.bak
 *.bak
 .backup/
@@ -41,6 +40,8 @@ mirror/mirror-registry-amd64.tar.gz
 mirror/sqlite3.tar
 mirror/.??*
 sno*
+demo*
+compact*
 */cluster.conf
 *.ssh.conf
 standard*

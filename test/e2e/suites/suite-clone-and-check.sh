@@ -238,7 +238,7 @@ test_end
 test_begin "Harden: remove RPMs, pull-secret, proxy ($DIS_NAME)"
 
 e2e_run -h "${DEF_USER}@${DIS_HOST}" "Remove RPMs on $DIS_NAME" \
-    "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
+    "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y --disableplugin=subscription-manager"
 e2e_run -h "${DEF_USER}@${DIS_HOST}" "Remove pull-secret on $DIS_NAME" \
     "rm -fv ~/.pull-secret.json"
 e2e_run -h "${DEF_USER}@${DIS_HOST}" "Remove proxy on $DIS_NAME" \
@@ -451,11 +451,23 @@ test_end
 
 suite_end
 
+# All validations passed -- create a "pool-ready" snapshot on both VMs.
+# The parallel dispatcher reverts to this snapshot before each suite so
+# every suite starts from a known-good state.
+echo ""
+echo "Creating pool-ready snapshot (all validations passed) ..."
+govc snapshot.remove -vm "$CON_NAME" pool-ready 2>/dev/null || true
+govc snapshot.remove -vm "$DIS_NAME" pool-ready 2>/dev/null || true
+govc snapshot.create -vm "$CON_NAME" pool-ready || { echo "ERROR: Failed to snapshot $CON_NAME" >&2; exit 1; }
+govc snapshot.create -vm "$DIS_NAME" pool-ready || { echo "ERROR: Failed to snapshot $DIS_NAME" >&2; exit 1; }
+echo "  Snapshot 'pool-ready' created on $CON_NAME and $DIS_NAME."
+
 echo ""
 echo "================================================="
 echo "Pool ${POOL_NUM} VMs fully configured and verified:"
 echo "  $CON_NAME ($CON_HOST) -- connected bastion / gateway"
 echo "  $DIS_NAME ($DIS_HOST) -- disconnected bastion (air-gapped)"
+echo "  Snapshot: pool-ready (ready for parallel dispatch)"
 echo ""
 echo "VMs are left running. Destroy manually when done:"
 echo "  destroy_vm $CON_NAME && destroy_vm $DIS_NAME"

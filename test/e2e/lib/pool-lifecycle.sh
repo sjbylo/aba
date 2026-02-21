@@ -669,7 +669,7 @@ _vm_remove_rpms() {
 
     echo "  [vm] Removing RPMs (git, make, jq, etc.) on $host ..."
     _essh "${user}@${host}" -- \
-        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
+        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y --disableplugin=subscription-manager"
 }
 
 # --- _vm_remove_pull_secret -------------------------------------------------
@@ -1153,8 +1153,8 @@ create_pools() {
         govc folder.create "$pool_folder" 2>/dev/null || true
     done
 
-    # --- Phase 1: Clone all VMs in parallel from golden snapshot -------------
-    echo "--- Phase 1: Cloning VMs from $golden_name ---"
+    # --- Phase 1a: Clone connected (conN) VMs first ---------------------------
+    echo "--- Phase 1a: Cloning connected VMs from $golden_name ---"
 
     local -a clone_pids=()
     local -a clone_labels=()
@@ -1170,12 +1170,6 @@ create_pools() {
         VM_DATASTORE="$pool_ds" clone_vm "$golden_name" "con${i}" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
         clone_pids+=($!)
         clone_labels+=("clone con${i}")
-
-        if [ -z "$connected_only" ]; then
-            VM_DATASTORE="$pool_ds" clone_vm "$golden_name" "dis${i}" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
-            clone_pids+=($!)
-            clone_labels+=("clone dis${i}")
-        fi
     done
 
     local clone_failed=0
@@ -1189,10 +1183,47 @@ create_pools() {
     done
 
     if [ $clone_failed -gt 0 ]; then
-        echo "--- Phase 1 FAILED: $clone_failed clone(s) failed ---"
+        echo "--- Phase 1a FAILED: $clone_failed conN clone(s) failed ---"
         rm -rf "$signal_dir"
         return 1
     fi
+    echo "--- Phase 1a complete: connected VMs booting ---"
+
+    # --- Phase 1b: Clone disconnected (disN) VMs ----------------------------
+    if [ -z "$connected_only" ]; then
+        echo "--- Phase 1b: Cloning disconnected VMs from $golden_name ---"
+
+        clone_pids=()
+        clone_labels=()
+
+        for (( i=start_at; i<=end_at; i++ )); do
+            local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
+            local pool_ds="${_pool_datastores[$i]:-$VM_DATASTORE}"
+            local pool_log="${pool_log_dir}/create-pool${i}.log"
+
+            VM_DATASTORE="$pool_ds" clone_vm "$golden_name" "dis${i}" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
+            clone_pids+=($!)
+            clone_labels+=("clone dis${i}")
+        done
+
+        clone_failed=0
+        for idx in "${!clone_pids[@]}"; do
+            if wait "${clone_pids[$idx]}"; then
+                echo "  OK: ${clone_labels[$idx]}"
+            else
+                echo "  FAILED: ${clone_labels[$idx]} (exit=$?)" >&2
+                clone_failed=$(( clone_failed + 1 ))
+            fi
+        done
+
+        if [ $clone_failed -gt 0 ]; then
+            echo "--- Phase 1b FAILED: $clone_failed disN clone(s) failed ---"
+            rm -rf "$signal_dir"
+            return 1
+        fi
+        echo "--- Phase 1b complete: disconnected VMs booting ---"
+    fi
+
     echo "--- Phase 1 complete: all clones booting ---"
 
     # --- Phase 2: Per-pool configuration (parallel) -------------------------
