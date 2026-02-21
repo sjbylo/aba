@@ -24,9 +24,8 @@ fi
 [ ! "$data_dir" ] && data_dir=$HOME
 reg_root=$data_dir/quay-install
 
-##reg_root=~/quay-install  # ~ must be evaluated here
 reg_pw=p4ssw0rd
-[ "$1" ] && reg_host=$1 || reg_host=registry.example.com   #FIXME: needs to be param
+reg_host=${1:?Usage: $0 REGISTRY_HOSTNAME}
 reg_port=8443
 
 # mirror-registry installer does not open the port for us

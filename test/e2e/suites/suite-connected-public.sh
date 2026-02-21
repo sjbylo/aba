@@ -123,6 +123,7 @@ e2e_run "Verify proxy is set" "test -n \"\${http_proxy:-}\" && echo \"proxy set:
 e2e_run "Clean sno dir" "rm -rfv $SNO"
 e2e_run "Create SNO config with -I proxy" \
     "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
+e2e_run "Generate agent config" "aba -d $SNO agentconf"
 
 test_end
 

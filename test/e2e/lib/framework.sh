@@ -59,7 +59,7 @@ NOTIFY_CMD="${NOTIFY_CMD:-}"
 
 # Checkpoint / resume state files
 E2E_STATE_FILE=""      # Written during a run: logs pass/fail per test
-E2E_RESUME_FILE=""     # If set, skip tests already passed in a previous run
+E2E_RESUME_FILE="${E2E_RESUME_FILE:-}"  # If set, skip tests already passed in a previous run
 
 # Log file for the current suite run
 E2E_LOG_DIR="${_E2E_DIR}/logs"
@@ -200,7 +200,11 @@ _print_progress() {
     # Print to screen
     echo ""
     _e2e_draw_line "="
-    [ -n "${_E2E_SUITE_NAME:-}" ] && printf "  %s\n" "$(_e2e_bold "Suite: $_E2E_SUITE_NAME")"
+    if [ -n "${_E2E_SUITE_NAME:-}" ]; then
+        local _pi=""
+        [ -n "${POOL_NUM:-}" ] && _pi="  [pool${POOL_NUM} @ $(hostname -s)]"
+        printf "  %s\n" "$(_e2e_bold "Suite: $_E2E_SUITE_NAME${_pi}")"
+    fi
     printf "  %-${_col}s %s\n" "TEST" "STATUS"
     _e2e_draw_line "-"
 
@@ -225,7 +229,11 @@ _print_progress() {
     printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /=}"
     _e2e_summary ""
     _e2e_summary "  $_line"
-    [ -n "${_E2E_SUITE_NAME:-}" ] && _e2e_summary "  $(_e2e_Bold "Suite: $_E2E_SUITE_NAME")"
+    if [ -n "${_E2E_SUITE_NAME:-}" ]; then
+        local _si=""
+        [ -n "${POOL_NUM:-}" ] && _si="  [pool${POOL_NUM} @ $(hostname -s)]"
+        _e2e_summary "  $(_e2e_Bold "Suite: $_E2E_SUITE_NAME${_si}")"
+    fi
     _e2e_summary "  $(printf "%-${_col}s %s" "TEST" "STATUS")"
     printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /-}"
     _e2e_summary "  $_line"
@@ -248,7 +256,11 @@ _print_progress() {
     if [ -n "${E2E_LOG_FILE:-}" ]; then
         {
             echo ""
-            [ -n "${_E2E_SUITE_NAME:-}" ] && echo "  Suite: $_E2E_SUITE_NAME"
+            if [ -n "${_E2E_SUITE_NAME:-}" ]; then
+                local _li=""
+                [ -n "${POOL_NUM:-}" ] && _li="  [pool${POOL_NUM} @ $(hostname -s)]"
+                echo "  Suite: $_E2E_SUITE_NAME${_li}"
+            fi
             printf "  %-${_col}s %s\n" "TEST" "STATUS"
             printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /-}"
             echo "  $_line"
@@ -299,11 +311,14 @@ suite_begin() {
 
     : > "$E2E_STATE_FILE"
 
+    local _host_info=""
+    [ -n "${POOL_NUM:-}" ] && _host_info="pool${POOL_NUM} @ $(hostname -s)"
+
     _e2e_draw_line "="
-    _e2e_log_and_print "$(_e2e_bold "SUITE: $suite_name")"
+    _e2e_log_and_print "$(_e2e_bold "SUITE: $suite_name${_host_info:+  [$_host_info]}")"
     _e2e_draw_line "="
-    _e2e_summary "$(_e2e_Bold "========== SUITE: $suite_name ==========")"
-    _e2e_notify "Suite started: $suite_name ($(date))"
+    _e2e_summary "$(_e2e_Bold "========== SUITE: $suite_name${_host_info:+  [$_host_info]} ==========")"
+    _e2e_notify "Suite started: $suite_name${_host_info:+ ($_host_info)} ($(date))"
 }
 
 suite_end() {
@@ -546,10 +561,12 @@ e2e_run() {
     local cmd="$*"
     local _lf="${E2E_LOG_FILE:-/dev/null}"
 
-    _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_yellow "[$USER@${host:-localhost}:$PWD]")"
-    _e2e_log_and_print "    $(_e2e_cyan ">> $cmd")"
-    _e2e_summary "  $mark $(_e2e_Green "$description") $(_e2e_Yellow "[$USER@${host:-localhost}:$PWD]")"
-    _e2e_summary "    $(_e2e_Cyan ">> $cmd")"
+    local _display_host="${host:-$USER@$(hostname -s)}"
+
+    _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+    _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
+    _e2e_summary "  $mark $(_e2e_Green "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
+    _e2e_summary "    $(_e2e_Cyan "$cmd")"
 
     # Outer loop: interactive retry wraps the automatic retry loop
     while true; do
@@ -694,8 +711,10 @@ e2e_diag() {
     local _lf="${E2E_LOG_FILE:-/dev/null}"
     local ret=0
 
-    _e2e_log_and_print "  $mark $(_e2e_yellow "[diag]") $description $(_e2e_yellow "[$USER@${host:-localhost}:$PWD]")"
-    _e2e_log_and_print "    $(_e2e_cyan ">> $cmd")"
+    local _display_host="${host:-$USER@$(hostname -s)}"
+
+    _e2e_log_and_print "  $mark $(_e2e_yellow "[diag]") $description $(_e2e_yellow "[$_display_host:$PWD]")"
+    _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
 
     if [ -n "$host" ]; then
         ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
@@ -734,11 +753,11 @@ e2e_run_must_fail() {
     local description="$1"; shift
     local cmd="$*"
 
-    _e2e_log_and_print "  L $description (expect failure) $(_e2e_yellow "[$USER@localhost:$PWD]")"
-    _e2e_log_and_print "    $(_e2e_cyan ">> $cmd")"
+    _e2e_log_and_print "  L $description (expect failure) $(_e2e_yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
     _e2e_log "    CMD (must-fail): $cmd"
-    _e2e_summary "  L $(_e2e_Yellow "$description (expect failure)") $(_e2e_Yellow "[$USER@localhost:$PWD]")"
-    _e2e_summary "    $(_e2e_Cyan ">> $cmd")"
+    _e2e_summary "  L $(_e2e_Yellow "$description (expect failure)") $(_e2e_Yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_summary "    $(_e2e_Cyan "$cmd")"
 
     local ret=0
     ( eval "$cmd" ) >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
@@ -972,8 +991,9 @@ require_ssh() {
 }
 
 # Pre-flight SSH connectivity check.  Call at the top of any suite that
-# relies on a remote bastion (INTERNAL_BASTION).  Fails the suite
-# immediately instead of letting dozens of remote commands silently fail.
+# relies on a remote bastion (INTERNAL_BASTION).  Verifies all three
+# identities (default user, root, testy) so key mismatches are caught
+# before the suite wastes time.
 #
 # Usage: preflight_ssh           (uses $INTERNAL_BASTION)
 #        preflight_ssh HOST      (explicit host)
@@ -984,14 +1004,39 @@ preflight_ssh() {
         _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: INTERNAL_BASTION not set")"
         exit 1
     fi
-    _e2e_log "  Preflight: checking SSH to $host ..."
-    if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$host" true 2>/dev/null; then
-        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to $host")"
-        _e2e_log_and_print "  $(_e2e_Red "Aborting suite -- remote bastion is unreachable.")"
-        _e2e_notify "PREFLIGHT FAIL: Cannot SSH to $host -- suite aborted"
+
+    local _ssh_opts="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+    local _fail=""
+
+    _e2e_log "  Preflight: checking SSH to $host (default user) ..."
+    if ! ssh $_ssh_opts "$host" true 2>/dev/null; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to $host (default user)")"
+        _fail=1
+    else
+        _e2e_log "  Preflight: SSH to $host (default user) OK"
+    fi
+
+    _e2e_log "  Preflight: checking SSH to root@$host ..."
+    if ! ssh $_ssh_opts "root@$host" true 2>/dev/null; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to root@$host")"
+        _fail=1
+    else
+        _e2e_log "  Preflight: SSH to root@$host OK"
+    fi
+
+    _e2e_log "  Preflight: checking SSH to testy@$host (testy_rsa) ..."
+    if ! ssh $_ssh_opts -i ~/.ssh/testy_rsa "testy@$host" true 2>/dev/null; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to testy@$host with testy_rsa")"
+        _fail=1
+    else
+        _e2e_log "  Preflight: SSH to testy@$host (testy_rsa) OK"
+    fi
+
+    if [ -n "$_fail" ]; then
+        _e2e_log_and_print "  $(_e2e_Red "Aborting suite -- SSH preflight failed for $host.")"
+        _e2e_notify "PREFLIGHT FAIL: SSH check failed for $host -- suite aborted"
         exit 1
     fi
-    _e2e_log "  Preflight: SSH to $host OK"
 }
 
 require_govc() {

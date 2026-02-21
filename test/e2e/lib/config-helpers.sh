@@ -137,6 +137,13 @@ pool_vlan_apps_vip() {
     echo "${POOL_VLAN_APPS_VIP[$p]:-10.10.20.$((220 + p))}"
 }
 
+# Get conN's VLAN IP (for DNS on VLAN clusters): pool_vlan_dns [POOL_NUM]
+pool_vlan_dns() {
+    local p="${1:-${POOL_NUM:-1}}"
+    local con_vlan="${VM_CLONE_VLAN_IPS[con${p}]:-10.10.20.$((p * 2 - 1))/24}"
+    echo "${con_vlan%%/*}"
+}
+
 # Get the VLAN gateway (= disN's VLAN IP, stripped of /prefix): pool_vlan_gateway [POOL_NUM]
 pool_vlan_gateway() {
     local p="${1:-${POOL_NUM:-1}}"

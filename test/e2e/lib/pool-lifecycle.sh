@@ -64,8 +64,22 @@ VM_DEFAULT_USER="${VM_DEFAULT_USER:-steve}"
 # They are designed to be composed in configure_*_bastion() functions.
 # =============================================================================
 
+# --- SSH wrappers -----------------------------------------------------------
+# All SSH/SCP calls in _vm_* functions go through these wrappers to ensure
+# consistent options: no host-key prompts, connection timeouts, clean logs.
+_essh() {
+    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
+}
+_escp() {
+    scp -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
+}
+
 # --- _vm_wait_ssh -----------------------------------------------------------
 # Wait for a VM to become reachable via SSH after power-on.
+# Requires 2 consecutive successful probes to confirm SSH is truly stable
+# (a single probe can succeed right before sshd/firewall state settles).
 #
 _vm_wait_ssh() {
     local host="$1"
@@ -74,12 +88,18 @@ _vm_wait_ssh() {
     local start=$(date +%s)
 
     echo "  [vm] Waiting for SSH on ${user}@${host} (timeout: ${timeout}s) ..."
+    local consecutive=0
     while true; do
-        if ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
-               "${user}@${host}" -- "date" 2>/dev/null; then
-            echo "  [vm] SSH ready on ${user}@${host}"
-            return 0
+        if _essh -o BatchMode=yes "${user}@${host}" -- "date" 2>/dev/null; then
+            consecutive=$(( consecutive + 1 ))
+            if [ $consecutive -ge 2 ]; then
+                echo "  [vm] SSH ready on ${user}@${host}"
+                return 0
+            fi
+            sleep 2
+            continue
         fi
+        consecutive=0
 
         local elapsed=$(( $(date +%s) - start ))
         if [ $elapsed -ge $timeout ]; then
@@ -101,27 +121,22 @@ _vm_setup_ssh_keys() {
 
     echo "  [vm] Setting up SSH keys on $host ..."
 
-    # Add public key to root's authorized_keys (via sudo from $user)
-    cat <<-SSHEOF | ssh "${user}@${host}" -- sudo bash
+    cat <<-SSHEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
 		mkdir -p /root/.ssh
 		chmod 700 /root/.ssh
-		echo "$pub_key" > /root/.ssh/authorized_keys
+		echo '${pub_key}' > /root/.ssh/authorized_keys
 		chmod 600 /root/.ssh/authorized_keys
-	SSHEOF
+		ls -la /root/.ssh/
 
-    # Now that root has key access, copy SSH config
-    if [ "$user" != "root" ] && [ -f ~/.ssh/config ]; then
-        scp -o StrictHostKeyChecking=no ~/.ssh/config "root@${host}:.ssh/config"
-    fi
+		[ -f /home/${user}/.ssh/config ] && cp /home/${user}/.ssh/config /root/.ssh/config
 
-    # Keep long-running SSH sessions alive (matches bastion client config)
-    cat <<-'SSHDEOF' | ssh "root@${host}" -- bash
-		sed -i "/^ClientAliveInterval/d; /^ClientAliveCountMax/d" /etc/ssh/sshd_config
+		sed -i '/^ClientAliveInterval/d; /^ClientAliveCountMax/d' /etc/ssh/sshd_config
 		echo "ClientAliveInterval 60"  >> /etc/ssh/sshd_config
 		echo "ClientAliveCountMax 5"   >> /etc/ssh/sshd_config
 		systemctl restart sshd
-	SSHDEOF
+		echo "SSH setup complete."
+	SSHEOF
 }
 
 # --- _vm_setup_time ---------------------------------------------------------
@@ -135,7 +150,7 @@ _vm_setup_time() {
 
     echo "  [vm] Configuring time/NTP on $host ..."
 
-    cat <<-TIMEEOF | ssh "${user}@${host}" -- sudo bash
+    cat <<-TIMEEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
 		dnf install chrony -y
 
@@ -165,16 +180,39 @@ _vm_dnf_update() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
 
-    echo "  [vm] Running dnf update + reboot on $host ..."
+    echo "  [vm] Running dnf clean + update on $host ..."
 
-    cat <<-DNFEOF | ssh "${user}@${host}" -- sudo bash
+    cat <<-'DNFEOF' | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		dnf update -y
-		reboot
+		dnf clean all
+		dnf update -y &> /tmp/dnf-update.log
+		echo "dnf-update exit=$?"
+		tail -5 /tmp/dnf-update.log
+		dnf clean all
 	DNFEOF
 
-    # Give time for reboot to start
+    echo "  [vm] Rebooting $host ..."
+    _essh "${user}@${host}" -- "sudo reboot" || true
     sleep 20
+}
+
+# --- _vm_setup_default_route ------------------------------------------------
+# Remove the bogus default route on ens192 (10.0.1.1 doesn't exist) so all
+# internet traffic goes via ens256. Used on the golden VM before cloning.
+#
+_vm_setup_default_route() {
+    local host="$1"
+    local user="${2:-$VM_DEFAULT_USER}"
+
+    echo "  [vm] Setting default route via ens256 on $host ..."
+
+    cat <<-'ROUTEEOF' | _essh "${user}@${host}" -- sudo bash
+		set -ex
+		nmcli connection modify ens192 ipv4.never-default yes
+		nmcli connection up ens192
+		echo "=== Routes ==="
+		ip route
+	ROUTEEOF
 }
 
 # --- _vm_setup_network ------------------------------------------------------
@@ -225,7 +263,7 @@ _vm_setup_network() {
 _vm_setup_network_connected() {
     local host="$1" user="$2" clone_name="$3" vlan_ip="$4"
 
-    cat <<-NETEOF | ssh "${user}@${host}" -- sudo bash
+    cat <<-NETEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
 
 		# --- Rename default nmcli connections to match interface names ---
@@ -295,7 +333,7 @@ _vm_setup_network_disconnected() {
 
     echo "  [vm] Default gateway for $clone_name: $gateway_ip ($con_name via VLAN)"
 
-    cat <<-NETEOF | ssh "${user}@${host}" -- sudo bash
+    cat <<-NETEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
 
 		# --- Rename default nmcli connections to match interface names ---
@@ -375,30 +413,27 @@ _vm_setup_firewall() {
 
     echo "  [vm] Configuring firewall + NAT masquerade on $host ..."
 
-    cat <<-FWEOF | ssh "${user}@${host}" -- sudo bash
+    cat <<-'FWEOF' | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		# Remove legacy iptables-services (may not be installed)
 		rpm -q iptables-services && {
 		    systemctl disable --now iptables
 		    dnf remove -y iptables-services
 		} || echo "iptables-services not installed -- skipping"
 
-		# Enable firewalld
 		systemctl enable --now firewalld
 
-		# Enable IP forwarding (persistent)
-		cat > /etc/sysctl.d/99-ipforward.conf <<-SYSEOF
-		net.ipv4.ip_forward = 1
-		SYSEOF
-		sysctl -p /etc/sysctl.d/99-ipforward.conf
+		echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-ipforward.conf
 
-		# Zone-wide masquerade (matches registry2 reference config)
 		firewall-cmd --permanent --zone=public --add-masquerade
 		firewall-cmd --reload
+		sleep 5
+
+		echo 1 > /proc/sys/net/ipv4/ip_forward
 
 		echo "=== FIREWALL CONFIG ==="
 		firewall-cmd --list-all --zone=public
 		echo "ip_forward=$(cat /proc/sys/net/ipv4/ip_forward)"
+		[ "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ] || { echo "ERROR: ip_forward is 0"; exit 1; }
 	FWEOF
 }
 
@@ -491,7 +526,7 @@ address=/api.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_api
 address=/.apps.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_apps_vip}
 DNSEOF
 
-    cat <<-SETUPEOF | ssh "${user}@${host}" -- sudo bash
+    cat <<-SETUPEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
 
 		# Install dnsmasq and dig (bind-utils)
@@ -523,9 +558,7 @@ search example.com
 nameserver 127.0.0.1
 RESOLVEOF
 
-		# Enable and start dnsmasq
 		systemctl enable --now dnsmasq
-		systemctl restart dnsmasq
 
 		# Open DNS port in firewall
 		firewall-cmd --permanent --add-service=dns
@@ -542,7 +575,7 @@ RESOLVEOF
     local sno_name
     sno_name="$(pool_cluster_name sno ${pool_num})"
     echo "  [vm] Verifying DNS on $host (cluster name: $sno_name) ..."
-    cat <<-DNSEOF | ssh "${user}@${host}" -- bash
+    cat <<-DNSEOF | _essh "${user}@${host}" -- bash
 		echo '--- Testing registry DNS ---'
 		dig +short registry.${domain} @127.0.0.1
 		echo '--- Testing cluster DNS ---'
@@ -562,13 +595,13 @@ _vm_cleanup_caches() {
 
     echo "  [vm] Cleaning caches on $host ..."
 
-    cat <<-CACHEEOF | ssh "${user}@${host}" -- bash
+    cat <<-CACHEEOF | _essh "${user}@${host}" -- bash
 		set -ex
 		rm -vrf ~/.cache/agent/
 		rm -vrf ~/bin/*
-		rm -f \$HOME/.ssh/quay_installer*
-		rm -rfv \$HOME/.oc-mirror/.cache
-		rm -rfv \$HOME/*/.oc-mirror/.cache
+		rm -f ~/.ssh/quay_installer*
+		rm -rfv ~/.oc-mirror/.cache
+		rm -rfv ~/*/.oc-mirror/.cache
 		# Ensure test VMs are located together and on the pool's datastore
 		if [ -s ~/.vmware.conf ]; then
 		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g" ~/.vmware.conf
@@ -586,14 +619,15 @@ _vm_cleanup_podman() {
 
     echo "  [vm] Cleaning podman on $host ..."
 
-    cat <<-'PODMEOF' | ssh "${user}@${host}" -- bash
-		set -e
-		command -v podman || sudo dnf install podman -y
+    cat <<-'PODEOF' | _essh "${user}@${host}" -- bash
+		set -ex
+		command -v podman || sudo dnf install podman -y &> /tmp/dnf-podman.log
+		echo "dnf-podman exit=$?"
 		podman system prune --all --force
-		podman rmi --all --force
-		sudo rm -rfv ~/.local/share/containers/storage
-		rm -rfv ~/test
-	PODMEOF
+		podman rmi --all --force 2>/dev/null || true
+		sudo rm -rf ~/.local/share/containers/storage
+		rm -rf ~/test
+	PODEOF
 }
 
 # --- _vm_cleanup_home -------------------------------------------------------
@@ -604,7 +638,12 @@ _vm_cleanup_home() {
     local user="${2:-$VM_DEFAULT_USER}"
 
     echo "  [vm] Cleaning home directory on $host ..."
-    ssh "${user}@${host}" -- "rm -rfv ~/*"
+    cat <<-'HOMEEOF' | _essh "${user}@${host}" -- bash
+		set -ex
+		rm -rf ~/*
+		echo "=== Home directory after cleanup ==="
+		ls -la ~/
+	HOMEEOF
 }
 
 # --- _vm_setup_vmware_conf -------------------------------------------------
@@ -617,7 +656,7 @@ _vm_setup_vmware_conf() {
 
     echo "  [vm] Copying vmware.conf to $host ..."
     if [ -f "$vf" ]; then
-        scp "$vf" "${user}@${host}:"
+        _escp "$vf" "${user}@${host}:"
     fi
 }
 
@@ -629,7 +668,7 @@ _vm_remove_rpms() {
     local user="${2:-$VM_DEFAULT_USER}"
 
     echo "  [vm] Removing RPMs (git, make, jq, etc.) on $host ..."
-    ssh "${user}@${host}" -- \
+    _essh "${user}@${host}" -- \
         "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
 }
 
@@ -641,7 +680,7 @@ _vm_remove_pull_secret() {
     local user="${2:-$VM_DEFAULT_USER}"
 
     echo "  [vm] Removing pull-secret on $host ..."
-    ssh "${user}@${host}" -- "rm -fv ~/.pull-secret.json"
+    _essh "${user}@${host}" -- "rm -fv ~/.pull-secret.json"
 }
 
 # --- _vm_fix_proxy_noproxy ---------------------------------------------------
@@ -655,7 +694,7 @@ _vm_fix_proxy_noproxy() {
 
     echo "  [vm] Fixing no_proxy in ~/.proxy-set.sh on $host ..."
 
-    cat <<-'PROXYEOF' | ssh "${user}@${host}" -- bash
+    cat <<-'PROXYEOF' | _essh "${user}@${host}" -- bash
 		if [ -f ~/.proxy-set.sh ]; then
 		    sed -i "s|^export no_proxy=.*|export no_proxy=localhost,127.0.0.1,.lan,.example.com,10.0.0.0/8,192.168.0.0/16|" ~/.proxy-set.sh
 		    sed -i "s|^export NO_PROXY=.*|export NO_PROXY=localhost,127.0.0.1,.lan,.example.com,10.0.0.0/8,192.168.0.0/16|" ~/.proxy-set.sh
@@ -671,7 +710,7 @@ _vm_remove_proxy() {
     local user="${2:-$VM_DEFAULT_USER}"
 
     echo "  [vm] Disabling proxy on $host ..."
-    ssh "${user}@${host}" -- \
+    _essh "${user}@${host}" -- \
         "if [ -f ~/.bashrc ]; then sed -i 's|^source ~/.proxy-set.sh|# aba-test # source ~/.proxy-set.sh|g' ~/.bashrc; fi"
 }
 
@@ -687,7 +726,7 @@ _vm_disconnect_internet() {
 
     echo "  [vm] Disconnecting internet on $host ..."
 
-    cat <<-'DISCEOF' | ssh "${user}@${host}" -- sudo bash
+    cat <<-'DISCEOF' | _essh "${user}@${host}" -- sudo bash
 		set -ex
 		# Remove the default gateway from the VLAN connection
 		nmcli connection modify ens224.10 ipv4.gateway ''
@@ -713,20 +752,13 @@ _vm_create_test_user() {
     local host="$1"
     local def_user="${2:-$VM_DEFAULT_USER}"
     local test_user_name="testy"
-    local key_file="$HOME/.ssh/testy_rsa"
 
     echo "  [vm] Creating test user '$test_user_name' on $host ..."
 
-    # Generate SSH key for testy if not exists
-    if [ ! -f "$key_file" ]; then
-        rm -f "${key_file}" "${key_file}.pub"
-        ssh-keygen -t rsa -f "$key_file" -N ''
-    fi
-
     local pub_key
-    pub_key=$(cat "${key_file}.pub")
+    pub_key=$(cat ~/.ssh/testy_rsa.pub)
 
-    cat <<-USEREOF | ssh "${def_user}@${host}" -- sudo bash
+    cat <<-USEREOF | _essh "${def_user}@${host}" -- sudo bash
 		set -ex
 		id $test_user_name && userdel $test_user_name -r -f || true
 		useradd $test_user_name -p not-used
@@ -735,12 +767,28 @@ _vm_create_test_user() {
 		echo "$pub_key" > ~${test_user_name}/.ssh/authorized_keys
 		chmod 600 ~${test_user_name}/.ssh/authorized_keys
 		chown -R ${test_user_name}.${test_user_name} ~${test_user_name}
+		restorecon -R /home/${test_user_name} 2>/dev/null || true
 		echo '${test_user_name} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${test_user_name}
+
+		# Allow testy through sshd if AllowUsers is configured
+		if grep -q "^AllowUsers" /etc/ssh/sshd_config; then
+		    if ! grep "^AllowUsers" /etc/ssh/sshd_config | grep -qw ${test_user_name}; then
+		        sed -i "/^AllowUsers/s/\$/ ${test_user_name}/" /etc/ssh/sshd_config
+		        systemctl restart sshd
+		    fi
+		fi
 	USEREOF
 
-    # Verify SSH access
+    _vm_wait_ssh "$host" "$def_user"
+
     echo "  [vm] Verifying SSH to $test_user_name@$host ..."
-    ssh -i "$key_file" "${test_user_name}@${host}" -- whoami | grep -q "$test_user_name"
+    local who
+    who=$(_essh -i ~/.ssh/testy_rsa -o BatchMode=yes "${test_user_name}@${host}" -- whoami 2>&1)
+    if [ "$who" != "$test_user_name" ]; then
+        echo "  [vm] ERROR: SSH as $test_user_name failed (got: '$who')" >&2
+        return 1
+    fi
+    echo "  [vm] SSH to $test_user_name@$host OK"
 }
 
 # --- _vm_set_aba_testing ----------------------------------------------------
@@ -753,7 +801,7 @@ _vm_set_aba_testing() {
 
     echo "  [vm] Setting ABA_TESTING=1 on $host (root, $def_user, testy) ..."
 
-    cat <<-'TESTEOF' | ssh "${def_user}@${host}" -- sudo bash
+    cat <<-'TESTEOF' | _essh "${def_user}@${host}" -- sudo bash
 		set -e
 
 		# System-wide: /etc/environment is read by PAM for all login sessions
@@ -774,37 +822,140 @@ _vm_set_aba_testing() {
 }
 
 # --- _vm_install_aba --------------------------------------------------------
-# Rsync the aba tree to the VM and run ./install.
+# Clone the aba repo on the VM and run ./install.
 #
 _vm_install_aba() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
-    local aba_root="${3:-$(cd "$_E2E_LIB_DIR_PL/../../.." && pwd)}"
+    local branch
+    branch="$(git -C "$_E2E_LIB_DIR_PL/../../.." rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)"
+    local repo_url
+    repo_url="$(git -C "$_E2E_LIB_DIR_PL/../../.." remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)"
 
-    echo "  [vm] Installing aba on ${user}@${host} ..."
+    echo "  [vm] Installing aba on ${user}@${host} (branch: $branch) ..."
 
-    # Ensure rsync is available on the remote host
-    ssh "${user}@${host}" -- "command -v rsync || sudo dnf install -y rsync"
+    _essh "${user}@${host}" -- "
+        rm -rf ~/aba
+        git clone --depth 1 --branch $branch $repo_url ~/aba
+        cd ~/aba && ./install
+    "
+}
 
-    rsync -az --no-perms \
-        --exclude='.git' \
-        --exclude='mirror/save/' \
-        --exclude='mirror/sync/' \
-        --exclude='mirror/.oc-mirror/' \
-        --exclude='mirror/*.tar' \
-        --exclude='mirror/*.tar.gz' \
-        --exclude='mirror/mirror-registry' \
-        --exclude='mirror/oc-mirror-workspace/' \
-        --exclude='cli/*.tar.gz' \
-        --exclude='cli/oc' \
-        --exclude='cli/oc-mirror*' \
-        --exclude='cli/openshift-install' \
-        --exclude='cli/govc' \
-        --exclude='cli/kubectl' \
-        --exclude='cli/butane' \
-        "$aba_root/" "${user}@${host}:~/aba/"
+# =============================================================================
+# Golden VM verification and preparation
+# =============================================================================
 
-    ssh "${user}@${host}" -- "cd ~/aba && ./install"
+# --- _vm_verify_golden ------------------------------------------------------
+# Verify that a golden VM is correctly configured. Run after initial setup
+# and after every dnf update. Aborts if any check fails.
+#
+_vm_verify_golden() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+
+	echo "  [golden] Verifying golden VM state on $host ..."
+
+	_vm_wait_ssh "$host" "$user"
+
+	cat <<-'VERIFYEOF' | _essh "${user}@${host}" -- sudo bash
+		set -ex
+		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config
+		firewall-cmd --query-masquerade
+		[ "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ]
+		systemctl is-active chronyd
+		ping -c 3 -W 5 10.0.1.8
+		dnf check-update > /dev/null 2>&1 || { rc=$?; [ "$rc" -eq 100 ] && exit 1; exit "$rc"; }
+		! podman images -q 2>/dev/null | grep -q . || { echo "ERROR: podman images remain"; exit 1; }
+		[ -z "$(ls ~$SUDO_USER 2>/dev/null)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
+		id testy
+		grep -q "ABA_TESTING=1" /etc/environment
+		echo "All golden VM checks passed."
+	VERIFYEOF
+
+	if [ $? -ne 0 ]; then
+		echo "  [golden] ERROR: verification FAILED" >&2
+		return 1
+	fi
+}
+
+# --- prepare_golden_vm ------------------------------------------------------
+# Prepare (or refresh) a golden VM with all common config baked in.
+# Skips refresh if the snapshot is less than GOLDEN_MAX_AGE_HOURS old.
+#
+prepare_golden_vm() {
+	# Do NOT use set -e here. It leaks into the caller when called without
+	# a subshell and causes mysterious silent failures. All error handling
+	# is done via explicit "|| return 1" guards.
+
+	local vm_template="$1"
+	local golden_name="$2"
+	local folder="${3:-${VC_FOLDER:-/Datacenter/vm/abatesting}}"
+	local user="${4:-$VM_DEFAULT_USER}"
+	local snapshot_name="golden-ready"
+	local max_age_hours="${GOLDEN_MAX_AGE_HOURS:-24}"
+
+	local stamp_dir="${HOME}/.cache/aba-e2e"
+	mkdir -p "$stamp_dir"
+	local stamp_file="${stamp_dir}/${golden_name}.stamp"
+
+	echo ""
+	echo "=== Phase 0: Preparing golden VM ($golden_name) ==="
+
+	# If the golden VM exists and has a fresh stamp, reuse it.
+	# Otherwise, destroy it and rebuild from the template.
+	if vm_exists "$golden_name"; then
+		if [ -f "$stamp_file" ]; then
+			local stamp_epoch now_epoch age_hours
+			stamp_epoch=$(cat "$stamp_file")
+			now_epoch=$(date +%s)
+			age_hours=$(( (now_epoch - stamp_epoch) / 3600 ))
+			if [ "$age_hours" -lt "$max_age_hours" ]; then
+				echo "  Snapshot is ${age_hours}h old (max: ${max_age_hours}h) -- reusing."
+				return 0
+			fi
+			echo "  Snapshot is ${age_hours}h old (max: ${max_age_hours}h) -- stale, destroying ..."
+		else
+			echo "  No stamp file (failed or incomplete build?) -- destroying ..."
+		fi
+		govc vm.power -off "$golden_name" 2>/dev/null || true
+		govc vm.destroy "$golden_name" || return 1
+		rm -f "$stamp_file"
+	fi
+
+	echo "  Creating from $vm_template ..."
+
+	clone_vm "$vm_template" "$golden_name" "$folder" || return 1
+
+	local ip
+	ip=$(govc vm.ip -wait 5m "$golden_name") || return 1
+	echo "  Golden VM IP: $ip"
+
+	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_setup_ssh_keys "$ip" "$user"      || return 1
+	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_setup_default_route "$ip" "$user" || return 1
+	_vm_fix_proxy_noproxy "$ip" "$user"   || return 1
+	_vm_remove_proxy "$ip" "$user"        || return 1
+	_vm_setup_firewall "$ip" "$user"      || return 1
+	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_setup_time "$ip" "$user"          || return 1
+	_vm_dnf_update "$ip" "$user"          || return 1
+	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_cleanup_caches "$ip" "$user"      || return 1
+	_vm_cleanup_podman "$ip" "$user"      || return 1
+	_vm_cleanup_home "$ip" "$user"        || return 1
+	_vm_create_test_user "$ip" "$user"    || return 1
+	_vm_set_aba_testing "$ip" "$user"     || return 1
+	_vm_verify_golden "$ip" "$user"       || return 1
+
+	_essh "${user}@${ip}" -- "sudo poweroff" || true
+	sleep 10
+	govc vm.power -off "$golden_name" 2>/dev/null || true
+	govc snapshot.create -vm "$golden_name" "$snapshot_name" || return 1
+	date +%s > "$stamp_file"
+
+	echo "  Golden VM created and snapshotted."
+	echo "=== Phase 0 complete ==="
 }
 
 # =============================================================================
@@ -832,7 +983,6 @@ configure_connected_bastion() {
 
     _vm_wait_ssh "$host" "$user"
     _vm_setup_ssh_keys "$host" "$user"
-    _vm_fix_proxy_noproxy "$host" "$user"
 
     # Network + firewall first (NTP needs internet via ens256)
     _vm_setup_network "$host" "$user" "$clone_name"
@@ -918,25 +1068,8 @@ configure_internal_bastion() {
 # =============================================================================
 
 # --- create_pools -----------------------------------------------------------
-# Create N VM pools by cloning from template VMs and configuring them.
-#
-# Usage: create_pools N [--rhel rhel8|rhel9|rhel10] [--connected-only]
-#                       [--start M]
-#
-# Each pool gets:
-#   - A connected bastion clone (conN) from the template
-#   - Optionally a paired disconnected bastion clone (disN) from the template
-#
-# Execution is two-phase for speed:
-#   Phase 1 (parallel):  Clone all VMs from the template snapshot.
-#           clone_vm uses govc vm.clone -snapshot, so the template is
-#           read-only and multiple clones can run concurrently.
-#   Phase 2 (parallel):  Configure all VMs concurrently. Each disN waits
-#           for its conN's firewall/dnsmasq before starting NTP, using a
-#           signal-file handshake.
-#
-# --start M  Begin numbering at M instead of 1 (e.g. --start 3 creates
-#            only pool 3 when count=1).
+# Create N VM pools: Phase 0 prepares a golden VM, Phase 1 clones from it
+# in parallel, Phase 2 applies per-pool config in parallel.
 #
 create_pools() {
     local count="$1"; shift
@@ -944,6 +1077,7 @@ create_pools() {
     local connected_only=""
     local start_at=1
     local pools_file=""
+    local rebuild_golden=""
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -951,11 +1085,13 @@ create_pools() {
             --connected-only) connected_only=1; shift ;;
             --start) start_at="$2"; shift 2 ;;
             --pools-file) pools_file="$2"; shift 2 ;;
+            --rebuild-golden) rebuild_golden=1; shift ;;
             *) echo "create_pools: unknown flag: $1" >&2; return 1 ;;
         esac
     done
 
     local vm_template="${VM_TEMPLATES[$rhel_ver]:-bastion-internal-$rhel_ver}"
+    local golden_name="aba-e2e-golden-${rhel_ver}"
     local end_at=$(( start_at + count - 1 ))
     local signal_dir
     signal_dir=$(mktemp -d /tmp/e2e-pool-signals.XXXXXX)
@@ -984,19 +1120,41 @@ create_pools() {
         done < "$pools_file"
     fi
 
-    echo "=== Creating pool(s) ${start_at}..${end_at} from template $vm_template ==="
-    echo "  Signal dir: $signal_dir"
+    # --- Set up per-pool log directory ----------------------------------------
+    local pool_log_dir="${E2E_LOG_DIR:-${_E2E_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/logs}"
+    mkdir -p "$pool_log_dir"
 
-    # --- Create per-pool subfolders -----------------------------------------
+    echo "=== Creating pool(s) ${start_at}..${end_at} from golden VM ($golden_name) ==="
+
+    # --- Phase 0: Prepare (or refresh) the golden VM ------------------------
+
+    if [ -n "$rebuild_golden" ]; then
+        echo "  Rebuilding golden VM (--rebuild-golden) ..."
+        if vm_exists "$golden_name"; then
+            # VM may already be powered off
+            govc vm.power -off "$golden_name" 2>/dev/null || true
+            govc vm.destroy "$golden_name"
+        fi
+        rm -f "${HOME}/.cache/aba-e2e/${golden_name}.stamp"
+    fi
+
+    local golden_log="${pool_log_dir}/golden-${rhel_ver}.log"
+    local golden_rc=0
+    prepare_golden_vm "$vm_template" "$golden_name" "$base_folder" >> "$golden_log" 2>&1 || golden_rc=$?
+    if [ "$golden_rc" -ne 0 ]; then
+        echo "--- Phase 0 FAILED (rc=$golden_rc): see $golden_log ---"
+        rm -rf "$signal_dir"
+        return 1
+    fi
+
+    # --- Create per-pool subfolders (idempotent) ------------------------------
     for (( i=start_at; i<=end_at; i++ )); do
         local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
-        echo "  Creating folder: $pool_folder"
         govc folder.create "$pool_folder" 2>/dev/null || true
     done
 
-    # --- Phase 1: Clone all VMs in parallel from snapshot --------------------
-    echo ""
-    echo "--- Phase 1: Cloning VMs (parallel) ---"
+    # --- Phase 1: Clone all VMs in parallel from golden snapshot -------------
+    echo "--- Phase 1: Cloning VMs from $golden_name ---"
 
     local -a clone_pids=()
     local -a clone_labels=()
@@ -1005,12 +1163,16 @@ create_pools() {
     for (( i=start_at; i<=end_at; i++ )); do
         local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
         local pool_ds="${_pool_datastores[$i]:-$VM_DATASTORE}"
-        VM_DATASTORE="$pool_ds" clone_vm "$vm_template" "con${i}" "$pool_folder" &
+        local pool_log="${pool_log_dir}/create-pool${i}.log"
+
+        echo "=== Cloning VMs for pool ${i} ===" > "$pool_log"
+
+        VM_DATASTORE="$pool_ds" clone_vm "$golden_name" "con${i}" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
         clone_pids+=($!)
         clone_labels+=("clone con${i}")
 
         if [ -z "$connected_only" ]; then
-            VM_DATASTORE="$pool_ds" clone_vm "$vm_template" "dis${i}" "$pool_folder" &
+            VM_DATASTORE="$pool_ds" clone_vm "$golden_name" "dis${i}" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
             clone_pids+=($!)
             clone_labels+=("clone dis${i}")
         fi
@@ -1033,25 +1195,8 @@ create_pools() {
     fi
     echo "--- Phase 1 complete: all clones booting ---"
 
-    # --- Snapshot all clones (rollback point before configuration) ----------
-    echo ""
-    echo "--- Creating post-clone snapshots ---"
-    for (( i=start_at; i<=end_at; i++ )); do
-        local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
-        govc snapshot.create -vm "${pool_folder}/con${i}" "post-clone" &
-        if [ -z "$connected_only" ]; then
-            govc snapshot.create -vm "${pool_folder}/dis${i}" "post-clone" &
-        fi
-    done
-    wait
-    echo "--- Snapshots created ---"
-
-    # --- Phase 2: Configure all VMs in parallel -----------------------------
-    echo ""
-    echo "--- Phase 2: Configuring VMs (parallel) ---"
-
-    local pool_log_dir="${E2E_LOG_DIR:-${_E2E_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/logs}"
-    mkdir -p "$pool_log_dir"
+    # --- Phase 2: Per-pool configuration (parallel) -------------------------
+    echo "--- Phase 2: Per-pool configuration ---"
 
     local -a pids=()
     local -a labels=()
@@ -1062,87 +1207,69 @@ create_pools() {
         local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
         local pool_log="${pool_log_dir}/create-pool${i}.log"
 
-        echo "  Pool ${i} log: $pool_log"
-
-        # Connected bastion: signal dis as soon as firewall+dnsmasq are up,
-        # then continue with the slower cleanup/install steps.
         (
+            set -e
             export VC_FOLDER="$pool_folder"
 
-            echo "=== Configuring connected bastion: $conn_vm ==="
+            echo "=== Configuring $conn_vm (connected) ==="
 
             _vm_wait_ssh "$conn_vm" "$user"
-            _vm_setup_ssh_keys "$conn_vm" "$user"
-            _vm_fix_proxy_noproxy "$conn_vm" "$user"
+            _vm_dnf_update "$conn_vm" "$user"
+            _vm_wait_ssh "$conn_vm" "$user"
             _vm_setup_network "$conn_vm" "$user" "$conn_vm"
-            _vm_setup_firewall "$conn_vm" "$user"
             _vm_setup_dnsmasq "$conn_vm" "$user" "$conn_vm"
 
-            # disN can now proceed -- firewall masquerade + dnsmasq are up
             touch "${signal_dir}/${conn_vm}.ready"
 
-            _vm_setup_time "$conn_vm" "$user"
-            _vm_cleanup_caches "$conn_vm" "$user"
-            _vm_cleanup_podman "$conn_vm" "$user"
-            _vm_cleanup_home "$conn_vm" "$user"
             _vm_setup_vmware_conf "$conn_vm" "$user"
-            _vm_create_test_user "$conn_vm" "$user"
-            _vm_set_aba_testing "$conn_vm" "$user"
+            _vm_cleanup_caches "$conn_vm" "$user"
+            _vm_verify_golden "$conn_vm" "$user"
             _vm_install_aba "$conn_vm" "$user"
 
-            echo "=== Connected bastion ready: $conn_vm ==="
+            echo "  $conn_vm ready"
         ) >> "$pool_log" 2>&1 &
         pids+=($!)
         labels+=("configure $conn_vm")
 
-        # Disconnected bastion: wait for con's firewall, then configure
         if [ -z "$connected_only" ]; then
             local int_vm="dis${i}"
             (
+                set -e
                 export VC_FOLDER="$pool_folder"
-                # dis can do SSH, network, firewall and NTP config while
-                # waiting for con's firewall -- chrony syncs once the
-                # NTP server becomes reachable.
-                _vm_wait_ssh "$int_vm" "$user"
-                _vm_setup_ssh_keys "$int_vm" "$user"
-                _vm_setup_network "$int_vm" "$user" "$int_vm"
-                _vm_setup_firewall "$int_vm" "$user"
-                _vm_setup_time "$int_vm" "$user"
 
-                # Wait for con's masquerade+dnsmasq before dnf update
-                echo "  [$int_vm] Waiting for $conn_vm firewall+dnsmasq ..."
+                echo "=== Configuring $int_vm (disconnected) ==="
+
+                _vm_wait_ssh "$int_vm" "$user"
+                _vm_setup_network "$int_vm" "$user" "$int_vm"
+
+                # Wait for conN's dnsmasq -- disN needs conN for DNS.
+                echo "  [$int_vm] Waiting for $conn_vm dnsmasq ..."
                 local waited=0
                 while [ ! -f "${signal_dir}/${conn_vm}.ready" ]; do
                     sleep 5
                     waited=$(( waited + 5 ))
-                    if [ $waited -ge 1200 ]; then
+                    if [ $waited -ge 600 ]; then
                         echo "  [$int_vm] ERROR: Timed out waiting for $conn_vm (${waited}s)" >&2
                         return 1
                     fi
                 done
                 echo "  [$int_vm] $conn_vm is ready (waited ${waited}s), continuing ..."
 
-                _vm_dnf_update "$int_vm" "$user"
-                _vm_wait_ssh "$int_vm" "$user"
-                _vm_cleanup_caches "$int_vm" "$user"
-                _vm_cleanup_podman "$int_vm" "$user"
-                _vm_cleanup_home "$int_vm" "$user"
                 _vm_setup_vmware_conf "$int_vm" "$user"
+                _vm_cleanup_caches "$int_vm" "$user"
+                _vm_verify_golden "$int_vm" "$user"
                 _vm_remove_rpms "$int_vm" "$user"
                 _vm_remove_pull_secret "$int_vm" "$user"
                 _vm_remove_proxy "$int_vm" "$user"
-                _vm_create_test_user "$int_vm" "$user"
-                _vm_set_aba_testing "$int_vm" "$user"
                 _vm_disconnect_internet "$int_vm" "$user"
-                echo "=== Internal bastion ready: $int_vm ==="
+
+                echo "  $int_vm ready"
             ) >> "$pool_log" 2>&1 &
             pids+=($!)
             labels+=("configure $int_vm")
         fi
     done
 
-    # Wait for all background jobs and report results
-    echo "  Waiting for ${#pids[@]} configuration jobs ..."
     local failed=0
     for idx in "${!pids[@]}"; do
         if wait "${pids[$idx]}"; then
@@ -1155,7 +1282,6 @@ create_pools() {
 
     rm -rf "$signal_dir"
 
-    echo ""
     if [ $failed -gt 0 ]; then
         echo "=== $failed configuration(s) FAILED ==="
         return 1
@@ -1229,10 +1355,6 @@ list_pools() {
 # Usage: pool_ready HOST
 #
 pool_ready() {
-    local host="$1"
-
-    if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$host" -- "test -d ~/aba" 2>/dev/null; then
-        return 1
-    fi
-    return 0
+    _essh -o ConnectTimeout=5 -o BatchMode=yes "$1" -- "test -d ~/aba" 2>/dev/null
 }
+

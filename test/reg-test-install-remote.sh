@@ -26,7 +26,7 @@ rpm -q rsync || sudo yum install make rsync -y
 # Copy needed files
 rsync --progress --partial -avz reg-install.sh mirror-registry-amd64.tar.gz  $reg_ssh_user@$reg_host:test
 
-ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "bash -e test/reg-install.sh"
+ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "bash -e test/reg-install.sh $reg_host"
 
 # Clean up large files to save disk space. Also remove the mirror-registry
 # binary so the next run re-extracts everything from the tarball cleanly.
