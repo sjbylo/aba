@@ -417,12 +417,60 @@ run_suite_local() {
     # Interactive flag
     [ -n "${_E2E_INTERACTIVE:-}" ] && extra_flags+=" -i"
 
-    # Dispatch to conN via SSH (-t for TTY, needed for interactive mode)
-    echo "  Dispatching suite '$suite_name' to $con_host ..."
+    # Dispatch to conN inside a tmux session so the suite survives SSH drops.
+    # The user attaches to the session for live output; if SSH drops they
+    # can re-run the same command to re-attach.
+    local tmux_name="e2e-single-${suite_name}"
+    local rc_file="/tmp/${tmux_name}.rc"
+    local wrapper_script="/tmp/${tmux_name}-run.sh"
+    local remote_cmd="${env_exports}cd ~/aba && test/e2e/run.sh --suite $suite_name $extra_flags"
+    local _ssh_opts="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes"
+
+    echo "  Dispatching suite '$suite_name' to $con_host (tmux: $tmux_name) ..."
+
+    # Check if a tmux session already exists (re-attach scenario)
+    if ssh $_ssh_opts "$ssh_target" "tmux has-session -t $tmux_name 2>/dev/null"; then
+        echo "  Found existing tmux session '$tmux_name' -- re-attaching ..."
+    else
+        # Upload wrapper script
+        ssh $_ssh_opts "$ssh_target" \
+            "cat > $wrapper_script && chmod +x $wrapper_script" <<-WRAPPER
+		#!/bin/bash
+		rm -f $rc_file
+		(
+		$remote_cmd
+		)
+		_rc=\$?
+		echo "\$_rc" > $rc_file
+		exit \$_rc
+		WRAPPER
+
+        # Start tmux session
+        ssh $_ssh_opts "$ssh_target" \
+            "tmux kill-session -t $tmux_name 2>/dev/null || true; \
+             tmux new-session -d -s $tmux_name $wrapper_script"
+    fi
+
+    # Attach so the user sees live output (-t for TTY)
     ssh -t -o LogLevel=ERROR -o ConnectTimeout=30 \
         -o ServerAliveInterval=60 -o ServerAliveCountMax=10 \
-        "$ssh_target" -- \
-        "${env_exports}cd ~/aba && test/e2e/run.sh --suite $suite_name $extra_flags"
+        "$ssh_target" \
+        "tmux attach-session -t $tmux_name 2>/dev/null || echo 'Session already ended.'"
+
+    # Session ended or user detached -- check result
+    if ssh $_ssh_opts "$ssh_target" "tmux has-session -t $tmux_name 2>/dev/null"; then
+        echo ""
+        echo "  Suite still running in tmux (you detached)."
+        echo "  Re-run the same command to re-attach, or:"
+        echo "    ssh $ssh_target -t 'tmux attach -t $tmux_name'"
+        return 0
+    fi
+
+    # Retrieve exit code
+    local rc
+    rc=$(ssh $_ssh_opts "$ssh_target" "cat $rc_file 2>/dev/null") || rc=255
+    rc="${rc//[^0-9]/}"
+    return "${rc:-255}"
 }
 
 # --- Main -------------------------------------------------------------------
@@ -465,6 +513,8 @@ main() {
         if [ -f "$_vmconf" ]; then
             set -a; source "$_vmconf"; set +a
         fi
+        source "$_RUN_DIR/lib/parallel.sh"
+        tmux_cleanup_pools "$CLI_POOLS_FILE"
         destroy_pools --all
         exit 0
     fi
@@ -519,6 +569,21 @@ main() {
     # Parallel mode: run coordinator-only suites locally, dispatch the rest to pools
     if [ -n "$CLI_PARALLEL" ]; then
         source "$_RUN_DIR/lib/parallel.sh"
+        # Source vmware.conf so govc is available for snapshot revert in _reset_pool
+        local _vmconf
+        _vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+        if [ -f "$_vmconf" ]; then
+            set -a; source "$_vmconf"; set +a
+        fi
+        # CI runs to completion; otherwise pause on first suite failure for debugging
+        [ -n "$CLI_CI" ] && export E2E_PAUSE_ON_FAILURE=0 || export E2E_PAUSE_ON_FAILURE="${E2E_PAUSE_ON_FAILURE:-1}"
+        if [ -n "$CLI_CLEAN" ]; then
+            tmux_cleanup_pools "$CLI_POOLS_FILE"
+        fi
+        # Rotate previous run's log so current run gets a fresh e2e-parallel.log when teed
+        if [ -f "$_ABA_ROOT/e2e-parallel.log" ]; then
+            mv "$_ABA_ROOT/e2e-parallel.log" "$_ABA_ROOT/e2e-parallel.log.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+        fi
         local coordinator_suites=()
         local pool_suites=()
         local s

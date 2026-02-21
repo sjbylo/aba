@@ -189,6 +189,30 @@ The legacy `test/test[12345]*.sh` scripts use `10.0.1.x` (SNO=.201, compact=.71,
 
 Each suite writes progress to `.state` files (e.g., `clone-and-check.state`). Use `--resume` to skip already-passed tests after a failure. Use `--clean` to reset state and start fresh.
 
+## Framework policies
+
+### Pools always get new work
+
+Pools must always get new work. If a test or suite fails, we need to find out **why** and what is needed so tests pass again. For example, some state may need clearing after a suite finishes or fails. We must identify that and, if needed, reset the pool (e.g. clear data in `/home/steve` or `/root`, or clear and remove failed mirrors) so it works again. Do not exclude a pool from further work after a failure; fix the cause and add any required cleanup so the next suite can run.
+
+### Pool reset before each suite (snapshot-based)
+
+The parallel dispatcher **resets** each pool immediately before dispatching a suite by reverting the pool's conN and disN VMs to the `pool-ready` VMware snapshot. This snapshot is created by `clone-and-check` **only after all validations pass**, guaranteeing that every suite starts from a known-good, fully configured state.
+
+**How it works:**
+
+1. `clone-and-check` runs all configuration and validation steps on the pool's VMs.
+2. Only if every validation passes, `govc snapshot.create pool-ready` is called on both conN and disN.
+3. Before each suite dispatch, the parallel dispatcher runs `govc snapshot.revert pool-ready` on both VMs, powers them on, and waits for SSH.
+
+If the `pool-ready` snapshot does not exist (e.g. clone-and-check has not run or failed), the dispatcher prints an error and skips the pool.
+
+Once all suites are passing reliably, we will try runs **without** pool reset and then decide the long-term policy. To disable reset, set `E2E_RESET_POOL_BEFORE_SUITE=0`.
+
+### Pause on failure (while polishing)
+
+While the test framework is being polished, the parallel dispatcher **pauses** on the first suite failure: it stops assigning new work, lets running jobs finish, then exits with a message so you can debug and add cleanup code. Set `E2E_PAUSE_ON_FAILURE=0` (or use `--ci`) to run to completion without pausing. See [Parallel Execution](#parallel-execution) below.
+
 ## Parallel Execution
 
 Uncomment additional pools in `pools.conf`, then:
@@ -197,7 +221,7 @@ Uncomment additional pools in `pools.conf`, then:
 test/e2e/run.sh --parallel --all --pools pools.conf
 ```
 
-Each pool runs suites independently on its own bastion pair.
+Each pool runs suites independently on its own bastion pair. By default, the first suite failure pauses the run so you can debug and add pool cleanup; re-run when ready.
 
 ## Writing a New Suite
 

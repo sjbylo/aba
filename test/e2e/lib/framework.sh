@@ -1005,6 +1005,9 @@ preflight_ssh() {
         exit 1
     fi
 
+    # For root@ and testy@ checks we need host-only (INTERNAL_BASTION is user@host)
+    local host_only="${host#*@}"
+
     local _ssh_opts="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
     local _fail=""
 
@@ -1016,20 +1019,20 @@ preflight_ssh() {
         _e2e_log "  Preflight: SSH to $host (default user) OK"
     fi
 
-    _e2e_log "  Preflight: checking SSH to root@$host ..."
-    if ! ssh $_ssh_opts "root@$host" true 2>/dev/null; then
-        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to root@$host")"
+    _e2e_log "  Preflight: checking SSH to root@$host_only ..."
+    if ! ssh $_ssh_opts "root@$host_only" true 2>/dev/null; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to root@$host_only")"
         _fail=1
     else
-        _e2e_log "  Preflight: SSH to root@$host OK"
+        _e2e_log "  Preflight: SSH to root@$host_only OK"
     fi
 
-    _e2e_log "  Preflight: checking SSH to testy@$host (testy_rsa) ..."
-    if ! ssh $_ssh_opts -i ~/.ssh/testy_rsa "testy@$host" true 2>/dev/null; then
-        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to testy@$host with testy_rsa")"
+    _e2e_log "  Preflight: checking SSH to testy@$host_only (testy_rsa) ..."
+    if ! ssh $_ssh_opts -i ~/.ssh/testy_rsa "testy@$host_only" true 2>/dev/null; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to testy@$host_only with testy_rsa")"
         _fail=1
     else
-        _e2e_log "  Preflight: SSH to testy@$host (testy_rsa) OK"
+        _e2e_log "  Preflight: SSH to testy@$host_only (testy_rsa) OK"
     fi
 
     if [ -n "$_fail" ]; then

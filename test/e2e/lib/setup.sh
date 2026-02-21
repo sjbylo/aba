@@ -46,7 +46,7 @@ setup_aba_from_scratch() {
 
     # Remove RPMs so aba can test auto-install (removes make, git, etc.)
     e2e_run "Remove RPMs for clean install test" \
-        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
+        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y --disableplugin=subscription-manager"
 
     # podman prune/rmi with --force are idempotent (return 0 even when empty).
     e2e_run "Clean podman images" \
