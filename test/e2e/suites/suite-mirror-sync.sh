@@ -98,12 +98,12 @@ test_end
 # ============================================================================
 test_begin "Firewalld: bring down and sync"
 
-e2e_diag "Show firewalld status" \
-    "ssh ${INTERNAL_BASTION} 'sudo firewall-offline-cmd --list-all; sudo systemctl status firewalld'"
-e2e_run "Bring down firewalld" \
-    "ssh ${INTERNAL_BASTION} 'sudo systemctl disable firewalld; sudo systemctl stop firewalld'"
-e2e_diag "Show firewalld status (should be down)" \
-    "ssh ${INTERNAL_BASTION} 'sudo systemctl status firewalld'"
+e2e_diag_remote "Show firewalld status" \
+    "sudo firewall-offline-cmd --list-all; sudo systemctl status firewalld"
+e2e_run_remote "Bring down firewalld" \
+    "sudo systemctl disable firewalld; sudo systemctl stop firewalld"
+e2e_diag_remote "Show firewalld status (should be down)" \
+    "sudo systemctl status firewalld"
 
 e2e_run -r 3 2 "Sync images to remote registry" \
     "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
@@ -117,12 +117,12 @@ test_end
 
 test_begin "Firewalld: bring up and verify port"
 
-e2e_run "Bring up firewalld" \
-    "ssh ${INTERNAL_BASTION} 'sudo systemctl enable firewalld; sudo systemctl start firewalld'"
-e2e_run "Show firewalld status (should be up)" \
-    "ssh ${INTERNAL_BASTION} 'sudo systemctl status firewalld'"
-e2e_run "Verify port 8443 is open" \
-    "ssh ${INTERNAL_BASTION} 'sudo firewall-cmd --list-all | grep \"ports: .*8443/tcp\"'"
+e2e_run_remote "Bring up firewalld" \
+    "sudo systemctl enable firewalld; sudo systemctl start firewalld"
+e2e_run_remote "Show firewalld status (should be up)" \
+    "sudo systemctl status firewalld"
+e2e_run_remote "Verify port 8443 is open" \
+    "sudo firewall-cmd --list-all | grep 'ports: .*8443/tcp'"
 e2e_run "Verify registry reachable through firewall" \
     "curl -sk --connect-timeout 10 https://${DIS_HOST}:8443/health/instance"
 

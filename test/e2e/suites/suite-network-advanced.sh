@@ -226,6 +226,13 @@ _net_test() {
     e2e_run "Set vlan=$vlan" \
         "sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $cname/cluster.conf"
 
+    if [ -n "$vlan" ]; then
+        local _vlan_dns
+        _vlan_dns="$(pool_vlan_dns)"
+        e2e_run "Set VLAN dns_servers=$_vlan_dns (reachable from VLAN network)" \
+            "sed -i \"s/^dns_servers=.*/dns_servers=$_vlan_dns /g\" $cname/cluster.conf"
+    fi
+
     e2e_diag "Show cluster.conf" \
         "grep -e ^vlan= -e ^ports= -e ^port1= $cname/cluster.conf | awk '{print \$1}'"
 

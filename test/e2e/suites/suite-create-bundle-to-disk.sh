@@ -214,7 +214,7 @@ e2e_run "Verify mirror-registry exists before clean" \
 
 # Verify run_once state directory exists
 e2e_run "Verify run_once state exists" \
-    "ls -d ~/.aba/runner/mirror:* 2>/dev/null | head -3 || echo 'no run_once state yet'"
+    "ls -d ~/.aba/runner/mirror:* | head -3"
 
 # Run mirror clean -- should delete extracted files AND clear run_once state
 e2e_run "Run mirror clean" "aba --dir mirror clean"

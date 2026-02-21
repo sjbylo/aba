@@ -1038,6 +1038,36 @@ documented at the top of `test/e2e/lib/framework.sh`.
     Use idempotent setup helpers (e.g. `setup-pool-registry.sh`) for shared
     prerequisites.
 
+13. **Prefer inline commands over trivial wrappers in suites.**
+    If a `_vm_*` helper is just a one-liner around `_essh` / `_escp`, inline the
+    actual command directly in the `e2e_run` call.  This makes the log output show
+    the real ssh/scp command instead of an opaque function name.  Keep helper
+    functions only when they contain non-trivial logic (conditionals, loops,
+    multi-step setup) or are shared by `create_pools` provisioning.
+
+14. **Use `e2e_run -h` for remote commands, not embedded SSH.**
+    Suites that need to run a command on a remote host must use `e2e_run -h "user@host"`
+    (or the `e2e_run_remote` / `e2e_diag_remote` shorthands for `$INTERNAL_BASTION`).
+    Never put `ssh host 'cmd'` or `_essh host -- 'cmd'` inside the command string --
+    the framework cannot detect embedded SSH and will mark the command as `L` (local)
+    instead of `R` (remote), hiding where it actually runs.
+    **Exceptions:** (a) Pipe patterns that mix local and remote (`local_cmd | ssh host 'tar xf -'`)
+    must stay as `L` since the execution starts locally.  (b) Commands using custom SSH keys
+    (`ssh -i ~/.ssh/testy_rsa`) may stay inline when testing specific key-based access.
+
+15. **Legitimate error suppression MUST have a comment explaining WHY.**
+    If `2>/dev/null`, `|| true`, or `|| echo ...` is genuinely needed (not a
+    workaround), add a comment on the line above or inline explaining the
+    specific reason.  Uncommented suppression is treated as a bug.
+    ```bash
+    # ✅ GOOD - reason is documented
+    # Tolerate exit 1: VM may already be powered off
+    govc vm.power -off "$vm" 2>/dev/null || true
+
+    # ❌ BAD - no explanation
+    govc vm.power -off "$vm" 2>/dev/null || true
+    ```
+
 ### E2E Log Monitoring and Fix Scope
 
 **During test runs, continuously monitor ALL logs** from the current E2E run and
@@ -1274,6 +1304,6 @@ make -C mirror clean       # Mirror state
 
 ---
 
-**Last Updated**: January 22, 2026  
+**Last Updated**: February 21, 2026  
 **Purpose**: Keep this document updated as rules evolve
 

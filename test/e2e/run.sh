@@ -12,7 +12,7 @@
 #          [--interactive | -i | --ci]
 #          [--resume | --clean]
 #          [--notify | --no-notify]
-#          [--dry-run]
+#          [--dry-run] [--sync]
 #          [-c CHANNEL] [-v VERSION] [-r RHEL] [-u USER]
 # =============================================================================
 
@@ -37,6 +37,7 @@ CLI_PARALLEL=""
 CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
 CLI_CREATE_POOLS=""
 CLI_DESTROY_POOLS=""
+CLI_REBUILD_GOLDEN=""
 CLI_MATRIX=""
 CLI_INTERACTIVE=""
 CLI_CI=""
@@ -45,6 +46,7 @@ CLI_CLEAN=""
 CLI_NOTIFY=""
 CLI_NO_NOTIFY=""
 CLI_DRY_RUN=""
+CLI_SYNC=""
 CLI_LIST=""
 CLI_CHANNEL=""
 CLI_VERSION=""
@@ -75,6 +77,8 @@ parse_args() {
                 CLI_CREATE_POOLS="$2"; shift 2 ;;
             --destroy-pools)
                 CLI_DESTROY_POOLS=1; shift ;;
+            --rebuild-golden)
+                CLI_REBUILD_GOLDEN=1; shift ;;
             --matrix)
                 CLI_MATRIX=1; shift ;;
             --interactive|-i)
@@ -91,6 +95,8 @@ parse_args() {
                 CLI_NO_NOTIFY=1; shift ;;
             --dry-run)
                 CLI_DRY_RUN=1; shift ;;
+            --sync)
+                CLI_SYNC=1; shift ;;
             --list|-l)
                 CLI_LIST=1; shift ;;
             -c|--channel)
@@ -134,8 +140,10 @@ usage() {
 	  --pools FILE          Pool configuration file (default: pools.conf)
 	  --create-pools N      Create N pools from VM templates before running
 	  --destroy-pools       Power off all pool VMs and exit
+	  --rebuild-golden      Destroy and recreate the golden VM from scratch
 	  --matrix              Expand parameter combinations across pools
 	  --dry-run             Show dispatch plan without executing
+	  --sync                Rsync local aba tree to conN before dispatch (dev convenience)
 	
 	Test parameters (override config.env defaults):
 	  -c, --channel CHAN    Channel: stable, fast, candidate
@@ -277,6 +285,27 @@ run_suite_local() {
         echo "========================================"
         echo ""
 
+        # Load pool-specific overrides from pools.conf so VC_FOLDER etc. are correct.
+        # These must be exported BEFORE the suite runs, because config.env uses
+        # ${VAR:-default} and will respect pre-existing environment values.
+        local _pool_num="${POOL_NUM:-1}"
+        if [ -n "${CLI_POOLS_FILE:-}" ] && [ -f "$CLI_POOLS_FILE" ]; then
+            while IFS= read -r _pline; do
+                [[ "$_pline" =~ ^[[:space:]]*# ]] && continue
+                [[ -z "${_pline// }" ]] && continue
+                local _found_num=""
+                for _tok in $_pline; do
+                    case "$_tok" in POOL_NUM=*) _found_num="${_tok#POOL_NUM=}" ;; esac
+                done
+                if [ "$_found_num" = "$_pool_num" ]; then
+                    for _tok in $_pline; do
+                        case "$_tok" in *=*) export "$_tok" ;; esac
+                    done
+                    break
+                fi
+            done < "$CLI_POOLS_FILE"
+        fi
+
         if [ -n "$CLI_RESUME" ]; then
             local state_file="${E2E_LOG_DIR}/${suite_name}.state"
             if [ -f "$state_file" ]; then
@@ -323,9 +352,9 @@ run_suite_local() {
 
     # --- Dispatch to connected bastion via SSH -----------------------------
 
-    local con_host
-    con_host="$(pool_connected_bastion)"
-    local ssh_target="${CON_SSH_USER:+${CON_SSH_USER}@}${con_host}"
+    local ssh_target
+    ssh_target="$(pool_connected_bastion)"
+    local con_host="$ssh_target"
 
     echo ""
     echo "========================================"
@@ -333,60 +362,66 @@ run_suite_local() {
     echo "========================================"
     echo ""
 
-    # Warn if working tree has uncommitted changes (helps catch accidental local hacks)
-    local _dirty
-    _dirty="$(git -C "$_ABA_ROOT" status --porcelain 2>/dev/null)"
-    if [ -n "$_dirty" ]; then
-        echo "  WARNING: aba tree has uncommitted changes -- syncing working tree as-is"
-        git -C "$_ABA_ROOT" status --short 2>/dev/null | head -15 | while IFS= read -r _l; do
-            echo "    $_l"
-        done
-        echo ""
-    fi
+    # --sync: rsync local aba working tree to conN (dev convenience for testing
+    # uncommitted changes). Without --sync, conN uses whatever _vm_install_aba
+    # cloned from git, which matches the real user workflow.
+    if [ -n "$CLI_SYNC" ]; then
+        local _dirty
+        _dirty="$(git -C "$_ABA_ROOT" status --porcelain 2>/dev/null)"
+        if [ -n "$_dirty" ]; then
+            echo "  WARNING: aba tree has uncommitted changes -- syncing working tree as-is"
+            git -C "$_ABA_ROOT" status --short 2>/dev/null | head -15 | while IFS= read -r _l; do
+                echo "    $_l"
+            done
+            echo ""
+        fi
 
-    # Sync latest test framework + scripts to conN
-    echo "  Syncing aba tree to $con_host ..."
-    rsync -az --delete \
-        --exclude='mirror/save/' \
-        --exclude='mirror/.oc-mirror/' \
-        --exclude='mirror/*.tar' \
-        --exclude='mirror/*.tar.gz' \
-        --exclude='mirror/mirror-registry' \
-        --exclude='cli/*.tar.gz' \
-        --exclude='.git/' \
-        --exclude='sno/' \
-        --exclude='sno2/' \
-        --exclude='compact/' \
-        --exclude='standard/' \
-        "$_ABA_ROOT/" "$ssh_target:~/aba/"
+        echo "  Syncing aba tree to $con_host ..."
+        rsync -az --delete \
+            --exclude='mirror/save/' \
+            --exclude='mirror/.oc-mirror/' \
+            --exclude='mirror/*.tar' \
+            --exclude='mirror/*.tar.gz' \
+            --exclude='mirror/mirror-registry' \
+            --exclude='cli/*.tar.gz' \
+            --exclude='.git/' \
+            --exclude='sno/' \
+            --exclude='sno2/' \
+            --exclude='compact/' \
+            --exclude='standard/' \
+            "$_ABA_ROOT/" "$ssh_target:~/aba/"
 
-    # Sync notify helper to conN (if it exists on coordinator)
-    local _notify_src
-    _notify_src="$(eval echo "$NOTIFY_CMD" 2>/dev/null)"
-    if [ -n "$_notify_src" ] && [ -x "$_notify_src" ]; then
-        echo "  Syncing $(basename "$_notify_src") to $con_host ..."
-        rsync -az "$_notify_src" "$ssh_target:$(dirname "$_notify_src")/"
+        local _notify_src
+        _notify_src="$(eval echo "$NOTIFY_CMD" 2>/dev/null)"
+        if [ -n "$_notify_src" ] && [ -x "$_notify_src" ]; then
+            echo "  Syncing $(basename "$_notify_src") to $con_host ..."
+            rsync -az "$_notify_src" "$ssh_target:$(dirname "$_notify_src")/"
+        fi
     fi
 
     # Build environment variable exports (same pattern as parallel.sh)
     local env_exports="export E2E_ON_BASTION=1; "
     local var
     for var in TEST_CHANNEL OCP_VERSION INT_BASTION_RHEL_VER \
-               DIS_SSH_USER OC_MIRROR_VER POOL_NUM ABA_TESTING; do
+               DIS_SSH_USER OC_MIRROR_VER POOL_NUM ABA_TESTING \
+               VC_FOLDER VM_DATASTORE; do
         [ -n "${!var:-}" ] && env_exports+="export $var='${!var}'; "
     done
 
-    # Pass resume/clean flags
+    # Pass resume/clean/sync flags
     local extra_flags=""
     [ -n "$CLI_RESUME" ] && extra_flags+=" --resume"
     [ -n "$CLI_CLEAN" ]  && extra_flags+=" --clean"
+    [ -n "$CLI_SYNC" ]   && extra_flags+=" --sync"
 
     # Interactive flag
     [ -n "${_E2E_INTERACTIVE:-}" ] && extra_flags+=" -i"
 
     # Dispatch to conN via SSH (-t for TTY, needed for interactive mode)
     echo "  Dispatching suite '$suite_name' to $con_host ..."
-    ssh -t -o LogLevel=ERROR -o ConnectTimeout=30 "$ssh_target" -- \
+    ssh -t -o LogLevel=ERROR -o ConnectTimeout=30 \
+        -o ServerAliveInterval=60 -o ServerAliveCountMax=10 \
+        "$ssh_target" -- \
         "${env_exports}cd ~/aba && test/e2e/run.sh --suite $suite_name $extra_flags"
 }
 
@@ -444,7 +479,9 @@ main() {
             echo "ERROR: VMware config not found: $_vmconf" >&2
             exit 1
         fi
-        create_pools "$CLI_CREATE_POOLS" --pools-file "$CLI_POOLS_FILE" || { echo "ERROR: create_pools failed" >&2; exit 1; }
+        local _cp_flags=(--pools-file "$CLI_POOLS_FILE")
+        [ -n "$CLI_REBUILD_GOLDEN" ] && _cp_flags+=(--rebuild-golden)
+        create_pools "$CLI_CREATE_POOLS" "${_cp_flags[@]}" || { echo "ERROR: create_pools failed" >&2; exit 1; }
     fi
 
     # Determine which suites to run

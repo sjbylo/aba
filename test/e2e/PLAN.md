@@ -48,7 +48,7 @@ linked-clone all pool VMs from that snapshot.
 - `_vm_setup_dnsmasq` (DNS for pN.example.com)
 - Signal disN that conN is ready
 - `_vm_setup_vmware_conf`, `_vm_cleanup_caches`, `_vm_verify_golden`
-- `_vm_install_aba` (rsync aba code to bastion)
+- `_vm_install_aba` (git clone aba + ./install on bastion)
 
 **disN (disconnected bastion):**
 - `_vm_setup_network` (ens192/ens224.10, no ens256)
@@ -88,12 +88,12 @@ linked-clone all pool VMs from that snapshot.
 - [x] `set -e` subshell fix (bare subshell, no conditional context)
 - [x] `_vm_wait_ssh` after sshd/firewall disruptions
 - [x] `_vm_create_test_user` uses bastion's `id_rsa.pub` + restorecon + AllowUsers
-- [ ] End-to-end verification (golden build completes without errors)
-- [ ] Verify Phase 1 + Phase 2 produce working pool (suite run)
+- [x] End-to-end verification (golden build completes without errors)
+- [x] Verify Phase 1 + Phase 2 produce working pool (suite run)
 
 ## Backlog
 
 - [ ] Rename `CATALOG_CACHE_TTL_SECS` to `CATALOG_CACHE_TTL_MINS`
-- [ ] Reduce clone_vm MAC address warning noise for golden VMs (done: downgraded to info)
+- [x] Reduce clone_vm MAC address warning noise for golden VMs (downgraded to info)
 - [ ] Consider `set -o pipefail` in `prepare_golden_vm` for pipeline error detection
 - [ ] Audit remaining `2>/dev/null || true` suppressions across all `_vm_*` helpers

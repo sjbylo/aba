@@ -46,32 +46,6 @@ remote_exec_as() {
     fi
 }
 
-# --- remote_copy ------------------------------------------------------------
-#
-# Copy files to/from a remote host.
-#
-# Usage: remote_copy [--to|--from] HOST LOCAL_PATH REMOTE_PATH
-#   or:  remote_copy HOST SRC DST  (uses rsync)
-#
-remote_copy() {
-    local direction="to"
-
-    if [ "$1" = "--to" ] || [ "$1" = "--from" ]; then
-        direction="${1#--}"
-        shift
-    fi
-
-    local host="$1"
-    local path1="$2"
-    local path2="$3"
-
-    if [ "$direction" = "to" ]; then
-        rsync -az --no-perms "$path1" "$host:$path2"
-    else
-        rsync -az --no-perms "$host:$path1" "$path2"
-    fi
-}
-
 # --- remote_pipe_stdin ------------------------------------------------------
 #
 # Pipe stdin to a remote command via SSH.
@@ -203,37 +177,48 @@ clone_vm() {
         -folder "$folder" $ds_flag -on=false "$clone_name" || return 1
 
     # --- Set MAC addresses on the clone's NICs (before power-on) -----------
-    # The clone inherits the source's MACs which won't match DHCP
-    # reservations. Look up the correct MACs from VM_CLONE_MACS[clone_name].
-    # The port group for each NIC is auto-detected from the clone.
+    # The clone can inherit the source's MACs, causing IP conflict. So we
+    # always set each NIC: either a specific MAC from VM_CLONE_MACS[clone_name],
+    # or -net.address - for govc to assign a generated MAC (avoids conflict).
     local mac_entry="${VM_CLONE_MACS[$clone_name]:-}"
+    local -a macs=()
     if [ -n "$mac_entry" ]; then
-        local -a macs=($mac_entry)
-        local i
-        for (( i=0; i<${#macs[@]}; i++ )); do
-            local device="ethernet-${i}"
-            local mac="${macs[$i]}"
-
-            # Auto-detect the NIC's port group (works with dvSwitch)
-            local nic_net
-            nic_net=$(_get_nic_network "$clone_name" "$device")
-            if [ -z "$nic_net" ]; then
-                echo "  WARNING: Could not detect network for $device, using GOVC_NETWORK"
-                nic_net="${GOVC_NETWORK:-VM Network}"
-            fi
-
-            echo "  Setting $device MAC -> $mac (network: $nic_net)"
-            govc vm.network.change -vm "$clone_name" -net "$nic_net" \
-                -net.address "$mac" "$device" || return 1
-        done
-    else
-        echo "  WARNING: No MAC addresses defined for '$clone_name' in VM_CLONE_MACS."
-        echo "           DHCP may not assign the expected IP. Define them in config.env."
+        macs=($mac_entry)
     fi
 
-    # Power on the clone
+    local i=0
+    while true; do
+        local device="ethernet-${i}"
+        # Only touch devices that exist (govc device.info fails for non-existent NICs)
+        if ! govc device.info -vm "$clone_name" "$device" &>/dev/null; then
+            break
+        fi
+        local nic_net
+        nic_net=$(_get_nic_network "$clone_name" "$device")
+        if [ -z "$nic_net" ]; then
+            [ $i -eq 0 ] && echo "  WARNING: Could not detect network for $device, using GOVC_NETWORK"
+            nic_net="${GOVC_NETWORK:-VM Network}"
+        fi
+
+        if [ $i -lt ${#macs[@]} ] && [ -n "${macs[$i]}" ]; then
+            echo "  Setting $device MAC -> ${macs[$i]} (network: $nic_net)"
+            govc vm.network.change -vm "$clone_name" -net "$nic_net" \
+                -net.address "${macs[$i]}" "$device" || return 1
+        else
+            echo "  Setting $device MAC -> auto (network: $nic_net)"
+            govc vm.network.change -vm "$clone_name" -net "$nic_net" \
+                -net.address - "$device" || return 1
+        fi
+        i=$(( i + 1 ))
+    done
+
+    if [ $i -eq 0 ]; then
+        echo "  WARNING: No NICs found on clone '$clone_name', skipping MAC setup."
+    fi
+
     echo "  Powering on clone '$clone_name' ..."
-    govc vm.power -on "$clone_name" || return 1
+    # Tolerate exit 1: VM may already be powered on (e.g. retry or race)
+    govc vm.power -on "$clone_name" 2>/dev/null || true
 
     sleep "${VM_BOOT_DELAY:-8}"
 
@@ -274,7 +259,8 @@ power_off_vm() {
 #
 power_on_vm() {
     local vm_name="$1"
-    govc vm.power -on "$vm_name" || return 1
+    # Tolerate exit 1: VM may already be powered on
+    govc vm.power -on "$vm_name" 2>/dev/null || true
 }
 
 # --- vm_exists --------------------------------------------------------------

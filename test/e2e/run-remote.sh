@@ -5,6 +5,7 @@
 #
 # Usage:  ./run-remote.sh [run.sh args...]
 # Example: ./run-remote.sh --suite cluster-ops -r rhel8 --clean
+# Example: ./run-remote.sh --sync --suite cluster-ops  # rsync local tree first
 
 set -uo pipefail
 
@@ -14,20 +15,22 @@ SUITE=$(echo "$ARGS" | grep -oP '(?<=--suite\s)\S+' || echo "e2e")
 LOG="/tmp/e2e-${SUITE}.log"
 ABA_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
-echo "Syncing aba tree to $HOST ..."
-rsync -az --delete \
-    --exclude='mirror/save/' \
-    --exclude='mirror/.oc-mirror/' \
-    --exclude='mirror/*.tar' \
-    --exclude='mirror/*.tar.gz' \
-    --exclude='mirror/mirror-registry' \
-    --exclude='cli/*.tar.gz' \
-    --exclude='.git/' \
-    --exclude='sno/' \
-    --exclude='sno2/' \
-    --exclude='compact/' \
-    --exclude='standard/' \
-    "$ABA_ROOT/" "$HOST:~/aba/"
+if [[ " $ARGS " == *" --sync "* ]]; then
+    echo "Syncing aba tree to $HOST ..."
+    rsync -az --delete \
+        --exclude='mirror/save/' \
+        --exclude='mirror/.oc-mirror/' \
+        --exclude='mirror/*.tar' \
+        --exclude='mirror/*.tar.gz' \
+        --exclude='mirror/mirror-registry' \
+        --exclude='cli/*.tar.gz' \
+        --exclude='.git/' \
+        --exclude='sno/' \
+        --exclude='sno2/' \
+        --exclude='compact/' \
+        --exclude='standard/' \
+        "$ABA_ROOT/" "$HOST:~/aba/"
+fi
 
 echo "Launching on $HOST: ./run.sh $ARGS"
 echo "Log: $LOG"
