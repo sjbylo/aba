@@ -108,6 +108,14 @@ else
         sudo firewall-cmd --reload
     fi
 
+    # Ensure no stale containers/volumes from a failed previous install;
+    # mirror-registry generates a new Redis password each run but won't
+    # reset an already-running Redis, causing WRONGPASS mismatches.
+    podman stop -a 2>/dev/null || true
+    podman rm -a -f 2>/dev/null || true
+    podman volume rm -a -f 2>/dev/null || true
+    rm -rf ~/quay-install ~/quay-storage
+
     ./mirror-registry install --quayHostname "$reg_host" --initPassword "$REG_PW"
 
     # Trust the CA (install with 644 so non-root users/tools can read it)

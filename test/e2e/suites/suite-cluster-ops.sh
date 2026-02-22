@@ -98,8 +98,8 @@ e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=${TEST_CHANNEL:-stable} ab
 e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
-e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
-e2e_run "Verify vmware.conf" "grep abatesting vmware.conf"
+e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+e2e_run "Verify vmware.conf" "grep aba-e2e vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
@@ -110,7 +110,7 @@ e2e_run "Re-apply ask=false after interactive test" \
     "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
+    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
@@ -206,11 +206,11 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster"
 
-e2e_run "Clean up previous $SNO" "rm -rfv $SNO"
+e2e_run "Clean up previous $SNO cluster dir" "rm -rfv $SNO"
 e2e_run "Create and install SNO cluster" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
-e2e_run "Verify cluster operators" "aba --dir $SNO run"
-e2e_run -r 30 10 "Wait for all operators fully available" \
+e2e_run "Show cluster operator status" "aba --dir $SNO run"
+e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 

@@ -56,6 +56,8 @@ _usage() {
 	  run.sh --list                  List available suites
 	  run.sh --destroy               Destroy all pool VMs
 	  run.sh attach conN             Attach to conN's tmux session
+	  run.sh dashboard [N]           Open multi-pane summary dashboard (auto-detects from pools.conf)
+	  run.sh dashboard [N] log       Open multi-pane full log dashboard
 	  run.sh --dry-run               Show plan without executing
 
 	Options:
@@ -87,6 +89,9 @@ while [ $# -gt 0 ]; do
 		--list|-l)         CLI_LIST=1; shift ;;
 		--pools-file)      CLI_POOLS_FILE="$2"; shift 2 ;;
 		attach)            CLI_ATTACH="$2"; shift 2 ;;
+		dashboard)         shift; CLI_DASHBOARD=""; CLI_DASH_LOG="summary.log"
+		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_DASHBOARD="$1"; shift; fi
+		                   if [[ "${1:-}" == "log" ]]; then CLI_DASH_LOG="latest.log"; shift; fi ;;
 		--help|-h)         _usage; exit 0 ;;
 		*) echo "Unknown option: $1" >&2; _usage; exit 1 ;;
 	esac
@@ -113,6 +118,54 @@ if [ -n "$CLI_ATTACH" ]; then
 
 	echo "Attaching to tmux session on ${user}@${host} ..."
 	exec ssh -t -o LogLevel=ERROR "${user}@${host}" "tmux attach -t e2e-run 2>/dev/null || echo 'No e2e-run session found on ${host}.'"
+fi
+
+# --- Dashboard mode ----------------------------------------------------------
+
+if [ -n "${CLI_DASHBOARD+set}" ]; then
+	if [ -n "$CLI_DASHBOARD" ]; then
+		_num_pools="$CLI_DASHBOARD"
+	else
+		_num_pools=$(grep -c '^[^#]' "$_RUN_DIR/pools.conf" 2>/dev/null || echo 3)
+	fi
+	_SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+	DASH_SESSION="e2e-dashboard"
+
+	tmux kill-session -t "$DASH_SESSION" 2>/dev/null || true
+
+	_dash_tail_cmd() {
+		local p=$1
+		local user="${CON_SSH_USER:-steve}"
+		local host="con${p}.${VM_BASE_DOMAIN:-example.com}"
+		echo "echo '=== Pool $p (con${p}) [${CLI_DASH_LOG}] ==='; while true; do ssh $_SSH_OPTS ${user}@${host} 'tail -F -n 500 ~/aba/test/e2e/logs/${CLI_DASH_LOG}' 2>/dev/null && break; echo 'Waiting for con${p} ...'; sleep 10; done"
+	}
+
+	if [ "$_num_pools" -le 3 ]; then
+		# 1-3 pools: horizontal stack (split vertically)
+		tmux new-session -d -s "$DASH_SESSION" "$(_dash_tail_cmd 1)"
+		for (( p=2; p<=_num_pools; p++ )); do
+			tmux split-window -t "$DASH_SESSION" -v "$(_dash_tail_cmd $p)"
+		done
+		tmux select-layout -t "$DASH_SESSION" even-vertical 2>/dev/null
+	else
+		# 4+ pools: 2-column grid (top-left, top-right, bottom-left, bottom-right, ...)
+		tmux new-session -d -s "$DASH_SESSION" "$(_dash_tail_cmd 1)"
+		# Split into left/right columns
+		tmux split-window -t "$DASH_SESSION" -h "$(_dash_tail_cmd 2)"
+		# Pool 3+ alternate into left then right column
+		for (( p=3; p<=_num_pools; p++ )); do
+			if (( p % 2 == 1 )); then
+				# Odd pool -> split the first (left) pane vertically
+				tmux split-window -t "${DASH_SESSION}.0" -v "$(_dash_tail_cmd $p)"
+			else
+				# Even pool -> split the last right-column pane vertically
+				tmux split-window -t "${DASH_SESSION}" -v "$(_dash_tail_cmd $p)"
+			fi
+		done
+		tmux select-layout -t "$DASH_SESSION" tiled 2>/dev/null
+	fi
+	echo "Attaching to dashboard (${_num_pools} pools) ..."
+	exec tmux attach -t "$DASH_SESSION"
 fi
 
 # --- List mode ---------------------------------------------------------------
@@ -363,7 +416,7 @@ if [ -z "$CLI_QUIET" ] && [ "$CLI_POOLS" -gt 1 ]; then
 	for (( p=1; p<=CLI_POOLS; p++ )); do
 		user="${CON_SSH_USER:-steve}"
 		host="con${p}.${VM_BASE_DOMAIN:-example.com}"
-		_tail_cmd="echo '=== Pool $p (con${p}) ===' && ssh $_SSH_OPTS ${user}@${host} 'tail -f ~/aba/test/e2e/logs/summary.log 2>/dev/null'"
+		_tail_cmd="echo '=== Pool $p (con${p}) ==='; while true; do ssh $_SSH_OPTS ${user}@${host} 'tail -F -n 500 ~/aba/test/e2e/logs/summary.log' 2>/dev/null && break; echo 'Waiting for con${p} ...'; sleep 10; done"
 
 		if [ "$_first" -eq 1 ]; then
 			tmux new-session -d -s "$DASH_SESSION" "$_tail_cmd"

@@ -83,7 +83,7 @@ e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 
 # Simulate manual edit: set dns_servers to pool dnsmasq host
-e2e_run "Set dns_servers via sed" \
+e2e_run "Set dns_servers manually" \
     "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run -q "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
@@ -91,8 +91,8 @@ e2e_run -q "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 # Copy vmware.conf and set the test VM folder
 e2e_run "Copy vmware.conf" "cp -v $VF vmware.conf"
 e2e_run -q "Set VC_FOLDER in vmware.conf" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
-e2e_run -q "Verify vmware.conf" "grep vm/abatesting vmware.conf"
+    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+e2e_run -q "Verify vmware.conf" "grep vm/aba-e2e vmware.conf"
 
 # Suppress interactive prompts during testing
 e2e_run -q "Set ask=false" "aba --noask"
@@ -210,7 +210,7 @@ e2e_run "Verify mirror-registry exists before clean" \
 
 # Verify run_once state directory exists
 e2e_run "Verify run_once state exists" \
-    "ls -d ~/.aba/runner/mirror:* | head -3"
+    "ls -d ~/.aba/runner/mirror:*"
 
 # Run mirror clean -- should delete extracted files AND clear run_once state
 e2e_run "Run mirror clean" "aba --dir mirror clean"

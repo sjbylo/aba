@@ -96,6 +96,31 @@ ABA core scripts do not use strict bash mode (`set -euo pipefail`). This means u
 - http://mywiki.wooledge.org/BashFAQ/105 (why `set -e` is unreliable)
 - The `(( running++ ))` bug in `download_all_catalogs()` was caused by `set -e` + post-increment returning 0
 
+### 12. `imagesetconf` with `op-sets=all` Missing Catalog in Generated YAML
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-02-22
+
+**Problem:**
+When `op-sets` is set to `all` in `aba.conf`, running `aba -d mirror imagesetconf` generates imageset-config YAML files (`mirror/save/imageset-config-save.yaml` and `mirror/sync/imageset-config-sync.yaml`) that appear to be missing the `redhat-operator-index` catalog reference.
+
+The verbose output during generation shows the catalog is being processed:
+```
+operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.20
+    packages:
+```
+But a subsequent `grep 'redhat-operator-index' mirror/save/imageset-config-save.yaml` fails (exit=1), meaning the catalog string is not present in the written YAML file despite the generation logs indicating it was added.
+
+**Observed in:** E2E test [7] "All-operators imageset: generate and verify YAML" (OCP 4.20.14, stable channel, amd64).
+
+**To investigate:**
+- Check if the YAML generation writes the catalog line when `packages:` is empty (all operators = no filter)
+- Compare the generated YAML content with the verbose output
+- Verify whether the issue is in YAML generation or in the test assertion (grep pattern)
+
 ---
 
 ## Low Priority
