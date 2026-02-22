@@ -369,21 +369,38 @@ run.sh --all --recreate-vms
 
 ## Migration Path
 
-This is a significant refactor. Suggested approach: build the new framework alongside the old one, validate with a single suite, then migrate all suites.
+1. `git mv test/e2e test/e2e-v1` -- archive the current framework
+2. Create fresh `test/e2e/` with the new architecture
+3. Copy over what we're keeping from `e2e-v1/`:
+   - `suites/suite-*.sh` (all suites except clone-and-check)
+   - `config.env`, `pools.conf`
+   - Parts of `framework.sh` (e2e_run, progress, checkpoints, notifications)
+   - `lib/config-helpers.sh`, `lib/remote.sh`
+   - `_vm_*` helper functions (extracted into `lib/vm-helpers.sh`)
+4. Build the new pieces: `run.sh`, `setup-infra.sh`, `runner.sh`
+5. Validate with a single suite, then migrate all suites
+6. Once validated, delete `test/e2e-v1/` in a later cleanup commit
+
+The `ai/REDESIGN-PLAN.md` file moves with the rename and stays as reference in both locations.
 
 ## Implementation Todos
 
-1. Extract `_vm_*` functions from `pool-lifecycle.sh` into `lib/vm-helpers.sh` (pure helpers, no orchestration)
-2. Create `setup-infra.sh` with `set -x`: golden VM lifecycle, clone conN/disN, configure, snapshot, install ABA via `git clone + ./install`. Reuse-first logic with `--recreate-golden` and `--recreate-vms` flags
-3. Create `runner.sh`: runs on conN inside tmux, bootstrap govc (`aba --dir cli ~/bin/govc`), revert disN snapshot before each suite, lock file for concurrent protection, sources `framework.sh`, runs suites sequentially, prints per-pool summary
-4. Rewrite `run.sh` as thin coordinator: parse args, ensure VMs ready, scp config files (`pools.conf`, `config.env`), shuffle + distribute suites round-robin, send runner command to persistent tmux on each conN, open summary dashboard, collect logs + results, print final summary
-5. Update `framework.sh`: show `e2e_run_must_fail` output with `[EXPECT-FAIL]` marker, remove `-q` flag, one-line interactive prompt with `S` (skip-suite), wall-clock timing, add `-d` (initial delay) and `-m` (max delay) to `e2e_run -r`
-6. Implement summary dashboard: bastion tmux with one pane per pool tailing summary logs (read-only)
-7. Implement `run.sh attach conN` for full-screen interactive access to persistent tmux
-8. Add suite self-cleanup: each suite's final tests clean up conN state (clusters, configs, containers)
-9. Ensure each suite installs ABA into `~/testing/aba` as a test step (tests install process + ensures latest code)
-10. Add log collection: `run.sh` scps logs from each conN to bastion after all pools finish
-11. Tune per-test retry/backoff values across all suites based on expected recovery times
-12. Validate all existing suites work under new framework, remove clone-and-check suite, delete old `parallel.sh` and `pool-lifecycle.sh`
-13. Update `README.md`, `PLAN.md`, `WORKFLOW.md` to reflect new architecture
-14. Future: multi-pane fully interactive dashboard on bastion (Ctrl-a prefix, one pane per pool)
+1. `git mv test/e2e test/e2e-v1` -- archive the v1 framework
+2. Create `test/e2e/` directory structure: `lib/`, `suites/`, `ai/`
+3. Copy and adapt `framework.sh` from v1: show `e2e_run_must_fail` output with `[EXPECT-FAIL]` marker, remove `-q` flag, one-line interactive prompt with `S` (skip-suite), wall-clock timing, add `-d` (initial delay) and `-m` (max delay) to `e2e_run -r`
+4. Copy `lib/config-helpers.sh`, `lib/remote.sh` from v1 (mostly unchanged)
+5. Extract `_vm_*` functions from v1's `pool-lifecycle.sh` into `lib/vm-helpers.sh` (pure helpers, no orchestration)
+6. Create `setup-infra.sh` with `set -x`: golden VM lifecycle, clone conN/disN, configure, snapshot, install ABA via `git clone + ./install`. Reuse-first logic with `--recreate-golden` and `--recreate-vms` flags
+7. Create `runner.sh`: runs on conN inside tmux, bootstrap govc (`aba --dir cli ~/bin/govc`), revert disN snapshot before each suite, lock file for concurrent protection, sources `framework.sh`, runs suites sequentially, prints per-pool summary
+8. Create `run.sh` as thin coordinator: parse args, ensure VMs ready, scp config files (`pools.conf`, `config.env`), shuffle + distribute suites round-robin, send runner command to persistent tmux on each conN, open summary dashboard, collect logs + results, print final summary
+9. Copy `suites/suite-*.sh` from v1 (all except clone-and-check), adapt for new framework
+10. Ensure each suite installs ABA into `~/testing/aba` as a test step (tests install process + ensures latest code)
+11. Add suite self-cleanup: each suite's final tests clean up conN state (clusters, configs, containers)
+12. Implement summary dashboard: bastion tmux with one pane per pool tailing summary logs (read-only)
+13. Implement `run.sh attach conN` for full-screen interactive access to persistent tmux
+14. Add log collection: `run.sh` scps logs from each conN to bastion after all pools finish
+15. Tune per-test retry/backoff values across all suites based on expected recovery times
+16. Validate all suites work under new framework end-to-end
+17. Update `README.md` and other docs to reflect new architecture
+18. Delete `test/e2e-v1/` once fully validated
+19. Future: multi-pane fully interactive dashboard on bastion (Ctrl-a prefix, one pane per pool)
