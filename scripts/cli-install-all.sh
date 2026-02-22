@@ -15,7 +15,7 @@ aba_debug "Starting: $0 $*"
 
 ro_opt=
 out=Installing
-[ "$1" = "--wait" ] && ro_opt=-w && out=Waiting && shift
+[ "$1" = "--wait" ] && ro_opt="-q -w" && out=Waiting && shift
 [ "$1" = "--reset" ] && ro_opt=-r && out=Resetting && shift
 tool_filter=("$@")  # remaining args are tool names (empty = all)
 aba_debug "Mode: $out (ro_opt=$ro_opt) filter=[${tool_filter[*]}]"
