@@ -1,35 +1,45 @@
 #!/bin/bash
+# =============================================================================
 # Pre-commit checks for aba repository
-# Usage: build/pre-commit-checks.sh [--skip-version]
+# =============================================================================
+# Runs a series of sanity checks before a release commit is created.
+# Called by build/release.sh (step 1) but can also be run standalone.
 #
-# This script:
-# 1. Updates ABA_BUILD timestamp in scripts/aba.sh (unless --skip-version)
-# 2. Syncs RPM lists in install script:
-#    a. templates/rpms-external.txt (always)
-#    b. templates/rpms-internal.txt (for bundle installations)
-# 3. Checks syntax of all shell scripts
-# 4. Verifies we're on dev branch
-# 5. Pulls latest changes
+# What it does:
+#   1. Stamps a build timestamp (ABA_BUILD) into scripts/aba.sh
+#   2. Syncs RPM package lists from templates/ into the install script so
+#      the install script always installs the right set of packages
+#   3. Syntax-checks every .sh file in key directories
+#   4. Verifies we're on the dev branch
+#   5. Pulls latest changes from the remote
+#
+# Options:
+#   --skip-version     Skip the ABA_BUILD timestamp update (useful for
+#                      re-running checks without changing the build stamp)
+#   --release-branch   Skip the branch check (step 4) and git pull (step 5).
+#                      Used by release.sh --ref when running on a temporary
+#                      release branch that isn't dev and has no remote.
 #
 # Exit codes:
 #   0 = All checks passed
-#   1 = Check failed
+#   1 = A check failed
+# =============================================================================
 
 set -e
 
-# Colors
+# --- Terminal colours --------------------------------------------------------
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Find ABA_ROOT
+# Navigate to repository root (one level up from build/)
 cd "$(dirname "$0")/.." || exit 1
 ABA_ROOT="$(pwd)"
 
 echo -e "${YELLOW}=== Pre-Commit Checks ===${NC}\n"
 
-# Parse options
+# --- Parse options -----------------------------------------------------------
 SKIP_VERSION=false
 RELEASE_BRANCH=false
 for arg in "$@"; do
@@ -42,7 +52,11 @@ if $SKIP_VERSION; then
     echo -e "${YELLOW}(Skipping VERSION update)${NC}\n"
 fi
 
-# 1. Update ABA_BUILD timestamp
+# =============================================================================
+# Step 1: Update ABA_BUILD timestamp
+# =============================================================================
+# ABA_BUILD is a YYYYMMDDHHMMSS timestamp embedded in scripts/aba.sh.
+# It lets users (and support) see exactly when the installed binary was built.
 if [[ "$SKIP_VERSION" == false ]]; then
     echo -e "${YELLOW}[1/5] Updating ABA_BUILD timestamp...${NC}"
     new_build=$(date +%Y%m%d%H%M%S)
@@ -52,7 +66,13 @@ else
     echo -e "${YELLOW}[1/5] Skipping BUILD timestamp update${NC}\n"
 fi
 
-# 2a. Sync external RPM list with templates/rpms-external.txt
+# =============================================================================
+# Step 2a: Sync external RPM list
+# =============================================================================
+# templates/rpms-external.txt lists the RPM packages needed on an
+# internet-connected host.  This step copies that list into the install
+# script so the two stay in sync automatically.  The sed matches a specific
+# line shape:  required_pkgs+=(...)  # Synced from templates/rpms-external.txt
 echo -e "${YELLOW}[2a/6] Syncing external RPM list in install script...${NC}"
 if [ -f templates/rpms-external.txt ]; then
     rpm_list=$(cat templates/rpms-external.txt)
@@ -63,11 +83,15 @@ else
     exit 1
 fi
 
-# 2b. Sync internal RPM list with templates/rpms-internal.txt
+# =============================================================================
+# Step 2b: Sync internal RPM list
+# =============================================================================
+# templates/rpms-internal.txt lists additional RPMs needed on an air-gapped
+# (disconnected) host that receives a bundle.  Same sed technique as 2a but
+# for the internal line.
 echo -e "${YELLOW}[2b/6] Syncing internal RPM list for bundle installations...${NC}"
 if [ -f templates/rpms-internal.txt ]; then
     rpm_internal_list=$(cat templates/rpms-internal.txt)
-    # Match on the comment (not content) so it works every time
     sed -i "s|^required_pkgs+=([^)]*)  # Synced from templates/rpms-internal.txt|required_pkgs+=($rpm_internal_list)  # Synced from templates/rpms-internal.txt|" install
     echo -e "${GREEN}       ✓ Synced internal RPMs: $rpm_internal_list${NC}\n"
 else
@@ -75,7 +99,12 @@ else
     exit 1
 fi
 
-# 3. Check syntax of all shell scripts
+# =============================================================================
+# Step 3: Syntax-check all shell scripts
+# =============================================================================
+# Runs `bash -n` (parse-only, no execution) on every .sh file in the key
+# source directories.  Catches typos, unmatched quotes, etc. before they
+# reach users.
 echo -e "${YELLOW}[3/6] Checking shell script syntax...${NC}"
 failed=0
 checked=0
@@ -87,7 +116,7 @@ for dir in scripts mirror templates bundles test/func; do
         checked=$((checked + 1))
         if ! bash -n "$script" 2>/dev/null; then
             echo -e "${RED}      ✗ Syntax error: $script${NC}"
-            bash -n "$script"  # Show the actual error
+            bash -n "$script"  # Re-run without suppression to show the error
             failed=1
         fi
     done
@@ -100,7 +129,11 @@ fi
 
 echo -e "${GREEN}      ✓ All $checked shell scripts have valid syntax${NC}\n"
 
-# 4. Verify we're on dev branch
+# =============================================================================
+# Step 4: Verify we're on the dev branch
+# =============================================================================
+# Skipped with --release-branch (used when release.sh --ref creates a
+# temporary branch that isn't dev).
 if $RELEASE_BRANCH; then
     echo -e "${YELLOW}[4/6] Skipping branch check (--release-branch)${NC}\n"
 else
@@ -113,7 +146,12 @@ else
     echo -e "${GREEN}      ✓ On dev branch${NC}\n"
 fi
 
-# 5. Pull latest changes
+# =============================================================================
+# Step 5: Pull latest changes
+# =============================================================================
+# Ensures we're building on top of the latest remote state.  Uses --rebase
+# to keep commit history linear.
+# Skipped with --release-branch (temp branch has no remote tracking branch).
 if $RELEASE_BRANCH; then
     echo -e "${YELLOW}[5/6] Skipping git pull (--release-branch)${NC}\n"
 else

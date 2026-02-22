@@ -35,9 +35,11 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
 - [Day 2 Operations](#day-2-operations)
   - [Login and Verify Cluster State](#login-and-verify-cluster-state)
   - [Connect OperatorHub to Internal Mirror Registry](#connect-operatorhub-to-internal-mirror-registry)
+  - [Custom Manifests for Day-2](#custom-manifests-for-day-2)
   - [Synchronize NTP Across Cluster Nodes](#synchronize-ntp-across-cluster-nodes)
   - [Enable OpenShift Update Service (OSUS)](#enable-openshift-update-service-osus)
 - [Advanced Use](#advanced-use)
+  - [User Configuration (\`~/.aba/config\`)](#user-configuration-abaconfig)
   - [Supported Architectures](#supported-architectures)
   - [Running ABA in a container](#running-aba-in-a-container)
   - [Creating an Install bundle on a restricted VM or Laptop](#creating-an-install-bundle-on-a-restricted-vm-or-laptop)
@@ -272,16 +274,16 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
 # Download and install a stable release (recommended)
-wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.4.tar.gz
-tar xzf v0.9.4.tar.gz
-cd aba-0.9.4
+wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.5.tar.gz
+tar xzf v0.9.5.tar.gz
+cd aba-0.9.5
 ./install
 aba
 ```
 
 Or clone a specific release tag:
 ```bash
-git clone --branch v0.9.4 https://github.com/sjbylo/aba.git
+git clone --branch v0.9.5 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -687,6 +689,58 @@ As an example, you could edit `agent-config.yaml` to include the following to di
       deviceName: /dev/sdb
 ```
 
+### Embedding Custom Manifests in the ISO (Day-0)
+
+You can embed custom Kubernetes manifests directly into the agent-based ISO. These manifests are automatically applied by `openshift-install` during cluster bootstrap, before Day-2 operations.
+
+**Supported directories:**
+- `openshift/` - Standard OpenShift manifest directory
+- `manifests/` - Alternative manifest directory
+
+Both directories are checked automatically during ISO generation. You can use either one, or both.
+
+#### Hello World Example
+
+```bash
+cd mycluster
+
+# Create the manifest directory
+mkdir -p openshift
+
+# Create a simple ConfigMap
+cat > openshift/hello-world.yaml <<'EOF'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bootstrap-config
+  namespace: openshift-config
+data:
+  message: "Hello from Day-0 custom manifests"
+  created-by: "ABA agent-based installer"
+EOF
+
+# Generate the ISO (manifest is automatically embedded)
+aba iso
+
+# After cluster bootstrap completes, verify the ConfigMap exists
+oc get configmap bootstrap-config -n openshift-config
+oc get configmap bootstrap-config -n openshift-config -o yaml
+```
+
+#### Use Cases
+
+You can embed any Kubernetes manifests that need to be present at cluster bootstrap time.
+
+#### Notes
+
+- The `openshift/` and `manifests/` directories are optional - if they don't exist, ISO generation proceeds normally
+- Both `.yaml` and `.yml` file extensions are supported
+- Files are applied in alphabetical order during cluster bootstrap
+- Manifests are embedded in the ISO and applied during cluster creation (Day-0), not during Day-2
+- Empty directories are silently skipped
+- Use `aba -D iso` for debug output showing which manifests were embedded
+- **Important**: Day-0 manifests are applied before the internal mirror registry is attached to the cluster. Resources that reference images from your internal registry may not work until Day-2 (`aba day2`) connects the cluster to the mirror registry
+
 The following optional command can be used to extract cluster configuration details from the `agent-config.yaml` files.  
 You can run this command to verify that the correct information can be retrieved and used to create the VMs (if using platform=vmw in aba.conf).
 
@@ -793,7 +847,81 @@ It also ensures that OperatorHub continues to work properly, even when the clust
 
 **Important:**  
 Re-run this command whenever new Operators are added or updated in your mirror registry — for example, after running `aba -d mirror load` or `aba -d mirror sync` again.  
-This step refreshes OpenShift’s OperatorHub configuration (catalog) so it includes the latest mirrored Operators.
+This step refreshes OpenShift's OperatorHub configuration (catalog) so it includes the latest mirrored Operators.
+
+
+## Custom Manifests for Day-2
+
+You can automatically apply your own Kubernetes manifests during `aba day2` by placing them in the `day2-custom-manifests/` directory within your cluster folder.
+
+### Usage
+
+1. Create the directory in your cluster folder:
+```bash
+cd <cluster-name>
+mkdir day2-custom-manifests
+```
+
+2. Add your manifest files (`.yaml` or `.yml`):
+```bash
+cat > day2-custom-manifests/my-resource.yaml <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-custom-config
+  namespace: default
+data:
+  message: "Hello from custom manifest"
+EOF
+```
+
+3. Run day2 as normal:
+```bash
+aba day2
+```
+
+The manifests will be applied automatically after the oc-mirror resources (IDMS, ITMS, CatalogSources, signatures).
+
+### Hello World Example
+
+```bash
+cd mycluster
+
+# Create the directory
+mkdir -p day2-custom-manifests
+
+# Create a simple ConfigMap
+cat > day2-custom-manifests/hello-world.yaml <<'EOF'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hello-world
+  namespace: default
+data:
+  greeting: "Hello from ABA custom manifests"
+  timestamp: "2024-01-01"
+EOF
+
+# Run day2
+aba day2
+
+# Verify the ConfigMap was created
+oc get configmap hello-world -n default
+```
+
+### Why Use This Feature?
+
+Deploy any Kubernetes resources you need as part of the Day-2 workflow. The key benefit is that your manifests are applied **after** the internal mirror registry is already configured, so you can reference images from your mirror in your custom resources.
+
+You can deploy whatever resources your cluster needs - the `day2-custom-manifests/` directory gives you complete flexibility to apply any Kubernetes manifests during the Day-2 process.
+
+### Notes
+
+- The `day2-custom-manifests/` directory is optional - if it doesn't exist, day2 runs normally
+- Files are applied in alphabetical order
+- Empty files are skipped with a warning
+- If a manifest fails to apply, day2 continues with remaining files
+- Manifests are applied after the internal mirror registry is configured, so they can reference mirrored images
 
 
 ## Synchronize NTP Across Cluster Nodes
@@ -887,6 +1015,38 @@ In a partially disconnected environment, the following workflow can be used:
 
 
 # Advanced Use
+
+## User Configuration (`~/.aba/config`)
+
+ABA creates a user-level configuration file at `~/.aba/config` during installation.
+Settings here apply system-wide for the current user.
+Values are commented out by default; uncomment and edit to override.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `CATALOG_DOWNLOAD_TIMEOUT_MINS` | `20` | Timeout (minutes) for downloading operator catalog indexes. Increase on slow networks. |
+| `CATALOG_CACHE_TTL_SECS` | `86400` | How long (seconds) to cache downloaded catalog indexes before re-downloading (default 24 hours). |
+| `OC_MIRROR_IMAGE_TIMEOUT` | `30m` | Per-image timeout passed to `oc-mirror --image-timeout`. Increase for large operator images or slow connections (e.g. `60m`). |
+| `OC_MIRROR_PARALLEL_IMAGES` | `8` | Number of images to mirror concurrently via `oc-mirror --parallel-images`. Reduce on slow or unreliable networks. |
+
+Example — increase the image timeout to 60 minutes:
+
+```bash
+# Edit (or create) the config file
+vi ~/.aba/config
+
+# Uncomment or add:
+OC_MIRROR_IMAGE_TIMEOUT=60m
+```
+
+Example — reduce parallel image downloads to 4:
+
+```bash
+vi ~/.aba/config
+
+# Uncomment or add:
+OC_MIRROR_PARALLEL_IMAGES=4
+```
 
 ## Supported Architectures
 

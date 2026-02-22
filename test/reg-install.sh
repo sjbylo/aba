@@ -12,7 +12,7 @@ if ! rpm -q podman || ! rpm -q rsync; then
 	sudo dnf install podman rsync -y
 fi
 
-if [ ! -x ./mirror-registry ]; then
+if [ ! -x ./mirror-registry ] || [ ! -f ./execution-environment.tar ]; then
 	if file mirror-registry-amd64.tar.gz | grep -i "gzip compressed data"; then
 		tar xvmzf mirror-registry-amd64.tar.gz 
 	else
@@ -24,9 +24,8 @@ fi
 [ ! "$data_dir" ] && data_dir=$HOME
 reg_root=$data_dir/quay-install
 
-##reg_root=~/quay-install  # ~ must be evaluated here
 reg_pw=p4ssw0rd
-[ "$1" ] && reg_host=$1 || reg_host=registry.example.com   #FIXME: needs to be param
+reg_host=${1:?Usage: $0 REGISTRY_HOSTNAME}
 reg_port=8443
 
 # mirror-registry installer does not open the port for us
@@ -57,7 +56,7 @@ reg_url=https://$reg_host:$reg_port
 
 # Check if the cert needs to be updated
 sudo diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-	sudo cp $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+	sudo install -m 644 $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
 		sudo update-ca-trust extract
 
 podman logout --all 

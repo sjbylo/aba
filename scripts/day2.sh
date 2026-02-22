@@ -1,11 +1,12 @@
 #!/bin/bash -e
 # Run some day 2 changes
 # Set up cluster trust CA with the internal registry's Root CA
-# Configure OperatorHub using the internal mirror registry. 
+# Configure OperatorHub using the internal mirror registry.
 # Apply the imageContentSourcePolicy resource files that were created by oc-mirror (aba -d mirror sync/load)
-## This script also solves the problem that multiple sync/save runs do not containing all ICSPs. See: https://github.com/openshift/oc-mirror/issues/597 
+## This script also solves the problem that multiple sync/save runs do not containing all ICSPs. See: https://github.com/openshift/oc-mirror/issues/597
 # For disconnected environments, disable online public catalog sources
 # Install any CatalogSources
+# Apply any user-provided custom manifests from day2-custom-manifests/ in cluster folder
 # Note: https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html-single/registry/index#images-configuration-cas_configuring-registry-operator 
 
 source scripts/include_all.sh
@@ -55,6 +56,7 @@ aba_info "- Apply any/all idms/itms resource files under aba/mirror/save/working
 aba_info "- For fully disconnected environments, disable online public catalog sources."
 aba_info "- Install any CatalogSources found under working-dir/cluster-resources."
 aba_info "- Apply any release image signatures found under working-dir/cluster-resources."
+aba_info "- Apply any user-provided custom manifests from day2-custom-manifests/ directory."
 echo
 
 
@@ -109,9 +111,81 @@ if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
 		aba_info "'Unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
 	fi
 	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
-else	
+else
 	aba_info "Registry trust bundle already added (cm registry-config -n openshift-config). Assuming workaround has already been applied or not necessary."
 fi
+
+apply_custom_manifests() {
+	# Apply user-provided custom manifests from day2-custom-manifests/ in cluster folder
+	# This function is called after signature application to allow users to deploy
+	# additional resources (e.g., StorageClass, NetworkPolicy, custom operators, etc.)
+
+	local custom_manifest_dir="$PWD/day2-custom-manifests"
+
+	# Check if day2-custom-manifests directory exists
+	if [ ! -d "$custom_manifest_dir" ]; then
+		aba_info "No custom manifests directory found at $custom_manifest_dir (this is optional)"
+		return 0
+	fi
+
+	# Enable nullglob for safe glob expansion (empty globs return empty array)
+	shopt -s nullglob
+
+	# Collect all .yaml and .yml files into array
+	local yaml_files=("$custom_manifest_dir"/*.yaml "$custom_manifest_dir"/*.yml)
+	local file_count=${#yaml_files[@]}
+
+	# Disable nullglob to restore default behavior
+	shopt -u nullglob
+
+	# If no files found, inform user and return
+	if [ $file_count -eq 0 ]; then
+		aba_debug "No custom manifest files (.yaml/.yml) found in $custom_manifest_dir"
+		return 0
+	fi
+
+	# Show what we're doing
+	aba_info "Found $file_count custom manifest file(s) in $custom_manifest_dir"
+	aba_info "Applying user-provided custom manifests ..."
+
+	# Track successes and failures
+	local success_count=0
+	local failure_count=0
+
+	# Apply each file
+	for manifest_file in "${yaml_files[@]}"; do
+		# Get just the filename for cleaner output
+		local basename_file="${manifest_file##*/}"
+
+		# Verify file is not empty
+		if [ ! -s "$manifest_file" ]; then
+			aba_warning "Skipping empty file: $basename_file"
+			failure_count=$((failure_count + 1))
+			continue
+		fi
+
+		# Apply the manifest
+		aba_info "oc apply -f $basename_file"
+
+		if oc apply -f "$manifest_file"; then
+			success_count=$((success_count + 1))
+		else
+			aba_warning "Failed to apply custom manifest: $basename_file (continuing with other files)"
+			failure_count=$((failure_count + 1))
+		fi
+	done
+
+	# Show summary
+	if [ $success_count -gt 0 ]; then
+		aba_info_ok "Successfully applied $success_count custom manifest(s)"
+	fi
+
+	if [ $failure_count -gt 0 ]; then
+		aba_warning "Failed to apply $failure_count custom manifest(s) - see warnings above"
+	fi
+
+	return 0  # Always return success - failures are non-fatal
+}
 
 
 ####################################
@@ -253,7 +327,10 @@ else
 
 fi
 
-# Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071 
+# Note that if any operators fail to install after 600 seconds ... need to read this: https://access.redhat.com/solutions/6459071
+
+# Apply user-provided custom manifests (if any)
+apply_custom_manifests
 
 exit 0
 

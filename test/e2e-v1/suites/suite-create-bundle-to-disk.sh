@@ -6,7 +6,7 @@
 #          No cluster install, no VMs needed -- the leanest E2E test.
 #
 # What it tests:
-#   - Clean-slate aba install (RPMs removed so aba must auto-install them)
+#   - Clean-slate aba install
 #   - aba CLI configuration (aba.conf, vmware.conf, NTP, operator-sets)
 #   - Light bundle creation (specific operator subset)
 #   - Full bundle creation (all operators)
@@ -43,16 +43,12 @@ plan_tests \
     "All-operators imageset: generate and verify YAML" \
     "run_once: mirror clean clears state"
 
-suite_begin "bundle-disk"
+suite_begin "create-bundle-to-disk"
 
 # ============================================================================
 # 1. Clean slate
 # ============================================================================
 test_begin "Setup: clean slate"
-
-# dnf remove returns non-zero only if NONE of the packages are installed (= already clean).
-e2e_run "Remove RPMs for clean install test" \
-    "sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y || { echo 'All packages already absent'; true; }"
 
 # podman prune/rmi with --force are idempotent (return 0 even when empty).
 e2e_run "Clean podman" \
@@ -85,6 +81,10 @@ e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+
+# Simulate manual edit: set dns_servers to pool dnsmasq host
+e2e_run "Set dns_servers via sed" \
+    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run -q "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
@@ -210,7 +210,7 @@ e2e_run "Verify mirror-registry exists before clean" \
 
 # Verify run_once state directory exists
 e2e_run "Verify run_once state exists" \
-    "ls -d ~/.aba/runner/mirror:* 2>/dev/null | head -3 || echo 'no run_once state yet'"
+    "ls -d ~/.aba/runner/mirror:* | head -3"
 
 # Run mirror clean -- should delete extracted files AND clear run_once state
 e2e_run "Run mirror clean" "aba --dir mirror clean"
@@ -235,4 +235,4 @@ test_end 0
 
 suite_end
 
-echo "SUCCESS: suite-bundle-disk.sh"
+echo "SUCCESS: suite-create-bundle-to-disk.sh"

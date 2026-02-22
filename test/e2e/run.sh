@@ -1,496 +1,455 @@
 #!/bin/bash
 # =============================================================================
-# E2E Test Framework -- Main Runner
+# E2E Test Framework v2 -- Thin Coordinator
 # =============================================================================
-# Entry point for running E2E test suites, either locally (sequential) or
-# across remote pools (parallel).
+# The user always runs this script. It figures out what to do.
+#
+# Responsibilities:
+#   1. Parse args
+#   2. Ensure VMs are ready (call setup-infra.sh if needed)
+#   3. scp config files to each conN
+#   4. Distribute suites across pools (round-robin, shuffled)
+#   5. Send runner command into persistent tmux on each conN
+#   6. Monitor completion, collect results
+#   7. Print final combined summary
 #
 # Usage:
-#   run.sh [--suite NAME | --all]
-#          [--parallel [--pools FILE] [--create-pools N] [--destroy-pools]]
-#          [--matrix --channel c1,c2 --rhel r1,r2 --user u1,u2]
-#          [--interactive | -i | --ci]
-#          [--resume | --clean]
-#          [--notify | --no-notify]
-#          [--dry-run]
-#          [-c CHANNEL] [-v VERSION] [-r RHEL] [-u USER]
+#   run.sh --all [--pools N] [--recreate-golden] [--recreate-vms]
+#   run.sh --suite X,Y [--pools N]
+#   run.sh --list
+#   run.sh --destroy
+#   run.sh --dry-run
+#   run.sh attach conN
+#   run.sh [-q] [--clean]
 # =============================================================================
 
 set -u
 
-# Resolve paths
 _RUN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
 
-# --- Source libraries -------------------------------------------------------
-
-source "$_RUN_DIR/lib/framework.sh"
-source "$_RUN_DIR/lib/config-helpers.sh"
-source "$_RUN_DIR/lib/remote.sh"
-source "$_RUN_DIR/lib/pool-lifecycle.sh"
-
-# --- CLI Variables ----------------------------------------------------------
+# --- CLI Variables -----------------------------------------------------------
 
 CLI_SUITE=""
 CLI_ALL=""
-CLI_PARALLEL=""
-CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
-CLI_CREATE_POOLS=""
-CLI_DESTROY_POOLS=""
-CLI_MATRIX=""
-CLI_INTERACTIVE=""
-CLI_CI=""
-CLI_RESUME=""
+CLI_POOLS=1
+CLI_RECREATE_GOLDEN=""
+CLI_RECREATE_VMS=""
+CLI_QUIET=""
 CLI_CLEAN=""
-CLI_NOTIFY=""
-CLI_NO_NOTIFY=""
 CLI_DRY_RUN=""
+CLI_DESTROY=""
 CLI_LIST=""
-CLI_CHANNEL=""
-CLI_VERSION=""
-CLI_RHEL=""
-CLI_USER=""
+CLI_ATTACH=""
+CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
 
-# Matrix parameters (comma-separated lists for expansion)
-CLI_MATRIX_CHANNEL=""
-CLI_MATRIX_RHEL=""
-CLI_MATRIX_USER=""
+# --- Usage (defined before arg parsing so --help works) ----------------------
 
-# --- Parse Arguments --------------------------------------------------------
+_usage() {
+	cat <<-'USAGE'
+	E2E Test Framework v2 -- Coordinator
 
-parse_args() {
-    while [ $# -gt 0 ]; do
-        case "$1" in
-            --suite)
-                CLI_SUITE="$2"; shift 2 ;;
-            --suites)
-                CLI_SUITE="$2"; shift 2 ;;  # alias: comma-separated list
-            --all)
-                CLI_ALL=1; shift ;;
-            --parallel)
-                CLI_PARALLEL=1; shift ;;
-            --pools)
-                CLI_POOLS_FILE="$2"; shift 2 ;;
-            --create-pools)
-                CLI_CREATE_POOLS="$2"; shift 2 ;;
-            --destroy-pools)
-                CLI_DESTROY_POOLS=1; shift ;;
-            --matrix)
-                CLI_MATRIX=1; shift ;;
-            --interactive|-i)
-                CLI_INTERACTIVE=1; shift ;;
-            --ci)
-                CLI_CI=1; shift ;;
-            --resume)
-                CLI_RESUME=1; shift ;;
-            --clean)
-                CLI_CLEAN=1; shift ;;
-            --notify)
-                CLI_NOTIFY=1; shift ;;
-            --no-notify)
-                CLI_NO_NOTIFY=1; shift ;;
-            --dry-run)
-                CLI_DRY_RUN=1; shift ;;
-            --list|-l)
-                CLI_LIST=1; shift ;;
-            -c|--channel)
-                CLI_CHANNEL="$2"; shift 2 ;;
-            -v|--version)
-                CLI_VERSION="$2"; shift 2 ;;
-            -r|--rhel)
-                CLI_RHEL="$2"; shift 2 ;;
-            -u|--user)
-                CLI_USER="$2"; shift 2 ;;
-            --help|-h)
-                usage; exit 0 ;;
-            *)
-                echo "Unknown option: $1" >&2
-                usage; exit 1 ;;
-        esac
-    done
-}
-
-# --- Usage ------------------------------------------------------------------
-
-usage() {
-    cat <<-'USAGE'
-	E2E Test Framework -- Runner
-	
 	Usage:
-	  run.sh --suite NAME           Run a specific suite
-	  run.sh --all                  Run all suites sequentially
-	  run.sh --parallel --all       Run all suites across pools in parallel
-	  run.sh --list                 List available suites
-	  run.sh --destroy-pools        Power off all pool VMs
-	
-	Suite selection:
-	  --suite NAME          Run suite by name (e.g. connected-sync)
-	  --suites N1,N2,...    Run multiple suites (comma-separated)
-	  --all                 Run all suites found in suites/
-	  -l, --list            List available suite names and exit
-	
-	Parallel execution:
-	  --parallel            Dispatch suites to remote pools via SSH
-	  --pools FILE          Pool configuration file (default: pools.conf)
-	  --create-pools N      Create N pools from VM templates before running
-	  --destroy-pools       Power off all pool VMs and exit
-	  --matrix              Expand parameter combinations across pools
-	  --dry-run             Show dispatch plan without executing
-	
-	Test parameters (override config.env defaults):
-	  -c, --channel CHAN    Channel: stable, fast, candidate
-	  -v, --version VER     Version: l (latest), p (previous), or x.y.z
-	  -r, --rhel VER        RHEL version: rhel8, rhel9, rhel10
-	  -u, --user USER       Test user on internal bastion
-	
-	Execution modes:
-	  -i, --interactive     Prompt on failure: retry, skip, or abort
-	  --ci                  Non-interactive, no prompts (default for --parallel)
-	  --resume              Resume from last checkpoint (skip passed tests)
-	  --clean               Delete checkpoint state files before running
-	
-	Notifications:
-	  --notify              Enable notifications (uses NOTIFY_CMD from config.env)
-	  --no-notify           Disable notifications
-	
-	Examples:
-	  run.sh --list                                  # Show available suites
-	  run.sh --suite connected-sync                  # Run one suite
-	  run.sh --suite connected-sync -i               # Interactive: prompt on failure
-	  run.sh --suite connected-sync --resume         # Resume, skip already-passed tests
-	  run.sh --suites connected-sync,network-advanced  # Run two suites
-	  run.sh --all --dry-run                         # Show execution plan
-	  run.sh --all                                   # Run all suites sequentially
-	  run.sh --parallel --all                        # Run all suites across pools
-	  run.sh -c fast -v l --suite connected-sync     # Override channel and version
-	
+	  run.sh --all                   Run all suites (1 pool, default)
+	  run.sh --all --pools 3         Run all suites across 3 pools
+	  run.sh --suite NAME            Run one suite
+	  run.sh --list                  List available suites
+	  run.sh --destroy               Destroy all pool VMs
+	  run.sh attach conN             Attach to conN's tmux session
+	  run.sh --dry-run               Show plan without executing
+
+	Options:
+	  --pools N              Number of pools (default: 1)
+	  --recreate-golden      Force rebuild golden VM from template
+	  --recreate-vms         Force reclone all conN/disN from golden
+	  --clean                Clear checkpoints before running
+	  -q, --quiet            CI mode: no interactive prompts
+	  --dry-run              Show dispatch plan, don't execute
+
+	The script auto-detects VM state and only creates/configures
+	what's missing. No --setup flag needed.
 	USAGE
 }
 
-# --- Apply Parameters -------------------------------------------------------
+# --- Parse Arguments ---------------------------------------------------------
 
-apply_params() {
-    # Apply CLI overrides to environment variables
-    [ -n "$CLI_CHANNEL" ] && export TEST_CHANNEL="$CLI_CHANNEL"
-    [ -n "$CLI_VERSION" ] && export OCP_VERSION="$CLI_VERSION"
-    [ -n "$CLI_RHEL" ]    && export INT_BASTION_RHEL_VER="$CLI_RHEL"
-    [ -n "$CLI_USER" ]    && export TEST_USER="$CLI_USER"
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--suite|--suites)  CLI_SUITE="$2"; shift 2 ;;
+		--all)             CLI_ALL=1; shift ;;
+		-p|--pools)           CLI_POOLS="$2"; shift 2 ;;
+		-G|--recreate-golden) CLI_RECREATE_GOLDEN=1; shift ;;
+		-R|--recreate-vms)    CLI_RECREATE_VMS=1; shift ;;
+		-q|--quiet)        CLI_QUIET=1; shift ;;
+		--clean)           CLI_CLEAN=1; shift ;;
+		--dry-run)         CLI_DRY_RUN=1; shift ;;
+		--destroy)         CLI_DESTROY=1; shift ;;
+		--list|-l)         CLI_LIST=1; shift ;;
+		--pools-file)      CLI_POOLS_FILE="$2"; shift 2 ;;
+		attach)            CLI_ATTACH="$2"; shift 2 ;;
+		--help|-h)         _usage; exit 0 ;;
+		*) echo "Unknown option: $1" >&2; _usage; exit 1 ;;
+	esac
+done
 
-    # Interactive mode
-    if [ -n "$CLI_CI" ]; then
-        export _E2E_INTERACTIVE=""
-    elif [ -n "$CLI_INTERACTIVE" ]; then
-        export _E2E_INTERACTIVE=1
-    elif [ -n "$CLI_PARALLEL" ]; then
-        export _E2E_INTERACTIVE=""  # non-interactive for parallel
-    else
-        # Default: interactive for local runs if on a TTY
-        [ -t 0 ] && export _E2E_INTERACTIVE=1 || export _E2E_INTERACTIVE=""
-    fi
+# --- Source config -----------------------------------------------------------
 
-    # Notifications
-    if [ -n "$CLI_NO_NOTIFY" ]; then
-        export NOTIFY_CMD=""
-    elif [ -n "$CLI_NOTIFY" ]; then
-        export NOTIFY_CMD="${NOTIFY_CMD:-notify.sh}"
-    fi
-}
-
-# --- Suite Discovery --------------------------------------------------------
-
-all_suites() {
-    # Find all suite files and return their names (without path and prefix)
-    local suite_dir="$_RUN_DIR/suites"
-    local suites=()
-
-    if [ -d "$suite_dir" ]; then
-        for f in "$suite_dir"/suite-*.sh; do
-            [ -f "$f" ] || continue
-            local name
-            name="$(basename "$f" .sh)"
-            name="${name#suite-}"
-            suites+=("$name")
-        done
-    fi
-
-    # Sort: longest suites first for optimal parallel scheduling
-    # Order: airgapped-local-reg, airgapped-existing-reg, connected-sync,
-    #        connected-public, network-advanced, bundle-disk
-    local ordered=()
-    for s in airgapped-local-reg airgapped-existing-reg connected-sync \
-             connected-public network-advanced bundle-disk; do
-        for found in "${suites[@]}"; do
-            [ "$found" = "$s" ] && ordered+=("$found")
-        done
-    done
-
-    # Add any suites not in the predefined order
-    for found in "${suites[@]}"; do
-        local in_ordered=""
-        for o in "${ordered[@]}"; do
-            [ "$found" = "$o" ] && in_ordered=1
-        done
-        [ -z "$in_ordered" ] && ordered+=("$found")
-    done
-
-    echo "${ordered[@]}"
-}
-
-resolve_suite_file() {
-    local name="$1"
-    local file="$_RUN_DIR/suites/suite-${name}.sh"
-    if [ -f "$file" ]; then
-        echo "$file"
-    else
-        echo "ERROR: Suite not found: $file" >&2
-        return 1
-    fi
-}
-
-# --- Run a Suite on the Connected Bastion -----------------------------------
-#
-# Dispatches the suite to conN via SSH. The coordinator only orchestrates;
-# all L commands execute on conN, all R commands SSH from conN to disN.
-#
-# If E2E_ON_BASTION is already set, we're running on conN (dispatched by a
-# previous coordinator call) -- run the suite directly, no re-dispatch.
-#
-
-run_suite_local() {
-    local suite_name="$1"
-    local suite_file
-    suite_file="$(resolve_suite_file "$suite_name")" || return 1
-
-    # --- Guard: coordinator-only suite? Run locally. -----------------------
-    # Suites like clone-check create VMs and need govc on the coordinator.
-    if grep -q '^E2E_COORDINATOR_ONLY=true' "$suite_file" 2>/dev/null; then
-        echo ""
-        echo "========================================"
-        echo "  Running suite: $suite_name (coordinator-only, running locally)"
-        echo "========================================"
-        echo ""
-        bash "$suite_file"
-        return $?
-    fi
-
-    # --- Guard: already on bastion? Run directly. --------------------------
-    if [ -n "${E2E_ON_BASTION:-}" ]; then
-        echo ""
-        echo "========================================"
-        echo "  Running suite: $suite_name (on bastion)"
-        echo "========================================"
-        echo ""
-
-        # Handle resume
-        if [ -n "$CLI_RESUME" ]; then
-            local state_file="${E2E_LOG_DIR}/${suite_name}.state"
-            if [ -f "$state_file" ]; then
-                export E2E_RESUME_FILE="$state_file"
-                echo "  Resuming from checkpoint: $state_file"
-            fi
-        fi
-
-        # Handle clean
-        if [ -n "$CLI_CLEAN" ]; then
-            rm -f "${E2E_LOG_DIR}/${suite_name}.state"
-            echo "  Cleaned checkpoint state for $suite_name"
-        fi
-
-        bash "$suite_file"
-        return $?
-    fi
-
-    # --- Dispatch to connected bastion via SSH -----------------------------
-
-    local con_host
-    con_host="$(pool_connected_bastion)"
-
-    echo ""
-    echo "========================================"
-    echo "  Running suite: $suite_name (dispatching to $con_host)"
-    echo "========================================"
-    echo ""
-
-    # Warn if working tree has uncommitted changes (helps catch accidental local hacks)
-    local _dirty
-    _dirty="$(git -C "$_ABA_ROOT" status --porcelain 2>/dev/null)"
-    if [ -n "$_dirty" ]; then
-        echo "  WARNING: aba tree has uncommitted changes -- syncing working tree as-is"
-        git -C "$_ABA_ROOT" status --short 2>/dev/null | head -15 | while IFS= read -r _l; do
-            echo "    $_l"
-        done
-        echo ""
-    fi
-
-    # Sync latest test framework + scripts to conN
-    echo "  Syncing aba tree to $con_host ..."
-    rsync -az --delete \
-        --exclude='mirror/save/' \
-        --exclude='mirror/.oc-mirror/' \
-        --exclude='mirror/*.tar' \
-        --exclude='mirror/*.tar.gz' \
-        --exclude='mirror/mirror-registry' \
-        --exclude='cli/*.tar.gz' \
-        --exclude='.git/' \
-        --exclude='sno/' \
-        --exclude='sno2/' \
-        --exclude='compact/' \
-        --exclude='standard/' \
-        "$_ABA_ROOT/" "$con_host:~/aba/"
-
-    # Sync notify helper to conN (if it exists on coordinator)
-    local _notify_src
-    _notify_src="$(eval echo "$NOTIFY_CMD" 2>/dev/null)"
-    if [ -n "$_notify_src" ] && [ -x "$_notify_src" ]; then
-        echo "  Syncing $(basename "$_notify_src") to $con_host ..."
-        rsync -az "$_notify_src" "$con_host:$(dirname "$_notify_src")/"
-    fi
-
-    # Build environment variable exports (same pattern as parallel.sh)
-    local env_exports="export E2E_ON_BASTION=1; "
-    local var
-    for var in TEST_CHANNEL OCP_VERSION INT_BASTION_RHEL_VER \
-               TEST_USER OC_MIRROR_VER POOL_NUM ABA_TESTING; do
-        [ -n "${!var:-}" ] && env_exports+="export $var='${!var}'; "
-    done
-
-    # Pass resume/clean flags
-    local extra_flags=""
-    [ -n "$CLI_RESUME" ] && extra_flags+=" --resume"
-    [ -n "$CLI_CLEAN" ]  && extra_flags+=" --clean"
-
-    # Interactive flag
-    [ -n "${_E2E_INTERACTIVE:-}" ] && extra_flags+=" -i"
-
-    # Dispatch to conN via SSH (-t for TTY, needed for interactive mode)
-    echo "  Dispatching suite '$suite_name' to $con_host ..."
-    ssh -t -o LogLevel=ERROR -o ConnectTimeout=30 "$con_host" -- \
-        "${env_exports}cd ~/aba && test/e2e/run.sh --suite $suite_name $extra_flags"
-}
-
-# --- Main -------------------------------------------------------------------
-
-main() {
-    parse_args "$@"
-
-    # Initialize the framework (sources config.env defaults)
-    e2e_setup
-
-    # Apply CLI overrides AFTER config.env so they take precedence
-    apply_params
-
-    # List suites and exit if requested
-    if [ -n "$CLI_LIST" ]; then
-        echo "Available suites:"
-        echo ""
-        local _suites _file _desc _tag
-        read -ra _suites <<< "$(all_suites)"
-        for s in "${_suites[@]}"; do
-            _file="$_RUN_DIR/suites/suite-${s}.sh"
-            _desc="$(grep -m1 '^# Suite:' "$_file" 2>/dev/null | sed 's/^# Suite: *//')"
-            # Tag coordinator-only suites (infra/provisioning)
-            _tag=""
-            grep -q '^E2E_COORDINATOR_ONLY=true' "$_file" 2>/dev/null && _tag=" [infra]"
-            printf "  %-30s %s%s\n" "$s" "$_desc" "$_tag"
-        done
-        echo ""
-        echo "Note: [infra] suites provision pool VMs (run via --create-pools or manually)."
-        echo ""
-        echo "Run:  test/e2e/run.sh --suite <name>"
-        echo "      test/e2e/run.sh --suite <name> -i   # interactive (prompt on failure)"
-        exit 0
-    fi
-
-    # Destroy pools and exit if requested
-    if [ -n "$CLI_DESTROY_POOLS" ]; then
-        destroy_pools --all
-        exit 0
-    fi
-
-    # Create pools if requested
-    if [ -n "$CLI_CREATE_POOLS" ]; then
-        create_pools "$CLI_CREATE_POOLS"
-    fi
-
-    # Determine which suites to run
-    local suites_to_run=()
-
-    if [ -n "$CLI_ALL" ]; then
-        read -ra suites_to_run <<< "$(all_suites)"
-    elif [ -n "$CLI_SUITE" ]; then
-        # Handle comma-separated suite list
-        IFS=',' read -ra suites_to_run <<< "$CLI_SUITE"
-    else
-        echo "ERROR: Specify --suite NAME, --all, or --list to see available suites" >&2
-        usage
-        exit 1
-    fi
-
-    if [ ${#suites_to_run[@]} -eq 0 ]; then
-        echo "No suites found to run."
-        exit 0
-    fi
-
-    echo "Suites to run: ${suites_to_run[*]}"
-    echo "Parameters: channel=${TEST_CHANNEL:-?} version=${OCP_VERSION:-?} rhel=${INT_BASTION_RHEL_VER:-?} user=${TEST_USER:-?}"
-    echo ""
-
-    # Dry run: just show the plan
-    if [ -n "$CLI_DRY_RUN" ]; then
-        echo "=== DRY RUN ==="
-        for s in "${suites_to_run[@]}"; do
-            echo "  Would run: $s"
-        done
-        exit 0
-    fi
-
-    # Parallel mode
-    if [ -n "$CLI_PARALLEL" ]; then
-        # Source parallel library
-        source "$_RUN_DIR/lib/parallel.sh"
-        dispatch_all "$CLI_POOLS_FILE" "${suites_to_run[@]}"
-        exit $?
-    fi
-
-    # Local sequential mode
-    local overall_rc=0
-    local start_time=$(date +%s)
-
-    _e2e_notify "E2E started: ${suites_to_run[*]} ($(date))"
-
-    for suite in "${suites_to_run[@]}"; do
-        local rc=0
-        run_suite_local "$suite" || rc=$?
-        if [ $rc -ne 0 ]; then
-            echo ""
-            echo "$(_e2e_red "Suite FAILED: $suite (exit=$rc)")"
-            overall_rc=1
-            # In non-CI mode, stop on first failure
-            if [ -z "$CLI_CI" ] && [ -z "$CLI_ALL" ]; then
-                break
-            fi
-        fi
-    done
-
-    local elapsed=$(( $(date +%s) - start_time ))
-    local mins=$(( elapsed / 60 ))
-    local secs=$(( elapsed % 60 ))
-
-    echo ""
-    echo "========================================"
-    if [ $overall_rc -eq 0 ]; then
-        echo "  $(_e2e_green "ALL SUITES PASSED") (${mins}m ${secs}s)"
-        _e2e_notify "E2E PASSED: ${suites_to_run[*]} (${mins}m ${secs}s)"
-    else
-        echo "  $(_e2e_red "SOME SUITES FAILED") (${mins}m ${secs}s)"
-        _e2e_notify "E2E FAILED: ${suites_to_run[*]} (${mins}m ${secs}s)"
-    fi
-    echo "========================================"
-
-    exit $overall_rc
-}
-
-# Run main only if executed directly (not sourced)
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    main "$@"
+if [ -f "$_RUN_DIR/config.env" ]; then
+	source "$_RUN_DIR/config.env"
 fi
+
+# --- Attach mode -------------------------------------------------------------
+
+if [ -n "$CLI_ATTACH" ]; then
+	host="${CLI_ATTACH}"
+	user="${CON_SSH_USER:-steve}"
+	domain="${VM_BASE_DOMAIN:-example.com}"
+
+	# Accept "conN" or "conN.domain"
+	case "$host" in
+		*.*) ;; # already FQDN
+		*)   host="${host}.${domain}" ;;
+	esac
+
+	echo "Attaching to tmux session on ${user}@${host} ..."
+	exec ssh -t -o LogLevel=ERROR "${user}@${host}" "tmux attach -t e2e-run 2>/dev/null || echo 'No e2e-run session found on ${host}.'"
+fi
+
+# --- List mode ---------------------------------------------------------------
+
+if [ -n "$CLI_LIST" ]; then
+	echo "Available suites:"
+	echo ""
+	for f in "$_RUN_DIR"/suites/suite-*.sh; do
+		[ -f "$f" ] || continue
+		name="$(basename "$f" .sh)"
+		name="${name#suite-}"
+		desc="$(grep -m1 '^# Suite:' "$f" 2>/dev/null | sed 's/^# Suite: *//')"
+		printf "  %-35s %s\n" "$name" "$desc"
+	done
+	echo ""
+	echo "Run:  test/e2e/run.sh --suite <name>"
+	echo "      test/e2e/run.sh --all --pools 3"
+	exit 0
+fi
+
+# --- Destroy mode ------------------------------------------------------------
+
+if [ -n "$CLI_DESTROY" ]; then
+	_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+	if [ -f "$_vmconf" ]; then
+		set -a; source "$_vmconf"; set +a
+	fi
+	source "$_RUN_DIR/lib/remote.sh"
+
+	echo "=== Destroying all pool VMs ==="
+	for (( i=1; i<=10; i++ )); do
+		for prefix in con dis; do
+			vm="${prefix}${i}"
+			if govc vm.info "$vm" 2>/dev/null | grep -q "Name:"; then
+				echo "  Destroying $vm ..."
+				govc vm.power -off "$vm" 2>/dev/null || true
+				govc vm.destroy "$vm" || true
+			fi
+		done
+	done
+	echo "=== Done ==="
+	exit 0
+fi
+
+# --- Determine suites --------------------------------------------------------
+
+_all_suites() {
+	local suites=()
+	for f in "$_RUN_DIR"/suites/suite-*.sh; do
+		[ -f "$f" ] || continue
+		local name
+		name="$(basename "$f" .sh)"
+		name="${name#suite-}"
+		suites+=("$name")
+	done
+	echo "${suites[@]}"
+}
+
+suites_to_run=()
+
+if [ -n "$CLI_ALL" ]; then
+	read -ra suites_to_run <<< "$(_all_suites)"
+elif [ -n "$CLI_SUITE" ]; then
+	IFS=',' read -ra suites_to_run <<< "$CLI_SUITE"
+else
+	echo "ERROR: Specify --suite NAME, --all, or --list" >&2
+	_usage
+	exit 1
+fi
+
+if [ ${#suites_to_run[@]} -eq 0 ]; then
+	echo "No suites found."
+	exit 0
+fi
+
+# --- SSH helpers --------------------------------------------------------------
+
+_SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+_ssh_con() {
+	local pool_num="$1"; shift
+	local user="${CON_SSH_USER:-steve}"
+	local host="con${pool_num}.${VM_BASE_DOMAIN:-example.com}"
+	ssh $_SSH_OPTS "${user}@${host}" "$@"
+}
+
+# --- Check if VMs are ready --------------------------------------------------
+
+_vms_ready() {
+	local pool_num="$1"
+	local user="${CON_SSH_USER:-steve}"
+	local con="con${pool_num}.${VM_BASE_DOMAIN:-example.com}"
+	ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
+		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+		"${user}@${con}" -- "test -d ~/aba" 2>/dev/null
+}
+
+# --- Dry run (before infra check -- no side effects) -------------------------
+
+if [ -n "$CLI_DRY_RUN" ]; then
+	echo ""
+	echo "=== DRY RUN ==="
+	echo "  Pools: $CLI_POOLS"
+	echo "  Suites: ${suites_to_run[*]}"
+	echo ""
+
+	_shuffled=($(printf '%s\n' "${suites_to_run[@]}" | shuf))
+	for (( p=0; p<CLI_POOLS; p++ )); do
+		pool_num=$(( p + 1 ))
+		echo "  con${pool_num}:"
+		for (( s=p; s<${#_shuffled[@]}; s+=CLI_POOLS )); do
+			echo "    - ${_shuffled[$s]}"
+		done
+	done
+	echo ""
+	exit 0
+fi
+
+# --- Ensure infrastructure ---------------------------------------------------
+
+echo ""
+echo "=== E2E Test Run ==="
+echo "  Suites: ${suites_to_run[*]}"
+echo "  Pools: $CLI_POOLS"
+echo ""
+
+_need_infra=""
+for (( i=1; i<=CLI_POOLS; i++ )); do
+	if ! _vms_ready "$i"; then
+		_need_infra=1
+		echo "  Pool $i: VMs not ready"
+	else
+		echo "  Pool $i: VMs ready"
+	fi
+done
+
+if [ -n "$_need_infra" ] || [ -n "$CLI_RECREATE_GOLDEN" ] || [ -n "$CLI_RECREATE_VMS" ]; then
+	echo ""
+	echo "  Running setup-infra.sh ..."
+	_infra_flags="--pools $CLI_POOLS --pools-file $CLI_POOLS_FILE"
+	[ -n "$CLI_RECREATE_GOLDEN" ] && _infra_flags+=" --recreate-golden"
+	[ -n "$CLI_RECREATE_VMS" ]    && _infra_flags+=" --recreate-vms"
+	bash "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
+fi
+
+# --- scp config files to each conN -------------------------------------------
+
+echo ""
+echo "  Deploying config files to conN hosts ..."
+for (( i=1; i<=CLI_POOLS; i++ )); do
+	user="${CON_SSH_USER:-steve}"
+	host="con${i}.${VM_BASE_DOMAIN:-example.com}"
+	target="${user}@${host}"
+
+	scp $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/aba/test/e2e/config.env" 2>/dev/null || true
+	scp $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/aba/test/e2e/pools.conf" 2>/dev/null || true
+	echo "    con${i}: config.env + pools.conf deployed"
+done
+
+# --- Shuffle and distribute suites across pools (round-robin) -----------------
+
+declare -a POOL_SUITES
+for (( p=1; p<=CLI_POOLS; p++ )); do
+	POOL_SUITES[$p]=""
+done
+
+_shuffled=($(printf '%s\n' "${suites_to_run[@]}" | shuf))
+for (( s=0; s<${#_shuffled[@]}; s++ )); do
+	pool_num=$(( (s % CLI_POOLS) + 1 ))
+	if [ -n "${POOL_SUITES[$pool_num]}" ]; then
+		POOL_SUITES[$pool_num]="${POOL_SUITES[$pool_num]} ${_shuffled[$s]}"
+	else
+		POOL_SUITES[$pool_num]="${_shuffled[$s]}"
+	fi
+done
+
+echo ""
+echo "  Suite distribution:"
+for (( p=1; p<=CLI_POOLS; p++ )); do
+	echo "    con${p}: ${POOL_SUITES[$p]}"
+done
+echo ""
+
+# --- Ensure persistent tmux session on each conN and send runner command ------
+
+TMUX_SESSION="e2e-run"
+declare -A _dispatched=()
+
+for (( p=1; p<=CLI_POOLS; p++ )); do
+	pool_suites="${POOL_SUITES[$p]}"
+	if [ -z "$pool_suites" ]; then
+		echo "  Pool $p: no suites assigned -- skipping"
+		continue
+	fi
+
+	echo "  Dispatching to con${p} (tmux: $TMUX_SESSION) ..."
+
+	# Ensure tmux session exists
+	if ! _ssh_con "$p" "tmux has-session -t $TMUX_SESSION 2>/dev/null"; then
+		_ssh_con "$p" "tmux new-session -d -s $TMUX_SESSION"
+		echo "    Created tmux session '$TMUX_SESSION' on con${p}"
+	else
+		echo "    Reusing existing tmux session '$TMUX_SESSION' on con${p}"
+	fi
+
+	# Check for active runner (lock file)
+	_lock_status=$(_ssh_con "$p" "
+		if [ -f /tmp/e2e-runner.lock ]; then
+			pid=\$(cat /tmp/e2e-runner.lock)
+			if kill -0 \$pid 2>/dev/null; then
+				echo BUSY
+			else
+				echo STALE
+			fi
+		else
+			echo FREE
+		fi
+	")
+
+	if [ "$_lock_status" = "BUSY" ]; then
+		echo "    WARNING: runner.sh already executing on con${p} -- skipping this pool"
+		continue
+	fi
+	if [ "$_lock_status" = "STALE" ]; then
+		echo "    Removing stale lock on con${p}"
+		_ssh_con "$p" "rm -f /tmp/e2e-runner.lock"
+	fi
+
+	# Send the runner command into the tmux session
+	_runner_cmd="bash ~/aba/test/e2e/runner.sh $p $pool_suites"
+	_ssh_con "$p" "tmux send-keys -t $TMUX_SESSION '$_runner_cmd' Enter"
+	_dispatched[$p]=1
+	echo "    Sent: $_runner_cmd"
+done
+
+# --- Monitor: poll for completion ---------------------------------------------
+
+echo ""
+echo "  All pools dispatched. Monitoring for completion ..."
+echo "  (Attach interactively: run.sh attach conN)"
+echo ""
+
+# Open summary dashboard (if not quiet mode and multiple pools)
+if [ -z "$CLI_QUIET" ] && [ "$CLI_POOLS" -gt 1 ]; then
+	DASH_SESSION="e2e-dashboard"
+	tmux kill-session -t "$DASH_SESSION" 2>/dev/null
+
+	_first=1
+	for (( p=1; p<=CLI_POOLS; p++ )); do
+		user="${CON_SSH_USER:-steve}"
+		host="con${p}.${VM_BASE_DOMAIN:-example.com}"
+		_tail_cmd="echo '=== Pool $p (con${p}) ===' && ssh $_SSH_OPTS ${user}@${host} 'tail -f ~/aba/test/e2e/logs/summary.log 2>/dev/null'"
+
+		if [ "$_first" -eq 1 ]; then
+			tmux new-session -d -s "$DASH_SESSION" "$_tail_cmd"
+			_first=0
+		else
+			tmux split-window -t "$DASH_SESSION" -v "$_tail_cmd"
+		fi
+	done
+
+	tmux select-layout -t "$DASH_SESSION" even-vertical 2>/dev/null
+	echo "  Summary dashboard created: tmux attach -t $DASH_SESSION"
+	echo ""
+fi
+
+# Poll each pool's RC file for completion
+declare -A _pool_done
+declare -A _pool_rc
+_all_done=""
+
+if [ ${#_dispatched[@]} -eq 0 ]; then
+	echo "  No pools dispatched -- nothing to monitor."
+else
+	while [ -z "$_all_done" ]; do
+		sleep 10
+		_all_done=1
+
+		for p in "${!_dispatched[@]}"; do
+			[ -n "${_pool_done[$p]:-}" ] && continue
+
+			_rc_content=$(_ssh_con "$p" "cat /tmp/e2e-runner.rc 2>/dev/null" 2>/dev/null || true)
+			if [ -n "$_rc_content" ]; then
+				_rc_content="${_rc_content//[^0-9]/}"
+				_pool_done[$p]=1
+				_pool_rc[$p]="${_rc_content:-255}"
+				echo "  Pool $p (con${p}): finished (exit=${_pool_rc[$p]})"
+			else
+				_all_done=""
+			fi
+		done
+	done
+fi
+
+# --- Collect logs from each conN ----------------------------------------------
+
+echo ""
+echo "  Collecting logs ..."
+mkdir -p "$_RUN_DIR/logs"
+
+for p in "${!_dispatched[@]}"; do
+	user="${CON_SSH_USER:-steve}"
+	host="con${p}.${VM_BASE_DOMAIN:-example.com}"
+	local_dir="$_RUN_DIR/logs/pool-${p}"
+	mkdir -p "$local_dir"
+	scp -r $_SSH_OPTS "${user}@${host}:~/aba/test/e2e/logs/*" "$local_dir/" 2>/dev/null || true
+	echo "    Pool $p logs -> $local_dir/"
+done
+
+# --- Final summary ------------------------------------------------------------
+
+echo ""
+echo "========================================"
+echo "  Final Summary"
+echo "========================================"
+
+_overall_rc=0
+for (( p=1; p<=CLI_POOLS; p++ )); do
+	if [ -z "${_dispatched[$p]:-}" ]; then
+		printf "  Pool %d (con%d):  \033[1;33mSKIP\033[0m (no suites assigned)\n" "$p" "$p"
+		continue
+	fi
+	rc="${_pool_rc[$p]:-255}"
+	if [ "$rc" -eq 0 ]; then
+		printf "  Pool %d (con%d):  \033[1;32mPASS\033[0m\n" "$p" "$p"
+	else
+		printf "  Pool %d (con%d):  \033[1;31mFAIL\033[0m (exit=%s)\n" "$p" "$p" "$rc"
+		_overall_rc=1
+	fi
+done
+
+echo ""
+echo "  Logs: $_RUN_DIR/logs/"
+echo "========================================"
+
+# Cleanup dashboard tmux if it exists
+if [ -n "${DASH_SESSION:-}" ]; then
+	tmux kill-session -t "$DASH_SESSION" 2>/dev/null || true
+fi
+
+exit "$_overall_rc"

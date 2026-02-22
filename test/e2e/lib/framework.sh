@@ -59,7 +59,7 @@ NOTIFY_CMD="${NOTIFY_CMD:-}"
 
 # Checkpoint / resume state files
 E2E_STATE_FILE=""      # Written during a run: logs pass/fail per test
-E2E_RESUME_FILE=""     # If set, skip tests already passed in a previous run
+E2E_RESUME_FILE="${E2E_RESUME_FILE:-}"  # If set, skip tests already passed in a previous run
 
 # Log file for the current suite run
 E2E_LOG_DIR="${_E2E_DIR}/logs"
@@ -74,6 +74,9 @@ _E2E_PASS_COUNT=0
 _E2E_FAIL_COUNT=0
 _E2E_SKIP_COUNT=0
 _E2E_START_TIME=""
+
+# Resume skip-block: when set, test_begin/e2e_run skip commands until test_end
+_E2E_SKIP_BLOCK=""
 
 # Progress plan -- parallel arrays
 declare -a _E2E_PLAN_NAMES=()
@@ -197,6 +200,11 @@ _print_progress() {
     # Print to screen
     echo ""
     _e2e_draw_line "="
+    if [ -n "${_E2E_SUITE_NAME:-}" ]; then
+        local _pi=""
+        [ -n "${POOL_NUM:-}" ] && _pi="  [pool${POOL_NUM} @ $(hostname -s)]"
+        printf "  %s\n" "$(_e2e_bold "Suite: $_E2E_SUITE_NAME${_pi}")"
+    fi
     printf "  %-${_col}s %s\n" "TEST" "STATUS"
     _e2e_draw_line "-"
 
@@ -221,6 +229,11 @@ _print_progress() {
     printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /=}"
     _e2e_summary ""
     _e2e_summary "  $_line"
+    if [ -n "${_E2E_SUITE_NAME:-}" ]; then
+        local _si=""
+        [ -n "${POOL_NUM:-}" ] && _si="  [pool${POOL_NUM} @ $(hostname -s)]"
+        _e2e_summary "  $(_e2e_Bold "Suite: $_E2E_SUITE_NAME${_si}")"
+    fi
     _e2e_summary "  $(printf "%-${_col}s %s" "TEST" "STATUS")"
     printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /-}"
     _e2e_summary "  $_line"
@@ -243,6 +256,11 @@ _print_progress() {
     if [ -n "${E2E_LOG_FILE:-}" ]; then
         {
             echo ""
+            if [ -n "${_E2E_SUITE_NAME:-}" ]; then
+                local _li=""
+                [ -n "${POOL_NUM:-}" ] && _li="  [pool${POOL_NUM} @ $(hostname -s)]"
+                echo "  Suite: $_E2E_SUITE_NAME${_li}"
+            fi
             printf "  %-${_col}s %s\n" "TEST" "STATUS"
             printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /-}"
             echo "  $_line"
@@ -280,15 +298,28 @@ suite_begin() {
     ln -sf "$(basename "$E2E_LOG_FILE")" "${E2E_LOG_DIR}/latest.log"
     ln -sf "$(basename "$E2E_SUMMARY_FILE")" "${E2E_LOG_DIR}/summary.log"
 
-    # Initialize state file for checkpointing
-    E2E_STATE_FILE="${E2E_LOG_DIR}/${suite_name}.state"
+    # State file for checkpoint/resume. Caller may set E2E_STATE_FILE for a per-run path
+    # (e.g. clone-and-check.pool2.state) so multiple runs don't share one file.
+    E2E_STATE_FILE="${E2E_STATE_FILE:-${E2E_LOG_DIR}/${suite_name}.state}"
+
+    # Bug 2 fix: if resuming and the resume file IS our state file, copy it
+    # to a .resume backup so truncating the state file doesn't destroy it
+    if [ -n "$E2E_RESUME_FILE" ] && [ -f "$E2E_RESUME_FILE" ]; then
+        local resume_backup="${E2E_STATE_FILE}.resume"
+        cp "$E2E_RESUME_FILE" "$resume_backup"
+        E2E_RESUME_FILE="$resume_backup"
+    fi
+
     : > "$E2E_STATE_FILE"
 
+    local _host_info=""
+    [ -n "${POOL_NUM:-}" ] && _host_info="pool${POOL_NUM} @ $(hostname -s)"
+
     _e2e_draw_line "="
-    _e2e_log_and_print "$(_e2e_bold "SUITE: $suite_name")"
+    _e2e_log_and_print "$(_e2e_bold "SUITE: $suite_name${_host_info:+  [$_host_info]}")"
     _e2e_draw_line "="
-    _e2e_summary "$(_e2e_Bold "========== SUITE: $suite_name ==========")"
-    _e2e_notify "Suite started: $suite_name ($(date))"
+    _e2e_summary "$(_e2e_Bold "========== SUITE: $suite_name${_host_info:+  [$_host_info]} ==========")"
+    _e2e_notify "Suite started: $suite_name${_host_info:+ ($_host_info)} ($(date))"
 }
 
 suite_end() {
@@ -323,6 +354,16 @@ test_begin() {
     _E2E_CURRENT_TEST="$test_name"
     (( _E2E_TEST_COUNT++ )) || true
 
+    # Bug 3 fix: check resume checkpoint for test_begin/test_end pattern
+    if should_skip_checkpoint "$test_name"; then
+        _E2E_SKIP_BLOCK=1
+        _update_plan "$test_name" "DONE"
+        _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"
+        _e2e_summary "$(_e2e_Green "  DONE (resumed): $test_name")"
+        return 0
+    fi
+
+    _E2E_SKIP_BLOCK=""
     _update_plan "$test_name" "RUNNING"
     _e2e_draw_line "-"
     _e2e_log_and_print "$(_e2e_cyan "TEST [$_E2E_TEST_COUNT]: $test_name")"
@@ -333,6 +374,13 @@ test_begin() {
 test_end() {
     local result="${1:-0}"  # 0 = pass, non-zero = fail
     local test_name="$_E2E_CURRENT_TEST"
+
+    # Bug 3 fix: if this test was skipped via resume, just clear state and return
+    if [ -n "$_E2E_SKIP_BLOCK" ]; then
+        _E2E_SKIP_BLOCK=""
+        _E2E_CURRENT_TEST=""
+        return 0
+    fi
 
     if [ "$result" -eq 0 ]; then
         (( _E2E_PASS_COUNT++ )) || true
@@ -393,7 +441,7 @@ should_skip_checkpoint() {
     local test_name="$1"
     # Only skip if we are in resume mode and test previously passed
     if [ -n "$E2E_RESUME_FILE" ] && [ -f "$E2E_RESUME_FILE" ]; then
-        if grep -q "^0 ${test_name}$" "$E2E_RESUME_FILE" 2>/dev/null; then
+        if grep -q "^0 ${test_name}$" "$E2E_RESUME_FILE"; then
             return 0  # yes, skip
         fi
     fi
@@ -403,16 +451,13 @@ should_skip_checkpoint() {
 # --- Interactive Prompt -----------------------------------------------------
 
 _interactive_prompt() {
-    # Called when a command has failed and all retries are exhausted.
-    # In interactive mode, prompt the user; otherwise, return 1 (fail).
     local cmd="$1"
     local ret="$2"
 
     if [ -z "$_E2E_INTERACTIVE" ]; then
-        return 1  # non-interactive: just fail
+        return 1
     fi
 
-    # Send notification about the failure
     (
         echo "Log tail:"
         tail -20 "${E2E_LOG_FILE:-/dev/null}" 2>/dev/null
@@ -420,18 +465,22 @@ _interactive_prompt() {
 
     while true; do
         echo ""
-        _e2e_log_and_print "COMMAND FAILED (exit=$ret): $cmd"
-        printf "%s" "$(_e2e_red "[r] Retry  [s] Skip  [a] Abort  [or type a new command] > ")"
+        _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
+        printf "%s" "$(_e2e_red "[r]etry [s]kip [S]kip-suite [a]bort [cmd]: ")"
         read -r ans </dev/tty
 
         case "$ans" in
             r|R|"")
                 _e2e_log "User chose: retry"
-                return 2  # signal: retry
+                return 2
                 ;;
-            s|S)
-                _e2e_log "User chose: skip"
-                return 0  # signal: skip (success)
+            s)
+                _e2e_log "User chose: skip test"
+                return 0
+                ;;
+            S)
+                _e2e_log "User chose: skip entire suite"
+                return 3
                 ;;
             a|A)
                 _e2e_log "User chose: abort"
@@ -439,51 +488,70 @@ _interactive_prompt() {
                 exit 1
                 ;;
             *)
-                # User typed a replacement command -- run it
                 _e2e_log "User entered new command: $ans"
                 echo "Running: $ans"
-                ( eval "$ans" ) >> "${E2E_LOG_FILE:-/dev/null}" 2>&1
-                local new_rc=$?
+                ( eval "$ans" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
+                local new_rc=${PIPESTATUS[0]}
                 if [ $new_rc -eq 0 ]; then
                     _e2e_log "User command succeeded"
                     return 0
                 else
                     _e2e_log "User command failed (exit=$new_rc)"
                     echo "Command failed with exit code $new_rc"
-                    # loop again to re-prompt
                 fi
                 ;;
         esac
     done
 }
 
+# Format an exit code for display: appends signal name for codes > 128.
+#   _e2e_exit_info 141  =>  "exit=141/SIGPIPE"
+#   _e2e_exit_info 1    =>  "exit=1"
+_e2e_exit_info() {
+    local rc="$1"
+    if [ "$rc" -gt 128 ] 2>/dev/null; then
+        local sig=$((rc - 128))
+        local name
+        name=$(kill -l "$sig" 2>/dev/null) || name=""
+        if [ -n "$name" ]; then
+            echo "exit=${rc}/SIG${name}"
+            return
+        fi
+    fi
+    echo "exit=${rc}"
+}
+
 # --- Core Execution: e2e_run -----------------------------------------------
 #
-# Usage: e2e_run [-r RETRIES BACKOFF] [-h HOST] [-i] [-q] "description" command...
+# Usage: e2e_run [-r RETRIES BACKOFF] [-d INITIAL_DELAY] [-m MAX_DELAY]
+#                [-h HOST] "description" command...
 #
-# By default, command output is shown on screen AND logged to the suite log
-# file (like the original test-cmd). Use -q to suppress screen output.
+# All output is shown on screen AND logged (verbose by default, no -q flag).
 #
 # Flags:
 #   -r RETRIES BACKOFF   Retry on failure (default: 5 retries, 1.5x backoff)
+#   -d INITIAL_DELAY     Initial delay before first retry in seconds (default: 5)
+#   -m MAX_DELAY         Maximum delay between retries in seconds (default: 60)
 #   -h HOST              Run command on remote HOST via SSH
-#   -q                   Quiet: log output to file only (don't show on screen)
 #   "description"        First non-flag argument = human-readable description
 #   command...           Remaining arguments = the command to run
 #
 e2e_run() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+
     local tot_cnt=5
     local backoff=1.5
+    local initial_delay=5
+    local max_delay=60
     local host=""
-    local quiet=""
     local mark="L"
 
-    # Parse flags
     while [[ "${1:-}" == -* ]]; do
         case "$1" in
             -r) tot_cnt="$2"; backoff="$3"; shift 3 ;;
+            -d) initial_delay="$2"; shift 2 ;;
+            -m) max_delay="$2"; shift 2 ;;
             -h) host="$2"; mark="R"; shift 2 ;;
-            -q) quiet=1; shift ;;
             *)  break ;;
         esac
     done
@@ -491,67 +559,57 @@ e2e_run() {
     local description="$1"; shift
     local cmd="$*"
     local _lf="${E2E_LOG_FILE:-/dev/null}"
+    local _display_host="${host:-$USER@$(hostname -s)}"
 
-    _e2e_draw_line "."
-    _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_cyan "($cmd)") $(_e2e_yellow "[$PWD -> ${host:-localhost}]")"
-    # Summary: show command description and the actual command being run
-    _e2e_summary "  ----------------------------------------"
-    _e2e_summary "  $mark $(_e2e_Green "$description") $(_e2e_Cyan "($cmd)")"
+    _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+    _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
+    _e2e_summary "  $mark $(_e2e_Green "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
+    _e2e_summary "    $(_e2e_Cyan "$cmd")"
 
-    # Outer loop: interactive retry wraps the automatic retry loop
+    local _step_start
+    _step_start=$(date +%s)
+
     while true; do
-        local sleep_time=5
+        local sleep_time="$initial_delay"
         local attempt=1
 
-        # Inner loop: automatic retries with backoff
         while true; do
             local ret=0
 
             if [ -n "$host" ]; then
                 _e2e_log "  Running on $host (attempt $attempt/$tot_cnt): $cmd"
-                if [ -n "$quiet" ]; then
-                    ssh -t -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
-                        >> "$_lf" 2>&1 || ret=$?
-                else
-                    # Use PIPESTATUS to capture ssh exit code, not tee's
-                    ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
-                        2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
-                fi
+                ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                    2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
-                if [ -n "$quiet" ]; then
-                    ( eval "$cmd" ) >> "$_lf" 2>&1 || ret=$?
-                else
-                    # Use PIPESTATUS to capture command exit code, not tee's
-                    ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
-                fi
+                ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
             fi
 
-            # Ctrl-C during execution
             [ $ret -eq 130 ] && return 130
 
-            # Success
             if [ $ret -eq 0 ]; then
+                local _elapsed=$(( $(date +%s) - _step_start ))
                 if [ $attempt -gt 1 ]; then
-                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description"
+                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description (${_elapsed}s)"
                     _e2e_notify "Command recovered: $description ($(date))"
                 fi
-                _e2e_log "  OK (attempt $attempt)"
+                _e2e_log_and_print "    $(_e2e_green "OK") (${_elapsed}s)"
+                _e2e_summary "    $(_e2e_Green "OK (${_elapsed}s)")"
+                _e2e_log "  OK (attempt $attempt, ${_elapsed}s)"
                 return 0
             fi
 
-            _e2e_log "  Attempt $attempt/$tot_cnt failed (exit=$ret)"
-            _e2e_log_and_print "    $(_e2e_yellow "Attempt ($attempt/$tot_cnt) failed (exit=$ret): $description")"
-            _e2e_summary "    $(_e2e_Yellow "Attempt ($attempt/$tot_cnt) failed (exit=$ret)") $description"
+            local _exi; _exi="$(_e2e_exit_info $ret)"
+            _e2e_log "  Attempt $attempt/$tot_cnt failed ($_exi)"
+            _e2e_log_and_print "    $(_e2e_yellow "Attempt ($attempt/$tot_cnt) failed ($_exi): $description")"
+            _e2e_summary "    $(_e2e_Yellow "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description"
 
-            # Exhausted retries?
             if [ $attempt -ge $tot_cnt ]; then
                 _e2e_log "  All $tot_cnt attempts exhausted"
                 _e2e_summary "    $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
-                break  # fall through to interactive prompt
+                break
             fi
 
-            # Notify on first failure
             if [ $attempt -eq 1 ]; then
                 (
                     echo "Command: $cmd"
@@ -565,29 +623,30 @@ e2e_run() {
             echo "    Next attempt ($attempt/$tot_cnt) in ${sleep_time}s ..."
             sleep "$sleep_time"
             sleep_time=$(awk -v s="$sleep_time" -v b="$backoff" 'BEGIN {print int(s * b)}')
-            [ "$sleep_time" -gt 40 ] && sleep_time=40
+            [ "$sleep_time" -gt "$max_delay" ] && sleep_time="$max_delay"
         done
 
-        # All retries exhausted -- try interactive prompt
         _interactive_prompt "$cmd" "$ret"
         local prompt_rc=$?
 
         if [ $prompt_rc -eq 2 ]; then
-            # User chose retry -- loop back to outer while
             _e2e_log "  Restarting retry cycle (user requested)"
             continue
         elif [ $prompt_rc -eq 0 ]; then
-            # User chose skip or replacement command succeeded
+            local _elapsed=$(( $(date +%s) - _step_start ))
+            _e2e_log_and_print "    $(_e2e_green "OK (user skip)") (${_elapsed}s)"
             return 0
+        elif [ $prompt_rc -eq 3 ]; then
+            return 3
         else
-            # Non-interactive failure or abort -- fail the current test and stop the suite
-            _e2e_log "  FAILED: $description (exit=$ret)"
-            _e2e_log_and_print "  $(_e2e_red "FATAL: $description -- aborting suite")"
-            _e2e_summary "    $(_e2e_Red "FATAL: $description -- aborting suite")"
+            local _exf; _exf="$(_e2e_exit_info $ret)"
+            _e2e_log "  FAILED: $description ($_exf)"
+            _e2e_log_and_print "  $(_e2e_red "FATAL: $description ($_exf) -- aborting suite")"
+            _e2e_summary "    $(_e2e_Red "FATAL: $description ($_exf) -- aborting suite")"
             if [ -n "$_E2E_CURRENT_TEST" ]; then
                 test_end "$ret"
             fi
-            _e2e_notify "FATAL: $description (exit=$ret) -- suite aborted"
+            _e2e_notify "FATAL: $description ($_exf) -- suite aborted"
             exit 1
         fi
     done
@@ -598,7 +657,9 @@ e2e_run() {
 # Shorthand for e2e_run -h $INTERNAL_BASTION
 # The INTERNAL_BASTION variable must be set by the suite or config.
 #
+# Shorthand for e2e_run -h $INTERNAL_BASTION (all flags pass through)
 e2e_run_remote() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
     if [ -z "${INTERNAL_BASTION:-}" ]; then
         _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
         exit 1
@@ -621,6 +682,8 @@ e2e_run_remote() {
 #   e2e_diag -h "$host" "Check disk space" "df -h"
 #
 e2e_diag() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+
     local host=""
     local mark="L"
 
@@ -636,7 +699,10 @@ e2e_diag() {
     local _lf="${E2E_LOG_FILE:-/dev/null}"
     local ret=0
 
-    _e2e_log_and_print "  $mark $(_e2e_yellow "[diag]") $description $(_e2e_cyan "($cmd)")"
+    local _display_host="${host:-$USER@$(hostname -s)}"
+
+    _e2e_log_and_print "  $mark $(_e2e_yellow "[diag]") $description $(_e2e_yellow "[$_display_host:$PWD]")"
+    _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
 
     if [ -n "$host" ]; then
         ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
@@ -654,6 +720,7 @@ e2e_diag() {
 
 # Shorthand: e2e_diag on $INTERNAL_BASTION
 e2e_diag_remote() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
     if [ -z "${INTERNAL_BASTION:-}" ]; then
         _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
         exit 1
@@ -669,20 +736,25 @@ e2e_diag_remote() {
 # Usage: e2e_run_must_fail "description" command...
 #
 e2e_run_must_fail() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+
     local description="$1"; shift
     local cmd="$*"
+    local _lf="${E2E_LOG_FILE:-/dev/null}"
 
-    _e2e_draw_line "."
-    _e2e_log_and_print "  L $description (expect failure)"
+    _e2e_log_and_print "  L $(_e2e_yellow "[EXPECT-FAIL]") $description $(_e2e_yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
     _e2e_log "    CMD (must-fail): $cmd"
-    _e2e_summary "  L $(_e2e_Yellow "$description (expect failure)") $(_e2e_Cyan "($cmd)")"
+    _e2e_summary "  L $(_e2e_Yellow "[EXPECT-FAIL] $description") $(_e2e_Yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_summary "    $(_e2e_Cyan "$cmd")"
 
     local ret=0
-    ( eval "$cmd" ) >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
+    ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
     if [ $ret -ne 0 ]; then
-        _e2e_log "  OK: command failed as expected (exit=$ret)"
-        _e2e_summary "    $(_e2e_Green "OK: failed as expected (exit=$ret)")"
+        _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
+        _e2e_log_and_print "    $(_e2e_green "[EXPECT-FAIL] OK: failed as expected ($(_e2e_exit_info $ret))")"
+        _e2e_summary "    $(_e2e_Green "[EXPECT-FAIL] OK ($(_e2e_exit_info $ret))")"
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
@@ -699,27 +771,32 @@ e2e_run_must_fail() {
 # Like e2e_run_must_fail but runs on INTERNAL_BASTION
 #
 e2e_run_must_fail_remote() {
+    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+
     local description="$1"; shift
     local cmd="$*"
+    local _lf="${E2E_LOG_FILE:-/dev/null}"
 
     if [ -z "${INTERNAL_BASTION:-}" ]; then
         _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
         exit 1
     fi
 
-    _e2e_draw_line "."
-    _e2e_log_and_print "  R $description (expect failure)"
+    _e2e_log_and_print "  R $(_e2e_yellow "[EXPECT-FAIL]") $description"
+    _e2e_log_and_print "    $(_e2e_cyan "($cmd)")"
     _e2e_log "    CMD (must-fail on $INTERNAL_BASTION): $cmd"
-    _e2e_summary "  R $(_e2e_Yellow "$description (expect failure)") $(_e2e_Cyan "($cmd)")"
+    _e2e_summary "  R $(_e2e_Yellow "[EXPECT-FAIL] $description")"
+    _e2e_summary "    $(_e2e_Cyan "($cmd)")"
 
     local ret=0
-    ssh -t -o LogLevel=ERROR "$INTERNAL_BASTION" -- \
+    ssh -o LogLevel=ERROR "$INTERNAL_BASTION" -- \
         ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
-        >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
+        2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
     if [ $ret -ne 0 ]; then
-        _e2e_log "  OK: command failed as expected (exit=$ret)"
-        _e2e_summary "    $(_e2e_Green "OK: failed as expected (exit=$ret)")"
+        _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
+        _e2e_log_and_print "    $(_e2e_green "[EXPECT-FAIL] OK: failed as expected ($(_e2e_exit_info $ret))")"
+        _e2e_summary "    $(_e2e_Green "[EXPECT-FAIL] OK ($(_e2e_exit_info $ret))")"
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
@@ -780,7 +857,11 @@ assert_contains() {
     local file="$1"
     local pattern="$2"
     local msg="${3:-File $file should contain: $pattern}"
-    if grep -q "$pattern" "$file" 2>/dev/null; then
+    if [ ! -f "$file" ]; then
+        _assert_fail "File does not exist: $file (expected to contain: $pattern)"
+        return
+    fi
+    if grep -q "$pattern" "$file"; then
         _e2e_log "  ASSERT OK: '$pattern' found in $file"
     else
         _assert_fail "$msg"
@@ -791,7 +872,11 @@ assert_not_contains() {
     local file="$1"
     local pattern="$2"
     local msg="${3:-File $file should NOT contain: $pattern}"
-    if ! grep -q "$pattern" "$file" 2>/dev/null; then
+    if [ ! -f "$file" ]; then
+        _assert_fail "File does not exist: $file (checking for absence of: $pattern)"
+        return
+    fi
+    if ! grep -q "$pattern" "$file"; then
         _e2e_log "  ASSERT OK: '$pattern' not found in $file (expected)"
     else
         _assert_fail "$msg"
@@ -830,6 +915,44 @@ assert_command_exists() {
     fi
 }
 
+# --- YAML helpers -----------------------------------------------------------
+
+# Normalize a YAML file (sort-free pretty-print) and write to stdout.
+# Optionally strips secrets/environment-specific fields from install-config.
+#   Usage: yaml_normalize FILE [--strip-secrets]
+yaml_normalize() {
+    local file="$1" strip="${2:-}"
+    if [ "$strip" = "--strip-secrets" ]; then
+        python3 -c "
+import yaml, sys
+d = yaml.safe_load(open('$file'))
+for k in ('additionalTrustBundle', 'pullSecret'):
+    d.pop(k, None)
+vs = d.get('platform', {}).get('vsphere', {})
+for vc in vs.get('vcenters', []):
+    vc.pop('password', None)
+fds = vs.get('failureDomains', [])
+if fds:
+    for k in ('name', 'region', 'zone'):
+        fds[0].pop(k, None)
+    fds[0].get('topology', {}).pop('datastore', None)
+yaml.dump(d, sys.stdout, default_flow_style=False, sort_keys=False)
+"
+    else
+        python3 -c "
+import yaml, sys
+yaml.dump(yaml.safe_load(open('$file')), sys.stdout, default_flow_style=False, sort_keys=False)
+"
+    fi
+}
+
+# Diff two YAML files after normalizing.  Returns non-zero on differences.
+#   Usage: yaml_diff FILE_A FILE_B [--strip-secrets]
+yaml_diff() {
+    local file_a="$1" file_b="$2" strip="${3:-}"
+    diff <(yaml_normalize "$file_a" $strip) <(yaml_normalize "$file_b" $strip)
+}
+
 # --- Guards -----------------------------------------------------------------
 
 require_cluster() {
@@ -859,8 +982,9 @@ require_ssh() {
 }
 
 # Pre-flight SSH connectivity check.  Call at the top of any suite that
-# relies on a remote bastion (INTERNAL_BASTION).  Fails the suite
-# immediately instead of letting dozens of remote commands silently fail.
+# relies on a remote bastion (INTERNAL_BASTION).  Verifies all three
+# identities (default user, root, testy) so key mismatches are caught
+# before the suite wastes time.
 #
 # Usage: preflight_ssh           (uses $INTERNAL_BASTION)
 #        preflight_ssh HOST      (explicit host)
@@ -871,14 +995,42 @@ preflight_ssh() {
         _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: INTERNAL_BASTION not set")"
         exit 1
     fi
-    _e2e_log "  Preflight: checking SSH to $host ..."
-    if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$host" true 2>/dev/null; then
-        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to $host")"
-        _e2e_log_and_print "  $(_e2e_Red "Aborting suite -- remote bastion is unreachable.")"
-        _e2e_notify "PREFLIGHT FAIL: Cannot SSH to $host -- suite aborted"
+
+    # For root@ and testy@ checks we need host-only (INTERNAL_BASTION is user@host)
+    local host_only="${host#*@}"
+
+    local _ssh_opts="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+    local _fail=""
+
+    _e2e_log "  Preflight: checking SSH to $host (default user) ..."
+    if ! ssh $_ssh_opts "$host" true 2>/dev/null; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to $host (default user)")"
+        _fail=1
+    else
+        _e2e_log "  Preflight: SSH to $host (default user) OK"
+    fi
+
+    _e2e_log "  Preflight: checking SSH to root@$host_only ..."
+    if ! ssh $_ssh_opts "root@$host_only" true 2>/dev/null; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to root@$host_only")"
+        _fail=1
+    else
+        _e2e_log "  Preflight: SSH to root@$host_only OK"
+    fi
+
+    _e2e_log "  Preflight: checking SSH to testy@$host_only (testy_rsa) ..."
+    if ! ssh $_ssh_opts -i ~/.ssh/testy_rsa "testy@$host_only" true 2>/dev/null; then
+        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to testy@$host_only with testy_rsa")"
+        _fail=1
+    else
+        _e2e_log "  Preflight: SSH to testy@$host_only (testy_rsa) OK"
+    fi
+
+    if [ -n "$_fail" ]; then
+        _e2e_log_and_print "  $(_e2e_Red "Aborting suite -- SSH preflight failed for $host.")"
+        _e2e_notify "PREFLIGHT FAIL: SSH check failed for $host -- suite aborted"
         exit 1
     fi
-    _e2e_log "  Preflight: SSH to $host OK"
 }
 
 require_govc() {
@@ -898,6 +1050,33 @@ require_var() {
     return 0
 }
 
+# --- SSH config ownership fix -----------------------------------------------
+# OpenSSH refuses to use system config files not owned by root (exit 255).
+# Container/sandbox environments sometimes map /etc as nobody:nobody.
+# This fix is idempotent and only runs sudo when needed.
+_e2e_fix_ssh_config_ownership() {
+    local dir="/etc/ssh/ssh_config.d"
+    [ -d "$dir" ] || return 0
+    local needs_fix=""
+    for f in "$dir" "$dir"/*.conf; do
+        [ -e "$f" ] || continue
+        if [ "$(stat -c '%u' "$f" 2>/dev/null)" != "0" ]; then
+            needs_fix=1
+            break
+        fi
+    done
+    if [ -n "$needs_fix" ]; then
+        echo "  Fixing SSH config ownership in $dir ..."
+        sudo chown root:root "$dir" 2>/dev/null || true
+        sudo chmod 755 "$dir" 2>/dev/null || true
+        for f in "$dir"/*.conf; do
+            [ -f "$f" ] || continue
+            sudo chown root:root "$f" 2>/dev/null || true
+            sudo chmod 644 "$f" 2>/dev/null || true
+        done
+    fi
+}
+
 # --- Environment Setup (called by run.sh or suites directly) ---------------
 
 e2e_setup() {
@@ -909,6 +1088,11 @@ e2e_setup() {
     export ABA_TESTING=1
     hash -r  # Forget cached command paths
 
+    # Fix SSH config ownership -- RHEL/Fedora ssh_config.d files must be root:root
+    # or SSH refuses to run (exit 255). Container/sandbox environments sometimes
+    # reset ownership to nobody:nobody.
+    _e2e_fix_ssh_config_ownership
+
     # Load config.env defaults (if it exists)
     # Source it directly so declare -A and multi-line constructs work.
     if [ -f "$_E2E_DIR/config.env" ]; then
@@ -917,7 +1101,7 @@ e2e_setup() {
 
     # Source aba's own include files if available
     if [ -f "scripts/include_all.sh" ]; then
-        source scripts/include_all.sh no-trap 2>/dev/null || true
+        source scripts/include_all.sh no-trap
     fi
 
     # Log git state so we know exactly what was tested
@@ -939,7 +1123,7 @@ e2e_setup() {
     _e2e_log "  TEST_CHANNEL=${TEST_CHANNEL:-unset}"
     _e2e_log "  OCP_VERSION=${OCP_VERSION:-unset}"
     _e2e_log "  INT_BASTION_RHEL_VER=${INT_BASTION_RHEL_VER:-unset}"
-    _e2e_log "  TEST_USER=${TEST_USER:-unset}"
+    _e2e_log "  DIS_SSH_USER=${DIS_SSH_USER:-unset}"
     _e2e_log "  OC_MIRROR_VER=${OC_MIRROR_VER:-unset}"
     _e2e_log "  NOTIFY_CMD=${NOTIFY_CMD:-disabled}"
     _e2e_log "  _E2E_INTERACTIVE=${_E2E_INTERACTIVE:-off}"

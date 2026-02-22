@@ -57,8 +57,7 @@ plan_tests \
     "Incremental: mesh operators" \
     "Upgrade: OSUS and cluster upgrade" \
     "Lifecycle: shutdown/startup" \
-    "Standard: cluster with macs.conf" \
-    "Cleanup: uninstall registry"
+    "Standard: cluster with macs.conf"
 
 suite_begin "airgapped-local-reg"
 
@@ -77,6 +76,11 @@ e2e_run "Install aba" "./install"
 # Use OCP_VERSION=p for upgrade testing (we'll reduce version further below)
 e2e_run "Configure aba.conf with previous version" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version p --base-domain $(pool_domain)"
+
+# Simulate manual edit: set dns_servers to pool dnsmasq host
+e2e_run "Set dns_servers via sed" \
+    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
+
 e2e_run "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
@@ -119,7 +123,7 @@ e2e_run "Show configured version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 test_end
 
 # ============================================================================
-# 3. Setup: reset internal bastion (reuse clone-check's disN)
+# 3. Setup: reset internal bastion (reuse clone-and-check's disN)
 # ============================================================================
 test_begin "Setup: reset internal bastion"
 
@@ -133,7 +137,7 @@ test_end
 test_begin "Bundle: create with older version"
 
 e2e_run -r 3 2 "Create bundle and pipe to bastion" \
-    "source <(normalize-aba-conf) && aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel ${TEST_CHANNEL:-stable} --version \$ocp_version --op-sets abatest --ops web-terminal --base-domain $(pool_domain) -o - -y | ssh ${INTERNAL_BASTION} 'mkdir -p ~/aba && tar xf - -C ~/aba'"
+    "source <(normalize-aba-conf) && aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel ${TEST_CHANNEL:-stable} --version \$ocp_version --op-sets abatest --ops web-terminal --base-domain $(pool_domain) -o - -y | ssh ${INTERNAL_BASTION} 'tar xf - -C ~'"
 
 test_end
 
@@ -329,8 +333,24 @@ test_begin "Lifecycle: shutdown/startup"
 
 e2e_run_remote "Shutdown cluster" \
     "cd ~/aba && yes | aba --dir $SNO shutdown --wait"
+
+# GAP 3: Verify 'aba ls' shows node power state after shutdown
+e2e_run_remote "Verify 'aba ls' shows poweredOff" \
+    "cd ~/aba && aba --dir $SNO ls | grep -i poweredOff"
+
 e2e_run_remote "Startup cluster" \
     "cd ~/aba && aba --dir $SNO startup --wait"
+
+# GAP 3: Verify 'aba ls' shows node power state after startup
+e2e_run_remote "Verify 'aba ls' shows poweredOn" \
+    "cd ~/aba && aba --dir $SNO ls | grep -i poweredOn"
+
+# GAP 4: Verify 'aba login' and 'aba shell' set up kubeconfig correctly
+e2e_run_remote "Verify 'aba login' sets kubeconfig" \
+    "cd ~/aba && eval \"\$(aba --dir $SNO login)\" && oc get nodes"
+e2e_run_remote "Verify 'aba shell' exports work" \
+    "cd ~/aba && eval \"\$(aba --dir $SNO shell)\" && oc get clusterversion"
+
 e2e_run_remote "Verify cluster healthy after restart" \
     "cd ~/aba && aba --dir $SNO run"
 
@@ -369,16 +389,18 @@ e2e_run_remote "Delete standard cluster" \
 test_end
 
 # ============================================================================
-# 17. Cleanup
+# End-of-suite cleanup: uninstall Docker registry on disN + verify
 # ============================================================================
-test_begin "Cleanup: uninstall registry"
+test_begin "Cleanup: uninstall registry on disN"
 
 e2e_run_remote "Uninstall Docker registry" \
-    "cd ~/aba && aba -d mirror uninstall-docker-registry || aba -d mirror uninstall"
+    "cd ~/aba && aba -d mirror uninstall-docker-registry"
+e2e_run_remote "Verify no registry containers" \
+    "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
+e2e_run "Verify registry unreachable on disN" \
+    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/health/instance"
 
 test_end
-
-# ============================================================================
 
 suite_end
 

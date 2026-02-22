@@ -67,6 +67,7 @@ e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
@@ -83,6 +84,7 @@ e2e_run "Clean cluster dirs" "rm -rfv $SNO $COMPACT"
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
 e2e_run "Re-apply config after reset" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+e2e_run "Re-set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
@@ -93,7 +95,7 @@ e2e_run "Set operator sets (re-apply)" \
 test_end
 
 # ============================================================================
-# 2. Setup: reset internal bastion (reuse clone-check's disN)
+# 2. Setup: reset internal bastion (reuse clone-and-check's disN)
 # ============================================================================
 test_begin "Setup: reset internal bastion"
 
@@ -115,7 +117,7 @@ e2e_run "Set mirror host" \
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
 
 e2e_run "Install test registry on bastion" \
-    "test/reg-test-install-remote.sh ${TEST_USER:-steve} ${DIS_HOST}"
+    "test/reg-test-install-remote.sh ${DIS_HOST}"
 
 test_end
 
@@ -127,6 +129,9 @@ test_begin "Must-fail checks"
 # These commands should fail -- verify they do
 e2e_run_must_fail "Sync to unknown host should fail" \
     "aba -d mirror sync -H unknown.example.com --retry"
+
+e2e_run_must_fail "Install mirror to host where mirror already exists should fail" \
+    "aba -d mirror -k ~/.ssh/id_rsa -H $DIS_HOST install"
 
 e2e_run_must_fail "Install to localhost (no mirror on localhost) should fail" \
     "aba -d mirror install"
@@ -279,6 +284,16 @@ e2e_run_remote "Shutdown SNO cluster" \
 test_end
 
 # ============================================================================
+# End-of-suite cleanup: uninstall registry on disN + verify
+# ============================================================================
+test_begin "Cleanup: uninstall registry on disN"
+
+e2e_run "Uninstall registry from conN" \
+    "aba -d mirror uninstall"
+e2e_run "Verify registry unreachable on disN" \
+    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/health/instance"
+
+test_end
 
 suite_end
 

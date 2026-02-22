@@ -41,6 +41,8 @@ else  # If platform is 'vmw', all steps can be automated
 	# Create the agent based config files and the matching VMs
 	vmware_conf_dep = vmware.conf  # Add this dependency
 	TARGET_DEPENDENCIES = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .auto-agent-up .install-complete
+	# Bootstrap: same chain as install up to agents up, then monitor bootstrap (no .install-complete)
+	BOOTSTRAP_PRE_DEPS = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .auto-agent-up
 endif
 
 .PHONY: install
@@ -221,10 +223,12 @@ mon:  ## Monitor for 'install complete' the agent-based installation of OpenShif
 	$(SCRIPTS)/monitor-install.sh
 	@touch .install-complete
 
-.PHONY: bootstrap
-# monitor for bootstrap complete 
-bootstrap:  ## Monitor for 'bootstrap complete' of the agent-based bootstrap installation of OpenShift.
+# Stamp file so bootstrap has real deps (not .PHONY). Chain runs config+ISO+VMs+agents, then monitor bootstrap.
+.bootstrap-complete: $(BOOTSTRAP_PRE_DEPS)
 	$(SCRIPTS)/monitor-bootstrap.sh
+	@touch .bootstrap-complete
+
+bootstrap: .bootstrap-complete  ## Monitor for 'bootstrap complete' (runs config+ISO+VM chain first when needed).
 
 .PHONY: info
 info:  ## Show cluster access credentials 

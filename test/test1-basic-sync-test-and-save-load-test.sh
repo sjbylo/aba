@@ -20,7 +20,7 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
-[ ! "$TEST_USER" ] && TEST_USER=$(whoami)
+[ ! "$DIS_SSH_USER" ] && DIS_SSH_USER=$(whoami)
 
 # On Fedora, Try to fix "out of space" error when generating the op. index
 cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
@@ -123,7 +123,7 @@ mylog Showing aba.conf settings
 normalize-aba-conf
 source <(normalize-aba-conf)
 
-reg_ssh_user=$TEST_USER
+reg_ssh_user=$DIS_SSH_USER
 
 aba --dir cli ~/bin/govc
 source <(normalize-vmware-conf)
@@ -137,7 +137,7 @@ normalize-vmware-conf
 
 export subdir=\~/subdir  # init_bastion() needs this to create 'subdir' dir! though test1 does not use it! #FIXME
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
-init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
+init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $DIS_SSH_USER
 
 #####################################################################################################################
 #####################################################################################################################
@@ -147,23 +147,23 @@ init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
 mylog "Installing Quay mirror registry at $int_bastion_hostname:8443, using key ~/.ssh/id_rsa and then ..."
 
 # Note that the firewalld is used for the VLAN/private network masquerade/config ... 'test1' should be ok
-test-cmd -m "Show Firewalld status" -h $TEST_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
+test-cmd -m "Show Firewalld status" -h $DIS_SSH_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
 # This will install mirror and sync images
 # This should also set the firewall rule in 'firewalld offline' mode
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Bring down firewalld to test the mirror can be installed to remote host ok and the port added in offline mode" "sudo systemctl disable firewalld && sudo systemctl stop firewalld"
-test-cmd -m "Show Firewalld status" -h $TEST_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Bring down firewalld to test the mirror can be installed to remote host ok and the port added in offline mode" "sudo systemctl disable firewalld && sudo systemctl stop firewalld"
+test-cmd -m "Show Firewalld status" -h $DIS_SSH_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
 
 # Install & sync mirror on remote host
 test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba -d mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
-test-cmd -m "Show Firewalld status" -h $TEST_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Bring up firewalld to test the 8443 port was added during mirror installation (above)" "sudo systemctl enable firewalld && sudo systemctl start firewalld"
-test-cmd -m "Show Firewalld status" -h $TEST_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
-test-cmd -m "Test firewalld port open" -h $TEST_USER@$int_bastion_hostname "sudo firewall-cmd --list-all | grep \"ports: .*8443/tcp\""  # This port must be open
+test-cmd -m "Show Firewalld status" -h $DIS_SSH_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Bring up firewalld to test the 8443 port was added during mirror installation (above)" "sudo systemctl enable firewalld && sudo systemctl start firewalld"
+test-cmd -m "Show Firewalld status" -h $DIS_SSH_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
+test-cmd -m "Test firewalld port open" -h $DIS_SSH_USER@$int_bastion_hostname "sudo firewall-cmd --list-all | grep \"ports: .*8443/tcp\""  # This port must be open
 
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
-test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
+test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 
 source <(cd mirror; normalize-mirror-conf)  # This is only needed for the test script to output the $reg_* values (see below)
 echo
@@ -264,7 +264,7 @@ test-cmd -i -m "Deleting sno cluster (if it was created)" aba --dir sno delete
 test-cmd -r 15 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
-test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
+test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 
 # Should we delete the seq file here? #FIXME
 
@@ -283,8 +283,8 @@ test-cmd -m "Verify mirror-registry binary removed by clean" "test ! -f mirror/m
 test-cmd -m "Re-extract mirror-registry binary after clean (must not be skipped)" "make -C mirror mirror-registry"
 test-cmd -m "Verify mirror-registry binary exists after re-extract" "test -x mirror/mirror-registry"
 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify remote mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verify remote mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 #####################################################################################################################
 #####################################################################################################################
@@ -341,7 +341,7 @@ mylog "Using remote container mirror at $reg_host:$reg_port and using reg_ssh_us
 test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync --retry
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
-test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
+test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 
 aba --dir sno clean # This should clean up the cluster and make should start from scratch next time. Instead of running "rm -rf sno"
 rm sno/cluster.conf   # This should 100% reset the cluster and 'make' should start from scratch next time
@@ -377,7 +377,7 @@ test-cmd -m "Delete the registry so it will be re-created again in next test" ab
 test-cmd -r 15 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
-test-cmd -m "Check location of oc-mirror .cache dir" -h $TEST_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
+test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 
 aba --dir sno clean # This should clean up the cluster and 'make' should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'aba cluster -n sno -t sno --step $default_target'" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target
@@ -411,11 +411,11 @@ test-cmd -m "Bare-metal simulation: Creating iso file"	aba --dir standard instal
 test-cmd -m "Verify ISO file now exists"		ls -l standard/iso-agent-based/agent.*.iso
 
 #test-cmd -m "Delete the registry" aba --dir mirror uninstall 
-#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
-#test-cmd -h $TEST_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
+#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
+#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Deleting all podman images" "podman system prune --all --force && podman rmi --all && sudo rm -rf ~/.local/share/containers/storage && rm -rf ~/test"
 
 test-cmd -m "Delete the remote registry" aba --dir mirror uninstall 
-test-cmd -h $TEST_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verify mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
 
 #####################################################################################################################
 #####################################################################################################################
