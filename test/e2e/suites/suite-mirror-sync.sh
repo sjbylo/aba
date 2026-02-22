@@ -237,8 +237,10 @@ e2e_run "Verify .bm-nextstep exists" "test -f $STANDARD/.bm-nextstep"
 e2e_run "Verify ISO created" "ls -l $STANDARD/iso-agent-based/agent.*.iso"
 
 e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
-e2e_run_remote "Verify registry removed" \
+e2e_run_remote "Verify no registry containers on disN" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
+e2e_run "Verify registry unreachable on disN" \
+    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/health/instance"
 
 test_end
 
