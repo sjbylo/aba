@@ -68,6 +68,118 @@ _configure_con_vm() {
 	_vm_install_aba "$vm" "$user"
 	_escp ~/.ssh/testy_rsa "${user}@${vm}:.ssh/testy_rsa"
 
+	# --- Post-configuration verification ---
+	local pool_num="${vm#con}"
+	local _con_vlan="${VM_CLONE_VLAN_IPS[$vm]%%/*}"
+	local _domain
+	_domain="$(pool_domain "$pool_num")"
+	local _reg_ip
+	_reg_ip="$(pool_dis_ip "$pool_num")"
+	local _ntp="${NTP_SERVER:-10.0.1.8}"
+
+	local _tz="${TIMEZONE:-Asia/Singapore}"
+
+	echo "  [$vm] Post-configuration verification ..."
+	cat <<-VERIFY | _essh "${user}@${vm}" -- sudo bash
+		set -e
+
+		# --- Identity ---
+		hostname | grep -q "^${vm}\$" || { echo "FAIL: hostname \$(hostname) != ${vm}"; exit 1; }
+		echo "  PASS: hostname ${vm}"
+
+		timedatectl | grep -q "${_tz}" || { echo "FAIL: timezone not ${_tz}"; exit 1; }
+		echo "  PASS: timezone ${_tz}"
+
+		# --- Network ---
+		ip addr show ens224.10 | grep -q "${_con_vlan}" || { echo "FAIL: VLAN IP ${_con_vlan} not on ens224.10"; exit 1; }
+		echo "  PASS: VLAN IP ${_con_vlan} on ens224.10"
+
+		ip route | grep -q "^default.*ens256" || { echo "FAIL: default route not via ens256"; exit 1; }
+		echo "  PASS: default route via ens256"
+
+		ip link show ens192 | grep -q "mtu 9000" || { echo "FAIL: ens192 mtu != 9000"; exit 1; }
+		echo "  PASS: ens192 mtu 9000"
+
+		ip link show ens224 | grep -q "mtu 9000" || { echo "FAIL: ens224 mtu != 9000"; exit 1; }
+		echo "  PASS: ens224 mtu 9000"
+
+		nmcli -g ipv4.ignore-auto-dns connection show ens256 | grep -q yes || { echo "FAIL: ens256 ignore-auto-dns"; exit 1; }
+		echo "  PASS: ens256 ignore-auto-dns"
+
+		# --- Firewall / NAT ---
+		systemctl is-active --quiet firewalld || { echo "FAIL: firewalld not active"; exit 1; }
+		echo "  PASS: firewalld active"
+
+		[ "\$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ] || { echo "FAIL: ip_forward=0"; exit 1; }
+		echo "  PASS: ip_forward=1"
+
+		firewall-cmd --query-masquerade > /dev/null || { echo "FAIL: masquerade not enabled"; exit 1; }
+		echo "  PASS: masquerade enabled"
+
+		firewall-cmd --list-services | grep -q dns || { echo "FAIL: dns not in firewall"; exit 1; }
+		echo "  PASS: firewall dns service"
+
+		# --- DNS / dnsmasq ---
+		systemctl is-active --quiet dnsmasq || { echo "FAIL: dnsmasq not active"; exit 1; }
+		echo "  PASS: dnsmasq active"
+
+		dig +short google.com @127.0.0.1 | head -1 | grep -q . || { echo "FAIL: DNS @127.0.0.1 -> google.com"; exit 1; }
+		echo "  PASS: DNS @127.0.0.1 -> google.com"
+
+		dig +short google.com @${_con_vlan} | head -1 | grep -q . || { echo "FAIL: DNS @${_con_vlan} -> google.com"; exit 1; }
+		echo "  PASS: DNS @${_con_vlan} -> google.com (disN path)"
+
+		dig +short registry.${_domain} @${_con_vlan} | grep -q "${_reg_ip}" || { echo "FAIL: registry.${_domain} @${_con_vlan} != ${_reg_ip}"; exit 1; }
+		echo "  PASS: DNS @${_con_vlan} -> registry.${_domain} = ${_reg_ip}"
+
+		grep -q "nameserver 127.0.0.1" /etc/resolv.conf || { echo "FAIL: resolv.conf not 127.0.0.1"; exit 1; }
+		echo "  PASS: resolv.conf -> 127.0.0.1"
+
+		test -f /etc/NetworkManager/conf.d/no-dns.conf || { echo "FAIL: NM dns=none missing"; exit 1; }
+		echo "  PASS: NM dns=none"
+
+		# --- Time ---
+		systemctl is-active --quiet chronyd || { echo "FAIL: chronyd not active"; exit 1; }
+		echo "  PASS: chronyd active"
+
+		ping -c 1 -W 3 ${_ntp} > /dev/null || { echo "FAIL: NTP server ${_ntp} unreachable"; exit 1; }
+		echo "  PASS: NTP server ${_ntp} reachable"
+
+		# --- SSH ---
+		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config || { echo "FAIL: sshd ClientAliveInterval"; exit 1; }
+		echo "  PASS: sshd ClientAliveInterval"
+
+		# --- Users / environment ---
+		id testy > /dev/null 2>&1 || { echo "FAIL: testy user missing"; exit 1; }
+		echo "  PASS: testy user exists"
+
+		sudo -u testy sudo -n whoami | grep -q root || { echo "FAIL: testy cannot sudo"; exit 1; }
+		echo "  PASS: testy sudo"
+
+		grep -q "ABA_TESTING=1" /etc/environment || { echo "FAIL: ABA_TESTING not set"; exit 1; }
+		echo "  PASS: ABA_TESTING=1"
+
+		# --- Installed software ---
+		command -v aba > /dev/null || { echo "FAIL: aba not in PATH"; exit 1; }
+		echo "  PASS: aba installed"
+
+		test -d /home/${user}/aba || { echo "FAIL: ~/aba not present"; exit 1; }
+		echo "  PASS: ~/aba exists"
+
+		# --- Files ---
+		test -s /home/${user}/.vmware.conf || { echo "FAIL: vmware.conf missing"; exit 1; }
+		echo "  PASS: vmware.conf"
+
+		test -f /home/${user}/.ssh/testy_rsa || { echo "FAIL: testy_rsa key missing"; exit 1; }
+		echo "  PASS: testy_rsa key"
+
+		# --- Podman clean ---
+		! podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images"; exit 1; }
+		echo "  PASS: no podman images"
+
+		echo "  [$vm] All verifications PASSED."
+	VERIFY
+
 	echo "  $vm configured."
 }
 
@@ -111,6 +223,117 @@ _configure_dis_vm() {
 		fi
 		sleep 5
 	done
+
+	# --- Post-configuration verification ---
+	local pool_num="${vm#dis}"
+	local _dis_vlan="${VM_CLONE_VLAN_IPS[$vm]%%/*}"
+	local _con_vlan="${VM_CLONE_VLAN_IPS[$con_vm]%%/*}"
+	local _domain
+	_domain="$(pool_domain "$pool_num")"
+	local _con_lab_ip
+	_con_lab_ip="$(pool_con_ip "$pool_num")"
+	local _ntp="${NTP_SERVER:-10.0.1.8}"
+	local _base_domain="${VM_BASE_DOMAIN:-example.com}"
+
+	local _tz="${TIMEZONE:-Asia/Singapore}"
+	local _dis_lab_ip
+	_dis_lab_ip="$(pool_dis_ip "$pool_num")"
+
+	echo "  [$vm] Post-configuration verification ..."
+	cat <<-VERIFY | _essh "${user}@${vm}" -- sudo bash
+		set -e
+
+		# --- Identity ---
+		hostname | grep -q "^${vm}\$" || { echo "FAIL: hostname \$(hostname) != ${vm}"; exit 1; }
+		echo "  PASS: hostname ${vm}"
+
+		timedatectl | grep -q "${_tz}" || { echo "FAIL: timezone not ${_tz}"; exit 1; }
+		echo "  PASS: timezone ${_tz}"
+
+		# --- Network (disconnected) ---
+		ip addr show ens224.10 | grep -q "${_dis_vlan}" || { echo "FAIL: VLAN IP ${_dis_vlan} not on ens224.10"; exit 1; }
+		echo "  PASS: VLAN IP ${_dis_vlan} on ens224.10"
+
+		ip link show ens256 | grep -q "state DOWN" || { echo "FAIL: ens256 not DOWN"; exit 1; }
+		echo "  PASS: ens256 DOWN"
+
+		! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 || { echo "FAIL: internet still reachable"; exit 1; }
+		echo "  PASS: no internet (disconnected)"
+
+		ip link show ens192 | grep -q "mtu 9000" || { echo "FAIL: ens192 mtu != 9000"; exit 1; }
+		echo "  PASS: ens192 mtu 9000"
+
+		ip link show ens224 | grep -q "mtu 9000" || { echo "FAIL: ens224 mtu != 9000"; exit 1; }
+		echo "  PASS: ens224 mtu 9000"
+
+		# --- VLAN connectivity ---
+		ping -c 1 -W 3 ${_con_vlan} > /dev/null || { echo "FAIL: cannot ping con VLAN ${_con_vlan}"; exit 1; }
+		echo "  PASS: VLAN ping to ${con_vm} (${_con_vlan})"
+
+		# --- Firewall / NAT ---
+		systemctl is-active --quiet firewalld || { echo "FAIL: firewalld not active"; exit 1; }
+		echo "  PASS: firewalld active"
+
+		[ "\$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ] || { echo "FAIL: ip_forward=0"; exit 1; }
+		echo "  PASS: ip_forward=1"
+
+		firewall-cmd --query-masquerade > /dev/null || { echo "FAIL: masquerade not enabled"; exit 1; }
+		echo "  PASS: masquerade enabled"
+
+		# --- DNS resolution (critical: the path dis uses to reach dnsmasq on con) ---
+		grep -q "nameserver ${_con_vlan}" /etc/resolv.conf || { echo "FAIL: resolv.conf not ${_con_vlan}"; exit 1; }
+		echo "  PASS: resolv.conf -> ${_con_vlan}"
+
+		test -f /etc/NetworkManager/conf.d/no-dns.conf || { echo "FAIL: NM dns=none missing"; exit 1; }
+		echo "  PASS: NM dns=none"
+
+		getent hosts ${con_vm}.${_base_domain} | grep -q "${_con_lab_ip}" || { echo "FAIL: cannot resolve ${con_vm}.${_base_domain} -> ${_con_lab_ip}"; exit 1; }
+		echo "  PASS: DNS ${con_vm}.${_base_domain} -> ${_con_lab_ip}"
+
+		getent hosts ${vm}.${_base_domain} | grep -q "${_dis_lab_ip}" || { echo "FAIL: cannot resolve ${vm}.${_base_domain} -> ${_dis_lab_ip}"; exit 1; }
+		echo "  PASS: DNS ${vm}.${_base_domain} -> ${_dis_lab_ip}"
+
+		getent hosts registry.${_domain} > /dev/null || { echo "FAIL: cannot resolve registry.${_domain}"; exit 1; }
+		echo "  PASS: DNS registry.${_domain}"
+
+		# --- Lab connectivity ---
+		ping -c 1 -W 3 ${_ntp} > /dev/null || { echo "FAIL: lab server ${_ntp} unreachable via ens192"; exit 1; }
+		echo "  PASS: lab server ${_ntp} reachable"
+
+		# --- Time ---
+		systemctl is-active --quiet chronyd || { echo "FAIL: chronyd not active"; exit 1; }
+		echo "  PASS: chronyd active"
+
+		# --- SSH ---
+		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config || { echo "FAIL: sshd ClientAliveInterval"; exit 1; }
+		echo "  PASS: sshd ClientAliveInterval"
+
+		# --- Users / environment ---
+		id testy > /dev/null 2>&1 || { echo "FAIL: testy user missing"; exit 1; }
+		echo "  PASS: testy user exists"
+
+		sudo -u testy sudo -n whoami | grep -q root || { echo "FAIL: testy cannot sudo"; exit 1; }
+		echo "  PASS: testy sudo"
+
+		grep -q "ABA_TESTING=1" /etc/environment || { echo "FAIL: ABA_TESTING not set"; exit 1; }
+		echo "  PASS: ABA_TESTING=1"
+
+		# --- Files ---
+		test -s /home/${user}/.vmware.conf || { echo "FAIL: vmware.conf missing"; exit 1; }
+		echo "  PASS: vmware.conf"
+
+		! test -f /home/${user}/.pull-secret.json || { echo "FAIL: pull-secret still exists"; exit 1; }
+		echo "  PASS: pull-secret removed"
+
+		! grep -q "^source.*proxy-set" /home/${user}/.bashrc 2>/dev/null || { echo "FAIL: proxy still in .bashrc"; exit 1; }
+		echo "  PASS: proxy disabled"
+
+		# --- Podman clean ---
+		! podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images"; exit 1; }
+		echo "  PASS: no podman images"
+
+		echo "  [$vm] All verifications PASSED."
+	VERIFY
 
 	echo "  $vm configured."
 }
@@ -214,7 +437,7 @@ fi
 _RHEL_VER="${INT_BASTION_RHEL_VER:-rhel8}"
 _VM_TEMPLATE="${VM_TEMPLATES[$_RHEL_VER]:-aba-e2e-template-$_RHEL_VER}"
 _GOLDEN_NAME="aba-e2e-golden-${_RHEL_VER}"
-_BASE_FOLDER="${VC_FOLDER:-/Datacenter/vm/abatesting}"
+_BASE_FOLDER="${VC_FOLDER:-/Datacenter/vm/aba-e2e}"
 _SNAPSHOT_NAME="pool-ready"
 _LOG_DIR="$_INFRA_DIR/logs"
 
@@ -391,6 +614,7 @@ echo "=== Phase 2: Configure VMs ==="
 _signal_dir=$(mktemp -d /tmp/e2e-infra-signals.XXXXXX)
 declare -a _cfg_pids=()
 declare -a _cfg_labels=()
+declare -a _cfg_logs=()
 _cfg_failed=0
 
 for (( i=1; i<=_POOLS; i++ )); do
@@ -469,6 +693,7 @@ for (( i=1; i<=_POOLS; i++ )); do
 		# ------------------------------------------------------------------
 		# Pool 1 non-interactive (cron) OR pools 2-N: background, log only
 		# ------------------------------------------------------------------
+		echo "    Log: $pool_log"
 		(
 			set -e
 			export VC_FOLDER="$pool_folder"
@@ -484,8 +709,16 @@ for (( i=1; i<=_POOLS; i++ )); do
 		) >> "$pool_log" 2>&1 &
 		_cfg_pids+=($!)
 		_cfg_labels+=("configure $dis_vm")
+		_cfg_logs+=("$pool_log")
 	fi
 done
+
+# While background config jobs run, tail their logs so the user sees progress
+_tail_pid=""
+if [ ${#_cfg_pids[@]} -gt 0 ] && [ ${#_cfg_logs[@]} -gt 0 ] && [ -t 1 ]; then
+	tail -f "${_cfg_logs[@]}" 2>/dev/null &
+	_tail_pid=$!
+fi
 
 for idx in "${!_cfg_pids[@]}"; do
 	if wait "${_cfg_pids[$idx]}"; then
@@ -495,6 +728,8 @@ for idx in "${!_cfg_pids[@]}"; do
 		_cfg_failed=1
 	fi
 done
+
+[ -n "$_tail_pid" ] && kill "$_tail_pid" 2>/dev/null || true
 
 rm -rf "$_signal_dir"
 

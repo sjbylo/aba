@@ -213,13 +213,22 @@ _cleanup_con_quay() {
 
     local _did_uninstall=""
 
+    local _pool_reg_present=""
+    [ -d "$HOME/.e2e-pool-registry" ] && _pool_reg_present=1
+
     # Tier 1: use aba's own uninstall for any aba-installed registry
     for _dir in "$_testing_aba" "$_aba_root"; do
         if [ -f "$_dir/mirror/.installed" ]; then
-            echo "  [cleanup] Found .installed in $_dir/mirror -- running aba uninstall"
-            ( cd "$_dir" && aba -d mirror uninstall ) && _did_uninstall=1 || {
-                echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
-            }
+            if [ -n "$_pool_reg_present" ]; then
+                echo "  [cleanup] Found .installed in $_dir/mirror -- removing marker only (pool registry protected)"
+                rm -f "$_dir/mirror/.installed"
+                _did_uninstall=1
+            else
+                echo "  [cleanup] Found .installed in $_dir/mirror -- running aba uninstall"
+                ( cd "$_dir" && aba -d mirror uninstall ) && _did_uninstall=1 || {
+                    echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
+                }
+            fi
         fi
     done
 
@@ -237,7 +246,7 @@ _cleanup_con_quay() {
         echo "  [cleanup] Stale Quay remnants detected -- brute-force cleanup"
         podman stop -a 2>/dev/null || true
         podman rm -a -f 2>/dev/null || true
-        podman volume prune -f 2>/dev/null || true
+        podman volume rm -a -f 2>/dev/null || true
         rm -rf ~/quay-install
         rm -rf ~/quay-storage
         rm -f ~/.ssh/quay_installer*

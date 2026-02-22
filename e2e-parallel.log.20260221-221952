@@ -1,0 +1,59 @@
+  Fixing SSH config ownership in /etc/ssh/ssh_config.d ...
+Suites to run: airgapped-local-reg airgapped-existing-reg mirror-sync cluster-ops connected-public network-advanced create-bundle-to-disk
+Parameters: channel=stable version=p rhel=rhel8 con_user=steve dis_user=steve
+
+=== Parallel Dispatch ===
+
+Loaded 3 pool(s) from test/e2e/pools.conf
+  pool1      con1                 dis1                 aba-e2e-template-rhel8         INT_BASTION_RHEL_VER=rhel8  POOL_NUM=1  VM_DATASTORE=Datastore4-1  VC_FOLDER=/Datacenter/vm/abatesting/pool1
+  pool2      con2                 dis2                 aba-e2e-template-rhel8         INT_BASTION_RHEL_VER=rhel8  POOL_NUM=2  VM_DATASTORE=Datastore4-2  VC_FOLDER=/Datacenter/vm/abatesting/pool2
+  pool3      con3                 dis3                 aba-e2e-template-rhel8         INT_BASTION_RHEL_VER=rhel8  POOL_NUM=3  VM_DATASTORE=Datastore4-3  VC_FOLDER=/Datacenter/vm/abatesting/pool3
+
+Work queue (7 suites):
+  - airgapped-local-reg
+  - airgapped-existing-reg
+  - mirror-sync
+  - cluster-ops
+  - connected-public
+  - network-advanced
+  - create-bundle-to-disk
+
+  DISPATCH: airgapped-local-reg -> pool1 (con1)
+  DISPATCH: airgapped-existing-reg -> pool2 (con2)
+  DISPATCH: mirror-sync -> pool3 (con3)
+  COMPLETED: airgapped-local-reg on pool1 -- FAIL (exit=255, 3m 1s)
+0
+  DISPATCH: cluster-ops -> pool1 (con1)
+  COMPLETED: cluster-ops on pool1 -- FAIL (exit=255, 1m 0s)
+0
+  DISPATCH: connected-public -> pool1 (con1)
+  COMPLETED: connected-public on pool1 -- FAIL (exit=255, 1m 0s)
+0
+  DISPATCH: network-advanced -> pool1 (con1)
+  COMPLETED: network-advanced on pool1 -- FAIL (exit=255, 1m 0s)
+0
+  DISPATCH: create-bundle-to-disk -> pool1 (con1)
+  COMPLETED: create-bundle-to-disk on pool1 -- FAIL (exit=255, 1m 0s)
+0
+  COMPLETED: mirror-sync on pool3 -- FAIL (exit=255, 10m 2s)
+2
+  COMPLETED: airgapped-existing-reg on pool2 -- FAIL (exit=255, 12m 2s)
+1
+
+========================================
+  PARALLEL EXECUTION SUMMARY
+========================================
+
+  POOL            SUITE                               RESULT   LOG
+  -------------------------------------------------------------------------------------
+  pool1           airgapped-local-reg                 [0;31mFAIL(255)[0m /home/steve/aba/test/e2e/logs/pool1-suite-airgapped-local-reg.log
+  pool1           cluster-ops                         [0;31mFAIL(255)[0m /home/steve/aba/test/e2e/logs/pool1-suite-cluster-ops.log
+  pool1           connected-public                    [0;31mFAIL(255)[0m /home/steve/aba/test/e2e/logs/pool1-suite-connected-public.log
+  pool1           create-bundle-to-disk               [0;31mFAIL(255)[0m /home/steve/aba/test/e2e/logs/pool1-suite-create-bundle-to-disk.log
+  pool1           network-advanced                    [0;31mFAIL(255)[0m /home/steve/aba/test/e2e/logs/pool1-suite-network-advanced.log
+  pool2           airgapped-existing-reg              [0;31mFAIL(255)[0m /home/steve/aba/test/e2e/logs/pool2-suite-airgapped-existing-reg.log
+  pool3           mirror-sync                         [0;31mFAIL(255)[0m /home/steve/aba/test/e2e/logs/pool3-suite-mirror-sync.log
+
+  Total: 7  Passed: 0  Failed: 7
+========================================
+

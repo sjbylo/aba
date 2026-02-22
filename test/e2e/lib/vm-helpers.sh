@@ -412,7 +412,8 @@ search example.com
 nameserver 127.0.0.1
 RESOLVEOF
 
-		systemctl enable --now dnsmasq
+		systemctl enable dnsmasq
+		systemctl restart dnsmasq
 
 		firewall-cmd --permanent --add-service=dns
 		firewall-cmd --reload
@@ -452,7 +453,7 @@ _vm_cleanup_caches() {
 		rm -rfv ~/.oc-mirror/.cache
 		rm -rfv ~/*/.oc-mirror/.cache
 		if [ -s ~/.vmware.conf ]; then
-		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g" ~/.vmware.conf
+		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g" ~/.vmware.conf
 		    [ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
 		fi
 	CACHEEOF
@@ -672,7 +673,7 @@ _vm_verify_golden() {
 		firewall-cmd --query-masquerade
 		[ "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ]
 		systemctl is-active chronyd
-		ping -c 3 -W 5 10.0.1.8
+		ping -c 3 -W 5 -i0.2 10.0.1.8
 		dnf check-update > /dev/null 2>&1 || { rc=$?; [ "$rc" -eq 100 ] && exit 1; exit "$rc"; }
 		! podman images -q 2>/dev/null | grep -q . || { echo "ERROR: podman images remain"; exit 1; }
 		[ -z "$(ls ~$SUDO_USER 2>/dev/null)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }

@@ -210,7 +210,7 @@ e2e_run "Clean up previous $SNO" "rm -rfv $SNO"
 e2e_run "Create and install SNO cluster" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Verify cluster operators" "aba --dir $SNO run"
-e2e_run -r 30 10 "Wait for all operators fully available" \
+e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 

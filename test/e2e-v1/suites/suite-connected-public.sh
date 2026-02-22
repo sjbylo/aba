@@ -160,7 +160,7 @@ test_end
 test_begin "Proxy mode: verify and shutdown"
 
 e2e_run "Verify cluster operators" "aba --dir $SNO run"
-e2e_run -r 30 10 "Wait for all operators fully available" \
+e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Shutdown cluster" "yes | aba --dir $SNO shutdown --wait"
@@ -184,7 +184,12 @@ e2e_run "Clean sno-mirror dir" "rm -rfv $SNO_MIRROR"
 # Create mirror.conf pointing at the pool registry so aba generates mirror sources.
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set mirror host to pool registry" \
-    "sed -i \"s/registry.example.com/$(pool_registry_host)/g\" mirror/mirror.conf"
+    "sed -i \"s/registry.$(pool_domain)/$(pool_registry_host)/g\" mirror/mirror.conf"
+
+e2e_run "Copy pool registry CA to regcreds" \
+    "cp ~/quay-install/quay-rootCA/rootCA.pem mirror/regcreds/"
+e2e_run "Copy pool registry pull secret to regcreds" \
+    "cp ~/.containers/auth.json mirror/regcreds/pull-secret-mirror.json"
 
 e2e_run "Create SNO config (mirror mode, no proxy)" \
     "aba cluster -n $SNO_MIRROR -t sno -i $(pool_sno_ip) --step cluster.conf"
