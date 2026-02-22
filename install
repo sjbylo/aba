@@ -129,17 +129,14 @@ fi
 
 mkdir -p ~/.aba
 
-# Create ssh.conf if needed
-if [ ! -f ~/.aba/ssh.conf ]; then
-	cat > ~/.aba/ssh.conf <<END
+# Always write ssh.conf so upgrades can add new options (e.g. BatchMode)
+cat > ~/.aba/ssh.conf <<END
 StrictHostKeyChecking no
 UserKnownHostsFile=/dev/null
 ConnectTimeout=15
-PreferredAuthentications=publickey
-PasswordAuthentication=no
+BatchMode=yes
 LogLevel=ERROR
 END
-fi
 
 # Create user config file if needed
 if [ ! -f ~/.aba/config ]; then

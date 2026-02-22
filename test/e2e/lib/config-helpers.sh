@@ -56,9 +56,32 @@ pool_con_ip() {
     echo "${POOL_SUBNET:-10.0.2}.$((p * 10))"
 }
 
+# Get the disconnected bastion's lab IP (ens192): pool_dis_ip [POOL_NUM]
+# This is the .x1 address in the pool's decade: 10.0.2.(N*10+1)
+pool_dis_ip() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "${POOL_SUBNET:-10.0.2}.$((p * 10 + 1))"
+}
+
+# Get the registry hostname for a pool: pool_registry_host [POOL_NUM]
+pool_registry_host() {
+    local p="${1:-${POOL_NUM:-1}}"
+    echo "registry.$(pool_domain "$p")"
+}
+
 # Get the DNS server IP for a pool (= conN's lab IP, running dnsmasq)
 pool_dns_server() {
     pool_con_ip "$@"
+}
+
+# Get a small /29 CIDR that contains the pool's SNO IP: pool_small_cidr [POOL_NUM]
+# /29 = 8 addresses, aligned to 8-byte boundary.  Used by tests to validate
+# CIDR handling with minimal address ranges.
+pool_small_cidr() {
+	local p="${1:-${POOL_NUM:-1}}"
+	local last_octet=$((p * 10 + 2))
+	local net_addr=$((last_octet / 8 * 8))
+	echo "${POOL_SUBNET:-10.0.2}.${net_addr}/29"
 }
 
 # Convenience aliases -- all cluster types share the same IPs.
@@ -114,6 +137,13 @@ pool_vlan_apps_vip() {
     echo "${POOL_VLAN_APPS_VIP[$p]:-10.10.20.$((220 + p))}"
 }
 
+# Get conN's VLAN IP (for DNS on VLAN clusters): pool_vlan_dns [POOL_NUM]
+pool_vlan_dns() {
+    local p="${1:-${POOL_NUM:-1}}"
+    local con_vlan="${VM_CLONE_VLAN_IPS[con${p}]:-10.10.20.$((p * 2 - 1))/24}"
+    echo "${con_vlan%%/*}"
+}
+
 # Get the VLAN gateway (= disN's VLAN IP, stripped of /prefix): pool_vlan_gateway [POOL_NUM]
 pool_vlan_gateway() {
     local p="${1:-${POOL_NUM:-1}}"
@@ -126,7 +156,7 @@ pool_vlan_gateway() {
 # Returns user@conN.domain suitable for ssh/rsync.
 pool_connected_bastion() {
     local p="${1:-${POOL_NUM:-1}}"
-    local user="${TEST_USER:-steve}"
+    local user="${CON_SSH_USER:-steve}"
     echo "${user}@con${p}.${VM_BASE_DOMAIN:-example.com}"
 }
 
@@ -134,7 +164,7 @@ pool_connected_bastion() {
 # Returns user@disN.domain suitable for ssh/rsync.
 pool_internal_bastion() {
     local p="${1:-${POOL_NUM:-1}}"
-    local user="${TEST_USER:-steve}"
+    local user="${DIS_SSH_USER:-steve}"
     echo "${user}@dis${p}.${VM_BASE_DOMAIN:-example.com}"
 }
 

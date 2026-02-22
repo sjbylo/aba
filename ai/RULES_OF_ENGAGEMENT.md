@@ -1025,6 +1025,65 @@ documented at the top of `test/e2e/lib/framework.sh`.
 10. **Prefer `aba` commands over raw `make` / scripts.**
     Eat your own dog food.  Use the product's CLI for setup and teardown.
 
+11. **Never destroy resources at the END of a suite.**
+    VMs, registries, clusters, etc. must be left alive so operators can inspect
+    state after a failure.  Cleanup belongs at the **start** of the next run
+    (e.g. `clone_vm` destroys a previous clone before creating a new one,
+    `reset_internal_bastion` wipes disN at suite start).  Explicit cleanup is
+    available via `--clean` or a dedicated destroy command.
+
+12. **Suites must be self-sufficient after clone-and-check.**
+    Every suite (except `clone-and-check` itself) must be runnable independently
+    after the pool VMs exist.  No suite may assume another suite has already run.
+    Use idempotent setup helpers (e.g. `setup-pool-registry.sh`) for shared
+    prerequisites.
+
+13. **Prefer inline commands over trivial wrappers in suites.**
+    If a `_vm_*` helper is just a one-liner around `_essh` / `_escp`, inline the
+    actual command directly in the `e2e_run` call.  This makes the log output show
+    the real ssh/scp command instead of an opaque function name.  Keep helper
+    functions only when they contain non-trivial logic (conditionals, loops,
+    multi-step setup) or are shared by `create_pools` provisioning.
+
+14. **Use `e2e_run -h` for remote commands, not embedded SSH.**
+    Suites that need to run a command on a remote host must use `e2e_run -h "user@host"`
+    (or the `e2e_run_remote` / `e2e_diag_remote` shorthands for `$INTERNAL_BASTION`).
+    Never put `ssh host 'cmd'` or `_essh host -- 'cmd'` inside the command string --
+    the framework cannot detect embedded SSH and will mark the command as `L` (local)
+    instead of `R` (remote), hiding where it actually runs.
+    **Exceptions:** (a) Pipe patterns that mix local and remote (`local_cmd | ssh host 'tar xf -'`)
+    must stay as `L` since the execution starts locally.  (b) Commands using custom SSH keys
+    (`ssh -i ~/.ssh/testy_rsa`) may stay inline when testing specific key-based access.
+
+15. **Legitimate error suppression MUST have a comment explaining WHY.**
+    If `2>/dev/null`, `|| true`, or `|| echo ...` is genuinely needed (not a
+    workaround), add a comment on the line above or inline explaining the
+    specific reason.  Uncommented suppression is treated as a bug.
+    ```bash
+    # ✅ GOOD - reason is documented
+    # Tolerate exit 1: VM may already be powered off
+    govc vm.power -off "$vm" 2>/dev/null || true
+
+    # ❌ BAD - no explanation
+    govc vm.power -off "$vm" 2>/dev/null || true
+    ```
+
+### E2E Log Monitoring and Fix Scope
+
+**During test runs, continuously monitor ALL logs** from the current E2E run and
+investigate any failures.
+
+**Fix scope rules:**
+- ✅ **Fix test code freely** — test suites, helpers, framework, config
+- ❌ **Do NOT change ABA core code** (scripts/, Makefiles, tui/) unless a major
+  product bug is found
+- ⚠️ If ABA core needs changing, **describe what and why**, then **wait for
+  explicit user permission** before making any edits
+
+**Why:** E2E failures almost always stem from test assumptions (wrong IPs,
+hardcoded values, missing setup) rather than product bugs. Fixing the test
+preserves the integrity of the product code and avoids unintended regressions.
+
 ### Three Levels of Tests
 
 #### E2E Tests in `test/e2e/` (Full Infrastructure)
@@ -1037,7 +1096,7 @@ documented at the top of `test/e2e/lib/framework.sh`.
 - 🌐 Requires VMware vCenter, template VMs, network infrastructure
 - 📝 Pool-based isolation for parallel execution
 
-**Key suites**: `clone-check`, `bundle-disk`, `connected-sync`, `airgapped-local-reg`, `network-advanced`
+**Key suites**: `clone-and-check`, `create-bundle-to-disk`, `cluster-ops`, `mirror-sync`, `airgapped-local-reg`, `network-advanced`
 
 **When to Run**:
 - Before releases
@@ -1047,9 +1106,9 @@ documented at the top of `test/e2e/lib/framework.sh`.
 **How to Run**:
 ```bash
 test/e2e/run.sh --suite vm-smoke           # Quick VMware sanity check
-test/e2e/run.sh --suite clone-check        # Set up bastion pair
+test/e2e/run.sh --suite clone-and-check    # Set up bastion pair
 test/e2e/run.sh --all                      # Run everything
-test/e2e/run.sh --suite connected-sync --resume  # Resume after failure
+test/e2e/run.sh --suite cluster-ops --resume  # Resume after failure
 ```
 
 See `test/e2e/README.md` for full documentation including IP/domain allocation, pool configuration, and how to write new suites.
@@ -1245,6 +1304,6 @@ make -C mirror clean       # Mirror state
 
 ---
 
-**Last Updated**: January 22, 2026  
+**Last Updated**: February 21, 2026  
 **Purpose**: Keep this document updated as rules evolve
 

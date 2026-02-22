@@ -14,9 +14,9 @@ PasswordAuthentication=no
 LogLevel=ERROR
 END
 
-reg_host=$1
+reg_host=${1:?Usage: $0 REGISTRY_HOST}
 
-reg_ssh_user=$TEST_USER
+reg_ssh_user=${DIS_SSH_USER:-steve}
 
 ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "mkdir -p test"
 
@@ -26,9 +26,9 @@ rpm -q rsync || sudo yum install make rsync -y
 # Copy needed files
 rsync --progress --partial -avz reg-install.sh mirror-registry-amd64.tar.gz  $reg_ssh_user@$reg_host:test
 
-ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "bash -e test/reg-install.sh"
+ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "bash -e test/reg-install.sh $reg_host"
 
-# FIXME: do this, but fix reg-test-uninstall-remote.sh
-#ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "rm -rf test"  # Just so we don't run out of disk space during tests! 
-ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "rm -vf test/*.tar test/*.gz"  # Just so we don't run out of disk space during tests! 
+# Clean up large files to save disk space. Also remove the mirror-registry
+# binary so the next run re-extracts everything from the tarball cleanly.
+ssh -F ~/.aba/ssh.conf $reg_ssh_user@$reg_host "rm -vf test/*.tar test/*.gz test/mirror-registry"
 

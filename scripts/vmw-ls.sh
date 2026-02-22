@@ -6,6 +6,7 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
 
 if [ -s vmware.conf ]; then
+	ensure_govc
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
 	aba_info "vmware.conf file not defined. Run 'aba vmw' to create it if needed"

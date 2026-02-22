@@ -55,17 +55,37 @@ The script automatically:
 7. Creates git tag v0.10.0
 8. Verifies the tagged commit has correct version data
 
+### 2b. Partial Release (--ref)
+
+To release only up to a specific commit (not all of dev), use `--ref`:
+
+```bash
+# Preview first
+build/release.sh --dry-run --ref 87cdf93 0.10.0 "Stability and bug fixes"
+
+# Run the release
+build/release.sh --ref 87cdf93 0.10.0 "Stability and bug fixes"
+```
+
+The script creates a temporary branch from the specified commit, applies the version
+bump there, tags it, and returns to dev. This is useful when dev has newer commits
+that are not yet ready for release.
+
 ### 3. Push and Merge to Main
 
 After the script completes, push and merge to main:
 
 ```bash
-# Push dev branch and tag
+# Default mode: push dev and tag, merge dev to main
 git push origin dev
 git push origin v0.10.0
-
-# Merge to main (one-liner)
 git checkout main && git merge --no-ff dev && git push origin main && git checkout dev
+
+# --ref mode: push tag, merge tag to main, sync dev
+git push origin v0.10.0
+git checkout main && git merge --no-ff v0.10.0 && git push origin main && git checkout dev
+git merge main
+git branch -d _release-v0.10.0
 ```
 
 ### 4. Create GitHub Release
@@ -116,6 +136,15 @@ build/release.sh --dry-run 0.10.0 "New features"          # preview
 build/release.sh 0.10.0 "New features"                     # release
 git push origin dev v0.10.0                                 # push
 git checkout main && git merge --no-ff dev && git push origin main && git checkout dev  # merge to main
+build/create-github-release.sh v0.10.0                      # GitHub release
+
+# Partial release flow (--ref, copy-paste ready)
+git checkout dev
+build/release.sh --dry-run --ref abc1234 0.10.0 "Fixes"   # preview
+build/release.sh --ref abc1234 0.10.0 "Fixes"             # release
+git push origin v0.10.0                                     # push tag
+git checkout main && git merge --no-ff v0.10.0 && git push origin main && git checkout dev
+git merge main && git branch -d _release-v0.10.0           # sync dev, cleanup
 build/create-github-release.sh v0.10.0                      # GitHub release
 ```
 

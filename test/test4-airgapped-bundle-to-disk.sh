@@ -25,7 +25,7 @@ else
 	sudo dnf install -y $(cat templates/rpms-external.txt)
 fi
 
-[ ! "$TEST_USER" ] && export TEST_USER=$(whoami)
+[ ! "$DIS_SSH_USER" ] && export DIS_SSH_USER=$(whoami)
 
 # Try to fix "out of space" error when generating the op. index
 cat /etc/redhat-release | grep -q ^Fedora && sudo mount -o remount,size=20G /tmp && rm -rf /tmp/render-registry-*
@@ -171,13 +171,13 @@ test-cmd -m "Setting op_sets='abatest' in mirror/mirror.conf" aba --op-sets abat
 source <(normalize-vmware-conf)
 ##scripts/vmw-create-folder.sh /Datacenter/vm/test
 
-### NOTR NEEDED FOR THIS TEST ### init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $TEST_USER
+### NOTR NEEDED FOR THIS TEST ### init_bastion $int_bastion_hostname $int_bastion_vm_name aba-test $DIS_SSH_USER
 
 #################################
 
 source <(cd mirror && normalize-mirror-conf)
 
-reg_ssh_user=$TEST_USER
+reg_ssh_user=$DIS_SSH_USER
 
 #mylog "Using container mirror at $reg_host:$reg_port and using reg_ssh_user=$reg_ssh_user reg_ssh_key=$reg_ssh_key"
 

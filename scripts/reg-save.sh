@@ -103,10 +103,11 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 [[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && eval mkdir -p $OC_MIRROR_CACHE && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
 
 # oc-mirror v2 tuning params
-parallel_images=8
+parallel_images="${OC_MIRROR_PARALLEL_IMAGES:-8}"
 retry_delay=2
 retry_times=2
-aba_debug "Initial tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
+image_timeout="${OC_MIRROR_IMAGE_TIMEOUT:-30m}"
+aba_debug "Initial tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times image_timeout=$image_timeout"
 
 ##oc mirror -c <image_set_configuration> file://<file_path> --v2
 
@@ -119,7 +120,7 @@ do
 	aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 	# Set up the command in a script which can be run manually if needed.
 	# --since string Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored (only m2d)
-	cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01  --image-timeout 15m --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+	cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01  --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
 	echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
 	aba_debug "Created save-mirror.sh script"
 

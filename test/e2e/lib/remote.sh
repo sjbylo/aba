@@ -46,32 +46,6 @@ remote_exec_as() {
     fi
 }
 
-# --- remote_copy ------------------------------------------------------------
-#
-# Copy files to/from a remote host.
-#
-# Usage: remote_copy [--to|--from] HOST LOCAL_PATH REMOTE_PATH
-#   or:  remote_copy HOST SRC DST  (uses rsync)
-#
-remote_copy() {
-    local direction="to"
-
-    if [ "$1" = "--to" ] || [ "$1" = "--from" ]; then
-        direction="${1#--}"
-        shift
-    fi
-
-    local host="$1"
-    local path1="$2"
-    local path2="$3"
-
-    if [ "$direction" = "to" ]; then
-        rsync -az --no-perms "$path1" "$host:$path2"
-    else
-        rsync -az --no-perms "$host:$path1" "$path2"
-    fi
-}
-
 # --- remote_pipe_stdin ------------------------------------------------------
 #
 # Pipe stdin to a remote command via SSH.
@@ -152,10 +126,9 @@ _get_nic_network() {
 # Clone a VM from a source VM. If a clone with the same name already
 # exists, it is destroyed first (always-fresh strategy).
 #
-# Before cloning, the source VM is reverted to its snapshot (default:
-# "aba-test") to ensure the clone is always from a known-clean state.
-# The source VMs (e.g. bastion-internal-rhel9) are regular VMs with a
-# clean snapshot -- not VMware "template" objects.
+# If the source has snapshots, clones from the named snapshot (default:
+# "aba-test") for linked clones. If no snapshots exist (e.g. VMware
+# template objects), performs a full clone instead.
 #
 # After cloning (while still powered off), MAC addresses are set on the
 # clone's NICs so DHCP assigns the correct IP addresses. The port group
@@ -173,7 +146,7 @@ _get_nic_network() {
 #
 # Usage: clone_vm SOURCE_VM CLONE_NAME [FOLDER] [SNAPSHOT]
 #
-# Example: clone_vm bastion-internal-rhel9 dis1
+# Example: clone_vm aba-e2e-template-rhel8 dis1
 #
 clone_vm() {
     local source_vm="$1"
@@ -181,7 +154,7 @@ clone_vm() {
     local folder="${3:-${VC_FOLDER:-/Datacenter/vm/abatesting}}"
     local snapshot="${4:-${VM_SNAPSHOT:-aba-test}}"
 
-    echo "  Cloning VM: $source_vm -> $clone_name (folder: $folder) ..."
+    echo "  Cloning VM: $source_vm -> $clone_name (folder: $folder, snapshot: $snapshot) ..."
 
     # Destroy existing clone if present (clones are disposable)
     if vm_exists "$clone_name"; then
@@ -190,48 +163,62 @@ clone_vm() {
         govc vm.destroy "$clone_name" || true
     fi
 
-    # Revert source VM to clean snapshot before cloning
-    echo "  Reverting '$source_vm' to snapshot '$snapshot' ..."
-    govc vm.power -off "$source_vm" 2>/dev/null || true
-    govc snapshot.revert -vm "$source_vm" "$snapshot" || return 1
-
-    # Clone from source (powered off initially)
     local ds_flag=""
     [ -n "${VM_DATASTORE:-}" ] && ds_flag="-ds=$VM_DATASTORE"
-    govc vm.clone -vm "$source_vm" -folder "$folder" $ds_flag -on=false "$clone_name" || return 1
 
-    # --- Set MAC addresses on the clone's NICs (before power-on) -----------
-    # The clone inherits the source's MACs which won't match DHCP
-    # reservations. Look up the correct MACs from VM_CLONE_MACS[clone_name].
-    # The port group for each NIC is auto-detected from the clone.
-    local mac_entry="${VM_CLONE_MACS[$clone_name]:-}"
-    if [ -n "$mac_entry" ]; then
-        local -a macs=($mac_entry)
-        local i
-        for (( i=0; i<${#macs[@]}; i++ )); do
-            local device="ethernet-${i}"
-            local mac="${macs[$i]}"
-
-            # Auto-detect the NIC's port group (works with dvSwitch)
-            local nic_net
-            nic_net=$(_get_nic_network "$clone_name" "$device")
-            if [ -z "$nic_net" ]; then
-                echo "  WARNING: Could not detect network for $device, using GOVC_NETWORK"
-                nic_net="${GOVC_NETWORK:-VM Network}"
-            fi
-
-            echo "  Setting $device MAC -> $mac (network: $nic_net)"
-            govc vm.network.change -vm "$clone_name" -net "$nic_net" \
-                -net.address "$mac" "$device" || return 1
-        done
-    else
-        echo "  WARNING: No MAC addresses defined for '$clone_name' in VM_CLONE_MACS."
-        echo "           DHCP may not assign the expected IP. Define them in config.env."
+    # Use -snapshot for linked clones when the source has snapshots.
+    # VMware templates and VMs without snapshots require a full clone.
+    local snap_flag=""
+    if govc snapshot.tree -vm "$source_vm" 2>/dev/null | grep -q .; then
+        snap_flag="-snapshot=$snapshot"
     fi
 
-    # Power on the clone
+    govc vm.clone -vm "$source_vm" $snap_flag \
+        -folder "$folder" $ds_flag -on=false "$clone_name" || return 1
+
+    # --- Set MAC addresses on the clone's NICs (before power-on) -----------
+    # The clone can inherit the source's MACs, causing IP conflict. So we
+    # always set each NIC: either a specific MAC from VM_CLONE_MACS[clone_name],
+    # or -net.address - for govc to assign a generated MAC (avoids conflict).
+    local mac_entry="${VM_CLONE_MACS[$clone_name]:-}"
+    local -a macs=()
+    if [ -n "$mac_entry" ]; then
+        macs=($mac_entry)
+    fi
+
+    local i=0
+    while true; do
+        local device="ethernet-${i}"
+        # Only touch devices that exist (govc device.info fails for non-existent NICs)
+        if ! govc device.info -vm "$clone_name" "$device" &>/dev/null; then
+            break
+        fi
+        local nic_net
+        nic_net=$(_get_nic_network "$clone_name" "$device")
+        if [ -z "$nic_net" ]; then
+            [ $i -eq 0 ] && echo "  WARNING: Could not detect network for $device, using GOVC_NETWORK"
+            nic_net="${GOVC_NETWORK:-VM Network}"
+        fi
+
+        if [ $i -lt ${#macs[@]} ] && [ -n "${macs[$i]}" ]; then
+            echo "  Setting $device MAC -> ${macs[$i]} (network: $nic_net)"
+            govc vm.network.change -vm "$clone_name" -net "$nic_net" \
+                -net.address "${macs[$i]}" "$device" || return 1
+        else
+            echo "  Setting $device MAC -> auto (network: $nic_net)"
+            govc vm.network.change -vm "$clone_name" -net "$nic_net" \
+                -net.address - "$device" || return 1
+        fi
+        i=$(( i + 1 ))
+    done
+
+    if [ $i -eq 0 ]; then
+        echo "  WARNING: No NICs found on clone '$clone_name', skipping MAC setup."
+    fi
+
     echo "  Powering on clone '$clone_name' ..."
-    govc vm.power -on "$clone_name" || return 1
+    # Tolerate exit 1: VM may already be powered on (e.g. retry or race)
+    govc vm.power -on "$clone_name" 2>/dev/null || true
 
     sleep "${VM_BOOT_DELAY:-8}"
 
@@ -272,7 +259,8 @@ power_off_vm() {
 #
 power_on_vm() {
     local vm_name="$1"
-    govc vm.power -on "$vm_name" || return 1
+    # Tolerate exit 1: VM may already be powered on
+    govc vm.power -on "$vm_name" 2>/dev/null || true
 }
 
 # --- vm_exists --------------------------------------------------------------
@@ -281,17 +269,27 @@ power_on_vm() {
 #
 vm_exists() {
     local vm_name="$1"
-    govc vm.info "$vm_name" &>/dev/null
+    # govc vm.info exits 0 even for non-existent VMs (empty output),
+    # so check that output contains at least a "Name:" field.
+    govc vm.info "$vm_name" 2>/dev/null | grep -q "Name:"
 }
 
 # --- setup_ssh_to_root ------------------------------------------------------
 #
 # Copy the current user's SSH config and keys to /root/.ssh so that
-# root can also SSH to test hosts (needed when TEST_USER=root).
+# root can also SSH to test hosts (needed when DIS_SSH_USER=root).
 #
 setup_ssh_to_root() {
     local def_user="${1:-steve}"
+    local user_ssh_dir
+    user_ssh_dir="$(eval echo "~${def_user}")/.ssh"
+
     mkdir -p /root/.ssh
-    eval cp ~${def_user}/.ssh/config /root/.ssh/ 2>/dev/null || true
-    eval cp ~${def_user}/.ssh/id_rsa* /root/.ssh/ 2>/dev/null || true
+    if [ -f "${user_ssh_dir}/config" ]; then
+        cp "${user_ssh_dir}/config" /root/.ssh/
+    fi
+    # Copy id_rsa keypair if present
+    for f in "${user_ssh_dir}"/id_rsa*; do
+        [ -f "$f" ] && cp "$f" /root/.ssh/
+    done
 }

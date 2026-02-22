@@ -41,6 +41,12 @@ alwaysApply: true
 - When user says "show me" a change, display it -- do not edit the file
 - Only apply changes when user explicitly approves
 
+## NEVER make silent code changes
+
+- After making any code edit, ALWAYS tell the user what was changed and why
+- Never edit a file without explicitly mentioning it in the response
+- If multiple files were edited, list every file and summarize each change
+
 ## File modification permissions
 
 - CAN modify freely: `test/func/*`, `ai/*`

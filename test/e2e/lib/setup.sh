@@ -34,22 +34,13 @@ setup_aba_from_scratch() {
 
     echo "=== setup_aba_from_scratch ==="
 
-    # Uninstall any existing registry using aba's own uninstall command.
-    # aba checks mirror/.installed internally and does the right thing.
-    # This also handles remote registries (e.g. on disN) if mirror.conf has
-    # reg_ssh_key set -- Rule 6: uninstall from the same host that installed.
+    # Uninstall any existing registry. Aba checks .installed internally.
+    # Rule 6: uninstall from the same host that installed.
     e2e_run "Uninstall registry (local or remote)" \
         "cd $aba_root && aba -d mirror uninstall"
 
-    # Reset aba BEFORE removing RPMs -- 'aba reset' needs 'make' which is
-    # removed in the RPM removal step below (Rule 7).
-    # Conditional: mirror dir may not exist on first run.
     e2e_run "Reset aba" \
         "cd $aba_root && if [ -d mirror ]; then aba reset -f; else echo 'No mirror dir -- nothing to reset'; fi"
-
-    # Remove RPMs so aba can test auto-install (removes make, git, etc.)
-    e2e_run "Remove RPMs for clean install test" \
-        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y"
 
     # podman prune/rmi with --force are idempotent (return 0 even when empty).
     e2e_run "Clean podman images" \
@@ -57,7 +48,7 @@ setup_aba_from_scratch() {
 
     # Remove oc-mirror caches
     e2e_run "Remove oc-mirror caches" \
-        "find ~/ -type d -name .oc-mirror | xargs rm -rfv"
+        "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
 
     echo "=== setup_aba_from_scratch complete ==="
 }
@@ -67,14 +58,14 @@ setup_aba_from_scratch() {
 # Initialize an internal (air-gapped) bastion VM by cloning from template.
 # Clones the template, powers on, and applies configure_internal_bastion.
 #
-# Usage: setup_bastion CLONE_NAME [TEMPLATE] [TEST_USER]
+# Usage: setup_bastion CLONE_NAME [TEMPLATE] [DIS_SSH_USER]
 #
-# Example: setup_bastion dis1 bastion-internal-rhel9 steve
+# Example: setup_bastion dis1 aba-e2e-template-rhel8 steve
 #
 setup_bastion() {
     local clone_name="$1"
-    local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
-    local test_user="${3:-${TEST_USER:-$VM_DEFAULT_USER}}"
+    local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel8}]:-aba-e2e-template-rhel8}}"
+    local test_user="${3:-${DIS_SSH_USER:-$VM_DEFAULT_USER}}"
 
     echo "=== setup_bastion: clone $template -> $clone_name ==="
 
@@ -98,7 +89,7 @@ setup_bastion() {
 #
 setup_connected_bastion() {
     local clone_name="$1"
-    local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel9}]:-bastion-internal-rhel9}}"
+    local template="${2:-${VM_TEMPLATES[${INT_BASTION_RHEL_VER:-rhel8}]:-aba-e2e-template-rhel8}}"
 
     echo "=== setup_connected_bastion: clone $template -> $clone_name ==="
 
@@ -114,7 +105,7 @@ setup_connected_bastion() {
 # --- reset_internal_bastion -------------------------------------------------
 #
 # Reset the internal (air-gapped) bastion to a clean state WITHOUT re-cloning.
-# Assumes clone-check has already created and configured the disN VM.
+# Assumes clone-and-check has already created and configured the disN VM.
 #
 # Handles two installation scenarios:
 #   - Connected suites: registry was installed on disN remotely FROM conN.
@@ -144,45 +135,15 @@ reset_internal_bastion() {
     # Rsyncing from the E2E framework bypasses aba's workflow and can mask bugs.
 
     # 1. Uninstall the registry using aba's own uninstall, from conN.
-    #    Rule 6: uninstall from the same host that installed.  In the connected
-    #    case the registry was installed from conN (via SSH), so 'aba -d mirror
-    #    uninstall' from conN will SSH to disN and do the proper teardown.
-    #    aba checks mirror/.installed internally and does the right thing.
-    e2e_diag "Uninstall registry from conN" \
+    #    Rule 6: uninstall from the same host that installed.
+    e2e_run "Uninstall registry from conN" \
         "cd ${_aba_root} && aba -d mirror uninstall"
 
-    # 2. Defensive: stop and disable Quay systemd user services on disN.
-    #    Rootless containers started with --cgroups=no-conmon are managed by
-    #    systemd and can survive 'aba uninstall' or 'podman stop'.  If systemd
-    #    is not told to stop them, it restarts the containers and rootlessport
-    #    keeps holding port 8443, blocking any new install.
-    e2e_diag_remote "Stop Quay systemd user services" \
-        "systemctl --user stop quay-app quay-redis quay-pod; systemctl --user disable quay-app quay-redis quay-pod; systemctl --user reset-failed"
-
-    # 3. Podman cleanup for anything aba uninstall missed.
-    e2e_diag_remote "Stop all containers on internal bastion" \
-        "podman pod stop --all; podman stop --all; podman pod rm --all --force; podman rm --all --force"
-
-    # 4. Kill orphan rootlessport/conmon processes from previous installs.
-    #    When container storage was wiped but processes survived (the
-    #    --cgroups=no-conmon case), podman can't see them.  These orphans
-    #    hold port 8443 and block new installs.
-    e2e_diag_remote "Kill orphan container processes (if any)" \
-        "pkill -u \$(whoami) rootlessport; pkill -u \$(whoami) conmon; sleep 1; ss -tlnp | grep 8443 && echo 'WARNING: port 8443 still in use' || echo 'Port 8443 is free'"
-
-    # 5. Remove leftover Quay data directories.  A previous install leaves
-    #    storage dirs with files owned by container sub-UIDs that regular rm
-    #    can't remove.  Use sudo after stopping containers.
-    e2e_run_remote "Clean Quay data directories on internal bastion" \
-        "sudo rm -rfv ~/quay-install ~/my-quay-mirror-test*"
-
-    # 6. VERIFY the registry is actually down -- hard failure if it's still up!
+    # 2. Verify the registry is actually down.
     e2e_run "Verify registry is down on $_dis_bare" \
         "! curl -sk --connect-timeout 5 https://${_dis_bare}:8443/health/instance"
 
-    # 7. Clean slate on disN: remove aba tree, caches, container storage.
-    #    aba itself will repopulate ~/aba via its own mechanisms (mirror sync,
-    #    bundle, etc.) during the next test run.
+    # 3. Clean slate on disN: remove aba tree, caches, container storage.
     e2e_run_remote "Remove aba tree on internal bastion" \
         "rm -rfv ~/aba"
     e2e_run_remote "Clean podman images on internal bastion" \
@@ -224,9 +185,66 @@ cleanup_all() {
 
     # Remove caches
     e2e_run "Remove oc-mirror caches" \
-        "find ~/ -type d -name .oc-mirror | xargs rm -rfv"
+        "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
 
     echo "=== cleanup_all complete ==="
+}
+
+# --- _cleanup_con_quay ------------------------------------------------------
+#
+# Pre-suite cleanup of Quay/registry state on conN. Called by runner.sh
+# before each suite to prevent stale state (e.g. Redis password mismatch)
+# from a previous crashed or incomplete suite run.
+#
+# Two-tier approach:
+#   Tier 1 (aba way): If aba's mirror/.installed marker exists, use
+#          'aba -d mirror uninstall' -- the proper uninstall path.
+#   Tier 2 (brute-force): If tier 1 didn't clean up and Quay remnants
+#          remain (containers, ~/quay-install), force-remove everything.
+#
+# Guard: If the pool registry marker (~/.e2e-pool-registry/) exists, the
+#        brute-force tier is skipped to avoid destroying the pre-populated
+#        registry used by network-advanced and cluster-ops suites.
+#
+_cleanup_con_quay() {
+    local _testing_aba="$HOME/testing/aba"
+    local _aba_root
+    _aba_root="$(cd "$_E2E_LIB_DIR_SU/../../.." && pwd)"
+
+    local _did_uninstall=""
+
+    # Tier 1: use aba's own uninstall for any aba-installed registry
+    for _dir in "$_testing_aba" "$_aba_root"; do
+        if [ -f "$_dir/mirror/.installed" ]; then
+            echo "  [cleanup] Found .installed in $_dir/mirror -- running aba uninstall"
+            ( cd "$_dir" && aba -d mirror uninstall ) && _did_uninstall=1 || {
+                echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
+            }
+        fi
+    done
+
+    # Tier 2: brute-force fallback -- only if no pool registry is present
+    if [ -d "$HOME/.e2e-pool-registry" ]; then
+        [ -z "$_did_uninstall" ] && echo "  [cleanup] Pool registry present -- skipping brute-force cleanup"
+        return 0
+    fi
+
+    local _quay_detected=""
+    podman ps -a 2>/dev/null | grep -q quay && _quay_detected=1
+    [ -d "$HOME/quay-install" ] && _quay_detected=1
+
+    if [ -n "$_quay_detected" ]; then
+        echo "  [cleanup] Stale Quay remnants detected -- brute-force cleanup"
+        podman stop -a 2>/dev/null || true
+        podman rm -a -f 2>/dev/null || true
+        podman volume prune -f 2>/dev/null || true
+        rm -rf ~/quay-install
+        rm -rf ~/quay-storage
+        rm -f ~/.ssh/quay_installer*
+        echo "  [cleanup] Brute-force cleanup complete"
+    elif [ -z "$_did_uninstall" ]; then
+        echo "  [cleanup] No Quay state detected -- nothing to clean"
+    fi
 }
 
 # --- build_and_test_cluster -------------------------------------------------
