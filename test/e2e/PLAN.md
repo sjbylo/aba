@@ -54,7 +54,7 @@ linked-clone all pool VMs from that snapshot.
 - `_vm_setup_network` (ens192/ens224.10, no ens256)
 - Wait for conN's dnsmasq signal
 - `_vm_setup_vmware_conf`, `_vm_cleanup_caches`, `_vm_verify_golden`
-- `_vm_remove_rpms`, `_vm_remove_pull_secret`, `_vm_remove_proxy`
+- `_vm_remove_pull_secret`, `_vm_remove_proxy`
 - `_vm_disconnect_internet` (remove ens256 default route)
 
 ### Key implementation notes

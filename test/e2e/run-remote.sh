@@ -9,7 +9,11 @@
 
 set -uo pipefail
 
-HOST="steve@con1.example.com"
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$_SCRIPT_DIR/config.env"
+source "$_SCRIPT_DIR/lib/config-helpers.sh"
+
+HOST="$(pool_connected_bastion "${POOL_NUM:-1}")"
 ARGS="${*:---suite cluster-ops -r rhel8 --clean}"
 SUITE=$(echo "$ARGS" | grep -oP '(?<=--suite\s)\S+' || echo "e2e")
 LOG="/tmp/e2e-${SUITE}.log"

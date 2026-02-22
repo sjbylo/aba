@@ -39,14 +39,8 @@ setup_aba_from_scratch() {
     e2e_run "Uninstall registry (local or remote)" \
         "cd $aba_root && aba -d mirror uninstall"
 
-    # Reset aba BEFORE removing RPMs -- 'aba reset' needs 'make' which is
-    # removed in the RPM removal step below (Rule 7).
     e2e_run "Reset aba" \
         "cd $aba_root && if [ -d mirror ]; then aba reset -f; else echo 'No mirror dir -- nothing to reset'; fi"
-
-    # Remove RPMs so aba can test auto-install (removes make, git, etc.)
-    e2e_run "Remove RPMs for clean install test" \
-        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y --disableplugin=subscription-manager"
 
     # podman prune/rmi with --force are idempotent (return 0 even when empty).
     e2e_run "Clean podman images" \

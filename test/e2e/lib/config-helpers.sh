@@ -156,7 +156,7 @@ pool_vlan_gateway() {
 # Returns user@conN.domain suitable for ssh/rsync.
 pool_connected_bastion() {
     local p="${1:-${POOL_NUM:-1}}"
-    local user="${DIS_SSH_USER:-steve}"
+    local user="${CON_SSH_USER:-steve}"
     echo "${user}@con${p}.${VM_BASE_DOMAIN:-example.com}"
 }
 

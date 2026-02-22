@@ -79,8 +79,6 @@ test_end
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-e2e_run "Remove RPMs for clean install test" \
-    "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y --disableplugin=subscription-manager"
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
 
