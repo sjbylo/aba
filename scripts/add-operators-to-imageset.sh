@@ -121,7 +121,7 @@ aba_info "Adding operators to the image-set config file ..."  >&2
 # 'all' is a special operator set which allows all operators to be downloaded!  The below "operators->catalog" entry will enable all op.
 if echo $op_sets | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
 	aba_info_ok "Adding all redhat-operator operators to your image-set config file!" >&2
-	cat <<-END
+	cat <<-END >> "$OUTPUT_FILE"
 	  operators:
 	  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
 	    packages:
