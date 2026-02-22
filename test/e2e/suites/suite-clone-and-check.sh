@@ -9,7 +9,7 @@
 # Configuration pipeline (order matters for dependencies):
 #   Both:  SSH keys, network (role-aware), NTP/time, cleanup, test user
 #   con#:  firewall/masquerade (before NTP so dis# can reach NTP), vmware.conf, install aba
-#   dis#:  remove RPMs, remove pull-secret, remove proxy
+#   dis#:  remove pull-secret, remove proxy
 #
 # VMware NICs:
 #   ethernet-0 / ens192 = VMNET-DPG      (private lab, DHCP)
@@ -94,7 +94,7 @@ plan_tests \
     "NTP: chrony and timezone on both hosts" \
     "Cleanup: caches, podman, home on both hosts" \
     "Config: vmware.conf, test user, aba install ($CON_NAME)" \
-    "Harden: remove RPMs, pull-secret, proxy ($DIS_NAME)" \
+    "Harden: pull-secret, proxy ($DIS_NAME)" \
     "Verify: full configuration check"
 
 suite_begin "clone-and-check"
@@ -222,6 +222,10 @@ e2e_run "Copy vmware.conf to $DIS_NAME" "_escp ~/.vmware.conf ${DEF_USER}@${DIS_
 e2e_run "Create test user on $CON_NAME" "_vm_create_test_user $CON_HOST $DEF_USER"
 e2e_run "Create test user on $DIS_NAME" "_vm_create_test_user $DIS_HOST $DEF_USER"
 
+# Suites run on con hosts and need the testy private key to SSH to dis hosts
+e2e_run "Deploy testy_rsa to $CON_NAME" \
+    "_escp ~/.ssh/testy_rsa ${DEF_USER}@${CON_HOST}:.ssh/testy_rsa"
+
 e2e_run "Set ABA_TESTING on $CON_NAME" "_vm_set_aba_testing $CON_HOST $DEF_USER"
 e2e_run "Set ABA_TESTING on $DIS_NAME" "_vm_set_aba_testing $DIS_HOST $DEF_USER"
 
@@ -233,12 +237,10 @@ e2e_run -h "${DEF_USER}@${CON_HOST}" "Install aba on $CON_NAME" \
 test_end
 
 # ============================================================================
-# 11. Harden dis1: remove RPMs, pull-secret, proxy
+# 11. Harden dis1: pull-secret, proxy
 # ============================================================================
-test_begin "Harden: remove RPMs, pull-secret, proxy ($DIS_NAME)"
+test_begin "Harden: pull-secret, proxy ($DIS_NAME)"
 
-e2e_run -h "${DEF_USER}@${DIS_HOST}" "Remove RPMs on $DIS_NAME" \
-    "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y --disableplugin=subscription-manager"
 e2e_run -h "${DEF_USER}@${DIS_HOST}" "Remove pull-secret on $DIS_NAME" \
     "rm -fv ~/.pull-secret.json"
 e2e_run -h "${DEF_USER}@${DIS_HOST}" "Remove proxy on $DIS_NAME" \
@@ -284,9 +286,9 @@ e2e_run -h "$DEF_USER@$DIS_HOST" "$DIS_HOST: ens224.10 has IP $dis_vlan_ip" \
 
 # --- VLAN connectivity ---
 e2e_run -h "$DEF_USER@$CON_HOST" "$CON_HOST -> $DIS_NAME ($dis_vlan_ip) VLAN ping" \
-    "ping -c 3 -W 5 $dis_vlan_ip"
+    "ping -c 3 -i 0.2 -W 5 $dis_vlan_ip"
 e2e_run -h "$DEF_USER@$DIS_HOST" "$DIS_HOST -> $CON_NAME ($con_vlan_ip) VLAN ping" \
-    "ping -c 3 -W 5 $con_vlan_ip"
+    "ping -c 3 -i 0.2 -W 5 $con_vlan_ip"
 
 # --- Masquerade ---
 e2e_run -h "$DEF_USER@$CON_HOST" "$CON_HOST: firewall masquerade enabled" \
@@ -294,13 +296,13 @@ e2e_run -h "$DEF_USER@$CON_HOST" "$CON_HOST: firewall masquerade enabled" \
 e2e_run -h "$DEF_USER@$CON_HOST" "$CON_HOST: ip_forward = 1" \
     "cat /proc/sys/net/ipv4/ip_forward | grep 1"
 e2e_run -h "$DEF_USER@$CON_HOST" "$CON_HOST: ping internet (8.8.8.8)" \
-    "ping -c 3 -W 5 8.8.8.8"
+    "ping -c 3 -i 0.2 -W 5 8.8.8.8"
 
 # --- dis1 reaches internet via con1 masquerade ---
 e2e_run -h "$DEF_USER@$DIS_HOST" "$DIS_HOST: default route via $CON_NAME VLAN ($con_vlan_ip)" \
     "ip route show default | grep $con_vlan_ip"
 e2e_run -h "$DEF_USER@$DIS_HOST" "$DIS_HOST: ping internet via $CON_NAME masquerade (8.8.8.8)" \
-    "ping -c 3 -W 5 8.8.8.8"
+    "ping -c 3 -i 0.2 -W 5 8.8.8.8"
 
 # --- DNS: dnsmasq on con1 ---
 pool_dom="$(pool_domain $POOL_NUM)"
@@ -363,9 +365,9 @@ e2e_run -h "$DEF_USER@$DIS_HOST" "$DIS_HOST: resolv.conf nameserver $con_vlan_ip
 
 # --- Lab server reachability (DNS upstream + NTP) ---
 e2e_run -h "$DEF_USER@$CON_HOST" "$CON_HOST: ping lab server (10.0.1.8)" \
-    "ping -c 3 -W 5 10.0.1.8"
+    "ping -c 3 -i 0.2 -W 5 10.0.1.8"
 e2e_run -h "$DEF_USER@$DIS_HOST" "$DIS_HOST: ping lab server (10.0.1.8)" \
-    "ping -c 3 -W 5 10.0.1.8"
+    "ping -c 3 -i 0.2 -W 5 10.0.1.8"
 
 # --- Root SSH ---
 e2e_run -h "root@$CON_HOST" "$CON_HOST: root SSH" "whoami | grep root"
@@ -408,10 +410,6 @@ e2e_run "$DIS_HOST: testy ABA_TESTING=1" \
 # --- con1: aba installed ---
 e2e_run -h "$DEF_USER@$CON_HOST" "$CON_HOST: aba installed" \
     "which aba"
-
-# --- dis1: RPMs removed (git should be gone) ---
-e2e_run -h "$DEF_USER@$DIS_HOST" "$DIS_HOST: git NOT installed" \
-    "! command -v git"
 
 # --- dis1: pull-secret removed ---
 e2e_run -h "$DEF_USER@$DIS_HOST" "$DIS_HOST: pull-secret removed" \

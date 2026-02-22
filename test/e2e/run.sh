@@ -221,11 +221,10 @@ all_suites() {
         done
     fi
 
-    # Sort: longest suites first for optimal parallel scheduling
-    # Order: airgapped-local-reg, airgapped-existing-reg, mirror-sync, cluster-ops,
-    #        connected-public, network-advanced, create-bundle-to-disk
+    # clone-and-check must run first (creates VMs); then longest suites for optimal parallel scheduling
     local ordered=()
-    for s in airgapped-local-reg airgapped-existing-reg mirror-sync \
+    for s in clone-and-check \
+             airgapped-local-reg airgapped-existing-reg mirror-sync \
              cluster-ops connected-public network-advanced create-bundle-to-disk; do
         for found in "${suites[@]}"; do
             [ "$found" = "$s" ] && ordered+=("$found")
@@ -279,11 +278,13 @@ run_suite_local() {
     # --- Guard: coordinator-only suite? Run locally. -----------------------
     # Suites like clone-and-check create VMs and need govc on the coordinator.
     if grep -q '^E2E_COORDINATOR_ONLY=true' "$suite_file" 2>/dev/null; then
-        echo ""
-        echo "========================================"
-        echo "  Running suite: $suite_name (coordinator-only, running locally)"
-        echo "========================================"
-        echo ""
+        if [ -z "${E2E_SUPPRESS_COORDINATOR_BANNER:-}" ]; then
+            echo ""
+            echo "========================================"
+            echo "  Running suite: $suite_name (coordinator-only, running locally)"
+            echo "========================================"
+            echo ""
+        fi
 
         # Load pool-specific overrides from pools.conf so VC_FOLDER etc. are correct.
         # These must be exported BEFORE the suite runs, because config.env uses
@@ -306,16 +307,16 @@ run_suite_local() {
             done < "$CLI_POOLS_FILE"
         fi
 
+        # State file: use caller-set E2E_STATE_FILE (e.g. per-pool) or default
+        local _state_file="${E2E_STATE_FILE:-${E2E_LOG_DIR}/${suite_name}.state}"
         if [ -n "$CLI_RESUME" ]; then
-            local state_file="${E2E_LOG_DIR}/${suite_name}.state"
-            if [ -f "$state_file" ]; then
-                export E2E_RESUME_FILE="$state_file"
-                echo "  Resuming from checkpoint: $state_file"
+            if [ -f "$_state_file" ]; then
+                export E2E_RESUME_FILE="$_state_file"
+                echo "  Resuming from checkpoint: $_state_file"
             fi
         fi
-
         if [ -n "$CLI_CLEAN" ]; then
-            rm -f "${E2E_LOG_DIR}/${suite_name}.state"
+            rm -f "$_state_file"
             echo "  Cleaned checkpoint state for $suite_name"
         fi
 
@@ -331,18 +332,15 @@ run_suite_local() {
         echo "========================================"
         echo ""
 
-        # Handle resume
+        local _state_file="${E2E_STATE_FILE:-${E2E_LOG_DIR}/${suite_name}.state}"
         if [ -n "$CLI_RESUME" ]; then
-            local state_file="${E2E_LOG_DIR}/${suite_name}.state"
-            if [ -f "$state_file" ]; then
-                export E2E_RESUME_FILE="$state_file"
-                echo "  Resuming from checkpoint: $state_file"
+            if [ -f "$_state_file" ]; then
+                export E2E_RESUME_FILE="$_state_file"
+                echo "  Resuming from checkpoint: $_state_file"
             fi
         fi
-
-        # Handle clean
         if [ -n "$CLI_CLEAN" ]; then
-            rm -f "${E2E_LOG_DIR}/${suite_name}.state"
+            rm -f "$_state_file"
             echo "  Cleaned checkpoint state for $suite_name"
         fi
 
@@ -376,19 +374,21 @@ run_suite_local() {
             echo ""
         fi
 
-        echo "  Syncing aba tree to $con_host ..."
-        rsync -az --delete \
-            --exclude='mirror/save/' \
-            --exclude='mirror/.oc-mirror/' \
-            --exclude='mirror/*.tar' \
-            --exclude='mirror/*.tar.gz' \
-            --exclude='mirror/mirror-registry' \
-            --exclude='cli/*.tar.gz' \
+        echo "  Syncing aba tree to $con_host (scripts only, max 3MB per file) ..."
+        rsync -avz --max-size=3m \
+            --exclude='mirror/' \
+            --exclude='cli/' \
+            --exclude='images/' \
+            --exclude='demo1/' \
             --exclude='.git/' \
             --exclude='sno/' \
             --exclude='sno2/' \
             --exclude='compact/' \
             --exclude='standard/' \
+            --exclude='*.tar' \
+            --exclude='*.tar.gz' \
+            --exclude='*.tgz' \
+            --exclude='*.iso' \
             "$_ABA_ROOT/" "$ssh_target:~/aba/"
 
         local _notify_src
@@ -457,14 +457,19 @@ run_suite_local() {
         "$ssh_target" \
         "tmux attach-session -t $tmux_name 2>/dev/null || echo 'Session already ended.'"
 
-    # Session ended or user detached -- check result
-    if ssh $_ssh_opts "$ssh_target" "tmux has-session -t $tmux_name 2>/dev/null"; then
+    # Session ended or user detached -- wait for suite to finish either way.
+    # Without this, the sequential loop would start the next suite while this one
+    # is still running (multiple suites on the same host, stepping on each other).
+    while ssh $_ssh_opts "$ssh_target" "tmux has-session -t $tmux_name 2>/dev/null"; do
         echo ""
-        echo "  Suite still running in tmux (you detached)."
-        echo "  Re-run the same command to re-attach, or:"
-        echo "    ssh $ssh_target -t 'tmux attach -t $tmux_name'"
-        return 0
-    fi
+        echo "  Suite still running in tmux '$tmux_name' (SSH dropped or detached)."
+        echo "  Waiting for it to finish ... (re-attach: ssh $ssh_target -t 'tmux attach -t $tmux_name')"
+        # Poll every 30s until the tmux session exits
+        while ssh $_ssh_opts "$ssh_target" "tmux has-session -t $tmux_name 2>/dev/null"; do
+            sleep 30
+        done
+        echo "  Session '$tmux_name' finished."
+    done
 
     # Retrieve exit code
     local rc
@@ -531,6 +536,8 @@ main() {
         fi
         local _cp_flags=(--pools-file "$CLI_POOLS_FILE")
         [ -n "$CLI_REBUILD_GOLDEN" ] && _cp_flags+=(--rebuild-golden)
+        # Always skip Phase 1/2 when creating pools so clone-and-check is the only cloner (one clone per VM, no double-clone).
+        [ -n "$CLI_CREATE_POOLS" ] && _cp_flags+=(--skip-phase2)
         create_pools "$CLI_CREATE_POOLS" "${_cp_flags[@]}" || { echo "ERROR: create_pools failed" >&2; exit 1; }
     fi
 
@@ -539,6 +546,15 @@ main() {
 
     if [ -n "$CLI_ALL" ]; then
         read -ra suites_to_run <<< "$(all_suites)"
+        # Skip clone-and-check when --create-pools is not used (VMs already exist with pool-ready)
+        if [ -z "$CLI_CREATE_POOLS" ]; then
+            local filtered=()
+            for s in "${suites_to_run[@]}"; do
+                [ "$s" = "clone-and-check" ] && echo "  Skipping clone-and-check (no --create-pools; VMs assumed ready)" && continue
+                filtered+=("$s")
+            done
+            suites_to_run=("${filtered[@]}")
+        fi
     elif [ -n "$CLI_SUITE" ]; then
         # Handle comma-separated suite list
         IFS=',' read -ra suites_to_run <<< "$CLI_SUITE"
@@ -598,7 +614,39 @@ main() {
         if [ ${#coordinator_suites[@]} -gt 0 ]; then
             echo "Running coordinator-only suites locally: ${coordinator_suites[*]}"
             for s in "${coordinator_suites[@]}"; do
-                run_suite_local "$s" || overall_rc=1
+                if [ "$s" = "clone-and-check" ] && [ ${#pool_suites[@]} -gt 0 ]; then
+                    # clone-and-check runs once per pool so each pool's conN/disN get pool-ready snapshot
+                    load_pools "$CLI_POOLS_FILE" || { echo "ERROR: load_pools failed" >&2; exit 1; }
+                    local _max_pools="${CLI_CREATE_POOLS:-${#_POOL_NAMES[@]}}"
+                    [ "$_max_pools" -gt "${#_POOL_NAMES[@]}" ] && _max_pools="${#_POOL_NAMES[@]}"
+                    echo "  (clone-and-check will run ${_max_pools} time(s), once per pool)"
+                    echo ""
+                    local i
+                    for i in "${!_POOL_NAMES[@]}"; do
+                        [ "$i" -ge "$_max_pools" ] && break
+                        local overrides="${_POOL_OVERRIDES[$i]:-}"
+                        local pool_num=""
+                        local ov
+                        for ov in $overrides; do
+                            case "$ov" in POOL_NUM=*) pool_num="${ov#POOL_NUM=}" ;; esac
+                        done
+                        [ -z "$pool_num" ] && continue
+                        echo ""
+                        echo "  --- clone-and-check for ${_POOL_NAMES[$i]} (POOL_NUM=$pool_num) ---"
+                        for ov in $overrides; do
+                            case "$ov" in ?*=*) export "$ov" ;; esac
+                        done
+                        # Per-pool state file: clone-and-check.pool1.state, .pool2.state, etc.
+                        export E2E_STATE_FILE="${E2E_LOG_DIR}/${s}.pool${pool_num}.state"
+                        [ -n "$CLI_RESUME" ] && export E2E_RESUME_FILE="$E2E_STATE_FILE"
+                        export E2E_SUPPRESS_COORDINATOR_BANNER=1
+                        run_suite_local "$s" || overall_rc=1
+                        unset E2E_SUPPRESS_COORDINATOR_BANNER 2>/dev/null || true
+                        unset E2E_STATE_FILE E2E_RESUME_FILE 2>/dev/null || true
+                    done
+                else
+                    run_suite_local "$s" || overall_rc=1
+                fi
             done
             echo ""
         fi
@@ -616,13 +664,67 @@ main() {
 
     for suite in "${suites_to_run[@]}"; do
         local rc=0
-        run_suite_local "$suite" || rc=$?
+        if [ "$suite" = "clone-and-check" ] && [ -f "${CLI_POOLS_FILE:-}" ]; then
+            # Run clone-and-check once per pool (same as parallel path) so all pools get VMs and pool-ready
+            source "$_RUN_DIR/lib/parallel.sh"
+            if ! load_pools "$CLI_POOLS_FILE"; then
+                echo "ERROR: load_pools failed" >&2
+                rc=1
+                overall_rc=1
+            else
+            local _max_pools="${CLI_CREATE_POOLS:-${#_POOL_NAMES[@]}}"
+            [ "$_max_pools" -gt "${#_POOL_NAMES[@]}" ] && _max_pools="${#_POOL_NAMES[@]}"
+            echo "  (clone-and-check will run ${_max_pools} time(s), once per pool)"
+            local i
+            for i in "${!_POOL_NAMES[@]}"; do
+                [ "$i" -ge "$_max_pools" ] && break
+                local overrides="${_POOL_OVERRIDES[$i]:-}"
+                local pool_num=""
+                local ov
+                for ov in $overrides; do
+                    case "$ov" in POOL_NUM=*) pool_num="${ov#POOL_NUM=}" ;; esac
+                done
+                [ -z "$pool_num" ] && continue
+                echo ""
+                echo "  --- clone-and-check for ${_POOL_NAMES[$i]} (POOL_NUM=$pool_num) ---"
+                for ov in $overrides; do
+                    case "$ov" in ?*=*) export "$ov" ;; esac
+                done
+                export E2E_STATE_FILE="${E2E_LOG_DIR:-$_RUN_DIR/logs}/${suite}.pool${pool_num}.state"
+                [ -n "$CLI_RESUME" ] && export E2E_RESUME_FILE="$E2E_STATE_FILE"
+                run_suite_local "$suite" || rc=$?
+                unset E2E_STATE_FILE E2E_RESUME_FILE 2>/dev/null || true
+                if [ $rc -ne 0 ]; then
+                    echo "$(_e2e_red "Suite FAILED: $suite pool $pool_num (exit=$rc)")"
+                    overall_rc=1
+                    break
+                fi
+            done
+            fi
+        else
+            run_suite_local "$suite" || rc=$?
+        fi
         if [ $rc -ne 0 ]; then
             echo ""
-            echo "$(_e2e_red "Suite FAILED: $suite (exit=$rc)")"
+            [ "$suite" != "clone-and-check" ] && echo "$(_e2e_red "Suite FAILED: $suite (exit=$rc)")"
             overall_rc=1
-            # In non-CI mode, stop on first failure
-            if [ -z "$CLI_CI" ] && [ -z "$CLI_ALL" ]; then
+            if [ -n "${_E2E_INTERACTIVE:-}" ]; then
+                echo ""
+                echo "Suite '$suite' failed (exit=$rc). What now?"
+                echo "  c = continue to next suite"
+                echo "  r = retry this suite"
+                echo "  a = abort (stop all)"
+                local _choice=""
+                while true; do
+                    read -r -p "  [c/r/a] > " _choice
+                    case "$_choice" in
+                        c) echo "  Continuing ..."; break ;;
+                        r) echo "  Retrying $suite ..."; rc=0; continue 2 ;;
+                        a) echo "  Aborting."; break 2 ;;
+                        *) echo "  Invalid choice. Enter c, r, or a." ;;
+                    esac
+                done
+            elif [ -z "$CLI_CI" ]; then
                 break
             fi
         fi

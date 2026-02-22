@@ -75,8 +75,8 @@ the golden snapshot. This takes ~15 seconds per clone instead of minutes.
 
 **Phase 2 -- Per-pool config**: Only lightweight, pool-specific steps run on
 each clone: network setup (`_vm_setup_network`), `dnsmasq`, `vmware.conf`,
-and ABA installation. `disN` bastions additionally have RPMs removed, proxy
-stripped, and internet disconnected.
+and ABA installation. `disN` bastions additionally have proxy stripped and
+internet disconnected.
 
 ### Staleness and refresh
 

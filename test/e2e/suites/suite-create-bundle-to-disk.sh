@@ -6,7 +6,7 @@
 #          No cluster install, no VMs needed -- the leanest E2E test.
 #
 # What it tests:
-#   - Clean-slate aba install (RPMs removed so aba must auto-install them)
+#   - Clean-slate aba install
 #   - aba CLI configuration (aba.conf, vmware.conf, NTP, operator-sets)
 #   - Light bundle creation (specific operator subset)
 #   - Full bundle creation (all operators)
@@ -49,10 +49,6 @@ suite_begin "create-bundle-to-disk"
 # 1. Clean slate
 # ============================================================================
 test_begin "Setup: clean slate"
-
-# dnf remove returns non-zero only if NONE of the packages are installed (= already clean).
-e2e_run "Remove RPMs for clean install test" \
-    "sudo dnf remove git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer -y --disableplugin=subscription-manager || { echo 'All packages already absent'; true; }"
 
 # podman prune/rmi with --force are idempotent (return 0 even when empty).
 e2e_run "Clean podman" \

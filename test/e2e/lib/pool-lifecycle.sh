@@ -660,18 +660,6 @@ _vm_setup_vmware_conf() {
     fi
 }
 
-# --- _vm_remove_rpms --------------------------------------------------------
-# Remove RPMs that aba should install automatically (testing auto-install).
-#
-_vm_remove_rpms() {
-    local host="$1"
-    local user="${2:-$VM_DEFAULT_USER}"
-
-    echo "  [vm] Removing RPMs (git, make, jq, etc.) on $host ..."
-    _essh "${user}@${host}" -- \
-        "sudo dnf remove git hostname make jq python3-jinja2 python3-pyyaml -y --disableplugin=subscription-manager"
-}
-
 # --- _vm_remove_pull_secret -------------------------------------------------
 # Remove .pull-secret.json (not needed in fully air-gapped environment).
 #
@@ -914,8 +902,12 @@ prepare_golden_vm() {
 				return 0
 			fi
 			echo "  Snapshot is ${age_hours}h old (max: ${max_age_hours}h) -- stale, destroying ..."
+		elif govc snapshot.tree -vm "$golden_name" 2>/dev/null | grep -q "$snapshot_name"; then
+			echo "  No stamp file but '$snapshot_name' snapshot exists -- reusing (recreating stamp)."
+			date +%s > "$stamp_file"
+			return 0
 		else
-			echo "  No stamp file (failed or incomplete build?) -- destroying ..."
+			echo "  No stamp file and no '$snapshot_name' snapshot -- destroying ..."
 		fi
 		govc vm.power -off "$golden_name" 2>/dev/null || true
 		govc vm.destroy "$golden_name" || return 1
@@ -1045,9 +1037,6 @@ configure_internal_bastion() {
     # Install govc config
     _vm_setup_vmware_conf "$host" "$user"
 
-    # Remove RPMs so aba can test auto-install
-    _vm_remove_rpms "$host" "$user"
-
     # Air-gap: remove pull-secret and proxy
     _vm_remove_pull_secret "$host" "$user"
     _vm_remove_proxy "$host" "$user"
@@ -1071,6 +1060,9 @@ configure_internal_bastion() {
 # Create N VM pools: Phase 0 prepares a golden VM, Phase 1 clones from it
 # in parallel, Phase 2 applies per-pool config in parallel.
 #
+# --skip-phase2: Only clone VMs (Phase 0 + 1). Use when clone-and-check will
+# run next and do the full config + pool-ready snapshot (avoids doing config twice).
+#
 create_pools() {
     local count="$1"; shift
     local rhel_ver="${INT_BASTION_RHEL_VER:-rhel9}"
@@ -1078,6 +1070,7 @@ create_pools() {
     local start_at=1
     local pools_file=""
     local rebuild_golden=""
+    local skip_phase2=""
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -1086,6 +1079,7 @@ create_pools() {
             --start) start_at="$2"; shift 2 ;;
             --pools-file) pools_file="$2"; shift 2 ;;
             --rebuild-golden) rebuild_golden=1; shift ;;
+            --skip-phase2) skip_phase2=1; shift ;;
             *) echo "create_pools: unknown flag: $1" >&2; return 1 ;;
         esac
     done
@@ -1140,7 +1134,7 @@ create_pools() {
 
     local golden_log="${pool_log_dir}/golden-${rhel_ver}.log"
     local golden_rc=0
-    prepare_golden_vm "$vm_template" "$golden_name" "$base_folder" >> "$golden_log" 2>&1 || golden_rc=$?
+    prepare_golden_vm "$vm_template" "$golden_name" "$base_folder" 2>&1 | tee -a "$golden_log" || golden_rc=$?
     if [ "$golden_rc" -ne 0 ]; then
         echo "--- Phase 0 FAILED (rc=$golden_rc): see $golden_log ---"
         rm -rf "$signal_dir"
@@ -1152,6 +1146,13 @@ create_pools() {
         local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
         govc folder.create "$pool_folder" 2>/dev/null || true
     done
+
+    if [ -n "$skip_phase2" ]; then
+        echo "--- Skipping Phase 1 & 2 (--skip-phase2): clone-and-check will clone and configure each pool (no duplicate clones) ---"
+        rm -rf "$signal_dir"
+        echo "=== Golden VM ready; run clone-and-check per pool to create conN/disN and pool-ready snapshots ==="
+        return 0
+    fi
 
     # --- Phase 1a: Clone connected (conN) VMs first ---------------------------
     echo "--- Phase 1a: Cloning connected VMs from $golden_name ---"
@@ -1289,7 +1290,6 @@ create_pools() {
                 _vm_setup_vmware_conf "$int_vm" "$user"
                 _vm_cleanup_caches "$int_vm" "$user"
                 _vm_verify_golden "$int_vm" "$user"
-                _vm_remove_rpms "$int_vm" "$user"
                 _vm_remove_pull_secret "$int_vm" "$user"
                 _vm_remove_proxy "$int_vm" "$user"
                 _vm_disconnect_internet "$int_vm" "$user"

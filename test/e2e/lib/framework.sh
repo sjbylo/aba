@@ -298,8 +298,9 @@ suite_begin() {
     ln -sf "$(basename "$E2E_LOG_FILE")" "${E2E_LOG_DIR}/latest.log"
     ln -sf "$(basename "$E2E_SUMMARY_FILE")" "${E2E_LOG_DIR}/summary.log"
 
-    # Initialize state file for checkpointing
-    E2E_STATE_FILE="${E2E_LOG_DIR}/${suite_name}.state"
+    # State file for checkpoint/resume. Caller may set E2E_STATE_FILE for a per-run path
+    # (e.g. clone-and-check.pool2.state) so multiple runs don't share one file.
+    E2E_STATE_FILE="${E2E_STATE_FILE:-${E2E_LOG_DIR}/${suite_name}.state}"
 
     # Bug 2 fix: if resuming and the resume file IS our state file, copy it
     # to a .resume backup so truncating the state file doesn't destroy it
