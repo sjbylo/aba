@@ -93,7 +93,7 @@ e2e_run "Set operator sets" \
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set mirror host" \
-    "sed -i 's/registry.example.com/${DIS_HOST} /g' ./mirror/mirror.conf"
+    "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
 
 test_end
 
@@ -193,7 +193,7 @@ e2e_run_remote "Create and install SNO" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Verify cluster operators" \
     "cd ~/aba && aba --dir $SNO run"
-e2e_run_remote -r 30 10 "Wait for all operators fully available" \
+e2e_poll_remote 600 30 "Wait for all operators fully available" \
     "cd ~/aba && aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"

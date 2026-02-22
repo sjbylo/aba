@@ -501,9 +501,15 @@ server=${upstream}
 # --- Registry: registry.pN.example.com -> disN lab IP ---
 address=/registry.${domain}/${dis_lab_ip}
 
-# --- SNO: api + apps -> node IP ---
+# --- SNO variants: api + apps -> node IP ---
 address=/api.$(pool_cluster_name sno ${pool_num}).${domain}/${node_ip}
 address=/.apps.$(pool_cluster_name sno ${pool_num}).${domain}/${node_ip}
+address=/api.$(pool_cluster_name sno-mirror ${pool_num}).${domain}/${node_ip}
+address=/.apps.$(pool_cluster_name sno-mirror ${pool_num}).${domain}/${node_ip}
+address=/api.$(pool_cluster_name sno-proxyonly ${pool_num}).${domain}/${node_ip}
+address=/.apps.$(pool_cluster_name sno-proxyonly ${pool_num}).${domain}/${node_ip}
+address=/api.$(pool_cluster_name sno-noproxy ${pool_num}).${domain}/${node_ip}
+address=/.apps.$(pool_cluster_name sno-noproxy ${pool_num}).${domain}/${node_ip}
 
 # --- Compact: api -> API VIP, apps -> APPS VIP ---
 address=/api.$(pool_cluster_name compact ${pool_num}).${domain}/${api_vip}
@@ -532,6 +538,11 @@ DNSEOF
 		# Install dnsmasq and dig (bind-utils)
 		dnf install -y dnsmasq bind-utils
 
+		# Remove any listen-address restriction from the default config
+		# so dnsmasq listens on ALL interfaces (lab, VLAN, loopback).
+		# RHEL 9 default or prior installs may have listen-address=127.0.0.1.
+		sed -i '/^listen-address/d' /etc/dnsmasq.conf
+
 		# Write config
 		cat > /etc/dnsmasq.d/e2e-pool.conf << 'CONFEOF'
 ${dnsmasq_conf}
@@ -559,6 +570,7 @@ nameserver 127.0.0.1
 RESOLVEOF
 
 		systemctl enable --now dnsmasq
+		systemctl restart dnsmasq
 
 		# Open DNS port in firewall
 		firewall-cmd --permanent --add-service=dns
@@ -604,7 +616,7 @@ _vm_cleanup_caches() {
 		rm -rfv ~/*/.oc-mirror/.cache
 		# Ensure test VMs are located together and on the pool's datastore
 		if [ -s ~/.vmware.conf ]; then
-		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g" ~/.vmware.conf
+		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g" ~/.vmware.conf
 		    [ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
 		fi
 	CACHEEOF
@@ -851,7 +863,7 @@ _vm_verify_golden() {
 		firewall-cmd --query-masquerade
 		[ "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ]
 		systemctl is-active chronyd
-		ping -c 3 -W 5 10.0.1.8
+		ping -c 3 -W 5 -i0.2 10.0.1.8
 		dnf check-update > /dev/null 2>&1 || { rc=$?; [ "$rc" -eq 100 ] && exit 1; exit "$rc"; }
 		! podman images -q 2>/dev/null | grep -q . || { echo "ERROR: podman images remain"; exit 1; }
 		[ -z "$(ls ~$SUDO_USER 2>/dev/null)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
@@ -877,7 +889,7 @@ prepare_golden_vm() {
 
 	local vm_template="$1"
 	local golden_name="$2"
-	local folder="${3:-${VC_FOLDER:-/Datacenter/vm/abatesting}}"
+	local folder="${3:-${VC_FOLDER:-/Datacenter/vm/aba-e2e}}"
 	local user="${4:-$VM_DEFAULT_USER}"
 	local snapshot_name="golden-ready"
 	local max_age_hours="${GOLDEN_MAX_AGE_HOURS:-24}"
@@ -1090,7 +1102,7 @@ create_pools() {
     local signal_dir
     signal_dir=$(mktemp -d /tmp/e2e-pool-signals.XXXXXX)
 
-    local base_folder="${VC_FOLDER:-/Datacenter/vm/abatesting}"
+    local base_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}"
 
     # --- Parse per-pool overrides from pools.conf ---------------------------
     local -A _pool_datastores=()

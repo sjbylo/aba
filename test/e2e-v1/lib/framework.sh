@@ -680,6 +680,29 @@ e2e_run_remote() {
     e2e_run -h "$INTERNAL_BASTION" "$@"
 }
 
+# --- e2e_poll ---------------------------------------------------------------
+#
+# Time-bounded polling: repeat a condition command every INTERVAL seconds
+# until it succeeds or TIMEOUT seconds have elapsed (wall-clock).
+#
+# Usage: e2e_poll TIMEOUT INTERVAL "description" "condition_cmd"
+#
+# Unlike e2e_run retries (count-based), this is wall-clock bounded:
+# the total time includes both sleep intervals AND command execution time.
+#
+e2e_poll() {
+    local timeout="$1" interval="$2"; shift 2
+    e2e_run "$1 (max $((timeout/60))m)" \
+        "end=\$((SECONDS + $timeout)); while [ \$SECONDS -lt \$end ]; do ( $2 ) && exit 0; sleep $interval; done; exit 1"
+}
+
+# Shorthand: e2e_poll on $INTERNAL_BASTION
+e2e_poll_remote() {
+    local timeout="$1" interval="$2"; shift 2
+    e2e_run_remote "$1 (max $((timeout/60))m)" \
+        "end=\$((SECONDS + $timeout)); while [ \$SECONDS -lt \$end ]; do ( $2 ) && exit 0; sleep $interval; done; exit 1"
+}
+
 # --- e2e_diag ---------------------------------------------------------------
 #
 # Run a DIAGNOSTIC command whose exit code does NOT affect the test outcome.

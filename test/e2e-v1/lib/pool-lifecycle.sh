@@ -501,9 +501,15 @@ server=${upstream}
 # --- Registry: registry.pN.example.com -> disN lab IP ---
 address=/registry.${domain}/${dis_lab_ip}
 
-# --- SNO: api + apps -> node IP ---
+# --- SNO variants: api + apps -> node IP ---
 address=/api.$(pool_cluster_name sno ${pool_num}).${domain}/${node_ip}
 address=/.apps.$(pool_cluster_name sno ${pool_num}).${domain}/${node_ip}
+address=/api.$(pool_cluster_name sno-mirror ${pool_num}).${domain}/${node_ip}
+address=/.apps.$(pool_cluster_name sno-mirror ${pool_num}).${domain}/${node_ip}
+address=/api.$(pool_cluster_name sno-proxyonly ${pool_num}).${domain}/${node_ip}
+address=/.apps.$(pool_cluster_name sno-proxyonly ${pool_num}).${domain}/${node_ip}
+address=/api.$(pool_cluster_name sno-noproxy ${pool_num}).${domain}/${node_ip}
+address=/.apps.$(pool_cluster_name sno-noproxy ${pool_num}).${domain}/${node_ip}
 
 # --- Compact: api -> API VIP, apps -> APPS VIP ---
 address=/api.$(pool_cluster_name compact ${pool_num}).${domain}/${api_vip}
@@ -532,6 +538,11 @@ DNSEOF
 		# Install dnsmasq and dig (bind-utils)
 		dnf install -y dnsmasq bind-utils
 
+		# Remove any listen-address restriction from the default config
+		# so dnsmasq listens on ALL interfaces (lab, VLAN, loopback).
+		# RHEL 9 default or prior installs may have listen-address=127.0.0.1.
+		sed -i '/^listen-address/d' /etc/dnsmasq.conf
+
 		# Write config
 		cat > /etc/dnsmasq.d/e2e-pool.conf << 'CONFEOF'
 ${dnsmasq_conf}
@@ -559,6 +570,7 @@ nameserver 127.0.0.1
 RESOLVEOF
 
 		systemctl enable --now dnsmasq
+		systemctl restart dnsmasq
 
 		# Open DNS port in firewall
 		firewall-cmd --permanent --add-service=dns

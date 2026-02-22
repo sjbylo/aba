@@ -72,7 +72,7 @@ e2e_run "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
+    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets" \
@@ -87,7 +87,7 @@ e2e_run "Re-apply config after reset" \
 e2e_run "Re-set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
+    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets (re-apply)" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
@@ -112,11 +112,11 @@ e2e_run -r 2 2 "Download mirror-registry tarball" \
     "aba --dir test mirror-registry-amd64.tar.gz"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-e2e_run "Set mirror host" \
-    "sed -i 's/registry.example.com/${DIS_HOST} /g' ./mirror/mirror.conf"
+e2e_run "Set mirror hostname in mirror.conf" \
+    "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
 
-e2e_run "Install test registry on bastion" \
+e2e_run "Install test registry on internal bastion" \
     "test/reg-test-install-remote.sh ${DIS_HOST}"
 
 test_end
@@ -154,7 +154,7 @@ test_end
 # ============================================================================
 test_begin "Tar-pipe transfer to bastion"
 
-e2e_run -r 3 2 "Pipe tar to bastion" \
+e2e_run -r 3 2 "Pipe tar to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xvf -'"
 
 test_end
@@ -211,9 +211,9 @@ test_begin "SNO: install cluster"
 
 e2e_run_remote "Create SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
-e2e_run_remote "Verify cluster operators" \
+e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
-e2e_run_remote -r 30 10 "Wait for all operators fully available" \
+e2e_poll_remote 600 30 "Wait for all operators fully available" \
     "cd ~/aba && aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
@@ -238,7 +238,7 @@ test_begin "ACM: install operators"
 # Add ACM operator to imageset and sync
 e2e_run "Set op_sets=acm" "aba --op-sets acm"
 e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
-e2e_run -r 3 2 "Pipe ACM tar to bastion" \
+e2e_run -r 3 2 "Pipe ACM tar to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xvf -'"
 e2e_run_remote -r 3 2 "Load ACM images" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -288,7 +288,7 @@ test_end
 # ============================================================================
 test_begin "Cleanup: uninstall registry on disN"
 
-e2e_run "Uninstall registry from conN" \
+e2e_run "Uninstall registry on internal bastion" \
     "aba -d mirror uninstall"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/health/instance"

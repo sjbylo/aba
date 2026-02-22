@@ -53,12 +53,12 @@ e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 
 # Simulate manual edit: set dns_servers to the pool's dnsmasq host (conN)
-e2e_run "Set dns_servers via sed" \
+e2e_run "Set dns_servers manually" \
     "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
+    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 
@@ -78,7 +78,7 @@ unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY
 
 e2e_run "Verify proxy is unset" "test -z \"\${http_proxy:-}\" && echo 'proxy unset OK'"
 
-e2e_run "Clean sno dir" "rm -rfv $SNO"
+e2e_run "Clean sno cluster dir" "rm -rfv $SNO"
 e2e_run "Create SNO config with -I direct" \
     "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I direct --step cluster.conf"
 e2e_run "Generate agent config" "aba -d $SNO agentconf"
@@ -120,7 +120,7 @@ fi
 
 e2e_run "Verify proxy is set" "test -n \"\${http_proxy:-}\" && echo \"proxy set: \$http_proxy\""
 
-e2e_run "Clean sno dir" "rm -rfv $SNO"
+e2e_run "Clean sno cluster dir" "rm -rfv $SNO"
 e2e_run "Create SNO config with -I proxy" \
     "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 e2e_run "Generate agent config" "aba -d $SNO agentconf"
@@ -159,8 +159,8 @@ test_end
 # ============================================================================
 test_begin "Proxy mode: verify and shutdown"
 
-e2e_run "Verify cluster operators" "aba --dir $SNO run"
-e2e_run -r 30 10 "Wait for all operators fully available" \
+e2e_run "Show cluster operator status" "aba --dir $SNO run"
+e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Shutdown cluster" "yes | aba --dir $SNO shutdown --wait"
@@ -178,13 +178,21 @@ unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY
 
 SNO_MIRROR="$(pool_cluster_name sno-mirror)"
 
-e2e_run "Clean sno-mirror dir" "rm -rfv $SNO_MIRROR"
+e2e_run "Clean sno-mirror cluster dir" "rm -rfv $SNO_MIRROR"
 
 # Default int_connection (empty) = mirror mode.
 # Create mirror.conf pointing at the pool registry so aba generates mirror sources.
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-e2e_run "Set mirror host to pool registry" \
-    "sed -i \"s/registry.example.com/$(pool_registry_host)/g\" mirror/mirror.conf"
+e2e_run "Set mirror hostname in mirror.conf" \
+    "sed -i \"s/registry.$(pool_domain)/$(pool_registry_host)/g\" mirror/mirror.conf"
+
+# No real registry needed -- this test only verifies install-config.yaml generation.
+# Populate regcreds with minimal valid files so create-install-config.sh injects
+# imageDigestSources and additionalTrustBundle into the YAML.
+e2e_run "Create dummy pull secret for config verification" \
+    "echo '{\"auths\":{\"$(pool_registry_host):8443\":{\"auth\":\"dGVzdDp0ZXN0\"}}}' > mirror/regcreds/pull-secret-mirror.json"
+e2e_run "Create dummy CA cert for config verification" \
+    "openssl req -x509 -newkey rsa:2048 -keyout /dev/null -out mirror/regcreds/rootCA.pem -days 1 -nodes -subj '/CN=test' 2>/dev/null"
 
 e2e_run "Create SNO config (mirror mode, no proxy)" \
     "aba cluster -n $SNO_MIRROR -t sno -i $(pool_sno_ip) --step cluster.conf"
@@ -199,7 +207,7 @@ e2e_run "Verify no httpProxy in mirror+direct mode" \
 e2e_run "Verify additionalTrustBundle present for mirror CA" \
     "grep -q additionalTrustBundle $SNO_MIRROR/install-config.yaml"
 
-e2e_run "Clean up sno-mirror dir" "rm -rfv $SNO_MIRROR"
+e2e_run "Clean up sno-mirror cluster dir" "rm -rfv $SNO_MIRROR"
 
 test_end
 
@@ -229,7 +237,7 @@ e2e_run "Verify proxy curl works" \
 
 # Create a proxy-mode cluster config and verify it generates correctly
 SNO_PROXY_ONLY="$(pool_cluster_name sno-proxyonly)"
-e2e_run "Clean sno-proxyonly dir" "rm -rfv $SNO_PROXY_ONLY"
+e2e_run "Clean sno-proxyonly cluster dir" "rm -rfv $SNO_PROXY_ONLY"
 e2e_run "Create SNO config with -I proxy (proxy-only bastion)" \
     "aba cluster -n $SNO_PROXY_ONLY -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 
@@ -237,7 +245,7 @@ assert_file_exists "$SNO_PROXY_ONLY/cluster.conf"
 e2e_run "Verify int_connection=proxy in cluster.conf" \
     "grep -q 'int_connection=proxy' $SNO_PROXY_ONLY/cluster.conf"
 
-e2e_run "Clean up sno-proxyonly dir" "rm -rfv $SNO_PROXY_ONLY"
+e2e_run "Clean up sno-proxyonly cluster dir" "rm -rfv $SNO_PROXY_ONLY"
 
 # Restore direct internet
 e2e_run "Restore direct internet" \
@@ -268,7 +276,7 @@ e2e_run "Verify no_proxy includes 10.0.0.0/8 or broad local range" \
 # Verify aba's monitor/wait scripts append rendezvous IP to no_proxy.
 # Create a cluster dir and check agent-related scripts handle proxy correctly.
 SNO_NOPROXY="$(pool_cluster_name sno-noproxy)"
-e2e_run "Clean sno-noproxy dir" "rm -rfv $SNO_NOPROXY"
+e2e_run "Clean sno-noproxy cluster dir" "rm -rfv $SNO_NOPROXY"
 e2e_run "Create SNO config with -I proxy" \
     "aba cluster -n $SNO_NOPROXY -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 e2e_run "Generate agent config" "aba -d $SNO_NOPROXY agentconf"
@@ -279,11 +287,12 @@ e2e_run "Verify rendezvousIP is a valid IP" \
     "grep -qE '^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\$' $SNO_NOPROXY/iso-agent-based/rendezvousIP"
 
 # Verify install-config noProxy includes essential exclusions
-e2e_run "Verify install-config noProxy includes node subnet" \
+assert_file_exists "$SNO_NOPROXY/install-config.yaml"
+e2e_run "Verify install-config noProxy includes node subnet or domain" \
     "grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep -qE '10\\.' || \
      grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep -q example.com"
 
-e2e_run "Clean up sno-noproxy dir" "rm -rfv $SNO_NOPROXY"
+e2e_run "Clean up sno-noproxy cluster dir" "rm -rfv $SNO_NOPROXY"
 
 test_end
 

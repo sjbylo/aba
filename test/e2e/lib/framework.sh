@@ -466,7 +466,8 @@ _interactive_prompt() {
     while true; do
         echo ""
         _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
-        printf "%s" "$(_e2e_red "[r]etry [s]kip [S]kip-suite [a]bort [cmd]: ")"
+        printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [a]bort [!cmd]: ")"
+        read -t 0 -n 10000 </dev/tty 2>/dev/null || true
         read -r ans </dev/tty
 
         case "$ans" in
@@ -487,10 +488,11 @@ _interactive_prompt() {
                 echo "Aborting."
                 exit 1
                 ;;
-            *)
-                _e2e_log "User entered new command: $ans"
-                echo "Running: $ans"
-                ( eval "$ans" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
+            !*)
+                local user_cmd="${ans#!}"
+                _e2e_log "User entered command: $user_cmd"
+                echo "Running: $user_cmd"
+                ( eval "$user_cmd" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
                 local new_rc=${PIPESTATUS[0]}
                 if [ $new_rc -eq 0 ]; then
                     _e2e_log "User command succeeded"
@@ -499,6 +501,9 @@ _interactive_prompt() {
                     _e2e_log "User command failed (exit=$new_rc)"
                     echo "Command failed with exit code $new_rc"
                 fi
+                ;;
+            *)
+                echo "Unknown option '$ans'. Prefix with ! to run a command (e.g. !ls -la)"
                 ;;
         esac
     done
@@ -544,6 +549,7 @@ e2e_run() {
     local initial_delay=5
     local max_delay=60
     local host=""
+    local quiet=""
     local mark="L"
 
     while [[ "${1:-}" == -* ]]; do
@@ -552,6 +558,7 @@ e2e_run() {
             -d) initial_delay="$2"; shift 2 ;;
             -m) max_delay="$2"; shift 2 ;;
             -h) host="$2"; mark="R"; shift 2 ;;
+            -q) quiet=1; shift ;;
             *)  break ;;
         esac
     done
@@ -578,11 +585,20 @@ e2e_run() {
 
             if [ -n "$host" ]; then
                 _e2e_log "  Running on $host (attempt $attempt/$tot_cnt): $cmd"
-                ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
-                    2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+                if [ -n "$quiet" ]; then
+                    ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                        >> "$_lf" 2>&1 || ret=$?
+                else
+                    ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                        2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+                fi
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
-                ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+                if [ -n "$quiet" ]; then
+                    ( eval "$cmd" ) >> "$_lf" 2>&1 || ret=$?
+                else
+                    ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+                fi
             fi
 
             [ $ret -eq 130 ] && return 130
@@ -665,6 +681,29 @@ e2e_run_remote() {
         exit 1
     fi
     e2e_run -h "$INTERNAL_BASTION" "$@"
+}
+
+# --- e2e_poll ---------------------------------------------------------------
+#
+# Time-bounded polling: repeat a condition command every INTERVAL seconds
+# until it succeeds or TIMEOUT seconds have elapsed (wall-clock).
+#
+# Usage: e2e_poll TIMEOUT INTERVAL "description" "condition_cmd"
+#
+# Unlike e2e_run retries (count-based), this is wall-clock bounded:
+# the total time includes both sleep intervals AND command execution time.
+#
+e2e_poll() {
+    local timeout="$1" interval="$2"; shift 2
+    e2e_run "$1 (max $((timeout/60))m)" \
+        "end=\$((SECONDS + $timeout)); while [ \$SECONDS -lt \$end ]; do ( $2 ) && exit 0; sleep $interval; done; exit 1"
+}
+
+# Shorthand: e2e_poll on $INTERNAL_BASTION
+e2e_poll_remote() {
+    local timeout="$1" interval="$2"; shift 2
+    e2e_run_remote "$1 (max $((timeout/60))m)" \
+        "end=\$((SECONDS + $timeout)); while [ \$SECONDS -lt \$end ]; do ( $2 ) && exit 0; sleep $interval; done; exit 1"
 }
 
 # --- e2e_diag ---------------------------------------------------------------
