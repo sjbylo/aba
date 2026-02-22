@@ -451,13 +451,16 @@ should_skip_checkpoint() {
 # --- Interactive Prompt -----------------------------------------------------
 
 _interactive_prompt() {
+    # Called when a command has failed and all retries are exhausted.
+    # In interactive mode, prompt the user; otherwise, return 1 (fail).
     local cmd="$1"
     local ret="$2"
 
     if [ -z "$_E2E_INTERACTIVE" ]; then
-        return 1
+        return 1  # non-interactive: just fail
     fi
 
+    # Send notification about the failure
     (
         echo "Log tail:"
         tail -20 "${E2E_LOG_FILE:-/dev/null}" 2>/dev/null
@@ -465,22 +468,18 @@ _interactive_prompt() {
 
     while true; do
         echo ""
-        _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
-        printf "%s" "$(_e2e_red "[r]etry [s]kip [S]kip-suite [a]bort [cmd]: ")"
+        _e2e_log_and_print "COMMAND FAILED ($(_e2e_exit_info $ret)): $cmd"
+        printf "%s" "$(_e2e_red "[r] Retry  [s] Skip  [a] Abort  [or type a new command] > ")"
         read -r ans </dev/tty
 
         case "$ans" in
             r|R|"")
                 _e2e_log "User chose: retry"
-                return 2
+                return 2  # signal: retry
                 ;;
-            s)
-                _e2e_log "User chose: skip test"
-                return 0
-                ;;
-            S)
-                _e2e_log "User chose: skip entire suite"
-                return 3
+            s|S)
+                _e2e_log "User chose: skip"
+                return 0  # signal: skip (success)
                 ;;
             a|A)
                 _e2e_log "User chose: abort"
@@ -488,16 +487,18 @@ _interactive_prompt() {
                 exit 1
                 ;;
             *)
+                # User typed a replacement command -- run it
                 _e2e_log "User entered new command: $ans"
                 echo "Running: $ans"
-                ( eval "$ans" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
-                local new_rc=${PIPESTATUS[0]}
+                ( eval "$ans" ) >> "${E2E_LOG_FILE:-/dev/null}" 2>&1
+                local new_rc=$?
                 if [ $new_rc -eq 0 ]; then
                     _e2e_log "User command succeeded"
                     return 0
                 else
                     _e2e_log "User command failed (exit=$new_rc)"
                     echo "Command failed with exit code $new_rc"
+                    # loop again to re-prompt
                 fi
                 ;;
         esac
@@ -523,35 +524,36 @@ _e2e_exit_info() {
 
 # --- Core Execution: e2e_run -----------------------------------------------
 #
-# Usage: e2e_run [-r RETRIES BACKOFF] [-d INITIAL_DELAY] [-m MAX_DELAY]
-#                [-h HOST] "description" command...
+# Usage: e2e_run [-r RETRIES BACKOFF] [-h HOST] [-i] [-q] "description" command...
 #
-# All output is shown on screen AND logged (verbose by default, no -q flag).
+# By default, command output is shown on screen AND logged to the suite log
+# file (like the original test-cmd). Use -q to suppress screen output.
 #
 # Flags:
 #   -r RETRIES BACKOFF   Retry on failure (default: 5 retries, 1.5x backoff)
-#   -d INITIAL_DELAY     Initial delay before first retry in seconds (default: 5)
-#   -m MAX_DELAY         Maximum delay between retries in seconds (default: 60)
 #   -h HOST              Run command on remote HOST via SSH
+#   -q                   Quiet: log output to file only (don't show on screen)
 #   "description"        First non-flag argument = human-readable description
 #   command...           Remaining arguments = the command to run
 #
 e2e_run() {
-    [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+    # Bug 3 fix: skip commands inside a resumed test block
+    if [ -n "$_E2E_SKIP_BLOCK" ]; then
+        return 0
+    fi
 
     local tot_cnt=5
     local backoff=1.5
-    local initial_delay=5
-    local max_delay=60
     local host=""
+    local quiet=""
     local mark="L"
 
+    # Parse flags
     while [[ "${1:-}" == -* ]]; do
         case "$1" in
             -r) tot_cnt="$2"; backoff="$3"; shift 3 ;;
-            -d) initial_delay="$2"; shift 2 ;;
-            -m) max_delay="$2"; shift 2 ;;
             -h) host="$2"; mark="R"; shift 2 ;;
+            -q) quiet=1; shift ;;
             *)  break ;;
         esac
     done
@@ -559,6 +561,7 @@ e2e_run() {
     local description="$1"; shift
     local cmd="$*"
     local _lf="${E2E_LOG_FILE:-/dev/null}"
+
     local _display_host="${host:-$USER@$(hostname -s)}"
 
     _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
@@ -566,36 +569,45 @@ e2e_run() {
     _e2e_summary "  $mark $(_e2e_Green "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
     _e2e_summary "    $(_e2e_Cyan "$cmd")"
 
-    local _step_start
-    _step_start=$(date +%s)
-
+    # Outer loop: interactive retry wraps the automatic retry loop
     while true; do
-        local sleep_time="$initial_delay"
+        local sleep_time=5
         local attempt=1
 
+        # Inner loop: automatic retries with backoff
         while true; do
             local ret=0
 
             if [ -n "$host" ]; then
                 _e2e_log "  Running on $host (attempt $attempt/$tot_cnt): $cmd"
-                ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
-                    2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+                if [ -n "$quiet" ]; then
+                    ssh -t -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                        >> "$_lf" 2>&1 || ret=$?
+                else
+                    # Use PIPESTATUS to capture ssh exit code, not tee's
+                    ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                        2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+                fi
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
-                ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+                if [ -n "$quiet" ]; then
+                    ( eval "$cmd" ) >> "$_lf" 2>&1 || ret=$?
+                else
+                    # Use PIPESTATUS to capture command exit code, not tee's
+                    ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+                fi
             fi
 
+            # Ctrl-C during execution
             [ $ret -eq 130 ] && return 130
 
+            # Success
             if [ $ret -eq 0 ]; then
-                local _elapsed=$(( $(date +%s) - _step_start ))
                 if [ $attempt -gt 1 ]; then
-                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description (${_elapsed}s)"
+                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description"
                     _e2e_notify "Command recovered: $description ($(date))"
                 fi
-                _e2e_log_and_print "    $(_e2e_green "OK") (${_elapsed}s)"
-                _e2e_summary "    $(_e2e_Green "OK (${_elapsed}s)")"
-                _e2e_log "  OK (attempt $attempt, ${_elapsed}s)"
+                _e2e_log "  OK (attempt $attempt)"
                 return 0
             fi
 
@@ -604,12 +616,14 @@ e2e_run() {
             _e2e_log_and_print "    $(_e2e_yellow "Attempt ($attempt/$tot_cnt) failed ($_exi): $description")"
             _e2e_summary "    $(_e2e_Yellow "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description"
 
+            # Exhausted retries?
             if [ $attempt -ge $tot_cnt ]; then
                 _e2e_log "  All $tot_cnt attempts exhausted"
                 _e2e_summary "    $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
-                break
+                break  # fall through to interactive prompt
             fi
 
+            # Notify on first failure
             if [ $attempt -eq 1 ]; then
                 (
                     echo "Command: $cmd"
@@ -623,22 +637,22 @@ e2e_run() {
             echo "    Next attempt ($attempt/$tot_cnt) in ${sleep_time}s ..."
             sleep "$sleep_time"
             sleep_time=$(awk -v s="$sleep_time" -v b="$backoff" 'BEGIN {print int(s * b)}')
-            [ "$sleep_time" -gt "$max_delay" ] && sleep_time="$max_delay"
+            [ "$sleep_time" -gt 40 ] && sleep_time=40
         done
 
+        # All retries exhausted -- try interactive prompt
         _interactive_prompt "$cmd" "$ret"
         local prompt_rc=$?
 
         if [ $prompt_rc -eq 2 ]; then
+            # User chose retry -- loop back to outer while
             _e2e_log "  Restarting retry cycle (user requested)"
             continue
         elif [ $prompt_rc -eq 0 ]; then
-            local _elapsed=$(( $(date +%s) - _step_start ))
-            _e2e_log_and_print "    $(_e2e_green "OK (user skip)") (${_elapsed}s)"
+            # User chose skip or replacement command succeeded
             return 0
-        elif [ $prompt_rc -eq 3 ]; then
-            return 3
         else
+            # Non-interactive failure or abort -- fail the current test and stop the suite
             local _exf; _exf="$(_e2e_exit_info $ret)"
             _e2e_log "  FAILED: $description ($_exf)"
             _e2e_log_and_print "  $(_e2e_red "FATAL: $description ($_exf) -- aborting suite")"
@@ -657,7 +671,6 @@ e2e_run() {
 # Shorthand for e2e_run -h $INTERNAL_BASTION
 # The INTERNAL_BASTION variable must be set by the suite or config.
 #
-# Shorthand for e2e_run -h $INTERNAL_BASTION (all flags pass through)
 e2e_run_remote() {
     [ -n "$_E2E_SKIP_BLOCK" ] && return 0
     if [ -z "${INTERNAL_BASTION:-}" ]; then
@@ -740,21 +753,19 @@ e2e_run_must_fail() {
 
     local description="$1"; shift
     local cmd="$*"
-    local _lf="${E2E_LOG_FILE:-/dev/null}"
 
-    _e2e_log_and_print "  L $(_e2e_yellow "[EXPECT-FAIL]") $description $(_e2e_yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_log_and_print "  L $description (expect failure) $(_e2e_yellow "[$USER@$(hostname -s):$PWD]")"
     _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
     _e2e_log "    CMD (must-fail): $cmd"
-    _e2e_summary "  L $(_e2e_Yellow "[EXPECT-FAIL] $description") $(_e2e_Yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_summary "  L $(_e2e_Yellow "$description (expect failure)") $(_e2e_Yellow "[$USER@$(hostname -s):$PWD]")"
     _e2e_summary "    $(_e2e_Cyan "$cmd")"
 
     local ret=0
-    ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+    ( eval "$cmd" ) >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
-        _e2e_log_and_print "    $(_e2e_green "[EXPECT-FAIL] OK: failed as expected ($(_e2e_exit_info $ret))")"
-        _e2e_summary "    $(_e2e_Green "[EXPECT-FAIL] OK ($(_e2e_exit_info $ret))")"
+        _e2e_summary "    $(_e2e_Green "OK: failed as expected ($(_e2e_exit_info $ret))")"
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
@@ -775,28 +786,27 @@ e2e_run_must_fail_remote() {
 
     local description="$1"; shift
     local cmd="$*"
-    local _lf="${E2E_LOG_FILE:-/dev/null}"
 
     if [ -z "${INTERNAL_BASTION:-}" ]; then
         _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
         exit 1
     fi
 
-    _e2e_log_and_print "  R $(_e2e_yellow "[EXPECT-FAIL]") $description"
+    _e2e_draw_line "."
+    _e2e_log_and_print "  R $description (expect failure)"
     _e2e_log_and_print "    $(_e2e_cyan "($cmd)")"
     _e2e_log "    CMD (must-fail on $INTERNAL_BASTION): $cmd"
-    _e2e_summary "  R $(_e2e_Yellow "[EXPECT-FAIL] $description")"
+    _e2e_summary "  R $(_e2e_Yellow "$description (expect failure)")"
     _e2e_summary "    $(_e2e_Cyan "($cmd)")"
 
     local ret=0
-    ssh -o LogLevel=ERROR "$INTERNAL_BASTION" -- \
+    ssh -t -o LogLevel=ERROR "$INTERNAL_BASTION" -- \
         ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
-        2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+        >> "${E2E_LOG_FILE:-/dev/null}" 2>&1 || ret=$?
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
-        _e2e_log_and_print "    $(_e2e_green "[EXPECT-FAIL] OK: failed as expected ($(_e2e_exit_info $ret))")"
-        _e2e_summary "    $(_e2e_Green "[EXPECT-FAIL] OK ($(_e2e_exit_info $ret))")"
+        _e2e_summary "    $(_e2e_Green "OK: failed as expected ($(_e2e_exit_info $ret))")"
         return 0
     else
         _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"

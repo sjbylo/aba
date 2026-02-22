@@ -115,13 +115,6 @@ Every suite's last tests must clean up the state it created. This is a contract:
 
 disN cleanup is handled automatically by snapshot revert (section 4), so suites only need to clean up conN.
 
-**Pre-suite safety net (`_cleanup_con_quay`):** Because suites can crash mid-way (before their cleanup runs), runner.sh calls `_cleanup_con_quay()` before every suite as defense-in-depth. This two-tier function:
-
-1. **Tier 1 (aba way):** Checks `~/testing/aba/mirror/.installed` and `~/aba/mirror/.installed`. If found, runs `aba -d mirror uninstall` -- the proper uninstall path that only affects aba-installed registries.
-2. **Tier 2 (brute-force):** If tier 1 didn't clean everything and Quay containers or `~/quay-install` are still detected, force-stops all containers, prunes volumes, and removes `~/quay-install`, `~/quay-storage`, `~/.ssh/quay_installer*`.
-
-**Pool registry guard:** If `~/.e2e-pool-registry/` exists (created by `setup-pool-registry.sh`), the brute-force tier is skipped entirely. This protects the pre-populated registry used by `network-advanced` and `cluster-ops` suites. Tier 1 (`aba uninstall`) is always safe because it only targets aba-installed registries, not the out-of-band pool registry.
-
 ### 7. Interactive failure handling
 
 When a test fails, the prompt is compact and on one line:

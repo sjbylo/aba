@@ -190,63 +190,6 @@ cleanup_all() {
     echo "=== cleanup_all complete ==="
 }
 
-# --- _cleanup_con_quay ------------------------------------------------------
-#
-# Pre-suite cleanup of Quay/registry state on conN. Called by runner.sh
-# before each suite to prevent stale state (e.g. Redis password mismatch)
-# from a previous crashed or incomplete suite run.
-#
-# Two-tier approach:
-#   Tier 1 (aba way): If aba's mirror/.installed marker exists, use
-#          'aba -d mirror uninstall' -- the proper uninstall path.
-#   Tier 2 (brute-force): If tier 1 didn't clean up and Quay remnants
-#          remain (containers, ~/quay-install), force-remove everything.
-#
-# Guard: If the pool registry marker (~/.e2e-pool-registry/) exists, the
-#        brute-force tier is skipped to avoid destroying the pre-populated
-#        registry used by network-advanced and cluster-ops suites.
-#
-_cleanup_con_quay() {
-    local _testing_aba="$HOME/testing/aba"
-    local _aba_root
-    _aba_root="$(cd "$_E2E_LIB_DIR_SU/../../.." && pwd)"
-
-    local _did_uninstall=""
-
-    # Tier 1: use aba's own uninstall for any aba-installed registry
-    for _dir in "$_testing_aba" "$_aba_root"; do
-        if [ -f "$_dir/mirror/.installed" ]; then
-            echo "  [cleanup] Found .installed in $_dir/mirror -- running aba uninstall"
-            ( cd "$_dir" && aba -d mirror uninstall ) && _did_uninstall=1 || {
-                echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
-            }
-        fi
-    done
-
-    # Tier 2: brute-force fallback -- only if no pool registry is present
-    if [ -d "$HOME/.e2e-pool-registry" ]; then
-        [ -z "$_did_uninstall" ] && echo "  [cleanup] Pool registry present -- skipping brute-force cleanup"
-        return 0
-    fi
-
-    local _quay_detected=""
-    podman ps -a 2>/dev/null | grep -q quay && _quay_detected=1
-    [ -d "$HOME/quay-install" ] && _quay_detected=1
-
-    if [ -n "$_quay_detected" ]; then
-        echo "  [cleanup] Stale Quay remnants detected -- brute-force cleanup"
-        podman stop -a 2>/dev/null || true
-        podman rm -a -f 2>/dev/null || true
-        podman volume prune -f 2>/dev/null || true
-        rm -rf ~/quay-install
-        rm -rf ~/quay-storage
-        rm -f ~/.ssh/quay_installer*
-        echo "  [cleanup] Brute-force cleanup complete"
-    elif [ -z "$_did_uninstall" ]; then
-        echo "  [cleanup] No Quay state detected -- nothing to clean"
-    fi
-}
-
 # --- build_and_test_cluster -------------------------------------------------
 #
 # Helper to create a cluster, install it, and run post-install checks.

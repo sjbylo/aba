@@ -389,18 +389,10 @@ e2e_run_remote "Delete standard cluster" \
 test_end
 
 # ============================================================================
-# End-of-suite cleanup: uninstall Docker registry on disN + verify
+# NOTE: No end-of-suite cleanup.  reset_internal_bastion at the START of
+# the next run handles teardown.  Leaving resources alive lets operators
+# inspect state after failures.
 # ============================================================================
-test_begin "Cleanup: uninstall registry on disN"
-
-e2e_run_remote "Uninstall Docker registry" \
-    "cd ~/aba && aba -d mirror uninstall-docker-registry"
-e2e_run_remote "Verify no registry containers" \
-    "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
-e2e_run "Verify registry unreachable on disN" \
-    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/health/instance"
-
-test_end
 
 suite_end
 

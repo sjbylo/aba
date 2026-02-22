@@ -284,16 +284,6 @@ e2e_run_remote "Shutdown SNO cluster" \
 test_end
 
 # ============================================================================
-# End-of-suite cleanup: uninstall registry on disN + verify
-# ============================================================================
-test_begin "Cleanup: uninstall registry on disN"
-
-e2e_run "Uninstall registry from conN" \
-    "aba -d mirror uninstall"
-e2e_run "Verify registry unreachable on disN" \
-    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/health/instance"
-
-test_end
 
 suite_end
 
