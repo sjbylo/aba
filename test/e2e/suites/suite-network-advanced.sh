@@ -88,12 +88,12 @@ e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 
 # Simulate manual edit: override dns_servers to point to pool dnsmasq
-e2e_run "Set dns_servers via sed" \
+e2e_run "Set dns_servers manually" \
     "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
+    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets" \
@@ -198,7 +198,7 @@ _net_test() {
             "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" aba.conf"
     fi
 
-    e2e_run "Clean $cname dir" "rm -rfv $cname"
+    e2e_run "Remove $cname cluster dir" "rm -rfv $cname"
 
     e2e_run "Generate cluster.conf for $cname" \
         "aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
@@ -231,6 +231,7 @@ _net_test() {
             "sed -i \"s/^dns_servers=.*/dns_servers=$_vlan_dns /g\" $cname/cluster.conf"
     fi
 
+    assert_file_exists "$cname/cluster.conf"
     e2e_diag "Show cluster.conf" \
         "grep -e ^vlan= -e ^ports= -e ^port1= $cname/cluster.conf | awk '{print \$1}'"
 
@@ -255,7 +256,7 @@ _net_test() {
         "timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
 
     e2e_run "Delete $cname VMs" "aba --dir $cname delete"
-    e2e_run "Clean $cname dir" "aba -d $cname clean"
+    e2e_run "Clean $cname cluster files" "aba -d $cname clean"
 
     if [ -n "$vlan" ]; then
         e2e_run "Restore aba.conf machine_network ($_saved_aba_machine_network)" \

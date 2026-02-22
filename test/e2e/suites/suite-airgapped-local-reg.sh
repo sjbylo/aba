@@ -78,22 +78,22 @@ e2e_run "Configure aba.conf with previous version" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version p --base-domain $(pool_domain)"
 
 # Simulate manual edit: set dns_servers to pool dnsmasq host
-e2e_run "Set dns_servers via sed" \
+e2e_run "Set dns_servers manually" \
     "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/abatesting}#g' vmware.conf"
+    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-e2e_run "Set mirror host" \
-    "sed -i 's/registry.example.com/${DIS_HOST} /g' ./mirror/mirror.conf"
+e2e_run "Set mirror hostname in mirror.conf" \
+    "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
 
 test_end
 
@@ -136,7 +136,7 @@ test_end
 # ============================================================================
 test_begin "Bundle: create with older version"
 
-e2e_run -r 3 2 "Create bundle and pipe to bastion" \
+e2e_run -r 3 2 "Create bundle and pipe to internal bastion" \
     "source <(normalize-aba-conf) && aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel ${TEST_CHANNEL:-stable} --version \$ocp_version --op-sets abatest --ops web-terminal --base-domain $(pool_domain) -o - -y | ssh ${INTERNAL_BASTION} 'tar xf - -C ~'"
 
 test_end
@@ -148,7 +148,7 @@ test_begin "Bundle: transfer to bastion"
 
 e2e_run_remote "Verify bundle extracted" \
     "ls -la ~/aba/mirror/ && ls -la ~/aba/cli/"
-e2e_run_remote "Run aba install on bastion" \
+e2e_run_remote "Run aba install on internal bastion" \
     "cd ~/aba && ./install"
 
 test_end
@@ -191,9 +191,9 @@ test_begin "SNO: install cluster"
 
 e2e_run_remote "Create and install SNO" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
-e2e_run_remote "Verify cluster operators" \
+e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
-e2e_run_remote -r 30 10 "Wait for all operators fully available" \
+e2e_poll_remote 600 30 "Wait for all operators fully available" \
     "cd ~/aba && aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
@@ -218,7 +218,7 @@ test_begin "Incremental: UBI image load"
 # Save UBI images from connected bastion
 e2e_run "Add UBI to imageset and save" \
     "aba -d mirror --add-image registry.redhat.io/ubi9/ubi:latest && aba -d mirror save --retry"
-e2e_run "Transfer UBI images to bastion" \
+e2e_run "Transfer UBI images to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xf -'"
 e2e_run_remote -r 3 2 "Load UBI images" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -232,7 +232,7 @@ test_begin "Incremental: vote-app image load"
 
 e2e_run "Add vote-app image and save" \
     "aba -d mirror --add-image quay.io/sjbylo/flask-vote-app:latest && aba -d mirror save --retry"
-e2e_run "Transfer vote-app to bastion" \
+e2e_run "Transfer vote-app to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xf -'"
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -294,7 +294,7 @@ test_begin "Incremental: mesh operators"
 
 e2e_run "Add mesh operator set" "aba --op-sets mesh3"
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
-e2e_run "Transfer mesh images to bastion" \
+e2e_run "Transfer mesh images to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xf -'"
 e2e_run_remote -r 3 2 "Load mesh images" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -310,7 +310,7 @@ test_begin "Upgrade: OSUS and cluster upgrade"
 e2e_run "Set version to desired (upgrade target)" \
     "aba -v \$(cat /tmp/e2e-ocp-version-desired)"
 e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
-e2e_run "Transfer upgrade images to bastion" \
+e2e_run "Transfer upgrade images to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xf -'"
 e2e_run_remote -r 3 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -366,14 +366,16 @@ e2e_run_remote "Copy macs.conf" \
     "cp -v ~/aba/test/macs.conf ~/aba/"
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
-e2e_run_remote "Clean sno dir" \
+e2e_run_remote "Clean sno cluster dir" \
     "cd ~/aba && rm -rfv $SNO"
 
 # Build standard cluster
 e2e_run_remote "Create standard cluster config" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_standard_api_vip) --step cluster.conf"
+e2e_run_remote "Assert $STANDARD/cluster.conf exists" \
+    "cd ~/aba && test -f $STANDARD/cluster.conf"
 e2e_run_remote "Verify macs.conf used" \
-    "cd ~/aba && grep mac_prefix $STANDARD/cluster.conf || cat $STANDARD/cluster.conf"
+    "cd ~/aba && grep mac_prefix $STANDARD/cluster.conf"
 e2e_run_remote "Generate agent configs" \
     "cd ~/aba && aba --dir $STANDARD agentconf"
 e2e_run_remote "Verify agent-config has MACs" \

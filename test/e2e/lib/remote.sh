@@ -151,7 +151,7 @@ _get_nic_network() {
 clone_vm() {
     local source_vm="$1"
     local clone_name="$2"
-    local folder="${3:-${VC_FOLDER:-/Datacenter/vm/abatesting}}"
+    local folder="${3:-${VC_FOLDER:-/Datacenter/vm/aba-e2e}}"
     local snapshot="${4:-${VM_SNAPSHOT:-aba-test}}"
 
     echo "  Cloning VM: $source_vm -> $clone_name (folder: $folder, snapshot: $snapshot) ..."
