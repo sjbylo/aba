@@ -404,3 +404,4 @@ The `ai/REDESIGN-PLAN.md` file moves with the rename and stays as reference in b
 17. Update `README.md` and other docs to reflect new architecture
 18. Delete `test/e2e-v1/` once fully validated
 19. Future: multi-pane fully interactive dashboard on bastion (Ctrl-a prefix, one pane per pool)
+20. Future: dynamic suite dispatch (work queue) -- coordinator dispatches next suite to whichever pool finishes first, for better load balancing when suite durations vary significantly
