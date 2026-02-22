@@ -7,6 +7,8 @@
 - One code path for 1 pool or N pools
 - All test execution happens **on conN**, not from bastion
 - Default to reusing existing infrastructure
+- Verbose by default -- all commands and output visible
+- The user runs the same command every time -- the script figures out what to do
 
 ## New Architecture
 
@@ -24,25 +26,26 @@ flowchart TB
         CloneCon["Clone/reuse conN"]
         CloneDis["Clone/reuse disN"]
         ConfigVMs["Configure all VMs"]
-        CopyFiles["Install ABA on each conN"]
+        InstallABA["Install ABA on each conN"]
     end
 
     subgraph pool1 ["con1 (tmux: e2e-run)"]
-        S1["suite-airgapped-local-reg"]
-        S2["suite-cluster-ops"]
+        R1["revert dis1 snapshot"] --> S1["suite-airgapped-local-reg"]
+        S1 --> C1["suite cleanup"]
+        C1 --> R1b["revert dis1 snapshot"] --> S2["suite-cluster-ops"]
+        S2 --> C1b["suite cleanup"]
     end
 
     subgraph pool2 ["con2 (tmux: e2e-run)"]
-        S3["suite-mirror-sync"]
-        S4["suite-connected-public"]
+        R2["revert dis2 snapshot"] --> S3["suite-mirror-sync"]
+        S3 --> C2["suite cleanup"] --> R2b["revert dis2 snapshot"] --> S4["suite-connected-public"]
+        S4 --> C2b["suite cleanup"]
     end
 
     RunSh --> SetupInfra
-    SetupInfra --> Golden --> CloneCon --> CloneDis --> ConfigVMs --> CopyFiles
+    SetupInfra --> Golden --> CloneCon --> CloneDis --> ConfigVMs --> InstallABA
     RunSh --> Distribute --> pool1 & pool2
     RunSh --> Monitor
-    S1 -->|sequential| S2
-    S3 -->|sequential| S4
 ```
 
 ## Key Design Decisions
@@ -59,44 +62,79 @@ flowchart TB
 Template VM prerequisites (created by the user, not the framework):
 - Default user (configurable via `config.env`) with SSH keys + sudo
 - Red Hat registration (for `dnf`)
-- RHEL includes open-vm-tools / VMware tools out of the box (required for `govc vm.ip`)
+- RHEL includes VMware tools (open-vm-tools) out of the box (required for `govc vm.ip`)
 
 ### 2. One tmux session per pool, all suites sequential inside it
 
-Bastion distributes suites across pools (round-robin by default). Each conN gets one tmux session named `e2e-run` that executes its assigned suites sequentially. Interactive mode (`-i`) is **on by default** on every conN -- if a test fails, the tmux session pauses and waits for user input.
+Bastion distributes suites across pools (round-robin by default). Each conN gets one **persistent** tmux session named `e2e-run` that executes its assigned suites sequentially. Interactive mode is **always on** -- if a test fails, the session pauses and waits for user input.
 
-### 3. Thin coordinator on bastion
+### 3. Persistent tmux sessions on conN
+
+The tmux session `e2e-run` on each conN is created once and **stays open permanently**:
+- User attaches once and stays attached across all suite runs
+- When `run.sh` launches suites, it sends the runner command into the existing tmux session (via `tmux send-keys`)
+- Suites execute, summary prints, and the user is back at a shell prompt in the same session
+- User can poke around between runs -- check logs, inspect files, run manual commands
+- Next `run.sh` invocation: same session, suites scroll through again
+- If runner.sh is already executing, `run.sh` detects this and warns instead of colliding
+
+### 4. Snapshot revert between suites (disN only)
+
+Before each suite, runner.sh reverts **disN** to the `pool-ready` snapshot, powers it on, and waits for SSH. This gives every suite a guaranteed clean disconnected bastion.
+
+**conN cannot be reverted** (the runner.sh tmux session is running on it). Instead, each suite cleans up after itself as its final tests -- removing clusters, configs, containers, etc. This leaves conN in a known state for the next suite.
+
+### 5. Suite self-cleanup
+
+Every suite's last tests must clean up the state it created. This is a contract: after a suite finishes (pass or fail-and-skip), conN should be ready for the next suite. Examples:
+- Remove any installed OpenShift clusters
+- Clean up generated configs (mirror.conf, cluster dirs, etc.)
+- Remove downloaded images/bundles
+- Stop/remove containers
+
+disN cleanup is handled automatically by snapshot revert (section 4), so suites only need to clean up conN.
+
+### 6. Interactive failure handling
+
+When a test fails, the prompt is compact and on one line:
+
+```
+FAILED: "Verify mirror sync"  [r]etry [s]kip [S]kip-suite [a]bort [cmd]:
+```
+
+Options:
+- `r` = retry this test
+- `s` = skip this test, continue with next test in the suite
+- `S` = skip the entire remaining suite, move to the next suite
+- `a` = abort all remaining suites on this pool
+- Type a replacement command to run instead
+
+### 7. Thin coordinator on bastion
 
 `run.sh` becomes simple orchestration (~100-150 lines of high-level flow):
 - Parse args
-- Call `setup-infra.sh` (if needed)
-- Distribute suites across pools
-- Launch one tmux per conN (via SSH)
-- Open dashboard (default) or print summary and wait
+- Ensure VMs are ready (calls `setup-infra.sh` if VMs don't exist)
+- `scp` config files (`pools.conf`, `config.env`) to each conN
+- Distribute suites across pools (round-robin)
+- Send runner command into each conN's persistent tmux session
+- Monitor all pools, collect exit codes when done
+- Print final combined summary on the bastion terminal
 
-### 4. Fully interactive dashboard
+The script is **idempotent** -- the user always runs the same command. No `--setup` flag needed. The script checks VM state and does whatever is necessary.
 
-After launching tmux sessions on all conN, `run.sh` opens a **dashboard**: a tmux session on bastion with one pane per pool. Each pane runs `ssh -t conN tmux attach -t e2e-run` -- a live, fully interactive connection to that pool's test session. The user sees all pools running simultaneously.
+### 8. Dashboard (future enhancement)
 
-The dashboard tmux uses prefix `Ctrl-a` (instead of the default `Ctrl-b`) to avoid conflicts with the conN tmux sessions inside each pane:
-- `Ctrl-a + arrow keys` = switch between pool panes (dashboard level)
-- `Ctrl-b` = interact with the conN tmux session in the active pane
+Initial implementation: `run.sh attach conN` for full-screen interactive access to any single pool's tmux session.
 
-Workflow when a test fails:
-1. User sees the failure prompt appear in one of the panes
-2. `Ctrl-a + arrow` to switch to that pane
-3. Type `r` to retry (or `s` to skip, `a` to abort)
-4. Switch back to other panes to continue monitoring
+Future: a multi-pane dashboard on bastion -- one pane per pool, each running `ssh -t conN tmux attach -t e2e-run`. The dashboard tmux uses prefix `Ctrl-a` to avoid conflicts with conN's `Ctrl-b`:
+- `Ctrl-a + arrow keys` = switch between pool panes
+- `Ctrl-b` = interact with the conN tmux in the active pane
 
-`run.sh attach conN` is still available as a convenience for a full-screen single-pool view (bypasses the dashboard, connects directly to conN's tmux).
+All panes are fully interactive -- the user can switch to any pane and respond to failure prompts directly.
 
-`run.sh dashboard` reopens the dashboard if the user detached from it.
+### 9. Reuse-first VM lifecycle
 
-After all pools finish, `run.sh` collects exit codes and prints a final summary.
-
-### 5. Reuse-first VM lifecycle
-
-Default behavior (no flags): reuse everything that already works.
+Default behavior (no flags): reuse everything that already works. No `--setup` needed.
 
 - Golden exists + `golden-ready` snapshot: **reuse**
 - Golden exists, no snapshot: rebuild
@@ -107,7 +145,7 @@ Default behavior (no flags): reuse everything that already works.
 - `--recreate-golden`: destroy + rebuild golden from template
 - `--recreate-vms`: destroy + reclone conN/disN from golden
 
-### 6. Test execution runs entirely on conN
+### 10. Test execution runs entirely on conN
 
 The e2e framework (`framework.sh`, `e2e_run`, etc.) runs on conN. From conN, suites SSH to disN for airgapped tests using `-h` flag. This eliminates:
 - Per-suite rsync from bastion
@@ -115,40 +153,76 @@ The e2e framework (`framework.sh`, `e2e_run`, etc.) runs on conN. From conN, sui
 - The `testy_rsa` key propagation problem (keys deployed during infra setup, once)
 - The `E2E_ON_BASTION` vs coordinator-only branching
 
-No `--sync` flag. ABA is installed on conN via `aba install` during `setup-infra.sh`. For iterative development, the developer manually updates files on conN (e.g. `git push/pull`, `scp`).
+No `--sync` flag. ABA is installed on conN via `aba install` during infra setup. Config files (`pools.conf`, `config.env`) are pushed via `scp` by `run.sh` before each launch. For iterative development on suite code, the developer manually updates files on conN (e.g. `git push/pull`, `scp`).
 
-### 7. Transparency by default
+### 11. Transparency by default
 
+- All command output is visible by default -- no hidden output
+- `e2e_run_must_fail` shows output with a clear `[EXPECT-FAIL]` marker so expected failures aren't confused with real ones
+- No `-q` flag on `e2e_run` -- removed entirely
 - `setup-infra.sh` shows all output on terminal (tee to log)
-- `e2e_run` prints the actual command being run (not just the description) when `-v` is active
 - `govc` clone/snapshot operations show progress
 - Wall-clock duration printed for each `e2e_run` step
 - SSH preflight errors shown in full (no `2>/dev/null` on diagnostics)
+- `-q` flag on `run.sh` available for CI mode (suppress interactive prompts, minimal output)
+
+### 12. Suite distribution
+
+Suites are distributed across pools using round-robin. Example with 6 suites and 2 pools:
+
+- con1 gets: suite 1, suite 3, suite 5
+- con2 gets: suite 2, suite 4, suite 6
+
+Each conN runs its assigned suites sequentially. Between each suite, disN is reverted to `pool-ready` snapshot for a clean start.
+
+With 1 pool (default), all suites run on con1 sequentially.
+
+### 13. End state / summary
+
+**On each conN** (visible in the persistent tmux session):
+```
+=== Pool 1 Summary ===
+  PASS  suite-airgapped-local-reg    (12m 34s)
+  FAIL  suite-mirror-sync            (3m 12s)  [skipped by user]
+  PASS  suite-connected-public       (8m 45s)
+Result: 2/3 passed
+```
+The tmux session stays open -- user remains at a shell prompt and can inspect logs, re-run tests, etc.
+
+**On bastion** (where `run.sh` was launched, printed after all pools finish):
+```
+=== Final Summary ===
+  Pool 1 (con1):  2/3 passed   [FAIL: mirror-sync]
+  Pool 2 (con2):  3/3 passed
+Overall: 5/6 suites passed
+Logs: test/e2e/logs/
+```
+This prints on the normal bastion terminal. `run.sh` exits with 0 if all passed, 1 if any failed.
 
 ## New CLI
 
 ```
-run.sh [--suite X,Y | --all]       # which suites
+run.sh [--suite X,Y | --all]       # which suites (required)
        [--pools N]                  # how many pools to use (default: 1)
-       [--setup]                    # force infra setup even if VMs look ready
        [--recreate-golden]          # destroy + rebuild golden from template
        [--recreate-vms]             # destroy + reclone con/dis from golden
-       [-v]                         # verbose (show commands, not just descriptions)
+       [-q]                         # quiet mode (CI: no interactive prompts, minimal output)
        [--clean]                    # clear checkpoints, start suites from beginning
        [--destroy]                  # destroy all VMs and exit
        [--list]                     # list available suites
        [--dry-run]                  # show plan without executing
-       attach conN                  # attach interactively to conN's tmux session
-       dashboard                    # reopen the dashboard (if detached)
+       attach conN                  # attach to conN's persistent tmux session
 ```
 
-Removed: `--parallel`, `--skip-phase2`, `--create-pools N`, `--sync`, `--resume`, `-i`
+Removed: `--parallel`, `--skip-phase2`, `--create-pools N`, `--sync`, `--resume`, `-i`, `-v`, `--setup`
 
-- `-i` removed because interactive is **always on** by default on every conN
-- `--sync` removed -- developer copies files manually when iterating
+- `-i` removed -- interactive is **always on** by default
+- `-v` removed -- verbose is **always on** by default (replaced by `-q` for quiet)
+- `--setup` removed -- script auto-detects what needs to be done
+- `--sync` removed -- `aba install` handles deployment; developer copies changes manually
 - `--resume` removed -- checkpoint files always respected unless `--clean`
 - `--parallel` removed -- always distributes across available pools
-- `--create-pools` removed -- replaced by `--pools N` + `--setup` / `--recreate-vms`
+- `--create-pools` removed -- `--pools N` defines pool count; infra created automatically
 
 ## New File Structure
 
@@ -166,8 +240,8 @@ test/e2e/
   suites/
     suite-*.sh              # test suites (unchanged, but no more clone-and-check)
   runner.sh                 # NEW: runs on conN inside tmux -- receives suite list,
-                            #   sources framework.sh, executes suites sequentially,
-                            #   writes exit code + log to known location
+                            #   sources framework.sh, reverts disN snapshot before each
+                            #   suite, executes suites sequentially, prints summary
 ```
 
 Files removed:
@@ -179,44 +253,48 @@ Files removed:
 ## User Workflow
 
 ```
-# First run (from scratch):
-run.sh --all --pools 3 --setup
-
-# Re-run (VMs exist, reuse them):
+# Run all suites (same command every time -- script figures out what to do):
 run.sh --all --pools 3
 
 # Run one suite for debugging:
 run.sh --suite airgapped-local-reg
+
+# Attach to a pool (persistent tmux -- stays open across runs):
+run.sh attach con1
 
 # Iterate on suite code:
 # 1. Edit suite locally, commit+push
 # 2. git pull on con1 (or scp the file)
 # 3. run.sh --suite foo
 
-# Dashboard opens automatically -- all panes are fully interactive.
-# Switch between panes: Ctrl-a + arrow keys
-# Interact with a pool's test session: just type in the active pane (Ctrl-b prefix)
-
-# Full-screen single pool view:
-run.sh attach con1
-
-# Reopen the dashboard if detached:
-run.sh dashboard
-
 # Nuke everything and start over:
 run.sh --destroy
-run.sh --all --pools 3 --setup
+run.sh --all --pools 3
+
+# Force rebuild golden VM (e.g. after RHEL update):
+run.sh --all --recreate-golden
+
+# Force reclone all con/dis VMs:
+run.sh --all --recreate-vms
 ```
 
 ## What Stays the Same
 
-- `framework.sh` core: `e2e_run`, `e2e_run_remote`, `e2e_run_must_fail`, retries, backoff, interactive prompts, progress table, checkpointing, notifications
+- `framework.sh` core: `e2e_run`, `e2e_run_remote`, retries, backoff, interactive prompts, progress table, checkpointing, notifications
 - `config-helpers.sh`: pool config, IP/domain resolution
 - `remote.sh`: `_essh`, `_escp`
 - All `suite-*.sh` files (minus clone-and-check)
 - `config.env`, `pools.conf` format
 - The clone flow: template -> golden -> conN -> disN
 - All `_vm_*` helper functions (they work well)
+
+## What Changes in framework.sh
+
+- `e2e_run_must_fail`: show output with `[EXPECT-FAIL]` marker instead of hiding it
+- Remove `-q` flag from `e2e_run` -- all output visible by default
+- Interactive prompt on one line: `FAILED: "desc"  [r]etry [s]kip [S]kip-suite [a]bort [cmd]:`
+- Add `S` (skip entire suite) option -- returns a special exit code for runner.sh to catch
+- Wall-clock duration on each step
 
 ## Migration Path
 
@@ -225,10 +303,12 @@ This is a significant refactor. Suggested approach: build the new framework alon
 ## Implementation Todos
 
 1. Extract `_vm_*` functions from `pool-lifecycle.sh` into `lib/vm-helpers.sh` (pure helpers, no orchestration)
-2. Create `setup-infra.sh`: golden VM lifecycle, clone conN/disN, configure, snapshot, install ABA on conN. Reuse-first logic with `--recreate-golden` and `--recreate-vms` flags
-3. Create `runner.sh`: runs on conN inside tmux, receives suite list as args, sources `framework.sh`, runs suites sequentially, writes exit code
-4. Rewrite `run.sh` as thin coordinator: parse args, call `setup-infra.sh`, distribute suites, launch one tmux per conN, dashboard, attach command, collect results, print summary
-5. Implement dashboard: bastion tmux session with one pane per pool (fully interactive). Implement `run.sh attach conN` for full-screen single-pool view
-6. Add `-v` flag to show commands in `e2e_run`, add wall-clock timing, remove unnecessary `2>/dev/null`, tee all infra output
-7. Validate all existing suites work under new framework, remove clone-and-check suite, delete old `parallel.sh` and `pool-lifecycle.sh`
-8. Update `README.md`, `PLAN.md`, `WORKFLOW.md` to reflect new architecture
+2. Create `setup-infra.sh`: golden VM lifecycle, clone conN/disN, configure, snapshot, install ABA via `aba install`. Reuse-first logic with `--recreate-golden` and `--recreate-vms` flags
+3. Create `runner.sh`: runs on conN inside tmux, receives suite list as args, reverts disN snapshot before each suite, sources `framework.sh`, runs suites sequentially, prints per-pool summary
+4. Rewrite `run.sh` as thin coordinator: parse args, ensure VMs ready, scp config files, distribute suites, send runner command to persistent tmux on each conN, monitor, collect results, print final summary
+5. Update `framework.sh`: show `e2e_run_must_fail` output with `[EXPECT-FAIL]` marker, remove `-q` flag, one-line interactive prompt with `S` (skip-suite) option, wall-clock timing
+6. Add suite self-cleanup: each suite's final tests clean up conN state (clusters, configs, containers)
+7. Implement `run.sh attach conN` for full-screen single-pool access to persistent tmux
+8. Validate all existing suites work under new framework, remove clone-and-check suite, delete old `parallel.sh` and `pool-lifecycle.sh`
+9. Update `README.md`, `PLAN.md`, `WORKFLOW.md` to reflect new architecture
+10. Future: multi-pane interactive dashboard on bastion (Ctrl-a prefix, one pane per pool)
