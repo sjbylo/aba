@@ -143,21 +143,27 @@ Options:
 
 The script is **idempotent** -- the user always runs the same command. No `--setup` flag needed. The script checks VM state and does whatever is necessary.
 
-### 9. Two dashboard modes
+### 9. Two viewing modes (no nested tmux)
 
-**Summary dashboard (read-only):** `run.sh` opens this by default after launching suites. A tmux session on bastion with one pane per pool, each tailing that pool's summary log via `ssh conN "tail -f ~/aba/test/e2e/logs/summary.log"`. Shows test names + PASS/FAIL + commands as they complete -- no verbose command output. The user can glance at all pools' progress without attaching interactively.
+The only tmux in the system runs on conN (the `e2e-run` session where suites execute). There is no nested tmux anywhere.
 
-The summary log already exists in the current framework (`E2E_SUMMARY_FILE`). It captures: suite start/end, test names, commands executed, PASS/FAIL/SKIP status, retry attempts, and the progress table -- all with ANSI colors for readability.
+**Summary dashboard (read-only, on bastion):** `run.sh` creates a tmux session on bastion with one pane per pool. Each pane runs `ssh conN "tail -f ~/aba/test/e2e/logs/summary.log"` -- plain SSH + tail, NOT tmux attach. This means bastion tmux panes contain no remote tmux, so there is no nesting. Shows test names, commands, PASS/FAIL as they happen.
 
-**Full interactive attach:** `run.sh attach conN` connects directly to conN's persistent tmux session with full interactive control. This is for responding to failure prompts, inspecting state, running manual commands.
+The user SSHes from Mac to bastion and attaches: `tmux attach -t e2e-dashboard`.
+
+The summary log already exists in the current framework (`E2E_SUMMARY_FILE`). It captures: suite start/end, test names, commands executed, PASS/FAIL/SKIP status, retry attempts, and the progress table -- all with ANSI colors.
+
+**Interactive attach (from separate Mac terminal tab):** The user opens another Mac terminal tab and SSHes directly to conN: `ssh -t conN tmux attach -t e2e-run`. One level of tmux only (on conN). Full interactive control -- respond to failure prompts, inspect state, run manual commands. `Ctrl-b + d` to detach.
 
 Workflow:
-1. `run.sh --all --pools 3` launches suites and opens the summary dashboard
-2. User watches all 3 pools' progress in the read-only panes
-3. User sees pool 2 has a failure -- runs `run.sh attach con2` in another terminal
-4. Responds to the prompt, then detaches back
+1. Mac tab 1: `ssh bastion` then `tmux attach -t e2e-dashboard` -- watch all pools
+2. See pool 2 has a failure in the dashboard
+3. Mac tab 2: `ssh -t con2 tmux attach -t e2e-run` -- respond to prompt
+4. `Ctrl-b + d` to detach, back to watching dashboard
 
-Future enhancement: a single multi-pane fully interactive dashboard (Ctrl-a prefix) where every pane is a live `ssh -t conN tmux attach -t e2e-run`. All panes interactive, switch with `Ctrl-a + arrows`.
+Proven by demo: `test/e2e/ai/demo-dashboards.sh`
+
+Future enhancement: fully interactive multi-pane dashboard where every pane is a live `ssh -t conN tmux attach -t e2e-run` (would require Ctrl-a prefix to avoid nesting conflicts).
 
 ### 10. Reuse-first VM lifecycle
 
