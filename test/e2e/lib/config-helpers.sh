@@ -63,12 +63,6 @@ pool_dis_ip() {
     echo "${POOL_SUBNET:-10.0.2}.$((p * 10 + 1))"
 }
 
-# Get the registry hostname for a pool: pool_registry_host [POOL_NUM]
-pool_registry_host() {
-    local p="${1:-${POOL_NUM:-1}}"
-    echo "registry.$(pool_domain "$p")"
-}
-
 # Get the DNS server IP for a pool (= conN's lab IP, running dnsmasq)
 pool_dns_server() {
     pool_con_ip "$@"
