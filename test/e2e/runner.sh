@@ -172,9 +172,16 @@ for suite in "${SUITES[@]}"; do
 	fi
 
 	echo ""
-	echo "========================================"
-	echo "  Suite: $suite  (pool $POOL_NUM)"
-	echo "========================================"
+	echo ""
+	printf '%0.s#' {1..80}; echo
+	printf '%0.s#' {1..80}; echo
+	printf '##  %-74s##\n' ""
+	printf '##  %-74s##\n' "SUITE: $suite"
+	printf '##  %-74s##\n' "Pool $POOL_NUM  ($(hostname))    $(date '+%Y-%m-%d %H:%M:%S')"
+	printf '##  %-74s##\n' ""
+	printf '%0.s#' {1..80}; echo
+	printf '%0.s#' {1..80}; echo
+	echo ""
 
 	# Revert disN to clean state before each suite
 	_revert_dis_snapshot "pool-ready" || {
