@@ -38,7 +38,11 @@ CLI_RECREATE_VMS=""
 CLI_QUIET=""
 CLI_CLEAN=""
 CLI_DRY_RUN=""
+CLI_FORCE=""
+CLI_POOL=""
+CLI_LAST=""
 CLI_DESTROY=""
+CLI_STOP=""
 CLI_LIST=""
 CLI_ATTACH=""
 CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
@@ -53,7 +57,10 @@ _usage() {
 	  run.sh --all                   Run all suites (1 pool, default)
 	  run.sh --all --pools 3         Run all suites across 3 pools
 	  run.sh --suite NAME            Run one suite
+	  run.sh --suite X --pool 2      Run suite on a specific pool
+	  run.sh --last --pool 3         Re-run last suite(s) on a pool
 	  run.sh --list                  List available suites
+	  run.sh stop                    Kill all runners on all pools
 	  run.sh --destroy               Destroy all pool VMs
 	  run.sh attach conN             Attach to conN's tmux session
 	  run.sh dashboard [N]           Open multi-pane summary dashboard (auto-detects from pools.conf)
@@ -65,6 +72,9 @@ _usage() {
 	  --recreate-golden      Force rebuild golden VM from template
 	  --recreate-vms         Force reclone all conN/disN from golden
 	  --clean                Clear checkpoints before running
+	  --pool N               Target a specific pool (default: round-robin)
+	  --last                 Re-run the last suite(s) dispatched to --pool N
+	  -f, --force            Kill any running runner on conN before dispatching
 	  -q, --quiet            CI mode: no interactive prompts
 	  --dry-run              Show dispatch plan, don't execute
 
@@ -85,10 +95,14 @@ while [ $# -gt 0 ]; do
 		-q|--quiet)        CLI_QUIET=1; shift ;;
 		--clean)           CLI_CLEAN=1; shift ;;
 		--dry-run)         CLI_DRY_RUN=1; shift ;;
+		-f|--force)        CLI_FORCE=1; shift ;;
+		--pool)            CLI_POOL="$2"; shift 2 ;;
+		--last)            CLI_LAST=1; shift ;;
 		--destroy)         CLI_DESTROY=1; shift ;;
 		--list|-l)         CLI_LIST=1; shift ;;
 		--pools-file)      CLI_POOLS_FILE="$2"; shift 2 ;;
 		attach)            CLI_ATTACH="$2"; shift 2 ;;
+		stop)              CLI_STOP=1; shift ;;
 		dashboard)         shift; CLI_DASHBOARD=""; CLI_DASH_LOG="summary.log"
 		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_DASHBOARD="$1"; shift; fi
 		                   if [[ "${1:-}" == "log" ]]; then CLI_DASH_LOG="latest.log"; shift; fi ;;
@@ -96,6 +110,10 @@ while [ $# -gt 0 ]; do
 		*) echo "Unknown option: $1" >&2; _usage; exit 1 ;;
 	esac
 done
+
+# --- Pool flag adjustment ----------------------------------------------------
+
+[ -n "$CLI_POOL" ] && [ "$CLI_POOL" -gt "$CLI_POOLS" ] && CLI_POOLS="$CLI_POOL"
 
 # --- Source config -----------------------------------------------------------
 
@@ -118,6 +136,29 @@ if [ -n "$CLI_ATTACH" ]; then
 
 	echo "Attaching to tmux session on ${user}@${host} ..."
 	exec ssh -t -o LogLevel=ERROR "${user}@${host}" "tmux attach -t e2e-run 2>/dev/null || echo 'No e2e-run session found on ${host}.'"
+fi
+
+# --- Stop mode ---------------------------------------------------------------
+
+if [ -n "$CLI_STOP" ]; then
+	_num_pools=$(grep -c '^[^#]' "$CLI_POOLS_FILE" 2>/dev/null || echo "$CLI_POOLS")
+	_stop_ssh="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+	_user="${CON_SSH_USER:-steve}"
+	_domain="${VM_BASE_DOMAIN:-example.com}"
+
+	echo "Stopping all runners on $_num_pools pool(s) ..."
+	for (( p=1; p<=_num_pools; p++ )); do
+		_host="con${p}.${_domain}"
+		printf "  con${p}: "
+		if ssh $_stop_ssh "${_user}@${_host}" \
+			"kill \$(cat /tmp/e2e-runner.lock 2>/dev/null) 2>/dev/null; rm -f /tmp/e2e-runner.lock /tmp/e2e-runner.rc; tmux kill-session -t e2e-run 2>/dev/null; echo stopped" 2>/dev/null; then
+			:
+		else
+			echo "unreachable"
+		fi
+	done
+	echo "Done."
+	exit 0
 fi
 
 # --- Dashboard mode ----------------------------------------------------------
@@ -226,12 +267,27 @@ _all_suites() {
 
 suites_to_run=()
 
-if [ -n "$CLI_ALL" ]; then
+if [ -n "$CLI_LAST" ]; then
+	if [ -z "$CLI_POOL" ]; then
+		echo "ERROR: --last requires --pool N" >&2
+		exit 1
+	fi
+	_last_host="con${CLI_POOL}.${VM_BASE_DOMAIN:-example.com}"
+	_last_user="${CON_SSH_USER:-steve}"
+	_last_ssh="-o LogLevel=ERROR -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+	_last=$(ssh $_last_ssh "${_last_user}@${_last_host}" "cat /tmp/e2e-last-suites 2>/dev/null" || true)
+	if [ -z "$_last" ]; then
+		echo "ERROR: No previous suite record on con${CLI_POOL} (/tmp/e2e-last-suites not found)" >&2
+		exit 1
+	fi
+	read -ra suites_to_run <<< "$_last"
+	echo "  Re-running last suite(s) from con${CLI_POOL}: ${suites_to_run[*]}"
+elif [ -n "$CLI_ALL" ]; then
 	read -ra suites_to_run <<< "$(_all_suites)"
 elif [ -n "$CLI_SUITE" ]; then
 	IFS=',' read -ra suites_to_run <<< "$CLI_SUITE"
 else
-	echo "ERROR: Specify --suite NAME, --all, or --list" >&2
+	echo "ERROR: Specify --suite NAME, --all, --last, or --list" >&2
 	_usage
 	exit 1
 fi
@@ -271,14 +327,21 @@ if [ -n "$CLI_DRY_RUN" ]; then
 	echo "  Suites: ${suites_to_run[*]}"
 	echo ""
 
-	_shuffled=($(printf '%s\n' "${suites_to_run[@]}" | shuf))
-	for (( p=0; p<CLI_POOLS; p++ )); do
-		pool_num=$(( p + 1 ))
-		echo "  con${pool_num}:"
-		for (( s=p; s<${#_shuffled[@]}; s+=CLI_POOLS )); do
-			echo "    - ${_shuffled[$s]}"
+	if [ -n "$CLI_POOL" ]; then
+		echo "  con${CLI_POOL}: (targeted)"
+		for suite in "${suites_to_run[@]}"; do
+			echo "    - ${suite}"
 		done
-	done
+	else
+		_shuffled=($(printf '%s\n' "${suites_to_run[@]}" | shuf))
+		for (( p=0; p<CLI_POOLS; p++ )); do
+			pool_num=$(( p + 1 ))
+			echo "  con${pool_num}:"
+			for (( s=p; s<${#_shuffled[@]}; s+=CLI_POOLS )); do
+				echo "    - ${_shuffled[$s]}"
+			done
+		done
+	fi
 	echo ""
 	exit 0
 fi
@@ -331,15 +394,19 @@ for (( p=1; p<=CLI_POOLS; p++ )); do
 	POOL_SUITES[$p]=""
 done
 
-_shuffled=($(printf '%s\n' "${suites_to_run[@]}" | shuf))
-for (( s=0; s<${#_shuffled[@]}; s++ )); do
-	pool_num=$(( (s % CLI_POOLS) + 1 ))
-	if [ -n "${POOL_SUITES[$pool_num]}" ]; then
-		POOL_SUITES[$pool_num]="${POOL_SUITES[$pool_num]} ${_shuffled[$s]}"
-	else
-		POOL_SUITES[$pool_num]="${_shuffled[$s]}"
-	fi
-done
+if [ -n "$CLI_POOL" ]; then
+	POOL_SUITES[$CLI_POOL]="${suites_to_run[*]}"
+else
+	_shuffled=($(printf '%s\n' "${suites_to_run[@]}" | shuf))
+	for (( s=0; s<${#_shuffled[@]}; s++ )); do
+		pool_num=$(( (s % CLI_POOLS) + 1 ))
+		if [ -n "${POOL_SUITES[$pool_num]}" ]; then
+			POOL_SUITES[$pool_num]="${POOL_SUITES[$pool_num]} ${_shuffled[$s]}"
+		else
+			POOL_SUITES[$pool_num]="${_shuffled[$s]}"
+		fi
+	done
+fi
 
 echo ""
 echo "  Suite distribution:"
@@ -352,6 +419,7 @@ echo ""
 
 TMUX_SESSION="e2e-run"
 declare -A _dispatched=()
+declare -A _skipped_busy=()
 
 for (( p=1; p<=CLI_POOLS; p++ )); do
 	pool_suites="${POOL_SUITES[$p]}"
@@ -385,8 +453,22 @@ for (( p=1; p<=CLI_POOLS; p++ )); do
 	")
 
 	if [ "$_lock_status" = "BUSY" ]; then
-		echo "    WARNING: runner.sh already executing on con${p} -- skipping this pool"
-		continue
+		if [ -n "$CLI_FORCE" ]; then
+			echo "    --force: killing existing runner on con${p} ..."
+			_ssh_con "$p" "kill \$(cat /tmp/e2e-runner.lock) 2>/dev/null; rm -f /tmp/e2e-runner.lock /tmp/e2e-runner.rc"
+			_ssh_con "$p" "tmux kill-session -t $TMUX_SESSION 2>/dev/null"
+			_ssh_con "$p" "tmux new-session -d -s $TMUX_SESSION"
+			echo "    Killed previous runner and created fresh tmux session"
+		else
+			echo ""
+			echo "    ERROR: runner.sh is still executing on con${p}."
+			echo ""
+			echo "    To check progress:   run.sh attach con${p}"
+			echo "    To force restart:    re-run with --force"
+			echo ""
+			_skipped_busy[$p]=1
+			continue
+		fi
 	fi
 	if [ "$_lock_status" = "STALE" ]; then
 		echo "    Removing stale lock on con${p}"
@@ -402,10 +484,12 @@ done
 
 # --- Monitor: poll for completion ---------------------------------------------
 
-echo ""
-echo "  All pools dispatched. Monitoring for completion ..."
-echo "  (Attach interactively: run.sh attach conN)"
-echo ""
+if [ ${#_dispatched[@]} -gt 0 ]; then
+	echo ""
+	echo "  ${#_dispatched[@]} pool(s) dispatched. Monitoring for completion ..."
+	echo "  (Attach interactively: run.sh attach conN)"
+	echo ""
+fi
 
 # Open summary dashboard (if not quiet mode and multiple pools)
 if [ -z "$CLI_QUIET" ] && [ "$CLI_POOLS" -gt 1 ]; then
@@ -437,7 +521,9 @@ declare -A _pool_rc
 _all_done=""
 
 if [ ${#_dispatched[@]} -eq 0 ]; then
-	echo "  No pools dispatched -- nothing to monitor."
+	echo ""
+	echo "  No pools were dispatched. All requested pools are busy or had no suites assigned."
+	echo ""
 else
 	while [ -z "$_all_done" ]; do
 		sleep 10
@@ -483,6 +569,11 @@ echo "========================================"
 
 _overall_rc=0
 for (( p=1; p<=CLI_POOLS; p++ )); do
+	if [ -n "${_skipped_busy[$p]:-}" ]; then
+		printf "  Pool %d (con%d):  \033[1;33mSKIP\033[0m (runner already executing)\n" "$p" "$p"
+		_overall_rc=1
+		continue
+	fi
 	if [ -z "${_dispatched[$p]:-}" ]; then
 		printf "  Pool %d (con%d):  \033[1;33mSKIP\033[0m (no suites assigned)\n" "$p" "$p"
 		continue

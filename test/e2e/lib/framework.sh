@@ -453,6 +453,7 @@ should_skip_checkpoint() {
 _interactive_prompt() {
     local cmd="$1"
     local ret="$2"
+    local description="${3:-}"
 
     if [ -z "$_E2E_INTERACTIVE" ]; then
         return 1
@@ -465,6 +466,11 @@ _interactive_prompt() {
 
     while true; do
         echo ""
+        local _ctx=""
+        [ -n "${_E2E_SUITE_NAME:-}" ] && _ctx="Suite: $_E2E_SUITE_NAME"
+        [ -n "${_E2E_CURRENT_TEST:-}" ] && _ctx="${_ctx:+$_ctx | }TEST [$_E2E_TEST_COUNT]: $_E2E_CURRENT_TEST"
+        [ -n "$description" ] && _ctx="${_ctx:+$_ctx | }Step: $description"
+        [ -n "$_ctx" ] && _e2e_log_and_print "$(_e2e_yellow "$_ctx")"
         _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
         printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [a]bort [!cmd]: ")"
         read -t 0 -n 10000 </dev/tty 2>/dev/null || true
@@ -617,14 +623,23 @@ e2e_run() {
 
             local _exi; _exi="$(_e2e_exit_info $ret)"
             _e2e_log "  Attempt $attempt/$tot_cnt failed ($_exi)"
-            _e2e_log_and_print "    $(_e2e_yellow "Attempt ($attempt/$tot_cnt) failed ($_exi): $description")"
-            _e2e_summary "    $(_e2e_Yellow "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description"
 
             if [ $attempt -ge $tot_cnt ]; then
                 _e2e_log "  All $tot_cnt attempts exhausted"
+                _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
+                _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
                 _e2e_summary "    $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
+                (
+                    echo "Command: $cmd"
+                    echo "Host: ${host:-localhost}"
+                    echo "Log tail:"
+                    tail -20 "${E2E_LOG_FILE:-/dev/null}" 2>/dev/null
+                ) | _e2e_notify_stdin "EXHAUSTED $tot_cnt attempts: $description"
                 break
             fi
+
+            _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description")"
+            _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description"
 
             if [ $attempt -eq 1 ]; then
                 (
@@ -642,7 +657,7 @@ e2e_run() {
             [ "$sleep_time" -gt "$max_delay" ] && sleep_time="$max_delay"
         done
 
-        _interactive_prompt "$cmd" "$ret"
+        _interactive_prompt "$cmd" "$ret" "$description"
         local prompt_rc=$?
 
         if [ $prompt_rc -eq 2 ]; then
