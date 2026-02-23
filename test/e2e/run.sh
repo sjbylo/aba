@@ -382,9 +382,14 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 	host="con${i}.${VM_BASE_DOMAIN:-example.com}"
 	target="${user}@${host}"
 
-	scp $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/aba/test/e2e/config.env" 2>/dev/null || true
-	scp $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/aba/test/e2e/pools.conf" 2>/dev/null || true
-	echo "    con${i}: config.env + pools.conf deployed"
+	_deploy_ok=1
+	scp $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/aba/test/e2e/config.env" || _deploy_ok=0
+	scp $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/aba/test/e2e/pools.conf" || _deploy_ok=0
+	if [ "$_deploy_ok" -eq 1 ]; then
+		echo "    con${i}: config.env + pools.conf deployed"
+	else
+		echo "    con${i}: WARNING: deploy failed (SCP error above)"
+	fi
 done
 
 # --- Shuffle and distribute suites across pools (round-robin) -----------------
@@ -556,8 +561,11 @@ for p in "${!_dispatched[@]}"; do
 	host="con${p}.${VM_BASE_DOMAIN:-example.com}"
 	local_dir="$_RUN_DIR/logs/pool-${p}"
 	mkdir -p "$local_dir"
-	scp -r $_SSH_OPTS "${user}@${host}:~/aba/test/e2e/logs/*" "$local_dir/" 2>/dev/null || true
-	echo "    Pool $p logs -> $local_dir/"
+	if scp -r $_SSH_OPTS "${user}@${host}:~/aba/test/e2e/logs/*" "$local_dir/"; then
+		echo "    Pool $p logs -> $local_dir/"
+	else
+		echo "    Pool $p: WARNING: log collection failed"
+	fi
 done
 
 # --- Final summary ------------------------------------------------------------
