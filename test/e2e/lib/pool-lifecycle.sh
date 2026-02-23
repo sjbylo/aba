@@ -468,10 +468,6 @@ _vm_setup_dnsmasq() {
     local apps_vip
     apps_vip="${POOL_APPS_VIP[$pool_num]:-${POOL_SUBNET:-10.0.2}.$((pool_num * 10 + 4))}"
 
-    # Registry record: registry.pN.example.com -> disN's lab IP
-    local dis_lab_ip
-    dis_lab_ip="$(pool_dis_ip "$pool_num")"
-
     # VLAN IPs for network-advanced VLAN clusters
     local vlan_node_ip vlan_api_vip vlan_apps_vip
     vlan_node_ip="${POOL_VLAN_NODE_IP[$pool_num]:-10.10.20.$((200 + pool_num))}"
@@ -481,7 +477,6 @@ _vm_setup_dnsmasq() {
     echo "  [vm] Setting up dnsmasq on $host for pool $pool_num ($domain) ..."
     echo "  [vm]   node=$node_ip  api_vip=$api_vip  apps_vip=$apps_vip  upstream=$upstream"
     echo "  [vm]   vlan_node=$vlan_node_ip  vlan_api=$vlan_api_vip  vlan_apps=$vlan_apps_vip"
-    echo "  [vm]   registry -> $dis_lab_ip (dis${pool_num} lab IP)"
 
     # Build the dnsmasq config
     local dnsmasq_conf
@@ -493,13 +488,10 @@ _vm_setup_dnsmasq() {
 
 # Listen on all interfaces, don't read /etc/resolv.conf
 no-resolv
-bind-interfaces
+bind-dynamic
 
 # Forward non-cluster queries to upstream lab DNS
 server=${upstream}
-
-# --- Registry: registry.pN.example.com -> disN lab IP ---
-address=/registry.${domain}/${dis_lab_ip}
 
 # --- SNO variants: api + apps -> node IP ---
 address=/api.$(pool_cluster_name sno ${pool_num}).${domain}/${node_ip}
@@ -588,8 +580,6 @@ RESOLVEOF
     sno_name="$(pool_cluster_name sno ${pool_num})"
     echo "  [vm] Verifying DNS on $host (cluster name: $sno_name) ..."
     cat <<-DNSEOF | _essh "${user}@${host}" -- bash
-		echo '--- Testing registry DNS ---'
-		dig +short registry.${domain} @127.0.0.1
 		echo '--- Testing cluster DNS ---'
 		dig +short api.${sno_name}.${domain} @127.0.0.1
 		dig +short test.apps.${sno_name}.${domain} @127.0.0.1
@@ -702,14 +692,15 @@ _vm_fix_proxy_noproxy() {
 	PROXYEOF
 }
 
-# --- _vm_remove_proxy -------------------------------------------------------
-# Disable proxy configuration in .bashrc (for fully disconnected testing).
+# --- _vm_disable_proxy_autoload ----------------------------------------------
+# Comment out proxy auto-sourcing in .bashrc so clones start proxy-free.
+# The ~/.proxy-set.sh and ~/.proxy-unset.sh files are preserved for test use.
 #
-_vm_remove_proxy() {
+_vm_disable_proxy_autoload() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
 
-    echo "  [vm] Disabling proxy on $host ..."
+    echo "  [vm] Disabling proxy auto-load on $host ..."
     _essh "${user}@${host}" -- \
         "if [ -f ~/.bashrc ]; then sed -i 's|^source ~/.proxy-set.sh|# aba-test # source ~/.proxy-set.sh|g' ~/.bashrc; fi"
 }
@@ -869,6 +860,18 @@ _vm_verify_golden() {
 		[ -z "$(ls ~$SUDO_USER 2>/dev/null)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
 		id testy
 		grep -q "ABA_TESTING=1" /etc/environment
+
+		# Golden VM must have no default route (fully disconnected)
+		! ip route show default | grep -q . || { echo "ERROR: default route still present"; exit 1; }
+
+		# Proxy env vars must not be active in the default environment
+		[ -z "${http_proxy:-}" ] && [ -z "${https_proxy:-}" ] && [ -z "${HTTP_PROXY:-}" ] && [ -z "${HTTPS_PROXY:-}" ] \
+			|| { echo "ERROR: proxy env vars still active"; exit 1; }
+
+		# No internet connectivity expected
+		! curl -s --max-time 5 -o /dev/null http://google.com 2>/dev/null \
+			|| { echo "ERROR: internet is reachable (should be disconnected)"; exit 1; }
+
 		echo "All golden VM checks passed."
 	VERIFYEOF
 
@@ -939,7 +942,7 @@ prepare_golden_vm() {
 	_vm_wait_ssh "$ip" "$user"            || return 1
 	_vm_setup_default_route "$ip" "$user" || return 1
 	_vm_fix_proxy_noproxy "$ip" "$user"   || return 1
-	_vm_remove_proxy "$ip" "$user"        || return 1
+	_vm_disable_proxy_autoload "$ip" "$user"        || return 1
 	_vm_setup_firewall "$ip" "$user"      || return 1
 	_vm_wait_ssh "$ip" "$user"            || return 1
 	_vm_setup_time "$ip" "$user"          || return 1
@@ -1051,7 +1054,7 @@ configure_internal_bastion() {
 
     # Air-gap: remove pull-secret and proxy
     _vm_remove_pull_secret "$host" "$user"
-    _vm_remove_proxy "$host" "$user"
+    _vm_disable_proxy_autoload "$host" "$user"
 
     # Create test user
     _vm_create_test_user "$host" "$user"
@@ -1303,7 +1306,7 @@ create_pools() {
                 _vm_cleanup_caches "$int_vm" "$user"
                 _vm_verify_golden "$int_vm" "$user"
                 _vm_remove_pull_secret "$int_vm" "$user"
-                _vm_remove_proxy "$int_vm" "$user"
+                _vm_disable_proxy_autoload "$int_vm" "$user"
                 _vm_disconnect_internet "$int_vm" "$user"
 
                 echo "  $int_vm ready"

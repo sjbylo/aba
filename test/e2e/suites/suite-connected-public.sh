@@ -18,6 +18,7 @@ source "$_SUITE_DIR/../lib/setup.sh"
 # --- Configuration ----------------------------------------------------------
 
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
+DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
 
 # Pool-unique cluster names (avoid VM collisions when pools run in parallel)
 SNO="$(pool_cluster_name sno)"
@@ -184,13 +185,13 @@ e2e_run "Clean sno-mirror cluster dir" "rm -rfv $SNO_MIRROR"
 # Create mirror.conf pointing at the pool registry so aba generates mirror sources.
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set mirror hostname in mirror.conf" \
-    "sed -i \"s/registry.$(pool_domain)/$(pool_registry_host)/g\" mirror/mirror.conf"
+    "sed -i \"s/registry.$(pool_domain)/${DIS_HOST}/g\" mirror/mirror.conf"
 
 # No real registry needed -- this test only verifies install-config.yaml generation.
 # Populate regcreds with minimal valid files so create-install-config.sh injects
 # imageDigestSources and additionalTrustBundle into the YAML.
 e2e_run "Create dummy pull secret for config verification" \
-    "echo '{\"auths\":{\"$(pool_registry_host):8443\":{\"auth\":\"dGVzdDp0ZXN0\"}}}' > mirror/regcreds/pull-secret-mirror.json"
+    "echo '{\"auths\":{\"${DIS_HOST}:8443\":{\"auth\":\"dGVzdDp0ZXN0\"}}}' > mirror/regcreds/pull-secret-mirror.json"
 e2e_run "Create dummy CA cert for config verification" \
     "openssl req -x509 -newkey rsa:2048 -keyout /dev/null -out mirror/regcreds/rootCA.pem -days 1 -nodes -subj '/CN=test' 2>/dev/null"
 
