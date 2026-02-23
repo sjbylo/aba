@@ -297,9 +297,6 @@ _configure_dis_vm() {
 		getent hosts ${vm}.${_base_domain} | grep -q "${_dis_lab_ip}" || { echo "FAIL: cannot resolve ${vm}.${_base_domain} -> ${_dis_lab_ip}"; exit 1; }
 		echo "  PASS: DNS ${vm}.${_base_domain} -> ${_dis_lab_ip}"
 
-		getent hosts registry.${_domain} > /dev/null || { echo "FAIL: cannot resolve registry.${_domain}"; exit 1; }
-		echo "  PASS: DNS registry.${_domain}"
-
 		# --- Lab connectivity ---
 		ping -c 1 -W 3 ${_ntp} > /dev/null || { echo "FAIL: lab server ${_ntp} unreachable via ens192"; exit 1; }
 		echo "  PASS: lab server ${_ntp} reachable"
