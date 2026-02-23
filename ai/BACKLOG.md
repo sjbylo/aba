@@ -121,6 +121,74 @@ But a subsequent `grep 'redhat-operator-index' mirror/save/imageset-config-save.
 - Compare the generated YAML content with the verbose output
 - Verify whether the issue is in YAML generation or in the test assertion (grep pattern)
 
+### 13. `run.sh verify` -- Re-run Pool Verification Without Reconfiguring
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Medium  
+**Created:** 2026-02-23
+
+**Problem:**
+After `setup-infra.sh` creates and configures conN/disN VMs, the post-configuration verification checks are embedded inline in `_configure_con_vm` and `_configure_dis_vm`. There is no way to re-run just the verification without re-running the full configuration.
+
+This is useful when:
+- A pool setup failed and you want to verify the current state after a manual fix
+- VMs were rebooted and you want to confirm they are still correctly configured
+- Debugging infrastructure issues (DNS, VLAN, firewall, etc.)
+
+**Proposed solution:**
+1. Extract the con and dis verification blocks into standalone `_verify_con_vm()` and `_verify_dis_vm()` functions in `setup-infra.sh`
+2. Call those functions from the existing `_configure_con_vm` / `_configure_dis_vm` (so setup still verifies)
+3. Add a `--verify` flag to `setup-infra.sh` that only runs verification on all pools
+4. Add a `verify` subcommand to `run.sh` that calls `setup-infra.sh --verify`
+
+Usage: `run.sh verify` or `run.sh verify 3` (single pool)
+
+### 14. Dynamic Suite Dispatcher (Work-Queue Model)
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Medium  
+**Created:** 2026-02-23
+
+**Problem:**
+The current dispatcher in `run.sh` is static: suites are shuffled and round-robin assigned to pools at startup. Each pool's `runner.sh` receives its full suite list upfront and runs them sequentially. If one pool finishes fast suites while another is stuck on a slow one, the fast pool sits idle -- no rebalancing.
+
+**Proposed Solution -- Dynamic work-queue dispatch:**
+Pools receive one suite at a time. When a pool finishes, the dispatcher assigns the next suite from the queue. This maximises pool utilization when suite durations vary.
+
+The v1 framework (`test/e2e-v1/lib/parallel.sh`) has a complete working implementation with `dispatch_all()`, `_find_free_pool()`, `_wait_for_any()`, and `_record_result()`. Adapt this to the v2 architecture:
+
+1. **`run.sh`**: Replace the round-robin block (lines 327-459) with a dispatch loop that sends one suite at a time via `tmux send-keys` and polls for completion before dispatching the next
+2. **`runner.sh`**: Simplify to single-suite mode -- accept `POOL_NUM suite_name`, revert snapshot, run suite, write rc file, exit
+3. **Dashboard**: Keep as-is (tail summary logs per pool)
+
+**Reference:** `test/e2e-v1/lib/parallel.sh` (518 lines, complete implementation)
+
+### 15. Suite Banner in tmux on Dispatch
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-02-23
+
+**Problem:**
+When a new suite is dispatched to a tmux pane on conN, the output starts immediately with no visual separator. When scrolling up through a long log to find where a suite started, it's hard to locate the boundary.
+
+**Proposed Solution:**
+Have `runner.sh` print a large, obvious banner before each suite starts, e.g.:
+
+```
+################################################################################
+##                                                                            ##
+##   SUITE: airgapped-local-reg   (pool 3, con3)                             ##
+##   Started: 2026-02-23 08:15:30                                            ##
+##                                                                            ##
+################################################################################
+```
+
+This makes it easy to find suite boundaries when scrolling the tmux scrollback buffer.
+
 ---
 
 ## Low Priority

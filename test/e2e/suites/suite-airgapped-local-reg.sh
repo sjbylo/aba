@@ -219,7 +219,7 @@ test_begin "Incremental: UBI image load"
 e2e_run "Add UBI to imageset and save" \
     "aba -d mirror --add-image registry.redhat.io/ubi9/ubi:latest && aba -d mirror save --retry"
 e2e_run "Transfer UBI images to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xf -'"
+    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
 e2e_run_remote -r 3 2 "Load UBI images" \
     "cd ~/aba && aba -d mirror load --retry"
 
@@ -233,7 +233,7 @@ test_begin "Incremental: vote-app image load"
 e2e_run "Add vote-app image and save" \
     "aba -d mirror --add-image quay.io/sjbylo/flask-vote-app:latest && aba -d mirror save --retry"
 e2e_run "Transfer vote-app to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xf -'"
+    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
 
@@ -295,7 +295,7 @@ test_begin "Incremental: mesh operators"
 e2e_run "Add mesh operator set" "aba --op-sets mesh3"
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
 e2e_run "Transfer mesh images to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xf -'"
+    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
 e2e_run_remote -r 3 2 "Load mesh images" \
     "cd ~/aba && aba -d mirror load --retry"
 
@@ -311,7 +311,7 @@ e2e_run "Set version to desired (upgrade target)" \
     "aba -v \$(cat /tmp/e2e-ocp-version-desired)"
 e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
 e2e_run "Transfer upgrade images to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xf -'"
+    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
 e2e_run_remote -r 3 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
 

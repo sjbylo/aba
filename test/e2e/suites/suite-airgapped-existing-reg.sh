@@ -155,7 +155,7 @@ test_end
 test_begin "Tar-pipe transfer to bastion"
 
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xvf -'"
+    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
 
 test_end
 
@@ -239,7 +239,7 @@ test_begin "ACM: install operators"
 e2e_run "Set op_sets=acm" "aba --op-sets acm"
 e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
 e2e_run -r 3 2 "Pipe ACM tar to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'cd ~/aba && tar xvf -'"
+    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
 e2e_run_remote -r 3 2 "Load ACM images" \
     "cd ~/aba && aba -d mirror load --retry"
 

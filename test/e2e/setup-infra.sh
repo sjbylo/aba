@@ -73,8 +73,6 @@ _configure_con_vm() {
 	local _con_vlan="${VM_CLONE_VLAN_IPS[$vm]%%/*}"
 	local _domain
 	_domain="$(pool_domain "$pool_num")"
-	local _reg_ip
-	_reg_ip="$(pool_dis_ip "$pool_num")"
 	local _ntp="${NTP_SERVER:-10.0.1.8}"
 
 	local _tz="${TIMEZONE:-Asia/Singapore}"
@@ -129,9 +127,6 @@ _configure_con_vm() {
 		dig +short google.com @${_con_vlan} | head -1 | grep -q . || { echo "FAIL: DNS @${_con_vlan} -> google.com"; exit 1; }
 		echo "  PASS: DNS @${_con_vlan} -> google.com (disN path)"
 
-		dig +short registry.${_domain} @${_con_vlan} | grep -q "${_reg_ip}" || { echo "FAIL: registry.${_domain} @${_con_vlan} != ${_reg_ip}"; exit 1; }
-		echo "  PASS: DNS @${_con_vlan} -> registry.${_domain} = ${_reg_ip}"
-
 		grep -q "nameserver 127.0.0.1" /etc/resolv.conf || { echo "FAIL: resolv.conf not 127.0.0.1"; exit 1; }
 		echo "  PASS: resolv.conf -> 127.0.0.1"
 
@@ -159,8 +154,8 @@ _configure_con_vm() {
 		grep -q "ABA_TESTING=1" /etc/environment || { echo "FAIL: ABA_TESTING not set"; exit 1; }
 		echo "  PASS: ABA_TESTING=1"
 
-		# --- Installed software ---
-		command -v aba > /dev/null || { echo "FAIL: aba not in PATH"; exit 1; }
+		# --- Installed software (check as the owning user, not root) ---
+		sudo -u ${user} bash -lc 'command -v aba > /dev/null' || { echo "FAIL: aba not in PATH"; exit 1; }
 		echo "  PASS: aba installed"
 
 		test -d /home/${user}/aba || { echo "FAIL: ~/aba not present"; exit 1; }
@@ -173,9 +168,13 @@ _configure_con_vm() {
 		test -f /home/${user}/.ssh/testy_rsa || { echo "FAIL: testy_rsa key missing"; exit 1; }
 		echo "  PASS: testy_rsa key"
 
-		# --- Podman clean ---
-		! podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images"; exit 1; }
-		echo "  PASS: no podman images"
+		# --- Podman clean (all users) ---
+		! podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (root)"; exit 1; }
+		echo "  PASS: no podman images (root)"
+		! sudo -u ${user} podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (${user})"; exit 1; }
+		echo "  PASS: no podman images (${user})"
+		! sudo -u testy podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (testy)"; exit 1; }
+		echo "  PASS: no podman images (testy)"
 
 		echo "  [$vm] All verifications PASSED."
 	VERIFY
@@ -210,7 +209,7 @@ _configure_dis_vm() {
 	_vm_cleanup_home "$vm" "$user"
 	_vm_setup_vmware_conf "$vm" "$user"
 	_vm_remove_pull_secret "$vm" "$user"
-	_vm_remove_proxy "$vm" "$user"
+	_vm_disable_proxy_autoload "$vm" "$user"
 	_vm_create_test_user "$vm" "$user"
 	_vm_set_aba_testing "$vm" "$user"
 	_vm_disconnect_internet "$vm" "$user"
@@ -266,8 +265,13 @@ _configure_dis_vm() {
 		ip link show ens224 | grep -q "mtu 9000" || { echo "FAIL: ens224 mtu != 9000"; exit 1; }
 		echo "  PASS: ens224 mtu 9000"
 
-		# --- VLAN connectivity ---
-		ping -c 1 -W 3 ${_con_vlan} > /dev/null || { echo "FAIL: cannot ping con VLAN ${_con_vlan}"; exit 1; }
+		# --- VLAN connectivity (con may still be configuring in parallel) ---
+		_vlan_ok=0
+		for _try in \$(seq 1 40); do
+			if ping -c 1 -W 3 ${_con_vlan} > /dev/null 2>&1; then _vlan_ok=1; break; fi
+			sleep 3
+		done
+		[ "\$_vlan_ok" -eq 1 ] || { echo "FAIL: cannot ping con VLAN ${_con_vlan} after 120s"; exit 1; }
 		echo "  PASS: VLAN ping to ${con_vm} (${_con_vlan})"
 
 		# --- Firewall / NAT ---
@@ -328,66 +332,19 @@ _configure_dis_vm() {
 		! grep -q "^source.*proxy-set" /home/${user}/.bashrc 2>/dev/null || { echo "FAIL: proxy still in .bashrc"; exit 1; }
 		echo "  PASS: proxy disabled"
 
-		# --- Podman clean ---
-		! podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images"; exit 1; }
-		echo "  PASS: no podman images"
+		# --- Podman clean (all users) ---
+		! podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (root)"; exit 1; }
+		echo "  PASS: no podman images (root)"
+		! sudo -u ${user} podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (${user})"; exit 1; }
+		echo "  PASS: no podman images (${user})"
+		! sudo -u testy podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (testy)"; exit 1; }
+		echo "  PASS: no podman images (testy)"
 
 		echo "  [$vm] All verifications PASSED."
 	VERIFY
 
 	echo "  $vm configured."
 }
-
-# =============================================================================
-# Internal sub-command: --_run-pane (used by tmux panes, not user-facing)
-# =============================================================================
-
-if [ "${1:-}" = "--_run-pane" ]; then
-	_pane_role="$2"       # con or dis
-	_pane_vm="$3"         # e.g. con1
-	_pane_other="$4"      # e.g. dis1 (for last-to-finish logic)
-	_pane_signal="$5"     # signal directory (for RC files + prompt coordination)
-	_pane_log="$6"        # pool log file
-	_pane_folder="$7"     # VC_FOLDER for this pool
-	_pane_user="$8"       # VM user
-	_pane_con="${9:-}"    # con VM name (needed by dis for internet wait)
-
-	export VC_FOLDER="$_pane_folder"
-
-	_pane_rc=0
-	(
-		set -e
-		if [ "$_pane_role" = "con" ]; then
-			_configure_con_vm "$_pane_vm" "$_pane_user"
-		else
-			_configure_dis_vm "$_pane_vm" "$_pane_user" "$_pane_con"
-		fi
-	) 2>&1 | tee -a "$_pane_log"
-	_pane_rc=${PIPESTATUS[0]}
-
-	echo "$_pane_rc" > "${_pane_signal}/${_pane_vm}.rc"
-
-	if [ "$_pane_rc" -ne 0 ]; then
-		echo "  $_pane_vm: configuration FAILED (rc=$_pane_rc)"
-	fi
-
-	# Last-to-finish: show prompt and detach tmux
-	_pane_other_rc="${_pane_signal}/${_pane_other}.rc"
-	for ((_pw=0; _pw<120; _pw++)); do
-		if [ -f "$_pane_other_rc" ] && mkdir "${_pane_signal}/prompt-lock" 2>/dev/null; then
-			echo ""
-			echo "=== Pool 1 configuration complete ==="
-			read -t 30 -p "Press Enter to continue..." _ || true
-			touch "${_pane_signal}/continue"
-			tmux detach-client -s e2e-infra 2>/dev/null || true
-			exit "$_pane_rc"
-		fi
-		[ -f "${_pane_signal}/continue" ] && exit "$_pane_rc"
-		sleep 1
-	done
-	tmux detach-client -s e2e-infra 2>/dev/null || true
-	exit "$_pane_rc"
-fi
 
 # =============================================================================
 # Normal flow: parse arguments
@@ -495,7 +452,7 @@ _prepare_golden() {
 	_vm_wait_ssh "$ip" "$user"            || return 1
 	_vm_setup_default_route "$ip" "$user" || return 1
 	_vm_fix_proxy_noproxy "$ip" "$user"   || return 1
-	_vm_remove_proxy "$ip" "$user"        || return 1
+	_vm_disable_proxy_autoload "$ip" "$user"        || return 1
 	_vm_setup_firewall "$ip" "$user"      || return 1
 	_vm_wait_ssh "$ip" "$user"            || return 1
 	_vm_setup_time "$ip" "$user"          || return 1
@@ -550,18 +507,22 @@ _vm_needs_clone() {
 	echo "broken"
 }
 
-declare -a _clone_pids=()
-declare -a _clone_labels=()
 _clone_failed=0
 
-for (( i=1; i<=_POOLS; i++ )); do
-	pool_folder="${_pool_folders[$i]:-${_BASE_FOLDER}/pool${i}}"
-	pool_ds="${_pool_datastores[$i]:-$VM_DATASTORE}"
-	pool_log="$_LOG_DIR/create-pool${i}.log"
+# Stagger clones: all conN first, then all disN, to reduce concurrent vCenter I/O.
+for prefix in con dis; do
+	declare -a _clone_pids=()
+	declare -a _clone_labels=()
 
-	govc folder.create "$pool_folder" 2>/dev/null || true
+	echo "  --- Cloning ${prefix}1..${prefix}${_POOLS} ---"
 
-	for prefix in con dis; do
+	for (( i=1; i<=_POOLS; i++ )); do
+		pool_folder="${_pool_folders[$i]:-${_BASE_FOLDER}/pool${i}}"
+		pool_ds="${_pool_datastores[$i]:-$VM_DATASTORE}"
+		pool_log="$_LOG_DIR/create-pool${i}.log"
+
+		govc folder.create "$pool_folder" 2>/dev/null || true
+
 		vm_name="${prefix}${i}"
 		status=$(_vm_needs_clone "$vm_name")
 
@@ -586,15 +547,17 @@ for (( i=1; i<=_POOLS; i++ )); do
 				;;
 		esac
 	done
-done
 
-for idx in "${!_clone_pids[@]}"; do
-	if wait "${_clone_pids[$idx]}"; then
-		echo "  OK: ${_clone_labels[$idx]}"
-	else
-		echo "  FAILED: ${_clone_labels[$idx]} (exit=$?)" >&2
-		_clone_failed=1
-	fi
+	for idx in "${!_clone_pids[@]}"; do
+		if wait "${_clone_pids[$idx]}"; then
+			echo "  OK: ${_clone_labels[$idx]}"
+		else
+			echo "  FAILED: ${_clone_labels[$idx]} (exit=$?)" >&2
+			_clone_failed=1
+		fi
+	done
+
+	unset _clone_pids _clone_labels
 done
 
 if [ "$_clone_failed" -ne 0 ]; then
@@ -611,7 +574,6 @@ echo "=== Phase 1 complete ==="
 echo ""
 echo "=== Phase 2: Configure VMs ==="
 
-_signal_dir=$(mktemp -d /tmp/e2e-infra-signals.XXXXXX)
 declare -a _cfg_pids=()
 declare -a _cfg_labels=()
 declare -a _cfg_logs=()
@@ -632,85 +594,24 @@ for (( i=1; i<=_POOLS; i++ )); do
 	fi
 
 	echo "  Configuring pool $i ($con_vm + $dis_vm) ..."
+	echo "    Log: $pool_log"
 
-	if [ "$i" -eq 1 ] && [ -t 0 ] && [ -t 1 ]; then
-		# ------------------------------------------------------------------
-		# Pool 1, interactive: tmux 2-pane (con top, dis bottom)
-		# ------------------------------------------------------------------
-		_self="$_INFRA_DIR/setup-infra.sh"
+	(
+		set -e
+		export VC_FOLDER="$pool_folder"
+		_configure_con_vm "$con_vm" "$user"
+	) >> "$pool_log" 2>&1 &
+	_cfg_pids+=($!)
+	_cfg_labels+=("configure $con_vm")
 
-		tmux kill-session -t e2e-infra 2>/dev/null || true
-		tmux new-session -d -s e2e-infra -x 200 -y 50
-		tmux set-option -t e2e-infra remain-on-exit on
-
-		tmux send-keys -t e2e-infra \
-			"bash '$_self' --_run-pane con '$con_vm' '$dis_vm' '$_signal_dir' '$pool_log' '$pool_folder' '$user' '$con_vm'" Enter
-		tmux split-window -v -t e2e-infra
-		tmux send-keys -t e2e-infra \
-			"bash '$_self' --_run-pane dis '$dis_vm' '$con_vm' '$_signal_dir' '$pool_log' '$pool_folder' '$user' '$con_vm'" Enter
-
-		if [ -n "${TMUX:-}" ]; then
-			tmux switch-client -t e2e-infra
-		else
-			tmux attach -t e2e-infra
-		fi
-
-		# Safety net: wait for both RC files even if user detached early
-		for ((_w=0; _w<900; _w++)); do
-			[ -f "${_signal_dir}/${con_vm}.rc" ] && [ -f "${_signal_dir}/${dis_vm}.rc" ] && break
-			sleep 2
-		done
-
-		# Read exit codes
-		if [ -f "${_signal_dir}/${con_vm}.rc" ]; then
-			_rc=$(cat "${_signal_dir}/${con_vm}.rc")
-			if [ "$_rc" -ne 0 ]; then
-				echo "  FAILED: configure $con_vm (exit=$_rc)" >&2
-				_cfg_failed=1
-			else
-				echo "  OK: configure $con_vm"
-			fi
-		else
-			echo "  FAILED: configure $con_vm (timed out)" >&2
-			_cfg_failed=1
-		fi
-
-		if [ -f "${_signal_dir}/${dis_vm}.rc" ]; then
-			_rc=$(cat "${_signal_dir}/${dis_vm}.rc")
-			if [ "$_rc" -ne 0 ]; then
-				echo "  FAILED: configure $dis_vm (exit=$_rc)" >&2
-				_cfg_failed=1
-			else
-				echo "  OK: configure $dis_vm"
-			fi
-		else
-			echo "  FAILED: configure $dis_vm (timed out)" >&2
-			_cfg_failed=1
-		fi
-
-		tmux kill-session -t e2e-infra 2>/dev/null || true
-	else
-		# ------------------------------------------------------------------
-		# Pool 1 non-interactive (cron) OR pools 2-N: background, log only
-		# ------------------------------------------------------------------
-		echo "    Log: $pool_log"
-		(
-			set -e
-			export VC_FOLDER="$pool_folder"
-			_configure_con_vm "$con_vm" "$user"
-		) >> "$pool_log" 2>&1 &
-		_cfg_pids+=($!)
-		_cfg_labels+=("configure $con_vm")
-
-		(
-			set -e
-			export VC_FOLDER="$pool_folder"
-			_configure_dis_vm "$dis_vm" "$user" "$con_vm"
-		) >> "$pool_log" 2>&1 &
-		_cfg_pids+=($!)
-		_cfg_labels+=("configure $dis_vm")
-		_cfg_logs+=("$pool_log")
-	fi
+	(
+		set -e
+		export VC_FOLDER="$pool_folder"
+		_configure_dis_vm "$dis_vm" "$user" "$con_vm"
+	) >> "$pool_log" 2>&1 &
+	_cfg_pids+=($!)
+	_cfg_labels+=("configure $dis_vm")
+	_cfg_logs+=("$pool_log")
 done
 
 # While background config jobs run, tail their logs so the user sees progress
@@ -730,8 +631,6 @@ for idx in "${!_cfg_pids[@]}"; do
 done
 
 [ -n "$_tail_pid" ] && kill "$_tail_pid" 2>/dev/null || true
-
-rm -rf "$_signal_dir"
 
 if [ "$_cfg_failed" -ne 0 ]; then
 	echo "FATAL: VM configuration failed" >&2

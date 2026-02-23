@@ -53,6 +53,8 @@ POOL_NUM="$1"; shift
 export POOL_NUM
 SUITES=("$@")
 
+echo "${SUITES[*]}" > /tmp/e2e-last-suites
+
 echo ""
 echo "========================================"
 echo "  E2E Runner on $(hostname) (pool $POOL_NUM)"
