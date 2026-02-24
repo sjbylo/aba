@@ -408,6 +408,7 @@ _POOLS=1
 _RECREATE_GOLDEN=""
 _RECREATE_VMS=""
 _VERIFY_ONLY=""
+_YES=""
 _POOLS_FILE="$_INFRA_DIR/pools.conf"
 
 while [ $# -gt 0 ]; do
@@ -416,10 +417,24 @@ while [ $# -gt 0 ]; do
 		-G|--recreate-golden) _RECREATE_GOLDEN=1; shift ;;
 		-R|--recreate-vms)    _RECREATE_VMS=1; shift ;;
 		--verify)             _VERIFY_ONLY=1; shift ;;
+		-y|--yes)             _YES=1; shift ;;
 		--pools-file)         _POOLS_FILE="$2"; shift 2 ;;
 		*) echo "setup-infra.sh: unknown flag: $1" >&2; exit 1 ;;
 	esac
 done
+
+_confirm() {
+	local msg="$1"
+	if [ -n "$_YES" ]; then
+		echo "$msg Y (auto)"
+		return 0
+	fi
+	read -r -p "$msg " answer
+	case "${answer:-Y}" in
+		[Yy]*) return 0 ;;
+		*) return 1 ;;
+	esac
+}
 
 # --- Parse per-pool overrides from pools.conf --------------------------------
 
@@ -551,15 +566,18 @@ _prepare_golden() {
 			echo "=== Phase 0 complete ==="
 			return 0
 		fi
-		echo "" >&2
-		echo "ERROR: Golden VM '$_GOLDEN_NAME' exists but has no '$snapshot_name' snapshot." >&2
-		echo "" >&2
-		echo "  This means a previous golden build did not complete successfully." >&2
-		echo "  Inspect the VM, then either:" >&2
-		echo "    - Manually snapshot it as '$snapshot_name' in vCenter, or" >&2
-		echo "    - Re-run with --recreate-golden to destroy and rebuild it from scratch." >&2
-		echo "" >&2
-		return 1
+		echo ""
+		echo "  Golden VM '$_GOLDEN_NAME' exists but has no '$snapshot_name' snapshot."
+		echo "  A previous golden build likely did not complete successfully."
+		echo ""
+		if _confirm "  Destroy and rebuild from template? (Y/n)"; then
+			echo "  Destroying golden VM ..."
+			govc vm.power -off "$_GOLDEN_NAME" 2>/dev/null || true
+			govc vm.destroy "$_GOLDEN_NAME"
+		else
+			echo "  Aborted." >&2
+			return 1
+		fi
 	fi
 
 	echo "  Cloning from template: $_VM_TEMPLATE ..."
@@ -671,12 +689,17 @@ for prefix in con dis; do
 				govc vm.power -on "$vm_name" 2>/dev/null || true
 				;;
 		broken)
-			echo "  $vm_name: broken (SSH down, no '$_SNAPSHOT_NAME' snapshot) -- destroying and recloning ..."
-			govc vm.power -off "$vm_name" 2>/dev/null || true
-			govc vm.destroy "$vm_name" || true
-			VM_DATASTORE="$pool_ds" clone_vm "$_GOLDEN_NAME" "$vm_name" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
-			_clone_pids+=($!)
-			_clone_labels+=("clone $vm_name (was broken)")
+			echo "  $vm_name: broken (SSH down, no '$_SNAPSHOT_NAME' snapshot)"
+			if _confirm "  Replace $vm_name? (Y/n)"; then
+				govc vm.power -off "$vm_name" 2>/dev/null || true
+				govc vm.destroy "$vm_name" || true
+				VM_DATASTORE="$pool_ds" clone_vm "$_GOLDEN_NAME" "$vm_name" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
+				_clone_pids+=($!)
+				_clone_labels+=("clone $vm_name (was broken)")
+			else
+				echo "  Skipping $vm_name."
+				_clone_failed=1
+			fi
 			;;
 			missing|recreate)
 				echo "  $vm_name: $status -- cloning from $_GOLDEN_NAME ..."
