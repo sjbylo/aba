@@ -875,6 +875,41 @@ data:
 EOF
 ```
 
+Or organize manifests into subdirectories to group them by application or purpose:
+```bash
+# Organize manifests by application or purpose:
+mkdir -p day2-custom-manifests/00-namespaces
+mkdir -p day2-custom-manifests/01-gitea
+
+cat > day2-custom-manifests/00-namespaces/gitea-ns.yaml <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitea
+EOF
+
+cat > day2-custom-manifests/01-gitea/deployment.yaml <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  namespace: gitea
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitea
+  template:
+    metadata:
+      labels:
+        app: gitea
+    spec:
+      containers:
+      - name: gitea
+        image: registry.example.com:8443/gitea/gitea:latest
+EOF
+```
+
 3. Run day2 as normal:
 ```bash
 aba day2
@@ -913,12 +948,13 @@ oc get configmap hello-world -n default
 
 Deploy any Kubernetes resources you need as part of the Day-2 workflow. The key benefit is that your manifests are applied **after** the internal mirror registry is already configured, so you can reference images from your mirror in your custom resources.
 
-You can deploy whatever resources your cluster needs - the `day2-custom-manifests/` directory gives you complete flexibility to apply any Kubernetes manifests during the Day-2 process.
+You can deploy whatever resources your cluster needs - the `day2-custom-manifests/` directory gives you complete flexibility to apply any Kubernetes manifests during the Day-2 process. For complex deployments, organizing manifests into subdirectories makes it easier to manage dependencies and control the order in which resources are created.
 
 ### Notes
 
 - The `day2-custom-manifests/` directory is optional - if it doesn't exist, day2 runs normally
-- Files are applied in alphabetical order
+- Files are discovered recursively in subdirectories and applied in alphabetical order by full path
+- Use directory naming prefixes (e.g., `00-namespaces/`, `01-app/`) to control application order
 - Empty files are skipped with a warning
 - If a manifest fails to apply, day2 continues with remaining files
 - Manifests are applied after the internal mirror registry is configured, so they can reference mirrored images
