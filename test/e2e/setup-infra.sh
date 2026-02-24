@@ -624,17 +624,17 @@ _vm_needs_clone() {
 		echo "recreate"
 		return
 	fi
-	if ! vm_exists "$vm_name"; then
+	if ! vm_exists "$vm_name" > /dev/null; then
 		echo "missing"
 		return
 	fi
 	local user="$VM_DEFAULT_USER"
 	local host="${vm_name}.${VM_BASE_DOMAIN:-example.com}"
-	if _essh -o BatchMode=yes -o ConnectTimeout=10 "${user}@${host}" -- "date" 2>/dev/null; then
+	if _essh -o BatchMode=yes -o ConnectTimeout=10 "${user}@${host}" -- "date" > /dev/null; then
 		echo "ok"
 		return
 	fi
-	if govc snapshot.tree -vm "$vm_name" 2>/dev/null | grep "$_SNAPSHOT_NAME"; then
+	if govc snapshot.tree -vm "$vm_name" | grep "$_SNAPSHOT_NAME" > /dev/null; then
 		echo "revert"
 		return
 	fi
