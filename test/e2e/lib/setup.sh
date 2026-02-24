@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # E2E Test Framework -- Shared Setup Functions
 # =============================================================================
@@ -239,7 +239,7 @@ _cleanup_con_quay() {
     fi
 
     local _quay_detected=""
-    podman ps -a 2>/dev/null | grep -q quay && _quay_detected=1
+    podman ps -a 2>/dev/null | grep quay && _quay_detected=1
     [ -d "$HOME/quay-install" ] && _quay_detected=1
 
     if [ -n "$_quay_detected" ]; then

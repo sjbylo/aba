@@ -394,7 +394,7 @@ fi
 
 #### Stderr Redirection Best Practice
 
-**RULE**: Only use `2>/dev/null` IF there is an **explicit reason** to do so.
+**RULE**: Only use `2>/dev/null` or `2>&1` IF there is an **explicit reason** to do so.
 
 **DON'T** blindly suppress errors:
 ```bash
@@ -995,6 +995,8 @@ documented at the top of `test/e2e/lib/framework.sh`.
 
 1. **Tests MUST fail on error.**  Never mask underlying issues.
    If something breaks, the test must stop and report it.
+   **Especially in test/infrastructure code: never silently skip over or work around
+   an unexpected state.  Surface it loudly so the operator can act.**
 
 2. **Never use `2>/dev/null` in test commands.**
    Stderr output is diagnostic gold.  Suppressing it hides root causes.

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # E2E Test Framework -- Core Library
 # =============================================================================
@@ -441,7 +441,7 @@ should_skip_checkpoint() {
     local test_name="$1"
     # Only skip if we are in resume mode and test previously passed
     if [ -n "$E2E_RESUME_FILE" ] && [ -f "$E2E_RESUME_FILE" ]; then
-        if grep -q "^0 ${test_name}$" "$E2E_RESUME_FILE"; then
+        if grep "^0 ${test_name}$" "$E2E_RESUME_FILE"; then
             return 0  # yes, skip
         fi
     fi
@@ -472,7 +472,7 @@ _interactive_prompt() {
         [ -n "$description" ] && _ctx="${_ctx:+$_ctx | }Step: $description"
         [ -n "$_ctx" ] && _e2e_log_and_print "$(_e2e_yellow "$_ctx")"
         _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
-        printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [a]bort [!cmd]: ")"
+        printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [a]bort [!cmd]: ")"
         read -t 0 -n 10000 </dev/tty 2>/dev/null || true
         read -r ans </dev/tty
 
@@ -488,6 +488,10 @@ _interactive_prompt() {
             S)
                 _e2e_log "User chose: skip entire suite"
                 return 3
+                ;;
+            0)
+                _e2e_log "User chose: restart suite"
+                return 4
                 ;;
             a|A)
                 _e2e_log "User chose: abort"
@@ -669,6 +673,8 @@ e2e_run() {
             return 0
         elif [ $prompt_rc -eq 3 ]; then
             return 3
+        elif [ $prompt_rc -eq 4 ]; then
+            return 4
         else
             local _exf; _exf="$(_e2e_exit_info $ret)"
             _e2e_log "  FAILED: $description ($_exf)"
@@ -915,7 +921,7 @@ assert_contains() {
         _assert_fail "File does not exist: $file (expected to contain: $pattern)"
         return
     fi
-    if grep -q "$pattern" "$file"; then
+    if grep "$pattern" "$file"; then
         _e2e_log "  ASSERT OK: '$pattern' found in $file"
     else
         _assert_fail "$msg"
@@ -930,7 +936,7 @@ assert_not_contains() {
         _assert_fail "File does not exist: $file (checking for absence of: $pattern)"
         return
     fi
-    if ! grep -q "$pattern" "$file"; then
+    if ! grep "$pattern" "$file"; then
         _e2e_log "  ASSERT OK: '$pattern' not found in $file (expected)"
     else
         _assert_fail "$msg"
@@ -1072,12 +1078,20 @@ preflight_ssh() {
         _e2e_log "  Preflight: SSH to root@$host_only OK"
     fi
 
-    _e2e_log "  Preflight: checking SSH to testy@$host_only (testy_rsa) ..."
-    if ! ssh $_ssh_opts -i ~/.ssh/testy_rsa "testy@$host_only" true 2>/dev/null; then
-        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to testy@$host_only with testy_rsa")"
-        _fail=1
+    # testy key lives on conN (baked into golden snapshot).
+    # Verify that conN can SSH as testy to disN -- the path used by test suites.
+    local _dis_host_only="${DIS_HOST:-}"
+    _dis_host_only="${_dis_host_only#*@}"   # strip user@ prefix if present
+    if [ -n "$_dis_host_only" ]; then
+        _e2e_log "  Preflight: checking testy SSH from $host_only to $_dis_host_only ..."
+        if ! ssh $_ssh_opts "$host" -- "ssh -i ~/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null testy@${_dis_host_only} whoami 2>&1 | grep testy"; then
+            _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: testy cannot SSH from $host_only to $_dis_host_only")"
+            _fail=1
+        else
+            _e2e_log "  Preflight: testy SSH from $host_only to $_dis_host_only OK"
+        fi
     else
-        _e2e_log "  Preflight: SSH to testy@$host_only (testy_rsa) OK"
+        _e2e_log "  Preflight: DIS_HOST not set -- skipping testy SSH check"
     fi
 
     if [ -n "$_fail" ]; then

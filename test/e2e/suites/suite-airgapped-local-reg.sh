@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # Suite: Airgapped with Local Registry (rewrite of test5)
 # =============================================================================
@@ -178,6 +178,8 @@ e2e_run_remote "Install Docker registry" \
     "cd ~/aba && aba -d mirror install-docker-registry"
 e2e_run_remote "Verify Docker registry running" \
     "podman ps | grep registry"
+e2e_run_remote "Verify Docker registry accessible" \
+    "cd ~/aba && aba -d mirror verify"
 
 e2e_run_remote -r 3 2 "Load images into Docker registry" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -215,9 +217,17 @@ test_end
 # ============================================================================
 test_begin "Incremental: UBI image load"
 
-# Save UBI images from connected bastion
-e2e_run "Add UBI to imageset and save" \
-    "aba -d mirror --add-image registry.redhat.io/ubi9/ubi:latest && aba -d mirror save --retry"
+# oc-mirror v2 needs a fresh imageset config per save cycle
+e2e_run "Create imageset config with UBI image" \
+    "cat > mirror/save/imageset-config-save.yaml <<'YAML'
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: registry.redhat.io/ubi9/ubi:latest
+YAML"
+e2e_run "Save UBI image to disk" \
+    "aba -d mirror save --retry"
 e2e_run "Transfer UBI images to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
 e2e_run_remote -r 3 2 "Load UBI images" \
@@ -230,8 +240,16 @@ test_end
 # ============================================================================
 test_begin "Incremental: vote-app image load"
 
-e2e_run "Add vote-app image and save" \
-    "aba -d mirror --add-image quay.io/sjbylo/flask-vote-app:latest && aba -d mirror save --retry"
+e2e_run "Create imageset config with vote-app image" \
+    "cat > mirror/save/imageset-config-save.yaml <<'YAML'
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/sjbylo/flask-vote-app:latest
+YAML"
+e2e_run "Save vote-app image to disk" \
+    "aba -d mirror save --retry"
 e2e_run "Transfer vote-app to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
 e2e_run_remote -r 3 2 "Load vote-app images" \

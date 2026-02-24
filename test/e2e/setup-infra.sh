@@ -22,6 +22,9 @@
 # =============================================================================
 
 set -u
+set -x
+# Show file:line before each traced command (no [ ] so trace is never parsed as a command)
+PS4='+ ${BASH_SOURCE##*/}:${LINENO} '
 
 _INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$(cd "$_INFRA_DIR/../.." && pwd)"
@@ -45,63 +48,64 @@ else
 	exit 1
 fi
 
+# --- Require govc (fail fast; use ABA ensure_govc when available) ------------
+_ensure_govc() {
+	if command -v govc &>/dev/null; then
+		return 0
+	fi
+	if [ -f "$_ABA_ROOT/scripts/include_all.sh" ]; then
+		# shellcheck source=../../scripts/include_all.sh
+		source "$_ABA_ROOT/scripts/include_all.sh"
+		if ensure_govc; then
+			return 0
+		fi
+		echo "ERROR: govc installation failed." >&2
+		exit 1
+	fi
+	echo "ERROR: govc not found. Install govc (e.g. from ABA: ensure_govc) or add it to PATH." >&2
+	exit 1
+}
+_ensure_govc
+
 # =============================================================================
 # Reusable VM configuration functions
 # =============================================================================
 
-_configure_con_vm() {
+_verify_con_vm() {
 	local vm="$1" user="$2"
 
-	_vm_wait_ssh "$vm" "$user"
-	_vm_setup_network "$vm" "$user" "$vm"
-	_vm_setup_firewall "$vm" "$user"
-	_vm_setup_dnsmasq "$vm" "$user" "$vm"
-	_vm_setup_time "$vm" "$user"
-	_vm_dnf_update "$vm" "$user"
-	_vm_wait_ssh "$vm" "$user"
-	_vm_cleanup_caches "$vm" "$user"
-	_vm_cleanup_podman "$vm" "$user"
-	_vm_cleanup_home "$vm" "$user"
-	_vm_setup_vmware_conf "$vm" "$user"
-	_vm_create_test_user "$vm" "$user"
-	_vm_set_aba_testing "$vm" "$user"
-	_vm_install_aba "$vm" "$user"
-	_escp ~/.ssh/testy_rsa "${user}@${vm}:.ssh/testy_rsa"
-
-	# --- Post-configuration verification ---
 	local pool_num="${vm#con}"
 	local _con_vlan="${VM_CLONE_VLAN_IPS[$vm]%%/*}"
 	local _domain
 	_domain="$(pool_domain "$pool_num")"
 	local _ntp="${NTP_SERVER:-10.0.1.8}"
-
 	local _tz="${TIMEZONE:-Asia/Singapore}"
 
-	echo "  [$vm] Post-configuration verification ..."
+	echo "  [$vm] Verifying ..."
 	cat <<-VERIFY | _essh "${user}@${vm}" -- sudo bash
 		set -e
 
 		# --- Identity ---
-		hostname | grep -q "^${vm}\$" || { echo "FAIL: hostname \$(hostname) != ${vm}"; exit 1; }
+		hostname | grep "^${vm}\$" || { echo "FAIL: hostname \$(hostname) != ${vm}"; exit 1; }
 		echo "  PASS: hostname ${vm}"
 
-		timedatectl | grep -q "${_tz}" || { echo "FAIL: timezone not ${_tz}"; exit 1; }
+		timedatectl | grep "${_tz}" || { echo "FAIL: timezone not ${_tz}"; exit 1; }
 		echo "  PASS: timezone ${_tz}"
 
 		# --- Network ---
-		ip addr show ens224.10 | grep -q "${_con_vlan}" || { echo "FAIL: VLAN IP ${_con_vlan} not on ens224.10"; exit 1; }
+		ip addr show ens224.10 | grep "${_con_vlan}" || { echo "FAIL: VLAN IP ${_con_vlan} not on ens224.10"; exit 1; }
 		echo "  PASS: VLAN IP ${_con_vlan} on ens224.10"
 
-		ip route | grep -q "^default.*ens256" || { echo "FAIL: default route not via ens256"; exit 1; }
+		ip route | grep "^default.*ens256" || { echo "FAIL: default route not via ens256"; exit 1; }
 		echo "  PASS: default route via ens256"
 
-		ip link show ens192 | grep -q "mtu 9000" || { echo "FAIL: ens192 mtu != 9000"; exit 1; }
+		ip link show ens192 | grep "mtu 9000" || { echo "FAIL: ens192 mtu != 9000"; exit 1; }
 		echo "  PASS: ens192 mtu 9000"
 
-		ip link show ens224 | grep -q "mtu 9000" || { echo "FAIL: ens224 mtu != 9000"; exit 1; }
+		ip link show ens224 | grep "mtu 9000" || { echo "FAIL: ens224 mtu != 9000"; exit 1; }
 		echo "  PASS: ens224 mtu 9000"
 
-		nmcli -g ipv4.ignore-auto-dns connection show ens256 | grep -q yes || { echo "FAIL: ens256 ignore-auto-dns"; exit 1; }
+		nmcli -g ipv4.ignore-auto-dns connection show ens256 | grep yes || { echo "FAIL: ens256 ignore-auto-dns"; exit 1; }
 		echo "  PASS: ens256 ignore-auto-dns"
 
 		# --- Firewall / NAT ---
@@ -114,20 +118,20 @@ _configure_con_vm() {
 		firewall-cmd --query-masquerade > /dev/null || { echo "FAIL: masquerade not enabled"; exit 1; }
 		echo "  PASS: masquerade enabled"
 
-		firewall-cmd --list-services | grep -q dns || { echo "FAIL: dns not in firewall"; exit 1; }
+		firewall-cmd --list-services | grep dns || { echo "FAIL: dns not in firewall"; exit 1; }
 		echo "  PASS: firewall dns service"
 
 		# --- DNS / dnsmasq ---
 		systemctl is-active --quiet dnsmasq || { echo "FAIL: dnsmasq not active"; exit 1; }
 		echo "  PASS: dnsmasq active"
 
-		dig +short google.com @127.0.0.1 | head -1 | grep -q . || { echo "FAIL: DNS @127.0.0.1 -> google.com"; exit 1; }
+		dig +short google.com @127.0.0.1 | head -1 | grep . || { echo "FAIL: DNS @127.0.0.1 -> google.com"; exit 1; }
 		echo "  PASS: DNS @127.0.0.1 -> google.com"
 
-		dig +short google.com @${_con_vlan} | head -1 | grep -q . || { echo "FAIL: DNS @${_con_vlan} -> google.com"; exit 1; }
+		dig +short google.com @${_con_vlan} | head -1 | grep . || { echo "FAIL: DNS @${_con_vlan} -> google.com"; exit 1; }
 		echo "  PASS: DNS @${_con_vlan} -> google.com (disN path)"
 
-		grep -q "nameserver 127.0.0.1" /etc/resolv.conf || { echo "FAIL: resolv.conf not 127.0.0.1"; exit 1; }
+		grep "nameserver 127.0.0.1" /etc/resolv.conf || { echo "FAIL: resolv.conf not 127.0.0.1"; exit 1; }
 		echo "  PASS: resolv.conf -> 127.0.0.1"
 
 		test -f /etc/NetworkManager/conf.d/no-dns.conf || { echo "FAIL: NM dns=none missing"; exit 1; }
@@ -141,21 +145,27 @@ _configure_con_vm() {
 		echo "  PASS: NTP server ${_ntp} reachable"
 
 		# --- SSH ---
-		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config || { echo "FAIL: sshd ClientAliveInterval"; exit 1; }
+		grep "^ClientAliveInterval" /etc/ssh/sshd_config || { echo "FAIL: sshd ClientAliveInterval"; exit 1; }
 		echo "  PASS: sshd ClientAliveInterval"
 
 		# --- Users / environment ---
 		id testy > /dev/null 2>&1 || { echo "FAIL: testy user missing"; exit 1; }
 		echo "  PASS: testy user exists"
 
-		sudo -u testy sudo -n whoami | grep -q root || { echo "FAIL: testy cannot sudo"; exit 1; }
+		sudo -u testy sudo -n whoami | grep root || { echo "FAIL: testy cannot sudo"; exit 1; }
 		echo "  PASS: testy sudo"
 
-		grep -q "ABA_TESTING=1" /etc/environment || { echo "FAIL: ABA_TESTING not set"; exit 1; }
+		test -f /home/${user}/.ssh/testy_rsa || { echo "FAIL: testy_rsa key missing"; exit 1; }
+		echo "  PASS: testy_rsa key"
+
+		sudo -u ${user} ssh -i /home/${user}/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null testy@localhost whoami 2>&1 | grep testy || { echo "FAIL: testy SSH (local) failed"; exit 1; }
+		echo "  PASS: testy SSH (local)"
+
+		grep "ABA_TESTING=1" /etc/environment || { echo "FAIL: ABA_TESTING not set"; exit 1; }
 		echo "  PASS: ABA_TESTING=1"
 
 		# --- Installed software (check as the owning user, not root) ---
-		sudo -u ${user} bash -lc 'command -v aba > /dev/null' || { echo "FAIL: aba not in PATH"; exit 1; }
+		test -x /home/${user}/bin/aba || { echo "FAIL: aba not installed"; exit 1; }
 		echo "  PASS: aba installed"
 
 		test -d /home/${user}/aba || { echo "FAIL: ~/aba not present"; exit 1; }
@@ -165,19 +175,46 @@ _configure_con_vm() {
 		test -s /home/${user}/.vmware.conf || { echo "FAIL: vmware.conf missing"; exit 1; }
 		echo "  PASS: vmware.conf"
 
-		test -f /home/${user}/.ssh/testy_rsa || { echo "FAIL: testy_rsa key missing"; exit 1; }
-		echo "  PASS: testy_rsa key"
-
 		# --- Podman clean (all users) ---
-		! podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (root)"; exit 1; }
+		! podman images -q 2>/dev/null | grep . || { echo "FAIL: stale podman images (root)"; exit 1; }
 		echo "  PASS: no podman images (root)"
-		! sudo -u ${user} podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (${user})"; exit 1; }
+		! sudo -u ${user} podman images -q 2>/dev/null | grep . || { echo "FAIL: stale podman images (${user})"; exit 1; }
 		echo "  PASS: no podman images (${user})"
-		! sudo -u testy podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (testy)"; exit 1; }
+		! sudo -u testy podman images -q 2>/dev/null | grep . || { echo "FAIL: stale podman images (testy)"; exit 1; }
 		echo "  PASS: no podman images (testy)"
+
+		# --- No running containers ---
+		! podman ps -q 2>/dev/null | grep . || { echo "FAIL: running containers (root)"; exit 1; }
+		echo "  PASS: no running containers (root)"
+		! sudo -u ${user} podman ps -q 2>/dev/null | grep . || { echo "FAIL: running containers (${user})"; exit 1; }
+		echo "  PASS: no running containers (${user})"
+
+		# --- No service on registry port ---
+		! ss -tlnp | grep ':8443 ' || { echo "FAIL: port 8443 in use"; exit 1; }
+		echo "  PASS: port 8443 free"
 
 		echo "  [$vm] All verifications PASSED."
 	VERIFY
+}
+
+_configure_con_vm() {
+	local vm="$1" user="$2"
+
+	_vm_wait_ssh "$vm" "$user"
+	_vm_setup_network "$vm" "$user" "$vm"
+	_vm_setup_firewall "$vm" "$user"
+	_vm_setup_dnsmasq "$vm" "$user" "$vm"
+	_vm_dnf_update "$vm" "$user"
+	_vm_wait_ssh "$vm" "$user"
+	_vm_cleanup_caches "$vm" "$user"
+	_vm_cleanup_podman "$vm" "$user"
+	_vm_cleanup_home "$vm" "$user"
+	_vm_setup_vmware_conf "$vm" "$user"
+	_vm_create_test_user "$vm" "$user"
+	_vm_set_aba_testing "$vm" "$user"
+	_vm_install_aba "$vm" "$user"
+
+	_verify_con_vm "$vm" "$user"
 
 	echo "  $vm configured."
 }
@@ -188,7 +225,6 @@ _configure_dis_vm() {
 	_vm_wait_ssh "$vm" "$user"
 	_vm_setup_network "$vm" "$user" "$vm"
 	_vm_setup_firewall "$vm" "$user"
-	_vm_setup_time "$vm" "$user"
 
 	echo "  [$vm] Waiting for internet via $con_vm NAT ..."
 	local waited=0
@@ -204,6 +240,7 @@ _configure_dis_vm() {
 
 	_vm_dnf_update "$vm" "$user"
 	_vm_wait_ssh "$vm" "$user"
+
 	_vm_cleanup_caches "$vm" "$user"
 	_vm_cleanup_podman "$vm" "$user"
 	_vm_cleanup_home "$vm" "$user"
@@ -216,14 +253,21 @@ _configure_dis_vm() {
 
 	echo "  [$vm] Verifying NTP sync (server: ${NTP_SERVER:-10.0.1.8}) ..."
 	for ((_ntp=0; _ntp<20; _ntp++)); do
-		if _essh "${user}@${vm}" -- "chronyc sources 2>/dev/null" | grep -q "^\^\*.*${NTP_SERVER:-10.0.1.8}"; then
+		if _essh "${user}@${vm}" -- "chronyc sources 2>/dev/null" | grep "^\^\*.*${NTP_SERVER:-10.0.1.8}"; then
 			echo "  [$vm] NTP synced to ${NTP_SERVER:-10.0.1.8}."
 			break
 		fi
 		sleep 5
 	done
 
-	# --- Post-configuration verification ---
+	_verify_dis_vm "$vm" "$user" "$con_vm"
+
+	echo "  $vm configured."
+}
+
+_verify_dis_vm() {
+	local vm="$1" user="$2" con_vm="$3"
+
 	local pool_num="${vm#dis}"
 	local _dis_vlan="${VM_CLONE_VLAN_IPS[$vm]%%/*}"
 	local _con_vlan="${VM_CLONE_VLAN_IPS[$con_vm]%%/*}"
@@ -233,39 +277,38 @@ _configure_dis_vm() {
 	_con_lab_ip="$(pool_con_ip "$pool_num")"
 	local _ntp="${NTP_SERVER:-10.0.1.8}"
 	local _base_domain="${VM_BASE_DOMAIN:-example.com}"
-
 	local _tz="${TIMEZONE:-Asia/Singapore}"
 	local _dis_lab_ip
 	_dis_lab_ip="$(pool_dis_ip "$pool_num")"
 
-	echo "  [$vm] Post-configuration verification ..."
+	echo "  [$vm] Verifying ..."
 	cat <<-VERIFY | _essh "${user}@${vm}" -- sudo bash
 		set -e
 
 		# --- Identity ---
-		hostname | grep -q "^${vm}\$" || { echo "FAIL: hostname \$(hostname) != ${vm}"; exit 1; }
+		hostname | grep "^${vm}\$" || { echo "FAIL: hostname \$(hostname) != ${vm}"; exit 1; }
 		echo "  PASS: hostname ${vm}"
 
-		timedatectl | grep -q "${_tz}" || { echo "FAIL: timezone not ${_tz}"; exit 1; }
+		timedatectl | grep "${_tz}" || { echo "FAIL: timezone not ${_tz}"; exit 1; }
 		echo "  PASS: timezone ${_tz}"
 
 		# --- Network (disconnected) ---
-		ip addr show ens224.10 | grep -q "${_dis_vlan}" || { echo "FAIL: VLAN IP ${_dis_vlan} not on ens224.10"; exit 1; }
+		ip addr show ens224.10 | grep "${_dis_vlan}" || { echo "FAIL: VLAN IP ${_dis_vlan} not on ens224.10"; exit 1; }
 		echo "  PASS: VLAN IP ${_dis_vlan} on ens224.10"
 
-		ip link show ens256 | grep -q "state DOWN" || { echo "FAIL: ens256 not DOWN"; exit 1; }
+		ip link show ens256 | grep "state DOWN" || { echo "FAIL: ens256 not DOWN"; exit 1; }
 		echo "  PASS: ens256 DOWN"
 
 		! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 || { echo "FAIL: internet still reachable"; exit 1; }
 		echo "  PASS: no internet (disconnected)"
 
-		ip link show ens192 | grep -q "mtu 9000" || { echo "FAIL: ens192 mtu != 9000"; exit 1; }
+		ip link show ens192 | grep "mtu 9000" || { echo "FAIL: ens192 mtu != 9000"; exit 1; }
 		echo "  PASS: ens192 mtu 9000"
 
-		ip link show ens224 | grep -q "mtu 9000" || { echo "FAIL: ens224 mtu != 9000"; exit 1; }
+		ip link show ens224 | grep "mtu 9000" || { echo "FAIL: ens224 mtu != 9000"; exit 1; }
 		echo "  PASS: ens224 mtu 9000"
 
-		# --- VLAN connectivity (con may still be configuring in parallel) ---
+		# --- VLAN connectivity ---
 		_vlan_ok=0
 		for _try in \$(seq 1 40); do
 			if ping -c 1 -W 3 ${_con_vlan} > /dev/null 2>&1; then _vlan_ok=1; break; fi
@@ -284,17 +327,17 @@ _configure_dis_vm() {
 		firewall-cmd --query-masquerade > /dev/null || { echo "FAIL: masquerade not enabled"; exit 1; }
 		echo "  PASS: masquerade enabled"
 
-		# --- DNS resolution (critical: the path dis uses to reach dnsmasq on con) ---
-		grep -q "nameserver ${_con_vlan}" /etc/resolv.conf || { echo "FAIL: resolv.conf not ${_con_vlan}"; exit 1; }
+		# --- DNS resolution ---
+		grep "nameserver ${_con_vlan}" /etc/resolv.conf || { echo "FAIL: resolv.conf not ${_con_vlan}"; exit 1; }
 		echo "  PASS: resolv.conf -> ${_con_vlan}"
 
 		test -f /etc/NetworkManager/conf.d/no-dns.conf || { echo "FAIL: NM dns=none missing"; exit 1; }
 		echo "  PASS: NM dns=none"
 
-		getent hosts ${con_vm}.${_base_domain} | grep -q "${_con_lab_ip}" || { echo "FAIL: cannot resolve ${con_vm}.${_base_domain} -> ${_con_lab_ip}"; exit 1; }
+		getent hosts ${con_vm}.${_base_domain} | grep "${_con_lab_ip}" || { echo "FAIL: cannot resolve ${con_vm}.${_base_domain} -> ${_con_lab_ip}"; exit 1; }
 		echo "  PASS: DNS ${con_vm}.${_base_domain} -> ${_con_lab_ip}"
 
-		getent hosts ${vm}.${_base_domain} | grep -q "${_dis_lab_ip}" || { echo "FAIL: cannot resolve ${vm}.${_base_domain} -> ${_dis_lab_ip}"; exit 1; }
+		getent hosts ${vm}.${_base_domain} | grep "${_dis_lab_ip}" || { echo "FAIL: cannot resolve ${vm}.${_base_domain} -> ${_dis_lab_ip}"; exit 1; }
 		echo "  PASS: DNS ${vm}.${_base_domain} -> ${_dis_lab_ip}"
 
 		# --- Lab connectivity ---
@@ -306,17 +349,23 @@ _configure_dis_vm() {
 		echo "  PASS: chronyd active"
 
 		# --- SSH ---
-		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config || { echo "FAIL: sshd ClientAliveInterval"; exit 1; }
+		grep "^ClientAliveInterval" /etc/ssh/sshd_config || { echo "FAIL: sshd ClientAliveInterval"; exit 1; }
 		echo "  PASS: sshd ClientAliveInterval"
 
 		# --- Users / environment ---
 		id testy > /dev/null 2>&1 || { echo "FAIL: testy user missing"; exit 1; }
 		echo "  PASS: testy user exists"
 
-		sudo -u testy sudo -n whoami | grep -q root || { echo "FAIL: testy cannot sudo"; exit 1; }
+		sudo -u testy sudo -n whoami | grep root || { echo "FAIL: testy cannot sudo"; exit 1; }
 		echo "  PASS: testy sudo"
 
-		grep -q "ABA_TESTING=1" /etc/environment || { echo "FAIL: ABA_TESTING not set"; exit 1; }
+		test -f /home/${user}/.ssh/testy_rsa || { echo "FAIL: testy_rsa key missing"; exit 1; }
+		echo "  PASS: testy_rsa key"
+
+		sudo -u ${user} ssh -i /home/${user}/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null testy@localhost whoami 2>&1 | grep testy || { echo "FAIL: testy SSH (local) failed"; exit 1; }
+		echo "  PASS: testy SSH (local)"
+
+		grep "ABA_TESTING=1" /etc/environment || { echo "FAIL: ABA_TESTING not set"; exit 1; }
 		echo "  PASS: ABA_TESTING=1"
 
 		# --- Files ---
@@ -326,21 +375,29 @@ _configure_dis_vm() {
 		! test -f /home/${user}/.pull-secret.json || { echo "FAIL: pull-secret still exists"; exit 1; }
 		echo "  PASS: pull-secret removed"
 
-		! grep -q "^source.*proxy-set" /home/${user}/.bashrc 2>/dev/null || { echo "FAIL: proxy still in .bashrc"; exit 1; }
+		! grep "^source.*proxy-set" /home/${user}/.bashrc 2>/dev/null || { echo "FAIL: proxy still in .bashrc"; exit 1; }
 		echo "  PASS: proxy disabled"
 
 		# --- Podman clean (all users) ---
-		! podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (root)"; exit 1; }
+		! podman images -q 2>/dev/null | grep . || { echo "FAIL: stale podman images (root)"; exit 1; }
 		echo "  PASS: no podman images (root)"
-		! sudo -u ${user} podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (${user})"; exit 1; }
+		! sudo -u ${user} podman images -q 2>/dev/null | grep . || { echo "FAIL: stale podman images (${user})"; exit 1; }
 		echo "  PASS: no podman images (${user})"
-		! sudo -u testy podman images -q 2>/dev/null | grep -q . || { echo "FAIL: stale podman images (testy)"; exit 1; }
+		! sudo -u testy podman images -q 2>/dev/null | grep . || { echo "FAIL: stale podman images (testy)"; exit 1; }
 		echo "  PASS: no podman images (testy)"
+
+		# --- No running containers ---
+		! podman ps -q 2>/dev/null | grep . || { echo "FAIL: running containers (root)"; exit 1; }
+		echo "  PASS: no running containers (root)"
+		! sudo -u ${user} podman ps -q 2>/dev/null | grep . || { echo "FAIL: running containers (${user})"; exit 1; }
+		echo "  PASS: no running containers (${user})"
+
+		# --- No service on registry port ---
+		! ss -tlnp | grep ':8443 ' || { echo "FAIL: port 8443 in use"; exit 1; }
+		echo "  PASS: port 8443 free"
 
 		echo "  [$vm] All verifications PASSED."
 	VERIFY
-
-	echo "  $vm configured."
 }
 
 # =============================================================================
@@ -350,6 +407,7 @@ _configure_dis_vm() {
 _POOLS=1
 _RECREATE_GOLDEN=""
 _RECREATE_VMS=""
+_VERIFY_ONLY=""
 _POOLS_FILE="$_INFRA_DIR/pools.conf"
 
 while [ $# -gt 0 ]; do
@@ -357,6 +415,7 @@ while [ $# -gt 0 ]; do
 		-p|--pools)           _POOLS="$2"; shift 2 ;;
 		-G|--recreate-golden) _RECREATE_GOLDEN=1; shift ;;
 		-R|--recreate-vms)    _RECREATE_VMS=1; shift ;;
+		--verify)             _VERIFY_ONLY=1; shift ;;
 		--pools-file)         _POOLS_FILE="$2"; shift 2 ;;
 		*) echo "setup-infra.sh: unknown flag: $1" >&2; exit 1 ;;
 	esac
@@ -392,10 +451,71 @@ _RHEL_VER="${INT_BASTION_RHEL_VER:-rhel8}"
 _VM_TEMPLATE="${VM_TEMPLATES[$_RHEL_VER]:-aba-e2e-template-$_RHEL_VER}"
 _GOLDEN_NAME="aba-e2e-golden-${_RHEL_VER}"
 _BASE_FOLDER="${VC_FOLDER:-/Datacenter/vm/aba-e2e}"
+# Golden VM always goes under aba-e2e/golden (even when VC_FOLDER is e.g. abatesting for pools)
+_VC_PARENT="${_BASE_FOLDER%/*}"
+_GOLDEN_FOLDER="${_VC_PARENT}/aba-e2e/golden"
 _SNAPSHOT_NAME="pool-ready"
 _LOG_DIR="$_INFRA_DIR/logs"
 
 mkdir -p "$_LOG_DIR"
+
+# =============================================================================
+# --verify: run post-config checks on all pools, skip infra setup
+# =============================================================================
+
+if [ -n "$_VERIFY_ONLY" ]; then
+	echo ""
+	echo "=== Verifying pools 1..$_POOLS ==="
+	declare -a _ver_pids=() _ver_labels=() _ver_logs=()
+	_ver_failed=0
+
+	for (( i=1; i<=_POOLS; i++ )); do
+		user="$VM_DEFAULT_USER"
+		con_vm="con${i}"
+		dis_vm="dis${i}"
+		ver_log="$_LOG_DIR/verify-pool${i}.log"
+		echo "  Pool $i: $con_vm + $dis_vm  (log: $ver_log)"
+
+		(
+			set -e
+			_verify_con_vm "$con_vm" "$user"
+		) > "$ver_log" 2>&1 &
+		_ver_pids+=($!)
+		_ver_labels+=("verify $con_vm")
+		_ver_logs+=("$ver_log")
+
+		(
+			set -e
+			_verify_dis_vm "$dis_vm" "$user" "$con_vm"
+		) >> "$ver_log" 2>&1 &
+		_ver_pids+=($!)
+		_ver_labels+=("verify $dis_vm")
+	done
+
+	_tail_pid=""
+	if [ ${#_ver_logs[@]} -gt 0 ] && [ -t 1 ]; then
+		tail -f "${_ver_logs[@]}" 2>/dev/null &
+		_tail_pid=$!
+	fi
+
+	for idx in "${!_ver_pids[@]}"; do
+		if wait "${_ver_pids[$idx]}"; then
+			echo "  OK:     ${_ver_labels[$idx]}"
+		else
+			echo "  FAILED: ${_ver_labels[$idx]}" >&2
+			_ver_failed=1
+		fi
+	done
+
+	[ -n "$_tail_pid" ] && kill "$_tail_pid" 2>/dev/null || true
+
+	if [ "$_ver_failed" -ne 0 ]; then
+		echo "FATAL: Verification failed on one or more pools" >&2
+		exit 1
+	fi
+	echo "=== All pools verified OK ==="
+	exit 0
+fi
 
 echo ""
 echo "=== E2E Infrastructure Setup ==="
@@ -404,6 +524,7 @@ echo "  RHEL: $_RHEL_VER"
 echo "  Golden: $_GOLDEN_NAME"
 echo "  Template: $_VM_TEMPLATE"
 echo "  Base folder: $_BASE_FOLDER"
+echo "  Golden folder: $_GOLDEN_FOLDER"
 echo ""
 
 # =============================================================================
@@ -424,20 +545,28 @@ _prepare_golden() {
 	fi
 
 	if vm_exists "$_GOLDEN_NAME"; then
-		if govc snapshot.tree -vm "$_GOLDEN_NAME" 2>/dev/null | grep -q "$snapshot_name"; then
+		if govc snapshot.tree -vm "$_GOLDEN_NAME" 2>/dev/null | grep "$snapshot_name"; then
 			echo "  Golden VM exists with '$snapshot_name' snapshot -- reusing."
 			echo "  (Use -G/--recreate-golden to force rebuild)"
 			echo "=== Phase 0 complete ==="
 			return 0
 		fi
-		echo "  Golden VM exists but no '$snapshot_name' snapshot -- rebuilding ..."
-		govc vm.power -off "$_GOLDEN_NAME" 2>/dev/null || true
-		govc vm.destroy "$_GOLDEN_NAME" || return 1
+		echo "" >&2
+		echo "ERROR: Golden VM '$_GOLDEN_NAME' exists but has no '$snapshot_name' snapshot." >&2
+		echo "" >&2
+		echo "  This means a previous golden build did not complete successfully." >&2
+		echo "  Inspect the VM, then either:" >&2
+		echo "    - Manually snapshot it as '$snapshot_name' in vCenter, or" >&2
+		echo "    - Re-run with --recreate-golden to destroy and rebuild it from scratch." >&2
+		echo "" >&2
+		return 1
 	fi
 
 	echo "  Cloning from template: $_VM_TEMPLATE ..."
 
-	clone_vm "$_VM_TEMPLATE" "$_GOLDEN_NAME" "$_BASE_FOLDER" || return 1
+	govc folder.create "${_VC_PARENT}/aba-e2e" 2>/dev/null || true
+	govc folder.create "$_GOLDEN_FOLDER" 2>/dev/null || true
+	clone_vm "$_VM_TEMPLATE" "$_GOLDEN_NAME" "$_GOLDEN_FOLDER" || return 1
 
 	local ip
 	ip=$(govc vm.ip -wait 5m "$_GOLDEN_NAME") || return 1
@@ -458,21 +587,24 @@ _prepare_golden() {
 	_vm_cleanup_caches "$ip" "$user"      || return 1
 	_vm_cleanup_podman "$ip" "$user"      || return 1
 	_vm_cleanup_home "$ip" "$user"        || return 1
-	_vm_create_test_user "$ip" "$user"    || return 1
+	_vm_create_test_user_and_key_on_host "$ip" "$user" || return 1
 	_vm_set_aba_testing "$ip" "$user"     || return 1
 	_vm_verify_golden "$ip" "$user"       || return 1
 
 	_essh "${user}@${ip}" -- "sudo poweroff" || true
 	sleep 10
-	govc vm.power -off "$_GOLDEN_NAME" 2>/dev/null || true
-	govc snapshot.create -vm "$_GOLDEN_NAME" "$snapshot_name" || return 1
+	# Tolerate exit 1: VM may already be powered off (no redirect to avoid /dev/null permission issues)
+	govc vm.power -off "$_GOLDEN_NAME" || true
+	govc snapshot.create -vm "$_GOLDEN_NAME" "golden-ready" || return 1
 
 	echo "  Golden VM created and snapshotted."
 	echo "=== Phase 0 complete ==="
 }
 
-_golden_log="$_LOG_DIR/golden-${_RHEL_VER}.log"
-_prepare_golden 2>&1 | tee -a "$_golden_log" || { echo "FATAL: Golden VM preparation failed" >&2; exit 1; }
+# Golden phase: output to terminal only (no separate log file)
+_prepare_golden 2>&1
+_r=$?
+[ "$_r" -eq 0 ] || { echo "FATAL: Golden VM preparation failed" >&2; exit 1; }
 
 # =============================================================================
 # Phase 1: Clone conN and disN
@@ -480,6 +612,11 @@ _prepare_golden 2>&1 | tee -a "$_golden_log" || { echo "FATAL: Golden VM prepara
 
 echo ""
 echo "=== Phase 1: Ensure conN/disN VMs (pools 1..$_POOLS) ==="
+
+if ! govc snapshot.tree -vm "$_GOLDEN_NAME" | grep "golden-ready"; then
+	echo "FATAL: golden VM '$_GOLDEN_NAME' has no 'golden-ready' snapshot -- cannot clone pool VMs" >&2
+	exit 1
+fi
 
 _vm_needs_clone() {
 	local vm_name="$1"
@@ -497,7 +634,7 @@ _vm_needs_clone() {
 		echo "ok"
 		return
 	fi
-	if govc snapshot.tree -vm "$vm_name" 2>/dev/null | grep -q "$_SNAPSHOT_NAME"; then
+	if govc snapshot.tree -vm "$vm_name" 2>/dev/null | grep "$_SNAPSHOT_NAME"; then
 		echo "revert"
 		return
 	fi
@@ -517,6 +654,7 @@ for prefix in con dis; do
 		pool_folder="${_pool_folders[$i]:-${_BASE_FOLDER}/pool${i}}"
 		pool_ds="${_pool_datastores[$i]:-$VM_DATASTORE}"
 		pool_log="$_LOG_DIR/create-pool${i}.log"
+		> "$pool_log"
 
 		govc folder.create "$pool_folder" 2>/dev/null || true
 
@@ -532,7 +670,19 @@ for prefix in con dis; do
 				govc snapshot.revert -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: revert $vm_name failed" >&2; _clone_failed=1; continue; }
 				govc vm.power -on "$vm_name" 2>/dev/null || true
 				;;
-			missing|recreate|broken)
+			broken)
+				echo "" >&2
+				echo "ERROR: $vm_name exists but SSH is down and has no '$_SNAPSHOT_NAME' snapshot." >&2
+				echo "" >&2
+				echo "  The VM is in an unknown state and cannot be safely reused or reverted." >&2
+				echo "  Inspect the VM, then either:" >&2
+				echo "    - Fix SSH and retry, or" >&2
+				echo "    - Re-run with --recreate-vms to destroy and reclone it." >&2
+				echo "" >&2
+				_clone_failed=1
+				continue
+				;;
+			missing|recreate)
 				echo "  $vm_name: $status -- cloning from $_GOLDEN_NAME ..."
 				if vm_exists "$vm_name"; then
 					govc vm.power -off "$vm_name" 2>/dev/null || true
@@ -578,12 +728,14 @@ _cfg_failed=0
 
 for (( i=1; i<=_POOLS; i++ )); do
 	pool_folder="${_pool_folders[$i]:-${_BASE_FOLDER}/pool${i}}"
-	pool_log="$_LOG_DIR/create-pool${i}.log"
+	con_log="$_LOG_DIR/create-pool${i}-con.log"
+	dis_log="$_LOG_DIR/create-pool${i}-dis.log"
 	user="$VM_DEFAULT_USER"
 	con_vm="con${i}"
 	dis_vm="dis${i}"
 
-	if govc snapshot.tree -vm "$con_vm" 2>/dev/null | grep -q "$_SNAPSHOT_NAME"; then
+	if govc snapshot.tree -vm "$con_vm" 2>/dev/null | grep "$_SNAPSHOT_NAME" \
+	   && govc snapshot.tree -vm "$dis_vm" 2>/dev/null | grep "$_SNAPSHOT_NAME"; then
 		if [ -z "$_RECREATE_VMS" ]; then
 			echo "  $con_vm + $dis_vm: pool-ready snapshot exists -- skipping config"
 			continue
@@ -591,13 +743,13 @@ for (( i=1; i<=_POOLS; i++ )); do
 	fi
 
 	echo "  Configuring pool $i ($con_vm + $dis_vm) ..."
-	echo "    Log: $pool_log"
+	echo "    Logs: $con_log  |  $dis_log"
 
 	(
 		set -e
 		export VC_FOLDER="$pool_folder"
 		_configure_con_vm "$con_vm" "$user"
-	) >> "$pool_log" 2>&1 &
+	) >> "$con_log" 2>&1 &
 	_cfg_pids+=($!)
 	_cfg_labels+=("configure $con_vm")
 
@@ -605,10 +757,10 @@ for (( i=1; i<=_POOLS; i++ )); do
 		set -e
 		export VC_FOLDER="$pool_folder"
 		_configure_dis_vm "$dis_vm" "$user" "$con_vm"
-	) >> "$pool_log" 2>&1 &
+	) >> "$dis_log" 2>&1 &
 	_cfg_pids+=($!)
 	_cfg_labels+=("configure $dis_vm")
-	_cfg_logs+=("$pool_log")
+	_cfg_logs+=("$con_log" "$dis_log")
 done
 
 # While background config jobs run, tail their logs so the user sees progress
@@ -646,7 +798,7 @@ echo "=== Phase 3: Create pool-ready snapshots ==="
 for (( i=1; i<=_POOLS; i++ )); do
 	for prefix in con dis; do
 		vm_name="${prefix}${i}"
-		if govc snapshot.tree -vm "$vm_name" 2>/dev/null | grep -q "$_SNAPSHOT_NAME"; then
+		if govc snapshot.tree -vm "$vm_name" 2>/dev/null | grep "$_SNAPSHOT_NAME"; then
 			if [ -z "$_RECREATE_VMS" ]; then
 				echo "  $vm_name: $_SNAPSHOT_NAME already exists -- skipping"
 				continue
