@@ -670,18 +670,14 @@ for prefix in con dis; do
 				govc snapshot.revert -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: revert $vm_name failed" >&2; _clone_failed=1; continue; }
 				govc vm.power -on "$vm_name" 2>/dev/null || true
 				;;
-			broken)
-				echo "" >&2
-				echo "ERROR: $vm_name exists but SSH is down and has no '$_SNAPSHOT_NAME' snapshot." >&2
-				echo "" >&2
-				echo "  The VM is in an unknown state and cannot be safely reused or reverted." >&2
-				echo "  Inspect the VM, then either:" >&2
-				echo "    - Fix SSH and retry, or" >&2
-				echo "    - Re-run with --recreate-vms to destroy and reclone it." >&2
-				echo "" >&2
-				_clone_failed=1
-				continue
-				;;
+		broken)
+			echo "  $vm_name: broken (SSH down, no '$_SNAPSHOT_NAME' snapshot) -- destroying and recloning ..."
+			govc vm.power -off "$vm_name" 2>/dev/null || true
+			govc vm.destroy "$vm_name" || true
+			VM_DATASTORE="$pool_ds" clone_vm "$_GOLDEN_NAME" "$vm_name" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
+			_clone_pids+=($!)
+			_clone_labels+=("clone $vm_name (was broken)")
+			;;
 			missing|recreate)
 				echo "  $vm_name: $status -- cloning from $_GOLDEN_NAME ..."
 				if vm_exists "$vm_name"; then
