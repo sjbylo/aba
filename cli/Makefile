@@ -306,7 +306,8 @@ $(butane_binary_file): ## Download butane binary
 .PHONY: clean 
 clean: ## Clean up installed binaries
 	@../scripts/cli-install-all.sh --reset
-	@rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} *sha256sum.txt
+#	@rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} *sha256sum.txt
+	@rm -f                                                            *sha256sum.txt
 #	This should be just: run_once -r -i "cli:install" # to reset all downloads in cli dir
 
 .PHONY: reset
