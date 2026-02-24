@@ -41,6 +41,7 @@ CLI_ALL=""
 CLI_POOLS=1
 CLI_RECREATE_GOLDEN=""
 CLI_RECREATE_VMS=""
+CLI_YES=""
 CLI_QUIET=""
 CLI_CLEAN=""
 CLI_DRY_RUN=""
@@ -84,8 +85,9 @@ _usage() {
 	  --clean                Clear checkpoints before running
 	  --pool N               Target a specific pool (default: round-robin)
 	  --last                 Re-run the last suite(s) dispatched to --pool N
+	  -y, --yes              Auto-accept prompts (e.g. broken VM replacement)
 	  -f, --force            Kill any running runner on conN before dispatching
-	  -q, --quiet            CI mode: no interactive prompts
+	  -q, --quiet            CI mode: no interactive prompts (implies -y)
 	  --dry-run              Show dispatch plan, don't execute
 
 	The script auto-detects VM state and only creates/configures
@@ -102,7 +104,8 @@ while [ $# -gt 0 ]; do
 		-p|--pools)           CLI_POOLS="$2"; shift 2 ;;
 		-G|--recreate-golden) CLI_RECREATE_GOLDEN=1; shift ;;
 		-R|--recreate-vms)    CLI_RECREATE_VMS=1; shift ;;
-		-q|--quiet)        CLI_QUIET=1; shift ;;
+		-y|--yes)          CLI_YES=1; shift ;;
+		-q|--quiet)        CLI_QUIET=1; CLI_YES=1; shift ;;
 		--clean)           CLI_CLEAN=1; shift ;;
 		--dry-run)         CLI_DRY_RUN=1; shift ;;
 		-f|--force)        CLI_FORCE=1; shift ;;
@@ -491,6 +494,7 @@ if [ -n "$_need_infra" ] || [ -n "$CLI_RECREATE_GOLDEN" ] || [ -n "$CLI_RECREATE
 	_infra_flags="--pools $CLI_POOLS --pools-file $CLI_POOLS_FILE"
 	[ -n "$CLI_RECREATE_GOLDEN" ] && _infra_flags+=" --recreate-golden"
 	[ -n "$CLI_RECREATE_VMS" ]    && _infra_flags+=" --recreate-vms"
+	[ -n "$CLI_YES" ]             && _infra_flags+=" --yes"
 	"$BASH" "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
 fi
 
