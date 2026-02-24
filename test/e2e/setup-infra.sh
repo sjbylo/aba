@@ -823,8 +823,12 @@ for (( i=1; i<=_POOLS; i++ )); do
 				continue
 			fi
 		fi
+		echo "  Powering off $vm_name before snapshot ..."
+		govc vm.power -off "$vm_name" || true
 		echo "  Creating snapshot '$_SNAPSHOT_NAME' on $vm_name ..."
 		govc snapshot.create -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: snapshot $vm_name failed" >&2; exit 1; }
+		echo "  Powering on $vm_name ..."
+		govc vm.power -on "$vm_name" || true
 	done
 done
 
