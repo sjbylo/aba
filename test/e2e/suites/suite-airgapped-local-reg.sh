@@ -217,15 +217,10 @@ test_end
 # ============================================================================
 test_begin "Incremental: UBI image load"
 
-# oc-mirror v2 needs a fresh imageset config per save cycle
-e2e_run "Create imageset config with UBI image" \
-    "cat > mirror/save/imageset-config-save.yaml <<'YAML'
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/v2alpha1
-mirror:
-  additionalImages:
-  - name: registry.redhat.io/ubi9/ubi:latest
-YAML"
+e2e_run "Uncomment additionalImages in imageset config" \
+    "sed -i 's|^#  additionalImages:|  additionalImages:|' mirror/save/imageset-config-save.yaml"
+e2e_run "Uncomment UBI image entry" \
+    "sed -i 's|^#  - name: registry.redhat.io/ubi9/ubi:latest|  - name: registry.redhat.io/ubi9/ubi:latest|' mirror/save/imageset-config-save.yaml"
 e2e_run "Save UBI image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer UBI images to internal bastion" \
@@ -240,14 +235,8 @@ test_end
 # ============================================================================
 test_begin "Incremental: vote-app image load"
 
-e2e_run "Create imageset config with vote-app image" \
-    "cat > mirror/save/imageset-config-save.yaml <<'YAML'
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/v2alpha1
-mirror:
-  additionalImages:
-  - name: quay.io/sjbylo/flask-vote-app:latest
-YAML"
+e2e_run "Add vote-app image to imageset config" \
+    "sed -i '/additionalImages:/a\\  - name: quay.io/sjbylo/flask-vote-app:latest' mirror/save/imageset-config-save.yaml"
 e2e_run "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app to internal bastion" \

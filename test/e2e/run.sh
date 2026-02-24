@@ -71,8 +71,8 @@ _usage() {
 	  run.sh --destroy               Destroy all pool VMs
 	  run.sh attach conN             Attach to conN's tmux session
 	  run.sh live [N]                Interactive multi-pane dashboard (read-write, handles prompts)
-	  run.sh dashboard [N]           Open multi-pane summary dashboard (auto-detects from pools.conf)
-	  run.sh dashboard [N] log       Open multi-pane full log dashboard
+	  run.sh dash [N]                Open multi-pane summary dashboard (auto-detects from pools.conf)
+	  run.sh dash [N] log            Open multi-pane full log dashboard
 	  run.sh --verify                Verify all pool VMs (no suite dispatch)
 	  run.sh --verify --pools 3     Verify pools 1-3
 	  run.sh --dry-run               Show plan without executing
@@ -116,7 +116,7 @@ while [ $# -gt 0 ]; do
 		live)              shift; CLI_LIVE=""
 		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_LIVE="$1"; shift; fi ;;
 		stop)              CLI_STOP=1; shift ;;
-		dashboard)         shift; CLI_DASHBOARD=""; CLI_DASH_LOG="summary.log"
+		dash)              shift; CLI_DASHBOARD=""; CLI_DASH_LOG="summary.log"
 		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_DASHBOARD="$1"; shift; fi
 		                   if [[ "${1:-}" == "log" ]]; then CLI_DASH_LOG="latest.log"; shift; fi ;;
 		--help|-h)         _usage; exit 0 ;;
@@ -410,10 +410,27 @@ _vms_ready() {
 	local pool_num="$1"
 	local user="${CON_SSH_USER:-steve}"
 	local con="con${pool_num}.${VM_BASE_DOMAIN:-example.com}"
-	ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
+	local _reason=""
+
+	if ! ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
 		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
-		"${user}@${con}" -- "test -d ~/aba" 2>/dev/null || return 1
-	govc snapshot.tree -vm "dis${pool_num}" 2>/dev/null | grep "pool-ready" || return 1
+		"${user}@${con}" -- "test -d ~/aba"; then
+		_reason="SSH to ${con} failed or ~/aba missing"
+		echo "  Pool $pool_num: not ready ($_reason)" >&2
+		return 1
+	fi
+
+	if ! govc snapshot.tree -vm "con${pool_num}" | grep "pool-ready"; then
+		_reason="con${pool_num} missing pool-ready snapshot"
+		echo "  Pool $pool_num: not ready ($_reason)" >&2
+		return 1
+	fi
+
+	if ! govc snapshot.tree -vm "dis${pool_num}" | grep "pool-ready"; then
+		_reason="dis${pool_num} missing pool-ready snapshot"
+		echo "  Pool $pool_num: not ready ($_reason)" >&2
+		return 1
+	fi
 }
 
 # --- Dry run (before infra check -- no side effects) -------------------------
@@ -447,6 +464,9 @@ fi
 # --- Ensure infrastructure ---------------------------------------------------
 
 _ensure_govc
+_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+[ -f "$_vmconf" ] && { set -a; source "$_vmconf"; set +a; }
+
 echo ""
 echo "=== E2E Test Run ==="
 echo "  Suites: ${suites_to_run[*]}"
@@ -458,11 +478,10 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 	if [ -n "$CLI_RECREATE_VMS" ]; then
 		echo "  Pool $i: will be recreated (--recreate-vms)"
 		_need_infra=1
-	elif ! _vms_ready "$i"; then
-		_need_infra=1
-		echo "  Pool $i: VMs not ready"
+	elif _vms_ready "$i"; then
+		echo "  Pool $i: ready"
 	else
-		echo "  Pool $i: VMs ready"
+		_need_infra=1
 	fi
 done
 
