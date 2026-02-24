@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # Suite: Network Advanced (VLAN + bonding matrix)
 # =============================================================================
@@ -242,7 +242,7 @@ _net_test() {
     e2e_run -r 1 1 "Wait for node0 SSH ($cname)" \
         "timeout 8m bash -c 'until aba --dir $cname ssh --cmd hostname; do sleep 10; done'"
 
-    if echo "$if_check" | grep -q bond0; then
+    if echo "$if_check" | grep bond0; then
         e2e_run -q "Wait for bond0 to settle" "sleep 30"
     fi
 

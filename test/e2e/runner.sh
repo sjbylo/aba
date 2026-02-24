@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # E2E Test Framework v2 -- Suite Runner (runs on conN inside tmux)
 # =============================================================================
@@ -127,7 +127,7 @@ _revert_dis_snapshot() {
 	echo ""
 	echo "  Reverting $DIS_VM to snapshot '$snapshot' ..."
 
-	if ! govc snapshot.tree -vm "$DIS_VM" 2>/dev/null | grep -q "$snapshot"; then
+	if ! govc snapshot.tree -vm "$DIS_VM" 2>/dev/null | grep "$snapshot"; then
 		echo "  WARNING: Snapshot '$snapshot' not found on $DIS_VM -- skipping revert"
 		return 0
 	fi
@@ -171,8 +171,10 @@ for suite in "${SUITES[@]}"; do
 		continue
 	fi
 
-	echo ""
-	echo ""
+	# Reset terminal state (prevents vt corruption from accumulating across suites)
+	printf '\033c'
+	tmux clear-history 2>/dev/null
+
 	printf '%0.s#' {1..80}; echo
 	printf '%0.s#' {1..80}; echo
 	printf '##  %-74s##\n' ""
@@ -183,19 +185,41 @@ for suite in "${SUITES[@]}"; do
 	printf '%0.s#' {1..80}; echo
 	echo ""
 
-	# Revert disN to clean state before each suite
+	# Revert disN to clean state before each suite. Required: disN must have
+	# a 'pool-ready' snapshot (create via clone-and-check / setup-infra).
 	_revert_dis_snapshot "pool-ready" || {
-		echo "  WARNING: disN revert failed -- proceeding anyway"
+		echo ""
+		echo "  ERROR: disN revert failed -- cannot proceed."
+		echo "  $DIS_VM must have a 'pool-ready' snapshot. Create it by running"
+		echo "  clone-and-check (or setup-infra Phase 3) for this pool."
+		echo ""
+		_overall_rc=1
+		exit 1
 	}
 
 	# Clean up any stale Quay/registry state on conN from previous suite
 	_cleanup_con_quay
 
-	cd "$_ABA_ROOT"
-	_suite_start=$(date +%s)
+	while true; do
+		cd "$_ABA_ROOT"
+		_suite_start=$(date +%s)
 
-	_rc=0
-	bash "$suite_file" || _rc=$?
+		_rc=0
+		bash "$suite_file" || _rc=$?
+
+		if [ $_rc -eq 4 ]; then
+			echo ""
+			echo "  Suite $suite: RESTARTING by user request ..."
+			echo ""
+			_revert_dis_snapshot "pool-ready" || {
+				echo "  ERROR: disN revert failed -- cannot restart. Fix snapshot then re-run."
+				exit 1
+			}
+			_cleanup_con_quay
+			continue
+		fi
+		break
+	done
 
 	_suite_elapsed=$(( $(date +%s) - _suite_start ))
 	_suite_mins=$(( _suite_elapsed / 60 ))

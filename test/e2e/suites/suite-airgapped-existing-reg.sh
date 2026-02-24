@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # Suite: Airgapped with Existing Registry (rewrite of test2)
 # =============================================================================
@@ -157,6 +157,9 @@ test_begin "Tar-pipe transfer to bastion"
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
 
+e2e_run_remote "Install aba on internal bastion" \
+    "cd ~/aba && ./install"
+
 test_end
 
 # ============================================================================
@@ -172,8 +175,14 @@ e2e_run_remote -q "Remove any existing regcreds" \
 e2e_run_must_fail_remote "Load without regcreds should fail" \
     "cd ~/aba && aba -d mirror load --retry"
 
-# Now restore regcreds so subsequent steps work
-e2e_run_remote "Restore regcreds from existing registry" \
+# Manually restore regcreds (simulates user configuring existing registry credentials)
+e2e_run_remote "Create regcreds directory" \
+    "mkdir -p ~/aba/mirror/regcreds"
+e2e_run_remote "Copy registry CA cert to regcreds" \
+    "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"
+e2e_run_remote "Copy registry pull secret to regcreds" \
+    "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
+e2e_run_remote "Verify registry access with restored regcreds" \
     "cd ~/aba && aba -d mirror verify"
 
 test_end

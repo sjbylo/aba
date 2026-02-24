@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # E2E Test Framework v2 -- Thin Coordinator
 # =============================================================================
@@ -25,6 +25,12 @@
 
 set -u
 
+if (( BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 2) )); then
+    echo "ERROR: Bash 4.2+ is required (you have $BASH_VERSION)." >&2
+    echo "       On macOS: brew install bash, then run with /opt/homebrew/bin/bash $0" >&2
+    exit 1
+fi
+
 _RUN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
 
@@ -45,6 +51,7 @@ CLI_DESTROY=""
 CLI_STOP=""
 CLI_LIST=""
 CLI_ATTACH=""
+CLI_VERIFY=""
 CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
 
 # --- Usage (defined before arg parsing so --help works) ----------------------
@@ -63,8 +70,11 @@ _usage() {
 	  run.sh stop                    Kill all runners on all pools
 	  run.sh --destroy               Destroy all pool VMs
 	  run.sh attach conN             Attach to conN's tmux session
+	  run.sh live [N]                Interactive multi-pane dashboard (read-write, handles prompts)
 	  run.sh dashboard [N]           Open multi-pane summary dashboard (auto-detects from pools.conf)
 	  run.sh dashboard [N] log       Open multi-pane full log dashboard
+	  run.sh --verify                Verify all pool VMs (no suite dispatch)
+	  run.sh --verify --pools 3     Verify pools 1-3
 	  run.sh --dry-run               Show plan without executing
 
 	Options:
@@ -99,9 +109,12 @@ while [ $# -gt 0 ]; do
 		--pool)            CLI_POOL="$2"; shift 2 ;;
 		--last)            CLI_LAST=1; shift ;;
 		--destroy)         CLI_DESTROY=1; shift ;;
+		--verify)          CLI_VERIFY=1; shift ;;
 		--list|-l)         CLI_LIST=1; shift ;;
 		--pools-file)      CLI_POOLS_FILE="$2"; shift 2 ;;
 		attach)            CLI_ATTACH="$2"; shift 2 ;;
+		live)              shift; CLI_LIVE=""
+		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_LIVE="$1"; shift; fi ;;
 		stop)              CLI_STOP=1; shift ;;
 		dashboard)         shift; CLI_DASHBOARD=""; CLI_DASH_LOG="summary.log"
 		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_DASHBOARD="$1"; shift; fi
@@ -120,6 +133,24 @@ done
 if [ -f "$_RUN_DIR/config.env" ]; then
 	source "$_RUN_DIR/config.env"
 fi
+
+# --- Ensure govc when we will use it (destroy or infra check / setup) ---------
+_ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
+_ensure_govc() {
+	if command -v govc &>/dev/null; then
+		return 0
+	fi
+	if [ -f "$_ABA_ROOT/scripts/include_all.sh" ]; then
+		source "$_ABA_ROOT/scripts/include_all.sh"
+		if ensure_govc; then
+			return 0
+		fi
+		echo "ERROR: govc installation failed." >&2
+		exit 1
+	fi
+	echo "ERROR: govc not found. Install govc (e.g. from ABA: ensure_govc) or add it to PATH." >&2
+	exit 1
+}
 
 # --- Attach mode -------------------------------------------------------------
 
@@ -161,6 +192,67 @@ if [ -n "$CLI_STOP" ]; then
 	exit 0
 fi
 
+# --- Live (interactive) mode -------------------------------------------------
+
+if [ -n "${CLI_LIVE+set}" ]; then
+	if [ -n "$CLI_LIVE" ]; then
+		_num_pools="$CLI_LIVE"
+	else
+		_num_pools=$(grep -c '^[^#]' "$_RUN_DIR/pools.conf" 2>/dev/null || echo 3)
+	fi
+	_user="${CON_SSH_USER:-steve}"
+	_domain="${VM_BASE_DOMAIN:-example.com}"
+	LIVE_SESSION="e2e-live"
+
+	tmux kill-session -t "$LIVE_SESSION" 2>/dev/null || true
+
+	_live_script_dir=$(mktemp -d /tmp/e2e-live.XXXXXX)
+	_live_create_script() {
+		local p=$1
+		local _h="con${p}.${_domain}"
+		local _so="-o LogLevel=ERROR -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+		local _script="${_live_script_dir}/pool${p}.sh"
+		{
+			echo '#!/bin/bash'
+			printf "printf '\\\\033]2;live | Pool %d (con%d)\\\\033\\\\\\\\'\n" "$p" "$p"
+			echo 'stty -ixon 2>/dev/null'
+			echo 'while true; do'
+			echo "  if ssh $_so ${_user}@${_h} tmux has-session -t e2e-run 2>/dev/null; then"
+			echo "    ssh -t $_so ${_user}@${_h} tmux attach -d -t e2e-run"
+			echo '  else'
+			echo "    echo 'No e2e-run session on con${p}. Tailing summary...'"
+			echo "    ssh $_so ${_user}@${_h} 'tail -n 50 ~/aba/test/e2e/logs/summary.log 2>/dev/null' || echo '(con${p} unreachable)'"
+			echo '  fi'
+			echo '  echo "Reconnecting in 5s ..."'
+			echo '  sleep 5'
+			echo 'done'
+		} > "$_script"
+		chmod +x "$_script"
+		echo "$_script"
+	}
+
+	if [ "$_num_pools" -le 3 ]; then
+		tmux new-session -d -s "$LIVE_SESSION" "$(_live_create_script 1)"
+		for (( p=2; p<=_num_pools; p++ )); do
+			tmux split-window -t "$LIVE_SESSION" -v "$(_live_create_script $p)"
+		done
+		tmux select-layout -t "$LIVE_SESSION" even-vertical 2>/dev/null
+	else
+		# 4-pool grid: ensure pane index N runs pool N+1 (0=pool1, 1=pool2, 2=pool3, 3=pool4)
+		tmux new-session -d -s "$LIVE_SESSION" "$(_live_create_script 1)"
+		tmux split-window -t "$LIVE_SESSION" -h "$(_live_create_script 2)"
+		tmux split-window -t "${LIVE_SESSION}.0" -v "$(_live_create_script 3)"
+		tmux split-window -t "${LIVE_SESSION}.1" -v "$(_live_create_script 4)"
+		tmux select-layout -t "$LIVE_SESSION" tiled 2>/dev/null
+	fi
+	tmux set-option -t "$LIVE_SESSION" alternate-screen off 2>/dev/null
+	tmux set-option -t "$LIVE_SESSION" allow-rename on 2>/dev/null
+	tmux set-option -t "$LIVE_SESSION" pane-border-status top 2>/dev/null
+	tmux set-option -t "$LIVE_SESSION" pane-border-format " #{pane_title} " 2>/dev/null
+	echo "Live dashboard (${_num_pools} pools) -- Ctrl-b + arrow to switch panes"
+	exec tmux attach -t "$LIVE_SESSION"
+fi
+
 # --- Dashboard mode ----------------------------------------------------------
 
 if [ -n "${CLI_DASHBOARD+set}" ]; then
@@ -178,7 +270,7 @@ if [ -n "${CLI_DASHBOARD+set}" ]; then
 		local p=$1
 		local user="${CON_SSH_USER:-steve}"
 		local host="con${p}.${VM_BASE_DOMAIN:-example.com}"
-		echo "echo '=== Pool $p (con${p}) [${CLI_DASH_LOG}] ==='; while true; do ssh $_SSH_OPTS ${user}@${host} 'tail -F -n 500 ~/aba/test/e2e/logs/${CLI_DASH_LOG}' 2>/dev/null && break; echo 'Waiting for con${p} ...'; sleep 10; done"
+		echo "printf '\\033]2;dashboard | Pool $p (con${p})\\033\\\\'; echo '=== Pool $p (con${p}) [${CLI_DASH_LOG}] ==='; while true; do ssh $_SSH_OPTS ${user}@${host} 'tail -F -n 500 ~/aba/test/e2e/logs/${CLI_DASH_LOG}' 2>/dev/null && break; echo 'Waiting for con${p} ...'; sleep 10; done"
 	}
 
 	if [ "$_num_pools" -le 3 ]; then
@@ -189,22 +281,16 @@ if [ -n "${CLI_DASHBOARD+set}" ]; then
 		done
 		tmux select-layout -t "$DASH_SESSION" even-vertical 2>/dev/null
 	else
-		# 4+ pools: 2-column grid (top-left, top-right, bottom-left, bottom-right, ...)
+		# 4-pool grid: pane index N = pool N+1 (0=pool1, 1=pool2, 2=pool3, 3=pool4)
 		tmux new-session -d -s "$DASH_SESSION" "$(_dash_tail_cmd 1)"
-		# Split into left/right columns
 		tmux split-window -t "$DASH_SESSION" -h "$(_dash_tail_cmd 2)"
-		# Pool 3+ alternate into left then right column
-		for (( p=3; p<=_num_pools; p++ )); do
-			if (( p % 2 == 1 )); then
-				# Odd pool -> split the first (left) pane vertically
-				tmux split-window -t "${DASH_SESSION}.0" -v "$(_dash_tail_cmd $p)"
-			else
-				# Even pool -> split the last right-column pane vertically
-				tmux split-window -t "${DASH_SESSION}" -v "$(_dash_tail_cmd $p)"
-			fi
-		done
+		tmux split-window -t "${DASH_SESSION}.0" -v "$(_dash_tail_cmd 3)"
+		tmux split-window -t "${DASH_SESSION}.1" -v "$(_dash_tail_cmd 4)"
 		tmux select-layout -t "$DASH_SESSION" tiled 2>/dev/null
 	fi
+	tmux set-option -t "$DASH_SESSION" allow-rename on 2>/dev/null
+	tmux set-option -t "$DASH_SESSION" pane-border-status top 2>/dev/null
+	tmux set-option -t "$DASH_SESSION" pane-border-format " #{pane_title} " 2>/dev/null
 	echo "Attaching to dashboard (${_num_pools} pools) ..."
 	exec tmux attach -t "$DASH_SESSION"
 fi
@@ -230,6 +316,7 @@ fi
 # --- Destroy mode ------------------------------------------------------------
 
 if [ -n "$CLI_DESTROY" ]; then
+	_ensure_govc
 	_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
 	if [ -f "$_vmconf" ]; then
 		set -a; source "$_vmconf"; set +a
@@ -240,7 +327,7 @@ if [ -n "$CLI_DESTROY" ]; then
 	for (( i=1; i<=10; i++ )); do
 		for prefix in con dis; do
 			vm="${prefix}${i}"
-			if govc vm.info "$vm" 2>/dev/null | grep -q "Name:"; then
+			if govc vm.info "$vm" 2>/dev/null | grep "Name:"; then
 				echo "  Destroying $vm ..."
 				govc vm.power -off "$vm" 2>/dev/null || true
 				govc vm.destroy "$vm" || true
@@ -248,6 +335,16 @@ if [ -n "$CLI_DESTROY" ]; then
 		done
 	done
 	echo "=== Done ==="
+	exit 0
+fi
+
+# --- Verify mode -------------------------------------------------------------
+
+if [ -n "$CLI_VERIFY" ]; then
+	_infra_flags="--verify --pools $CLI_POOLS --pools-file $CLI_POOLS_FILE"
+	echo ""
+	echo "=== Verifying pool VMs (pools 1..$CLI_POOLS) ==="
+	"$BASH" "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Verification failed" >&2; exit 1; }
 	exit 0
 fi
 
@@ -315,7 +412,8 @@ _vms_ready() {
 	local con="con${pool_num}.${VM_BASE_DOMAIN:-example.com}"
 	ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
 		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
-		"${user}@${con}" -- "test -d ~/aba" 2>/dev/null
+		"${user}@${con}" -- "test -d ~/aba" 2>/dev/null || return 1
+	govc snapshot.tree -vm "dis${pool_num}" 2>/dev/null | grep "pool-ready" || return 1
 }
 
 # --- Dry run (before infra check -- no side effects) -------------------------
@@ -348,6 +446,7 @@ fi
 
 # --- Ensure infrastructure ---------------------------------------------------
 
+_ensure_govc
 echo ""
 echo "=== E2E Test Run ==="
 echo "  Suites: ${suites_to_run[*]}"
@@ -356,7 +455,10 @@ echo ""
 
 _need_infra=""
 for (( i=1; i<=CLI_POOLS; i++ )); do
-	if ! _vms_ready "$i"; then
+	if [ -n "$CLI_RECREATE_VMS" ]; then
+		echo "  Pool $i: will be recreated (--recreate-vms)"
+		_need_infra=1
+	elif ! _vms_ready "$i"; then
 		_need_infra=1
 		echo "  Pool $i: VMs not ready"
 	else
@@ -370,7 +472,7 @@ if [ -n "$_need_infra" ] || [ -n "$CLI_RECREATE_GOLDEN" ] || [ -n "$CLI_RECREATE
 	_infra_flags="--pools $CLI_POOLS --pools-file $CLI_POOLS_FILE"
 	[ -n "$CLI_RECREATE_GOLDEN" ] && _infra_flags+=" --recreate-golden"
 	[ -n "$CLI_RECREATE_VMS" ]    && _infra_flags+=" --recreate-vms"
-	bash "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
+	"$BASH" "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
 fi
 
 # --- scp config files to each conN -------------------------------------------
@@ -424,7 +526,6 @@ echo ""
 
 TMUX_SESSION="e2e-run"
 declare -A _dispatched=()
-declare -A _skipped_busy=()
 
 for (( p=1; p<=CLI_POOLS; p++ )); do
 	pool_suites="${POOL_SUITES[$p]}"
@@ -465,13 +566,8 @@ for (( p=1; p<=CLI_POOLS; p++ )); do
 			_ssh_con "$p" "tmux new-session -d -s $TMUX_SESSION"
 			echo "    Killed previous runner and created fresh tmux session"
 		else
-			echo ""
-			echo "    ERROR: runner.sh is still executing on con${p}."
-			echo ""
-			echo "    To check progress:   run.sh attach con${p}"
-			echo "    To force restart:    re-run with --force"
-			echo ""
-			_skipped_busy[$p]=1
+			echo "    runner.sh already running on con${p} -- reattaching to poll"
+			_dispatched[$p]=1
 			continue
 		fi
 	fi
@@ -505,7 +601,7 @@ if [ -z "$CLI_QUIET" ] && [ "$CLI_POOLS" -gt 1 ]; then
 	for (( p=1; p<=CLI_POOLS; p++ )); do
 		user="${CON_SSH_USER:-steve}"
 		host="con${p}.${VM_BASE_DOMAIN:-example.com}"
-		_tail_cmd="echo '=== Pool $p (con${p}) ==='; while true; do ssh $_SSH_OPTS ${user}@${host} 'tail -F -n 500 ~/aba/test/e2e/logs/summary.log' 2>/dev/null && break; echo 'Waiting for con${p} ...'; sleep 10; done"
+		_tail_cmd="printf '\\033]2;dashboard | Pool $p (con${p})\\033\\\\'; echo '=== Pool $p (con${p}) ==='; while true; do ssh $_SSH_OPTS ${user}@${host} 'tail -F -n 500 ~/aba/test/e2e/logs/summary.log' 2>/dev/null && break; echo 'Waiting for con${p} ...'; sleep 10; done"
 
 		if [ "$_first" -eq 1 ]; then
 			tmux new-session -d -s "$DASH_SESSION" "$_tail_cmd"
@@ -516,6 +612,9 @@ if [ -z "$CLI_QUIET" ] && [ "$CLI_POOLS" -gt 1 ]; then
 	done
 
 	tmux select-layout -t "$DASH_SESSION" even-vertical 2>/dev/null
+	tmux set-option -t "$DASH_SESSION" allow-rename on 2>/dev/null
+	tmux set-option -t "$DASH_SESSION" pane-border-status top 2>/dev/null
+	tmux set-option -t "$DASH_SESSION" pane-border-format " #{pane_title} " 2>/dev/null
 	echo "  Summary dashboard created: tmux attach -t $DASH_SESSION"
 	echo ""
 fi
@@ -577,11 +676,6 @@ echo "========================================"
 
 _overall_rc=0
 for (( p=1; p<=CLI_POOLS; p++ )); do
-	if [ -n "${_skipped_busy[$p]:-}" ]; then
-		printf "  Pool %d (con%d):  \033[1;33mSKIP\033[0m (runner already executing)\n" "$p" "$p"
-		_overall_rc=1
-		continue
-	fi
 	if [ -z "${_dispatched[$p]:-}" ]; then
 		printf "  Pool %d (con%d):  \033[1;33mSKIP\033[0m (no suites assigned)\n" "$p" "$p"
 		continue

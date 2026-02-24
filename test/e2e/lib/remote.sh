@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # E2E Test Framework -- Remote / SSH Helpers
 # =============================================================================
@@ -169,7 +169,7 @@ clone_vm() {
     # Use -snapshot for linked clones when the source has snapshots.
     # VMware templates and VMs without snapshots require a full clone.
     local snap_flag=""
-    if govc snapshot.tree -vm "$source_vm" 2>/dev/null | grep -q .; then
+    if govc snapshot.tree -vm "$source_vm" 2>/dev/null | grep .; then
         snap_flag="-snapshot=$snapshot"
     fi
 
@@ -271,7 +271,7 @@ vm_exists() {
     local vm_name="$1"
     # govc vm.info exits 0 even for non-existent VMs (empty output),
     # so check that output contains at least a "Name:" field.
-    govc vm.info "$vm_name" 2>/dev/null | grep -q "Name:"
+    govc vm.info "$vm_name" 2>/dev/null | grep "Name:"
 }
 
 # --- setup_ssh_to_root ------------------------------------------------------

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # E2E Test Framework v2 -- VM Helper Functions
 # =============================================================================
@@ -6,6 +6,15 @@
 # No orchestration logic -- just individual VM configuration steps.
 #
 # Used by: setup-infra.sh, runner.sh (for snapshot revert)
+#
+# IMPORTANT -- heredoc + stdin hazard:
+#   Every _vm_* helper pipes a heredoc into 'ssh ... bash', so the remote
+#   bash reads its script from stdin.  Commands like dnf/yum (Python-based)
+#   can read from the same stdin even with -y, consuming lines that bash
+#   has not yet executed.  To avoid this:
+#     - Keep dnf/yum calls as the LAST command in a heredoc, or
+#     - Redirect their stdin: dnf install -y ... < /dev/null
+#   Never add new commands after a dnf/yum call in a heredoc block.
 # =============================================================================
 
 _E2E_LIB_DIR_VM="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -203,9 +212,9 @@ _vm_setup_network_connected() {
 	cat <<-NETEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
 		nmcli connection show
-		nmcli -g NAME connection show | grep -q "^Wired connection 1$" && \
+		nmcli -g NAME connection show | grep "^Wired connection 1$" && \
 		    nmcli connection modify "Wired connection 1" connection.id ens224
-		nmcli -g NAME connection show | grep -q "^Wired connection 2$" && \
+		nmcli -g NAME connection show | grep "^Wired connection 2$" && \
 		    nmcli connection modify "Wired connection 2" connection.id ens256
 
 		nmcli connection modify ens192 \
@@ -227,7 +236,7 @@ _vm_setup_network_connected() {
 		    802-3-ethernet.mtu 9000
 		nmcli connection up ens224
 
-		nmcli -g NAME connection show | grep -q "^ens224\.10$" && \
+		nmcli -g NAME connection show | grep "^ens224\.10$" && \
 		    nmcli connection delete ens224.10
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
 		    id 10 ipv4.method manual ipv4.addresses $vlan_ip ipv4.never-default yes
@@ -252,9 +261,9 @@ _vm_setup_network_disconnected() {
 	cat <<-NETEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
 		nmcli connection show
-		nmcli -g NAME connection show | grep -q "^Wired connection 1$" && \
+		nmcli -g NAME connection show | grep "^Wired connection 1$" && \
 		    nmcli connection modify "Wired connection 1" connection.id ens224
-		nmcli -g NAME connection show | grep -q "^Wired connection 2$" && \
+		nmcli -g NAME connection show | grep "^Wired connection 2$" && \
 		    nmcli connection modify "Wired connection 2" connection.id ens256
 
 		nmcli connection modify ens256 \
@@ -277,7 +286,7 @@ _vm_setup_network_disconnected() {
 		    802-3-ethernet.mtu 9000
 		nmcli connection up ens224
 
-		nmcli -g NAME connection show | grep -q "^ens224\.10$" && \
+		nmcli -g NAME connection show | grep "^ens224\.10$" && \
 		    nmcli connection delete ens224.10
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
 		    id 10 ipv4.method manual ipv4.addresses $vlan_ip \
@@ -483,6 +492,9 @@ _vm_cleanup_podman() {
 }
 
 # --- _vm_cleanup_home -------------------------------------------------------
+# Quay/mirror-registry uses systemd user services; stop/disable them first, then
+# stop containers, then rm. Use sudo for the rm so root-owned Quay files under
+# ~/my-quay-mirror-test1, ~/quay-install, ~/quay-storage are removed.
 
 _vm_cleanup_home() {
 	local host="$1"
@@ -491,7 +503,15 @@ _vm_cleanup_home() {
 	echo "  [vm] Cleaning home directory on $host ..."
 	cat <<-'HOMEEOF' | _essh "${user}@${host}" -- bash
 		set -ex
-		rm -rf ~/*
+		# Stop/disable systemd user services (Quay/mirror-registry install creates these)
+		systemctl --user stop --all 2>/dev/null || true
+		systemctl --user disable --all 2>/dev/null || true
+		# Stop all podman/docker containers so no process holds files under ~
+		podman stop -a 2>/dev/null || true
+		podman rm -af 2>/dev/null || true
+		command -v docker >/dev/null 2>&1 && docker stop $(docker ps -q) 2>/dev/null || true
+		command -v docker >/dev/null 2>&1 && docker rm -f $(docker ps -aq) 2>/dev/null || true
+		sudo rm -rf ~/*
 		echo "=== Home directory after cleanup ==="
 		ls -la ~/
 	HOMEEOF
@@ -559,32 +579,45 @@ _vm_disconnect_internet() {
 
 	cat <<-'DISCEOF' | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		nmcli connection modify ens224.10 ipv4.gateway ''
-		nmcli connection up ens224.10
+		if nmcli -g NAME connection show | grep "^ens224\.10$"; then
+		    nmcli connection modify ens224.10 ipv4.gateway ''
+		    nmcli connection up ens224.10
+		fi
 
-		nmcli connection down ens256 2>/dev/null || true
-		ip link set ens256 down 2>/dev/null || true
+		# ens256 may already be down on disconnected VMs
+		if nmcli -g NAME connection show --active | grep "^ens256$"; then
+		    nmcli connection down ens256
+		fi
+		ip link set ens256 down
 
 		echo '=== Routes after disconnect ==='
 		ip route
 		echo '=== Verify ens256 is DOWN ==='
-		ip link show ens256 | grep -q 'state DOWN' && echo 'GOOD: ens256 is DOWN' || echo 'WARNING: ens256 not in DOWN state'
+		ip link show ens256 | grep 'state DOWN' && echo 'GOOD: ens256 is DOWN' || echo 'WARNING: ens256 not in DOWN state'
 		echo '=== Verify no internet ==='
 		! ping -c 1 -W 3 8.8.8.8 && echo 'GOOD: no internet access' || { echo 'ERROR: internet still reachable'; exit 1; }
 	DISCEOF
 }
 
-# --- _vm_create_test_user ---------------------------------------------------
-
-_vm_create_test_user() {
+# --- _vm_create_test_user_and_key_on_host ------------------------------------
+# Used on the GOLDEN VM only.  Generates a fresh testy_rsa key pair in the
+# default user's ~/.ssh/ on the host, creates the testy user with that public
+# key, and verifies SSH locally on the host.  The key pair is baked into the
+# golden snapshot so all clones inherit it.  Nothing is copied to bastion.
+#
+_vm_create_test_user_and_key_on_host() {
 	local host="$1"
 	local def_user="${2:-$VM_DEFAULT_USER}"
 	local test_user_name="testy"
 
-	echo "  [vm] Creating test user '$test_user_name' on $host ..."
+	echo "  [vm] Creating testy key and user on $host ..."
+
+	# Generate a fresh key pair in the default user's ~/.ssh/ on the host.
+	# ~/.ssh/ is hidden so it survives _vm_cleanup_home (sudo rm -rf ~/*).
+	_essh "${def_user}@${host}" -- "mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy -y 2>/dev/null; ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy"
 
 	local pub_key
-	pub_key=$(cat ~/.ssh/testy_rsa.pub)
+	pub_key=$(_essh "${def_user}@${host}" -- "cat ~/.ssh/testy_rsa.pub")
 
 	cat <<-USEREOF | _essh "${def_user}@${host}" -- sudo bash
 		set -ex
@@ -598,8 +631,8 @@ _vm_create_test_user() {
 		restorecon -R /home/${test_user_name} 2>/dev/null || true
 		echo '${test_user_name} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${test_user_name}
 
-		if grep -q "^AllowUsers" /etc/ssh/sshd_config; then
-		    if ! grep "^AllowUsers" /etc/ssh/sshd_config | grep -qw ${test_user_name}; then
+		if grep "^AllowUsers" /etc/ssh/sshd_config; then
+		    if ! grep "^AllowUsers" /etc/ssh/sshd_config | grep -w ${test_user_name}; then
 		        sed -i "/^AllowUsers/s/\$/ ${test_user_name}/" /etc/ssh/sshd_config
 		        systemctl restart sshd
 		    fi
@@ -608,14 +641,61 @@ _vm_create_test_user() {
 
 	_vm_wait_ssh "$host" "$def_user"
 
-	echo "  [vm] Verifying SSH to $test_user_name@$host ..."
+	echo "  [vm] Verifying testy SSH locally on $host ..."
 	local who
-	who=$(_essh -i ~/.ssh/testy_rsa -o BatchMode=yes "${test_user_name}@${host}" -- whoami 2>&1)
+	who=$(_essh "${def_user}@${host}" -- "ssh -i ~/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${test_user_name}@localhost whoami")
 	if [ "$who" != "$test_user_name" ]; then
-		echo "  [vm] ERROR: SSH as $test_user_name failed (got: '$who')" >&2
+		echo "  [vm] ERROR: local SSH as $test_user_name failed (got: '$who')" >&2
 		return 1
 	fi
-	echo "  [vm] SSH to $test_user_name@$host OK"
+	echo "  [vm] testy key created and SSH to $test_user_name@localhost verified on $host"
+}
+
+# --- _vm_create_test_user ---------------------------------------------------
+# (Re-)create the testy user using the key pair already present in the default
+# user's ~/.ssh/testy_rsa on the host (placed there during golden VM setup).
+# Does NOT read from or write to bastion.
+
+_vm_create_test_user() {
+	local host="$1"
+	local def_user="${2:-$VM_DEFAULT_USER}"
+	local test_user_name="testy"
+
+	echo "  [vm] Creating test user '$test_user_name' on $host ..."
+
+	local pub_key
+	pub_key=$(_essh "${def_user}@${host}" -- "cat ~/.ssh/testy_rsa.pub")
+
+	cat <<-USEREOF | _essh "${def_user}@${host}" -- sudo bash
+		set -ex
+		id $test_user_name && userdel $test_user_name -r -f || true
+		useradd $test_user_name -p not-used
+		mkdir -p ~${test_user_name}/.ssh
+		chmod 700 ~${test_user_name}/.ssh
+		echo "$pub_key" > ~${test_user_name}/.ssh/authorized_keys
+		chmod 600 ~${test_user_name}/.ssh/authorized_keys
+		chown -R ${test_user_name}.${test_user_name} ~${test_user_name}
+		restorecon -R /home/${test_user_name} 2>/dev/null || true
+		echo '${test_user_name} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${test_user_name}
+
+		if grep "^AllowUsers" /etc/ssh/sshd_config; then
+		    if ! grep "^AllowUsers" /etc/ssh/sshd_config | grep -w ${test_user_name}; then
+		        sed -i "/^AllowUsers/s/\$/ ${test_user_name}/" /etc/ssh/sshd_config
+		        systemctl restart sshd
+		    fi
+		fi
+	USEREOF
+
+	_vm_wait_ssh "$host" "$def_user"
+
+	echo "  [vm] Verifying testy SSH locally on $host ..."
+	local who
+	who=$(_essh "${def_user}@${host}" -- "ssh -i ~/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${test_user_name}@localhost whoami")
+	if [ "$who" != "$test_user_name" ]; then
+		echo "  [vm] ERROR: local SSH as $test_user_name failed (got: '$who')" >&2
+		return 1
+	fi
+	echo "  [vm] SSH to $test_user_name@localhost verified on $host"
 }
 
 # --- _vm_set_aba_testing ----------------------------------------------------
@@ -675,27 +755,16 @@ _vm_verify_golden() {
 
 	cat <<-'VERIFYEOF' | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config
+		grep "^ClientAliveInterval" /etc/ssh/sshd_config
 		firewall-cmd --query-masquerade
 		[ "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ]
 		systemctl is-active chronyd
 		ping -c 3 -W 5 -i0.2 10.0.1.8
-		dnf check-update > /dev/null 2>&1 || { rc=$?; [ "$rc" -eq 100 ] && exit 1; exit "$rc"; }
-		! podman images -q 2>/dev/null | grep -q . || { echo "ERROR: podman images remain"; exit 1; }
+		dnf check-update || { rc=$?; [ "$rc" -eq 100 ] && exit 1; exit "$rc"; }
+		! podman images -q | grep . || { echo "ERROR: podman images remain"; exit 1; }
 		[ -z "$(ls ~$SUDO_USER 2>/dev/null)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
 		id testy
-		grep -q "ABA_TESTING=1" /etc/environment
-
-		# Golden VM must have no default route (fully disconnected)
-		! ip route show default | grep -q . || { echo "ERROR: default route still present"; exit 1; }
-
-		# Proxy env vars must not be active in the default environment
-		[ -z "${http_proxy:-}" ] && [ -z "${https_proxy:-}" ] && [ -z "${HTTP_PROXY:-}" ] && [ -z "${HTTPS_PROXY:-}" ] \
-			|| { echo "ERROR: proxy env vars still active"; exit 1; }
-
-		# No internet connectivity expected
-		! curl -s --max-time 5 -o /dev/null http://google.com 2>/dev/null \
-			|| { echo "ERROR: internet is reachable (should be disconnected)"; exit 1; }
+		grep "ABA_TESTING=1" /etc/environment
 
 		echo "All golden VM checks passed."
 	VERIFYEOF

@@ -6,66 +6,6 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ## Medium Priority
 
-### 1. E2E Clone-Check: Parallelize VM Cloning and Configuration
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Medium  
-**Created:** 2026-02-12
-
-**Current State:**
-`suite-clone-and-check.sh` runs all steps sequentially (~11 minutes). Each `_vm_*` operation on con1 completes before the same operation starts on dis1.
-
-**Proposed Optimization -- Parallel Operations:**
-
-Steps that CAN be parallelized (independent per VM):
-- SSH wait after power-on (both VMs boot simultaneously)
-- SSH key setup on both VMs
-- NTP on both (after con1 firewall is up)
-- Cleanup (caches, podman, home) on both
-- Config (vmware.conf, test user) on both
-
-Steps that MUST stay sequential:
-- Cloning: both share the same template; `clone_with_macs` reverts the template snapshot before each clone. Fix: revert once, then clone twice.
-- con1 network + firewall + dnsmasq BEFORE dis1 network: dis1's default route goes through con1's VLAN masquerade.
-
-**Estimated time saving:** ~11 min down to ~7-8 min.
-
-### 2. E2E VM Reuse: Snapshot-Based Fast Restart
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Medium  
-**Created:** 2026-02-12
-
-**Problem:**
-Every clone-and-check run destroys and re-clones VMs from template, then reconfigures from scratch. This is the biggest time cost (~10 min) and is wasteful when the VMs are already configured correctly.
-
-**Proposed Solution -- Three-tier reuse:**
-
-1. **Snapshot reuse (fastest, ~30s):** After clone-and-check fully configures VMs, take a govc snapshot `e2e-configured`. On subsequent runs, if VMs exist with that snapshot, revert to it and power on. Guarantees clean, known-good state.
-
-2. **Power-on + light cleanup (fast, ~60s):** Leave VMs powered off after tests. Next run powers on and runs a refresh (reset aba state, clean caches). Network/firewall/dnsmasq survive reboots. Slightly less deterministic than snapshots.
-
-3. **Full re-clone (current, ~11 min):** Destroy VMs and clone fresh from template. Used with `--fresh` flag or when VMs don't exist.
-
-**Recommended approach:** Hybrid -- snapshots for the clone-and-check / infra setup, light cleanup for the actual test suites that run on already-configured VMs. `--fresh` flag forces full re-clone.
-
-**Implementation sketch:**
-```bash
-# In suite-clone-and-check.sh or a new pool-reuse.sh:
-if vm_exists "$CON_NAME" && vm_has_snapshot "$CON_NAME" "e2e-configured"; then
-    govc snapshot.revert -vm "$CON_NAME" e2e-configured
-    govc vm.power -on "$CON_NAME"
-    # ... same for DIS_NAME
-else
-    # full clone + configure pipeline
-fi
-# After full configure:
-govc snapshot.create -vm "$CON_NAME" e2e-configured
-govc snapshot.create -vm "$DIS_NAME" e2e-configured
-```
-
 ### 3. Evaluate Selective `set -euo pipefail` Adoption
 
 **Status:** Backlog  
@@ -95,31 +35,6 @@ ABA core scripts do not use strict bash mode (`set -euo pipefail`). This means u
 **References:**
 - http://mywiki.wooledge.org/BashFAQ/105 (why `set -e` is unreliable)
 - The `(( running++ ))` bug in `download_all_catalogs()` was caused by `set -e` + post-increment returning 0
-
-### 12. `imagesetconf` with `op-sets=all` Missing Catalog in Generated YAML
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Small  
-**Created:** 2026-02-22
-
-**Problem:**
-When `op-sets` is set to `all` in `aba.conf`, running `aba -d mirror imagesetconf` generates imageset-config YAML files (`mirror/save/imageset-config-save.yaml` and `mirror/sync/imageset-config-sync.yaml`) that appear to be missing the `redhat-operator-index` catalog reference.
-
-The verbose output during generation shows the catalog is being processed:
-```
-operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.20
-    packages:
-```
-But a subsequent `grep 'redhat-operator-index' mirror/save/imageset-config-save.yaml` fails (exit=1), meaning the catalog string is not present in the written YAML file despite the generation logs indicating it was added.
-
-**Observed in:** E2E test [7] "All-operators imageset: generate and verify YAML" (OCP 4.20.14, stable channel, amd64).
-
-**To investigate:**
-- Check if the YAML generation writes the catalog line when `packages:` is empty (all operators = no filter)
-- Compare the generated YAML content with the verbose output
-- Verify whether the issue is in YAML generation or in the test assertion (grep pattern)
 
 ### 13. `run.sh verify` -- Re-run Pool Verification Without Reconfiguring
 
@@ -164,30 +79,6 @@ The v1 framework (`test/e2e-v1/lib/parallel.sh`) has a complete working implemen
 3. **Dashboard**: Keep as-is (tail summary logs per pool)
 
 **Reference:** `test/e2e-v1/lib/parallel.sh` (518 lines, complete implementation)
-
-### 15. Suite Banner in tmux on Dispatch
-
-**Status:** Backlog  
-**Priority:** Low  
-**Estimated Effort:** Small  
-**Created:** 2026-02-23
-
-**Problem:**
-When a new suite is dispatched to a tmux pane on conN, the output starts immediately with no visual separator. When scrolling up through a long log to find where a suite started, it's hard to locate the boundary.
-
-**Proposed Solution:**
-Have `runner.sh` print a large, obvious banner before each suite starts, e.g.:
-
-```
-################################################################################
-##                                                                            ##
-##   SUITE: airgapped-local-reg   (pool 3, con3)                             ##
-##   Started: 2026-02-23 08:15:30                                            ##
-##                                                                            ##
-################################################################################
-```
-
-This makes it easy to find suite boundaries when scrolling the tmux scrollback buffer.
 
 ---
 
@@ -329,23 +220,39 @@ The variable name `CATALOG_CACHE_TTL_SECS` is misleading if the value is typical
 
 ### 11. E2E Framework: Graceful Stop / Signal Handling
 
-**Status:** Backlog  
+**Status:** Partially done  
 **Priority:** Low  
-**Estimated Effort:** Medium  
+**Estimated Effort:** Small (remaining)  
 **Created:** 2026-02-21
 
-**Problem:**
-There is no way to gracefully stop a running E2E test. No `trap` for SIGINT/SIGTERM, no PID file, no `--stop` command. When the main `run.sh` is killed, orphan SSH sessions on conN keep running. Stopping requires manually killing the local process and then SSHing to each conN to kill remaining processes.
+**Done:**
+- `run.sh stop` subcommand: SSHes to each conN, kills the runner PID from lock file, removes lock/rc files, kills tmux session.
+- `runner.sh` has `trap 'rm -f "$LOCK_FILE"' EXIT` for lock cleanup.
 
-**Proposed:**
-- Add a `trap` in `run.sh` and `parallel.sh` to catch SIGINT/SIGTERM
-- On signal: kill child SSH sessions, notify conN to stop, write a summary of what was interrupted
-- Write a PID file so `run.sh --stop` can find and signal the running instance
-- For parallel mode: propagate the stop signal to all pool dispatchers
+**Remaining:**
+- Add `trap` in `run.sh` coordinator for SIGINT/SIGTERM (propagate stop to conN)
+- Write a PID file for `run.sh` itself so a second invocation can signal/stop the first
+- Propagate stop signal to all pool dispatchers in parallel mode
 
 ---
 
 ## Completed
+
+### E2E Suite Banner in tmux on Dispatch
+**Completed:** 2026-02-23  
+`runner.sh` now prints a large `####` banner with suite name, pool number, hostname, and timestamp before each suite starts. Makes it easy to find suite boundaries when scrolling tmux scrollback.
+
+### E2E Clone-Check: Parallelize VM Cloning and Configuration
+**Completed:** 2026-02-22  
+`setup-infra.sh` Phase 1 clones all conN in parallel (background `&` + `wait`), then all disN. Phase 2 runs `_configure_con_vm` and `_configure_dis_vm` in parallel per pool. disN waits for conN NAT internally.
+
+### E2E VM Reuse: Snapshot-Based Fast Restart
+**Completed:** 2026-02-22  
+Implemented via `pool-ready` snapshots. `setup-infra.sh` reverts existing VMs instead of re-cloning when the snapshot exists, and skips configuration. `runner.sh` reverts disN to `pool-ready` before each suite.
+
+### `imagesetconf` with `op-sets=all` Missing Catalog
+**Completed:** 2026-02-23  
+Verified working: `add-operators-to-imageset.sh` (lines 122-130) correctly writes the `redhat-operator-index` catalog for `op-sets=all`. E2E test in `suite-create-bundle-to-disk.sh` verifies it. Original report was likely a transient test environment issue.
 
 ### E2E Suites: Refactor Embedded SSH to `e2e_run -h`
 **Completed:** 2026-02-21
