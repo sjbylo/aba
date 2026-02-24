@@ -128,18 +128,17 @@ apply_custom_manifests() {
 		return 0
 	fi
 
-	# Enable nullglob for safe glob expansion (empty globs return empty array)
-	shopt -s nullglob
+	# Recursively discover .yaml/.yml files; sort ensures deterministic alphabetical
+	# order so users can control ordering via directory/file naming (e.g. 00-ns/, 01-app/)
+	local found_files
+	found_files="$(find "$custom_manifest_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
 
-	# Collect all .yaml and .yml files into array
-	local yaml_files=("$custom_manifest_dir"/*.yaml "$custom_manifest_dir"/*.yml)
-	local file_count=${#yaml_files[@]}
-
-	# Disable nullglob to restore default behavior
-	shopt -u nullglob
+	# Count matched files; grep -c exits 1 on zero matches, so suppress that with || true
+	local file_count
+	file_count="$(printf '%s\n' "$found_files" | grep -c . || true)"
 
 	# If no files found, inform user and return
-	if [ $file_count -eq 0 ]; then
+	if [ "$file_count" -eq 0 ]; then
 		aba_debug "No custom manifest files (.yaml/.yml) found in $custom_manifest_dir"
 		return 0
 	fi
@@ -152,28 +151,28 @@ apply_custom_manifests() {
 	local success_count=0
 	local failure_count=0
 
-	# Apply each file
-	for manifest_file in "${yaml_files[@]}"; do
-		# Get just the filename for cleaner output
-		local basename_file="${manifest_file##*/}"
+	# Apply each file; while+read handles filenames that contain spaces
+	while IFS= read -r manifest_file; do
+		# Show path relative to the custom manifests directory for cleaner output
+		local rel_path="${manifest_file#"$custom_manifest_dir"/}"
 
 		# Verify file is not empty
 		if [ ! -s "$manifest_file" ]; then
-			aba_warning "Skipping empty file: $basename_file"
+			aba_warning "Skipping empty file: $rel_path"
 			failure_count=$((failure_count + 1))
 			continue
 		fi
 
 		# Apply the manifest
-		aba_info "oc apply -f $basename_file"
+		aba_info "oc apply -f $rel_path"
 
 		if oc apply -f "$manifest_file"; then
 			success_count=$((success_count + 1))
 		else
-			aba_warning "Failed to apply custom manifest: $basename_file (continuing with other files)"
+			aba_warning "Failed to apply custom manifest: $rel_path (continuing with other files)"
 			failure_count=$((failure_count + 1))
 		fi
-	done
+	done <<< "$found_files"
 
 	# Show summary
 	if [ $success_count -gt 0 ]; then
