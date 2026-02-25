@@ -174,8 +174,9 @@ uninstall-docker-registry:
 	@touch .uninstalled
 	@rm -f .installed 
 
-# mirror.conf depends on aba.conf for the 'domain' value
-mirror.conf: ../aba.conf .init                        ## Create the mirror.conf file.
+# mirror.conf needs 'domain' from aba.conf when first created, but once it
+# exists create-mirror-conf.sh exits early so aba.conf is not required.
+mirror.conf: .init                                    ## Create the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh -f $(force)
 
 install: .installed

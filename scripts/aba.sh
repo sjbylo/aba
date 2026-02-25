@@ -207,8 +207,9 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # Start CLI downloads early to maximize parallel download time
 # For interactive mode: Wait until after user input (line ~1152) to avoid
 # bandwidth contention that could slow down reaching the user prompts
-# Skip for destructive targets that don't need CLIs (reset, clean)
-if [ ! "$interactive_mode" ] && ! echo " $* " | grep -qE " (reset|clean) "; then
+# Only start early CLI downloads when ocp_version is known (many targets
+# like mirror install/uninstall don't need it and aba.conf may not exist yet)
+if [ ! "$interactive_mode" ] && [ "$ocp_version" ]; then
 	aba_debug "Non-interactive mode detected - starting CLI downloads early"
 	$ABA_ROOT/scripts/cli-download-all.sh
 fi
