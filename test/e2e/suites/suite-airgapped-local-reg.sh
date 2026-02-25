@@ -374,7 +374,7 @@ e2e_run_remote "Copy macs.conf" \
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
 e2e_run_remote "Clean sno cluster dir" \
-    "cd ~/aba && rm -rfv $SNO"
+    "cd ~/aba && rm -rf $SNO"
 
 # Build standard cluster
 e2e_run_remote "Create standard cluster config" \

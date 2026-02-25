@@ -34,21 +34,21 @@ setup_aba_from_scratch() {
 
     echo "=== setup_aba_from_scratch ==="
 
-    # Uninstall any existing registry. Aba checks .installed internally.
-    # Rule 6: uninstall from the same host that installed.
-    e2e_run "Uninstall registry (local or remote)" \
-        "cd $aba_root && aba -d mirror uninstall"
+    # disN is always reverted to snapshot before each suite, so any remote
+    # registry is already gone. Just clear the stale state marker on conN.
+    e2e_run "Clear stale registry state (disN reverted to snapshot)" \
+        "rm -f $aba_root/mirror/.installed"
 
     e2e_run "Reset aba" \
         "cd $aba_root && if [ -d mirror ]; then aba reset -f; else echo 'No mirror dir -- nothing to reset'; fi"
 
     # podman prune/rmi with --force are idempotent (return 0 even when empty).
     e2e_run "Clean podman images" \
-        "podman system prune --all --force; podman rmi --all --force; sudo rm -rfv ~/.local/share/containers/storage"
+        "podman system prune --all --force; podman rmi --all --force; sudo rm -rf ~/.local/share/containers/storage"
 
     # Remove oc-mirror caches
     e2e_run "Remove oc-mirror caches" \
-        "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
+        "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
 
     echo "=== setup_aba_from_scratch complete ==="
 }
@@ -145,13 +145,13 @@ reset_internal_bastion() {
 
     # 3. Clean slate on disN: remove aba tree, caches, container storage.
     e2e_run_remote "Remove aba tree on internal bastion" \
-        "rm -rfv ~/aba"
+        "rm -rf ~/aba"
     e2e_run_remote "Clean podman images on internal bastion" \
         "podman system prune --all --force; podman rmi --all --force"
     e2e_run_remote "Clean oc-mirror caches on internal bastion" \
-        "rm -rfv ~/.cache/agent ~/.oc-mirror"
+        "rm -rf ~/.cache/agent ~/.oc-mirror"
     e2e_run_remote "Clean containers storage on internal bastion" \
-        "sudo rm -rfv ~/.local/share/containers/storage"
+        "sudo rm -rf ~/.local/share/containers/storage"
 
     echo "=== reset_internal_bastion complete ==="
 }
@@ -177,15 +177,15 @@ cleanup_all() {
     _compact="$(pool_cluster_name compact)"
     _standard="$(pool_cluster_name standard)"
     e2e_run "Remove cluster directories" \
-        "rm -rfv $_sno $_compact $_standard"
+        "rm -rf $_sno $_compact $_standard"
 
     # podman prune/rmi with --force are idempotent (return 0 even when empty).
     e2e_run "Clean podman images" \
-        "podman system prune --all --force; podman rmi --all --force; sudo rm -rfv ~/.local/share/containers/storage"
+        "podman system prune --all --force; podman rmi --all --force; sudo rm -rf ~/.local/share/containers/storage"
 
     # Remove caches
     e2e_run "Remove oc-mirror caches" \
-        "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
+        "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
 
     echo "=== cleanup_all complete ==="
 }

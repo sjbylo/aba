@@ -134,12 +134,12 @@ test_end
 test_begin "OC_MIRROR_CACHE: custom cache location"
 
 e2e_run "Create custom cache dir" "mkdir -pv \$HOME/.custom_oc_mirror_cache"
-e2e_run -q "Clean custom cache dir" "rm -rfv \$HOME/.custom_oc_mirror_cache/*"
+e2e_run -q "Clean custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache/*"
 
 e2e_run "Verify OC_MIRROR_CACHE env var is respected" \
     "export OC_MIRROR_CACHE=\$HOME/.custom_oc_mirror_cache && aba -d mirror save --retry && test -d \$HOME/.custom_oc_mirror_cache/.oc-mirror"
 
-e2e_run -q "Clean up custom cache dir" "rm -rfv \$HOME/.custom_oc_mirror_cache"
+e2e_run -q "Clean up custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache"
 
 test_end
 
@@ -169,7 +169,7 @@ e2e_run "Test small CIDR (cluster.conf)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step cluster.conf"
 e2e_run "Test small CIDR (ISO creation)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step iso"
-e2e_run "Clean and recreate with normal CIDR" "rm -rfv $SNO"
+e2e_run "Clean and recreate with normal CIDR" "rm -rf $SNO"
 e2e_run "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
@@ -196,7 +196,7 @@ e2e_run "Set reg_ssh_user=testy" "aba -d mirror --reg-ssh-user testy"
 e2e_run "Set reg_ssh_key" "aba -d mirror --reg-ssh-key '~/.ssh/testy_rsa'"
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
-e2e_run "Clean saved data" "rm -rfv mirror/save"
+e2e_run "Clean saved data" "rm -rf mirror/save"
 e2e_run -r 3 2 "Sync images with testy user config" "aba --dir mirror sync --retry"
 
 e2e_run "Clean sno cluster dir" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
@@ -221,7 +221,7 @@ e2e_run "Verify govc tar missing" "! test -f cli/govc*gz"
 e2e_run "Run download-all (should re-download govc)" "aba -d cli download-all"
 e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
 
-e2e_run "Clean standard cluster dir" "rm -rfv $STANDARD"
+e2e_run "Clean standard cluster dir" "rm -rf $STANDARD"
 e2e_run "Create agent configs (bare-metal)" \
     "aba cluster -n $STANDARD -t standard -i $(pool_standard_api_vip) -s agentconf"
 e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"

@@ -108,12 +108,20 @@ else
         sudo firewall-cmd --reload
     fi
 
-    # Ensure no stale containers/volumes from a failed previous install;
-    # mirror-registry generates a new Redis password each run but won't
-    # reset an already-running Redis, causing WRONGPASS mismatches.
+    # Fully remove any previous Quay install. mirror-registry generates a
+    # new Redis password each run; stale systemd services keep the old
+    # Redis running, causing WRONGPASS mismatches on reinstall.
+    if [[ -x ./mirror-registry ]] && systemctl --user is-active quay-pod &>/dev/null; then
+        echo "  Removing previous Quay installation ..."
+        ./mirror-registry uninstall --autoApprove 2>&1 || true
+    fi
+    systemctl --user stop quay-app quay-pod quay-redis 2>/dev/null || true
+    systemctl --user disable quay-app quay-pod quay-redis 2>/dev/null || true
+    systemctl --user reset-failed 2>/dev/null || true
     podman stop -a 2>/dev/null || true
     podman rm -a -f 2>/dev/null || true
     podman volume rm -a -f 2>/dev/null || true
+    podman secret rm --all 2>/dev/null || true
     rm -rf ~/quay-install ~/quay-storage
 
     ./mirror-registry install --quayHostname "$reg_host" --initPassword "$REG_PW"
@@ -130,26 +138,15 @@ fi
 
 echo "[2/4] Setting up container auth ..."
 
+POOL_AUTH="$POOL_REG_DIR/auth.json"
 enc_password=$(echo -n "${REG_USER}:${REG_PW}" | base64 -w0)
 
-# Build merged auth: Red Hat pull secret + local Quay
-merged_auth=$(python3 -c "
-import json, sys
-rh = json.load(open('$HOME/.pull-secret.json'))
-auths = rh.get('auths', rh)
-if 'auths' not in rh:
-    rh = {'auths': auths}
-rh['auths']['${reg_host}:${REG_PORT}'] = {'auth': '${enc_password}'}
-json.dump(rh, sys.stdout)
-")
+printf '{"auths":{"%s:%s":{"auth":"%s"}}}\n' "$reg_host" "$REG_PORT" "$enc_password" > "$POOL_REG_DIR/quay-creds.json"
+jq -s '.[0] * .[1]' "$HOME/.pull-secret.json" "$POOL_REG_DIR/quay-creds.json" > "$POOL_AUTH"
 
-mkdir -p ~/.docker ~/.containers
-echo "$merged_auth" > ~/.docker/config.json
-cp ~/.docker/config.json ~/.containers/auth.json
+podman login -u "$REG_USER" -p "$REG_PW" --authfile "$POOL_AUTH" "https://${reg_host}:${REG_PORT}"
 
-podman login -u "$REG_USER" -p "$REG_PW" "https://${reg_host}:${REG_PORT}"
-
-echo "  Auth configured for ${reg_host}:${REG_PORT} + registry.redhat.io"
+echo "  Auth configured in $POOL_AUTH"
 
 # --- Step 3: Create imageset config -----------------------------------------
 
@@ -189,7 +186,7 @@ echo "  Imageset config written to $SYNC_DIR/imageset-config.yaml"
 # Quay reinstall wipes images but the done-marker file persists on disk.
 DONE_MARKER="$SYNC_DIR/.synced-${version}"
 if [[ -f "$DONE_MARKER" ]]; then
-    if skopeo inspect "docker://${reg_host}:${REG_PORT}${REG_PATH}/openshift/release-images:${version}-$(uname -m)" &>/dev/null; then
+    if skopeo inspect --authfile "$POOL_AUTH" "docker://${reg_host}:${REG_PORT}${REG_PATH}/openshift/release-images:${version}-$(uname -m)" &>/dev/null; then
         echo "[4/4] Already synced for ${version} (verified) -- skipping"
     else
         echo "[4/4] Done-marker exists but release image not found -- re-syncing"
@@ -216,6 +213,7 @@ if [[ ! -f "$DONE_MARKER" ]]; then
         --config imageset-config.yaml \
         --workspace file://. \
         "docker://${reg_host}:${REG_PORT}${REG_PATH}" \
+        --authfile "$POOL_AUTH" \
         --image-timeout 15m \
         --parallel-images 4 \
         --retry-delay 30s \

@@ -463,8 +463,8 @@ _vm_cleanup_caches() {
 		rm -vrf ~/.cache/agent/
 		rm -vrf ~/bin/*
 		rm -f ~/.ssh/quay_installer*
-		rm -rfv ~/.oc-mirror/.cache
-		rm -rfv ~/*/.oc-mirror/.cache
+		rm -rf ~/.oc-mirror/.cache
+		rm -rf ~/*/.oc-mirror/.cache
 		if [ -s ~/.vmware.conf ]; then
 		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g" ~/.vmware.conf
 		    [ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
