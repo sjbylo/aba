@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+---
+
+## [0.9.6] - 2026-02-25
+
+Custom manifests, oc-mirror tuning, IP validation, and bug fixes
+
+
 ### New Features
 - **Custom manifest support (agent-based installer)** - Place `.yaml`/`.yml` files in `openshift/` or `manifests/` directories in a cluster folder to embed custom Kubernetes manifests (MachineConfig, networking, storage) into the agent-based ISO at bootstrap time (#18)
 - **Custom manifest support (day2)** - Place `.yaml`/`.yml` files in `day2-custom-manifests/` to have them automatically applied during `aba day2`, after oc-mirror resources and signatures (#19)
@@ -209,7 +216,8 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.6...HEAD
+[0.9.6]: https://github.com/sjbylo/aba/releases/tag/v0.9.6
 [0.9.4]: https://github.com/sjbylo/aba/releases/tag/v0.9.4
 [0.9.3]: https://github.com/sjbylo/aba/releases/tag/v0.9.3
 [0.9.2]: https://github.com/sjbylo/aba/releases/tag/v0.9.2
