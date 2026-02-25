@@ -205,7 +205,7 @@ test-cmd -m  "Delete this file that's already been copied to internal bastion: '
 # FIXME: aba should do this?
 ####ssh $reg_ssh_user@$int_bastion_hostname "rpm -q make || sudo yum install make -y"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 5 3 -m "Checking regcreds/ does not exist on $int_bastion_hostname" "test ! -d $subdir/aba/mirror/regcreds" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 5 3 -m "Checking ~/.aba/mirror/mirror/ does not exist on $int_bastion_hostname" "test ! -d ~/.aba/mirror/mirror" 
 
 ######################
 mylog Runtest: START - airgap

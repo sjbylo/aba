@@ -25,7 +25,7 @@ cat <<END
 [ABA] Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or
 [ABA] Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.
 END
-[ -f regcreds/pull-secret-mirror.json ] && \
+[ -f "$regcreds_dir/pull-secret-mirror.json" ] && \
 	echo "[ABA] Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
 	echo "[ABA] Run 'aba day2-osus' to configure the OpenShift Update Service."
 cat <<END

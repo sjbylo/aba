@@ -22,7 +22,7 @@ mirror/pause.tar
 mirror/postgres.tar
 mirror/quay.tar
 mirror/redis.tar
-mirror/regcreds/
+mirror/regcreds
 mirror/.registry-creds.txt
 mirror/.rpms
 mirror/save
@@ -33,7 +33,6 @@ mirror/sync
 mirror/.synced
 mirror/.uninstalled
 mirror/.*
-mirror/regcreds.bk
 mirror/mirror.conf.bk
 mirror/.redhat-operator-index*
 mirror/mirror-registry-amd64.tar.gz

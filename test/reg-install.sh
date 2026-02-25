@@ -52,7 +52,7 @@ reg_user=init
 reg_url=https://$reg_host:$reg_port
 
 # Fetch root CA from remote host 
-#scp -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem regcreds/
+#scp -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/
 
 # Check if the cert needs to be updated
 sudo diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \

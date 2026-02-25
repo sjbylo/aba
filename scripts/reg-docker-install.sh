@@ -167,8 +167,8 @@ if ! curl -k -fsSL --connect-timeout 10 "https://$REGISTRY_DOMAIN:$EXTERNAL_PORT
 	exit 1
 fi
 
-mkdir -p regcreds
-cp "$REGISTRY_CERTS_DIR/ca.crt" regcreds/rootCA.pem
+mkdir -p "$regcreds_dir"
+cp "$REGISTRY_CERTS_DIR/ca.crt" "$regcreds_dir/rootCA.pem"
 echo -n -e "$REGISTRY_USER\n$REGISTRY_PASS\n" | make password
 aba verify
 

@@ -48,6 +48,7 @@ cd ..
 touch "${repo_dir}/.bundle"  # Flag this archive as a bundle
 rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this conf file again on the internal/private network
 
+
 # All 'find expr' below are by default "and"
 file_list=$(find		\
 	"${repo_dir}/install"		\
@@ -78,7 +79,7 @@ file_list=$(find		\
 	! -path "${repo_dir}/mirror/pause.tar"  			\
 	! -path "${repo_dir}/mirror/postgres.tar"  			\
 	! -path "${repo_dir}/mirror/redis.tar"  			\
-	! -path "${repo_dir}/mirror/regcreds/*"	  			\
+	! -path "${repo_dir}/mirror/regcreds"	  			\
 	! -path "${repo_dir}/mirror/reg-uninstall.sh"  			\
 	! -path "${repo_dir}/*/iso-agent-based*"  			\
 	! -path "${repo_dir}/mirror/sync/working-dir*"  		\

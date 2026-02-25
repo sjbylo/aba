@@ -103,8 +103,9 @@ echo TERM=$TERM
 export TERM=xterm 
 echo TERM=$TERM
 cd ~/aba
-scp -rp steve@mirror.example.com:aba/mirror/regcreds/* mirror/regcreds
-ls -l mirror/regcreds
+mkdir -p ~/.aba/mirror/mirror
+scp -rp steve@mirror.example.com:~/.aba/mirror/mirror/* ~/.aba/mirror/mirror/
+ls -l ~/.aba/mirror/mirror
 aba -y mirror -H mirror.example.com -k "~/.ssh/id_rsa" -U steve
 #sed -i "s/^.*reg_ssh_user=.*/reg_ssh_user=steve/g" mirror.conf
 #sed -i "s#^.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa#g" mirror.conf

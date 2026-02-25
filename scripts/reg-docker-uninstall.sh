@@ -44,6 +44,6 @@ fi
 
 # FIXME: should ask for permission?
 sudo rm -rf $(dirname $REGISTRY_DATA_DIR) $REGISTRY_CERTS_DIR $REGISTRY_AUTH_DIR
-rm -rf regcreds
+rm -rf "$regcreds_dir"
 
 exit 0

@@ -39,7 +39,7 @@ Examples of fully disconnected mode (air-gapped):
   Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
     aba [-d mirror] load -H registry.example.com  --retry 8
 
-  Verify connection to mirror registry. First, install Quay or manually set up pull secret & CA cert files in aba/mirror/regcreds dir.
+  Verify connection to mirror registry. First, install Quay or manually set up pull secret & CA cert files in ~/.aba/mirror/mirror/ dir.
     aba [-d mirror] verify
 
   Install OpenShift:

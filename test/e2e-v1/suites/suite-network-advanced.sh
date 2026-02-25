@@ -115,12 +115,12 @@ e2e_run "Clear reg_ssh_key (local registry)" \
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
 
-e2e_run "Create regcreds directory" "mkdir -p mirror/regcreds"
+e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror"
 e2e_run "Copy Quay root CA to regcreds" \
-    "cp -v ~/quay-install/quay-rootCA/rootCA.pem mirror/regcreds/"
+    "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"
 
 e2e_run "Generate mirror pull secret" \
-    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > mirror/regcreds/pull-secret-mirror.json <<EOPS
+    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > ~/.aba/mirror/mirror/pull-secret-mirror.json <<EOPS
 {
   \"auths\": {
     \"${CON_HOST}:8443\": {

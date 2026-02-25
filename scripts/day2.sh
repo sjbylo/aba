@@ -78,11 +78,11 @@ aba_info "Adding registry CA to the cluster.  See workaround: https://access.red
 echo
 cm_existing=$(oc get cm registry-config -n openshift-config || true)
 # If installed from mirror reg. and trust CA missing (cm/registry-config) does not exist...
-if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
+if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 	aba_info "Adding the trust CA of the registry ($reg_host) ..."
 	aba_info "To fix https://access.redhat.com/solutions/5514331 and solve 'image pull errors in disconnected environment'."
-	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
-	aba_info "Using root CA file at regcreds/rootCA.pem"
+	export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem") 
+	aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
 
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
