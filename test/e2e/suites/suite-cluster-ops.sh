@@ -73,7 +73,7 @@ test_begin "Setup: install aba and configure"
 # Lightweight setup: clean caches only; do NOT touch podman/containers --
 # the pre-populated Quay must stay alive.
 e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
+    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
 
 e2e_run "Remove make (verify aba auto-installs it)" \
     "sudo dnf remove make -y --disableplugin=subscription-manager && ! which make"
@@ -172,7 +172,7 @@ for ctype in sno compact standard; do
     [ "$ctype" = "standard" ] && local_starting_ip=$(pool_standard_api_vip)
 
     e2e_run "Create cluster.conf for $cname" \
-        "rm -rfv $cname && aba cluster -n $cname -t $ctype -i $local_starting_ip --step cluster.conf"
+        "rm -rf $cname && aba cluster -n $cname -t $ctype -i $local_starting_ip --step cluster.conf"
     e2e_run "Fix mac_prefix for $cname" \
         "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $cname/cluster.conf"
     e2e_run "Generate install-config.yaml for $cname" \
@@ -206,7 +206,7 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster"
 
-e2e_run "Clean up previous $SNO cluster dir" "rm -rfv $SNO"
+e2e_run "Clean up previous $SNO cluster dir" "rm -rf $SNO"
 e2e_run "Create and install SNO cluster" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"

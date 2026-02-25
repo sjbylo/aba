@@ -34,10 +34,10 @@ setup_aba_from_scratch() {
 
     echo "=== setup_aba_from_scratch ==="
 
-    # Uninstall any existing registry. Aba checks .installed internally.
-    # Rule 6: uninstall from the same host that installed.
-    e2e_run "Uninstall registry (local or remote)" \
-        "cd $aba_root && aba -d mirror uninstall"
+    # disN is always reverted to snapshot before each suite, so any remote
+    # registry is already gone. Just clear the stale state marker on conN.
+    e2e_run "Clear stale registry state (disN reverted to snapshot)" \
+        "rm -f $aba_root/mirror/.installed"
 
     e2e_run "Reset aba" \
         "cd $aba_root && if [ -d mirror ]; then aba reset -f; else echo 'No mirror dir -- nothing to reset'; fi"

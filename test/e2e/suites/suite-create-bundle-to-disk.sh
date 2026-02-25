@@ -41,7 +41,7 @@ plan_tests \
     "Bundle without operator filters: create" \
     "Bundle without operator filters: verify contents" \
     "All-operators imageset: generate and verify YAML" \
-    "run_once: mirror clean clears state"
+    "mirror clean: removes files and re-extraction works"
 
 suite_begin "create-bundle-to-disk"
 
@@ -52,15 +52,15 @@ test_begin "Setup: clean slate"
 
 # podman prune/rmi with --force are idempotent (return 0 even when empty).
 e2e_run "Clean podman" \
-    "podman system prune --all --force; podman rmi --all --force; sudo rm -rfv ~/.local/share/containers/storage"
+    "podman system prune --all --force; podman rmi --all --force; sudo rm -rf ~/.local/share/containers/storage"
 
 # Remove oc-mirror caches
 e2e_run -q "Remove oc-mirror caches" \
-    "rm -rfv ~/.cache/agent; rm -rfv \$HOME/*/.oc-mirror/.cache"
+    "rm -rf ~/.cache/agent; rm -rf \$HOME/*/.oc-mirror/.cache"
 
 # Clean up leftover state from previous test runs
 e2e_run -q "Remove old files" \
-    "rm -rfv $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
+    "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
 # Ensure make is available (needed for aba reset)
 e2e_run -q "Ensure make is installed" \
@@ -195,32 +195,29 @@ e2e_run -q "Restore op-sets to abatest" "aba --op-sets abatest"
 test_end 0
 
 # ============================================================================
-# 8. run_once regression: mirror clean must clear run_once state (Gap 8)
-#    Verifies that 'aba --dir mirror clean' properly resets run_once state
-#    so subsequent operations don't silently skip re-extraction or re-download.
+# 8. mirror clean removes extracted files and re-extraction works (Gap 8)
+#    Note: the bundle creation flow (make -C mirror save) calls
+#    download-registries directly, so no mirror:* run_once state exists here.
+#    This test verifies the clean/re-extract cycle.
 # ============================================================================
-test_begin "run_once: mirror clean clears state"
+test_begin "mirror clean: removes files and re-extraction works"
 
 # Ensure mirror-registry binary exists (from bundle operations above)
 e2e_run "Verify mirror-registry exists before clean" \
     "test -f mirror/mirror-registry || make -C mirror mirror-registry"
 
-# Verify run_once state directory exists
-e2e_run "Verify run_once state exists" \
-    "ls -d ~/.aba/runner/mirror:*"
-
-# Run mirror clean -- should delete extracted files AND clear run_once state
+# Run mirror clean -- should delete extracted files
 e2e_run "Run mirror clean" "aba --dir mirror clean"
 
 # Verify the binary was removed
 e2e_run "Verify mirror-registry removed after clean" \
     "test ! -f mirror/mirror-registry"
 
-# Verify run_once state for mirror:reg:install was cleared
-e2e_run "Verify run_once state cleared for reg:install" \
+# Verify run_once state for mirror:reg:install does not exist
+e2e_run "Verify no leftover run_once state for reg:install" \
     "test ! -d ~/.aba/runner/mirror:reg:install"
 
-# Re-extract -- should succeed because run_once state was cleared
+# Re-extract -- should succeed after clean
 e2e_run "Re-extract mirror-registry after clean" \
     "make -C mirror mirror-registry"
 e2e_run "Verify mirror-registry re-extracted" \

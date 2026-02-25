@@ -623,8 +623,8 @@ _vm_cleanup_caches() {
 		rm -vrf ~/.cache/agent/
 		rm -vrf ~/bin/*
 		rm -f ~/.ssh/quay_installer*
-		rm -rfv ~/.oc-mirror/.cache
-		rm -rfv ~/*/.oc-mirror/.cache
+		rm -rf ~/.oc-mirror/.cache
+		rm -rf ~/*/.oc-mirror/.cache
 		# Ensure test VMs are located together and on the pool's datastore
 		if [ -s ~/.vmware.conf ]; then
 		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g" ~/.vmware.conf

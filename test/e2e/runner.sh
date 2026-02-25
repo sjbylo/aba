@@ -2,15 +2,16 @@
 # =============================================================================
 # E2E Test Framework v2 -- Suite Runner (runs on conN inside tmux)
 # =============================================================================
-# Receives a list of suites from run.sh (via tmux send-keys), executes them
-# sequentially, reverts disN snapshot before each suite, prints per-pool
-# summary at the end.
+# Runs a SINGLE suite.  run.sh dispatches one suite at a time to each pool;
+# when the suite finishes, run.sh dispatches the next one.
 #
-# This script runs INSIDE the persistent tmux session on conN.
+# This script runs INSIDE a tmux session on conN (session name: e2e-suite-NAME).
 # Interactive mode is always on -- failures pause and wait for user input.
 #
 # Usage (sent by run.sh via tmux send-keys):
-#   bash ~/aba/test/e2e/runner.sh POOL_NUM suite1 suite2 ...
+#   bash ~/aba/test/e2e/runner.sh POOL_NUM suite_name
+#
+# Exit code is written to /tmp/e2e-suite-<suite>.rc so run.sh can poll it.
 #
 # Environment:
 #   Config files (config.env, pools.conf) are scp'd to conN by run.sh.
@@ -21,15 +22,26 @@ set -u
 _RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$(cd "$_RUNNER_DIR/../.." && pwd)"
 
-LOCK_FILE="/tmp/e2e-runner.lock"
-RC_FILE="/tmp/e2e-runner.rc"
+# --- Parse arguments ----------------------------------------------------------
+
+if [ $# -ne 2 ]; then
+	echo "Usage: runner.sh POOL_NUM suite_name"
+	exit 1
+fi
+
+POOL_NUM="$1"; shift
+export POOL_NUM
+SUITE="$1"; shift
+
+LOCK_FILE="/tmp/e2e-suite-${SUITE}.lock"
+RC_FILE="/tmp/e2e-suite-${SUITE}.rc"
 
 # --- Concurrent run protection -----------------------------------------------
 
 if [ -f "$LOCK_FILE" ]; then
 	_lock_pid=$(cat "$LOCK_FILE" 2>/dev/null)
 	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
-		echo "ERROR: runner.sh already executing on $(hostname) (pid $_lock_pid). Aborting."
+		echo "ERROR: runner.sh for suite '$SUITE' already executing on $(hostname) (pid $_lock_pid). Aborting."
 		echo "255" > "$RC_FILE"
 		exit 1
 	fi
@@ -41,24 +53,12 @@ echo $$ > "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 rm -f "$RC_FILE"
 
-# --- Parse arguments ----------------------------------------------------------
-
-if [ $# -lt 2 ]; then
-	echo "Usage: runner.sh POOL_NUM suite1 [suite2 ...]"
-	echo "1" > "$RC_FILE"
-	exit 1
-fi
-
-POOL_NUM="$1"; shift
-export POOL_NUM
-SUITES=("$@")
-
-echo "${SUITES[*]}" > /tmp/e2e-last-suites
+echo "$SUITE" > /tmp/e2e-last-suites
 
 echo ""
 echo "========================================"
 echo "  E2E Runner on $(hostname) (pool $POOL_NUM)"
-echo "  Suites: ${SUITES[*]}"
+echo "  Suite: $SUITE"
 echo "  PID: $$"
 echo "========================================"
 echo ""
@@ -151,132 +151,91 @@ _revert_dis_snapshot() {
 	return 1
 }
 
-# --- Execute suites -----------------------------------------------------------
+# --- Execute suite ------------------------------------------------------------
 
-_overall_rc=0
 _start_time=$(date +%s)
 
-declare -a _suite_names=()
-declare -a _suite_results=()
-declare -a _suite_durations=()
+suite_file="$_RUNNER_DIR/suites/suite-${SUITE}.sh"
+if [ ! -f "$suite_file" ]; then
+	echo "  ERROR: Suite file not found: $suite_file"
+	echo "1" > "$RC_FILE"
+	exit 1
+fi
 
-for suite in "${SUITES[@]}"; do
-	suite_file="$_RUNNER_DIR/suites/suite-${suite}.sh"
-	if [ ! -f "$suite_file" ]; then
-		echo "  ERROR: Suite file not found: $suite_file"
-		_suite_names+=("$suite")
-		_suite_results+=("FAIL")
-		_suite_durations+=("0")
-		_overall_rc=1
+# Reset terminal state
+printf '\033c'
+tmux clear-history 2>/dev/null
+
+printf '%0.s#' {1..80}; echo
+printf '%0.s#' {1..80}; echo
+printf '##  %-74s##\n' ""
+printf '##  %-74s##\n' "SUITE: $SUITE"
+printf '##  %-74s##\n' "Pool $POOL_NUM  ($(hostname))    $(date '+%Y-%m-%d %H:%M:%S')"
+printf '##  %-74s##\n' ""
+printf '%0.s#' {1..80}; echo
+printf '%0.s#' {1..80}; echo
+echo ""
+
+# Revert disN to clean state before each suite
+_revert_dis_snapshot "pool-ready" || {
+	echo ""
+	echo "  ERROR: disN revert failed -- cannot proceed."
+	echo "  $DIS_VM must have a 'pool-ready' snapshot. Create it by running"
+	echo "  clone-and-check (or setup-infra Phase 3) for this pool."
+	echo ""
+	echo "1" > "$RC_FILE"
+	exit 1
+}
+
+# Clean up any stale Quay/registry state on conN from previous suite
+_cleanup_con_quay
+
+_rc=0
+
+while true; do
+	cd "$_ABA_ROOT"
+	_suite_start=$(date +%s)
+
+	_rc=0
+	bash "$suite_file" || _rc=$?
+
+	if [ $_rc -eq 4 ]; then
+		echo ""
+		echo "  Suite $SUITE: RESTARTING by user request ..."
+		echo ""
+		_revert_dis_snapshot "pool-ready" || {
+			echo "  ERROR: disN revert failed -- cannot restart. Fix snapshot then re-run."
+			echo "1" > "$RC_FILE"
+			exit 1
+		}
+		_cleanup_con_quay
 		continue
 	fi
+	break
+done
 
-	# Reset terminal state (prevents vt corruption from accumulating across suites)
-	printf '\033c'
-	tmux clear-history 2>/dev/null
+_elapsed=$(( $(date +%s) - _start_time ))
+_mins=$(( _elapsed / 60 ))
+_secs=$(( _elapsed % 60 ))
 
-	printf '%0.s#' {1..80}; echo
-	printf '%0.s#' {1..80}; echo
-	printf '##  %-74s##\n' ""
-	printf '##  %-74s##\n' "SUITE: $suite"
-	printf '##  %-74s##\n' "Pool $POOL_NUM  ($(hostname))    $(date '+%Y-%m-%d %H:%M:%S')"
-	printf '##  %-74s##\n' ""
-	printf '%0.s#' {1..80}; echo
-	printf '%0.s#' {1..80}; echo
+if [ $_rc -eq 0 ]; then
 	echo ""
-
-	# Revert disN to clean state before each suite. Required: disN must have
-	# a 'pool-ready' snapshot (create via clone-and-check / setup-infra).
-	_revert_dis_snapshot "pool-ready" || {
-		echo ""
-		echo "  ERROR: disN revert failed -- cannot proceed."
-		echo "  $DIS_VM must have a 'pool-ready' snapshot. Create it by running"
-		echo "  clone-and-check (or setup-infra Phase 3) for this pool."
-		echo ""
-		_overall_rc=1
-		exit 1
-	}
-
-	# Clean up any stale Quay/registry state on conN from previous suite
-	_cleanup_con_quay
-
-	while true; do
-		cd "$_ABA_ROOT"
-		_suite_start=$(date +%s)
-
-		_rc=0
-		bash "$suite_file" || _rc=$?
-
-		if [ $_rc -eq 4 ]; then
-			echo ""
-			echo "  Suite $suite: RESTARTING by user request ..."
-			echo ""
-			_revert_dis_snapshot "pool-ready" || {
-				echo "  ERROR: disN revert failed -- cannot restart. Fix snapshot then re-run."
-				exit 1
-			}
-			_cleanup_con_quay
-			continue
-		fi
-		break
-	done
-
-	_suite_elapsed=$(( $(date +%s) - _suite_start ))
-	_suite_mins=$(( _suite_elapsed / 60 ))
-	_suite_secs=$(( _suite_elapsed % 60 ))
-
-	_suite_names+=("$suite")
-	_suite_durations+=("${_suite_mins}m ${_suite_secs}s")
-
-	if [ $_rc -eq 0 ]; then
-		_suite_results+=("PASS")
-		echo ""
-		echo "  Suite $suite: PASS (${_suite_mins}m ${_suite_secs}s)"
-	elif [ $_rc -eq 3 ]; then
-		_suite_results+=("SKIP")
-		echo ""
-		echo "  Suite $suite: SKIPPED by user (${_suite_mins}m ${_suite_secs}s)"
-	else
-		_suite_results+=("FAIL")
-		_overall_rc=1
-		echo ""
-		echo "  Suite $suite: FAIL (exit=$_rc, ${_suite_mins}m ${_suite_secs}s)"
-	fi
-done
-
-# --- Per-pool summary ---------------------------------------------------------
-
-_total_elapsed=$(( $(date +%s) - _start_time ))
-_total_mins=$(( _total_elapsed / 60 ))
-_total_secs=$(( _total_elapsed % 60 ))
-
-_passed=0
-_failed=0
-_skipped=0
+	echo "  Suite $SUITE: PASS (${_mins}m ${_secs}s)"
+elif [ $_rc -eq 3 ]; then
+	echo ""
+	echo "  Suite $SUITE: SKIPPED by user (${_mins}m ${_secs}s)"
+else
+	echo ""
+	echo "  Suite $SUITE: FAIL (exit=$_rc, ${_mins}m ${_secs}s)"
+fi
 
 echo ""
 echo "========================================"
-echo "  Pool $POOL_NUM Summary ($(hostname))"
-echo "========================================"
-
-for i in "${!_suite_names[@]}"; do
-	_status="${_suite_results[$i]}"
-	_dur="${_suite_durations[$i]}"
-	case "$_status" in
-		PASS)  printf "  \033[1;32mPASS\033[0m  %-35s (%s)\n" "${_suite_names[$i]}" "$_dur"; (( _passed++ )) ;;
-		FAIL)  printf "  \033[1;31mFAIL\033[0m  %-35s (%s)\n" "${_suite_names[$i]}" "$_dur"; (( _failed++ )) ;;
-		SKIP)  printf "  \033[1;33mSKIP\033[0m  %-35s (%s)\n" "${_suite_names[$i]}" "$_dur"; (( _skipped++ )) ;;
-	esac
-done
-
-echo ""
-echo "  Result: $_passed/${#_suite_names[@]} passed"
-[ $_failed -gt 0 ] && echo "  Failed: $_failed"
-[ $_skipped -gt 0 ] && echo "  Skipped: $_skipped"
-echo "  Total time: ${_total_mins}m ${_total_secs}s"
+echo "  Pool $POOL_NUM Result: $SUITE"
+echo "  Exit code: $_rc  Time: ${_mins}m ${_secs}s"
 echo "========================================"
 echo ""
 
 # Write exit code for run.sh to read
-echo "$_overall_rc" > "$RC_FILE"
-exit "$_overall_rc"
+echo "$_rc" > "$RC_FILE"
+exit "$_rc"

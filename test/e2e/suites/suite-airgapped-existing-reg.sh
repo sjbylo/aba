@@ -79,7 +79,7 @@ e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Reset aba" "aba reset -f"
-e2e_run "Clean cluster dirs" "rm -rfv $SNO $COMPACT"
+e2e_run "Clean cluster dirs" "rm -rf $SNO $COMPACT"
 
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
 e2e_run "Re-apply config after reset" \
@@ -170,7 +170,7 @@ test_begin "Load without regcreds (must fail)"
 # Before regcreds are in place, loading should fail with a clear error.
 # This validates error handling for a common user mistake.
 e2e_run_remote -q "Remove any existing regcreds" \
-    "cd ~/aba && rm -rfv mirror/regcreds"
+    "cd ~/aba && rm -rf mirror/regcreds"
 
 e2e_run_must_fail_remote "Load without regcreds should fail" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -181,7 +181,7 @@ e2e_run_remote "Create regcreds directory" \
 e2e_run_remote "Copy registry CA cert to regcreds" \
     "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"
 e2e_run_remote "Copy registry pull secret to regcreds" \
-    "cp -v ~/.containers/auth.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
+    "cp -v ~/.e2e-pool-registry/quay-creds.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
 e2e_run_remote "Verify registry access with restored regcreds" \
     "cd ~/aba && aba -d mirror verify"
 
@@ -209,7 +209,7 @@ e2e_run_remote "Create compact cluster (bootstrap only)" \
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir $COMPACT delete"
 e2e_run_remote -q "Clean compact dir" \
-    "cd ~/aba && rm -rfv $COMPACT"
+    "cd ~/aba && rm -rf $COMPACT"
 
 test_end
 

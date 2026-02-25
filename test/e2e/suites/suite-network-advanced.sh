@@ -80,7 +80,7 @@ test_end
 test_begin "Setup: install aba and configure"
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
+    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
 
 e2e_run "Install aba" "./install"
 
@@ -198,7 +198,7 @@ _net_test() {
             "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" aba.conf"
     fi
 
-    e2e_run "Remove $cname cluster dir" "rm -rfv $cname"
+    e2e_run "Remove $cname cluster dir" "rm -rf $cname"
 
     e2e_run "Generate cluster.conf for $cname" \
         "aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
