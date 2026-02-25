@@ -3,42 +3,44 @@
 # Release script for aba
 # =============================================================================
 # Automates the full release lifecycle: validation, version bump, tagging, and
-# post-release verification.  Designed to run on the 'dev' branch.
+# post-release verification.
 #
-# Two modes:
+# Three modes:
 #   DEFAULT   — releases from the current tip of dev.
 #   --ref     — releases from a specific (older) commit on dev, useful when
 #               dev has moved ahead but you only want to ship up to a point.
+#   --hotfix  — releases from the main branch.  The hotfix commit should
+#               already be on main.  Script applies version bump, tags,
+#               pushes main, then merges back into dev.
 #
 # Usage:
-#   build/release.sh [--dry-run] [--ref <commit>] <version> "<release description>"
+#   build/release.sh [--dry-run] [--ref <commit>|--hotfix] <version> "<release description>"
 #
 # Examples:
 #   build/release.sh 0.9.4 "Bug fixes and improvements"
 #   build/release.sh --dry-run 0.9.4 "New features"
 #   build/release.sh --ref 87cdf93 0.9.4 "Partial release up to specific commit"
+#   build/release.sh --hotfix 0.9.5 "Critical fix for X"
 #
 # Options:
 #   --dry-run        Show what would happen without making any changes.
 #   --ref <commit>   Release from a specific commit instead of dev HEAD.
 #                    Creates a temporary branch, applies version bump there,
 #                    tags it, then returns to dev.
+#   --hotfix         Release from main.  Must be run on the main branch.
+#                    Mutually exclusive with --ref.
 #
 # High-level flow:
-#   1. Validate inputs and pre-conditions (CHANGELOG, clean tree, tag, branch)
+#   1. Pre-flight: validate inputs, check gh CLI, CHANGELOG, clean tree, tag
 #   2. Run pre-commit checks (RPM sync, syntax, git pull)
-#   3. Update VERSION file
-#   4. Embed version in scripts/aba.sh
-#   5. Update version references in README.md
+#   3-5. Update VERSION, scripts/aba.sh, README.md
 #   6. Update CHANGELOG.md (move [Unreleased] -> [X.Y.Z])
 #   7. Commit changes
 #   8. Create annotated git tag
 #   9. Verify the tagged commit has correct version data
-#  10. Show next-step commands to push and merge to main
+#  10-14. Push tag, merge to main, sync dev, push dev, create GitHub release
 #
-# After running this script:
-#   Default mode:  merge dev to main
-#   --ref mode:    merge the tag to main, then merge main back to dev
+# Steps 10-14 are automated with confirmation prompts before each action.
 #
 # Exit codes:
 #   0 = Success
@@ -54,6 +56,14 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'       # No Colour — resets terminal back to default
 
+# Prompt for confirmation before destructive steps.  Default is Yes (Enter).
+confirm() {
+    local msg="$1"
+    echo -en "${YELLOW}$msg [Y/n]: ${NC}"
+    read -r reply
+    [[ -z "$reply" || "$reply" =~ ^[Yy]$ ]]
+}
+
 # Navigate to repository root (one level up from build/)
 cd "$(dirname "$0")/.." || exit 1
 ABA_ROOT="$(pwd)"
@@ -65,10 +75,12 @@ ABA_ROOT="$(pwd)"
 # so we can treat them as positional args (<version> and <description>).
 DRY_RUN=false
 REF_COMMIT=""
+HOTFIX=false
 ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=true ;;
+        --hotfix)  HOTFIX=true ;;
         --ref)
             shift
             if [ -z "$1" ]; then
@@ -82,15 +94,21 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+if $HOTFIX && [ -n "$REF_COMMIT" ]; then
+    echo -e "${RED}Error: --hotfix and --ref cannot be used together${NC}"
+    exit 1
+fi
+
 # Re-assign so $1=version, $2=description
 set -- "${ARGS[@]}"
 
 # --- Validate positional arguments ------------------------------------------
 if [ -z "$1" ] || [ -z "$2" ]; then
-    echo -e "${RED}Usage: $0 [--dry-run] [--ref <commit>] <version> \"<release description>\"${NC}"
+    echo -e "${RED}Usage: $0 [--dry-run] [--ref <commit>|--hotfix] <version> \"<release description>\"${NC}"
     echo -e "${YELLOW}Example: $0 0.9.4 \"Bug fixes and improvements\"${NC}"
     echo -e "${YELLOW}Example: $0 --dry-run 0.9.4 \"New features\"${NC}"
     echo -e "${YELLOW}Example: $0 --ref 87cdf93 0.9.4 \"Partial release\"${NC}"
+    echo -e "${YELLOW}Example: $0 --hotfix 0.9.5 \"Critical fix for X\"  (run from main)${NC}"
     exit 1
 fi
 
@@ -108,6 +126,7 @@ fi
 HEADER_SUFFIX=""
 $DRY_RUN && HEADER_SUFFIX=" (DRY RUN — no changes will be made)"
 [ -n "$REF_COMMIT" ] && HEADER_SUFFIX="$HEADER_SUFFIX (--ref $REF_COMMIT)"
+$HOTFIX && HEADER_SUFFIX="$HEADER_SUFFIX (--hotfix from main)"
 
 echo -e "${CYAN}=== Aba Release Process${HEADER_SUFFIX} ===${NC}\n"
 echo -e "${YELLOW}New version: $NEW_VERSION${NC}"
@@ -118,11 +137,34 @@ echo -e "${YELLOW}Description: $RELEASE_DESC${NC}"
 # Pre-flight checks (read-only — safe to run even in dry-run mode)
 # =============================================================================
 
-# Must start on the dev branch; the release is cut from dev.
-CURRENT_BRANCH=$(git branch --show-current)
-if [ "$CURRENT_BRANCH" != "dev" ]; then
-    echo -e "${RED}Error: Must be on 'dev' branch (currently on '$CURRENT_BRANCH')${NC}"
+# GitHub CLI is required for creating the GitHub release at the end.
+# Check early so the user doesn't discover this after 10 minutes of work.
+if ! command -v gh &>/dev/null; then
+    echo -e "${RED}Error: GitHub CLI (gh) is required but not installed${NC}"
+    echo -e "${YELLOW}Install with:${NC}"
+    echo -e "  sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo"
+    echo -e "  sudo dnf install gh -y"
+    echo -e "  gh auth login"
     exit 1
+fi
+if ! gh auth status &>/dev/null 2>&1; then
+    echo -e "${RED}Error: GitHub CLI (gh) is not authenticated${NC}"
+    echo -e "${YELLOW}Run: gh auth login${NC}"
+    exit 1
+fi
+echo -e "${GREEN}GitHub CLI (gh) installed and authenticated${NC}\n"
+
+CURRENT_BRANCH=$(git branch --show-current)
+if $HOTFIX; then
+    if [ "$CURRENT_BRANCH" != "main" ]; then
+        echo -e "${RED}Error: --hotfix must be run from 'main' branch (currently on '$CURRENT_BRANCH')${NC}"
+        exit 1
+    fi
+else
+    if [ "$CURRENT_BRANCH" != "dev" ]; then
+        echo -e "${RED}Error: Must be on 'dev' branch (currently on '$CURRENT_BRANCH')${NC}"
+        exit 1
+    fi
 fi
 
 # When --ref is given, make sure the commit exists and is reachable from dev.
@@ -149,6 +191,8 @@ if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
 fi
 
 # Refuse to run with uncommitted changes (skip in dry-run since nothing is written)
+# Refresh the index first to avoid false positives from stale stat cache.
+git update-index --refresh >/dev/null 2>&1 || true
 if ! $DRY_RUN && ! git diff-index --quiet HEAD --; then
     echo -e "${RED}Error: You have uncommitted changes. Commit or stash them first.${NC}"
     git status --short
@@ -172,12 +216,36 @@ echo -e "${GREEN}CHANGELOG [Unreleased] section has content${NC}\n"
 if $DRY_RUN; then
     echo -e "${CYAN}--- Dry Run Summary ---${NC}\n"
 
-    echo -e "${YELLOW}  - Pre-commit checks (RPM sync, syntax${REF_COMMIT:+; skip pull})${NC}"
-    if [ -n "$REF_COMMIT" ]; then
-        echo -e "${YELLOW}  - Create temp branch _release-v$NEW_VERSION from $REF_COMMIT${NC}"
+    echo -e "${YELLOW}Steps 1-9 (build):${NC}"
+    if $HOTFIX; then
+        echo -e "   1. Pre-commit checks (hotfix on main; skip branch/pull checks)"
+    elif [ -n "$REF_COMMIT" ]; then
+        echo -e "   1. Pre-commit checks (RPM sync, syntax; skip pull)"
+        echo -e "      Create temp branch _release-v$NEW_VERSION from $REF_COMMIT"
+    else
+        echo -e "   1. Pre-commit checks (RPM sync, syntax)"
     fi
-    echo -e "${YELLOW}  - Version-bump commit${NC}"
-    echo -e "${YELLOW}  - Tag v$NEW_VERSION${NC}"
+    echo -e "   2-5. Update VERSION, aba.sh, README.md"
+    echo -e "   6. Update CHANGELOG.md ([Unreleased] -> [$NEW_VERSION])"
+    echo -e "   7. Commit version bump"
+    echo -e "   8. Tag v$NEW_VERSION"
+    echo -e "   9. Verify tagged commit"
+
+    echo
+    echo -e "${YELLOW}Steps 10-14 (publish, each with confirmation):${NC}"
+    echo -e "  10. Push tag v$NEW_VERSION to origin"
+    if $HOTFIX; then
+        echo -e "  11. Push main (hotfix already committed on main)"
+        echo -e "  12. Checkout dev, merge main into dev (sync hotfix)"
+    elif [ -n "$REF_COMMIT" ]; then
+        echo -e "  11. Checkout main, merge tag, push"
+        echo -e "  12. Merge main back into dev (sync version bump)"
+    else
+        echo -e "  11. Checkout main, merge dev, push"
+        echo -e "  12. (skipped — default mode, dev already has version bump)"
+    fi
+    echo -e "  13. Push dev to origin"
+    echo -e "  14. Create GitHub release via gh CLI"
 
     echo
     echo -e "${YELLOW}Files that would be modified:${NC}"
@@ -204,7 +272,7 @@ fi
 # Dry-run has already exited above.
 # =============================================================================
 
-TOTAL=9                                       # Total steps (for [N/$TOTAL] labels)
+TOTAL=14                                      # Total steps (for [N/$TOTAL] labels)
 RELEASE_BRANCH_NAME="_release-v$NEW_VERSION"  # Temp branch name used with --ref
 
 # -----------------------------------------------------------------------------
@@ -228,6 +296,9 @@ if [ -n "$REF_COMMIT" ]; then
     cp "$_tmp/CHANGELOG.md" CHANGELOG.md
     cp "$_tmp/pre-commit-checks.sh" build/pre-commit-checks.sh
     rm -rf "$_tmp"
+    build/pre-commit-checks.sh --release-branch
+elif $HOTFIX; then
+    echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks (hotfix on main)...${NC}"
     build/pre-commit-checks.sh --release-branch
 else
     echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks...${NC}"
@@ -387,60 +458,119 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Step 9: Return to dev (if --ref) and print next-step instructions
+# Step 9: Return to dev (if --ref); stay on main (if --hotfix)
 # -----------------------------------------------------------------------------
-# With --ref we're still on the temporary _release-vX.Y.Z branch; switch back.
 if [ -n "$REF_COMMIT" ]; then
     echo -e "${YELLOW}[9/$TOTAL] Returning to dev branch...${NC}"
     git checkout dev
     echo -e "${GREEN}       ✓ Back on dev branch${NC}\n"
+elif $HOTFIX; then
+    echo -e "${YELLOW}[9/$TOTAL] Staying on main (hotfix mode)${NC}\n"
+else
+    echo -e "${YELLOW}[9/$TOTAL] Already on dev (skipped)${NC}\n"
 fi
 
-# --- Print next steps for the operator to complete manually ------------------
-echo -e "${GREEN}=== Release v$NEW_VERSION Ready! ===${NC}\n"
+# =============================================================================
+# Automated publish — push, merge, sync, and create GitHub release.
+# Each destructive step requires confirmation (default: Yes).
+# =============================================================================
 
-echo -e "${CYAN}Next steps:${NC}"
-echo -e "${YELLOW}1. Review the changes:${NC}"
-echo -e "   git show v$NEW_VERSION"
-echo
+echo -e "${CYAN}=== Publishing Release v$NEW_VERSION ===${NC}\n"
+
+# -----------------------------------------------------------------------------
+# Step 10: Push tag to origin
+# -----------------------------------------------------------------------------
+echo -e "${YELLOW}[10/$TOTAL] Push tag v$NEW_VERSION to origin${NC}"
+if confirm "Push tag v$NEW_VERSION?"; then
+    git push origin "v$NEW_VERSION"
+    echo -e "${GREEN}       ✓ Tag pushed${NC}\n"
+else
+    echo -e "${YELLOW}       ⊘ Skipped${NC}\n"
+fi
+
+# -----------------------------------------------------------------------------
+# Step 11: Merge to main and push
+# -----------------------------------------------------------------------------
+if $HOTFIX; then
+    echo -e "${YELLOW}[11/$TOTAL] Push main (hotfix already on main)${NC}"
+    if confirm "Push main?"; then
+        git push origin main
+        echo -e "${GREEN}       ✓ main pushed${NC}\n"
+    else
+        echo -e "${YELLOW}       ⊘ Skipped (run manually: git push origin main)${NC}\n"
+    fi
+else
+    echo -e "${YELLOW}[11/$TOTAL] Merge to main and push${NC}"
+    if confirm "Checkout main, merge, and push?"; then
+        git checkout main 2>/dev/null || git checkout -b main origin/main
+        git pull --rebase origin main
+        if [ -n "$REF_COMMIT" ]; then
+            git merge --no-ff "v$NEW_VERSION" -m "Merge release v$NEW_VERSION into main"
+        else
+            git merge --no-ff dev -m "Merge dev into main for release v$NEW_VERSION"
+        fi
+        git push origin main
+        git checkout dev
+        echo -e "${GREEN}       ✓ main updated and pushed${NC}\n"
+    else
+        echo -e "${YELLOW}       ⊘ Skipped (run manually: git checkout main && git merge --no-ff v$NEW_VERSION && git push origin main && git checkout dev)${NC}\n"
+    fi
+fi
+
+# -----------------------------------------------------------------------------
+# Step 12: Sync dev with main (--ref and --hotfix modes)
+# -----------------------------------------------------------------------------
+if [ -n "$REF_COMMIT" ]; then
+    echo -e "${YELLOW}[12/$TOTAL] Sync dev with main (merge version bump back into dev)${NC}"
+    if confirm "Merge main into dev?"; then
+        git merge main -m "Merge main back into dev after release v$NEW_VERSION"
+        echo -e "${GREEN}       ✓ dev synced with main${NC}\n"
+    else
+        echo -e "${YELLOW}       ⊘ Skipped (run manually: git merge main)${NC}\n"
+    fi
+elif $HOTFIX; then
+    echo -e "${YELLOW}[12/$TOTAL] Sync dev with main (merge hotfix into dev)${NC}"
+    if confirm "Checkout dev and merge main into dev?"; then
+        git checkout dev
+        git merge main -m "Merge hotfix v$NEW_VERSION from main into dev"
+        echo -e "${GREEN}       ✓ dev synced with hotfix${NC}\n"
+    else
+        echo -e "${YELLOW}       ⊘ Skipped (run manually: git checkout dev && git merge main)${NC}\n"
+    fi
+else
+    echo -e "${YELLOW}[12/$TOTAL] Sync dev with main (not needed in default mode)${NC}\n"
+fi
+
+# -----------------------------------------------------------------------------
+# Step 13: Push dev and cleanup
+# -----------------------------------------------------------------------------
+echo -e "${YELLOW}[13/$TOTAL] Push dev to origin${NC}"
+if confirm "Push dev?"; then
+    # Ensure we're on dev (hotfix mode may still be on main if step 12 was skipped)
+    if [ "$(git branch --show-current)" != "dev" ]; then
+        git checkout dev
+    fi
+    git push origin dev
+    echo -e "${GREEN}       ✓ dev pushed${NC}\n"
+else
+    echo -e "${YELLOW}       ⊘ Skipped (run manually: git push origin dev)${NC}\n"
+fi
 
 if [ -n "$REF_COMMIT" ]; then
-    # --ref workflow: tag lives on a temp branch, not on dev
-    echo -e "${YELLOW}2. Push tag:${NC}"
-    echo -e "   git push origin v$NEW_VERSION"
-    echo
-
-    echo -e "${YELLOW}3. Merge tag to main:${NC}"
-    echo -e "   git checkout main && git merge --no-ff v$NEW_VERSION && git push origin main && git checkout dev"
-    echo
-
-    echo -e "${YELLOW}4. Sync dev with main (brings version bump into dev):${NC}"
-    echo -e "   git merge main"
-    echo
-
-    echo -e "${YELLOW}5. Delete temp branch:${NC}"
-    echo -e "   git branch -d $RELEASE_BRANCH_NAME"
-    echo
-
-    echo -e "${YELLOW}6. Create GitHub release:${NC}"
-else
-    # Default workflow: dev already has the release commit
-    echo -e "${YELLOW}2. Push dev and tag:${NC}"
-    echo -e "   git push origin dev"
-    echo -e "   git push origin v$NEW_VERSION"
-    echo
-
-    echo -e "${YELLOW}3. Merge to main:${NC}"
-    echo -e "   git checkout main && git merge --no-ff dev && git push origin main && git checkout dev"
-    echo
-
-    echo -e "${YELLOW}4. Create GitHub release:${NC}"
+    git branch -d "$RELEASE_BRANCH_NAME" 2>/dev/null && \
+        echo -e "${GREEN}       ✓ Deleted temp branch $RELEASE_BRANCH_NAME${NC}\n" || true
 fi
-echo
-echo -e "   ${CYAN}Automated (recommended, requires 'gh' CLI):${NC}"
-echo -e "   build/create-github-release.sh v$NEW_VERSION"
-echo
-echo -e "   ${CYAN}Alternative: Web Interface${NC}"
-echo -e "   https://github.com/sjbylo/aba/releases/new?tag=v$NEW_VERSION"
-echo
-echo -e "${CYAN}See build/RELEASE_WORKFLOW.md for complete instructions.${NC}"
+
+# -----------------------------------------------------------------------------
+# Step 14: Create GitHub release
+# -----------------------------------------------------------------------------
+echo -e "${YELLOW}[14/$TOTAL] Create GitHub release${NC}"
+if confirm "Create GitHub release for v$NEW_VERSION?"; then
+    build/create-github-release.sh "v$NEW_VERSION"
+else
+    echo -e "${YELLOW}       ⊘ Skipped${NC}"
+    echo -e "${YELLOW}       Run manually: build/create-github-release.sh v$NEW_VERSION${NC}"
+    echo -e "${YELLOW}       Or via web:   https://github.com/sjbylo/aba/releases/new?tag=v$NEW_VERSION${NC}\n"
+fi
+
+echo -e "${GREEN}=== Release v$NEW_VERSION Complete! ===${NC}"
