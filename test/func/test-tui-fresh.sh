@@ -76,19 +76,19 @@ sleep 2
 # Test 2: Pull secret instructions (first wizard step)
 # ============================================================
 
-log_info "Test 2: Pull secret instructions (fresh — no resume possible)"
-if wait_for "$TUI_TITLE_PULL_SECRET" 20; then
-	log_pass "Pull secret instructions appeared (fresh start)"
-	screenshot "pull-secret-instructions"
+log_info "Test 2: Pull secret required dialog (fresh — no resume possible)"
+if wait_for "$TUI_TITLE_PULL_SECRET_REQUIRED" 20; then
+	log_pass "Pull secret required dialog appeared (fresh start)"
+	screenshot "pull-secret-required"
 else
-	log_fail "Pull secret instructions did not appear"
+	log_fail "Pull secret required dialog did not appear"
 	log_info "Screen dump:"
 	capture
 	exit 1
 fi
 
-# Press Continue
-send Enter
+# Tab to "Paste" (Extra button), Enter to proceed to editbox
+send Tab Enter
 sleep 1
 
 # ============================================================

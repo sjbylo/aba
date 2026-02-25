@@ -80,6 +80,7 @@ start_tui() {
 
 	log_info "Starting TUI in tmux session: $SESSION"
 	tmux new-session -d -s "$SESSION" -x 240 -y 70 "$cmd"
+	tmux set-option -t "$SESSION" escape-time 0
 }
 
 stop_tui() {
@@ -198,6 +199,7 @@ restore_pull_secret() {
 }
 
 # Paste pull secret into the editbox via tmux buffer
+# Formats as multi-line JSON first to avoid editbox segfault on long single lines.
 # Usage: paste_pull_secret /path/to/pull-secret.json
 paste_pull_secret() {
 	local ps_file="$1"
@@ -205,8 +207,11 @@ paste_pull_secret() {
 		log_fail "Pull secret file not found: $ps_file"
 		return 1
 	fi
-	tmux load-buffer "$ps_file"
+	local formatted=$(mktemp)
+	jq . "$ps_file" > "$formatted"
+	tmux load-buffer "$formatted"
 	tmux paste-buffer -t "$SESSION"
+	rm -f "$formatted"
 	sleep 1
 }
 

@@ -1356,49 +1356,109 @@ Your Red Hat pull secret is valid and ready to use." 0 0
 				--msgbox "$error_msg" 0 0 || true
 			error_msg=""  # Clear for next iteration
 		elif [[ $_showed_instructions -eq 0 ]]; then
-			# Show instructions on first visit (no error, no existing pull secret)
 			_showed_instructions=1
-			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET" \
-				--ok-label "Continue" \
-				--msgbox "Paste your Red Hat pull secret into the next screen.
+			# Button order per TUI_BUTTON_STANDARDS: OK(0), Extra(3), Cancel(1)
+			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET_REQUIRED" \
+				--ok-label "Re-check" \
+				--extra-button --extra-label "Paste" \
+				--cancel-label "Exit" \
+				--yesno "\Z1~/.pull-secret.json not found\Zn
 
-Get your pull secret from:
+A Red Hat pull secret is required.
+
+Download from:
   https://console.redhat.com/openshift/downloads#tool-pull-secret
   (select \ZbTokens\Zn in the pull-down)
 
-Copy the entire JSON text and paste it into the editor." 0 0 || true
+\ZbOption 1 (recommended):\Zn Save to file, then re-run aba:
+  cat > ~/.pull-secret.json
+  (paste your pull secret, then press Ctrl+D)
+  Or, if you have a second terminal, press \Zb<Re-check>\Zn.
+
+\ZbOption 2:\Zn Paste into the editor (next screen).
+  \Z1Format first:\Zn  cat pull-secret.txt | jq .
+  Then paste the formatted (multi-line) output." 0 0
+			local choice_rc=$?
+			case $choice_rc in
+				0)
+					# Re-check -- see if user saved the file
+					if [[ -f "$pull_secret_file" ]] && jq empty "$pull_secret_file" 2>/dev/null && grep -q "registry.redhat.io" "$pull_secret_file"; then
+						log "Re-check: valid pull secret found at $pull_secret_file"
+						DIALOG_RC="next"
+						return
+					fi
+					log "Re-check: pull secret still missing or invalid"
+					_showed_instructions=0
+					continue
+					;;
+				3)
+					# Paste -- fall through to editbox
+					;;
+				1)
+					# Exit -- terminate TUI directly
+					log "User chose Exit from Pull Secret Required"
+					clear
+					echo "Exiting. Add your pull secret and re-run abatui:"
+					echo "  cat > ~/.pull-secret.json"
+					echo "  (paste your pull secret, then press Ctrl+D)"
+					echo ""
+					exit 0
+					;;
+				255)
+					# ESC -- treat as back
+					DIALOG_RC="back"
+					return
+					;;
+			esac
 		fi
 		
-		# Show editbox for paste - BLANK, large size
-		# Use full terminal size or max reasonable size
+		# Editbox for multi-line paste. Works well with formatted (jq .) pull secrets.
+		# Segfaults on very long single-line paste -- crash handler below catches that.
 		local dlg_h=$((TERM_ROWS - 4))
 		local dlg_w=$((TERM_COLS - 4))
-		
-		log "Terminal size: ${TERM_ROWS}x${TERM_COLS}, calculated dialog: ${dlg_h}x${dlg_w}"
-		
-		# Enforce minimums and maximums
 		[[ $dlg_h -lt 25 ]] && dlg_h=25
 		[[ $dlg_h -gt 50 ]] && dlg_h=50
 		[[ $dlg_w -lt 80 ]] && dlg_w=80
 		[[ $dlg_w -gt 120 ]] && dlg_w=120
 		
-		log "Final dialog size: ${dlg_h}x${dlg_w}"
+		log "Editbox dialog size: ${dlg_h}x${dlg_w}"
 		
-		# Create empty temp file for editbox
 		local empty_file=$(mktemp)
 		echo "" > "$empty_file"
 		
-		# Show editbox - title tells user what to do
+		# Button order per TUI_BUTTON_STANDARDS: OK(0)="Next", Extra(3)="Back"
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET_PASTE" \
 			--no-cancel \
 			--extra-button --extra-label "Back" \
-			--help-button --help-label "Clear" \
 			--ok-label "Next" \
 			--editbox "$empty_file" $dlg_h $dlg_w 2>"$TMP"
 		
 		rc=$?
 		rm -f "$empty_file"
 		log "Pull secret editbox returned: $rc"
+		
+		# Handle dialog crash (rc > 128 = killed by signal, e.g. 139 = SIGSEGV)
+		# dialog's editbox segfaults on very long single-line paste (> ~2048 chars)
+		if [[ $rc -gt 128 ]]; then
+			stty sane 2>/dev/null
+			tput reset 2>/dev/null
+			# Drain leftover paste data from stdin so the next dialog isn't confused
+			while read -r -t 0.1 -n 10000 </dev/tty 2>/dev/null; do :; done
+			log "Dialog crashed (rc=$rc, signal=$((rc - 128))) - likely long single-line paste"
+			error_msg="\Z1ERROR: Paste too long for editor\Zn
+
+The dialog editor crashed on a very long single-line paste.
+
+\ZbOption 1:\Zn Format first, then paste (recommended):
+  cat pull-secret.txt | jq . > formatted.txt
+  Then paste the multi-line output into this screen.
+
+\ZbOption 2:\Zn Save the file directly, then re-run aba:
+  cat > ~/.pull-secret.json
+  (paste, then press Ctrl+D)
+  Then re-run: aba"
+			continue
+		fi
 		
 		# Handle ESC - confirm quit
 		if [[ $rc -eq 255 ]]; then
@@ -1420,6 +1480,11 @@ Copy the entire JSON text and paste it into the editor." 0 0 || true
 				log "User clicked Next, validating pull secret"
 				local pull_secret=$(<"$TMP")
 				
+				# Normalize: compact multi-line JSON to single line (handles pretty-printed paste)
+				if normalized=$(echo "$pull_secret" | jq -c . 2>/dev/null); then
+					pull_secret="$normalized"
+				fi
+
 				# Check if empty
 			if [[ -z "$pull_secret" || "$pull_secret" =~ ^[[:space:]]*$ ]]; then
 				error_msg="\Z1ERROR: Pull secret is empty\Zn
@@ -1453,7 +1518,7 @@ Get it from:
 			log "Pull secret validation successful"
 			# Show success message briefly before proceeding
 			dialog --colors --backtitle "$(ui_backtitle)" --infobox "\Z2Pull secret validated!\Zn\n\nAuthentication successful." 5 60
-			sleep 1
+			sleep 3
 					DIALOG_RC="next"
 					return
 				else
@@ -1510,20 +1575,18 @@ Please copy the complete pull secret from:
 
 The pasted content is not valid JSON.
 
-Please copy the ENTIRE pull secret from the Red Hat console.
-It should start with { and end with }
+This can happen if a long single-line pull secret
+is cut off when pasting.
 
-Get it from:
+Before pasting, format the pull secret with:
+  cat pull-secret.txt | jq .
+Then copy and paste the formatted (multi-line) output.
+
+Download from:
   https://console.redhat.com/openshift/downloads#tool-pull-secret
   (select 'Tokens' in the pull-down)"
 			continue
 		fi
-			;;
-		2)
-			# Clear button - just loop back to show empty editbox again
-			log "Clear button pressed, restarting pull secret entry"
-			error_msg=""  # Clear any error messages
-			continue
 			;;
 		3|255)
 			# Back/ESC
