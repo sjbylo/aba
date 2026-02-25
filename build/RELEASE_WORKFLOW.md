@@ -12,8 +12,8 @@ dev branch:     Active development (default working branch)
 ### Workflow:
 
 1. **Development**: Work on `dev` branch
-2. **Release**: Run `build/release.sh` on `dev`, then merge to `main`
-3. **Hotfix**: Branch from `main`, fix, merge back to both `main` and `dev`
+2. **Release**: Run `build/release.sh` on `dev` — it handles everything end-to-end
+3. **Hotfix**: Commit fix on `main`, run `build/release.sh --hotfix` — it tags, pushes, and syncs dev
 
 ## Release Process
 
@@ -45,15 +45,21 @@ git pull
 build/release.sh 0.10.0 "New features and improvements"
 ```
 
-The script automatically:
-1. Runs pre-commit checks (RPM sync, syntax check, branch check, git pull)
-2. Updates VERSION file
-3. Embeds version in scripts/aba.sh
-4. Updates version references in README.md
-5. Updates CHANGELOG.md
-6. Commits changes
-7. Creates git tag v0.10.0
-8. Verifies the tagged commit has correct version data
+The script automatically handles the **entire release lifecycle**:
+
+**Build (steps 1-9, non-interactive):**
+1. Checks prerequisites (gh CLI, branch, clean tree, CHANGELOG)
+2. Runs pre-commit checks (RPM sync, syntax check, git pull)
+3. Updates VERSION, scripts/aba.sh, README.md, CHANGELOG.md
+4. Commits changes and creates annotated git tag
+5. Verifies the tagged commit has correct version data
+
+**Publish (steps 10-14, each with `[Y/n]` confirmation):**
+6. Pushes tag to origin
+7. Checks out main (creates from remote if needed), merges, pushes
+8. Syncs dev with main (--ref mode only)
+9. Pushes dev to origin
+10. Creates GitHub release via `gh` CLI
 
 ### 2b. Partial Release (--ref)
 
@@ -71,43 +77,20 @@ The script creates a temporary branch from the specified commit, applies the ver
 bump there, tags it, and returns to dev. This is useful when dev has newer commits
 that are not yet ready for release.
 
-### 3. Push and Merge to Main
+### 3. That's It!
 
-After the script completes, push and merge to main:
+The script handles pushing, merging to main, syncing dev, and creating the GitHub
+release — all with confirmation prompts. No manual steps are needed.
 
-```bash
-# Default mode: push dev and tag, merge dev to main
-git push origin dev
-git push origin v0.10.0
-git checkout main && git merge --no-ff dev && git push origin main && git checkout dev
+If you skipped any confirmation prompts during the run, the script prints the
+manual command for that step so you can run it later.
 
-# --ref mode: push tag, merge tag to main, sync dev
-git push origin v0.10.0
-git checkout main && git merge --no-ff v0.10.0 && git push origin main && git checkout dev
-git merge main
-git branch -d _release-v0.10.0
-```
+**Alternative: Create GitHub release via web interface** (if you skipped step 14)
 
-### 4. Create GitHub Release
-
-```bash
-# Automated (recommended — requires 'gh' CLI)
-build/create-github-release.sh v0.10.0
-
-# Or create a draft for review
-build/create-github-release.sh v0.10.0 --draft
-```
-
-**Alternative: Web Interface** (no tools required)
-
-1. Go to: https://github.com/sjbylo/aba/releases/new
-2. **Choose tag**: Select `v0.10.0` from dropdown (tag must already be pushed)
-3. **Release title**: `Aba v0.10.0`
-4. **Description**: Copy the v0.10.0 section from CHANGELOG.md
-5. **Options**:
-   - Set as pre-release (for beta/RC versions)
-   - Set as latest release (for stable releases)
-6. Click **Publish release**
+1. Go to: https://github.com/sjbylo/aba/releases/new?tag=v0.10.0
+2. **Release title**: `Aba v0.10.0`
+3. **Description**: Copy the v0.10.0 section from CHANGELOG.md
+4. Click **Publish release**
 
 ### 5. Post-release Verification
 
@@ -130,22 +113,21 @@ aba --aba-version
 ## Quick Reference
 
 ```bash
-# Full release flow (copy-paste ready)
+# Full release (one command does everything, with confirmations)
 git checkout dev
 build/release.sh --dry-run 0.10.0 "New features"          # preview
-build/release.sh 0.10.0 "New features"                     # release
-git push origin dev v0.10.0                                 # push
-git checkout main && git merge --no-ff dev && git push origin main && git checkout dev  # merge to main
-build/create-github-release.sh v0.10.0                      # GitHub release
+build/release.sh 0.10.0 "New features"                     # release + publish
 
-# Partial release flow (--ref, copy-paste ready)
+# Partial release from a specific commit
 git checkout dev
 build/release.sh --dry-run --ref abc1234 0.10.0 "Fixes"   # preview
-build/release.sh --ref abc1234 0.10.0 "Fixes"             # release
-git push origin v0.10.0                                     # push tag
-git checkout main && git merge --no-ff v0.10.0 && git push origin main && git checkout dev
-git merge main && git branch -d _release-v0.10.0           # sync dev, cleanup
-build/create-github-release.sh v0.10.0                      # GitHub release
+build/release.sh --ref abc1234 0.10.0 "Fixes"             # release + publish
+
+# Hotfix release (urgent patch on main)
+git checkout main
+# ... make and commit your fix ...
+build/release.sh --dry-run --hotfix 0.9.3 "Critical fix"  # preview
+build/release.sh --hotfix 0.9.3 "Critical fix"            # release + publish
 ```
 
 ## Managing Tags
@@ -195,45 +177,41 @@ git push origin v0.10.0
 ## Hotfix Workflow (urgent fixes to released versions)
 
 ```bash
-# 1. Branch from main (the released version)
+# 1. Switch to main and apply the fix
 git checkout main
 git pull
-git checkout -b hotfix-0.9.3
-
-# 2. Make the fix
 vim scripts/some-script.sh
 git add scripts/some-script.sh
 git commit -m "fix: Critical bug in catalog download"
 
-# 3. Merge to main and tag
-git checkout main
-git merge --no-ff hotfix-0.9.3
-git tag -a v0.9.3 -m "Hotfix v0.9.3"
-git push origin main v0.9.3
+# 2. Preview the hotfix release
+build/release.sh --dry-run --hotfix 0.9.3 "Critical fix for catalog download"
 
-# 4. Merge to dev (to keep in sync)
-git checkout dev
-git merge --no-ff main
-git push origin dev
-
-# 5. Delete hotfix branch
-git branch -d hotfix-0.9.3
-
-# 6. Create GitHub release
-build/create-github-release.sh v0.9.3
+# 3. Run the hotfix release (handles everything)
+build/release.sh --hotfix 0.9.3 "Critical fix for catalog download"
 ```
+
+The `--hotfix` flag tells the script it's running on `main` (not `dev`). It:
+- Applies the version bump and CHANGELOG update on main
+- Tags the release
+- Pushes main and the tag
+- Merges main back into dev (keeping dev in sync)
+- Pushes dev
+- Creates the GitHub release
+
+All publish steps have `[Y/n]` confirmation prompts, same as a normal release.
 
 ## Common Pitfalls
 
 1. **Empty CHANGELOG [Unreleased]**: The script exits early if `[Unreleased]` is empty. Populate it as you work, not at release time.
 
-2. **Wrong `ABA_VERSION` sed pattern**: The `sed` command in `release.sh` uses `s/^ABA_VERSION=.*/...` to match both quoted and unquoted formats. If `aba.sh` changes how `ABA_VERSION` is defined, update the sed pattern too.
+2. **`gh` CLI not installed**: The script checks for `gh` at startup and shows install commands. Install once: `sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo && sudo dnf install gh -y && gh auth login`
 
-3. **Accidental tag on wrong commit**: If a tag is pushed to the wrong commit, delete it locally and remotely before recreating it. Never force-move published tags — delete and recreate.
+3. **Wrong `ABA_VERSION` sed pattern**: The `sed` command in `release.sh` uses `s/^ABA_VERSION=.*/...` to match both quoted and unquoted formats. If `aba.sh` changes how `ABA_VERSION` is defined, update the sed pattern too.
 
-4. **Install script shows "up-to-date" incorrectly**: The `install` script uses `diff` to compare file contents (not timestamps). If you're testing dev builds, run `./install` again after switching to a release tag to force the update.
+4. **Accidental tag on wrong commit**: If a tag is pushed to the wrong commit, delete it locally and remotely before recreating it. Never force-move published tags — delete and recreate.
 
-5. **Forgetting to merge to main**: After running the release script on `dev`, always merge `dev` into `main` so the released code is on both branches.
+5. **Install script shows "up-to-date" incorrectly**: The `install` script uses `diff` to compare file contents (not timestamps). If you're testing dev builds, run `./install` again after switching to a release tag to force the update.
 
 ## Best Practices
 
