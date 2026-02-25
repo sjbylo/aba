@@ -70,12 +70,12 @@ oc patch proxy cluster --type=merge -p '{"spec":{"trustedCA":{"name":"user-ca-bu
 #####################
 aba_info "Adding mirror registry CA cert to registry config ..."
 
-if [ -s regcreds/rootCA.pem ]; then
-        ca_cert="$(cat regcreds/rootCA.pem | sed ':a;N;$!ba;s/\n/\\n/g')"
-        aba_info "Using root CA file at $PWD/mirror/regcreds/rootCA.pem"
+if [ -s "$regcreds_dir/rootCA.pem" ]; then
+        ca_cert="$(cat "$regcreds_dir/rootCA.pem" | sed ':a;N;$!ba;s/\n/\\n/g')"
+        aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
 	kubectl patch configmap registry-config -n openshift-config --type='merge' -p '{"data":{"updateservice-registry":"'"$ca_cert"'"}}'
 else
-	aba_abort "No root CA file found at $PWD/regcreds/rootCA.pem.  Is the mirror registry available?"
+	aba_abort "No root CA file found at $regcreds_dir/rootCA.pem.  Is the mirror registry available?"
 fi
 
 #####################

@@ -56,8 +56,8 @@ init: .init
 	ln -fs $(SCRIPTS) 
 	ln -fs ../cli
 	ln -fs ../aba.conf 
-	mkdir -p regcreds
-	touch regcreds/.dummy  # Needed only so tar includes the *empty* regcreds dir
+	mkdir -p ~/.aba/mirror/$$(basename $$PWD)
+	ln -sfn ~/.aba/mirror/$$(basename $$PWD) regcreds
 	touch .init
 
 # If aba.conf does not exist, must abort!
@@ -179,7 +179,7 @@ mirror.conf: ../aba.conf .init                        ## Create the mirror.conf 
 	$(SCRIPTS)/create-mirror-conf.sh -f $(force)
 
 install: .installed
-.installed: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into regcreds/ for existing registry.  See README.md.
+.installed: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into ~/.aba/mirror/ for existing registry.  See README.md.
 	@$(SCRIPTS)/ensure-cli.sh quay-registry
 	$(SCRIPTS)/reg-install.sh
 	$(SCRIPTS)/reg-verify.sh
@@ -196,7 +196,7 @@ pw:
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh
 
 .PHONY: verify
-verify: .init ## Using the credential files in 'aba/mirror/regcreds' dir and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
+verify: .init ## Using the credential files in '~/.aba/mirror/' and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
 	@$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 
 	@touch .installed
@@ -264,38 +264,31 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
-clean:  ## Clean up temporary files only, keeping your configuration files, e.g. mirror.conf.
-	@[ -f .installed ] && echo [ABA] "Important: to uninstall the registry, run 'aba -d mirror uninstall'!" || true
-	rm -rf *.tar mirror-registry
-	# Reset run_once state for mirror-registry extraction (since we just deleted the binary)
-	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install" 2>/dev/null || true
-	rm -f templates scripts
-	rm -f aba.conf  # remove link only
+clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirror.conf, registry state, save/ and sync/.
+	@[ -f .installed ] && echo "[ABA] Note: registry is still running. Credentials in ~/.aba/mirror/ are untouched." || true
+	rm -f templates scripts cli
+	rm -f aba.conf
 	rm -f .init 
+	rm -f .rpmsext .rpmsint
 	rm -rf .index
 	rm -f imageset-config-*.yaml
-	rm -f ~/.aba.previous.backup  # This is the 'timestamp' file used for incremental backups
-	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh # Only clean up the created scripts, not the script needed to uninstall the reg.
-	@#rm -f *.sh  # Don't clean up the scripts, esp. the reg. "uninstall" script since the registry is still installed 
-	@[ -d save ] && [ save/.created -nt "save/imageset-config-save.yaml" ] && rm -rf save || true  # Delete only if not edited
-	@[ -d sync ] && [ sync/.created -nt "sync/imageset-config-sync.yaml" ] && rm -rf sync || true  # Delete only if not edited
+	rm -f ~/.aba.previous.backup
+	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f .cmd.out
-	rm -f *sha256sum.txt
 
 
-# Note that reg-uninstall.sh script will delete registry and regcreds/ dir.
-# Backup regcreds/ and anything that should not be lost
+# Registry credentials and state are stored persistently in ~/.aba/mirror/ and survive clean/reset.
 .PHONY: reset
 reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
-	@[ -f .installed ] && echo [ABA] "Important: to uninstall the registry, you must run 'aba -d mirror uninstall' first!" || true
+	@[ -f .installed ] && echo "[ABA] Note: registry is still running and can be managed via 'aba -d mirror uninstall'." || true
 	make clean
-	@[ -d regcreds ] && rm -rf regcreds.bk && mv regcreds regcreds.bk && echo [ABA] aba/mirror/regcreds backed up to regcreds.bk || true
-	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo [ABA] aba/mirror/mirror.conf backed up to mirror.conf.bk || true
-	@#rm -rf *.tar.gz oc-mirror-workspace   # Leave this so the mirror can be uninstalled with reg-uninstall.sh 
+	rm -rf *.tar mirror-registry
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install" 2>/dev/null || true
+	rm -rf regcreds
+	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo "[ABA] mirror.conf backed up to mirror.conf.bk" || true
 	rm -rf          oc-mirror-workspace 
 	rm -f $(DOCKER_REG_FILE)
 	rm -rf mirror-registry-*.tar.gz
-	# Reset run_once state for mirror-registry and docker-reg downloads (since we just deleted the tarballs)
 	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download" 2>/dev/null || true
 	@$(SCRIPTS)/run-once.sh -r -i "mirror:download:docker-reg-image.tgz" 2>/dev/null || true
 	rm -f *.conf *.yaml 
@@ -303,7 +296,7 @@ reset:                # Clean up all files. Only use if you know what you're doi
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f *.log .*.log
 	rm -f .ssh.conf
-	rm -f .rpmsext .rpmsint
 	rm -f .redhat-operator-index* 
 	rm -f .init 
+	rm -f *sha256sum.txt
 

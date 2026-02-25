@@ -62,7 +62,7 @@ echo
 aba_info_ok "The cluster has been successfully installed!"
 aba_info_ok "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
 aba_info_ok "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
-[ -f regcreds/pull-secret-mirror.json ] && \
+[ -f "$regcreds_dir/pull-secret-mirror.json" ] && \
 	aba_info_ok "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
 	aba_info_ok "Run 'aba day2-osus' to configure the OpenShift Update Service."
 aba_info_ok "Run 'aba day2-ntp' to configure NTP on this cluster."

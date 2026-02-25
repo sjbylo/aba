@@ -187,9 +187,9 @@ e2e_run "Set mirror host to pool registry" \
     "sed -i \"s/registry.$(pool_domain)/$(pool_registry_host)/g\" mirror/mirror.conf"
 
 e2e_run "Copy pool registry CA to regcreds" \
-    "cp ~/quay-install/quay-rootCA/rootCA.pem mirror/regcreds/"
+    "cp ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"
 e2e_run "Copy pool registry pull secret to regcreds" \
-    "cp ~/.containers/auth.json mirror/regcreds/pull-secret-mirror.json"
+    "cp ~/.containers/auth.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
 
 e2e_run "Create SNO config (mirror mode, no proxy)" \
     "aba cluster -n $SNO_MIRROR -t sno -i $(pool_sno_ip) --step cluster.conf"

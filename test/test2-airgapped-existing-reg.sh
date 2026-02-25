@@ -210,15 +210,15 @@ test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Install aba on the remote ho
 ###test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 # This user's action is expected to fail since there are no login credentials for the "existing reg."
-test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
+test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Loading images into mirror registry (without ~/.aba/mirror/mirror/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
 
-# But, now regcreds/ is created...
-mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $DIS_SSH_USER@$int_bastion_hostname"
+# But, now ~/.aba/mirror/mirror/ is created...
+mylog "Simulating a manual config of 'existing' registry login credentials into ~/.aba/mirror/mirror/ on host: $DIS_SSH_USER@$int_bastion_hostname"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror"  
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror/regcreds"  
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "cp -v ~/.containers/auth.json $subdir/aba/mirror/regcreds/pull-secret-mirror.json"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "ls -l ~/.aba/mirror/mirror"  
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"  
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "cp -v ~/.containers/auth.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying access to the mirror registry $reg_host:$reg_port now succeeds" "aba --dir $subdir/aba/mirror verify"
 

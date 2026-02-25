@@ -107,9 +107,9 @@ out-install:
 out-install-all:
 	echo oc openshift-install oc-mirror butane govc
 
-# For "reset", "oc-mirror", "govc" and their download targets we DO NOT need ocp_version
-ifneq ($(filter reset oc-mirror govc download-oc-mirror download-govc download-butane,$(MAKECMDGOALS)),)
-  # reset not given
+# For reset/clean/out-* and tool-specific targets we DO NOT need ocp_version
+ifneq ($(filter reset clean out-install out-install-all out-download-all oc-mirror govc download-oc-mirror download-govc download-butane,$(MAKECMDGOALS)),)
+  # ocp_version not required for this target
 else
   ifeq ($(ocp_version),)
     # ocp_version is missing!

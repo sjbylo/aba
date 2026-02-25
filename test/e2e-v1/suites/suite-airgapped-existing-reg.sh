@@ -167,7 +167,7 @@ test_begin "Load without regcreds (must fail)"
 # Before regcreds are in place, loading should fail with a clear error.
 # This validates error handling for a common user mistake.
 e2e_run_remote -q "Remove any existing regcreds" \
-    "cd ~/aba && rm -rfv mirror/regcreds"
+    "cd ~/aba && rm -rfv ~/.aba/mirror/mirror/"
 
 e2e_run_must_fail_remote "Load without regcreds should fail" \
     "cd ~/aba && aba -d mirror load --retry"

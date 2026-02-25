@@ -151,9 +151,9 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 #### Existing Registry Prerequisites
 <!-- this is a perma-link from ABA blog, Oct 2025 -->
 
-   - If you're using an existing registry, place its credentials (pull secret and root CA) in the `aba/mirror/regcreds` directory. Here is an example:
-      - `aba/mirror/regcreds/pull-secret-mirror.json`
-      - `aba/mirror/regcreds/rootCA.pem`
+   - If you're using an existing registry, place its credentials (pull secret and root CA) in the `~/.aba/mirror/mirror/` directory. Here is an example:
+      - `~/.aba/mirror/mirror/pull-secret-mirror.json`
+      - `~/.aba/mirror/mirror/rootCA.pem`
    - Once the files are in place, run the following command to verify the connection to your existing mirror registry:
      ```
      aba -d mirror verify
@@ -332,8 +332,8 @@ aba -d mirror sync
 ```
 This command:
   - triggers `aba -d mirror install` (to configure or install the mirror registry).
-    - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `aba/mirror/regcreds/` first! See the [Existing Registry Prerequisites](#existing-registry-prerequisites) section for more).
-    - or, installs _Mirror Registry for Red Hat OpenShift_ (Quay) on the connected bastion (or remote host) and copies the generated pull secret and certificate into the `aba/mirror/regcreds` directory for later use.
+    - for an existing registry, check the connection is available and working (be sure to set up your registry credentials in `~/.aba/mirror/mirror/` first! See the [Existing Registry Prerequisites](#existing-registry-prerequisites) section for more).
+    - or, installs _Mirror Registry for Red Hat OpenShift_ (Quay) on the connected bastion (or remote host) and copies the generated pull secret and certificate into `~/.aba/mirror/mirror/` for later use.
   - pulls images from the Internet and stores them in the registry.
 
 ```
@@ -1113,7 +1113,7 @@ ABA supports the following architectures, automatically detecting the host and d
     bash-5.1# aba
     ```
   - In the arm64 container:
-    - ABA can connect to an existing remote registry as long as the aba/mirror/regcreds/ directory is populated with the registry's pull secret and the root CA credentials. 
+    - ABA can connect to an existing remote registry as long as the `~/.aba/mirror/mirror/` directory is populated with the registry's pull secret and the root CA credentials. 
       - cannot install a registry to a remote host from inside the container.  The Quay `mirror-registry` installer does not have a build for arm64. Error: 'rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2'. 
     - Can access public registries over the Internet (directly or via a proxy).
     - Generate an `arm64` ISO image suitable for OpenShift installation on `arm64` systems.
@@ -1285,7 +1285,7 @@ execution of diverse tasks through predefined rules!
 
 
 ### Example Credentials for an Existing Mirror Registry
-   - `aba/mirror/regcreds/pull-secret-mirror.json`
+   - `~/.aba/mirror/mirror/pull-secret-mirror.json`
       ```
       {
         "auths": {
@@ -1296,7 +1296,7 @@ execution of diverse tasks through predefined rules!
       }
       ```
 
-   - `aba/mirror/regcreds/rootCA.pem`
+   - `~/.aba/mirror/mirror/rootCA.pem`
       ```
       -----BEGIN CERTIFICATE-----
       MIID5TCCAs2gAwIBAgIUH2G9oqba4oaGXagGL+nNe9mukyIwDQYJKoZIhvcNAQEL

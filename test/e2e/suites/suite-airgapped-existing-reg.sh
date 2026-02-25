@@ -170,18 +170,18 @@ test_begin "Load without regcreds (must fail)"
 # Before regcreds are in place, loading should fail with a clear error.
 # This validates error handling for a common user mistake.
 e2e_run_remote -q "Remove any existing regcreds" \
-    "cd ~/aba && rm -rf mirror/regcreds"
+    "cd ~/aba && rm -rf ~/.aba/mirror/mirror/"
 
 e2e_run_must_fail_remote "Load without regcreds should fail" \
     "cd ~/aba && aba -d mirror load --retry"
 
 # Manually restore regcreds (simulates user configuring existing registry credentials)
 e2e_run_remote "Create regcreds directory" \
-    "mkdir -p ~/aba/mirror/regcreds"
+    "mkdir -p ~/.aba/mirror/mirror/"
 e2e_run_remote "Copy registry CA cert to regcreds" \
-    "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/aba/mirror/regcreds/"
+    "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"
 e2e_run_remote "Copy registry pull secret to regcreds" \
-    "cp -v ~/.e2e-pool-registry/quay-creds.json ~/aba/mirror/regcreds/pull-secret-mirror.json"
+    "cp -v ~/.e2e-pool-registry/quay-creds.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
 e2e_run_remote "Verify registry access with restored regcreds" \
     "cd ~/aba && aba -d mirror verify"
 

@@ -365,6 +365,8 @@ normalize-mirror-conf()
 	# Force tls_verify=true 
 	# Fix reg_path if it a) does not start with / or starts with anything other than space or tab, then prepend a '/'
 
+	echo "export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")"
+
 	[ ! -s mirror.conf ] &&                                                              return 0
 
 	(
@@ -379,7 +381,6 @@ normalize-mirror-conf()
 			awk '{print $1}' | \
 			sed	-e "s/^/export /g"
 
-		# Append always
 		#echo export tls_verify=true
 	)
 }
@@ -424,6 +425,9 @@ normalize-cluster-conf()
 	# Ensure only one arg after 'export'
 	# Prepend "export "
 	# Adjust new int_connection value for compatibility
+
+	grep -q ^mirror_name= cluster.conf 2>/dev/null	|| echo export mirror_name=mirror
+	echo 'export regcreds_dir=$HOME/.aba/mirror/$mirror_name'
 
 	[ ! -s cluster.conf ] &&                                                               return 0
 
@@ -1417,7 +1421,7 @@ trust_root_ca() {
 		else
 			$SUDO install -m 644 $1 /etc/pki/ca-trust/source/anchors/ 
 			$SUDO update-ca-trust extract
-			aba_info "Cert 'regcreds/rootCA.pem' updated in system trust"
+			aba_info "Cert '$regcreds_dir/rootCA.pem' updated in system trust"
 		fi
 	else
 		aba_info "No $1 cert file found" 

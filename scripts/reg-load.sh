@@ -67,11 +67,11 @@ scripts/create-containers-auth.sh --load   # --load option indicates that the pu
 
 # Check if the cert needs to be updated
 aba_debug "Checking for root CA certificate"
-if [ -s regcreds/rootCA.pem ]; then
+if [ -s "$regcreds_dir/rootCA.pem" ]; then
 	aba_debug "Installing root CA certificate"
-	trust_root_ca regcreds/rootCA.pem # FIXME: Is this required here since the rootCA.pem is installed after reg install?
+	trust_root_ca "$regcreds_dir/rootCA.pem" # FIXME: Is this required here since the rootCA.pem is installed after reg install?
 else
-	aba_warning "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 
+	aba_warning "No $regcreds_dir/rootCA.pem cert file found (skipTLS=$skipTLS)" 
 fi
 
 [ ! "$data_dir" ] && data_dir=\~
