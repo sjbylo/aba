@@ -508,10 +508,10 @@ if [ -n "$_need_infra" ] || [ -n "$CLI_RECREATE_GOLDEN" ] || [ -n "$CLI_RECREATE
 	"$BASH" "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
 fi
 
-# --- scp config files to each conN -------------------------------------------
+# --- scp test framework + config to each conN --------------------------------
 
 echo ""
-echo "  Deploying config files to conN hosts ..."
+echo "  Deploying test framework to conN hosts ..."
 for (( i=1; i<=CLI_POOLS; i++ )); do
 	user="${CON_SSH_USER:-steve}"
 	host="con${i}.${VM_BASE_DOMAIN:-example.com}"
@@ -520,8 +520,11 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 	_deploy_ok=1
 	scp $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/aba/test/e2e/config.env" || _deploy_ok=0
 	scp $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/aba/test/e2e/pools.conf" || _deploy_ok=0
+	scp $_SSH_OPTS "$_RUN_DIR/runner.sh"  "$target:~/aba/test/e2e/runner.sh"  || _deploy_ok=0
+	scp $_SSH_OPTS "$_RUN_DIR"/lib/*.sh   "$target:~/aba/test/e2e/lib/"       || _deploy_ok=0
+	scp $_SSH_OPTS "$_RUN_DIR"/suites/suite-*.sh "$target:~/aba/test/e2e/suites/" || _deploy_ok=0
 	if [ "$_deploy_ok" -eq 1 ]; then
-		echo "    con${i}: config.env + pools.conf deployed"
+		echo "    con${i}: framework + config deployed"
 	else
 		echo "    con${i}: WARNING: deploy failed (SCP error above)"
 	fi
