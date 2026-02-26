@@ -18,16 +18,14 @@ required_pkgs=($(printf '%s\n' "${required_pkgs[@]}" | sort -u))  # Deduplicate
 missing_pkgs=()
 
 # Check which packages are missing ...
+# Note: python3 is NOT listed explicitly — it is pulled in automatically as a
+# dependency of python3-jinja2 (requires python(abi) = 3.x, provided only by
+# the python3 RPM). This holds for both RHEL 8 and 9.
 for pkg in "${required_pkgs[@]}"; do
 	if ! rpm -q "$pkg" >/dev/null; then
 		missing_pkgs+=("$pkg")
 	fi
 done
-
-# RHEL8/9 compat: python3 may be named python36 on RHEL8
-if ! rpm -q python3 >/dev/null 2>&1 && ! rpm -q python36 >/dev/null 2>&1; then
-	missing_pkgs+=(python3)
-fi
 
 # If sudo is not found, assume we are running as root
 SUDO=
