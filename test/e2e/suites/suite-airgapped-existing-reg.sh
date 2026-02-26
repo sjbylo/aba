@@ -162,6 +162,8 @@ e2e_run -r 3 2 "Pipe tar to internal bastion" \
 
 e2e_run_remote "Install aba on internal bastion" \
     "cd ~/aba && ./install"
+e2e_run_remote "Verify single dnf batch (no duplicate install)" \
+    "cd ~/aba && test \$(grep -c 'Transaction Summary' .dnf-install.log 2>/dev/null) -le 1"
 
 test_end
 

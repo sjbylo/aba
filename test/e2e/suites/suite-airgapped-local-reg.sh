@@ -153,6 +153,8 @@ e2e_run_remote "Verify bundle extracted" \
     "ls -la ~/aba/mirror/ && ls -la ~/aba/cli/"
 e2e_run_remote "Run aba install on internal bastion" \
     "cd ~/aba && ./install"
+e2e_run_remote "Verify single dnf batch (no duplicate install)" \
+    "cd ~/aba && test \$(grep -c 'Transaction Summary' .dnf-install.log 2>/dev/null) -le 1"
 
 test_end
 
