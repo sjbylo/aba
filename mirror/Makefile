@@ -165,7 +165,7 @@ $(DOCKER_REG_FILE):
 install-docker-registry:
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for Docker registry image download" -i mirror:download:docker-reg-image.tgz -- make -sC . docker-reg-image.tgz
 	@podman load -i $(DOCKER_REG_FILE)
-	@$(SCRIPTS)/reg-docker-install.sh
+	@$(SCRIPTS)/reg-install-docker.sh
 	@rm -f .uninstalled 
 	@touch .installed
 
