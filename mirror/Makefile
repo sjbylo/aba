@@ -55,7 +55,8 @@ init: .init
 	ln -fs $(TEMPLATES) 
 	ln -fs $(SCRIPTS) 
 	ln -fs ../cli
-	ln -fs ../aba.conf 
+	ln -fs ../aba.conf
+	ln -fs . mirror
 	mkdir -p ~/.aba/mirror/$$(basename $$PWD)
 	ln -sfn ~/.aba/mirror/$$(basename $$PWD) regcreds
 	touch .init
@@ -267,7 +268,7 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 .PHONY: clean
 clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirror.conf, registry state, save/ and sync/.
 	@[ -f .installed ] && echo "[ABA] Note: registry is still running. Credentials in ~/.aba/mirror/ are untouched." || true
-	rm -f templates scripts cli
+	rm -f templates scripts cli mirror
 	rm -f aba.conf
 	rm -f .init 
 	rm -f .rpmsext .rpmsint

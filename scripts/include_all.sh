@@ -1857,6 +1857,13 @@ run_once() {
 				saved_cwd="$(cat "$id_dir/cwd")"
 				cd "$saved_cwd" || aba_debug "Warning: Could not restore CWD to $saved_cwd"
 			fi
+
+			# Use saved command for validation (it was recorded with the saved CWD)
+			# Callers may pass a different command with different relative paths
+			if [[ -f "$id_dir/cmd.sh" ]]; then
+				source "$id_dir/cmd.sh"
+				aba_debug "Loaded saved command for validation: ${command[*]}"
+			fi
 			
 			# Run validation command directly (keep lock held to prevent races)
 			# NOTE: Do NOT delete exit_file before validation — concurrent readers
@@ -2302,9 +2309,7 @@ ensure_butane() {
 
 # Ensure mirror-registry (Quay) is installed (extracted)
 ensure_quay_registry() {
-	local mirror_dir="mirror"
-	if [ -f mirror.conf ]; then mirror_dir="."; fi
-	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC "$mirror_dir" mirror-registry
+	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
 }
 
 # Get error output from a task (helper for error messages)
