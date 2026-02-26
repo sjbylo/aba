@@ -28,7 +28,7 @@ if [ ! -s "$regcreds_dir/pull-secret-mirror.json" ]; then
 	aba_abort \
 		"No mirror registry credential file found in: $regcreds_dir/pull-secret-mirror.json" \
 		"You have two options:" \
-		"- To install Quay, see: aba mirror --help" \
+		"- To install a registry, see: aba mirror --help" \
 		"- To use an existing mirror registry, copy its pull secret and root CA files into: $regcreds_dir/ and try again." \
 		"  The files must be named \"$regcreds_dir/pull-secret-mirror.json\" and \"$regcreds_dir/rootCA.pem\" respectively." \
 		"See the README.md for more."

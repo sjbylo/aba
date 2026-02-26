@@ -1407,7 +1407,7 @@ sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD
 sudo bash -c "iptables-save > /etc/sysconfig/iptables.save"
 ```
 
-See `scripts/reg-docker-install.sh` and `scripts/reg-install.sh` for details.
+See `scripts/reg-install-docker.sh` and `scripts/reg-install.sh` for details.
 
 ---
 
@@ -1461,19 +1461,21 @@ echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 **Use Docker Registry instead!** To replace Quay with the Docker Registry, run:
 
 ```
-aba -d mirror uninstall                        # Uninstall Quay if it was already installed.
+aba -d mirror uninstall                        # Uninstall the current registry (Quay or Docker).
 
                                                # Assuming aba/mirror/mirror.conf is set up correctly:
-aba -d mirror install-docker-registry          # Install Docker Registry and integrate with aba. Also works in diconnected env.
+                                               # Set reg_vendor=docker in mirror.conf, then:
+aba -d mirror install                          # Install the configured registry (auto/quay/docker). Also works in disconnected env.
 aba -d mirror verify                           # If verification is successful, use aba as usual (e.g. aba load/save).
 ```
 
-To uninstall the Docker Registry, run:
+To uninstall the registry, run:
 
 ```
-aba -d mirror uninstall-docker-registry        # Remove the Docker Registry pod.
+aba -d mirror uninstall                        # Remove the registry (reads install-time state to determine type).
 ```
 - Note: Like all tools that ABA uses, the Quay mirror registry is supported by Red Hat but the Docker Registry is not.
+- The `install-docker-registry` and `uninstall-docker-registry` targets are still supported for backward compatibility.
 
 [Back to top](#who-should-use-aba)
 
