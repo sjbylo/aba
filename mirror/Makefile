@@ -166,7 +166,6 @@ $(DOCKER_REG_FILE):
 .PHONY: install-docker-registry
 install-docker-registry:
 	@REG_VENDOR_OVERRIDE=docker $(SCRIPTS)/reg-install.sh
-	$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 
 	@touch .installed
 
@@ -184,7 +183,6 @@ mirror.conf: .init                                    ## Create the mirror.conf 
 install: .installed
 .installed: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into ~/.aba/mirror/ for existing registry.  See README.md.
 	$(SCRIPTS)/reg-install.sh
-	$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 
 	@touch .installed
 

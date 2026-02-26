@@ -90,9 +90,10 @@ reg_check_fqdn() {
 # If a registry is detected at the URL: abort with instructions to provide
 # credentials rather than installing on top of it.
 reg_detect_existing() {
-	# Fast-path: credentials already exist -- just verify and exit
-	if [ -s "$regcreds_dir/pull-secret-mirror.json" ]; then
-		aba_debug "Found existing pull secret at $regcreds_dir/pull-secret-mirror.json"
+	# Fast-path: credentials already exist and we have install state -- just verify and exit
+	# If pull-secret exists but state.sh is missing/stale, do not fast-path; proceed with install so reg_post_install can refresh creds.
+	if [ -s "$regcreds_dir/pull-secret-mirror.json" ] && [ -s "$regcreds_dir/state.sh" ]; then
+		aba_debug "Found existing pull secret and state at $regcreds_dir"
 		scripts/reg-verify.sh
 		exit
 	fi
@@ -171,11 +172,12 @@ reg_verify_localhost() {
 reg_setup_data_dir() {
 	local vendor="${1:-quay}"
 
-	# Default to home dir; expand ~ if present
-	if [ ! "$data_dir" ]; then
-		data_dir=~
+	# Remote (reg_ssh_key set): keep literal ~ so remote host expands it; do not expand here.
+	# Local: default to home dir and expand ~ for absolute path.
+	if [ "$reg_ssh_key" ]; then
+		if [ ! "$data_dir" ]; then data_dir='~'; fi
 	else
-		data_dir=$(eval echo "$data_dir")
+		if [ ! "$data_dir" ]; then data_dir=~; else data_dir=$(eval echo "$data_dir"); fi
 	fi
 
 	case "$vendor" in
