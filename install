@@ -24,6 +24,11 @@ for pkg in "${required_pkgs[@]}"; do
 	fi
 done
 
+# RHEL8/9 compat: python3 may be named python36 on RHEL8
+if ! rpm -q python3 >/dev/null 2>&1 && ! rpm -q python36 >/dev/null 2>&1; then
+	missing_pkgs+=(python3)
+fi
+
 # If sudo is not found, assume we are running as root
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
@@ -154,11 +159,6 @@ fi
 
 
 source scripts/include_all.sh
-
-# Most (or all) rpms are installed above.... but ...
-# Now double-check we have all the required rpms from the file: templates/rpms-external.txt
-[ -d templates ] && install_rpms $(cat templates/rpms-external.txt) # HACK - show not be needed to check
-[ -d ../templates ] && install_rpms $(cat ../templates/rpms-external.txt) # HACK - show not be needed to check
 
 # Reset ~/.aba state on manual install only
 # When -q flag is used (automatic update check from 'aba' command), preserve user state
