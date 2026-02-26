@@ -13,30 +13,10 @@ reg_setup_data_dir quay
 reg_generate_password
 reg_verify_localhost
 
-# --- Quay-specific: verify SSH to localhost ---
-# The Quay mirror-registry installer requires SSH access to the install host,
-# even for local installs. Verify connectivity and warn about misconfigurations.
-
-flag_file=/tmp/.$(whoami).$RANDOM
-rm -f $flag_file
-
-# Check if default SSH unexpectedly reaches a *remote* host (misconfigured DNS)
-if h=$(ssh -F $ssh_conf_file $reg_host "touch $flag_file && hostname") >/dev/null 2>&1; then
-	if [ ! -f $flag_file ]; then
-		aba_warning \
-			"Mirror registry configured for *local* install (reg_ssh_key is not defined)." \
-			"But $reg_host resolves to $fqdn_ip, which reaches remote host [$h] via ssh!" \
-			"Options:" \
-			"1. Update DNS so '$reg_host' resolves to this localhost '$(hostname -s)'." \
-			"2. Set 'reg_ssh_key' in mirror.conf for remote installation."
-		sleep 2
-	else
-		rm -f $flag_file
-		aba_info "SSH access to localhost via '$reg_host' is working."
-	fi
-fi
-
-# Quay installer needs SSH to localhost -- ensure a test key pair exists
+# --- Quay-specific: SSH-to-localhost key setup ---
+# The Quay mirror-registry installer requires SSH access to the install host.
+# (The generic DNS/SSH check is already done by reg_verify_localhost above.)
+# Ensure a test key pair exists so the installer can SSH to localhost.
 temp_aba_key=~/.ssh/aba_check_ssh
 temp_aba_pub_key=~/.ssh/aba_check_ssh.pub
 

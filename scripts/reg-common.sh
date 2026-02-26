@@ -122,6 +122,9 @@ reg_detect_existing() {
 
 # --- reg_verify_localhost -----------------------------------------------------
 # For local installs: verify that reg_host resolves to this machine's IP.
+# Also uses an SSH flag-file trick to detect when reg_host unexpectedly
+# reaches a remote machine (catches cases where IP matches a local interface
+# but SSH still lands elsewhere, or vice versa).
 # Issues warnings rather than hard errors since NAT/LB setups are common.
 # Requires: fqdn_ip (call reg_check_fqdn first)
 reg_verify_localhost() {
@@ -135,6 +138,27 @@ reg_verify_localhost() {
 			"$reg_host resolves to $fqdn_ip which is not found on any local network interface." \
 			"Ignore this warning if expected, e.g. when $fqdn_ip is an external/NAT IP."
 		sleep 1
+	fi
+
+	# SSH flag-file trick: SSH to reg_host and create a temp file. If the file
+	# does NOT appear on localhost, reg_host reaches a remote machine by mistake.
+	local flag_file="/tmp/.$(whoami).$RANDOM"
+	rm -f "$flag_file"
+
+	local remote_hostname
+	if remote_hostname=$(ssh -F "$ssh_conf_file" "$reg_host" "touch $flag_file && hostname") >/dev/null 2>&1; then
+		if [ ! -f "$flag_file" ]; then
+			aba_warning \
+				"Registry configured for *local* install (reg_ssh_key is not defined)." \
+				"But $reg_host resolves to $fqdn_ip, which reaches remote host [$remote_hostname] via SSH!" \
+				"Options:" \
+				"1. Update DNS so '$reg_host' resolves to this localhost '$(hostname -s)'." \
+				"2. Set 'reg_ssh_key' in mirror.conf for remote installation."
+			sleep 2
+		else
+			rm -f "$flag_file"
+			aba_info "SSH access to localhost via '$reg_host' is working."
+		fi
 	fi
 }
 
