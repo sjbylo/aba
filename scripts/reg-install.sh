@@ -10,6 +10,7 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
 source <(normalize-mirror-conf)
+export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
 # REG_VENDOR_OVERRIDE lets Makefile backward-compat aliases force a specific vendor
 vendor="${REG_VENDOR_OVERRIDE:-${reg_vendor:-auto}}"

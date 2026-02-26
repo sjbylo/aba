@@ -272,6 +272,8 @@ show_error() {
 [ -z "${1-}" ] && trap 'show_error' ERR && [ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
 normalize-aba-conf() {
+	# Output only the values from aba.conf (with defaults for backwards compat).
+	# Derived/computed values belong in the calling script, not here.
 	# Normalize or sanitize the config file
 	# Remove all chars from lines with <white-space>#<anything>
 	# Remove all white-space lines
@@ -354,6 +356,8 @@ verify-aba-conf() {
 
 normalize-mirror-conf()
 {
+	# Output only the values from mirror.conf (with defaults for backwards compat).
+	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
 	# Normalize or sanitize the config file
 	# Ensure any ~/ is masked, e.g. \~/ ('cos ~ may need to be expanded on remote host)
 	# Ensure data_disk has ~ masked in each case of: ^data_dir=$ ^data_disk=~ ^data_disk=  
@@ -365,7 +369,6 @@ normalize-mirror-conf()
 	# Force tls_verify=true 
 	# Fix reg_path if it a) does not start with / or starts with anything other than space or tab, then prepend a '/'
 
-	echo "export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")"
 	grep -q '^reg_vendor=' mirror.conf 2>/dev/null	|| echo export reg_vendor=auto
 
 	[ ! -s mirror.conf ] &&                                                              return 0
@@ -419,6 +422,8 @@ verify-mirror-conf() {
 
 normalize-cluster-conf()
 {
+	# Output only the values from cluster.conf (with defaults for backwards compat).
+	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
 	# Normalize or sanitize the config file
 	# Remove all chars from lines with <white-space>#<anything>
 	# Remove all white-space lines
@@ -430,7 +435,6 @@ normalize-cluster-conf()
 	# Adjust new int_connection value for compatibility
 
 	grep -q ^mirror_name= cluster.conf 2>/dev/null	|| echo export mirror_name=mirror
-	echo 'export regcreds_dir=$HOME/.aba/mirror/$mirror_name'
 
 	[ ! -s cluster.conf ] &&                                                               return 0
 

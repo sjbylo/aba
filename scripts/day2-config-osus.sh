@@ -10,6 +10,7 @@ umask 077
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 
 verify-aba-conf || exit 1

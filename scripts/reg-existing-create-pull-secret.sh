@@ -8,6 +8,7 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
+export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
 read -p "Enter username [init]: " reg_user
 [ ! "$reg_user" ] && reg_user=init 
