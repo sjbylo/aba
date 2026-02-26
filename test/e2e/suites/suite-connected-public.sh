@@ -51,7 +51,7 @@ setup_aba_from_scratch
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 # Simulate manual edit: set dns_servers to the pool's dnsmasq host (conN)
 e2e_run "Set dns_servers manually" \

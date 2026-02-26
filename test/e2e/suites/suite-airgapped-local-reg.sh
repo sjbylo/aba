@@ -75,7 +75,7 @@ e2e_run "Install aba" "./install"
 
 # Use OCP_VERSION=p for upgrade testing (we'll reduce version further below)
 e2e_run "Configure aba.conf with previous version" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version p --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version p --base-domain $(pool_domain)"
 
 # Simulate manual edit: set dns_servers to pool dnsmasq host
 e2e_run "Set dns_servers manually" \
@@ -83,7 +83,7 @@ e2e_run "Set dns_servers manually" \
 
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=${TEST_CHANNEL:-stable} aba.conf"
+e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
 e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
@@ -140,7 +140,7 @@ test_end
 test_begin "Bundle: create with older version"
 
 e2e_run -r 3 2 "Create bundle and pipe to internal bastion" \
-    "source <(normalize-aba-conf) && aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel ${TEST_CHANNEL:-stable} --version \$ocp_version --op-sets abatest --ops web-terminal --base-domain $(pool_domain) -o - -y | ssh ${INTERNAL_BASTION} 'tar xf - -C ~'"
+    "source <(normalize-aba-conf) && aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version \$ocp_version --op-sets abatest --ops web-terminal --base-domain $(pool_domain) -o - -y | ssh ${INTERNAL_BASTION} 'tar xf - -C ~'"
 
 test_end
 

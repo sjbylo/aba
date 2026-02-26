@@ -176,8 +176,8 @@ pool_internal_bastion() {
 #   --ask true|false       Set ask mode (default: false for testing)
 #
 gen_aba_conf() {
-    local channel="${TEST_CHANNEL:-stable}"
-    local version="${OCP_VERSION:-p}"
+	local channel="$TEST_CHANNEL"
+	local version="$OCP_VERSION"
     local platform="vmw"
     local op_sets=""
     local ops=""
