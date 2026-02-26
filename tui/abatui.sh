@@ -265,20 +265,14 @@ ui_backtitle() {
 	echo "ABA TUI  |  channel: ${OCP_CHANNEL:-?}  version: ${OCP_VERSION:-?}"
 }
 
-# Resolve actual registry type based on Auto selection and architecture
-get_actual_registry_type() {
-	local registry_type="${ABA_REGISTRY_TYPE:-Auto}"
-	
-	if [[ "$registry_type" == "Auto" ]]; then
-		local arch=$(uname -m)
-		if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
-			echo "Docker"
-		else
-			echo "Quay"
-		fi
-	else
-		echo "$registry_type"
-	fi
+# Map TUI registry type (Auto/Quay/Docker) to mirror.conf value (auto/quay/docker)
+reg_vendor_from_tui() {
+	case "${ABA_REGISTRY_TYPE:-Auto}" in
+		Auto)   echo "auto" ;;
+		Quay)   echo "quay" ;;
+		Docker) echo "docker" ;;
+		*)      echo "auto" ;;
+	esac
 }
 
 # Wrapper for dialog with consistent styling
@@ -1518,7 +1512,7 @@ Get it from:
 			log "Pull secret validation successful"
 			# Show success message briefly before proceeding
 			dialog --colors --backtitle "$(ui_backtitle)" --infobox "\Z2Pull secret validated!\Zn\n\nAuthentication successful." 5 60
-			sleep 3
+			sleep 1
 					DIALOG_RC="next"
 					return
 				else
@@ -2648,23 +2642,16 @@ handle_action_local_quay() {
 	replace-value-conf -q -n reg_ssh_key -v "" -f mirror/mirror.conf
 	log "Cleared SSH parameters for local registry installation"
 	
-	# Determine actual registry type and build appropriate command
-	local actual_type=$(get_actual_registry_type)
-	log "Actual registry type: $actual_type"
-	
-	local cmd
-	if [[ "$actual_type" == "Docker" ]]; then
-		# Docker: install-docker-registry + sync in one command
-		cmd="aba -d mirror install-docker-registry $retry_flag sync -H '$reg_host' $y_flag"
-	else
-		# Quay: just sync (install is make dependency)
-		cmd="aba -d mirror $retry_flag sync -H '$reg_host' $y_flag"
-	fi
-	
+	# Write reg_vendor to mirror.conf so the dispatcher uses the correct vendor
+	replace-value-conf -q -n reg_vendor -v "$(reg_vendor_from_tui)" -f mirror/mirror.conf
+	log "Set reg_vendor=$(reg_vendor_from_tui) in mirror.conf"
+
+	# Unified command: dispatcher handles vendor selection, install is a sync dependency
+	local cmd="aba -d mirror $retry_flag sync -H '$reg_host' $y_flag"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
-	
+
 	return 0
 }
 
@@ -2739,12 +2726,16 @@ handle_action_local_docker() {
 	replace-value-conf -q -n reg_ssh_key -v "" -f mirror/mirror.conf
 	log "Cleared SSH parameters for local registry installation"
 	
-	# Build command (install-docker-registry + sync in one)
-	local cmd="aba -d mirror install-docker-registry $retry_flag -H '$reg_host' sync $y_flag"
+	# Force Docker vendor in mirror.conf
+	replace-value-conf -q -n reg_vendor -v "docker" -f mirror/mirror.conf
+	log "Set reg_vendor=docker in mirror.conf"
+
+	# Unified command: dispatcher handles vendor selection, install is a sync dependency
+	local cmd="aba -d mirror $retry_flag sync -H '$reg_host' $y_flag"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
-	
+
 	return 0
 }
 
@@ -2822,23 +2813,16 @@ handle_action_remote_quay() {
 	replace-value-conf -q -n reg_ssh_key -v "$reg_ssh_key" -f mirror/mirror.conf
 	replace-value-conf -q -n reg_ssh_user -v "$reg_ssh_user" -f mirror/mirror.conf
 	
-	# Determine actual registry type and build appropriate command
-	local actual_type=$(get_actual_registry_type)
-	log "Actual registry type: $actual_type"
-	
-	local cmd
-	if [[ "$actual_type" == "Docker" ]]; then
-		# Docker: install-docker-registry + sync in one command
-		cmd="aba -d mirror install-docker-registry $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
-	else
-		# Quay: just sync (install is make dependency)
-		cmd="aba -d mirror $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
-	fi
-	
+	# Write reg_vendor to mirror.conf so the dispatcher uses the correct vendor
+	replace-value-conf -q -n reg_vendor -v "$(reg_vendor_from_tui)" -f mirror/mirror.conf
+	log "Set reg_vendor=$(reg_vendor_from_tui) in mirror.conf"
+
+	# Unified command: dispatcher handles vendor + remote selection via reg_ssh_key
+	local cmd="aba -d mirror $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
-	
+
 	return 0
 }
 
@@ -3310,13 +3294,17 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 					fi
 					settings_default="$TUI_SETTINGS_AUTO_ANSWER"
 					;;
-				$TUI_SETTINGS_REGISTRY_TYPE)
-					case "$ABA_REGISTRY_TYPE" in
-						Auto)   ABA_REGISTRY_TYPE="Quay"; log "Registry type toggled to Quay" ;;
-						Quay)   ABA_REGISTRY_TYPE="Docker"; log "Registry type toggled to Docker" ;;
-						Docker) ABA_REGISTRY_TYPE="Auto"; log "Registry type toggled to Auto" ;;
-					esac
-					settings_default="$TUI_SETTINGS_REGISTRY_TYPE"
+			$TUI_SETTINGS_REGISTRY_TYPE)
+				case "$ABA_REGISTRY_TYPE" in
+					Auto)   ABA_REGISTRY_TYPE="Quay"; log "Registry type toggled to Quay" ;;
+					Quay)   ABA_REGISTRY_TYPE="Docker"; log "Registry type toggled to Docker" ;;
+					Docker) ABA_REGISTRY_TYPE="Auto"; log "Registry type toggled to Auto" ;;
+				esac
+				# Persist to mirror.conf if it exists
+				if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+					replace-value-conf -q -n reg_vendor -v "$(reg_vendor_from_tui)" -f mirror/mirror.conf
+				fi
+				settings_default="$TUI_SETTINGS_REGISTRY_TYPE"
 					;;
 				$TUI_SETTINGS_RETRY_COUNT)
 					case "$RETRY_COUNT" in
@@ -3374,7 +3362,7 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
 						adv_default="3"; continue
 					fi
-					if ! confirm_and_execute "aba -d mirror uninstall-docker-registry -y"; then
+					if ! confirm_and_execute "aba -d mirror uninstall -y"; then
 						adv_default="3"; continue
 					fi
 					;;
@@ -3460,55 +3448,24 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 						continue
 					fi
 					;;
-				$TUI_ACTION_LOCAL_REGISTRY)
-					# Local Registry (Auto/Quay/Docker based on setting)
-					case "$ABA_REGISTRY_TYPE" in
-						Auto)
-							if [[ "$(uname -m)" == "aarch64" ]] || [[ "$(uname -m)" == "arm64" ]]; then
-								log "Auto-selected Docker for ARM64 architecture"
-								if handle_action_local_docker; then
-									return 0
-								else
-									default_item="$TUI_ACTION_LOCAL_REGISTRY"
-									continue
-								fi
-							else
-								log "Auto-selected Quay for non-ARM64 architecture"
-								if handle_action_local_quay; then
-									return 0
-								else
-									default_item="$TUI_ACTION_LOCAL_REGISTRY"
-									continue
-								fi
-							fi
-							;;
-						Quay)
-							if handle_action_local_quay; then
-								return 0
-							else
-								default_item="$TUI_ACTION_LOCAL_REGISTRY"
-								continue
-							fi
-							;;
-						Docker)
-							if handle_action_local_docker; then
-								return 0
-							else
-								default_item="$TUI_ACTION_LOCAL_REGISTRY"
-								continue
-							fi
-							;;
-					esac
-					;;
-				$TUI_ACTION_REMOTE_REGISTRY)
-					# Remote Registry
-					if handle_action_remote_quay; then
-						return 0
-					else
-						default_item="$TUI_ACTION_REMOTE_REGISTRY"
-						continue
-					fi
-					;;
+			$TUI_ACTION_LOCAL_REGISTRY)
+				# Local Registry -- dispatcher handles vendor (auto/quay/docker)
+				if handle_action_local_quay; then
+					return 0
+				else
+					default_item="$TUI_ACTION_LOCAL_REGISTRY"
+					continue
+				fi
+				;;
+			$TUI_ACTION_REMOTE_REGISTRY)
+				# Remote Registry -- dispatcher handles vendor + SSH
+				if handle_action_remote_quay; then
+					return 0
+				else
+					default_item="$TUI_ACTION_REMOTE_REGISTRY"
+					continue
+				fi
+				;;
 			$TUI_ACTION_RERUN_WIZARD)
 				# Rerun Wizard
 				log "User chose to rerun wizard"
