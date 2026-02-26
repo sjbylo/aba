@@ -366,6 +366,7 @@ normalize-mirror-conf()
 	# Fix reg_path if it a) does not start with / or starts with anything other than space or tab, then prepend a '/'
 
 	echo "export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")"
+	grep -q '^reg_vendor=' mirror.conf 2>/dev/null	|| echo export reg_vendor=auto
 
 	[ ! -s mirror.conf ] &&                                                              return 0
 
@@ -410,6 +411,8 @@ verify-mirror-conf() {
 	[ "$reg_path" ] && { echo $reg_path | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_path is invalid in mirror.conf [$reg_path]" >&2; ret=1; }; }
 
 	[ "$reg_ssh_key" ] && { echo $reg_ssh_key | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
+
+	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE '^(auto|quay|docker)$' || { echo_red "Error: reg_vendor must be auto, quay, or docker in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
 
 	return $ret
 }
