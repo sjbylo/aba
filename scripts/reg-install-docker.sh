@@ -23,6 +23,12 @@ ask "Install Docker registry on localhost ($(hostname -s)), accessible via $reg_
 
 aba_info "Installing Docker registry on localhost ..."
 
+# Pre-load Docker registry image from tarball (for air-gapped environments)
+if [ -f docker-reg-image.tgz ]; then
+	aba_info "Loading Docker registry image from docker-reg-image.tgz ..."
+	podman load -i docker-reg-image.tgz
+fi
+
 mkdir -p "$REGISTRY_DATA_DIR" "$REGISTRY_CERTS_DIR" "$REGISTRY_AUTH_DIR"
 
 # --- Generate CA certificate ---
