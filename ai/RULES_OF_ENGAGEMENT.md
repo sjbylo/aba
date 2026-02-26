@@ -11,20 +11,20 @@ This document contains the key rules, workflow, and architectural principles for
 
 ## Workflow
 
-**Development Environment**: Cursor Remote-SSH connected directly to `registry4`
+**Development Environment**: Cursor Remote-SSH connected directly to `dev host`
 
 ```
-Cursor (on registry4)
+Cursor (on dev host)
 ---------------------
-1. Edit files directly on registry4
+1. Edit files directly on the dev host (usually bastion or registry4)
 2. Test changes immediately
 3. Commit to git (when user approves)
 ```
 
 **Key Points:**
-- ✅ **Edit**: Changes are made directly on registry4 via Remote-SSH
+- ✅ **Edit**: Changes are made directly on dev host via Remote-SSH
 - ✅ **Test**: Test immediately in the same environment
-- ✅ **Commit**: Git operations happen on registry4 (with user permission!)
+- ✅ **Commit**: Git operations happen on dev host (with user permission!)
 - ✅ **No sync needed**: Working directly on target machine
 - ✅ **Real-time**: Changes are immediately available for testing
 
@@ -880,7 +880,7 @@ Makefiles        → Define targets and execution context
 - Specific fixes and decisions made
 
 ### What's Preserved:
-- All file changes (saved on registry4)
+- All file changes (saved on dev host)
 - Git diffs show what changed
 - System may provide a session summary
 
@@ -888,7 +888,7 @@ Makefiles        → Define targets and execution context
 
 1. **Remind AI of Key Rules** (paste this section):
    ```
-   - Working via Cursor Remote-SSH on registry4
+   - Working via Cursor Remote-SSH on dev host
    - Only modify: aba/tui, aba/test/func, scripts/include_all.sh (with permission)
    - Use run_once() for task management
    - Scripts use relative paths (minimal $ABA_ROOT usage)
@@ -913,7 +913,7 @@ Makefiles        → Define targets and execution context
 ### Testing Changes
 ```bash
 # Edit files directly in Cursor (via Remote-SSH)
-# Files are already on registry4, no sync needed!
+# Files are already on dev host, no sync needed!
 
 # Test immediately
 cd /home/steve/aba
@@ -932,7 +932,7 @@ git commit -m "Fix XYZ"
 
 ### Adding New Features
 1. Discuss design first
-2. Implement directly on registry4 (via Remote-SSH)
+2. Implement directly on dev host (via Remote-SSH)
 3. Test immediately (no sync delay!)
 4. Iterate until working
 5. User commits when ready (always ask first!)
@@ -1265,7 +1265,7 @@ done
 ## Don't Forget!
 
 - ✅ **Never commit without permission**: Always ask user first!
-- ✅ **Remote-SSH workflow**: Already on registry4, no sync needed
+- ✅ **Remote-SSH workflow**: Already on dev host, no sync needed
 - ✅ **Ask before modifying**: Unknown scripts
 - ✅ **Use run_once**: For background/async work
 - ✅ **Tabs only**: No spaces in indentation
