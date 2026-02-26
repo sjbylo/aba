@@ -3321,16 +3321,25 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 	# --- Advanced sub-dialog ---
 	_show_advanced() {
 		local adv_default="1"
+		# Label for delete: show installed registry type from state.sh when known
+		local _state_file="$HOME/.aba/mirror/mirror/state.sh"
+		local _delete_label="Delete registry"
+		if [[ -s "$_state_file" ]]; then
+			local _vendor
+			_vendor=$(grep -E '^REG_VENDOR=' "$_state_file" 2>/dev/null | cut -d= -f2-)
+			if [[ -n "$_vendor" ]]; then
+				_delete_label="Delete registry (${_vendor^})"
+			fi
+		fi
 		while :; do
 			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_ADVANCED" \
 				--cancel-label "Back" \
 				--ok-label "Select" \
 				--default-item "$adv_default" \
-				--menu "Advanced actions:" 0 0 4 \
+				--menu "Advanced actions:" 0 0 3 \
 				1 "Generate ImageSet Config & Exit" \
-				2 "Delete Registry (Quay)" \
-				3 "Delete Registry (Docker)" \
-				4 "Exit (run commands manually)" \
+				2 "$_delete_label" \
+				3 "Exit (run commands manually)" \
 				2>"$TMP"
 			local arc=$?
 			
@@ -3345,7 +3354,7 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 					adv_default="1"; continue
 					;;
 				2)
-					log "User chose to delete Quay registry"
+					log "User chose to delete registry"
 					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 						dialog --colors --title "$TUI_TITLE_ERROR" --msgbox \
 							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
@@ -3356,17 +3365,6 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 					fi
 					;;
 				3)
-					log "User chose to delete Docker registry"
-					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-						dialog --colors --title "$TUI_TITLE_ERROR" --msgbox \
-							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
-						adv_default="3"; continue
-					fi
-					if ! confirm_and_execute "aba -d mirror uninstall -y"; then
-						adv_default="3"; continue
-					fi
-					;;
-				4)
 					log "User chose to exit and run commands manually"
 					clear
 					_show_exit_summary
@@ -3538,8 +3536,7 @@ SETTINGS (sub-menu):
 
 ADVANCED (sub-menu):
 • Generate ISConf & Exit  - Create YAML only (for manual oc-mirror)
-• Delete Registry (Quay)  - Uninstall Quay mirror registry
-• Delete Registry (Docker) - Uninstall Docker mirror registry
+• Delete registry        - Uninstall mirror registry (aba -d mirror uninstall)
 • Exit (manual)           - Exit TUI to run 'aba' commands yourself
 
 Log file: $LOG_FILE" 0 0 || true

@@ -52,7 +52,9 @@ sleep 1
 
 verify-mirror-conf || exit 1
 
-if [ ! "$data_dir" ]; then data_dir=~; fi
+if [ ! "$data_dir" ]; then
+	if [ "$reg_ssh_key" ]; then data_dir='~'; else data_dir=~; fi
+fi
 if [ ! "$reg_ssh_user" ]; then reg_ssh_user=$(whoami); fi
 
 ssh_conf_file=~/.aba/ssh.conf
