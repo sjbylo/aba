@@ -80,7 +80,7 @@ test_begin "Setup: install and configure aba"
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 # Simulate manual edit: set dns_servers to pool dnsmasq host
 e2e_run "Set dns_servers manually" \
@@ -88,7 +88,7 @@ e2e_run "Set dns_servers manually" \
 
 e2e_run -q "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run -q "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run -q "Verify aba.conf: channel" "grep ^ocp_channel=${TEST_CHANNEL:-stable} aba.conf"
+e2e_run -q "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
 e2e_run -q "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 # Copy vmware.conf and set the test VM folder
