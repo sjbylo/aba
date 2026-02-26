@@ -11,7 +11,8 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-mirror-conf)
 
-vendor="${reg_vendor:-auto}"
+# REG_VENDOR_OVERRIDE lets Makefile backward-compat aliases force a specific vendor
+vendor="${REG_VENDOR_OVERRIDE:-${reg_vendor:-auto}}"
 
 # Resolve "auto": Quay if available for this architecture, else Docker
 if [ "$vendor" = "auto" ]; then

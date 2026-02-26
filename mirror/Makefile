@@ -163,14 +163,14 @@ $(DOCKER_REG_FILE):
 
 .PHONY: install-docker-registry
 install-docker-registry:
-	@$(SCRIPTS)/run-once.sh -w -m "Waiting for Docker registry image download" -i mirror:download:docker-reg-image.tgz -- make -sC . docker-reg-image.tgz
-	@podman load -i $(DOCKER_REG_FILE)
-	@$(SCRIPTS)/reg-install-docker.sh
+	@REG_VENDOR_OVERRIDE=docker $(SCRIPTS)/reg-install.sh
+	$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 
 	@touch .installed
 
+.PHONY: uninstall-docker-registry
 uninstall-docker-registry: 
-	@$(SCRIPTS)/reg-uninstall-docker.sh
+	@$(SCRIPTS)/reg-uninstall.sh
 	@touch .uninstalled
 	@rm -f .installed 
 
@@ -181,7 +181,6 @@ mirror.conf: .init                                    ## Create the mirror.conf 
 
 install: .installed
 .installed: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into ~/.aba/mirror/ for existing registry.  See README.md.
-	@$(SCRIPTS)/ensure-cli.sh quay-registry
 	$(SCRIPTS)/reg-install.sh
 	$(SCRIPTS)/reg-verify.sh
 	@rm -f .uninstalled 
@@ -237,7 +236,7 @@ index: init catalogs-download catalogs-wait
 catalog: catalogs-download
 	@echo "[ABA] Warning: 'make catalog' is deprecated, use 'make catalogs-download' instead" >&2
 
-uninstall: .init mirror-registry .uninstalled     ## Uninstall any previously installed registry  
+uninstall: .init .uninstalled     ## Uninstall any previously installed registry  
 .uninstalled: 
 	$(SCRIPTS)/reg-uninstall.sh
 	@rm -f .installed
@@ -258,6 +257,7 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 	rm -rf regcreds
 	rm -f  reg-uninstall.sh 
 	rm -f  .rpms* 
+	rm -f  .reg_vendor
 	rm -f  save/oc-mirror-workspace 
 	rm -f  save/publish 
 
@@ -276,6 +276,7 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 	rm -f ~/.aba.previous.backup
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f .cmd.out
+	rm -f .reg_vendor
 
 
 # Registry credentials and state are stored persistently in ~/.aba/mirror/ and survive clean/reset.
