@@ -170,7 +170,7 @@ install-docker-registry:
 	@touch .installed
 
 uninstall-docker-registry: 
-	@$(SCRIPTS)/reg-docker-uninstall.sh
+	@$(SCRIPTS)/reg-uninstall-docker.sh
 	@touch .uninstalled
 	@rm -f .installed 
 
