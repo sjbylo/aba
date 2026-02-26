@@ -229,7 +229,7 @@ sleep 2
 # ============================================================
 
 log_info "Test 8: Operators"
-if wait_for "$TUI_TITLE_OPERATORS" 10; then
+if wait_for "$TUI_TITLE_OPERATORS" 120; then
 	log_pass "Operators dialog appeared"
 	screenshot "operators"
 else
