@@ -19,6 +19,7 @@ alwaysApply: true
 ## NEVER add AI attribution to commits
 
 - No "Co-authored-by: Cursor" or similar tags in commit messages
+- Add a git hook to remove the attribution from the commit message.
 
 ## Git workflow
 
@@ -49,7 +50,7 @@ alwaysApply: true
 
 ## File modification permissions
 
-- CAN modify freely: `test/func/*`, `ai/*`
+- CAN modify freely: `test/func/*`, `ai/*`, `test/*`
 - CAN modify with permission: `scripts/include_all.sh`, `scripts/aba.sh`
 - CANNOT modify without explicit request: all other `scripts/*.sh`, Makefiles
 
@@ -58,19 +59,21 @@ alwaysApply: true
 - Use TABS for indentation, never spaces
 - Empty lines must have NO characters (no trailing whitespace)
 - Add comments for non-obvious bash features
+- Format bash scripts with proper and correct indentaton (pretty print).
 
 ## Key architecture
 
-- Use `run_once()` for all task management -- never access `~/.aba/runner/` directly
+- Use `run_once()` for all task management -- never access `~/.aba/runner/` dir directly
 - Use relative paths -- avoid `$ABA_ROOT` (only `aba.sh` should use it)
 - Use `ensure_*()` functions for CLI tool installation
 - Symlinks handle cross-directory access (scripts use same paths everywhere)
+- Ensure ABA can always be used via make too, so the make targets always work directly with make as well.
 
 ## E2E test golden rules
 
-- Tests MUST fail on error -- never mask underlying issues
-- Never use `2>/dev/null` or `|| true` in test commands (use `e2e_diag` for diagnostic-only commands, or explicit precondition checks)
-- When a test fails, check if the fix belongs in ABA code FIRST -- never "fix" a test just to make it pass
+- Tests MUST fail on error -- never mask underlying issues!
+- Never use `2>/dev/null` or `|| true` in test commands unless there is a good reason to do so (use `e2e_diag` for diagnostic-only commands, or explicit precondition checks)
+- When a test fails, check if the fix belongs in ABA code FIRST -- never "fix" a test just to make it pass!
 - Uninstall from the same host that installed (e.g. registry installed from conN must be uninstalled from conN)
 - Never remove tools before operations that need them (e.g. `dnf remove make` before `aba reset`)
 - Verify cleanup actually worked (assert service is down, directory is gone)
