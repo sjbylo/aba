@@ -85,8 +85,10 @@ save/imageset-config-save.yaml: ../aba.conf catalogs-download catalogs-wait
 
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
+# Auth is verified only when building .installed (install); do not depend on verify here or we run
+# reg-verify.sh even when .installed is up-to-date (stale .installed => login fails before sync).
 .PHONY: sync
-sync: .init .rpmsint ~/.pull-secret.json                     install verify sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
+sync: .init .rpmsint ~/.pull-secret.json                     install sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
 
 ~/.pull-secret.json:
@@ -103,7 +105,7 @@ save: .init .rpmsext ~/.pull-secret.json                                        
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: .init               .rpmsint install verify  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
+load: .init               .rpmsint install  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-load.sh          $(retry)
 
 .PHONY: testload
@@ -237,7 +239,7 @@ catalog: catalogs-download
 	@echo "[ABA] Warning: 'make catalog' is deprecated, use 'make catalogs-download' instead" >&2
 
 uninstall: .init .uninstalled     ## Uninstall any previously installed registry  
-.uninstalled: 
+.uninstalled: mirror-registry
 	$(SCRIPTS)/reg-uninstall.sh
 	@rm -f .installed
 	@touch .uninstalled

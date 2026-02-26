@@ -40,16 +40,23 @@ if ask "Uninstall $vendor registry on remote host $REG_SSH_USER@$REG_HOST:$REG_R
 		quay)
 			aba_info "Uninstalling Quay registry on remote host $REG_HOST ..."
 
-			# Run mirror-registry uninstall on the remote host
-			if $_ssh "test -f $REG_ROOT/../mirror-registry"; then
-				$_ssh "cd $REG_ROOT/.. && ./mirror-registry uninstall -v --autoApprove $REG_ROOT_OPTS"
-			else
-				# Fallback: try to find mirror-registry in common locations
-				aba_warning "mirror-registry binary not found in expected location on $REG_HOST."
-				aba_warning "Attempting to stop Quay containers directly ..."
-				$_ssh "podman rm -f quay-postgres quay-redis quay-app 2>/dev/null; \
-					$SUDO rm -rf $REG_ROOT" || true
+			# Ensure mirror-registry binary is available on remote host (tarball provided by Makefile deps)
+			if ! $_ssh "test -f $REG_ROOT/../mirror-registry"; then
+				aba_info "mirror-registry not found on remote host, uploading ..."
+				tarball=""
+				for f in mirror-registry-*.tar.gz; do
+					[ -f "$f" ] && tarball="$f" && break
+				done
+				if [ -z "$tarball" ]; then
+					aba_abort "mirror-registry tarball not found in $(pwd). Run 'aba -d mirror uninstall' so the Makefile provides it."
+				fi
+				_scp="scp -i $REG_SSH_KEY -F $ssh_conf_file"
+				$_scp "$tarball" "$REG_SSH_USER@$REG_HOST:/tmp/"
+				$_ssh "cd /tmp && tar xf $tarball && mv mirror-registry $REG_ROOT/../"
+				$_ssh "rm -f /tmp/$tarball"
 			fi
+
+			$_ssh "cd $REG_ROOT/.. && ./mirror-registry uninstall -v --autoApprove $REG_ROOT_OPTS"
 			;;
 
 		docker)

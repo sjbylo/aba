@@ -47,9 +47,10 @@ aba_info "Installing Quay registry on localhost ..."
 reg_open_firewall
 
 # Ensure the quay_installer SSH key exists (used internally by mirror-registry)
-[ ! -s $HOME/.ssh/quay_installer ] && \
-	ssh-keygen -t ed25519 -f $HOME/.ssh/quay_installer -N '' >/dev/null && \
+if [ ! -s $HOME/.ssh/quay_installer ]; then
+	ssh-keygen -t ed25519 -f $HOME/.ssh/quay_installer -N '' >/dev/null
 	cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys
+fi
 
 cmd="./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host $reg_root_opts"
 

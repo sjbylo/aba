@@ -2298,9 +2298,9 @@ ensure_butane() {
 
 # Ensure mirror-registry (Quay) is installed (extracted)
 ensure_quay_registry() {
-	# Note: Download should already be started (like CLI tools)
-	# Called via ensure-cli.sh which cds to ABA_ROOT, so use -C mirror
-	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
+	local mirror_dir="mirror"
+	if [ -f mirror.conf ]; then mirror_dir="."; fi
+	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC "$mirror_dir" mirror-registry
 }
 
 # Get error output from a task (helper for error messages)
