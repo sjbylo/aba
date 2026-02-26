@@ -14,6 +14,7 @@ aba_debug "Starting: $0 vendor=$vendor $*"
 
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
+export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
 verify-aba-conf || true
 

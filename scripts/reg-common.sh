@@ -39,6 +39,7 @@ ssh_conf_file=~/.aba/ssh.conf
 reg_load_config() {
 	source <(normalize-aba-conf)
 	source <(normalize-mirror-conf)
+	export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
 	verify-aba-conf || exit 1
 	verify-mirror-conf || exit 1

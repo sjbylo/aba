@@ -8,6 +8,7 @@ aba_debug "Starting: $0 $*"
 aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
+export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
 verify-aba-conf || exit 1
 verify-mirror-conf || exit 1

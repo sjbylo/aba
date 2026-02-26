@@ -12,7 +12,7 @@ public_pull_secret_file_needed=1  # Only needed for 'save' and 'sync'
 umask 077
 
 source <(normalize-aba-conf)
-# $regcreds_dir is set by normalize-mirror-conf; ensure caller has sourced it when using mirror credentials.
+# $regcreds_dir is derived by mirror-side callers from $PWD, or by cluster-side callers from $mirror_name in cluster.conf.
 
 verify-aba-conf || exit 1
 

@@ -7,6 +7,7 @@ aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 source <(normalize-vmware-conf)  # Some values needed for install-config.yaml
 
