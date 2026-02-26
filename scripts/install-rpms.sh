@@ -14,14 +14,15 @@ aba_debug "Starting: $0 $*"
 
 [ "$1" = "internal" ] && rpms=$(cat templates/rpms-internal.txt) || rpms=$(cat templates/rpms-external.txt)
 
+# Note: python3 is NOT listed explicitly — it is pulled in automatically as a
+# dependency of python3-jinja2 (requires python(abi) = 3.x, provided only by
+# the python3 RPM). This holds for both RHEL 8 and 9.
 rpms_to_install=
 
 for rpm in $rpms
 do
 	rpm -q --quiet $rpm || rpms_to_install="$rpms_to_install $rpm" 
 done
-
-rpm -q --quiet python3 || rpm -q --quiet python36 || rpms_to_install=" python3$rpms_to_install"
 
 if [ "$rpms_to_install" ]; then
 	aba_info "Installing required rpm packages:$rpms_to_install (logging to .dnf-install.log). Please wait!"
