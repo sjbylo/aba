@@ -68,7 +68,10 @@ e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
 e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
-e2e_run "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
+e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=${TEST_CHANNEL:-stable} aba.conf"
+e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
@@ -181,7 +184,7 @@ e2e_run_remote "Create regcreds directory" \
 e2e_run_remote "Copy registry CA cert to regcreds" \
     "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"
 e2e_run_remote "Copy registry pull secret to regcreds" \
-    "cp -v ~/.e2e-pool-registry/quay-creds.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
+    "cp -v ~/.docker/config.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
 e2e_run_remote "Verify registry access with restored regcreds" \
     "cd ~/aba && aba -d mirror verify"
 
@@ -234,8 +237,12 @@ test_end
 # ============================================================================
 test_begin "Deploy vote-app"
 
-e2e_run_remote "Deploy vote-app" \
-    "cd ~/aba && test/deploy-test-app.sh"
+e2e_run_remote "Create demo project" \
+    "cd ~/aba && aba --dir $SNO cmd 'oc new-project demo' || true"
+e2e_run_remote -r 3 2 "Launch vote-app from mirror" \
+    "cd ~/aba && source <(cd mirror && normalize-mirror-conf) && aba --dir $SNO cmd \"oc new-app --insecure-registry=true --image \$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app --name vote-app -n demo\""
+e2e_run_remote "Wait for vote-app rollout" \
+    "cd ~/aba && aba --dir $SNO cmd 'oc rollout status deployment vote-app -n demo'"
 
 test_end
 

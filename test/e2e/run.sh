@@ -55,6 +55,7 @@ CLI_DESTROY=""
 CLI_STOP=""
 CLI_LIST=""
 CLI_ATTACH=""
+CLI_DEPLOY=""
 CLI_VERIFY=""
 CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
 
@@ -73,6 +74,7 @@ _usage() {
 	  run.sh --list                  List available suites
 	  run.sh stop                    Kill all runners on all pools
 	  run.sh --destroy               Destroy all pool VMs
+	  run.sh deploy [--pools N]      Sync local ABA repo to all conN hosts
 	  run.sh attach conN             Attach to conN's tmux session
 	  run.sh live [N]                Interactive multi-pane dashboard (read-write, handles prompts)
 	  run.sh dash [N]                Open multi-pane summary dashboard (auto-detects from pools.conf)
@@ -120,6 +122,7 @@ while [ $# -gt 0 ]; do
 		--list|-l)         CLI_LIST=1; shift ;;
 		--pools-file)      CLI_POOLS_FILE="$2"; shift 2 ;;
 		attach)            CLI_ATTACH="$2"; shift 2 ;;
+		deploy)            CLI_DEPLOY=1; shift ;;
 		live)              shift; CLI_LIVE=""
 		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_LIVE="$1"; shift; fi ;;
 		stop)              CLI_STOP=1; shift ;;
@@ -159,6 +162,8 @@ _ensure_govc() {
 	exit 1
 }
 
+_SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
 # --- Attach mode -------------------------------------------------------------
 
 if [ -n "$CLI_ATTACH" ]; then
@@ -177,6 +182,39 @@ if [ -n "$CLI_ATTACH" ]; then
 		"sess=\$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E '^e2e-(suite-|run)' | head -1); \
 		 if [ -n \"\$sess\" ]; then tmux attach -t \"\$sess\"; \
 		 else echo 'No e2e session found on ${host}.'; tmux list-sessions 2>/dev/null || echo '(no tmux sessions)'; fi"
+fi
+
+# --- Deploy mode --------------------------------------------------------------
+
+if [ -n "$CLI_DEPLOY" ]; then
+	echo ""
+	echo "  Deploying ABA repo to conN hosts ..."
+	for (( i=1; i<=CLI_POOLS; i++ )); do
+		user="${CON_SSH_USER:-steve}"
+		host="con${i}.${VM_BASE_DOMAIN:-example.com}"
+		target="${user}@${host}"
+		echo -n "    con${i}: "
+		rsync -a --delete \
+			--exclude '.git' \
+			--exclude '.backup' \
+			--exclude '*.swp' \
+			--exclude 'test/e2e/logs' \
+			--exclude 'mirror/save/mirror_*.tar' \
+			--exclude 'mirror/save/working-dir*' \
+			--exclude 'mirror/save/oc-mirror-workspace*' \
+			--exclude 'mirror/sync/working-dir*' \
+			--exclude 'mirror/sync/oc-mirror-workspace*' \
+			--exclude 'mirror/regcreds' \
+			--exclude '*/iso-agent-based*' \
+			--exclude 'bundles*' \
+			--exclude 'ai/' \
+			-e "ssh $_SSH_OPTS" \
+			"$_ABA_ROOT/" "${target}:~/aba/"
+		echo "done"
+	done
+	echo ""
+	echo "  Deploy complete. Retry failed steps with: run.sh attach conN"
+	exit 0
 fi
 
 # --- Stop mode ---------------------------------------------------------------
