@@ -18,11 +18,11 @@
 # =============================================================================
 
 # Guard against double-sourcing
-[ "${_REG_COMMON_LOADED:-}" ] && return 0
+if [ "${_REG_COMMON_LOADED:-}" ]; then return 0; fi
 _REG_COMMON_LOADED=1
 
 # Enable INFO messages when called from make (unless parent set --quiet)
-[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
+if [ -z "${INFO_ABA+x}" ]; then export INFO_ABA=1; fi
 
 source scripts/include_all.sh
 
@@ -48,7 +48,7 @@ reg_load_config() {
 	export reg_hostport="$reg_host:$reg_port"
 	export reg_url="https://$reg_hostport"
 
-	[ ! "$reg_ssh_user" ] && reg_ssh_user=$(whoami)
+	if [ ! "$reg_ssh_user" ]; then reg_ssh_user=$(whoami); fi
 }
 
 # --- reg_check_fqdn ----------------------------------------------------------
@@ -79,7 +79,7 @@ reg_check_fqdn() {
 	fi
 
 	# Add registry host to no_proxy when a proxy is in use
-	[ "$http_proxy" ] && export no_proxy="${no_proxy:+$no_proxy,}$reg_host"
+	if [ "$http_proxy" ]; then export no_proxy="${no_proxy:+$no_proxy,}$reg_host"; fi
 }
 
 # --- reg_detect_existing ------------------------------------------------------
@@ -125,7 +125,8 @@ reg_detect_existing() {
 # Also uses an SSH flag-file trick to detect when reg_host unexpectedly
 # reaches a remote machine (catches cases where IP matches a local interface
 # but SSH still lands elsewhere, or vice versa).
-# Issues warnings rather than hard errors since NAT/LB setups are common.
+# The IP mismatch check is a warning (NAT/LB setups are common), but the
+# SSH flag-file check aborts since it positively confirms a remote host.
 # Requires: fqdn_ip (call reg_check_fqdn first)
 reg_verify_localhost() {
 	local local_ips
@@ -148,13 +149,12 @@ reg_verify_localhost() {
 	local remote_hostname
 	if remote_hostname=$(ssh -F "$ssh_conf_file" "$reg_host" "touch $flag_file && hostname") >/dev/null 2>&1; then
 		if [ ! -f "$flag_file" ]; then
-			aba_warning \
+			aba_abort \
 				"Registry configured for *local* install (reg_ssh_key is not defined)." \
 				"But $reg_host resolves to $fqdn_ip, which reaches remote host [$remote_hostname] via SSH!" \
 				"Options:" \
 				"1. Update DNS so '$reg_host' resolves to this localhost '$(hostname -s)'." \
 				"2. Set 'reg_ssh_key' in mirror.conf for remote installation."
-			sleep 2
 		else
 			rm -f "$flag_file"
 			aba_info "SSH access to localhost via '$reg_host' is working."
@@ -220,7 +220,7 @@ reg_generate_password() {
 # but not running (offline mode).
 reg_open_firewall() {
 	local via_ssh=""
-	[ "${1:-}" = "--ssh" ] && via_ssh=1
+	if [ "${1:-}" = "--ssh" ]; then via_ssh=1; fi
 
 	local where="${via_ssh:+ on $reg_host}"
 	aba_info "Opening firewall port $reg_port${where} ..."
@@ -283,7 +283,7 @@ reg_post_install() {
 	local ca_source="$1"
 	local vendor="$2"
 	local via_ssh=""
-	[ "${3:-}" = "--ssh" ] && via_ssh=1
+	if [ "${3:-}" = "--ssh" ]; then via_ssh=1; fi
 
 	# Back up existing regcreds if present
 	if [ -d "$regcreds_dir" ]; then
@@ -305,7 +305,7 @@ reg_post_install() {
 	trust_root_ca "$regcreds_dir/rootCA.pem"
 
 	# Default reg_user if empty
-	[ ! "$reg_user" ] && reg_user=init
+	if [ ! "$reg_user" ]; then reg_user=init; fi
 
 	# Generate pull secret from template (uses enc_password, reg_host, reg_port)
 	aba_info "Generating $regcreds_dir/pull-secret-mirror.json"

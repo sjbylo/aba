@@ -59,7 +59,9 @@ $_ssh "set -x; rpm -q podman || $SUDO dnf install podman jq -y" >> .remote_host_
 $_ssh "set -x; rpm -q jq     || $SUDO dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
 $_ssh "set -x; podman images" >> .remote_host_check.out 2>&1 || err=1
 
-[ "$err" ] && aba_abort "Install 'podman' and 'jq' on remote host '$reg_host' and try again."
+if [ "$err" ]; then
+	aba_abort "Install 'podman' and 'jq' on remote host '$reg_host' and try again."
+fi
 
 # Resolve reg_root on remote host (~ may expand differently than localhost)
 reg_root=$($_ssh "echo $reg_root")

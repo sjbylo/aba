@@ -52,8 +52,8 @@ sleep 1
 
 verify-mirror-conf || exit 1
 
-[ ! "$data_dir" ] && data_dir=\~
-[ ! "$reg_ssh_user" ] && reg_ssh_user=$(whoami)
+if [ ! "$data_dir" ]; then data_dir=~; fi
+if [ ! "$reg_ssh_user" ]; then reg_ssh_user=$(whoami); fi
 
 ssh_conf_file=~/.aba/ssh.conf
 
@@ -67,7 +67,7 @@ if [ "$reg_ssh_key" ] && ssh -F $ssh_conf_file $reg_ssh_user@$reg_host podman ps
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
 		cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
 		aba_info "Running command: $cmd"
-		[ -d "$regcreds_dir" ] && rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"
+		if [ -d "$regcreds_dir" ]; then rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"; fi
 		$cmd || exit 1
 	else
 		exit 1
@@ -79,7 +79,7 @@ elif podman ps 2>/dev/null | grep -q registry; then
 	if ask "Mirror registry detected on localhost. Uninstall this mirror registry"; then
 		cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 		aba_info "Running command: $cmd"
-		[ -d "$regcreds_dir" ] && rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"
+		if [ -d "$regcreds_dir" ]; then rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"; fi
 		$cmd || exit 1
 	else
 		exit 1
