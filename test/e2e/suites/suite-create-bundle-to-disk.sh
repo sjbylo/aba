@@ -86,7 +86,10 @@ e2e_run "Configure aba.conf" \
 e2e_run "Set dns_servers manually" \
     "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
-e2e_run -q "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
+e2e_run -q "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
+e2e_run -q "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+e2e_run -q "Verify aba.conf: channel" "grep ^ocp_channel=${TEST_CHANNEL:-stable} aba.conf"
+e2e_run -q "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 # Copy vmware.conf and set the test VM folder
 e2e_run "Copy vmware.conf" "cp -v $VF vmware.conf"

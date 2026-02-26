@@ -81,7 +81,10 @@ e2e_run "Configure aba.conf with previous version" \
 e2e_run "Set dns_servers manually" \
     "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
-e2e_run "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
+e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=${TEST_CHANNEL:-stable} aba.conf"
+e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
@@ -118,7 +121,7 @@ e2e_run "Source aba.conf and compute older version" "
 
 e2e_run "Set aba to older version for initial bundle" \
     "aba -v \$(cat /tmp/e2e-ocp-version-older)"
-e2e_run "Show configured version" "grep -o '^ocp_version=[^ ]*' aba.conf"
+e2e_run "Verify aba.conf: version matches older" "grep ^ocp_version=\$(cat /tmp/e2e-ocp-version-older) aba.conf"
 
 test_end
 
@@ -253,8 +256,12 @@ test_end
 test_begin "Deploy: vote-app with IDMS"
 
 # --- (a) Deploy directly from mirror registry path ---
-e2e_run_remote "Deploy vote-app (direct mirror path)" \
-    "cd ~/aba && test/deploy-test-app.sh"
+e2e_run_remote "Create demo project" \
+    "cd ~/aba && aba --dir $SNO cmd 'oc new-project demo' || true"
+e2e_run_remote -r 3 2 "Launch vote-app from mirror (direct path)" \
+    "cd ~/aba && source <(cd mirror && normalize-mirror-conf) && aba --dir $SNO cmd \"oc new-app --insecure-registry=true --image \$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app --name vote-app -n demo\""
+e2e_run_remote "Wait for vote-app rollout" \
+    "cd ~/aba && aba --dir $SNO cmd 'oc rollout status deployment vote-app -n demo'"
 
 # Clean up before IDMS test
 e2e_run_remote "Delete demo project" \
