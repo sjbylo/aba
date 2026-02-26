@@ -160,10 +160,16 @@ test_begin "Tar-pipe transfer to bastion"
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
 
+e2e_run_remote "Remove dialog RPM to force dnf install path" \
+    "sudo dnf remove -y dialog"
+e2e_run_remote "Remove stale dnf log" \
+    "cd ~/aba && rm -f .dnf-install.log"
 e2e_run_remote "Install aba on internal bastion" \
     "cd ~/aba && ./install"
+e2e_run_remote "Verify dialog was reinstalled" \
+    "rpm -q dialog"
 e2e_run_remote "Verify single dnf batch (no duplicate install)" \
-    "cd ~/aba && test \$(grep -c 'Transaction Summary' .dnf-install.log 2>/dev/null) -le 1"
+    "cd ~/aba && test \$(grep -c 'Transaction Summary' .dnf-install.log) -eq 1"
 
 test_end
 
