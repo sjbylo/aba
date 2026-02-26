@@ -136,7 +136,7 @@ ifeq ($(arch),aarch64)
 		echo "[ABA] ERROR: Failed to download $(MR_TARBALL)" ; \
 		echo "[ABA] The mirror-registry binary for arm64 may not be available yet." ; \
 		echo "[ABA] Check $(mirror_registry_url) for available builds." ; \
-		echo "[ABA] Workaround: use a Docker registry instead -- run 'aba -d mirror install-docker-registry'" ; \
+		echo "[ABA] Workaround: use a Docker registry instead -- set reg_vendor=docker in mirror.conf and run 'aba -d mirror install'" ; \
 		exit 1 ; \
 	}
 else
