@@ -85,8 +85,15 @@ export _E2E_INTERACTIVE=1
 
 if ! command -v govc &>/dev/null; then
 	echo "  Bootstrapping govc ..."
-	cd "$_ABA_ROOT" && aba --dir cli ~/bin/govc
+	cd "$_ABA_ROOT" && aba --dir cli govc || {
+		echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
+		exit 1
+	}
 	export PATH="$HOME/bin:$PATH"
+	command -v govc &>/dev/null || {
+		echo "  ERROR: govc not found in PATH after bootstrap." >&2
+		exit 1
+	}
 fi
 
 # Source VMware credentials for snapshot revert
@@ -127,13 +134,21 @@ _revert_dis_snapshot() {
 	echo ""
 	echo "  Reverting $DIS_VM to snapshot '$snapshot' ..."
 
-	if ! govc snapshot.tree -vm "$DIS_VM" 2>/dev/null | grep "$snapshot"; then
-		echo "  WARNING: Snapshot '$snapshot' not found on $DIS_VM -- skipping revert"
-		return 0
+	local snap_out
+	if ! snap_out=$(govc snapshot.tree -vm "$DIS_VM" 2>&1); then
+		echo "  ERROR: govc snapshot.tree failed for $DIS_VM:" >&2
+		echo "  $snap_out" >&2
+		return 1
+	fi
+
+	if ! echo "$snap_out" | grep -q "$snapshot"; then
+		echo "  ERROR: Snapshot '$snapshot' not found on $DIS_VM." >&2
+		echo "  Available snapshots: $snap_out" >&2
+		return 1
 	fi
 
 	govc snapshot.revert -vm "$DIS_VM" "$snapshot" || { echo "  ERROR: revert $DIS_VM failed" >&2; return 1; }
-	govc vm.power -on "$DIS_VM" 2>/dev/null || true
+	govc vm.power -on "$DIS_VM" || { echo "  ERROR: failed to power on $DIS_VM" >&2; return 1; }
 	sleep "${VM_BOOT_DELAY:-8}"
 
 	local dis_host="${DIS_SSH_USER:-steve}@${DIS_VM}.${VM_BASE_DOMAIN:-example.com}"

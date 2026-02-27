@@ -51,13 +51,24 @@ if ask "Uninstall $vendor registry on remote host $REG_SSH_USER@$REG_HOST:$REG_R
 				if [ -z "$tarball" ]; then
 					aba_abort "mirror-registry tarball not found in $(pwd). Run 'aba -d mirror uninstall' so the Makefile provides it."
 				fi
+
+				# Use a unique temp dir to avoid conflicts with leftover files from previous runs
+				remote_tmp="/tmp/aba-reg-uninstall-$$"
+				$_ssh "mkdir -p $remote_tmp" || aba_abort "Failed to create temp dir on $REG_HOST"
+				trap '$_ssh "rm -rf $remote_tmp" 2>/dev/null' EXIT
+
 				_scp="scp -i $REG_SSH_KEY -F $ssh_conf_file"
-				$_scp "$tarball" "$REG_SSH_USER@$REG_HOST:/tmp/"
-				$_ssh "cd /tmp && tar xf $tarball && mv mirror-registry $REG_ROOT/../"
-				$_ssh "rm -f /tmp/$tarball"
+				$_scp "$tarball" "$REG_SSH_USER@$REG_HOST:$remote_tmp/" || \
+					aba_abort "Failed to copy mirror-registry tarball to $REG_HOST"
+				$_ssh "cd $remote_tmp && tar xmf $tarball && mv mirror-registry $REG_ROOT/../" || \
+					aba_abort "Failed to extract/move mirror-registry on $REG_HOST"
+				$_ssh "rm -rf $remote_tmp"
 			fi
 
-			$_ssh "cd $REG_ROOT/.. && ./mirror-registry uninstall -v --autoApprove $REG_ROOT_OPTS"
+			aba_info "Running: mirror-registry uninstall on $REG_HOST ..."
+			if ! $_ssh "cd $REG_ROOT/.. && ./mirror-registry uninstall -v --autoApprove $REG_ROOT_OPTS"; then
+				aba_abort "Quay mirror-registry uninstall failed on $REG_HOST"
+			fi
 			;;
 
 		docker)
