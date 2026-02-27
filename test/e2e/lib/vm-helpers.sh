@@ -219,8 +219,7 @@ _vm_setup_network_connected() {
 
 		nmcli connection modify ens192 \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens192
 
 		nmcli connection modify ens256 \
@@ -232,8 +231,7 @@ _vm_setup_network_connected() {
 		nmcli connection modify ens224 \
 		    ipv4.method disabled \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens224
 
 		nmcli -g NAME connection show | grep "^ens224\.10$" && \
@@ -275,15 +273,13 @@ _vm_setup_network_disconnected() {
 
 		nmcli connection modify ens192 \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens192
 
 		nmcli connection modify ens224 \
 		    ipv4.method disabled \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens224
 
 		nmcli -g NAME connection show | grep "^ens224\.10$" && \

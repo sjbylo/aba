@@ -5,13 +5,13 @@
 # Runs a SINGLE suite.  run.sh dispatches one suite at a time to each pool;
 # when the suite finishes, run.sh dispatches the next one.
 #
-# This script runs INSIDE a tmux session on conN (session name: e2e-suite-NAME).
+# This script runs INSIDE a tmux session on conN (session name: $E2E_TMUX_PREFIX-NAME).
 # Interactive mode is always on -- failures pause and wait for user input.
 #
 # Usage (sent by run.sh via tmux send-keys):
 #   bash ~/aba/test/e2e/runner.sh POOL_NUM suite_name
 #
-# Exit code is written to /tmp/e2e-suite-<suite>.rc so run.sh can poll it.
+# Exit code is written to $E2E_RC_PREFIX-<suite>.rc so run.sh can poll it.
 #
 # Environment:
 #   Config files (config.env, pools.conf) are scp'd to conN by run.sh.
@@ -21,6 +21,8 @@ set -u
 
 _RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$(cd "$_RUNNER_DIR/../.." && pwd)"
+
+source "$_RUNNER_DIR/lib/constants.sh"
 
 # --- Parse arguments ----------------------------------------------------------
 
@@ -33,8 +35,8 @@ POOL_NUM="$1"; shift
 export POOL_NUM
 SUITE="$1"; shift
 
-LOCK_FILE="/tmp/e2e-suite-${SUITE}.lock"
-RC_FILE="/tmp/e2e-suite-${SUITE}.rc"
+LOCK_FILE="${E2E_RC_PREFIX}-${SUITE}.lock"
+RC_FILE="${E2E_RC_PREFIX}-${SUITE}.rc"
 
 # --- Concurrent run protection -----------------------------------------------
 
@@ -148,7 +150,8 @@ _revert_dis_snapshot() {
 	fi
 
 	govc snapshot.revert -vm "$DIS_VM" "$snapshot" || { echo "  ERROR: revert $DIS_VM failed" >&2; return 1; }
-	govc vm.power -on "$DIS_VM" || { echo "  ERROR: failed to power on $DIS_VM" >&2; return 1; }
+	# Power on may fail if VM is already on after revert — that's benign
+	govc vm.power -on "$DIS_VM" 2>/dev/null || true
 	sleep "${VM_BOOT_DELAY:-8}"
 
 	local dis_host="${DIS_SSH_USER:-steve}@${DIS_VM}.${VM_BASE_DOMAIN:-example.com}"

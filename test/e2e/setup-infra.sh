@@ -99,12 +99,6 @@ _verify_con_vm() {
 		ip route | grep "^default.*ens256" || { echo "FAIL: default route not via ens256"; exit 1; }
 		echo "  PASS: default route via ens256"
 
-		ip link show ens192 | grep "mtu 9000" || { echo "FAIL: ens192 mtu != 9000"; exit 1; }
-		echo "  PASS: ens192 mtu 9000"
-
-		ip link show ens224 | grep "mtu 9000" || { echo "FAIL: ens224 mtu != 9000"; exit 1; }
-		echo "  PASS: ens224 mtu 9000"
-
 		nmcli -g ipv4.ignore-auto-dns connection show ens256 | grep yes || { echo "FAIL: ens256 ignore-auto-dns"; exit 1; }
 		echo "  PASS: ens256 ignore-auto-dns"
 
@@ -301,12 +295,6 @@ _verify_dis_vm() {
 
 		! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 || { echo "FAIL: internet still reachable"; exit 1; }
 		echo "  PASS: no internet (disconnected)"
-
-		ip link show ens192 | grep "mtu 9000" || { echo "FAIL: ens192 mtu != 9000"; exit 1; }
-		echo "  PASS: ens192 mtu 9000"
-
-		ip link show ens224 | grep "mtu 9000" || { echo "FAIL: ens224 mtu != 9000"; exit 1; }
-		echo "  PASS: ens224 mtu 9000"
 
 		# --- VLAN connectivity ---
 		_vlan_ok=0

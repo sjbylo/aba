@@ -18,11 +18,14 @@ required_pkgs=($(printf '%s\n' "${required_pkgs[@]}" | sort -u))  # Deduplicate
 missing_pkgs=()
 
 # Check which packages are missing ...
-# Note: python3 must be listed explicitly in the rpm lists.  On RHEL 8,
-# python3-jinja2 depends on python(abi) = 3.6 which is satisfied by
-# platform-python (/usr/libexec/platform-python), so python3 (which
-# provides /usr/bin/python3) is NOT pulled in automatically.
+# On RHEL 8, `rpm -q python3` fails even after `dnf install python3` because
+# the actual RPM is `python36` (or `python3.11`, etc.).  DNF resolves the
+# virtual provide, but rpm -q does not.  So we check for /usr/bin/python3
+# instead of the RPM name to avoid re-running dnf on every invocation.
 for pkg in "${required_pkgs[@]}"; do
+	if [ "$pkg" = "python3" ]; then
+		[ -x /usr/bin/python3 ] && continue
+	fi
 	if ! rpm -q "$pkg" >/dev/null; then
 		missing_pkgs+=("$pkg")
 	fi
@@ -34,7 +37,7 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 if [ ${#missing_pkgs[@]} -gt 0 ]; then
 	# try our luck to install the missing packages ...
-	echo "Installing required rpms: ${missing_pkgs[*]} (logging to .dnf-install.log). Please wait!"
+	echo "Installing required rpms: ${missing_pkgs[*]} (logging to .dnf-install.log). Please wait!" >&2
 
 	if ! $SUDO dnf install ${missing_pkgs[*]} -y >.dnf-install.log 2>&1; then
 		echo

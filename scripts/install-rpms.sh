@@ -14,14 +14,16 @@ aba_debug "Starting: $0 $*"
 
 [ "$1" = "internal" ] && rpms=$(cat templates/rpms-internal.txt) || rpms=$(cat templates/rpms-external.txt)
 
-# Note: python3 must be listed explicitly in the rpm lists.  On RHEL 8,
-# python3-jinja2 depends on python(abi) = 3.6 which is satisfied by
-# platform-python (/usr/libexec/platform-python), so python3 (which
-# provides /usr/bin/python3) is NOT pulled in automatically.
+# On RHEL 8, `rpm -q python3` fails even after `dnf install python3`
+# because the actual RPM is `python36` (or `python3.11`, etc.).
+# DNF resolves the virtual provide, but rpm -q does not.
+# Check for /usr/bin/python3 instead to avoid re-running dnf every time.
 rpms_to_install=
 
 for rpm in $rpms
 do
+	# Skip python3 RPM check if the binary already exists (RHEL 8 compat)
+	[ "$rpm" = "python3" ] && [ -x /usr/bin/python3 ] && continue
 	rpm -q --quiet $rpm || rpms_to_install="$rpms_to_install $rpm" 
 done
 
@@ -30,7 +32,7 @@ if [ "$rpms_to_install" ]; then
 	if ! $SUDO dnf install $rpms_to_install -y >> .dnf-install.log 2>&1; then
 		echo_red "Warning: an error occured during rpm installation. See the logs at .dnf-install.log." >&2
 		echo_red "If dnf cannot be used to install rpm packages, please install the following packages manually and try again!" >&2
-		echo_magenta "$rpms_to_install"
+		echo_magenta "$rpms_to_install" >&2
 
 		exit 1
 	fi

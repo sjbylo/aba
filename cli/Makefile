@@ -194,6 +194,11 @@ out-download:
 out-download-all:
 	echo oc:$(ocp_version) oc-mirror openshift-install:$(ocp_version) butane govc
 
+# Version-independent tools only (oc-mirror, butane, govc don't need ocp_version)
+# govc is excluded when platform=bm (same as out-download)
+out-download-no-version:
+	echo oc-mirror butane $(govc_bin)
+
 
 ########################################
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)

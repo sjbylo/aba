@@ -371,10 +371,6 @@ init_bastion() {
 		nmcli connection show
 		ip a
 
-		# Set this for faster data transfer 
-		ip link set ens192 mtu 9000
-		ip link set ens224 mtu 9000
-
 		####################################
 		#### Set up private /24 net     ####
 		####################################
