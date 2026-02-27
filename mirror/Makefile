@@ -56,7 +56,7 @@ init: .init
 	ln -fs $(SCRIPTS) 
 	ln -fs ../cli
 	ln -fs ../aba.conf
-	ln -fs . mirror
+	ln -fsn . mirror
 	mkdir -p ~/.aba/mirror/$$(basename $$PWD)
 	ln -sfn ~/.aba/mirror/$$(basename $$PWD) regcreds
 	touch .init

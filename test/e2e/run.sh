@@ -189,29 +189,40 @@ fi
 if [ -n "$CLI_DEPLOY" ]; then
 	echo ""
 	echo "  Deploying ABA repo to conN hosts ..."
+	# Build a clean tarball once (excludes binaries, tarballs, IDE/test state)
+	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
+	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
+		--exclude='.git' \
+		--exclude='.backup' \
+		--exclude='.cursor' \
+		--exclude='*.swp' \
+		--exclude='images' \
+		--exclude='test/e2e/logs' \
+		--exclude='*/iso-agent-based*' \
+		--exclude='bundles*' \
+		--exclude='ai' \
+		--exclude='demo*' \
+		--exclude='sno' \
+		--exclude='*.tar' \
+		--exclude='*.tar.gz' \
+		--exclude='.dnf-install.log' \
+		--exclude='*.bk' \
+		.
+	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
+	echo "  Tarball: $_deploy_size"
+	echo ""
 	for (( i=1; i<=CLI_POOLS; i++ )); do
 		user="${CON_SSH_USER:-steve}"
 		host="con${i}.${VM_BASE_DOMAIN:-example.com}"
 		target="${user}@${host}"
 		echo -n "    con${i}: "
-		rsync -a --delete \
-			--exclude '.git' \
-			--exclude '.backup' \
-			--exclude '*.swp' \
-			--exclude 'test/e2e/logs' \
-			--exclude 'mirror/save/mirror_*.tar' \
-			--exclude 'mirror/save/working-dir*' \
-			--exclude 'mirror/save/oc-mirror-workspace*' \
-			--exclude 'mirror/sync/working-dir*' \
-			--exclude 'mirror/sync/oc-mirror-workspace*' \
-			--exclude 'mirror/regcreds' \
-			--exclude '*/iso-agent-based*' \
-			--exclude 'bundles*' \
-			--exclude 'ai/' \
-			-e "ssh $_SSH_OPTS" \
-			"$_ABA_ROOT/" "${target}:~/aba/"
+		# Wipe remote, pipe tarball over SSH, extract in place
+		ssh $_SSH_OPTS "${target}" "rm -rf ~/aba && mkdir ~/aba" || true
+		scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz"
+		ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"
 		echo "done"
 	done
+	rm -f "$_deploy_tar"
 	echo ""
 	echo "  Deploy complete. Retry failed steps with: run.sh attach conN"
 	exit 0
