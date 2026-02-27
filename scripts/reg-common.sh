@@ -265,6 +265,28 @@ reg_open_firewall() {
 	fi
 }
 
+# --- reg_ensure_remote_pkgs ---------------------------------------------------
+# Ensure required packages are installed on a remote host via SSH.
+# Usage: reg_ensure_remote_pkgs <ssh_cmd> <pkg1> [pkg2 ...]
+reg_ensure_remote_pkgs() {
+	local ssh_cmd="$1"; shift
+	local pkgs="$*"
+
+	local missing
+	missing=$($ssh_cmd "for pkg in $pkgs; do rpm -q \$pkg >/dev/null 2>&1 || echo \$pkg; done")
+
+	if [ "$missing" ]; then
+		aba_info "Installing missing packages on remote host: $missing"
+		$ssh_cmd "$SUDO dnf install -y $missing" >> .remote_host_check.out 2>&1 || true
+		local still_missing
+		still_missing=$($ssh_cmd "for pkg in $missing; do rpm -q \$pkg >/dev/null 2>&1 || echo \$pkg; done")
+		if [ "$still_missing" ]; then
+			aba_abort "Failed to install on remote host: $still_missing" \
+				"See .remote_host_check.out for details."
+		fi
+	fi
+}
+
 # --- reg_post_install ---------------------------------------------------------
 # Post-install steps common to all registry vendors:
 #   1. Back up old regcreds directory (if any)
@@ -298,7 +320,10 @@ reg_post_install() {
 	# Copy CA certificate to regcreds
 	if [ "$via_ssh" ]; then
 		aba_info "Fetching root CA from remote host: $ca_source"
-		scp -i "$reg_ssh_key" -F "$ssh_conf_file" -p "$ca_source" "$regcreds_dir/rootCA.pem"
+		if ! scp -i "$reg_ssh_key" -F "$ssh_conf_file" -p "$ca_source" "$regcreds_dir/rootCA.pem"; then
+			aba_abort "Failed to fetch root CA from remote host: $ca_source" \
+				"The registry install may have failed — check the output above."
+		fi
 	else
 		# eval handles ~ in paths
 		eval cp "$ca_source" "$regcreds_dir/rootCA.pem"

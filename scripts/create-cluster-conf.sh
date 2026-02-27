@@ -62,7 +62,11 @@ elif [ "$type" = "compact" ]; then
 fi
 
 # This takes quite a few exported vars as input
-scripts/j2 templates/cluster.conf.j2 > cluster.conf 
+if ! scripts/j2 templates/cluster.conf.j2 > cluster.conf; then
+	rm -f cluster.conf
+	echo_red "Error: failed to render cluster.conf (is python3 installed?)."
+	exit 1
+fi
 
 # For sno, ensure these values are commented out as they are not needed!
 [ "$type" = "sno" ] && sed -E -i -e "s/^api_vip=[^ \t]*/#api_vip=not-required/g" -e "s/^ingress_vip=[^ \t]*/#ingress_vip=not-required/g" cluster.conf

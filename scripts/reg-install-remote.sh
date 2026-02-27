@@ -53,15 +53,13 @@ aba_info "SSH access to $reg_ssh_user@$reg_host is working."
 aba_info "Checking prerequisites on remote host $reg_host (see .remote_host_check.out) ..."
 
 > .remote_host_check.out
-err=
 $_ssh "set -x; ip a" >> .remote_host_check.out 2>&1
-$_ssh "set -x; rpm -q podman || $SUDO dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
-$_ssh "set -x; rpm -q jq     || $SUDO dnf install podman jq -y" >> .remote_host_check.out 2>&1 || err=1
-$_ssh "set -x; podman images" >> .remote_host_check.out 2>&1 || err=1
 
-if [ "$err" ]; then
-	aba_abort "Install 'podman' and 'jq' on remote host '$reg_host' and try again."
-fi
+reg_ensure_remote_pkgs "$_ssh" podman jq hostname tar openssl
+
+$_ssh "podman images" >> .remote_host_check.out 2>&1 || \
+	aba_abort "podman is not working on remote host '$reg_host'." \
+		"See .remote_host_check.out for details."
 
 # Resolve reg_root on remote host (~ may expand differently than localhost)
 reg_root=$($_ssh "echo $reg_root")
@@ -78,6 +76,7 @@ reg_open_firewall --ssh
 # --- Vendor-specific install ---
 remote_dir="/tmp/aba-reg-install-$$"
 $_ssh "mkdir -p $remote_dir"
+trap '$_ssh "rm -rf $remote_dir" 2>/dev/null' EXIT
 
 _scp="scp -i $reg_ssh_key -F $ssh_conf_file"
 _target="$reg_ssh_user@$reg_host"
@@ -96,10 +95,14 @@ case "$vendor" in
 		aba_info "Copying mirror-registry tarball to remote host ..."
 		$_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
 
-		cmd="cd $remote_dir && tar xf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_host --initUser $reg_user --initPassword '\$REG_PW' $reg_root_opts"
+		cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_host --initUser $reg_user --initPassword '\$REG_PW' $reg_root_opts"
 
-		aba_info "Running Quay install on remote host ..."
-		$_ssh "export REG_PW='$reg_pw' && $cmd"
+		aba_info "Extracting and installing Quay registry on remote host ..."
+		aba_info "  ssh $reg_ssh_user@$reg_host: ./mirror-registry install -v --quayHostname $reg_host --initUser $reg_user --initPassword *** $reg_root_opts"
+		if ! $_ssh "export REG_PW='$reg_pw' && $cmd"; then
+			aba_abort "Quay mirror-registry install failed on remote host $reg_host." \
+				"Check the output above for details."
+		fi
 
 		remote_ca="$reg_root/quay-rootCA/rootCA.pem"
 		;;
@@ -120,7 +123,8 @@ case "$vendor" in
 		REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
 
 		aba_info "Running Docker registry install on remote host ..."
-		$_ssh "
+		aba_info "  ssh $reg_ssh_user@$reg_host: podman run -d -p ${reg_port}:5000 --name registry docker.io/library/registry:latest"
+		if ! $_ssh "
 			set -e
 			podman load -i $remote_dir/docker-reg-image.tgz
 			mkdir -p '$REGISTRY_DATA_DIR' '$REGISTRY_CERTS_DIR' '$REGISTRY_AUTH_DIR'
@@ -159,7 +163,10 @@ case "$vendor" in
 				-e 'REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm' \
 				-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
 				docker.io/library/registry:latest
-		"
+		"; then
+			aba_abort "Docker registry install failed on remote host $reg_host." \
+				"Check the output above for details."
+		fi
 
 		remote_ca="$REGISTRY_CERTS_DIR/ca.crt"
 		;;
@@ -175,5 +182,4 @@ reg_post_install "$_target:$remote_ca" "$vendor" --ssh
 # Leave breadcrumb on remote
 echo "Registry installed from $(hostname):$PWD" | $_ssh "cat > $reg_root/.install.source"
 
-# Cleanup temp dir on remote
-$_ssh "rm -rf $remote_dir"
+# Cleanup handled by EXIT trap
