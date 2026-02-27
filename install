@@ -11,16 +11,17 @@ uname -o | grep -q "^Darwin$" && echo "Install ABA on RHEL, Centos Stream or Fed
 
 # We need git, which, id, diff commands to run this script (not always available in a container) ... 
 # Other rpm packages that ABA requires are copied into the below lines at build time (which aren't available yet!)
-required_pkgs=(which file hostname diffutils git make jq python3-jinja2 python3-pyyaml ncurses)
-required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which diffutils dialog podman httpd-tools skopeo)  # Synced from templates/rpms-external.txt
-required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd)  # Synced from templates/rpms-internal.txt
+required_pkgs=(which file hostname diffutils git make jq python3 python3-jinja2 python3-pyyaml ncurses)
+required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which diffutils dialog podman httpd-tools skopeo)  # Synced from templates/rpms-external.txt
+required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd)  # Synced from templates/rpms-internal.txt
 required_pkgs=($(printf '%s\n' "${required_pkgs[@]}" | sort -u))  # Deduplicate
 missing_pkgs=()
 
 # Check which packages are missing ...
-# Note: python3 is NOT listed explicitly — it is pulled in automatically as a
-# dependency of python3-jinja2 (requires python(abi) = 3.x, provided only by
-# the python3 RPM). This holds for both RHEL 8 and 9.
+# Note: python3 must be listed explicitly in the rpm lists.  On RHEL 8,
+# python3-jinja2 depends on python(abi) = 3.6 which is satisfied by
+# platform-python (/usr/libexec/platform-python), so python3 (which
+# provides /usr/bin/python3) is NOT pulled in automatically.
 for pkg in "${required_pkgs[@]}"; do
 	if ! rpm -q "$pkg" >/dev/null; then
 		missing_pkgs+=("$pkg")

@@ -478,24 +478,23 @@ _interactive_prompt() {
 
         case "$ans" in
             r|R|"")
-                _e2e_log "User chose: retry"
+                _e2e_log_and_print "  >> $(_e2e_cyan "Retrying ...")"
                 return 2
                 ;;
             s)
-                _e2e_log "User chose: skip test"
+                _e2e_log_and_print "  >> $(_e2e_yellow "Skipping test")"
                 return 0
                 ;;
             S)
-                _e2e_log "User chose: skip entire suite"
+                _e2e_log_and_print "  >> $(_e2e_yellow "Skipping entire suite")"
                 return 3
                 ;;
             0)
-                _e2e_log "User chose: restart suite"
+                _e2e_log_and_print "  >> $(_e2e_cyan "Restarting suite")"
                 return 4
                 ;;
             a|A)
-                _e2e_log "User chose: abort"
-                echo "Aborting."
+                _e2e_log_and_print "  >> $(_e2e_red "Aborting")"
                 exit 1
                 ;;
             !*)

@@ -275,12 +275,12 @@ test-cmd -m "Installing sno cluster with 'aba cluster -n sno -t sno --step $defa
 test-cmd -m "Delete cluster (if needed)" aba --dir sno delete 
 test-cmd -m "Delete the remote registry" aba --dir mirror uninstall 
 
-# Regression test: verify 'make clean' resets run_once state and binary can be re-extracted
-test-cmd -m "Verify mirror:reg:install run_once state exists before clean" "test -d ~/.aba/runner/mirror:reg:install"
-test-cmd -m "Run mirror clean" "aba --dir mirror clean"
-test-cmd -m "Verify mirror:reg:install run_once state cleared after clean" "test ! -d ~/.aba/runner/mirror:reg:install"
-test-cmd -m "Verify mirror-registry binary removed by clean" "test ! -f mirror/mirror-registry"
-test-cmd -m "Re-extract mirror-registry binary after clean (must not be skipped)" "make -C mirror mirror-registry"
+# Regression test: verify 'make reset' clears run_once state and binary can be re-extracted
+test-cmd -m "Verify mirror:reg:install run_once state exists before reset" "test -d ~/.aba/runner/mirror:reg:install"
+test-cmd -m "Run mirror reset" "aba --dir mirror reset --force"
+test-cmd -m "Verify mirror:reg:install run_once state cleared after reset" "test ! -d ~/.aba/runner/mirror:reg:install"
+test-cmd -m "Verify mirror-registry binary removed by reset" "test ! -f mirror/mirror-registry"
+test-cmd -m "Re-extract mirror-registry binary after reset (must not be skipped)" "make -C mirror mirror-registry"
 test-cmd -m "Verify mirror-registry binary exists after re-extract" "test -x mirror/mirror-registry"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verify remote mirror uninstalled" "podman ps | tee /dev/tty | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"

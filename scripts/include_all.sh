@@ -649,9 +649,10 @@ normalize-vmware-conf()
 
 install_rpms() {
 	# Try to install the RPMs only if they are missing
-	# Note: python3 is NOT listed explicitly — it is pulled in automatically as a
-	# dependency of python3-jinja2 (requires python(abi) = 3.x, provided only by
-	# the python3 RPM). This holds for both RHEL 8 and 9.
+	# Note: python3 must be listed explicitly in the rpm lists.  On RHEL 8,
+	# python3-jinja2 depends on python(abi) = 3.6 which is satisfied by
+	# platform-python (/usr/libexec/platform-python), so python3 (which
+	# provides /usr/bin/python3) is NOT pulled in automatically.
 	local rpms_to_install=
 
 	for rpm in $@
@@ -2017,6 +2018,7 @@ probe_host() {
 	local desc="${2:-$url}"
 	
 	aba_debug "Probing $desc"
+	aba_debug "curl -sSf --connect-timeout 5 --max-time 15 --retry 2 -ILk $url"
 	
 	# -s: silent (no progress bar)
 	# -S: show errors even when silent
