@@ -41,9 +41,11 @@ if ask "Uninstall $vendor registry on remote host $REG_SSH_USER@$REG_HOST:$REG_R
 		quay)
 			aba_info "Uninstalling Quay registry on remote host $REG_HOST ..."
 
-			# Ensure mirror-registry binary is available on remote host (tarball provided by Makefile deps)
-			if ! $_ssh "test -f $REG_ROOT/../mirror-registry"; then
-				aba_info "mirror-registry not found on remote host, uploading ..."
+			# Ensure mirror-registry binary AND its supporting files are on remote host.
+			# mirror-registry needs execution-environment.tar, image-archive.tar, sqlite3.tar
+			# in the same directory — check for all of them, not just the binary.
+			if ! $_ssh "test -f $REG_ROOT/../mirror-registry && test -f $REG_ROOT/../execution-environment.tar"; then
+				aba_info "mirror-registry or supporting files not found on remote host, uploading ..."
 				tarball=""
 				for f in mirror-registry-*.tar.gz; do
 					[ -f "$f" ] && tarball="$f" && break
@@ -60,8 +62,11 @@ if ask "Uninstall $vendor registry on remote host $REG_SSH_USER@$REG_HOST:$REG_R
 				_scp="scp -i $REG_SSH_KEY -F $ssh_conf_file"
 				$_scp "$tarball" "$REG_SSH_USER@$REG_HOST:$remote_tmp/" || \
 					aba_abort "Failed to copy mirror-registry tarball to $REG_HOST"
-				$_ssh "cd $remote_tmp && tar xmf $tarball && mv mirror-registry $REG_ROOT/../" || \
-					aba_abort "Failed to extract/move mirror-registry on $REG_HOST"
+				# Extract directly into REG_ROOT/.. so mirror-registry binary AND its
+				# supporting files (execution-environment.tar, image-archive.tar, sqlite3.tar)
+				# are all in the same directory where mirror-registry expects them.
+				$_ssh "tar -C $REG_ROOT/.. -xmzf $remote_tmp/$tarball" || \
+					aba_abort "Failed to extract mirror-registry on $REG_HOST"
 				$_ssh "rm -rf $remote_tmp"
 			fi
 
