@@ -295,6 +295,9 @@ mylog "Configure mirror to install on internal bastion (remote host) in custom d
 reg_ssh_user=testy
 reg_ssh_key=${reg_ssh_user}_rsa
 
+# Re-create mirror.conf after reset (reset destroys it)
+test-cmd -m "Re-create mirror.conf after reset" make -C mirror mirror.conf
+
 test-cmd -m "Checking values in $PWD/mirror/mirror.conf" cat mirror/mirror.conf | cut -d\# -f1| sed '/^[ \t]*$/d'
 
 #sed -i "s/registry.example.com/$int_bastion_hostname /g" ./mirror/mirror.conf	# Install on registry2 
