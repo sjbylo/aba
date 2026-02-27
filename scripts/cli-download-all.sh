@@ -15,13 +15,16 @@ aba_debug "Starting: $0 $*"
 
 ro_opt=
 out=Downloading
-[ "$1" = "--wait" ] && ro_opt="-q -w" && out=Waiting && shift
+wait_mode=false
+[ "$1" = "--wait" ] && ro_opt="-q -w" && out=Waiting && wait_mode=true && shift
 [ "$1" = "--reset" ] && ro_opt=-r && out=Resetting && shift
 tool_filter=("$@")  # remaining args are tool names (empty = all)
 aba_debug "Mode: $out (ro_opt=$ro_opt) filter=[${tool_filter[*]}]"
 
 export PLAIN_OUTPUT=1
 aba_debug "PLAIN_OUTPUT=1 (suppressing progress indicators)"
+
+showed_wait_msg=false
 
 aba_debug "Fetching download list from cli/Makefile"
 for item in $(make --no-print-directory -sC cli out-download-all)
@@ -32,6 +35,14 @@ do
 	if [[ ${#tool_filter[@]} -gt 0 ]] && ! printf '%s\n' "${tool_filter[@]}" | grep -qx "$tool"; then
 		aba_debug "Skipping $tool (not in filter)"
 		continue
+	fi
+
+	# In --wait mode, show a message only once and only if a download is still pending
+	if $wait_mode && ! $showed_wait_msg; then
+		if ! run_once -p -i "cli:download:$item" 2>/dev/null; then
+			aba_info "Ensuring CLI downloads are complete ..."
+			showed_wait_msg=true
+		fi
 	fi
 
 	aba_debug "$out: item=$item tool=$tool"

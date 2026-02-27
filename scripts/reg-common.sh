@@ -273,13 +273,17 @@ reg_ensure_remote_pkgs() {
 	local pkgs="$*"
 
 	local missing
-	missing=$($ssh_cmd "for pkg in $pkgs; do rpm -q \$pkg >/dev/null 2>&1 || echo \$pkg; done")
+	# SSH output is newline-separated; convert to spaces so it can be safely
+	# interpolated into subsequent SSH commands (for loops, dnf install, etc.)
+	missing=$($ssh_cmd "for pkg in $pkgs; do rpm -q \$pkg >/dev/null 2>&1 || echo \$pkg; done" | tr '\n' ' ')
+	missing="${missing% }"  # trim trailing space
 
 	if [ "$missing" ]; then
 		aba_info "Installing missing packages on remote host: $missing"
 		$ssh_cmd "$SUDO dnf install -y $missing" >> .remote_host_check.out 2>&1 || true
 		local still_missing
-		still_missing=$($ssh_cmd "for pkg in $missing; do rpm -q \$pkg >/dev/null 2>&1 || echo \$pkg; done")
+		still_missing=$($ssh_cmd "for pkg in $missing; do rpm -q \$pkg >/dev/null 2>&1 || echo \$pkg; done" | tr '\n' ' ')
+		still_missing="${still_missing% }"
 		if [ "$still_missing" ]; then
 			aba_abort "Failed to install on remote host: $still_missing" \
 				"See .remote_host_check.out for details."

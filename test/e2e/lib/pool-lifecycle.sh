@@ -1000,7 +1000,7 @@ prepare_golden_vm() {
 				return 0
 			fi
 			echo "  Snapshot is ${age_hours}h old (max: ${max_age_hours}h) -- stale, destroying ..."
-		elif govc snapshot.tree -vm "$golden_name" 2>/dev/null | grep "$snapshot_name"; then
+		elif govc snapshot.tree -vm "$golden_name" 2>&1 | grep -q "$snapshot_name"; then
 			echo "  No stamp file but '$snapshot_name' snapshot exists -- reusing (recreating stamp)."
 			date +%s > "$stamp_file"
 			return 0

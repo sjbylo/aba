@@ -169,7 +169,7 @@ clone_vm() {
     # Use -snapshot for linked clones when the source has snapshots.
     # VMware templates and VMs without snapshots require a full clone.
     local snap_flag=""
-    if govc snapshot.tree -vm "$source_vm" 2>/dev/null | grep .; then
+    if govc snapshot.tree -vm "$source_vm" 2>&1 | grep -v "^govc:" | grep -q .; then
         snap_flag="-snapshot=$snapshot"
     fi
 

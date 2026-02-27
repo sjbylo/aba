@@ -560,7 +560,7 @@ _prepare_golden() {
 	fi
 
 	if vm_exists "$_GOLDEN_NAME"; then
-		if govc snapshot.tree -vm "$_GOLDEN_NAME" 2>/dev/null | grep "$snapshot_name"; then
+		if govc snapshot.tree -vm "$_GOLDEN_NAME" 2>&1 | grep -q "$snapshot_name"; then
 			echo "  Golden VM exists with '$snapshot_name' snapshot -- reusing."
 			echo "  (Use -G/--recreate-golden to force rebuild)"
 			echo "=== Phase 0 complete ==="
@@ -753,8 +753,8 @@ for (( i=1; i<=_POOLS; i++ )); do
 	con_vm="con${i}"
 	dis_vm="dis${i}"
 
-	if govc snapshot.tree -vm "$con_vm" 2>/dev/null | grep "$_SNAPSHOT_NAME" \
-	   && govc snapshot.tree -vm "$dis_vm" 2>/dev/null | grep "$_SNAPSHOT_NAME"; then
+	if govc snapshot.tree -vm "$con_vm" 2>&1 | grep -q "$_SNAPSHOT_NAME" \
+	   && govc snapshot.tree -vm "$dis_vm" 2>&1 | grep -q "$_SNAPSHOT_NAME"; then
 		if [ -z "$_RECREATE_VMS" ]; then
 			echo "  $con_vm + $dis_vm: pool-ready snapshot exists -- skipping config"
 			continue
@@ -817,7 +817,7 @@ echo "=== Phase 3: Create pool-ready snapshots ==="
 for (( i=1; i<=_POOLS; i++ )); do
 	for prefix in con dis; do
 		vm_name="${prefix}${i}"
-		if govc snapshot.tree -vm "$vm_name" 2>/dev/null | grep "$_SNAPSHOT_NAME"; then
+		if govc snapshot.tree -vm "$vm_name" 2>&1 | grep -q "$_SNAPSHOT_NAME"; then
 			if [ -z "$_RECREATE_VMS" ]; then
 				echo "  $vm_name: $_SNAPSHOT_NAME already exists -- skipping"
 				continue
