@@ -5,7 +5,7 @@
 ABA_VERSION=20260226143439
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260227183416
+ABA_BUILD=20260228075031
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -204,14 +204,19 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 [ "$*" ] && interactive_mode= && have_args=1
 
 # For non-interactive mode (aba bundle, aba -d mirror save, etc.):
-# Start CLI downloads early to maximize parallel download time
+# Start CLI downloads early to maximize parallel download time.
 # For interactive mode: Wait until after user input (line ~1152) to avoid
-# bandwidth contention that could slow down reaching the user prompts
-# Only start early CLI downloads when ocp_version is known (many targets
-# like mirror install/uninstall don't need it and aba.conf may not exist yet)
-if [ ! "$interactive_mode" ] && [ "$ocp_version" ]; then
-	aba_debug "Non-interactive mode detected - starting CLI downloads early"
-	$ABA_ROOT/scripts/cli-download-all.sh
+# bandwidth contention that could slow down reaching the user prompts.
+# When ocp_version is unknown, still download version-independent tools
+# (oc-mirror, butane, govc) via --no-version to save time.
+if [ ! "$interactive_mode" ]; then
+	if [ "$ocp_version" ]; then
+		aba_debug "Non-interactive mode - starting all CLI downloads early"
+		$ABA_ROOT/scripts/cli-download-all.sh
+	else
+		aba_debug "Non-interactive mode - starting version-independent CLI downloads early"
+		$ABA_ROOT/scripts/cli-download-all.sh --no-version
+	fi
 fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 

@@ -240,19 +240,19 @@ _vm_setup_default_route() {
 }
 
 # --- _vm_setup_network ------------------------------------------------------
-# Configure network: VLAN interface, MTU, nmcli adjustments, hostname.
+# Configure network: VLAN interface, nmcli adjustments, hostname.
 # Auto-detects role from clone name: con* = connected, dis* = disconnected.
 #
 # Connected bastion (con#):
-#   ens192  = lab (DHCP, MTU 9000, never-default -- NOT the default route)
-#   ens224  = base for VLAN (disabled, MTU 9000)
+#   ens192  = lab (DHCP, never-default -- NOT the default route)
+#   ens224  = base for VLAN (disabled)
 #   ens224.10 = VLAN to dis# (static IP, never-default)
 #   ens256  = internet (DHCP, IS the default route)
 #   hostname = con#
 #
 # Disconnected bastion (dis#):
-#   ens192  = lab (DHCP, MTU 9000, IS the default route)
-#   ens224  = base for VLAN (disabled, MTU 9000)
+#   ens192  = lab (DHCP, IS the default route)
+#   ens224  = base for VLAN (disabled)
 #   ens224.10 = VLAN to con# (static IP, never-default)
 #   ens256  = disabled (disconnected host has no internet)
 #   hostname = dis#
@@ -300,8 +300,7 @@ _vm_setup_network_connected() {
 		# --- ens192: lab network (NOT default route) ---
 		nmcli connection modify ens192 \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens192
 
 		# --- ens256: internet (IS the default route) ---
@@ -317,8 +316,7 @@ _vm_setup_network_connected() {
 		nmcli connection modify ens224 \
 		    ipv4.method disabled \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens224
 
 		# --- ens224.10: VLAN to disconnected bastion ---
@@ -378,16 +376,14 @@ _vm_setup_network_disconnected() {
 		# --- ens192: lab network (NOT the default route) ---
 		nmcli connection modify ens192 \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens192
 
 		# --- ens224: base for VLAN (no IP, just carrier) ---
 		nmcli connection modify ens224 \
 		    ipv4.method disabled \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens224
 
 		# --- ens224.10: VLAN to connected bastion ---
@@ -1059,7 +1055,7 @@ prepare_golden_vm() {
 # (ens224.10) so the disconnected bastion can reach it via NAT masquerade.
 #
 # NICs:
-#   ens192     = private lab (DHCP, MTU 9000)
+#   ens192     = private lab (DHCP)
 #   ens224.10  = VLAN to disconnected bastion (static IP from VM_CLONE_VLAN_IPS)
 #   ens256     = internet (DHCP, default route)
 #

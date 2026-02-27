@@ -37,6 +37,8 @@ fi
 _RUN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
 
+source "$_RUN_DIR/lib/constants.sh"
+
 # --- CLI Variables -----------------------------------------------------------
 
 CLI_SUITE=""
@@ -244,7 +246,7 @@ if [ -n "$CLI_STOP" ]; then
 			tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E '^e2e-(suite-|run)' | while read -r s; do
 				tmux kill-session -t \"\$s\" 2>/dev/null
 			done
-			rm -f /tmp/e2e-suite-*.rc /tmp/e2e-suite-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock
+			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock
 			echo stopped
 		" 2>/dev/null; then
 			:
@@ -587,13 +589,14 @@ done
 # sessions), making the dispatcher Ctrl-C safe: restart run.sh and it
 # reconnects to running suites and resumes dispatching.
 #
-# rc file convention:  /tmp/e2e-suite-<suite>.rc  (contains exit code)
-# tmux session name:   e2e-suite-<suite>
-# lock file:           /tmp/e2e-suite-<suite>.lock
+# rc file convention:  $E2E_RC_PREFIX-<suite>.rc  (contains exit code)
+# tmux session name:   $E2E_TMUX_PREFIX-<suite>
+# lock file:           $E2E_RC_PREFIX-<suite>.lock
+# All prefixes defined in lib/constants.sh (single source of truth).
 # =============================================================================
 
-_TMUX_PREFIX="e2e-suite"
-_RC_PREFIX="/tmp/e2e-suite"
+_TMUX_PREFIX="$E2E_TMUX_PREFIX"
+_RC_PREFIX="$E2E_RC_PREFIX"
 
 # Tracking arrays (populated by _detect_running_and_completed)
 declare -A _completed=()    # suite -> exit_code
@@ -685,8 +688,7 @@ _detect_running_and_completed() {
 				[ -z "$rc_file" ] && continue
 				local fname
 				fname=$(basename "$rc_file" .rc)
-				# fname = e2e-suite-<suite>
-				local suite="${fname#e2e-suite-}"
+				local suite="${fname#${E2E_TMUX_PREFIX}-}"
 				local rc
 				rc=$(_ssh_con "$p" "cat '$rc_file' 2>/dev/null" 2>/dev/null || true)
 				rc="${rc//[^0-9]/}"
@@ -696,7 +698,7 @@ _detect_running_and_completed() {
 			done <<< "$rc_files"
 		fi
 
-		# Check for running suites (tmux sessions named e2e-suite-*)
+		# Check for running suites (tmux sessions named ${E2E_TMUX_PREFIX}-*)
 		local sessions
 		sessions=$(_ssh_con "$p" "tmux list-sessions -F '#{session_name}' 2>/dev/null" 2>/dev/null || true)
 		if [ -n "$sessions" ]; then
