@@ -262,11 +262,11 @@ test_end
 test_begin "Deploy vote-app"
 
 e2e_run_remote "Create demo project" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc new-project demo' || true"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc new-project demo' || true"
 e2e_run_remote -r 3 2 "Launch vote-app from mirror" \
-    "cd ~/aba && source <(cd mirror && normalize-mirror-conf) && aba --dir $SNO cmd \"oc new-app --insecure-registry=true --image \$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app --name vote-app -n demo\""
+    "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && aba --dir $SNO run --cmd \"oc new-app --insecure-registry=true --image \$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app --name vote-app -n demo\""
 e2e_run_remote "Wait for vote-app rollout" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc rollout status deployment vote-app -n demo'"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc rollout status deployment vote-app -n demo'"
 
 test_end
 
@@ -291,13 +291,13 @@ test_end
 test_begin "ACM: MultiClusterHub"
 
 e2e_run_remote "Install ACM subscription" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc apply -f test/acm-subs.yaml'"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f test/acm-subs.yaml'"
 e2e_run_remote -r 10 1.5 "Wait for ACM operator" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc get csv -n open-cluster-management -o name | grep advanced-cluster-management'"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get csv -n open-cluster-management -o name | grep advanced-cluster-management'"
 e2e_run_remote "Install MultiClusterHub" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc apply -f test/acm-mch.yaml'"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f test/acm-mch.yaml'"
 e2e_run_remote -r 20 1.5 "Wait for MCH ready" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc get multiclusterhub -n open-cluster-management -o jsonpath={.items[0].status.phase} | grep Running'"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get multiclusterhub -n open-cluster-management -o jsonpath={.items[0].status.phase} | grep Running'"
 
 test_end
 
@@ -309,7 +309,7 @@ test_begin "NTP: day2 and chronyc verify"
 e2e_run_remote "Apply day2 NTP config" \
     "cd ~/aba && aba --dir $SNO day2-ntp"
 e2e_run_remote -r 3 2 "Verify chronyc sources" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc debug node/\$(oc get nodes -o name | head -1 | cut -d/ -f2) -- chroot /host chronyc sources' | grep $NTP_IP"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc debug node/\$(oc get nodes -o name | head -1 | cut -d/ -f2) -- chroot /host chronyc sources' | grep $NTP_IP"
 
 test_end
 
