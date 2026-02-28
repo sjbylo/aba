@@ -52,12 +52,16 @@ CLI_CLEAN=""
 CLI_DRY_RUN=""
 CLI_FORCE=""
 CLI_POOL=""
-CLI_LAST=""
+CLI_RESUME=""
 CLI_DESTROY=""
 CLI_STOP=""
 CLI_LIST=""
 CLI_ATTACH=""
 CLI_DEPLOY=""
+CLI_RESTART=""
+CLI_STATUS=""
+CLI_START=""
+_CLI_POOLS_SET=""
 CLI_VERIFY=""
 CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
 
@@ -72,11 +76,15 @@ _usage() {
 	  run.sh --all --pools 3         Run all suites across 3 pools
 	  run.sh --suite NAME            Run one suite on a free pool
 	  run.sh --suite X --pool 2      Run suite on a specific pool
-	  run.sh --last --pool 3         Re-run last suite on a pool
+	  run.sh --resume --pool 3       Reconnect and start scheduling again for a specific pool
 	  run.sh --list                  List available suites
 	  run.sh stop                    Kill all runners on all pools
+	  run.sh start [--pools N]       Power on pool VMs (conN + disN)
 	  run.sh --destroy               Destroy all pool VMs
 	  run.sh deploy [--pools N]      Sync local ABA repo to all conN hosts
+	  run.sh restart [--pools N]     Stop + deploy + re-run last suite(s) on all pools
+	  run.sh restart --pool N        Stop + deploy + re-run last suite on one pool
+	  run.sh status [--pools N]      Show what's running on each pool
 	  run.sh attach conN             Attach to conN's tmux session
 	  run.sh live [N]                Interactive multi-pane dashboard (read-write, handles prompts)
 	  run.sh dash [N]                Open multi-pane summary dashboard (auto-detects from pools.conf)
@@ -91,7 +99,7 @@ _usage() {
 	  --recreate-vms         Force reclone all conN/disN from golden
 	  --clean                Clear checkpoints before running
 	  --pool N               Target a specific pool (default: round-robin)
-	  --last                 Re-run the last suite(s) dispatched to --pool N
+	  --resume               Reconnect to running suite(s) and continue scheduling on --pool N
 	  -y, --yes              Auto-accept prompts (e.g. broken VM replacement)
 	  -f, --force            Clean slate: wipe suite state on conN before dispatching
 	                         Combine with --pool N or --suite X for targeted cleanup
@@ -109,7 +117,7 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--suite|--suites)  CLI_SUITE="$2"; shift 2 ;;
 		--all)             CLI_ALL=1; shift ;;
-		-p|--pools)           CLI_POOLS="$2"; shift 2 ;;
+		-p|--pools)           CLI_POOLS="$2"; _CLI_POOLS_SET=1; shift 2 ;;
 		-G|--recreate-golden) CLI_RECREATE_GOLDEN=1; shift ;;
 		-R|--recreate-vms)    CLI_RECREATE_VMS=1; shift ;;
 		-y|--yes)          CLI_YES=1; shift ;;
@@ -118,16 +126,19 @@ while [ $# -gt 0 ]; do
 		--dry-run)         CLI_DRY_RUN=1; shift ;;
 		-f|--force)        CLI_FORCE=1; shift ;;
 		--pool)            CLI_POOL="$2"; shift 2 ;;
-		--last)            CLI_LAST=1; shift ;;
+		--resume)          CLI_RESUME=1; shift ;;
 		--destroy)         CLI_DESTROY=1; shift ;;
 		--verify)          CLI_VERIFY=1; shift ;;
 		--list|-l)         CLI_LIST=1; shift ;;
 		--pools-file)      CLI_POOLS_FILE="$2"; shift 2 ;;
 		attach)            CLI_ATTACH="$2"; shift 2 ;;
 		deploy)            CLI_DEPLOY=1; shift ;;
+		restart)           CLI_RESTART=1; shift ;;
+		status)            CLI_STATUS=1; shift ;;
 		live)              shift; CLI_LIVE=""
 		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_LIVE="$1"; shift; fi ;;
 		stop)              CLI_STOP=1; shift ;;
+		start)             CLI_START=1; shift ;;
 		dash)              shift; CLI_DASHBOARD=""; CLI_DASH_LOG="summary.log"
 		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_DASHBOARD="$1"; shift; fi
 		                   if [[ "${1:-}" == "log" ]]; then CLI_DASH_LOG="latest.log"; shift; fi ;;
@@ -139,6 +150,15 @@ done
 # --- Pool flag adjustment ----------------------------------------------------
 
 [ -n "$CLI_POOL" ] && [ "$CLI_POOL" -gt "$CLI_POOLS" ] && CLI_POOLS="$CLI_POOL"
+
+# Auto-detect pool count from pools.conf for operational commands (stop, deploy,
+# restart) when --pools was not explicitly given.  Dispatch commands (--all,
+# --suite) keep the CLI_POOLS default of 1.
+_pool_count_from_conf() {
+	grep -c '^[^#]' "$CLI_POOLS_FILE" 2>/dev/null || echo "$CLI_POOLS"
+}
+_OP_POOLS="$CLI_POOLS"
+[ -z "$_CLI_POOLS_SET" ] && _OP_POOLS=$(_pool_count_from_conf)
 
 # --- Source config -----------------------------------------------------------
 
@@ -165,6 +185,44 @@ _ensure_govc() {
 }
 
 _SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+# --- Shared: create a tmux dashboard with one tail pane per pool --------------
+# Usage: _create_tmux_dashboard SESSION_NAME NUM_POOLS LOG_FILE
+_create_tmux_dashboard() {
+	local _sess="$1" _np="$2" _logfile="${3:-summary.log}"
+	local _user="${CON_SSH_USER:-steve}"
+	local _domain="${VM_BASE_DOMAIN:-example.com}"
+
+	_dash_pane_cmd() {
+		local _p=$1
+		local _h="con${_p}.${_domain}"
+		echo "printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; echo '=== Pool ${_p} (con${_p}) [${_logfile}] ==='; while true; do ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/aba/test/e2e/logs/${_logfile}' 2>/dev/null && break; echo 'Waiting for con${_p} ...'; sleep 10; done"
+	}
+
+	tmux kill-session -t "$_sess" 2>/dev/null || true
+
+	if [ "$_np" -le 2 ]; then
+		tmux new-session -d -s "$_sess" "$(_dash_pane_cmd 1)"
+		for (( _dp=2; _dp<=_np; _dp++ )); do
+			tmux split-window -t "$_sess" -v "$(_dash_pane_cmd $_dp)"
+		done
+		tmux select-layout -t "$_sess" even-vertical 2>/dev/null
+	else
+		tmux new-session -d -s "$_sess" "$(_dash_pane_cmd 1)"
+		local _tl
+		_tl=$(tmux list-panes -t "$_sess" -F '#{pane_id}' | head -1)
+		tmux split-window -h -t "$_tl" "$(_dash_pane_cmd 2)"
+		local _tr
+		_tr=$(tmux list-panes -t "$_sess" -F '#{pane_id}' | tail -1)
+		tmux split-window -v -t "$_tl" "$(_dash_pane_cmd 3)"
+		if [ "$_np" -ge 4 ]; then
+			tmux split-window -v -t "$_tr" "$(_dash_pane_cmd 4)"
+		fi
+	fi
+	tmux set-option -t "$_sess" allow-rename on 2>/dev/null
+	tmux set-option -t "$_sess" pane-border-status top 2>/dev/null
+	tmux set-option -t "$_sess" pane-border-format " #{pane_title} " 2>/dev/null
+}
 
 # --- Attach mode -------------------------------------------------------------
 
@@ -213,16 +271,29 @@ if [ -n "$CLI_DEPLOY" ]; then
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 	echo "  Tarball: $_deploy_size"
 	echo ""
-	for (( i=1; i<=CLI_POOLS; i++ )); do
+	for (( i=1; i<=_OP_POOLS; i++ )); do
 		user="${CON_SSH_USER:-steve}"
 		host="con${i}.${VM_BASE_DOMAIN:-example.com}"
 		target="${user}@${host}"
 		echo -n "    con${i}: "
-		# Wipe remote, pipe tarball over SSH, extract in place
-		ssh $_SSH_OPTS "${target}" "rm -rf ~/aba && mkdir ~/aba" || true
-		scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz"
-		ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"
-		echo "done"
+
+		# Skip pools with running suites unless --force is used
+		if [ -z "$CLI_FORCE" ]; then
+			_running_sess=$(ssh $_SSH_OPTS "${target}" \
+				"tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E '^${E2E_TMUX_PREFIX}-'" 2>/dev/null || true)
+			if [ -n "$_running_sess" ]; then
+				echo "RUNNING (skipped -- use --force to deploy anyway)"
+				continue
+			fi
+		fi
+
+		if ssh $_SSH_OPTS "${target}" "rm -rf ~/aba && mkdir ~/aba" 2>/dev/null &&
+		   scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
+		   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
+			echo "done"
+		else
+			echo "FAILED (unreachable?)"
+		fi
 	done
 	rm -f "$_deploy_tar"
 	echo ""
@@ -233,7 +304,7 @@ fi
 # --- Stop mode ---------------------------------------------------------------
 
 if [ -n "$CLI_STOP" ]; then
-	_num_pools=$(grep -c '^[^#]' "$CLI_POOLS_FILE" 2>/dev/null || echo "$CLI_POOLS")
+	_num_pools="$_OP_POOLS"
 	_stop_ssh="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 	_user="${CON_SSH_USER:-steve}"
 	_domain="${VM_BASE_DOMAIN:-example.com}"
@@ -258,6 +329,215 @@ if [ -n "$CLI_STOP" ]; then
 	exit 0
 fi
 
+# --- Start mode: power on pool VMs ------------------------------------------
+
+if [ -n "$CLI_START" ]; then
+	_ensure_govc
+	_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+	[ -f "$_vmconf" ] && { set -a; source "$_vmconf"; set +a; }
+
+	echo ""
+	echo "  Powering on pool VMs (pools 1..$_OP_POOLS) ..."
+	for (( p=1; p<=_OP_POOLS; p++ )); do
+		for prefix in con dis; do
+			vm="${prefix}${p}"
+			_state=$(govc vm.info -json "$vm" 2>/dev/null | grep -o '"powerState":"[^"]*"' | head -1 || true)
+			if [[ "$_state" == *"poweredOn"* ]]; then
+				echo "    ${vm}: already on"
+			elif govc vm.info "$vm" &>/dev/null; then
+				govc vm.power -on "$vm" 2>/dev/null || true
+				echo "    ${vm}: powered on"
+			else
+				echo "    ${vm}: not found (skipped)"
+			fi
+		done
+	done
+	echo ""
+	echo "  Done. Wait ~30s for SSH, then: run.sh deploy --pools $_OP_POOLS"
+	exit 0
+fi
+
+# --- Restart mode: stop + deploy + re-launch last suite(s) -------------------
+
+if [ -n "$CLI_RESTART" ]; then
+	_restart_ssh="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+	_user="${CON_SSH_USER:-steve}"
+	_domain="${VM_BASE_DOMAIN:-example.com}"
+
+	# Determine target pools (--pool N = single, --pools N / auto-detect)
+	if [ -n "$CLI_POOL" ]; then
+		_restart_pools=("$CLI_POOL")
+	else
+		_restart_pools=()
+		for (( p=1; p<=_OP_POOLS; p++ )); do _restart_pools+=("$p"); done
+	fi
+
+	echo ""
+	echo "=== Restart: pool(s) ${_restart_pools[*]} ==="
+
+	# 1) Stop
+	echo ""
+	echo "  [1/3] Stopping suites ..."
+	for p in "${_restart_pools[@]}"; do
+		_host="con${p}.${_domain}"
+		printf "    con${p}: "
+		if ssh $_restart_ssh "${_user}@${_host}" "
+			tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E '^e2e-(suite-|run)' | while read -r s; do
+				tmux kill-session -t \"\$s\" 2>/dev/null
+			done
+			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock
+			echo stopped
+		" 2>/dev/null; then
+			:
+		else
+			echo "unreachable"
+		fi
+	done
+
+	# 2) Deploy
+	echo ""
+	echo "  [2/3] Deploying ..."
+	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
+	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
+		--exclude='.git' \
+		--exclude='.backup' \
+		--exclude='.cursor' \
+		--exclude='*.swp' \
+		--exclude='images' \
+		--exclude='test/e2e/logs' \
+		--exclude='*/iso-agent-based*' \
+		--exclude='bundles*' \
+		--exclude='ai' \
+		--exclude='demo*' \
+		--exclude='sno' \
+		--exclude='*.tar' \
+		--exclude='*.tar.gz' \
+		--exclude='.dnf-install.log' \
+		--exclude='*.bk' \
+		.
+	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
+	echo "    Tarball: $_deploy_size"
+	for p in "${_restart_pools[@]}"; do
+		_host="con${p}.${_domain}"
+		_target="${_user}@${_host}"
+		echo -n "    con${p}: "
+		if ssh $_restart_ssh "${_target}" "rm -rf ~/aba && mkdir ~/aba" 2>/dev/null &&
+		   scp $_restart_ssh "$_deploy_tar" "${_target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
+		   ssh $_restart_ssh "${_target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
+			echo "done"
+		else
+			echo "FAILED (unreachable?)"
+		fi
+	done
+	rm -f "$_deploy_tar"
+
+	# 3) Re-launch last suite on each pool
+	echo ""
+	echo "  [3/3] Re-launching last suite(s) ..."
+	_restart_ok=0
+	_restart_fail=0
+	for p in "${_restart_pools[@]}"; do
+		_host="con${p}.${_domain}"
+		_last=$(ssh $_restart_ssh "${_user}@${_host}" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null || true)
+		if [ -z "$_last" ]; then
+			echo "    con${p}: skipped (no previous suite or unreachable)"
+			(( _restart_fail++ ))
+			continue
+		fi
+		read -ra _last_suites <<< "$_last"
+		for suite in "${_last_suites[@]}"; do
+			_tmux_name="${E2E_TMUX_PREFIX}-${suite}"
+			_runner_cmd="bash ~/aba/test/e2e/runner.sh $p $suite"
+			if ssh $_restart_ssh "${_user}@${_host}" "tmux new-session -d -s '$_tmux_name' '$_runner_cmd'" 2>/dev/null; then
+				echo "    con${p}: dispatched $suite (tmux: $_tmux_name)"
+				(( _restart_ok++ ))
+			else
+				echo "    con${p}: FAILED to dispatch $suite"
+				(( _restart_fail++ ))
+			fi
+		done
+	done
+
+	echo ""
+	echo "  Restart complete: ${_restart_ok} suite(s) launched, ${_restart_fail} pool(s) skipped."
+	echo "  Monitor: run.sh dash ${#_restart_pools[@]}"
+	echo "  Attach:  run.sh attach conN"
+	exit 0
+fi
+
+# --- Status mode --------------------------------------------------------------
+
+if [ -n "$CLI_STATUS" ]; then
+	_status_ssh="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+	_user="${CON_SSH_USER:-steve}"
+	_domain="${VM_BASE_DOMAIN:-example.com}"
+
+	printf "\n  %-6s  %-10s  %-40s  %s\n" "POOL" "STATE" "SUITE" "LAST OUTPUT"
+	printf "  %-6s  %-10s  %-40s  %s\n" "------" "----------" "----------------------------------------" "--------------------"
+
+	for (( p=1; p<=_OP_POOLS; p++ )); do
+		_host="con${p}.${_domain}"
+		_info=$(ssh $_status_ssh "${_user}@${_host}" "
+			sess=\$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E '^e2e-(suite-|run)' | head -1)
+			if [ -n \"\$sess\" ]; then
+				suite=\${sess#e2e-suite-}
+				# Check if rc file exists (completed)
+				rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
+				if [ -f \"\$rc_file\" ]; then
+					rc=\$(cat \"\$rc_file\" 2>/dev/null)
+					echo \"DONE|\${suite}|exit=\${rc}\"
+				else
+					last=\$(tail -1 ~/aba/test/e2e/logs/summary.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+					echo \"RUNNING|\${suite}|\${last}\"
+				fi
+			else
+				# No tmux session -- check for rc files from past runs
+				last_suite=\$(cat /tmp/e2e-last-suites 2>/dev/null || true)
+				if [ -n \"\$last_suite\" ]; then
+					rc_file=\"${E2E_RC_PREFIX}-\${last_suite}.rc\"
+					if [ -f \"\$rc_file\" ]; then
+						rc=\$(cat \"\$rc_file\" 2>/dev/null)
+						echo \"FINISHED|\${last_suite}|exit=\${rc}\"
+					else
+						echo \"IDLE|\${last_suite}|(no result)\"
+					fi
+				else
+					echo \"IDLE|-|-\"
+				fi
+			fi
+		" 2>/dev/null || echo "UNREACHABLE|-|-")
+
+		IFS='|' read -r _state _suite _detail <<< "$_info"
+		case "$_state" in
+			RUNNING)     _sc="\033[1;32m" ;;  # bold green
+			DONE)        if [[ "$_detail" == *"exit=0"* ]]; then
+			                 _sc="\033[1;32m"  # bold green (pass)
+			             else
+			                 _sc="\033[1;31m"  # bold red (fail)
+			             fi ;;
+			FINISHED)    if [[ "$_detail" == *"exit=0"* ]]; then
+			                 _sc="\033[32m"    # green (pass)
+			             else
+			                 _sc="\033[1;31m"  # bold red (fail)
+			             fi ;;
+			IDLE)        _sc="\033[0m" ;;      # default
+			UNREACHABLE) _sc="\033[90m" ;;     # dim grey
+			*)           _sc="\033[0m" ;;
+		esac
+		printf "  con%-3s  ${_sc}%-10s\033[0m  %-40s  %s\033[0m\n" "$p" "$_state" "$_suite" "$_detail"
+	done
+
+	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)" 2>/dev/null; then
+		printf "\n  Dispatcher: \033[1;32mRUNNING\033[0m (pid %s)\n" "$(cat "$E2E_DISPATCHER_PID")"
+	else
+		printf "\n  Dispatcher: \033[90mnot running\033[0m"
+		_last_cmd="./run.sh --all --pools $_OP_POOLS"
+		printf " -- reconnect with: %s\n" "$_last_cmd"
+	fi
+	echo ""
+	exit 0
+fi
+
 # --- Live (interactive) mode -------------------------------------------------
 
 if [ -n "${CLI_LIVE+set}" ]; then
@@ -272,6 +552,16 @@ if [ -n "${CLI_LIVE+set}" ]; then
 
 	tmux kill-session -t "$LIVE_SESSION" 2>/dev/null || true
 
+	# Claim ownership: write a unique ID to /tmp/e2e-live-owner on each conN.
+	# Pane scripts check this before re-attaching — if another live dashboard
+	# has taken over (different ID), the old pane exits instead of fighting.
+	_live_id="$$-$(date +%s)"
+	_live_so="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+	for (( _lp=1; _lp<=_num_pools; _lp++ )); do
+		ssh $_live_so "${_user}@con${_lp}.${_domain}" \
+			"echo '$_live_id' > /tmp/e2e-live-owner" 2>/dev/null || true
+	done
+
 	_live_script_dir=$(mktemp -d /tmp/e2e-live.XXXXXX)
 	_live_create_script() {
 		local p=$1
@@ -282,7 +572,13 @@ if [ -n "${CLI_LIVE+set}" ]; then
 			echo '#!/bin/bash'
 			printf "printf '\\\\033]2;live | Pool %d (con%d)\\\\033\\\\\\\\'\n" "$p" "$p"
 			echo 'stty -ixon 2>/dev/null'
+			echo "_MY_ID='${_live_id}'"
 		echo 'while true; do'
+		echo "  _owner=\$(ssh $_so ${_user}@${_h} 'cat /tmp/e2e-live-owner 2>/dev/null' 2>/dev/null)"
+		echo '  if [ -n "$_owner" ] && [ "$_owner" != "$_MY_ID" ]; then'
+		echo "    echo 'Another live dashboard took over con${p}. Exiting.'"
+		echo '    exit 0'
+		echo '  fi'
 		echo "  sess=\$(ssh $_so ${_user}@${_h} \"tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E '^e2e-(suite-|run)' | head -1\" 2>/dev/null)"
 		echo '  if [ -n "$sess" ]; then'
 		echo "    ssh -t $_so ${_user}@${_h} \"tmux attach -d -t \$sess\""
@@ -331,41 +627,9 @@ if [ -n "${CLI_DASHBOARD+set}" ]; then
 	else
 		_num_pools=$(grep -c '^[^#]' "$_RUN_DIR/pools.conf" 2>/dev/null || echo 3)
 	fi
-	_SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-	DASH_SESSION="e2e-dashboard"
-
-	tmux kill-session -t "$DASH_SESSION" 2>/dev/null || true
-
-	_dash_tail_cmd() {
-		local p=$1
-		local user="${CON_SSH_USER:-steve}"
-		local host="con${p}.${VM_BASE_DOMAIN:-example.com}"
-		echo "printf '\\033]2;dashboard | Pool $p (con${p})\\033\\\\'; echo '=== Pool $p (con${p}) [${CLI_DASH_LOG}] ==='; while true; do ssh $_SSH_OPTS ${user}@${host} 'tail -F -n 500 ~/aba/test/e2e/logs/${CLI_DASH_LOG}' 2>/dev/null && break; echo 'Waiting for con${p} ...'; sleep 10; done"
-	}
-
-	if [ "$_num_pools" -le 2 ]; then
-		# 1-2 pools: top/bottom stack
-		tmux new-session -d -s "$DASH_SESSION" "$(_dash_tail_cmd 1)"
-		for (( p=2; p<=_num_pools; p++ )); do
-			tmux split-window -t "$DASH_SESSION" -v "$(_dash_tail_cmd $p)"
-		done
-		tmux select-layout -t "$DASH_SESSION" even-vertical 2>/dev/null
-	else
-		# 3-4 pool 2x2 grid: 1|2 / 3|4  (target by pane ID for cross-platform reliability)
-		tmux new-session -d -s "$DASH_SESSION" "$(_dash_tail_cmd 1)"
-		_p_tl=$(tmux list-panes -t "$DASH_SESSION" -F '#{pane_id}' | head -1)
-		tmux split-window -h -t "$_p_tl" "$(_dash_tail_cmd 2)"
-		_p_tr=$(tmux list-panes -t "$DASH_SESSION" -F '#{pane_id}' | tail -1)
-		tmux split-window -v -t "$_p_tl" "$(_dash_tail_cmd 3)"
-		if [ "$_num_pools" -ge 4 ]; then
-			tmux split-window -v -t "$_p_tr" "$(_dash_tail_cmd 4)"
-		fi
-	fi
-	tmux set-option -t "$DASH_SESSION" allow-rename on 2>/dev/null
-	tmux set-option -t "$DASH_SESSION" pane-border-status top 2>/dev/null
-	tmux set-option -t "$DASH_SESSION" pane-border-format " #{pane_title} " 2>/dev/null
+	_create_tmux_dashboard "e2e-dashboard" "$_num_pools" "$CLI_DASH_LOG"
 	echo "Attaching to dashboard (${_num_pools} pools) ..."
-	exec tmux attach -t "$DASH_SESSION"
+	exec tmux attach -t "e2e-dashboard"
 fi
 
 # --- List mode ---------------------------------------------------------------
@@ -437,9 +701,9 @@ _all_suites() {
 
 suites_to_run=()
 
-if [ -n "$CLI_LAST" ]; then
+if [ -n "$CLI_RESUME" ]; then
 	if [ -z "$CLI_POOL" ]; then
-		echo "ERROR: --last requires --pool N" >&2
+		echo "ERROR: --resume requires --pool N" >&2
 		exit 1
 	fi
 	_last_host="con${CLI_POOL}.${VM_BASE_DOMAIN:-example.com}"
@@ -457,7 +721,7 @@ elif [ -n "$CLI_ALL" ]; then
 elif [ -n "$CLI_SUITE" ]; then
 	IFS=',' read -ra suites_to_run <<< "$CLI_SUITE"
 else
-	echo "ERROR: Specify --suite NAME, --all, --last, or --list" >&2
+	echo "ERROR: Specify --suite NAME, --all, --resume, or --list" >&2
 	_usage
 	exit 1
 fi
@@ -465,6 +729,20 @@ fi
 if [ ${#suites_to_run[@]} -eq 0 ]; then
 	echo "No suites found."
 	exit 0
+fi
+
+# Validate suite names (skip for --resume since those come from the remote host)
+if [ -z "$CLI_RESUME" ]; then
+	for _s in "${suites_to_run[@]}"; do
+		if [ ! -f "$_RUN_DIR/suites/suite-${_s}.sh" ]; then
+			echo "ERROR: Unknown suite '$_s' (no file: suites/suite-${_s}.sh)" >&2
+			echo "  Available suites:" >&2
+			for _sf in "$_RUN_DIR"/suites/suite-*.sh; do
+				echo "    $(basename "$_sf" .sh | sed 's/^suite-//')" >&2
+			done
+			exit 1
+		fi
+	done
 fi
 
 # --- SSH helpers --------------------------------------------------------------
@@ -493,13 +771,13 @@ _vms_ready() {
 		return 1
 	fi
 
-	if ! govc snapshot.tree -vm "con${pool_num}" | grep "pool-ready"; then
+	if ! govc snapshot.tree -vm "con${pool_num}" | grep -q "pool-ready"; then
 		_reason="con${pool_num} missing pool-ready snapshot"
 		echo "  Pool $pool_num: not ready ($_reason)" >&2
 		return 1
 	fi
 
-	if ! govc snapshot.tree -vm "dis${pool_num}" | grep "pool-ready"; then
+	if ! govc snapshot.tree -vm "dis${pool_num}" | grep -q "pool-ready"; then
 		_reason="dis${pool_num} missing pool-ready snapshot"
 		echo "  Pool $pool_num: not ready ($_reason)" >&2
 		return 1
@@ -568,16 +846,15 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 	host="con${i}.${VM_BASE_DOMAIN:-example.com}"
 	target="${user}@${host}"
 
-	_deploy_ok=1
-	scp $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/aba/test/e2e/config.env" || _deploy_ok=0
-	scp $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/aba/test/e2e/pools.conf" || _deploy_ok=0
-	scp $_SSH_OPTS "$_RUN_DIR/runner.sh"  "$target:~/aba/test/e2e/runner.sh"  || _deploy_ok=0
-	scp $_SSH_OPTS "$_RUN_DIR"/lib/*.sh   "$target:~/aba/test/e2e/lib/"       || _deploy_ok=0
-	scp $_SSH_OPTS "$_RUN_DIR"/suites/suite-*.sh "$target:~/aba/test/e2e/suites/" || _deploy_ok=0
-	if [ "$_deploy_ok" -eq 1 ]; then
+	if scp -q $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/aba/test/e2e/config.env" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/aba/test/e2e/pools.conf" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR/runner.sh"  "$target:~/aba/test/e2e/runner.sh" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR"/lib/*.sh   "$target:~/aba/test/e2e/lib/" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR"/suites/suite-*.sh "$target:~/aba/test/e2e/suites/"; then
 		echo "    con${i}: framework + config deployed"
 	else
-		echo "    con${i}: WARNING: deploy failed (SCP error above)"
+		echo "    con${i}: FAILED to deploy framework" >&2
+		exit 1
 	fi
 done
 
@@ -711,7 +988,7 @@ _detect_running_and_completed() {
 						if [ -z "${_completed[$suite]:-}" ]; then
 							_busy_pools[$p]="$suite"
 							_result_pool[$suite]="$p"
-							echo "    con${p}: $suite still running (tmux: $sess)"
+							echo "    con${p}: $suite still running"
 						fi
 						;;
 				esac
@@ -809,11 +1086,6 @@ _build_work_queue() {
 # --- Execute dispatch ---------------------------------------------------------
 # =============================================================================
 
-echo ""
-echo "  Work queue: ${suites_to_run[*]}"
-echo "  Pools: $CLI_POOLS"
-echo ""
-
 # Apply --force scoping
 if [ -n "$CLI_FORCE" ]; then
 	if [ -n "$CLI_POOL" ] && [ -n "$CLI_SUITE" ]; then
@@ -875,27 +1147,8 @@ echo ""
 DASH_SESSION=""
 if [ -z "$CLI_QUIET" ] && [ "$CLI_POOLS" -gt 1 ] && { [ ${#_work_queue[@]} -gt 0 ] || [ $_num_running -gt 0 ]; }; then
 	DASH_SESSION="e2e-dashboard"
-	tmux kill-session -t "$DASH_SESSION" 2>/dev/null || true
-
-	_first=1
-	for (( p=1; p<=CLI_POOLS; p++ )); do
-		user="${CON_SSH_USER:-steve}"
-		host="con${p}.${VM_BASE_DOMAIN:-example.com}"
-		_tail_cmd="printf '\\033]2;dashboard | Pool $p (con${p})\\033\\\\'; echo '=== Pool $p (con${p}) ==='; while true; do ssh $_SSH_OPTS ${user}@${host} 'tail -F -n 500 ~/aba/test/e2e/logs/summary.log' 2>/dev/null && break; echo 'Waiting for con${p} ...'; sleep 10; done"
-
-		if [ "$_first" -eq 1 ]; then
-			tmux new-session -d -s "$DASH_SESSION" "$_tail_cmd"
-			_first=0
-		else
-			tmux split-window -t "$DASH_SESSION" -v "$_tail_cmd"
-		fi
-	done
-
-	tmux select-layout -t "$DASH_SESSION" even-vertical 2>/dev/null
-	tmux set-option -t "$DASH_SESSION" allow-rename on 2>/dev/null
-	tmux set-option -t "$DASH_SESSION" pane-border-status top 2>/dev/null
-	tmux set-option -t "$DASH_SESSION" pane-border-format " #{pane_title} " 2>/dev/null
-	echo "  Summary dashboard: tmux attach -t $DASH_SESSION"
+	_create_tmux_dashboard "$DASH_SESSION" "$CLI_POOLS" "summary.log"
+	echo "  Summary dashboard opened (run.sh dash to reattach)"
 	echo ""
 fi
 
@@ -904,10 +1157,13 @@ fi
 _queue_idx=0
 
 if [ ${#_work_queue[@]} -gt 0 ] || [ $_num_running -gt 0 ]; then
-	echo "  Dispatching ... (Ctrl-C safe: restart run.sh to resume)"
-	echo "  (Attach interactively: run.sh attach conN)"
+	echo "  Dispatching ... (Ctrl-C safe: restart run.sh to reconnect)"
+	echo "  (Monitor: run.sh live | Single pool: run.sh attach conN)"
 	echo ""
 fi
+
+echo $$ > "$E2E_DISPATCHER_PID"
+trap 'rm -f "$E2E_DISPATCHER_PID"' EXIT
 
 while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 

@@ -128,7 +128,7 @@ e2e_run -q "Create temp dir" "mkdir -v -p ~/tmp"
 e2e_run -q "Clean previous light bundles" "rm -fv ~/tmp/delete-me*tar"
 
 e2e_run -r 3 2 "Create light bundle (channel=$TEST_CHANNEL version=$ocp_version ops=abatest+extras)" \
-    "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks nginx-ingress-operator flux --base-domain $(pool_domain) -o ~/tmp/delete-me -y"
+    "aba -f bundle --pull-secret '~/.pull-secret.json' --op-sets abatest --ops web-terminal yaks nginx-ingress-operator flux -o ~/tmp/delete-me -y"
 
 test_end 0
 
@@ -153,7 +153,7 @@ e2e_run -q "Clean previous bundles" "rm -fv /tmp/delete-me*tar"
 
 # No --op-sets, no --ops: zero operators are downloaded (only OCP release images)
 e2e_run -r 3 2 "Create bundle without operators (channel=$TEST_CHANNEL version=$ocp_version)" \
-    "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets --ops --base-domain $(pool_domain) -o /tmp/delete-me -y"
+    "aba -f bundle --pull-secret '~/.pull-secret.json' --op-sets --ops -o /tmp/delete-me -y"
 
 test_end 0
 

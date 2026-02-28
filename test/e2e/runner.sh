@@ -40,18 +40,25 @@ RC_FILE="${E2E_RC_PREFIX}-${SUITE}.rc"
 
 # --- Concurrent run protection -----------------------------------------------
 
+_LOCK_MAX_AGE=86400  # 24 hours
+
 if [ -f "$LOCK_FILE" ]; then
-	_lock_pid=$(cat "$LOCK_FILE" 2>/dev/null)
+	read -r _lock_pid _lock_ts _ < "$LOCK_FILE" 2>/dev/null || true
 	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
 		echo "ERROR: runner.sh for suite '$SUITE' already executing on $(hostname) (pid $_lock_pid). Aborting."
 		echo "255" > "$RC_FILE"
 		exit 1
 	fi
+	# Auto-expire: if lock is older than 24h, treat as stale regardless
+	_now=$(date +%s)
+	if [ -n "$_lock_ts" ] && [ $(( _now - _lock_ts )) -lt "$_LOCK_MAX_AGE" ] 2>/dev/null; then
+		: # Lock is recent but PID is dead -- fall through to stale removal
+	fi
 	echo "  Stale lock file found (pid ${_lock_pid:-unknown} dead) -- removing."
 	rm -f "$LOCK_FILE"
 fi
 
-echo $$ > "$LOCK_FILE"
+echo "$$ $(date +%s)" > "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 rm -f "$RC_FILE"
 

@@ -4,3 +4,4 @@
 E2E_TMUX_PREFIX="e2e-suite"
 E2E_RC_DIR="/tmp"
 E2E_RC_PREFIX="${E2E_RC_DIR}/e2e-suite"
+E2E_DISPATCHER_PID="/tmp/e2e-dispatcher.pid"
