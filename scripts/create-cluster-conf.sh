@@ -7,7 +7,9 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)
 
-verify-aba-conf # || exit 1
+# Warn about missing aba.conf values but don't abort — the explicit
+# ocp_version check below catches the critical case.
+verify-aba-conf
 
 if [ ! "$ocp_version" ]; then
 	echo_red "Error: 'ocp_version' not set in aba/aba.conf.  Run aba in the root of Aba's repository or see the aba/README.md on how to get started."

@@ -20,9 +20,9 @@ source <(normalize-cluster-conf)  # used to check int_connection value
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
 verify-cluster-conf || exit 1
-verify-mirror-conf || exit 1
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 # Stop processing (CatalogSources and Signatires etc) if this cluster is a connected cluster!
 if [ "$int_connection" ]; then

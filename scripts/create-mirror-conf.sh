@@ -11,7 +11,7 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
 
 # $domain is used as input in below j2 command
 if [ ! "$ocp_version" -o ! "$domain" ]; then

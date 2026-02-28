@@ -12,7 +12,7 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
-verify-aba-conf || true
+# No verify-aba-conf — uninstall uses state.sh, not aba.conf values
 
 if [ ! -s "$regcreds_dir/state.sh" ]; then
 	aba_abort "No Docker registry state found in $regcreds_dir/state.sh"

@@ -10,7 +10,7 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
 verify-cluster-conf || exit 1
 
 [ ! "$ntp_servers" ] && aba_abort "Define 'ntp_servers' value in 'aba.conf' to configure NTP" 

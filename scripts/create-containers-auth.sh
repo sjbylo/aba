@@ -14,7 +14,7 @@ umask 077
 source <(normalize-aba-conf)
 # $regcreds_dir is derived by mirror-side callers from $PWD, or by cluster-side callers from $mirror_name in cluster.conf.
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
 
 if [ "$public_pull_secret_file_needed" -a ! -s "$pull_secret_file" ]; then
 	if [ ! "$pull_secret_file" ]; then

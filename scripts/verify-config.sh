@@ -10,9 +10,9 @@ source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
 verify-cluster-conf || exit 1
-verify-mirror-conf || exit 1
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 # These checks are actually also made in 'verify-cluster-conf'
 [ ! "$cluster_name" ] && aba_abort "missing cluster_name value in cluster.conf!"

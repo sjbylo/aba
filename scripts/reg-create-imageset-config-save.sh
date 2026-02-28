@@ -18,7 +18,7 @@ umask 077
 
 source <(normalize-aba-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
 
 # Note that any existing save/* files will not be deleted
 mkdir -p save
