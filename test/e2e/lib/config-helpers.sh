@@ -186,7 +186,7 @@ gen_aba_conf() {
     local domain="${DOMAIN:-$(pool_domain)}"
     local machine_network="${MACHINE_NETWORK:-$(pool_machine_network)}"
     local dns_servers="${DNS_SERVERS:-$(pool_dns_server)}"
-    local next_hop="${NEXT_HOP:-10.0.1.1}"
+    local next_hop="${NEXT_HOP:-${DEFAULT_GATEWAY:-10.0.1.1}}"
 
     while [ $# -gt 0 ]; do
         case "$1" in

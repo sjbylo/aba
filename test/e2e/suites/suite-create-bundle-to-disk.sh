@@ -28,6 +28,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 VF="${VMWARE_CONF:-~/.vmware.conf}"
+STANDARD="$(pool_cluster_name standard)"
 
 # --- Suite ------------------------------------------------------------------
 
@@ -229,12 +230,30 @@ e2e_run "Verify mirror-registry re-extracted" \
 test_end 0
 
 # ============================================================================
-# 9. Bare-metal simulation: platform=bm ISO creation (ported from old test1)
-#    Validates govc download-all behavior with platform=bm, bare-metal ISO
-#    generation, and the two-step install process -- all without booting VMs.
+# 9. Bare-metal simulation: platform=bm two-step install (ported from old test1)
+#
+#    Tests the BM two-step install flow from the BUNDLE-LOAD perspective:
+#      - govc download-all behavior with platform=bm (on connected bastion)
+#      - Two-step bare-metal install (agent configs -> ISO) on internal bastion
+#
+#    WHY on internal bastion?  In the bundle-to-disk workflow, the registry
+#    is installed on the disconnected side (dis) during bundle extraction.
+#    The connected bastion (con) cannot resolve the registry hostname.
+#    ISO creation needs registry access (verify-release-image.sh), so the
+#    BM install must run where the registry lives.
+#
+#    The companion BM test in suite-mirror-sync.sh covers the same two-step
+#    flow but from the SYNC perspective (registry reachable from con via sync).
+#    Both tests are kept for defense-in-depth.
+#
+#    BM two-step flow (controlled by .bm-message / .bm-nextstep gate files):
+#      1st `aba install` -> creates agent configs, prints "Check & edit"
+#      2nd `aba install` -> creates ISO, prints "Boot your servers"
+#      (3rd would monitor cluster -- not tested since no real BM servers)
 # ============================================================================
-test_begin "Bare-metal simulation: platform=bm ISO creation"
+test_begin "Bare-metal simulation: platform=bm two-step install"
 
+# govc download-all test runs on connected bastion (CLI behavior check)
 e2e_run "Switch to bare-metal platform" "aba --platform bm"
 
 e2e_run "Remove govc tarball" "rm -f cli/govc*"
@@ -244,17 +263,36 @@ e2e_run "Run download-all (govc should still be downloaded)" \
 e2e_run "Verify govc tarball exists after download-all" \
     "test -f cli/govc*gz"
 
-# BM install stops after creating ISO (no VMware to boot VMs)
-e2e_run "Create standard cluster configs + ISO (BM mode)" \
-    "aba cluster -n standard -t standard -i 10.0.1.81 -s install"
-e2e_run "Verify cluster.conf created" "ls standard/cluster.conf"
-e2e_run "Verify agent configs created" \
-    "ls standard/install-config.yaml standard/agent-config.yaml"
-e2e_run "Verify ISO created" \
-    "ls standard/iso-agent-based/agent.*.iso"
+# BM two-step install runs on internal bastion (registry is there, loaded from bundle)
+e2e_run_remote "Switch to bare-metal platform on internal bastion" \
+    "cd ~/aba && aba --platform bm"
+e2e_run_remote "Clean standard cluster dir" \
+    "cd ~/aba && rm -rf $STANDARD"
+e2e_run_remote "Create agent configs (bare-metal)" \
+    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_standard_api_vip) -s agentconf"
+e2e_run_remote "Verify cluster.conf" "ls ~/aba/$STANDARD/cluster.conf"
+e2e_run_remote "Verify agent configs" \
+    "ls ~/aba/$STANDARD/install-config.yaml ~/aba/$STANDARD/agent-config.yaml"
+e2e_run_remote "Verify ISO not yet created" \
+    "! ls ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
 
-# Clean up and restore platform
-e2e_run -q "Clean up BM test dir" "rm -rf standard"
+# Phase 1: "aba install" stops after agent configs, shows MAC review instructions
+e2e_run_remote "First aba install (creates configs, stops for MAC review)" \
+    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Check & edit' /tmp/bm-phase1.out"
+e2e_run_remote "Verify .bm-message exists" "test -f ~/aba/$STANDARD/.bm-message"
+e2e_run_remote "Verify ISO not yet created (still)" \
+    "! ls ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
+
+# Phase 2: "aba install" creates ISO, shows boot instructions
+e2e_run_remote "Second aba install (creates ISO, stops for server boot)" \
+    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase2.out && grep 'Boot your servers' /tmp/bm-phase2.out"
+e2e_run_remote "Verify .bm-nextstep exists" "test -f ~/aba/$STANDARD/.bm-nextstep"
+e2e_run_remote "Verify ISO created" \
+    "ls -l ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
+
+# Clean up and restore platform on both sides
+e2e_run_remote -q "Clean up BM test dir on internal bastion" \
+    "cd ~/aba && rm -rf $STANDARD && aba --platform vmw"
 e2e_run -q "Restore VMware platform" "aba --platform vmw"
 
 test_end 0
