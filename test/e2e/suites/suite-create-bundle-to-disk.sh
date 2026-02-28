@@ -229,6 +229,37 @@ e2e_run "Verify mirror-registry re-extracted" \
 test_end 0
 
 # ============================================================================
+# 9. Bare-metal simulation: platform=bm ISO creation (ported from old test1)
+#    Validates govc download-all behavior with platform=bm, bare-metal ISO
+#    generation, and the two-step install process -- all without booting VMs.
+# ============================================================================
+test_begin "Bare-metal simulation: platform=bm ISO creation"
+
+e2e_run "Switch to bare-metal platform" "aba --platform bm"
+
+e2e_run "Remove govc tarball" "rm -f cli/govc*"
+e2e_run "Verify govc tarball removed" "test ! -f cli/govc*gz"
+e2e_run "Run download-all (govc should still be downloaded)" \
+    "aba -d cli download-all"
+e2e_run "Verify govc tarball exists after download-all" \
+    "test -f cli/govc*gz"
+
+# BM install stops after creating ISO (no VMware to boot VMs)
+e2e_run "Create standard cluster configs + ISO (BM mode)" \
+    "aba cluster -n standard -t standard -i 10.0.1.81 -s install"
+e2e_run "Verify cluster.conf created" "ls standard/cluster.conf"
+e2e_run "Verify agent configs created" \
+    "ls standard/install-config.yaml standard/agent-config.yaml"
+e2e_run "Verify ISO created" \
+    "ls standard/iso-agent-based/agent.*.iso"
+
+# Clean up and restore platform
+e2e_run -q "Clean up BM test dir" "rm -rf standard"
+e2e_run -q "Restore VMware platform" "aba --platform vmw"
+
+test_end 0
+
+# ============================================================================
 
 suite_end
 
