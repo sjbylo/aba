@@ -238,7 +238,7 @@ catalog: catalogs-download
 	@echo "[ABA] Warning: 'make catalog' is deprecated, use 'make catalogs-download' instead" >&2
 
 uninstall: .init .uninstalled     ## Uninstall any previously installed registry  
-.uninstalled: mirror-registry
+.uninstalled:
 	$(SCRIPTS)/reg-uninstall.sh
 	@rm -f .installed
 	@touch .uninstalled
@@ -278,6 +278,8 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f .cmd.out
 	rm -f .reg_vendor
+	rm -f mirror-registry image-archive.tar execution-environment.tar sqlite3.tar
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install" 2>/dev/null || true
 
 
 # Registry credentials and state are stored persistently in ~/.aba/mirror/ and survive clean/reset.

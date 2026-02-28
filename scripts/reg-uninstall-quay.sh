@@ -22,6 +22,8 @@ source "$regcreds_dir/state.sh"
 
 if ask "Uninstall Quay mirror registry on localhost, installed at $REG_HOST:$REG_PORT (root: $REG_ROOT)"; then
 
+	ensure_quay_registry
+
 	cmd="./mirror-registry uninstall -v --autoApprove $REG_ROOT_OPTS"
 
 	aba_info "Running command: $cmd"

@@ -68,6 +68,7 @@ if [ "$reg_ssh_key" ] && ssh -F $ssh_conf_file $reg_ssh_user@$reg_host podman ps
 	reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
 
 	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
+		ensure_quay_registry
 		cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
 		aba_info "Running command: $cmd"
 		if [ -d "$regcreds_dir" ]; then rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"; fi
@@ -80,6 +81,7 @@ elif podman ps 2>/dev/null | grep -q registry; then
 	reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
 
 	if ask "Mirror registry detected on localhost. Uninstall this mirror registry"; then
+		ensure_quay_registry
 		cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 		aba_info "Running command: $cmd"
 		if [ -d "$regcreds_dir" ]; then rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"; fi
