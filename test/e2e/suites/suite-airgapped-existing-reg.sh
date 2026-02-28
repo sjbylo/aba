@@ -164,11 +164,11 @@ test_begin "Tar-pipe transfer to bastion"
 e2e_run "Remove dialog RPM to force dnf path" \
     "sudo dnf remove -y dialog"
 e2e_run "Remove stale dnf log" \
-    "rm -f .dnf-install.log"
+    "rm -f mirror/.dnf-install.log"
 e2e_run "Verify tar stdout purity under dnf install" \
     "aba -d mirror tar --out - 2>/tmp/e2e-tar-stderr.log | tar tf - > /dev/null"
 e2e_run "Verify dnf install actually ran" \
-    "test -s .dnf-install.log"
+    "test -s mirror/.dnf-install.log"
 e2e_run "Verify dialog was reinstalled" \
     "rpm -q dialog"
 

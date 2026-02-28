@@ -140,7 +140,7 @@ test_end
 test_begin "Bundle: create with older version"
 
 e2e_run -r 3 2 "Create bundle and pipe to internal bastion" \
-    "source <(normalize-aba-conf) && aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version \$ocp_version --op-sets abatest --ops web-terminal --base-domain $(pool_domain) -o - -y | ssh ${INTERNAL_BASTION} 'tar xf - -C ~'"
+    "aba -f bundle --pull-secret '~/.pull-secret.json' --op-sets abatest --ops web-terminal -o - -y | ssh ${INTERNAL_BASTION} 'tar xf - -C ~'"
 
 test_end
 
@@ -228,10 +228,20 @@ test_end
 # ============================================================================
 test_begin "Incremental: UBI image load"
 
-e2e_run "Uncomment additionalImages in imageset config" \
-    "sed -i 's|^#  additionalImages:|  additionalImages:|' mirror/save/imageset-config-save.yaml"
-e2e_run "Uncomment UBI image entry" \
-    "sed -i 's|^#  - name: registry.redhat.io/ubi9/ubi:latest|  - name: registry.redhat.io/ubi9/ubi:latest|' mirror/save/imageset-config-save.yaml"
+# oc-mirror v2 requires a fresh imageset config with ONLY the incremental
+# images -- if the platform/release section is still present, oc-mirror tries
+# to re-resolve release images from the cache and fails with
+# "no release images found".  The old E2E tests create a fresh file here.
+e2e_run "Backup existing imageset config" \
+    "cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.\$(date +%Y%m%d%H%M%S)"
+e2e_run "Create fresh imageset config for UBI only" \
+    "tee mirror/save/imageset-config-save.yaml <<'EOF'
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: registry.redhat.io/ubi9/ubi:latest
+EOF"
 e2e_run "Save UBI image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer UBI images to internal bastion" \
@@ -246,8 +256,15 @@ test_end
 # ============================================================================
 test_begin "Incremental: vote-app image load"
 
-e2e_run "Add vote-app image to imageset config" \
-    "sed -i '/additionalImages:/a\\  - name: quay.io/sjbylo/flask-vote-app:latest' mirror/save/imageset-config-save.yaml"
+# Fresh config with only vote-app -- same rationale as UBI load above
+e2e_run "Create fresh imageset config for vote-app only" \
+    "tee mirror/save/imageset-config-save.yaml <<'EOF'
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/sjbylo/flask-vote-app:latest
+EOF"
 e2e_run "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app to internal bastion" \

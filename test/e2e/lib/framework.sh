@@ -610,7 +610,12 @@ e2e_run() {
                 fi
             fi
 
-            [ $ret -eq 130 ] && return 130
+            # Ctrl-C (SIGINT=130): skip retry loop, go straight to interactive prompt
+            if [ $ret -eq 130 ]; then
+                _e2e_log_and_print "    $(_e2e_yellow "Interrupted (Ctrl-C)")"
+                _e2e_summary "    $(_e2e_Yellow "Interrupted (Ctrl-C): $description")"
+                break
+            fi
 
             if [ $ret -eq 0 ]; then
                 local _elapsed=$(( $(date +%s) - _step_start ))
