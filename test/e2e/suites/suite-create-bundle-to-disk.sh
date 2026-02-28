@@ -42,7 +42,9 @@ plan_tests \
     "Bundle without operator filters: create" \
     "Bundle without operator filters: verify contents" \
     "All-operators imageset: generate and verify YAML" \
-    "mirror clean: removes files and re-extraction works"
+    "mirror clean: removes files and re-extraction works" \
+    "Load bundle to internal bastion" \
+    "Bare-metal simulation: platform=bm two-step install"
 
 suite_begin "create-bundle-to-disk"
 
@@ -168,7 +170,6 @@ e2e_run "Show tar file size (human)" "ls -lh /tmp/delete-me*tar"
 e2e_run "List tar contents" "tar tvf /tmp/delete-me*tar"
 e2e_run "Verify mirror_000001.tar in bundle" \
     "tar tvf /tmp/delete-me*tar | grep mirror/save/mirror_000001.tar"
-e2e_run -q "Clean up full bundle" "rm -fv /tmp/delete-me*tar"
 
 test_end 0
 
@@ -230,7 +231,23 @@ e2e_run "Verify mirror-registry re-extracted" \
 test_end 0
 
 # ============================================================================
-# 9. Bare-metal simulation: platform=bm two-step install (ported from old test1)
+# 9. Load the no-operator bundle to the internal bastion
+#    This creates ~/aba on dis and installs the mirror registry there,
+#    which is required by the BM two-step install test below.
+# ============================================================================
+test_begin "Load bundle to internal bastion"
+
+e2e_run "Stream bundle to internal bastion" \
+    "cat /tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba && tar xf - -C ~'"
+e2e_run -q "Clean up local bundle tarball" "rm -fv /tmp/delete-me*tar"
+e2e_run_remote "Verify ~/aba exists on internal bastion" "ls ~/aba/aba.conf"
+e2e_run_remote "Install aba on internal bastion" "cd ~/aba && ./install"
+e2e_run_remote "Install mirror registry from bundle" "cd ~/aba && aba mirror"
+
+test_end 0
+
+# ============================================================================
+# 10. Bare-metal simulation: platform=bm two-step install (ported from old test1)
 #
 #    Tests the BM two-step install flow from the BUNDLE-LOAD perspective:
 #      - govc download-all behavior with platform=bm (on connected bastion)

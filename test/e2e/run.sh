@@ -78,13 +78,13 @@ _usage() {
 	  run.sh --suite X --pool 2      Run suite on a specific pool
 	  run.sh --resume --pool 3       Reconnect and start scheduling again for a specific pool
 	  run.sh --list                  List available suites
-	  run.sh stop                    Kill all runners on all pools
-	  run.sh start [--pools N]       Power on pool VMs (conN + disN)
+	  run.sh stop [--pool N]         Kill runner(s) (all pools, or just pool N)
+	  run.sh start [--pool N]        Power on pool VMs (conN + disN)
 	  run.sh --destroy               Destroy all pool VMs
-	  run.sh deploy [--pools N]      Sync local ABA repo to all conN hosts
-	  run.sh restart [--pools N]     Stop + deploy + re-run last suite(s) on all pools
-	  run.sh restart --pool N        Stop + deploy + re-run last suite on one pool
-	  run.sh status [--pools N]      Show what's running on each pool
+	  run.sh deploy [--pool N]       Sync local ABA repo to conN host(s)
+	  run.sh restart [--pool N]      Stop + deploy + re-run last suite on pool N (or all)
+	  run.sh restart --pool N --resume  Resume: skip previously-passed tests
+	  run.sh status [--pool N]       Show what's running on pool N (or all)
 	  run.sh attach conN             Attach to conN's tmux session
 	  run.sh live [N]                Interactive multi-pane dashboard (read-write, handles prompts)
 	  run.sh dash [N]                Open multi-pane summary dashboard (auto-detects from pools.conf)
@@ -247,9 +247,15 @@ fi
 # --- Deploy mode --------------------------------------------------------------
 
 if [ -n "$CLI_DEPLOY" ]; then
+	# --pool N targets a single pool; --pools N targets 1..N
+	if [ -n "$CLI_POOL" ]; then
+		_deploy_list=("$CLI_POOL")
+	else
+		_deploy_list=()
+		for (( _dp=1; _dp<=_OP_POOLS; _dp++ )); do _deploy_list+=("$_dp"); done
+	fi
 	echo ""
-	echo "  Deploying ABA repo to conN hosts ..."
-	# Build a clean tarball once (excludes binaries, tarballs, IDE/test state)
+	echo "  Deploying ABA repo to conN hosts (${_deploy_list[*]}) ..."
 	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
 	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
 		--exclude='.git' \
@@ -271,7 +277,7 @@ if [ -n "$CLI_DEPLOY" ]; then
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 	echo "  Tarball: $_deploy_size"
 	echo ""
-	for (( i=1; i<=_OP_POOLS; i++ )); do
+	for i in "${_deploy_list[@]}"; do
 		user="${CON_SSH_USER:-steve}"
 		host="con${i}.${VM_BASE_DOMAIN:-example.com}"
 		target="${user}@${host}"
@@ -304,13 +310,19 @@ fi
 # --- Stop mode ---------------------------------------------------------------
 
 if [ -n "$CLI_STOP" ]; then
-	_num_pools="$_OP_POOLS"
 	_stop_ssh="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 	_user="${CON_SSH_USER:-steve}"
 	_domain="${VM_BASE_DOMAIN:-example.com}"
 
-	echo "Stopping all runners on $_num_pools pool(s) ..."
-	for (( p=1; p<=_num_pools; p++ )); do
+	# --pool N targets a single pool; --pools N targets 1..N
+	if [ -n "$CLI_POOL" ]; then
+		_stop_list=("$CLI_POOL")
+	else
+		_stop_list=()
+		for (( _sp=1; _sp<=_OP_POOLS; _sp++ )); do _stop_list+=("$_sp"); done
+	fi
+	echo "Stopping runners on pool(s) ${_stop_list[*]} ..."
+	for p in "${_stop_list[@]}"; do
 		_host="con${p}.${_domain}"
 		printf "  con${p}: "
 		if ssh $_stop_ssh "${_user}@${_host}" "
@@ -334,9 +346,16 @@ if [ -n "$CLI_START" ]; then
 	_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
 	[ -f "$_vmconf" ] && { set -a; source "$_vmconf"; set +a; }
 
+	# --pool N targets a single pool; --pools N targets 1..N
+	if [ -n "$CLI_POOL" ]; then
+		_start_list=("$CLI_POOL")
+	else
+		_start_list=()
+		for (( _stp=1; _stp<=_OP_POOLS; _stp++ )); do _start_list+=("$_stp"); done
+	fi
 	echo ""
-	echo "  Powering on pool VMs (pools 1..$_OP_POOLS) ..."
-	for (( p=1; p<=_OP_POOLS; p++ )); do
+	echo "  Powering on pool VMs (pool(s) ${_start_list[*]}) ..."
+	for p in "${_start_list[@]}"; do
 		for prefix in con dis; do
 			vm="${prefix}${p}"
 			_state=$(govc vm.info -json "$vm" 2>/dev/null | grep -o '"powerState":"[^"]*"' | head -1 || true)
@@ -442,7 +461,9 @@ if [ -n "$CLI_RESTART" ]; then
 		fi
 		read -ra _last_suites <<< "$_last"
 		for suite in "${_last_suites[@]}"; do
-			_runner_cmd="bash ~/aba/test/e2e/runner.sh $p $suite"
+			_resume_flag=""
+			[ -n "${CLI_RESUME:-}" ] && _resume_flag="--resume"
+			_runner_cmd="bash ~/aba/test/e2e/runner.sh $_resume_flag $p $suite"
 			if ssh $_restart_ssh "${_user}@${_host}" "tmux new-session -d -s '$E2E_TMUX_SESSION' '$_runner_cmd'" 2>/dev/null; then
 				echo "    con${p}: dispatched $suite (tmux: $E2E_TMUX_SESSION)"
 				(( _restart_ok++ ))
@@ -467,10 +488,18 @@ if [ -n "$CLI_STATUS" ]; then
 	_user="${CON_SSH_USER:-steve}"
 	_domain="${VM_BASE_DOMAIN:-example.com}"
 
+	# --pool N targets a single pool; --pools N targets 1..N
+	if [ -n "$CLI_POOL" ]; then
+		_status_list=("$CLI_POOL")
+	else
+		_status_list=()
+		for (( _ssp=1; _ssp<=_OP_POOLS; _ssp++ )); do _status_list+=("$_ssp"); done
+	fi
+
 	printf "\n  %-6s  %-10s  %-40s  %s\n" "POOL" "STATE" "SUITE" "LAST OUTPUT"
 	printf "  %-6s  %-10s  %-40s  %s\n" "------" "----------" "----------------------------------------" "--------------------"
 
-	for (( p=1; p<=_OP_POOLS; p++ )); do
+	for p in "${_status_list[@]}"; do
 		_host="con${p}.${_domain}"
 		_info=$(ssh $_status_ssh "${_user}@${_host}" "
 			suite=\$(cat /tmp/e2e-last-suites 2>/dev/null || true)

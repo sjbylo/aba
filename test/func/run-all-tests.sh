@@ -57,6 +57,7 @@ integration_tests=(
 	test/func/test-bundle-tar-output.sh
 	test/func/test-mirror-save-workflow.sh
 	test/func/test-cli-download-wait.sh
+	test/func/test-e2e-framework.sh
 )
 
 passed=0

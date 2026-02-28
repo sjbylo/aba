@@ -441,7 +441,7 @@ should_skip_checkpoint() {
     local test_name="$1"
     # Only skip if we are in resume mode and test previously passed
     if [ -n "$E2E_RESUME_FILE" ] && [ -f "$E2E_RESUME_FILE" ]; then
-        if grep "^0 ${test_name}$" "$E2E_RESUME_FILE"; then
+        if grep -q "^0 ${test_name}$" "$E2E_RESUME_FILE"; then
             return 0  # yes, skip
         fi
     fi
