@@ -167,7 +167,7 @@ e2e_run "Verify mirror-registry exists after re-extract" \
 # mirror.conf is destroyed by reset; re-create and reconfigure for remote registry
 e2e_run "Re-create mirror.conf after reset" "make -C mirror mirror.conf"
 e2e_run "Reconfigure remote registry after reset" \
-    "aba -d mirror --reg-host $DIS_HOST --reg-ssh-key ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+    "aba -d mirror -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
 # Save/load reinstall regression: verify save+load auto-reinstalls the
 # registry when it was uninstalled (ported from old test1 lines 376-380).
