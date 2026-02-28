@@ -5,7 +5,7 @@
 # Runs a SINGLE suite.  run.sh dispatches one suite at a time to each pool;
 # when the suite finishes, run.sh dispatches the next one.
 #
-# This script runs INSIDE a tmux session on conN (session name: $E2E_TMUX_PREFIX-NAME).
+# This script runs INSIDE a tmux session on conN (session: e2e-suite, same on all hosts).
 # Interactive mode is always on -- failures pause and wait for user input.
 #
 # Usage (sent by run.sh via tmux send-keys):

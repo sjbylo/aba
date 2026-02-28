@@ -183,7 +183,7 @@ _net_test() {
     else
         govc_network="VMNET-DPG"
         machine_network="$(pool_machine_network)"
-        next_hop="10.0.1.1"
+        next_hop="${DEFAULT_GATEWAY:-10.0.1.1}"
         start_ip="$(pool_node_ip)"
     fi
 

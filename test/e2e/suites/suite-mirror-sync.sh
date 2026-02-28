@@ -227,7 +227,24 @@ e2e_run "Shutdown cluster" "yes | aba --dir $SNO shutdown --wait"
 test_end
 
 # ============================================================================
-# 8. Bare-metal: ISO simulation
+# 8. Bare-metal: ISO simulation (two-step install)
+#
+#    Tests the BM two-step install flow from the SYNC perspective:
+#      - govc download-all behavior with platform=bm
+#      - Two-step bare-metal install (agent configs -> ISO)
+#
+#    Runs on con (connected bastion) because `aba mirror sync` was done from
+#    here, so the registry on dis IS reachable (DNS + network route exist).
+#
+#    The companion BM test in suite-create-bundle-to-disk.sh covers the same
+#    two-step flow from the BUNDLE-LOAD perspective (runs on internal bastion
+#    because the registry was loaded there and is not reachable from con).
+#    Both tests are kept for defense-in-depth.
+#
+#    BM two-step flow (controlled by .bm-message / .bm-nextstep gate files):
+#      1st `aba install` -> creates agent configs, prints "Check & edit"
+#      2nd `aba install` -> creates ISO, prints "Boot your servers"
+#      (3rd would monitor cluster -- not tested since no real BM servers)
 # ============================================================================
 test_begin "Bare-metal: ISO simulation"
 
@@ -244,10 +261,14 @@ e2e_run "Create agent configs (bare-metal)" \
 e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"
 e2e_run "Verify agent configs" "ls -l $STANDARD/install-config.yaml $STANDARD/agent-config.yaml"
 e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso"
+
+# Phase 1: "aba install" stops after agent configs, shows MAC review instructions
 e2e_run "First aba install (generates configs, stops for MAC review)" \
     "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Check & edit' /tmp/bm-phase1.out"
 e2e_run "Verify .bm-message exists" "test -f $STANDARD/.bm-message"
 e2e_run "Verify ISO not yet created (still)" "! ls $STANDARD/iso-agent-based/agent.*.iso"
+
+# Phase 2: "aba install" creates ISO, shows boot instructions
 e2e_run "Second aba install (creates ISO, stops for server boot)" \
     "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase2.out && grep 'Boot your servers' /tmp/bm-phase2.out"
 e2e_run "Verify .bm-nextstep exists" "test -f $STANDARD/.bm-nextstep"

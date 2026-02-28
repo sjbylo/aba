@@ -1,23 +1,22 @@
 # Session State
 
 ## Current goal
-Implementing "Consistent mirror-registry handling" plan and continuing E2E test monitoring / debugging.
+Monitoring E2E test suites, fixing bugs, preparing for full rerun.
 
 ## Done this session
-- Reverted `_REG_VENDOR` conditional and removed `mirror-registry` dep from `.uninstalled` target in `mirror/Makefile`
-- Added `ensure_quay_registry` call in `scripts/reg-uninstall-quay.sh` before `./mirror-registry uninstall`
-- Added `ensure_quay_registry` calls in both fallback paths of `scripts/reg-uninstall.sh`
-- Added `mirror-registry image-archive.tar execution-environment.tar sqlite3.tar` to `make clean` target
-- Added `run-once.sh -r` for `mirror:reg:install` in `clean` target to reset extraction cache
-- Analyzed `ensure_docker_registry()` need -- not required (Docker tarball is optional/best-effort)
+- Static tmux session name (`e2e-suite`) on all conN hosts -- tested and working
+- Fixed live dashboard: single-SSH approach eliminates connection teardown race
+- Fixed BM simulation in suite-create-bundle-to-disk: runs on internal bastion
+- Added detailed comments to both BM tests (create-bundle-to-disk + mirror-sync)
+- Centralized NTP_SERVER and DEFAULT_GATEWAY in config.env
+- Eliminated last hardcoded IPs from suites and config-helpers
 
 ## Next steps
-- Run `build/pre-commit-checks.sh` and commit if user approves
-- Continue E2E test monitoring (pools 1 and 2)
+- Wait for pools 1/2 to finish (con1 stuck at interactive prompt)
+- Commit and push all changes
+- Redeploy to all pools and rerun all suites
 
 ## Decisions / notes
-- `ensure_quay_registry()` handles extraction on both install and uninstall paths consistently
-- `make clean` removes derived files; `make reset` still removes everything including tarballs
-- `reg-uninstall-remote.sh` NOT changed — already handles tarball upload to remote host
-- No `ensure_docker_registry()` needed: tarball is optional (podman pulls image directly if internet available); for air-gapped, `download-registries` target pre-stages it during connected phase
-- Quay binary is mandatory at install/uninstall time; Docker tarball is only needed pre-staged for air-gapped
+- Two BM tests kept for defense-in-depth (sync perspective vs bundle-load perspective)
+- BM test needs registry access: mirror-sync runs from con, create-bundle-to-disk from dis
+- Gate files: .bm-message (phase 1) and .bm-nextstep (phase 2) control the two-step flow
