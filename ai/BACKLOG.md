@@ -218,6 +218,59 @@ Cluster (sno)       NOT INSTALLED
 **Problem:**
 The variable name `CATALOG_CACHE_TTL_SECS` is misleading if the value is typically in minutes. Rename for clarity.
 
+### 15. E2E Dispatcher: Detect Crashed Suites (No RC File)
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-02-28
+
+**Problem:**
+`_check_pool()` in `run.sh` only detects suite completion by polling for `.rc` files.
+If a suite crashes without writing an RC file (e.g., from a corrupted framework file,
+OOM kill, or SSH disconnection), the dispatcher waits forever thinking the suite is
+still running.
+
+**Proposed Solution:**
+Add a fallback liveness check: if no `.rc` file exists but the `e2e-suite-*` tmux
+session is gone, treat the suite as crashed (exit=255). This prevents the dispatcher
+from hanging indefinitely.
+
+```bash
+_check_pool() {
+    local pool_num="$1" suite="$2"
+    local rc_content
+    rc_content=$(_ssh_con "$pool_num" "cat '${_RC_PREFIX}-${suite}.rc' 2>/dev/null" 2>/dev/null || true)
+    if [ -n "$rc_content" ]; then
+        echo "${rc_content//[^0-9]/}"
+    else
+        # Fallback: if tmux session is gone, suite crashed without writing RC
+        local sess_exists
+        sess_exists=$(_ssh_con "$pool_num" "tmux has-session -t 'e2e-suite-${suite}' 2>/dev/null && echo yes" 2>/dev/null || true)
+        if [ -z "$sess_exists" ]; then
+            echo "255"  # crashed
+        fi
+    fi
+}
+```
+
+### 16. Audit All `[ABA]` Output for Left-Justification
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Medium  
+**Created:** 2026-02-28
+
+**Problem:**
+Some `[ABA]` messages appear indented or mid-line rather than at column 0. The
+expectation is that `[ABA]` is ALWAYS left-justified. In cases where the prefix
+is not appropriate (e.g., sub-messages like "invalid!"), only the message string
+should be output without the `[ABA]` prefix. In other cases, a `\n` is needed
+before the message.
+
+**Action:** Audit all `aba_log`, `echo "[ABA]"`, and similar patterns across
+`scripts/*.sh` and `*/Makefile` to ensure consistent left-justification.
+
 ### 11. E2E Framework: Graceful Stop / Signal Handling
 
 **Status:** Partially done  
