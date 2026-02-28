@@ -242,7 +242,8 @@ e2e_run "Stream bundle to internal bastion" \
 e2e_run -q "Clean up local bundle tarball" "rm -fv /tmp/delete-me*tar"
 e2e_run_remote "Verify ~/aba exists on internal bastion" "ls ~/aba/aba.conf"
 e2e_run_remote "Install aba on internal bastion" "cd ~/aba && ./install"
-e2e_run_remote "Install mirror registry from bundle" "cd ~/aba && aba mirror"
+e2e_run_remote "Install mirror registry and load images from bundle" \
+    "cd ~/aba && aba -d mirror load -H $DIS_HOST"
 
 test_end 0
 
