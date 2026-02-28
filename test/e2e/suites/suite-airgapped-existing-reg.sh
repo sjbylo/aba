@@ -157,6 +157,22 @@ test_end
 # ============================================================================
 test_begin "Tar-pipe transfer to bastion"
 
+# Stdout purity regression test: force the dnf install code path (by removing
+# a known RPM) and verify `aba -d mirror tar --out -` produces valid tar on
+# stdout with no text contamination.  This catches regressions where install
+# messages leak to stdout and corrupt the tar stream (see install >&2 fix).
+e2e_run "Remove dialog RPM to force dnf path" \
+    "sudo dnf remove -y dialog"
+e2e_run "Remove stale dnf log" \
+    "rm -f .dnf-install.log"
+e2e_run "Verify tar stdout purity under dnf install" \
+    "aba -d mirror tar --out - 2>/tmp/e2e-tar-stderr.log | tar tf - > /dev/null"
+e2e_run "Verify dnf install actually ran" \
+    "test -s .dnf-install.log"
+e2e_run "Verify dialog was reinstalled" \
+    "rpm -q dialog"
+
+# Now do the real tar-pipe transfer
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
 

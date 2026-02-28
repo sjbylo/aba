@@ -152,7 +152,24 @@ e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
 e2e_run_remote "Verify registry removed" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 
-e2e_run -r 3 2 "Save and load images" "aba --dir mirror save load"
+# Mirror reset regression: verify reset clears run_once state and binary,
+# and that re-extraction works afterward (ported from old test1 lines 278-284).
+e2e_run "Verify run_once state exists before reset" \
+    "test -d ~/.aba/runner/mirror:reg:install"
+e2e_run "Run mirror reset" "aba --dir mirror reset --force"
+e2e_run "Verify run_once state cleared after reset" \
+    "test ! -d ~/.aba/runner/mirror:reg:install"
+e2e_run "Verify mirror-registry binary removed by reset" \
+    "test ! -f mirror/mirror-registry"
+e2e_run "Re-extract mirror-registry after reset" "make -C mirror mirror-registry"
+e2e_run "Verify mirror-registry exists after re-extract" \
+    "test -x mirror/mirror-registry"
+# mirror.conf is destroyed by reset; re-create it for next steps
+e2e_run "Re-create mirror.conf after reset" "make -C mirror mirror.conf"
+
+# Save/load reinstall regression: verify save+load auto-reinstalls the
+# registry when it was uninstalled (ported from old test1 lines 376-380).
+e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load"
 
 e2e_diag "Check oc-mirror cache (local)" \
     "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*'"
