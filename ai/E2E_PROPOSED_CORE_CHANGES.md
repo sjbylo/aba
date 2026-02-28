@@ -34,6 +34,40 @@
      ```
   Then retry `run.sh --parallel --suites mirror-sync --ci`.
 
+## E2E framework fixes (Feb 28, 2026)
+
+- **Ctrl-C → interactive prompt**: `framework.sh` `e2e_run()` previously propagated
+  exit 130 (SIGINT) immediately, killing the entire suite. Now Ctrl-C during a running
+  command breaks out of the retry loop and drops to the interactive prompt
+  (`[R]etry [s]kip [S]kip-suite [0]restart-suite [a]bort`). Use case: user sees a
+  hopelessly failing command, Ctrl-C's it, and chooses to skip.
+
+- **oc-mirror incremental load fix**: New test suites were uncommenting lines in the
+  existing `imageset-config-save.yaml` (which retained the `mirror.platform` section),
+  causing `oc-mirror` to fail with "no release images found". Fixed to create a fresh
+  config with ONLY `additionalImages`, matching the old working tests. See
+  `ai/DECISIONS.md` for full rationale.
+
+- **`run.sh status` LAST OUTPUT no longer truncated**: Removed `| head -c 60` that
+  was cutting off command output in the status display.
+
+- **Redundant `aba bundle` flags removed**: Test suites were passing `--platform`,
+  `--channel`, `--version`, `--base-domain` to `aba bundle` even though `aba.conf` was
+  already configured. One suite also did `source <(normalize-aba-conf)` just to feed
+  `$ocp_version` back to `aba`. Cleaned up in `suite-airgapped-local-reg.sh` and
+  `suite-create-bundle-to-disk.sh`.
+
+## Operational lessons
+
+- **Never scp framework files to pools with active suites.** Replacing a sourced `.sh`
+  file mid-execution corrupts the running bash process. Use `run.sh deploy --force`
+  only when no suites are running, or use `run.sh restart` which handles stop → deploy
+  → re-launch safely. See `ai/DECISIONS.md` for full explanation.
+
+- **Dispatcher does not detect crashed suites.** If a suite exits without writing an
+  `.rc` file, the dispatcher waits forever. Backlog item #15 proposes a tmux liveness
+  fallback check.
+
 ## ABA/TUI core
 
 (No ABA/TUI core code changes proposed yet.)
