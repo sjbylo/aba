@@ -13,7 +13,7 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
-verify-aba-conf || true
+# No verify-aba-conf — uninstall uses state.sh, not aba.conf values
 
 # Primary path: use persistent state.sh written at install time
 if [ -s "$regcreds_dir/state.sh" ]; then
@@ -51,7 +51,7 @@ aba_warning \
 
 sleep 1
 
-verify-mirror-conf || exit 1
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 if [ ! "$data_dir" ]; then
 	if [ "$reg_ssh_key" ]; then data_dir='~'; else data_dir=~; fi

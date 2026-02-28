@@ -15,8 +15,7 @@ umask 077
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
-#verify-aba-conf || exit 1
-verify-mirror-conf || exit 1
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 if [ ! "$reg_host" -o ! "$reg_port" ]; then
 	aba_abort "No registry is configured in: mirror/mirror.conf.  Run: 'aba -d mirror mirror.conf' and edit the mirror.conf file."

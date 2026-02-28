@@ -37,8 +37,8 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
-verify-aba-conf || exit 1
-verify-mirror-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)

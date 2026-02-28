@@ -23,7 +23,7 @@ fi
 
 source <(normalize-aba-conf)  # Fetch the 'ask' param
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
 
 cluster_folder=$VC_FOLDER/$CLUSTER_NAME
 

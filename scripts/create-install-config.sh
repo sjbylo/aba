@@ -11,9 +11,9 @@ export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 source <(normalize-vmware-conf)  # Some values needed for install-config.yaml
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
 verify-cluster-conf || exit 1
-verify-mirror-conf || exit 1
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 #to_output=$(normalize-cluster-conf | sed -e "s/^export //g" | paste -d '  ' - - - | column -t --output-separator " | ")
 if [ "$platform" = "bm" ]; then

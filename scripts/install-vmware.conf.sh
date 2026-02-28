@@ -9,7 +9,7 @@ aba_debug "Starting: $0 $*"
 # Needed for $editor and $ask
 source <(normalize-aba-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
 
 [ "$platform" != "vmw" ] && \
 	aba_info "To set the platform value in aba.conf run: 'aba -p vmw' and run: 'aba vmw'." && rm -f vmware.conf && exit 0

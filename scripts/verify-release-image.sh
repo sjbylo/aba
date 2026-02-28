@@ -9,8 +9,8 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
-verify-aba-conf || exit 1
-verify-mirror-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc openshift-install

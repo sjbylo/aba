@@ -5,7 +5,7 @@
 ABA_VERSION=20260226143439
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260228075031
+ABA_BUILD=20260228083420
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -859,8 +859,6 @@ export ask=1  # In interactive mode let's use the safe option!
 export ASK_OVERRIDE=  # Do NOT override $ask, even if $ask is false (re-read from aba.conf - omg this needs to be simplified!)
 export ASK_ALWAYS=1   # Force to always ask, no matter the $ask or $ASK_OVERRIDE !!
 
-#verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_version or channel defined
-
 sed "s/VERSION/v$ABA_VERSION/" others/message.txt
 
 ##############################################################################################################################
@@ -1202,7 +1200,7 @@ scripts/install-rpms.sh external
 
 ##############################################################################################################################
 source <(normalize-aba-conf)
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
 export ask=1 # Must set for interactive mode!
 
 ##############################################################################################################################
