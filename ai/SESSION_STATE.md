@@ -1,22 +1,29 @@
 # Session State
 
 ## Current goal
-Monitoring E2E test suites, fixing bugs, preparing for full rerun.
+Monitor E2E test suites on pools 1 & 2, investigate failures, apply fixes, and repeat.
 
 ## Done this session
-- Static tmux session name (`e2e-suite`) on all conN hosts -- tested and working
-- Fixed live dashboard: single-SSH approach eliminates connection teardown race
-- Fixed BM simulation in suite-create-bundle-to-disk: runs on internal bastion
-- Added detailed comments to both BM tests (create-bundle-to-disk + mirror-sync)
-- Centralized NTP_SERVER and DEFAULT_GATEWAY in config.env
-- Eliminated last hardcoded IPs from suites and config-helpers
+- Restored all deleted tracked files via `git checkout -- .`
+- Recovered uncommitted changes from con1 (run.sh, runner.sh, suite-create-bundle-to-disk.sh)
+- Re-applied framework.sh grep -q fix and suite-mirror-sync.sh registry reconfigure fix
+- Fixed BM test: added `aba mirror` step after bundle load on dis1
+- Comprehensive audit found runner.sh resume feature was lost
+- Found resume code on con3; merged 3 blocks into runner.sh + 2 into run.sh
+- All changes verified: diffs match con3, syntax clean, line counts correct
+
+## Uncommitted changes (10 files)
+- `test/e2e/run.sh` -- `--pool N`, `--resume` passthrough to runner.sh
+- `test/e2e/runner.sh` -- `E2E_SKIP_SNAPSHOT_REVERT`, `--resume`, auto-resume
+- `test/e2e/lib/framework.sh` -- `grep -q` fix
+- `test/e2e/suites/suite-create-bundle-to-disk.sh` -- bundle load + `aba mirror`
+- `test/e2e/suites/suite-mirror-sync.sh` -- reconfigure registry after reset
+- `test/func/run-all-tests.sh` -- added test-e2e-framework.sh
+- NEW: `test/e2e/suites/suite-dummy-pass.sh`
+- NEW: `test/e2e/suites/suite-dummy-fail.sh`
+- NEW: `test/func/test-e2e-framework.sh`
 
 ## Next steps
-- Wait for pools 1/2 to finish (con1 stuck at interactive prompt)
-- Commit and push all changes
-- Redeploy to all pools and rerun all suites
-
-## Decisions / notes
-- Two BM tests kept for defense-in-depth (sync perspective vs bundle-load perspective)
-- BM test needs registry access: mirror-sync runs from con, create-bundle-to-disk from dis
-- Gate files: .bm-message (phase 1) and .bm-nextstep (phase 2) control the two-step flow
+- Continue monitoring pools 1 & 2 for completion or new failures
+- Commit all changes once suites pass
+- Pending: investigate network freezes, dispatcher inactivity
