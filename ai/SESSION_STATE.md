@@ -1,31 +1,22 @@
 # Session State
 
 ## Current goal
-Implemented "mirror --name" and existing-registry registration feature. Awaiting commit approval.
+Refactored `aba mirror --name` to match `aba cluster --name` pattern exactly -- separate registration step.
 
 ## Done this session
-- Committed 127f6c3: notifications, force-deploy fix, cleanup prompts, VIP placeholder removal
-- Committed 4264d4c: full CLI flag cleanup (17 files changed)
-- Committed 8b34af2: backlog, indentation fix, regcreds setup in suite
-- Implemented mirror --name + register feature:
-  - scripts/reg-register.sh (NEW): register existing registry creds
-  - scripts/reg-uninstall-existing.sh (NEW): safe deregister
-  - aba.sh: --pull-secret-mirror, --ca-cert flags; --name works for mirror; auto-inject register target
-  - Makefile: mirror target for named dirs
-  - mirror/Makefile: create-mirror-dir + register targets
-  - Help files updated
-
-## Scope of this chat
-- **This chat**: coding, refactoring, new features ONLY
-- **Separate chat**: E2E test monitoring, pool management
+- Simplified `scripts/setup-mirror.sh`: removed auto-registration, removed `force=yes`, clean 2-step flow
+- Simplified root `Makefile` mirror target: no longer passes `pull_secret_mirror`/`ca_cert`
+- Tested full flow: `aba mirror --name testmirror --noask` -> edit mirror.conf -> `aba -d testmirror --pull-secret-mirror ... --ca-cert ...` -> `aba -y -d testmirror uninstall`
+- All three steps verified working correctly
+- Cleaned up test artifacts (testmirror/, xxxx/, mirror/mirror)
 
 ## Next steps
-- Commit and push (awaiting approval)
-- Follow-up: rename .installed/.uninstalled to .available/.unavailable (backlog B1)
-- Follow-up: simplify E2E suite regcreds to use new register command
+- Commit the simplification (local only, no push -- user said "no need to push")
+- Previous commit `d5b74ac` still needs push
+- Simplify E2E suites to use new `register` command (backlog)
+- Rename `.installed/.uninstalled` to `.available/.unavailable` (backlog B1)
 
 ## Decisions / notes
-- REG_VENDOR=existing in state.sh marks externally-managed registries
-- reg-uninstall.sh dispatches to reg-uninstall-existing.sh (backs up creds, never touches registry)
-- Primary use case: oc-mirror v2 enclaves
-- mirror/Makefile .init target self-bootstraps symlinks for named dirs
+- Registration is now a separate step (not combined with `--name`)
+- `setup-mirror.sh` matches `setup-cluster.sh` pattern: create dir -> init -> mirror.conf (edit prompt) -> print next steps
+- Chat scope: coding/refactoring only (E2E monitoring in separate chat)
