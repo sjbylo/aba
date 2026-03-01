@@ -1,23 +1,24 @@
 # Session State
 
 ## Current goal
-Add CLI options, fix collision, create Docker tests, document ABA architecture.
+Implementing CLI Flag Cleanup plan (`cli_flag_cleanup_ec59867b.plan.md`). Still in Plan Mode -- awaiting user approval to begin execution.
 
 ## Done this session
-- Added `--vendor <auto|quay|docker>` and `--reg-port <number>` CLI options.
-- Fixed `-P` collision: `--reg-port` is long-form only.
-- Updated help text, suite, and cleanup test to use new flags.
-- Created `test/func/test-e2e-cleanup.sh` (ALL 14 TESTS PASSED).
-- Created `test/func/test-docker-registry.sh` (3 tests: localhost, remote, defaults).
-- Documented ABA Connected->Bundle->Disconnected architecture in code comments.
-- Fixed: removed conN/disN references from ABA core comments (user-facing code).
-- Documented notification improvements as backlog issue #13.
+- Refined plan: Remove `-A` from `--noask`, reassign `-A` to `--api-vip` ("A" for API)
+- Added `-G` for `--ingress-vip` ("G" for inGress)
+- Dropped `--av` / `--iv` compound aliases (replaced by `-A` / `-G`)
+- Audited all files: 9 test/script files, ~14 occurrences of `aba -A` to replace with `aba --noask`
+- Confirmed `test/test5-*.sh` uses `get po -A` (kubectl) -- not affected
 
 ## Next steps
-- Run `test/func/test-docker-registry.sh` on an idle pool to verify.
-- Run pre-commit checks, then user to approve commit+push.
+1. Get user approval to begin executing the CLI Flag Cleanup plan
+2. Execute plan tasks in order (see `cli_flag_cleanup_ec59867b.plan.md` for full todo list)
+3. Run `build/pre-commit-checks.sh` before committing
+4. Wait for explicit user permission to commit and push
 
 ## Decisions / notes
-- conN/disN are E2E nomenclature only -- never use in ABA core code/comments.
-- disN has NO INTERNET by design. All artifacts must be in the ABA bundle.
-- No skip/fallback in test suites. Documentation as code comments, not ai/ files.
+- `-A` reassigned: `--noask` -> `--api-vip` (natural mnemonic: "A" for API)
+- `-G` assigned to `--ingress-vip` ("G" for inGress; `-g` already taken by `--gateway-ip`)
+- `--noask` stays as long-form hidden deprecated alias (no short flag, no help text)
+- `-Y` / `--yes-permanent` is the recommended way to disable prompts
+- `ASK_OVERRIDE` difference: `-Y` sets it, `--noask` does not -- both behaviors preserved

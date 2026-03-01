@@ -81,16 +81,16 @@ ABA core fixes are deferred -- only framework/suite fixes applied immediately.
 - **Fix**: Added `pkill -f 'oc-mirror'` to `_pre_suite_cleanup()` in `runner.sh` so stale oc-mirror processes are killed before each new suite starts.
 
 ### 13. Notification messages need improvement
-- **Status**: BACKLOG
+- **Status**: FIXED (deployed, pending commit)
 - **Severity**: Medium -- notifications work but are hard to read/act on
-- **Requested improvements** (6 items):
-  1. **No duplicate info**: Don't repeat the test name if it's already in the message title/subject.
-  2. **Include pool number**: Add pool number (e.g. `pool3`) to every notification so it's clear which pool the event came from. `POOL_NUM` is available at runtime.
-  3. **Include test name**: Ensure the current test name (`_E2E_CURRENT_TEST`) is always in the message if not already present.
-  4. **Include last ~20 lines of suite log**: Currently only the output from the failed command is shown. Also include the last ~20 lines of the suite log (`E2E_LOG_FILE`) so the user can see what happened in preceding commands. Often the root cause is visible in earlier output.
-  5. **Replace "localhost" with actual hostname**: The `Host: ${host:-localhost}` line should show the real hostname (e.g. `con3` or `dis1`), never "localhost". Use `$(hostname -s)` as fallback.
-  6. **Prefix with `[e2e]`**: All notification titles should start with `[e2e]` for easy filtering.
-- **Affected code**: `_e2e_notify`, `_e2e_notify_stdin`, and their call sites in `framework.sh` (lines ~367, ~804, ~818, and `suite_end`).
+- **Requested improvements** (6 items -- all implemented):
+  1. **No duplicate info**: Removed redundant test name from notification body when already in subject.
+  2. **Include pool number**: All notifications prefixed with `[e2e] pool${POOL_NUM}/${hostname}`.
+  3. **Include test name**: `_E2E_CURRENT_TEST` included in FIRST FAIL and EXHAUSTED bodies.
+  4. **Include last ~20 lines of suite log**: Both suite log (`E2E_LOG_FILE`) and command output shown in failure notifications, giving context from preceding commands.
+  5. **Replace "localhost" with actual hostname**: `${host:-$(hostname -s)}` used everywhere, never "localhost".
+  6. **Prefix with `[e2e]`**: `_e2e_notify_prefix()` adds `[e2e] pool${N}/${host}` to every message.
+- **Fix**: Refactored `_e2e_notify_prefix()`, `_e2e_notify()`, `_e2e_notify_stdin()`, and all 3 call sites in `framework.sh`.
 
 ## ABA Core Issues (deferred to tomorrow)
 

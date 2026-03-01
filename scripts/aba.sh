@@ -485,7 +485,7 @@ elif [ "$1" = "--light" ]; then
 	#	fi
 		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
-	elif [ "$1" = "--api-vip" -o "$1" = "-XXXXXX" ]; then # FIXME: opt?
+	elif [ "$1" = "--api-vip" ]; then
 		# If arg ip addr then replace value in cluster.conf
 		# If arg missing remove from cluster.conf
 		api_vip=
@@ -511,7 +511,7 @@ elif [ "$1" = "--light" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND api_vip=$api_vip"
 		fi
 		shift
-	elif [ "$1" = "--ingress-vip" -o "$1" = "-YYYYY" ]; then # FIXME: opt?
+	elif [ "$1" = "--ingress-vip" ]; then
 		# If arg ip addr replace value in cluster.conf
 		# If arg missing remove from cluster.conf
 		ingress_vip=
