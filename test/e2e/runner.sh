@@ -225,7 +225,7 @@ _cleanup_dis_aba() {
 	for _dir in "$_testing_aba" "$_ABA_ROOT"; do
 		if [ -f "$_dir/mirror/.installed" ]; then
 			echo "  Uninstalling registry via aba (from $_dir) ..."
-			( cd "$_dir" && aba -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
+			( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
 		fi
 	done
 
@@ -320,9 +320,9 @@ _pre_suite_cleanup() {
 		local target abs_path
 		while IFS=' ' read -r target abs_path; do
 			[ -z "$abs_path" ] && continue
-			echo "    $target: aba -d $abs_path delete"
+			echo "    $target: aba -y -d $abs_path delete"
 			( _essh "$target" \
-				"[ -d '$abs_path' ] && aba -d '$abs_path' delete || echo '  (dir not found -- already cleaned)'" \
+				"[ -d '$abs_path' ] && aba -y -d '$abs_path' delete || echo '  (dir not found -- already cleaned)'" \
 				2>&1 || true )
 		done < "$cleanup_file"
 		rm -f "$cleanup_file"
@@ -335,9 +335,9 @@ _pre_suite_cleanup() {
 		local target abs_path
 		while IFS=' ' read -r target abs_path; do
 			[ -z "$abs_path" ] && continue
-			echo "    $target: aba -d $abs_path uninstall"
+			echo "    $target: aba -y -d $abs_path uninstall"
 			( _essh "$target" \
-				"[ -d '$abs_path' ] && aba -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
+				"[ -d '$abs_path' ] && aba -y -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
 				2>&1 || true )
 		done < "$cleanup_file"
 		rm -f "$cleanup_file"

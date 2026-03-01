@@ -293,7 +293,15 @@ if [ -n "$CLI_DEPLOY" ]; then
 			fi
 		fi
 
-		if ssh $_SSH_OPTS "${target}" "rm -rf ~/aba && mkdir ~/aba" 2>/dev/null &&
+		# --force hot-deploy: extract on top of existing dir (preserves logs/, state)
+		# Normal deploy: clean slate (rm -rf) since pool is idle
+		if [ -n "$CLI_FORCE" ]; then
+			_remote_prep="mkdir -p ~/aba"
+		else
+			_remote_prep="rm -rf ~/aba && mkdir ~/aba"
+		fi
+
+		if ssh $_SSH_OPTS "${target}" "$_remote_prep" 2>/dev/null &&
 		   scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
 		   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
 			echo "done"

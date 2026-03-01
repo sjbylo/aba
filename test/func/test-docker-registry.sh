@@ -216,7 +216,8 @@ _log "TEST 3: Docker localhost with defaults"
 T3_PORT=5000
 
 echo "  Installing Docker registry with defaults (port=$T3_PORT) ..."
-# Recreate mirror.conf (clean state after previous tests)
+# Delete and recreate mirror.conf for a clean slate (Test 2 left reg_user, data_dir, etc.)
+_con "rm -f ~/aba/mirror/mirror.conf"
 _con "cd ~/aba && aba -d mirror mirror.conf" 2>&1 | tail -1
 
 if _con "cd ~/aba && aba -d mirror install \

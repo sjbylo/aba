@@ -173,18 +173,27 @@ _e2e_summary() {
 }
 
 # --- Notification -----------------------------------------------------------
+# All notifications:
+#   - Prefixed with [e2e] for easy filtering
+#   - Include pool number and hostname (never "localhost")
+#   - Failure notifications include last ~20 lines of suite log for context
+
+_e2e_notify_prefix() {
+    local pool="${POOL_NUM:-?}"
+    local host="$(hostname -s)"
+    echo "[e2e] pool${pool}/${host}"
+}
 
 _e2e_notify() {
     if [ -n "$NOTIFY_CMD" ]; then
-        # Pass message as args only (not also via stdin, which caused duplicates)
-        $NOTIFY_CMD "$@" < /dev/null 2>/dev/null || true
+        $NOTIFY_CMD "$(_e2e_notify_prefix) $*" < /dev/null 2>/dev/null || true
     fi
 }
 
 _e2e_notify_stdin() {
     local subject="$1"
     if [ -n "$NOTIFY_CMD" ]; then
-        $NOTIFY_CMD "$subject" 2>/dev/null || true
+        $NOTIFY_CMD "$(_e2e_notify_prefix) $subject" 2>/dev/null || true
     else
         cat > /dev/null  # drain stdin
     fi
@@ -369,7 +378,7 @@ suite_end() {
         return 1
     else
         _e2e_summary "$(_e2e_Green "========== PASSED: $_E2E_SUITE_NAME  (${_E2E_PASS_COUNT} passed, ${mins}m ${secs}s) ==========")"
-        _e2e_notify "PASSED: $_E2E_SUITE_NAME -- $_E2E_PASS_COUNT passed (${mins}m ${secs}s)"
+        _e2e_notify "PASSED: $_E2E_SUITE_NAME -- ${_E2E_PASS_COUNT} tests (${mins}m ${secs}s)"
         return 0
     fi
 }
@@ -801,10 +810,14 @@ e2e_run() {
                 _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
                 _e2e_summary "    $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
                 (
-                    echo "$(date '+%H:%M:%S') EXHAUSTED $tot_cnt attempts: $description"
+                    echo "$(date '+%H:%M:%S') EXHAUSTED $tot_cnt attempts"
+                    echo "Suite: $_E2E_SUITE_NAME"
+                    echo "Test: ${_E2E_CURRENT_TEST:-$description}"
                     echo "Command: $cmd"
-                    echo "Host: ${host:-localhost}"
-                    echo "--- Last 20 lines of output ---"
+                    echo "Host: ${host:-$(hostname -s)}"
+                    echo "--- Last 20 lines of suite log ---"
+                    tail -20 "$E2E_LOG_FILE" 2>/dev/null
+                    echo "--- Last 20 lines of command output ---"
                     tail -20 "$_cmd_output_file" 2>/dev/null
                 ) | _e2e_notify_stdin "EXHAUSTED: $description"
                 break
@@ -815,10 +828,14 @@ e2e_run() {
 
             if [ $attempt -eq 1 ]; then
                 (
-                    echo "$(date '+%H:%M:%S') FIRST FAILURE: $description"
+                    echo "$(date '+%H:%M:%S') FIRST FAILURE"
+                    echo "Suite: $_E2E_SUITE_NAME"
+                    echo "Test: ${_E2E_CURRENT_TEST:-$description}"
                     echo "Command: $cmd"
-                    echo "Host: ${host:-localhost}"
-                    echo "--- Last 20 lines of output ---"
+                    echo "Host: ${host:-$(hostname -s)}"
+                    echo "--- Last 20 lines of suite log ---"
+                    tail -20 "$E2E_LOG_FILE" 2>/dev/null
+                    echo "--- Last 20 lines of command output ---"
                     tail -20 "$_cmd_output_file" 2>/dev/null
                 ) | _e2e_notify_stdin "FIRST FAIL: $description"
             fi
