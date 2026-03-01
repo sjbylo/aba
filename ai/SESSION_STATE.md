@@ -1,24 +1,23 @@
 # Session State
 
 ## Current goal
-E2E test monitoring loop + framework fixes (10-point plan).
+Add CLI options, fix collision, create Docker tests, document ABA architecture.
 
 ## Done this session
-- **Cross-suite cleanup bug fix**: `_pre_suite_cleanup` now iterates ALL `*.cleanup`/`*.mirror-cleanup` files.
-- **Mirror registration**: Added `e2e_register_mirror()` + `e2e_cleanup_mirrors()` to framework.sh.
-- **Resource lifecycle rules 11-14**: Documented in framework.sh.
-- **vCenter folder fix**: VC_FOLDER + GOVC_DATASTORE on disN after snapshot revert.
-- **notify.sh deployment**: Permanently deployed via run.sh.
-- **day2 + skopeo**: Added missing day2 calls after mirror load/sync, skopeo pre-checks.
-- **Rules of engagement updated**: Fixed contradictory rule 11, added rules 16-17, documentation preference, resource lifecycle section.
-- Committed `fad834b`, pushed to origin/dev.
+- Added `--vendor <auto|quay|docker>` and `--reg-port <number>` CLI options.
+- Fixed `-P` collision: `--reg-port` is long-form only.
+- Updated help text, suite, and cleanup test to use new flags.
+- Created `test/func/test-e2e-cleanup.sh` (ALL 14 TESTS PASSED).
+- Created `test/func/test-docker-registry.sh` (3 tests: localhost, remote, defaults).
+- Documented ABA Connected->Bundle->Disconnected architecture in code comments.
+- Fixed: removed conN/disN references from ABA core comments (user-facing code).
+- Documented notification improvements as backlog issue #13.
 
 ## Next steps
-- Commit rules-of-engagement updates when user approves.
-- Monitor pools 1/2/3 per 10-point plan.
+- Run `test/func/test-docker-registry.sh` on an idle pool to verify.
+- Run pre-commit checks, then user to approve commit+push.
 
 ## Decisions / notes
-- NO safety nets in suite_end() -- fix the suite (rule #5/16).
-- SNO: shutdown only. Compact/Standard: must delete. Mirrors: uninstall.
-- Always `aba day2` after `mirror load`/`sync` (rule 17).
-- Prefer code comments over ai/ files for documentation.
+- conN/disN are E2E nomenclature only -- never use in ABA core code/comments.
+- disN has NO INTERNET by design. All artifacts must be in the ABA bundle.
+- No skip/fallback in test suites. Documentation as code comments, not ai/ files.
