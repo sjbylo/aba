@@ -237,6 +237,7 @@ _net_test() {
 
     e2e_run "Create ISO for $cname" "aba --dir $cname iso"
     e2e_run "Upload ISO for $cname" "aba --dir $cname upload"
+    e2e_register_cluster "$PWD/$cname"
     e2e_run "Boot VMs for $cname" "aba --dir $cname refresh"
 
     e2e_run -r 1 1 "Wait for node0 SSH ($cname)" \

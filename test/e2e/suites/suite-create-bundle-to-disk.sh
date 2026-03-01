@@ -286,6 +286,7 @@ e2e_run_remote "Switch to bare-metal platform on internal bastion" \
     "cd ~/aba && aba --platform bm"
 e2e_run_remote "Clean standard cluster dir" \
     "cd ~/aba && rm -rf $STANDARD"
+e2e_register_cluster "$PWD/$STANDARD" remote
 e2e_run_remote "Create agent configs (bare-metal)" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_standard_api_vip) -s agentconf"
 e2e_run_remote "Verify cluster.conf" "ls ~/aba/$STANDARD/cluster.conf"

@@ -105,6 +105,7 @@ e2e_run_remote "Bring down firewalld" \
 e2e_diag_remote "Show firewalld status (should be down)" \
     "sudo systemctl status firewalld"
 
+e2e_register_mirror "$PWD/mirror" remote
 e2e_run -r 3 2 "Sync images to remote registry" \
     "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
@@ -189,6 +190,7 @@ e2e_run "Test small CIDR (cluster.conf)" \
 e2e_run "Test small CIDR (ISO creation)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step iso"
 e2e_run "Clean and recreate with normal CIDR" "rm -rf $SNO"
+e2e_register_cluster "$PWD/$SNO"
 e2e_run "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
@@ -219,11 +221,13 @@ e2e_run "Clean saved data" "rm -rf mirror/save"
 e2e_run -r 3 2 "Sync images with testy user config" "aba --dir mirror sync --retry"
 
 e2e_run "Clean sno cluster dir" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_register_cluster "$PWD/$SNO"
 e2e_run "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
+e2e_run "Apply day2 config" "aba --dir $SNO day2"
 e2e_run "Shutdown cluster" "yes | aba --dir $SNO shutdown --wait"
 
 test_end
@@ -258,6 +262,7 @@ e2e_run "Run download-all (should re-download govc)" "aba -d cli download-all"
 e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
 
 e2e_run "Clean standard cluster dir" "rm -rf $STANDARD"
+e2e_register_cluster "$PWD/$STANDARD"
 e2e_run "Create agent configs (bare-metal)" \
     "aba cluster -n $STANDARD -t standard -i $(pool_standard_api_vip) -s agentconf"
 e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"

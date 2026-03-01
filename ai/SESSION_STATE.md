@@ -1,26 +1,24 @@
 # Session State
 
 ## Current goal
-Monitor E2E test suites on pools 1 & 2, investigate failures, apply fixes, and repeat.
+E2E test monitoring loop + framework fixes (10-point plan).
 
 ## Done this session
-- Restored all deleted tracked files via `git checkout -- .`
-- Recovered uncommitted changes from con1 via scp
-- Re-applied framework.sh grep -q fix and suite-mirror-sync.sh registry reconfigure
-- Fixed BM test: added `aba mirror` step after bundle load on dis1
-- Found runner.sh resume feature on con3; merged into runner.sh and run.sh
-- Committed as 9c24fcf (no push yet)
-- Verified ~/aba-backup.tgz matches current local code exactly
-- Ran framework lifecycle test on pool 3: ALL 32 TESTS PASSED
-- Ran unit tests: 5/5 PASS (after fixing mirror symlinks)
-- Ran integration test (aba-root-cleanup): PASS
-- Checked registry2 files: stale/old, nothing useful
-
-## Uncommitted changes
-- `scripts/aba.sh` (ABA_BUILD timestamp from pre-commit checks)
-- `ai/SESSION_STATE.md`
+- **vCenter folder fix**: Added VC_FOLDER + GOVC_DATASTORE correction to `runner.sh` `_revert_dis_snapshot()` after SSH ready.
+- **Cross-suite cleanup bug fix**: `_pre_suite_cleanup` now iterates ALL `*.cleanup` and `*.mirror-cleanup` files, not just `${SUITE}.cleanup`. This was the root cause of orphaned VMs in vCenter.
+- **Mirror registration**: Added `e2e_register_mirror()` + `e2e_cleanup_mirrors()` to framework.sh, mirroring the cluster pattern.
+- **Golden rules 11-14**: Documented resource lifecycle policy (SNO: shutdown; compact/standard: delete; mirrors: uninstall; OOB registry: never touch).
+- **Suite mirror calls**: Added `e2e_register_mirror` to 3 suites (airgapped-local-reg, airgapped-existing-reg, mirror-sync).
+- Deployed all changes to con1/2/3.
+- Dispatched `connected-public` to idle pool 3.
 
 ## Next steps
-- Push commit when ready
-- Continue monitoring pools 1 & 2 for completion or new failures
-- Pending: investigate network freezes, dispatcher inactivity
+- Commit and push when user approves.
+- Monitor pools 1/2/3 per 10-point plan.
+- Pool 1 VIP conflict should resolve once user deletes stale compact1 VMs from vCenter.
+
+## Decisions / notes
+- NO safety nets in suite_end() -- if a suite doesn't clean up, fix the suite (rule #5).
+- SNO: shutdown only (small, useful for debugging). Compact/Standard: must delete.
+- `_pre_suite_cleanup` is the crash recovery mechanism, not a substitute for proper suite cleanup.
+- `~/.vmware.conf` on disN is NOT part of bundle/tar; runner.sh fixes it after snapshot revert.

@@ -869,6 +869,12 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 	   scp -q $_SSH_OPTS "$_RUN_DIR/runner.sh"  "$target:~/aba/test/e2e/runner.sh" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR"/lib/*.sh   "$target:~/aba/test/e2e/lib/" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR"/suites/suite-*.sh "$target:~/aba/test/e2e/suites/"; then
+		# Deploy notify.sh if available locally (contains secrets, not in git)
+		if [ -x ~/bin/notify.sh ]; then
+			ssh -q $_SSH_OPTS "$target" "mkdir -p ~/bin" &&
+			scp -q $_SSH_OPTS ~/bin/notify.sh "$target:~/bin/notify.sh" &&
+			ssh -q $_SSH_OPTS "$target" "chmod +x ~/bin/notify.sh" || true
+		fi
 		echo "    con${i}: framework + config deployed"
 	else
 		echo "    con${i}: FAILED to deploy framework" >&2
