@@ -1027,12 +1027,15 @@ documented at the top of `test/e2e/lib/framework.sh`.
 10. **Prefer `aba` commands over raw `make` / scripts.**
     Eat your own dog food.  Use the product's CLI for setup and teardown.
 
-11. **Never destroy resources at the END of a suite.**
-    VMs, registries, clusters, etc. must be left alive so operators can inspect
-    state after a failure.  Cleanup belongs at the **start** of the next run
-    (e.g. `clone_vm` destroys a previous clone before creating a new one,
-    `reset_internal_bastion` wipes disN at suite start).  Explicit cleanup is
-    available via `--clean` or a dedicated destroy command.
+11. **Suites MUST clean up their own resources before suite_end.**
+    - SNO clusters: shutdown only (small, useful for post-suite debugging)
+    - Compact / Standard clusters: MUST delete (large, hold VIPs that block future installs)
+    - Mirrors on disN: MUST uninstall
+    - OOB pool registry: NEVER touched by suites (managed by setup-pool-registry.sh)
+    A suite NEVER installs a resource and leaves it for another suite.
+    Register every cluster (`e2e_register_cluster`) and mirror (`e2e_register_mirror`)
+    immediately before the install command -- this enables crash recovery via
+    `_pre_suite_cleanup` in runner.sh, which iterates ALL leftover .cleanup files.
 
 12. **Suites must be self-sufficient after clone-and-check.**
     Every suite (except `clone-and-check` itself) must be runnable independently
@@ -1069,6 +1072,23 @@ documented at the top of `test/e2e/lib/framework.sh`.
     # ❌ BAD - no explanation
     govc vm.power -off "$vm" 2>/dev/null || true
     ```
+
+16. **No safety nets in framework code.**
+    If a suite fails to clean up its resources, that is a bug in the suite --
+    fix the suite.  Do not add fallback cleanup to `suite_end()` or
+    `e2e_teardown()`.  Paper-over fixes violate rule #5.
+
+17. **Always run `aba day2` after `mirror load` or `mirror sync`.**
+    This applies the oc-mirror generated IDMS/ITMS/CatalogSources to the
+    cluster.  Without it, the cluster has no mirror configuration for newly
+    loaded images and deployments will fail with "image not found".
+
+### Documentation
+
+**Prefer adding documentation as comments inside the code** rather than in
+separate files under `ai/`.  Code comments are the primary source of truth --
+they stay with the code and don't drift out of sync.  Use `ai/` files only
+for high-level project context that doesn't belong in any specific source file.
 
 ### E2E Log Monitoring and Fix Scope
 
@@ -1306,6 +1326,6 @@ make -C mirror clean       # Mirror state
 
 ---
 
-**Last Updated**: February 21, 2026  
+**Last Updated**: March 1, 2026  
 **Purpose**: Keep this document updated as rules evolve
 

@@ -4,21 +4,21 @@
 E2E test monitoring loop + framework fixes (10-point plan).
 
 ## Done this session
-- **vCenter folder fix**: Added VC_FOLDER + GOVC_DATASTORE correction to `runner.sh` `_revert_dis_snapshot()` after SSH ready.
-- **Cross-suite cleanup bug fix**: `_pre_suite_cleanup` now iterates ALL `*.cleanup` and `*.mirror-cleanup` files, not just `${SUITE}.cleanup`. This was the root cause of orphaned VMs in vCenter.
-- **Mirror registration**: Added `e2e_register_mirror()` + `e2e_cleanup_mirrors()` to framework.sh, mirroring the cluster pattern.
-- **Golden rules 11-14**: Documented resource lifecycle policy (SNO: shutdown; compact/standard: delete; mirrors: uninstall; OOB registry: never touch).
-- **Suite mirror calls**: Added `e2e_register_mirror` to 3 suites (airgapped-local-reg, airgapped-existing-reg, mirror-sync).
-- Deployed all changes to con1/2/3.
-- Dispatched `connected-public` to idle pool 3.
+- **Cross-suite cleanup bug fix**: `_pre_suite_cleanup` now iterates ALL `*.cleanup`/`*.mirror-cleanup` files.
+- **Mirror registration**: Added `e2e_register_mirror()` + `e2e_cleanup_mirrors()` to framework.sh.
+- **Resource lifecycle rules 11-14**: Documented in framework.sh.
+- **vCenter folder fix**: VC_FOLDER + GOVC_DATASTORE on disN after snapshot revert.
+- **notify.sh deployment**: Permanently deployed via run.sh.
+- **day2 + skopeo**: Added missing day2 calls after mirror load/sync, skopeo pre-checks.
+- **Rules of engagement updated**: Fixed contradictory rule 11, added rules 16-17, documentation preference, resource lifecycle section.
+- Committed `fad834b`, pushed to origin/dev.
 
 ## Next steps
-- Commit and push when user approves.
+- Commit rules-of-engagement updates when user approves.
 - Monitor pools 1/2/3 per 10-point plan.
-- Pool 1 VIP conflict should resolve once user deletes stale compact1 VMs from vCenter.
 
 ## Decisions / notes
-- NO safety nets in suite_end() -- if a suite doesn't clean up, fix the suite (rule #5).
-- SNO: shutdown only (small, useful for debugging). Compact/Standard: must delete.
-- `_pre_suite_cleanup` is the crash recovery mechanism, not a substitute for proper suite cleanup.
-- `~/.vmware.conf` on disN is NOT part of bundle/tar; runner.sh fixes it after snapshot revert.
+- NO safety nets in suite_end() -- fix the suite (rule #5/16).
+- SNO: shutdown only. Compact/Standard: must delete. Mirrors: uninstall.
+- Always `aba day2` after `mirror load`/`sync` (rule 17).
+- Prefer code comments over ai/ files for documentation.
