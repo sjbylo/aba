@@ -850,6 +850,8 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all co availabl
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "If cluster up, shutting cluster down and wait" ". <(aba --dir $subdir/aba/$cluster_name shell) && . <(aba --dir $subdir/aba/$cluster_name login) && yes|aba --dir $subdir/aba/$cluster_name shutdown --wait || echo cluster shutdown failure"
 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete cluster" "aba --dir $subdir/aba/$cluster_name delete"  # Clean up
+
 # keep it # test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Running 'aba clean' in $subdir/aba/stanadard" "aba --dir $subdir/aba/$cluster_name clean" 
 
 #test-cmd -m "aba reset --force"
