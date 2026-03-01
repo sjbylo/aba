@@ -1,6 +1,5 @@
 #!/bin/bash -e
-# Create a named mirror directory (like setup-cluster.sh creates cluster dirs).
-# Copies mirror/Makefile, runs init + mirror.conf, optionally registers existing registry creds.
+# Create a named mirror directory (same pattern as setup-cluster.sh).
 
 source scripts/include_all.sh
 
@@ -37,24 +36,12 @@ else
 	aba_info "Creating '$name/mirror.conf'."
 fi
 
-make -s mirror.conf force=yes
-
-# If both pull_secret_mirror and ca_cert are provided, register the existing registry
-if [ "$pull_secret_mirror" -a "$ca_cert" ]; then
-	aba_info "Registering existing registry credentials ..."
-	make -s register pull_secret_mirror="$pull_secret_mirror" ca_cert="$ca_cert"
-fi
+make -s mirror.conf
 
 echo
 aba_info "Mirror directory created: $name"
 aba_info "Next steps:"
-if [ "$pull_secret_mirror" -a "$ca_cert" ]; then
-	aba_info "  Verify:  aba -d $name verify"
-	aba_info "  Sync:    aba -d $name sync --retry"
-	aba_info "  Load:    aba -d $name load --retry"
-else
-	aba_info "  Install registry:  aba -d $name install"
-	aba_info "  Register existing: aba -d $name --pull-secret-mirror <file> --ca-cert <file>"
-fi
+aba_info "  Install registry:  aba -d $name install"
+aba_info "  Register existing: aba -d $name --pull-secret-mirror <file> --ca-cert <file>"
 
 exit 0
