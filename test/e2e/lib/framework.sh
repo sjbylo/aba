@@ -43,6 +43,11 @@
 # 10. Prefer 'aba' commands over raw 'make' / scripts.
 #     Eat your own dog food.  Use the product's CLI for setup and teardown.
 #
+# 10b. disN has NO INTERNET by design.
+#      All artifacts (images, tarballs, CLI tools) must arrive via the ABA
+#      bundle transfer from conN.  If something is missing on disN, the
+#      bundle creation failed -- never try to fetch from the internet.
+#
 # ===========================  RESOURCE LIFECYCLE  ===========================
 #
 # 11. A suite ALWAYS cleans up the resources it created (clusters AND mirrors).
@@ -805,8 +810,8 @@ e2e_run() {
                 break
             fi
 
-            _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description")"
-            _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description"
+            _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description") -- retrying ..."
+            _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description -- retrying ..."
 
             if [ $attempt -eq 1 ]; then
                 (

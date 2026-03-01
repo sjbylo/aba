@@ -126,16 +126,7 @@ e2e_run "Verify aba.conf: version matches older" "grep ^ocp_version=\$(cat /tmp/
 test_end
 
 # ============================================================================
-# 3. Setup: reset internal bastion (reuse clone-and-check's disN)
-# ============================================================================
-test_begin "Setup: reset internal bastion"
-
-reset_internal_bastion
-
-test_end
-
-# ============================================================================
-# 4. Bundle: create with older version
+# 3. Bundle: create with older version
 # ============================================================================
 test_begin "Bundle: create with older version"
 
@@ -187,7 +178,7 @@ test_begin "Registry: Docker install and load"
 
 e2e_register_mirror "$PWD/mirror" remote
 e2e_run_remote "Install Docker registry" \
-    "cd ~/aba && aba -d mirror install-docker-registry"
+    "cd ~/aba && aba -d mirror install --vendor docker"
 e2e_run_remote "Verify Docker registry running" \
     "podman ps | grep registry"
 e2e_run_remote "Verify Docker registry accessible" \
@@ -204,7 +195,7 @@ test_end
 test_begin "SNO: install cluster"
 
 e2e_register_cluster "$PWD/$SNO" remote
-e2e_run_remote "Create and install SNO" \
+e2e_run_remote -r 1 1 "Create and install SNO" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
@@ -461,7 +452,7 @@ test_end
 test_begin "Cleanup: uninstall registry on disN"
 
 e2e_run_remote "Uninstall Docker registry" \
-    "cd ~/aba && aba -d mirror uninstall-docker-registry"
+    "cd ~/aba && aba -d mirror uninstall"
 e2e_run_remote "Verify no registry containers" \
     "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
 e2e_run "Verify registry unreachable on disN" \

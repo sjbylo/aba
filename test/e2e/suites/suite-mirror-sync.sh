@@ -85,16 +85,7 @@ e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set
 test_end
 
 # ============================================================================
-# 2. Setup: reset internal bastion
-# ============================================================================
-test_begin "Setup: reset internal bastion"
-
-reset_internal_bastion
-
-test_end
-
-# ============================================================================
-# 3. Firewalld: bring down, sync, bring up, verify port
+# 2. Firewalld: bring down, sync, bring up, verify port
 # ============================================================================
 test_begin "Firewalld: bring down and sync"
 
@@ -191,7 +182,7 @@ e2e_run "Test small CIDR (ISO creation)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step iso"
 e2e_run "Clean and recreate with normal CIDR" "rm -rf $SNO"
 e2e_register_cluster "$PWD/$SNO"
-e2e_run "Create SNO and generate ISO" \
+e2e_run -r 1 1 "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
@@ -222,7 +213,7 @@ e2e_run -r 3 2 "Sync images with testy user config" "aba --dir mirror sync --ret
 
 e2e_run "Clean sno cluster dir" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
 e2e_register_cluster "$PWD/$SNO"
-e2e_run "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
+e2e_run -r 1 1 "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
