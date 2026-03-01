@@ -181,6 +181,18 @@ _revert_dis_snapshot() {
 	while [ $elapsed -lt 120 ]; do
 		if _essh -o BatchMode=yes -o ConnectTimeout=5 "$dis_host" -- "date" 2>/dev/null; then
 			echo "  SSH ready on $dis_host"
+			# Fix VC_FOLDER on disN after snapshot revert (snapshot has base value,
+			# not pool-specific). The bundle/tar only copies aba repo files, not ~/.vmware.conf.
+			if [ -n "${VC_FOLDER:-}" ]; then
+				_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" 2>/dev/null \
+					&& echo "  Set VC_FOLDER=${VC_FOLDER} on $dis_host" \
+					|| echo "  WARNING: could not set VC_FOLDER on $dis_host"
+			fi
+			if [ -n "${VM_DATASTORE:-}" ]; then
+				_essh "$dis_host" "sed -i \"s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g\" ~/.vmware.conf" 2>/dev/null \
+					&& echo "  Set GOVC_DATASTORE=${VM_DATASTORE} on $dis_host" \
+					|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
+			fi
 			return 0
 		fi
 		sleep 5
@@ -229,6 +241,49 @@ printf '%0.s#' {1..80}; echo
 printf '%0.s#' {1..80}; echo
 echo ""
 
+# --- Pre-suite cleanup: delete leftover clusters/mirrors from crashed/abandoned runs
+# Iterates ALL .cleanup and .mirror-cleanup files, not just the current suite's.
+# Each conN is a separate host and only one suite runs per pool, so any leftover
+# file is from a previously finished/crashed suite and is safe to process.
+_pre_suite_cleanup() {
+	local found=""
+
+	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do
+		[ -f "$cleanup_file" ] || continue
+		found=1
+		echo "  Found leftover: $(basename "$cleanup_file") -- deleting registered clusters ..."
+		local target abs_path
+		while IFS=' ' read -r target abs_path; do
+			[ -z "$abs_path" ] && continue
+			echo "    $target: aba -d $abs_path delete"
+			( _essh "$target" \
+				"[ -d '$abs_path' ] && aba -d '$abs_path' delete || echo '  (dir not found -- already cleaned)'" \
+				2>&1 || true )
+		done < "$cleanup_file"
+		rm -f "$cleanup_file"
+	done
+
+	for cleanup_file in "${_RUNNER_DIR}"/logs/*.mirror-cleanup; do
+		[ -f "$cleanup_file" ] || continue
+		found=1
+		echo "  Found leftover: $(basename "$cleanup_file") -- uninstalling registered mirrors ..."
+		local target abs_path
+		while IFS=' ' read -r target abs_path; do
+			[ -z "$abs_path" ] && continue
+			echo "    $target: aba -d $abs_path uninstall"
+			( _essh "$target" \
+				"[ -d '$abs_path' ] && aba -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
+				2>&1 || true )
+		done < "$cleanup_file"
+		rm -f "$cleanup_file"
+	done
+
+	[ -n "$found" ] && echo "  Pre-suite cleanup complete."
+	return 0
+}
+
+_pre_suite_cleanup
+
 if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 	# Revert disN to clean state before each suite
 	_revert_dis_snapshot "pool-ready" || {
@@ -265,6 +320,8 @@ while true; do
 			export E2E_RESUME_FILE="$_STATE_FILE_PATH"
 			echo "  Will skip $(grep -c '^0 ' "$_STATE_FILE_PATH" 2>/dev/null || echo 0) previously-passed test(s)."
 		fi
+		# Cleanup clusters BEFORE snapshot revert -- aba delete needs cluster dir
+		_pre_suite_cleanup
 		if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			_revert_dis_snapshot "pool-ready" || {
 				echo "  ERROR: disN revert failed -- cannot restart. Fix snapshot then re-run."

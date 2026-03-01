@@ -119,6 +119,7 @@ e2e_run "Set mirror hostname in mirror.conf" \
     "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
 
+e2e_register_mirror "$PWD/mirror" remote
 e2e_run "Install test registry on internal bastion" \
     "test/reg-test-install-remote.sh ${DIS_HOST}"
 
@@ -231,6 +232,7 @@ test_end
 # ============================================================================
 test_begin "Compact: install and delete cluster"
 
+e2e_register_cluster "$PWD/$COMPACT" remote
 e2e_run_remote "Create compact cluster (bootstrap only)" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_compact_api_vip) --step bootstrap"
 e2e_run_remote "Delete compact cluster" \
@@ -245,6 +247,7 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster"
 
+e2e_register_cluster "$PWD/$SNO" remote
 e2e_run_remote "Create SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Show cluster operator status" \
@@ -254,12 +257,19 @@ e2e_poll_remote 600 30 "Wait for all operators fully available" \
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 
+e2e_run_remote "Apply day2 config" \
+    "cd ~/aba && aba --dir $SNO day2"
+
 test_end
 
 # ============================================================================
 # 11. Deploy vote-app
 # ============================================================================
 test_begin "Deploy vote-app"
+
+# Pre-check: verify vote-app image exists in mirror before attempting deploy
+e2e_run_remote "Verify vote-app image in mirror (skopeo)" \
+    "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && skopeo inspect --tls-verify=false docker://\$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app:latest"
 
 e2e_run_remote "Create demo project" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc new-project demo' || true"
@@ -282,6 +292,9 @@ e2e_run -r 3 2 "Pipe ACM tar to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
 e2e_run_remote -r 3 2 "Load ACM images" \
     "cd ~/aba && aba -d mirror load --retry"
+
+e2e_run_remote "Apply day2 config (ACM operator resources)" \
+    "cd ~/aba && aba --dir $SNO day2"
 
 test_end
 

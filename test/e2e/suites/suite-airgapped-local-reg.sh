@@ -11,7 +11,7 @@
 #   - Registry: Quay install -> uninstall -> Docker install
 #   - SNO cluster install + day2 configuration
 #   - Incremental image loads (UBI, vote-app, mesh operators)
-#   - Vote-app deployment with ImageDigestMirrorSet
+#   - Vote-app deployment with IDMS redirect
 #   - OSUS + cluster upgrade
 #   - Graceful shutdown/startup/restart cycle
 #   - Standard cluster with macs.conf (bare-metal MAC addresses)
@@ -185,6 +185,7 @@ test_end
 # ============================================================================
 test_begin "Registry: Docker install and load"
 
+e2e_register_mirror "$PWD/mirror" remote
 e2e_run_remote "Install Docker registry" \
     "cd ~/aba && aba -d mirror install-docker-registry"
 e2e_run_remote "Verify Docker registry running" \
@@ -202,6 +203,7 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster"
 
+e2e_register_cluster "$PWD/$SNO" remote
 e2e_run_remote "Create and install SNO" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Show cluster operator status" \
@@ -249,6 +251,13 @@ e2e_run "Transfer UBI images to internal bastion" \
 e2e_run_remote -r 3 2 "Load UBI images" \
     "cd ~/aba && aba -d mirror load --retry"
 
+# Verify UBI image exists in mirror (fail fast instead of waiting for deploy timeout)
+e2e_run_remote "Verify UBI image in mirror (skopeo)" \
+    "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && skopeo inspect --tls-verify=false docker://\$reg_host:\$reg_port\$reg_path/ubi9/ubi:latest"
+
+e2e_run_remote "Apply day2 config (UBI mirror resources)" \
+    "cd ~/aba && aba --dir $SNO day2"
+
 test_end
 
 # ============================================================================
@@ -272,10 +281,19 @@ e2e_run "Transfer vote-app to internal bastion" \
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
 
+# Verify vote-app image exists in mirror (fail fast instead of waiting for deploy timeout)
+e2e_run_remote "Verify vote-app image in mirror (skopeo)" \
+    "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && skopeo inspect --tls-verify=false docker://\$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app:latest"
+
+# Apply oc-mirror generated cluster resources (IDMS/ITMS for vote-app)
+# Without this, the cluster has no mirror config for quay.io/sjbylo.
+e2e_run_remote "Apply day2 config (vote-app mirror resources)" \
+    "cd ~/aba && aba --dir $SNO day2"
+
 test_end
 
 # ============================================================================
-# 12. Deploy vote-app with ImageDigestMirrorSet (Gap 6: explicit IDMS test)
+# 12. Deploy vote-app with ImageDigestMirrorSet (IDMS redirect test)
 #     Two deployments: (a) direct from mirror path, (b) via IDMS redirect
 # ============================================================================
 test_begin "Deploy: vote-app with IDMS"
@@ -296,10 +314,11 @@ e2e_run_remote -r 3 2 "Recreate demo project" \
 
 # --- (b) Deploy via ImageDigestMirrorSet (IDMS) ---
 # Apply an IDMS that redirects quay.io/sjbylo -> mirror registry.
-# This tests the key air-gapped mechanism: users reference public image
-# names and OCP transparently pulls from the mirror.
+# The day2 step above already applied the oc-mirror generated ITMS,
+# but we also apply a manual IDMS to explicitly test the mechanism:
+# users reference public image names and OCP transparently pulls from mirror.
 e2e_run_remote "Apply ImageDigestMirrorSet for quay.io/sjbylo" \
-    "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && aba --dir $SNO run --cmd 'oc apply -f -' <<'IDMSEOF'
+    "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && aba --dir $SNO run --cmd 'oc apply -f -' <<IDMSEOF
 apiVersion: config.openshift.io/v1
 kind: ImageDigestMirrorSet
 metadata:
@@ -311,7 +330,7 @@ spec:
     source: quay.io/sjbylo
 IDMSEOF"
 
-# Give the MachineConfigOperator time to process the IDMS
+# Give the MachineConfigOperator time to process
 e2e_run_remote -q "Wait for IDMS to propagate" "sleep 30"
 
 # Deploy vote-app using the PUBLIC image name -- IDMS should redirect to mirror
@@ -338,6 +357,9 @@ e2e_run "Transfer mesh images to internal bastion" \
 e2e_run_remote -r 3 2 "Load mesh images" \
     "cd ~/aba && aba -d mirror load --retry"
 
+e2e_run_remote "Apply day2 config (mesh operator resources)" \
+    "cd ~/aba && aba --dir $SNO day2"
+
 test_end
 
 # ============================================================================
@@ -353,6 +375,9 @@ e2e_run "Transfer upgrade images to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
 e2e_run_remote -r 3 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
+
+e2e_run_remote "Apply day2 config (upgrade mirror resources)" \
+    "cd ~/aba && aba --dir $SNO day2"
 
 e2e_run_remote "Apply OSUS day2" \
     "cd ~/aba && aba --dir $SNO day2-osus"
@@ -422,6 +447,7 @@ e2e_run_remote "Verify agent-config has MACs" \
 # Bootstrap only (saves ~30 min vs full install) -- proves agent configs are
 # valid and control plane comes up.  Full operator verification is done on
 # the SNO cluster earlier in this suite.
+e2e_register_cluster "$PWD/$STANDARD" remote
 e2e_run_remote "Bootstrap standard cluster" \
     "cd ~/aba && aba --dir $STANDARD bootstrap"
 e2e_run_remote "Delete standard cluster" \
