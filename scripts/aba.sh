@@ -900,12 +900,12 @@ if [ "$cur_target" ]; then
 			$ABA_ROOT/scripts/oc-command.sh "$cmd"
 			exit 
 		;;
-	bundle)
-		trap - ERR  # No need for this anymore
-		aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
-		eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
-		exit 
-	;;
+		bundle)
+			trap - ERR  # No need for this anymore
+			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
+			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
+			exit 
+		;;
 	esac
 fi
 

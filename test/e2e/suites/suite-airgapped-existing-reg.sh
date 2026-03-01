@@ -179,6 +179,15 @@ e2e_run_remote "Verify dialog was reinstalled" \
 e2e_run_remote "Verify single dnf batch (no duplicate install)" \
     "cd ~/aba && test \$(grep -c 'Transaction Summary' .dnf-install.log) -eq 1"
 
+# Populate regcreds dir on disN so ABA can talk to the existing registry.
+# reg-install.sh puts creds in ~/.docker/config.json and CA in ~/quay-install/.
+e2e_run_remote "Create regcreds dir" \
+    "mkdir -p ~/.aba/mirror/mirror"
+e2e_run_remote "Copy pull secret to regcreds" \
+    "cp -v ~/.docker/config.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
+e2e_run_remote "Copy root CA to regcreds" \
+    "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"
+
 test_end
 
 # ============================================================================
