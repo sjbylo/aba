@@ -98,16 +98,7 @@ e2e_run "Set operator sets (re-apply)" \
 test_end
 
 # ============================================================================
-# 2. Setup: reset internal bastion (reuse clone-and-check's disN)
-# ============================================================================
-test_begin "Setup: reset internal bastion"
-
-reset_internal_bastion
-
-test_end
-
-# ============================================================================
-# 3. Install "existing" registry on internal bastion
+# 2. Install "existing" registry on internal bastion
 # ============================================================================
 test_begin "Existing registry: install on bastion"
 
@@ -195,21 +186,19 @@ test_end
 # ============================================================================
 test_begin "Load without regcreds (must fail)"
 
-# Before regcreds are in place, loading should fail with a clear error.
-# This validates error handling for a common user mistake.
-e2e_run_remote -q "Remove any existing regcreds" \
-    "cd ~/aba && rm -rf ~/.aba/mirror/mirror/"
+# Back up regcreds before removing, then restore after the must-fail test.
+# This is safer than manually reconstructing from ~/.docker/config.json.
+e2e_run_remote -q "Back up regcreds" \
+    "cp -a ~/.aba/mirror/mirror/ /tmp/e2e-regcreds-backup/"
+
+e2e_run_remote -q "Remove regcreds" \
+    "rm -rf ~/.aba/mirror/mirror/"
 
 e2e_run_must_fail_remote "Load without regcreds should fail" \
     "cd ~/aba && aba -d mirror load --retry"
 
-# Manually restore regcreds (simulates user configuring existing registry credentials)
-e2e_run_remote "Create regcreds directory" \
-    "mkdir -p ~/.aba/mirror/mirror/"
-e2e_run_remote "Copy registry CA cert to regcreds" \
-    "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"
-e2e_run_remote "Copy registry pull secret to regcreds" \
-    "cp -v ~/.docker/config.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
+e2e_run_remote "Restore regcreds from backup" \
+    "rm -rf ~/.aba/mirror/mirror && cp -a /tmp/e2e-regcreds-backup ~/.aba/mirror/mirror && rm -rf /tmp/e2e-regcreds-backup"
 e2e_run_remote "Verify registry access with restored regcreds" \
     "cd ~/aba && aba -d mirror verify"
 
@@ -233,7 +222,7 @@ test_end
 test_begin "Compact: install and delete cluster"
 
 e2e_register_cluster "$PWD/$COMPACT" remote
-e2e_run_remote "Create compact cluster (bootstrap only)" \
+e2e_run_remote -r 1 1 "Create compact cluster (bootstrap only)" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_compact_api_vip) --step bootstrap"
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir $COMPACT delete"
@@ -248,7 +237,7 @@ test_end
 test_begin "SNO: install cluster"
 
 e2e_register_cluster "$PWD/$SNO" remote
-e2e_run_remote "Create SNO cluster" \
+e2e_run_remote -r 1 1 "Create SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"

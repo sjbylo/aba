@@ -101,6 +101,8 @@ export _E2E_INTERACTIVE=1
 # --- Bootstrap: ensure govc is available -------------------------------------
 # Set E2E_SKIP_SNAPSHOT_REVERT=1 for lightweight suites (e.g. dummy-pass/fail)
 # that don't need VMware infrastructure.
+# govc is needed for: snapshot revert (opt-in via E2E_USE_SNAPSHOT_REVERT=1),
+# and cluster VM operations (aba delete uses govc underneath).
 
 if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 	if ! command -v govc &>/dev/null; then
@@ -202,6 +204,63 @@ _revert_dis_snapshot() {
 	return 1
 }
 
+# --- Clean disN via ABA commands (replaces snapshot revert) -------------------
+# Instead of reverting disN to a VMware snapshot, use ABA's own cleanup to
+# return disN to a clean state.  This exercises aba uninstall/reset code paths
+# and is faster (no VM reboot + SSH wait).
+#
+# Covers: registry uninstall, filesystem cleanup, podman prune, cache removal,
+#         firewalld baseline restore, VC_FOLDER/GOVC_DATASTORE patch.
+#
+# Prerequisite: _pre_suite_cleanup has already run (deletes clusters/mirrors
+#               via .cleanup/.mirror-cleanup files).
+
+_cleanup_dis_aba() {
+	local dis_host="${DIS_SSH_USER:-steve}@${DIS_VM}.${VM_BASE_DOMAIN:-example.com}"
+	echo ""
+	echo "  Cleaning disN ($dis_host) via ABA commands ..."
+
+	# 1. Uninstall any aba-installed registry from conN (Rule 6: uninstall from installer host)
+	local _testing_aba="$HOME/testing/aba"
+	for _dir in "$_testing_aba" "$_ABA_ROOT"; do
+		if [ -f "$_dir/mirror/.installed" ]; then
+			echo "  Uninstalling registry via aba (from $_dir) ..."
+			( cd "$_dir" && aba -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
+		fi
+	done
+
+	# 2. Clean disN filesystem: aba tree, quay data, caches, container storage
+	echo "  Cleaning disN filesystem ..."
+	_essh "$dis_host" "rm -rf ~/aba ~/quay-install ~/quay-storage ~/.ssh/quay_installer*" 2>&1 || true
+	_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
+	_essh "$dis_host" "rm -rf ~/.cache/agent ~/.oc-mirror" 2>&1 || true
+	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage" 2>&1 || true
+
+	# 3. Restore baseline system state (firewalld on, as created by setup-infra)
+	_essh "$dis_host" "sudo systemctl enable firewalld 2>/dev/null; sudo systemctl start firewalld 2>/dev/null" 2>&1 || true
+
+	# 4. Ensure VC_FOLDER / GOVC_DATASTORE are correct on disN
+	if [ -n "${VC_FOLDER:-}" ]; then
+		_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" 2>/dev/null \
+			&& echo "  Set VC_FOLDER=${VC_FOLDER} on $dis_host" \
+			|| echo "  WARNING: could not set VC_FOLDER on $dis_host"
+	fi
+	if [ -n "${VM_DATASTORE:-}" ]; then
+		_essh "$dis_host" "sed -i \"s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g\" ~/.vmware.conf" 2>/dev/null \
+			&& echo "  Set GOVC_DATASTORE=${VM_DATASTORE} on $dis_host" \
+			|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
+	fi
+
+	# 5. Verify clean state
+	if _essh "$dis_host" "[ ! -d ~/aba ] && [ ! -d ~/quay-install ] && ! podman ps -q 2>/dev/null | grep -q ." 2>/dev/null; then
+		echo "  disN cleanup verified: clean state"
+	else
+		echo "  WARNING: disN cleanup may be incomplete -- check manually"
+	fi
+
+	echo "  disN cleanup complete."
+}
+
 # --- Execute suite ------------------------------------------------------------
 
 _start_time=$(date +%s)
@@ -248,6 +307,12 @@ echo ""
 _pre_suite_cleanup() {
 	local found=""
 
+	# Kill stale oc-mirror processes from previous suite (they hold port 55000)
+	if pkill -f 'oc-mirror' 2>/dev/null; then
+		echo "  Killed stale oc-mirror process(es)"
+		sleep 2
+	fi
+
 	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do
 		[ -f "$cleanup_file" ] || continue
 		found=1
@@ -285,21 +350,26 @@ _pre_suite_cleanup() {
 _pre_suite_cleanup
 
 if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
-	# Revert disN to clean state before each suite
-	_revert_dis_snapshot "pool-ready" || {
-		echo ""
-		echo "  ERROR: disN revert failed -- cannot proceed."
-		echo "  $DIS_VM must have a 'pool-ready' snapshot. Create it by running"
-		echo "  clone-and-check (or setup-infra Phase 3) for this pool."
-		echo ""
-		echo "1" > "$RC_FILE"
-		exit 1
-	}
+	if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
+		# Legacy path: VMware snapshot revert (opt-in via E2E_USE_SNAPSHOT_REVERT=1)
+		_revert_dis_snapshot "pool-ready" || {
+			echo ""
+			echo "  ERROR: disN revert failed -- cannot proceed."
+			echo "  $DIS_VM must have a 'pool-ready' snapshot. Create it by running"
+			echo "  clone-and-check (or setup-infra Phase 3) for this pool."
+			echo ""
+			echo "1" > "$RC_FILE"
+			exit 1
+		}
+	else
+		# Default: clean disN using ABA's own commands (exercises product code paths)
+		_cleanup_dis_aba
+	fi
 
 	# Clean up any stale Quay/registry state on conN from previous suite
 	_cleanup_con_quay
 else
-	echo "  (Skipping snapshot revert and Quay cleanup -- E2E_SKIP_SNAPSHOT_REVERT=1)"
+	echo "  (Skipping disN cleanup and Quay cleanup -- E2E_SKIP_SNAPSHOT_REVERT=1)"
 fi
 
 _rc=0
@@ -320,14 +390,18 @@ while true; do
 			export E2E_RESUME_FILE="$_STATE_FILE_PATH"
 			echo "  Will skip $(grep -c '^0 ' "$_STATE_FILE_PATH" 2>/dev/null || echo 0) previously-passed test(s)."
 		fi
-		# Cleanup clusters BEFORE snapshot revert -- aba delete needs cluster dir
+		# Cleanup clusters BEFORE disN reset -- aba delete needs cluster dir
 		_pre_suite_cleanup
 		if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
-			_revert_dis_snapshot "pool-ready" || {
-				echo "  ERROR: disN revert failed -- cannot restart. Fix snapshot then re-run."
-				echo "1" > "$RC_FILE"
-				exit 1
-			}
+			if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
+				_revert_dis_snapshot "pool-ready" || {
+					echo "  ERROR: disN revert failed -- cannot restart. Fix snapshot then re-run."
+					echo "1" > "$RC_FILE"
+					exit 1
+				}
+			else
+				_cleanup_dis_aba
+			fi
 			_cleanup_con_quay
 		fi
 		continue
