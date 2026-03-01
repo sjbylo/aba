@@ -12,6 +12,8 @@ Options:
   -u, --reg-user string                # The username used to access the registry (default is 'init').
       --data-dir </path/to/dir>        # Install Quay images/cache to this dir instead of ~/quay-install.
       --reg-path <string>              # The path to store images inside the mirror registry.
+      --vendor <auto|quay|docker>      # Registry type: auto (default), quay, or docker.
+      --reg-port <number>              # Port of the mirror registry (default 8443).
   -r, --retry [<count>]                # Retry <count> times on oc-mirror error.
 
 Related commands:

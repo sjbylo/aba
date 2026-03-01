@@ -1,11 +1,29 @@
 #!/bin/bash
 # Start here, run this script to get going!
+#
+# =============================================================================
+# ABA Architecture: Connected -> Bundle -> Disconnected
+# =============================================================================
+# ABA always starts on a CONNECTED workstation with internet access.
+# It downloads all required artifacts: CLI tools, container images,
+# mirror registry tarballs (Quay + Docker), and operator catalogs.
+#
+# These are packaged into an "ABA Bundle" (via 'aba bundle' or 'aba tar')
+# which is transferred into a FULLY DISCONNECTED environment (the "DISCO").
+#
+# The disconnected bastion has NO INTERNET by design.
+# ALL dependencies must already be inside the ABA bundle/repo.
+# If an artifact is missing in the disconnected environment, the bundle
+# creation failed -- it is never acceptable to reach the internet from there.
+#
+# See: https://developers.redhat.com/articles/2025/10/14/simplify-openshift-installation-air-gapped-environments
+# =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
 ABA_VERSION=20260226143439
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260301113826
+ABA_BUILD=20260301204853
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -379,6 +397,18 @@ elif [ "$1" = "--light" ]; then
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_ROOT/mirror mirror.conf force=yes
 		replace-value-conf -n data_dir -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		shift 2
+	elif [ "$1" = "--vendor" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[[ "$2" =~ ^(auto|quay|docker)$ ]] || aba_abort "invalid vendor '$2' -- must be auto, quay, or docker"
+		make -sC $ABA_ROOT/mirror mirror.conf force=yes
+		replace-value-conf -n reg_vendor -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		shift 2
+	elif [ "$1" = "--reg-port" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[[ "$2" =~ ^[0-9]+$ ]] || aba_abort "invalid port '$2' -- must be a number"
+		make -sC $ABA_ROOT/mirror mirror.conf force=yes
+		replace-value-conf -n reg_port -v "$2" -f $ABA_ROOT/mirror/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-user" ]; then
 		# The username used to access the mirror registry 

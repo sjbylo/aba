@@ -150,8 +150,11 @@ endif
 	curl -f --retry 8 -sL $(CURL_PROGRESS) -o mirror-registry-sha256sum.txt $(mirror_registry_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" mirror-registry-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
 	echo "valid!"
 
-# Store the docker registry image so it can be used in air-gapped env. (if docker.io reachable) Note: Docker available as arm64 image!
-# Ignore any errors, since docker.io may not be whitelisted
+# Docker registry image for air-gapped environments.
+# This file MUST be created on the connected workstation (during 'aba bundle' / 'aba save')
+# and included in the ABA bundle. The disconnected bastion has NO internet access --
+# if this file is missing there, the bundle was not properly created.
+# Ignore pull errors on connected side since docker.io may not be whitelisted.
 DOCKER_REG_IMAGE := docker.io/library/registry:latest
 DOCKER_REG_FILE  := docker-reg-image.tgz
 $(DOCKER_REG_FILE):
