@@ -6,7 +6,7 @@ Usage:
 Options:
   -d, --dir <path/to/dir>              # Run aba in the specified directory, or cd there and run without -d.
   -y                                   # Automatically accept the default answer to all prompts.
-  -H, --mirror-hostname string         # The hostname of the mirror registry.
+  -H, --reg-host <hostname>             # The hostname of the mirror registry.
   -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key, used to install Quay to a *remote host*.
   -U, --reg-ssh-user <string>          # Username to use to access the remote host via ssh.
   -u, --reg-user string                # The username used to access the registry (default is 'init').

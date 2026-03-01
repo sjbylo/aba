@@ -97,7 +97,7 @@ _log "TEST 1: Mirror cleanup (Docker registry on port 5000)"
 
 echo "  Step 1: Configure aba + mirror.conf for Docker on port 5000 ..."
 _con "cd ~/aba && aba reset -f 2>/dev/null; true"
-_con "cd ~/aba && aba -A --platform vmw --channel stable --version p --base-domain p${POOL}.example.com" 2>&1 | tail -1
+_con "cd ~/aba && aba --noask --platform vmw --channel stable --version p --base-domain p${POOL}.example.com" 2>&1 | tail -1
 _con "cd ~/aba && aba -d mirror mirror.conf" 2>&1 | tail -1
 
 # Verify mirror.conf exists now

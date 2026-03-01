@@ -54,7 +54,7 @@ test_begin "Setup: ensure pre-populated registry"
 # We need the actual x.y.z version for the registry setup script.
 e2e_run "Install aba (needed for version resolution)" "./install"
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
-    "aba -A --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 # Read the resolved x.y.z version from aba.conf
 _ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
@@ -90,7 +90,7 @@ e2e_run "Auto-update: run aba (triggers update)" \
 e2e_run "Auto-update: verify installed binary has new build stamp" \
     "grep ^ABA_BUILD=\$(cat /tmp/e2e-aba-build-stamp) \$(which aba)"
 
-e2e_run "Configure aba.conf" "aba -A --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Configure aba.conf" "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
@@ -107,7 +107,7 @@ e2e_run "Set operator sets" "echo kiali-ossm > templates/operator-set-abatest &&
 e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 
 e2e_run "Re-apply ask=false after interactive test" \
-    "aba -A --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"

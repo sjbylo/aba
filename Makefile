@@ -112,9 +112,8 @@ ask: # Automatically accept the default answer to all prompts. Set 'ask' in aba.
 #.PHONY: setask
 #setask: ask
 
-#FIXME: Remove? Use -A or -y
 .PHONY: noask
-noask:  # Always prompt.  Set 'ask' in aba.conf to 'false'
+noask:  # Disable prompts. Use 'aba --noask' or 'aba -Y' instead.
 	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
 	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf && echo [ABA] value ask has been set to false in aba.conf.
 #.PHONY: setnoask

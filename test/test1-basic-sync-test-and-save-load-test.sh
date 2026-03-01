@@ -98,7 +98,7 @@ v=4.16.3
 vf=~steve/.vmware.conf
 [ ! "$VER_OVERRIDE" ] && VER_OVERRIDE=latest
 [ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
-test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba -A --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE ### --vmw $vf
+test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --noask --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE ### --vmw $vf
 
 test-cmd -m "Checking aba.conf settings - ask=false" "grep ^ask=false aba.conf"
 test-cmd -m "Checking aba.conf settings - platform=vmw" "grep ^platform=vmw aba.conf"

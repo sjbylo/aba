@@ -8,7 +8,7 @@ Examples:
   aba cluster --name mycompact --type compact --step agentconf       # Create agent-based config files and stop.
   aba cluster --name sno --type sno --step agentconf|iso|install     # Create cluster dir and process until 'step'.
   aba cluster --name sno --type sno --starting-ip 10.0.0.1           # Install SNO cluster, setting the first node's IP.
-  aba cluster --name ocp --api-vip 10.0.0.5 --ingress-vip 10.0.0.6   # Set VIPs for API and ingress endpoints.
+  aba cluster --name ocp -A 10.0.0.5 -G 10.0.0.6                     # Set VIPs for API and ingress endpoints.
   aba cluster --name mycluster --ports ens192 ens224                 # Specify network ports used for cluster nodes.
 
 Options:
@@ -21,8 +21,8 @@ Options:
     -s, --step <step>                     # Process up to this step or target <cluster.conf|agentconf|iso|mon>.
                                           # See steps (targets) with "aba --dir mycluster help".
     -i, --starting-ip <ip>                # IP address for the first cluster node (rendezvous/node0).
-        --api-vip <ip>                    # IP address for cluster's API.
-        --ingress-vip <ip>                # IP address for cluster application ingress.
+    -A, --api-vip <ip>                    # IP address for cluster's API.
+    -G, --ingress-vip <ip>                # IP address for cluster application ingress.
     -M, --machine-network <cidr>          # CIDR of node machine network, such as 10.0.0.0/20.
     -g, --gateway-ip <ip>                 # Gateway IP or next hop address.
     -I, --int-connection [proxy|direct]   # Install from the public registry or set empty to use mirror.
@@ -34,7 +34,13 @@ Options:
         --mmem <count>                    # Set master memory (GB)
         --wcpu <count>                    # Set worker CPU count (vCPUs)
         --wmem <count>                    # Set worker memory (GB)
-        --data-disk [<size>]              # Size (GB) of thin-provisioned 'data disk' or empty for none.
+        --data-disk-gb [<size>]           # Size (GB) of thin-provisioned 'data disk' or empty for none.
+    -W, --num-workers <count>             # Set number of worker nodes.
+        --num-masters <count>             # Set number of master/control-plane nodes.
+        --vlan [<tag>]                    # Set VLAN tag or empty to clear.
+        --ssh-key [<path>]                # Path to SSH public key or empty to clear.
+        --proxy [<url>]                   # Set http/https proxy URL or empty to clear.
+        --no-proxy [<list>]               # Set no_proxy list or empty to clear.
 
 Usage (from a cluster directory):
   aba run --cmd "oc command"              # Run this 'oc command' on the current cluster.

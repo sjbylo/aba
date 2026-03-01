@@ -86,7 +86,7 @@ set -x
 cd aba
 #aba -d cli govc
 echo "Config aba.conf ..."
-aba -A --channel stable --version latest -p vmw
+aba --noask --channel stable --version latest -p vmw
 grep -e ocp_channel -e ocp_version aba.conf
 echo DONE PART 1
 END

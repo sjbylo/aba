@@ -1,24 +1,30 @@
 # Session State
 
 ## Current goal
-Implementing CLI Flag Cleanup plan (`cli_flag_cleanup_ec59867b.plan.md`). Still in Plan Mode -- awaiting user approval to begin execution.
+CLI Flag Cleanup plan -- fully implemented, awaiting commit/push approval.
 
 ## Done this session
-- Refined plan: Remove `-A` from `--noask`, reassign `-A` to `--api-vip` ("A" for API)
-- Added `-G` for `--ingress-vip` ("G" for inGress)
-- Dropped `--av` / `--iv` compound aliases (replaced by `-A` / `-G`)
-- Audited all files: 9 test/script files, ~14 occurrences of `aba -A` to replace with `aba --noask`
-- Confirmed `test/test5-*.sh` uses `get po -A` (kubectl) -- not affected
+- Committed 127f6c3: notifications, force-deploy fix, cleanup prompts, VIP placeholder removal
+- Executed full CLI Flag Cleanup plan (12 todos, 16 files changed, 1 deleted):
+  - Removed fake short flags (-dd, -PP)
+  - Renamed --data-disk to --data-disk-gb (alias kept)
+  - Added --yes-permanent alias for -Y
+  - Reassigned -A from --noask to --api-vip
+  - Added -G for --ingress-vip
+  - Added --reg-host (primary), kept --mirror-hostname/-H as aliases
+  - Consolidated --incl-platform into --excl-platform true/false
+  - Added --num-workers/-W, --num-masters, --vlan, --ssh-key, --proxy, --no-proxy
+  - Replaced all aba -A with aba --noask in 9 test files
+  - Updated 4 help files, fixed Makefile comment, deleted .options.md
+- Pre-commit checks passed
 
 ## Next steps
-1. Get user approval to begin executing the CLI Flag Cleanup plan
-2. Execute plan tasks in order (see `cli_flag_cleanup_ec59867b.plan.md` for full todo list)
-3. Run `build/pre-commit-checks.sh` before committing
-4. Wait for explicit user permission to commit and push
+1. Commit and push (awaiting user approval)
+2. Deploy to pools and test
+3. Clean up .backup/ after successful commit
 
 ## Decisions / notes
-- `-A` reassigned: `--noask` -> `--api-vip` (natural mnemonic: "A" for API)
-- `-G` assigned to `--ingress-vip` ("G" for inGress; `-g` already taken by `--gateway-ip`)
-- `--noask` stays as long-form hidden deprecated alias (no short flag, no help text)
-- `-Y` / `--yes-permanent` is the recommended way to disable prompts
-- `ASK_OVERRIDE` difference: `-Y` sets it, `--noask` does not -- both behaviors preserved
+- -A = --api-vip, -G = --ingress-vip
+- --mirror-hostname kept as alias (used in Red Hat blog)
+- --noask stays as hidden long-form deprecated alias
+- Blog safe: https://developers.redhat.com/articles/2025/10/14/simplify-openshift-installation-air-gapped-environments

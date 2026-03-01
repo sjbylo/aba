@@ -370,7 +370,7 @@ elif [ "$1" = "--light" ]; then
 
 		shift 2
 		ocp_version=$ver
-	elif [ "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
+	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		# force will skip over asking to edit the conf file
 		make -sC $ABA_ROOT/mirror mirror.conf force=yes
@@ -485,7 +485,7 @@ elif [ "$1" = "--light" ]; then
 	#	fi
 		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
-	elif [ "$1" = "--api-vip" ]; then
+	elif [ "$1" = "--api-vip" -o "$1" = "-A" ]; then
 		# If arg ip addr then replace value in cluster.conf
 		# If arg missing remove from cluster.conf
 		api_vip=
@@ -511,7 +511,7 @@ elif [ "$1" = "--light" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND api_vip=$api_vip"
 		fi
 		shift
-	elif [ "$1" = "--ingress-vip" ]; then
+	elif [ "$1" = "--ingress-vip" -o "$1" = "-G" ]; then
 		# If arg ip addr replace value in cluster.conf
 		# If arg missing remove from cluster.conf
 		ingress_vip=
@@ -539,7 +539,7 @@ elif [ "$1" = "--light" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND ingress_vip=$ingress_vip"
 		fi
 		shift
-	elif [ "$1" = "--ports" -o "$1" = "-PP" ]; then #FIXME: opt name?
+	elif [ "$1" = "--ports" ]; then
 		# If arg missing remove from aba.conf
 		# Check arg after --ports, if "empty" then remove value from cluster.conf
 		ports_vals=""
@@ -591,11 +591,14 @@ elif [ "$1" = "--light" ]; then
 			ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
 			replace-value-conf -n ops -v $ops_list -f $ABA_ROOT/aba.conf
 		fi
-	elif [ "$1" = "--incl-platform" ]; then  # FIXME: Only have "--excl-platform" option and add true or false (remove: --incl-platform ??)
-		replace-value-conf -n excl_platform -v "false" -f $ABA_ROOT/aba.conf
-		shift
 	elif [ "$1" = "--excl-platform" ]; then
-		replace-value-conf -n excl_platform -v "true" -f $ABA_ROOT/aba.conf
+		if [ "$2" = "false" ]; then
+			replace-value-conf -n excl_platform -v "false" -f $ABA_ROOT/aba.conf
+			shift
+		else
+			replace-value-conf -n excl_platform -v "true" -f $ABA_ROOT/aba.conf
+			[ "$2" = "true" ] && shift
+		fi
 		shift
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -614,7 +617,7 @@ elif [ "$1" = "--light" ]; then
 		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
 		export ask=1
 		shift 
-	elif [ "$1" = "-Y" ]; then  # One off, accept the default answer to all prompts for this invocation
+	elif [ "$1" = "-Y" -o "$1" = "--yes-permanent" ]; then
 		export ASK_OVERRIDE=1  
 		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf  # And make permanent change
 		export ask=
@@ -623,7 +626,7 @@ elif [ "$1" = "--light" ]; then
 		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
 		export ask=1
 		shift 
-	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then  # FIXME: make -y work only for a single command execution (not write into file)
+	elif [ "$1" = "--noask" ]; then
 		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
 		export ask=
 		shift 
@@ -688,7 +691,7 @@ elif [ "$1" = "--light" ]; then
 		fi
 		shift 2
 
-	elif [ "$1" = "--data-disk" -o "$1" = "-dd" ]; then
+	elif [ "$1" = "--data-disk-gb" -o "$1" = "--data-disk" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
 				replace-value-conf -n data_disk -v $2 -f cluster.conf
@@ -780,6 +783,77 @@ elif [ "$1" = "--light" ]; then
 		shift
 	elif [ "$1" = "--masters" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND masters=1"
+		shift
+	elif [ "$1" = "--num-workers" -o "$1" = "-W" ]; then
+		if echo "$2" | grep -q -E '^[0-9]+$'; then
+			if [ -f cluster.conf ]; then
+				replace-value-conf -n num_workers -v $2 -f cluster.conf
+			else
+				BUILD_COMMAND="$BUILD_COMMAND num_workers=$2"
+			fi
+		else
+			aba_abort "argument invalid [$2] after option $1"
+		fi
+		shift 2
+	elif [ "$1" = "--num-masters" ]; then
+		if echo "$2" | grep -q -E '^[0-9]+$'; then
+			if [ -f cluster.conf ]; then
+				replace-value-conf -n num_masters -v $2 -f cluster.conf
+			else
+				BUILD_COMMAND="$BUILD_COMMAND num_masters=$2"
+			fi
+		else
+			aba_abort "argument invalid [$2] after option $1"
+		fi
+		shift 2
+	elif [ "$1" = "--vlan" ]; then
+		vlan_val=
+		if [[ -n $2 && $2 != -* ]]; then
+			vlan_val=$2
+			shift
+		fi
+		if [ -f cluster.conf ]; then
+			replace-value-conf -n vlan -v "$vlan_val" -f cluster.conf
+		else
+			BUILD_COMMAND="$BUILD_COMMAND vlan=$vlan_val"
+		fi
+		shift
+	elif [ "$1" = "--ssh-key" ]; then
+		ssh_key_val=
+		if [[ -n $2 && $2 != -* ]]; then
+			ssh_key_val=$2
+			shift
+		fi
+		if [ -f cluster.conf ]; then
+			replace-value-conf -n ssh_key_file -v "$ssh_key_val" -f cluster.conf
+		else
+			BUILD_COMMAND="$BUILD_COMMAND ssh_key_file=$ssh_key_val"
+		fi
+		shift
+	elif [ "$1" = "--proxy" ]; then
+		proxy_val=
+		if [[ -n $2 && $2 != -* ]]; then
+			proxy_val=$2
+			shift
+		fi
+		if [ -f cluster.conf ]; then
+			replace-value-conf -n http_proxy -v "$proxy_val" -f cluster.conf
+			replace-value-conf -n https_proxy -v "$proxy_val" -f cluster.conf
+		else
+			BUILD_COMMAND="$BUILD_COMMAND http_proxy=$proxy_val https_proxy=$proxy_val"
+		fi
+		shift
+	elif [ "$1" = "--no-proxy" ]; then
+		no_proxy_val=
+		if [[ -n $2 && $2 != -* ]]; then
+			no_proxy_val=$2
+			shift
+		fi
+		if [ -f cluster.conf ]; then
+			replace-value-conf -n no_proxy -v "$no_proxy_val" -f cluster.conf
+		else
+			BUILD_COMMAND="$BUILD_COMMAND no_proxy=$no_proxy_val"
+		fi
 		shift
 	elif [ "$1" = "--start" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND start=--start"
