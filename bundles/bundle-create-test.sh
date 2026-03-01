@@ -121,7 +121,7 @@ if podman ps | grep registry; then
 	cd ..
 	# Uninstall Quay
 	./install  # install aba
-	aba -A
+	aba --noask
 	#aba uninstall  || true
 	cd mirror
 	./mirror-registry uninstall --autoApprove -v || true
@@ -333,7 +333,7 @@ sed -i "s/platform=bm/platform=vmw/g" aba.conf
 
 ./install
 aba
-aba -A
+aba --noask
 aba --machine-network 10.0.0.0/20 --ntp $NTP_IP --gateway-ip 10.0.1.1  # Just to be sure, needed on dual-homed bastion
 
 echo_step Install Quay and load the images ...
@@ -534,7 +534,7 @@ echo_step Remove Quay ...
 # Uninstall Quay
 cd $WORK_DIR/test-install/aba
 ./install  # install aba
-aba -A
+aba --noask
 # Use one of the following two:
 aba -d mirror uninstall -y
 #aba -d mirror uninstall-docker-registry -y

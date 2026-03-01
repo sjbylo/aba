@@ -64,7 +64,7 @@ test_begin "Setup: ensure pre-populated registry"
 
 e2e_run "Install aba (needed for version resolution)" "./install"
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
-    "aba -A --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 _ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
 _ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')

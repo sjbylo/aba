@@ -28,7 +28,7 @@ Usage: Create a install 'bundle archive'
 Usage: Set up and load mirror registry
    aba --dir mirror <command>            # Connect to existing, or create a, mirror registry. 
    <<options>>:
-     -H, --mirror-hostname <hostname>    # The hostname of the target mirror registry
+     -H, --reg-host <hostname>            # The hostname of the target mirror registry
      -u, --reg-user <username>           # The username used to access the registry (default it 'init')
      -k, --reg-ssh-key ~/.ssh/mykey      # Path to ssh key to use to install Quay to a remote host
      -U, --reg-ssh-user myuser           # Username to use to access the remote host via ssh
@@ -56,8 +56,8 @@ Usage: Provision OpenShift cluster
          --step <step>                   # Process up to this step or command.  
                                          # See commands with "aba -d mycluster help"
          --starting-ip <ip>              # IP addr for the first cluster node
-         --api-vip <ip>                  # IP addr for cluster API
-         --ingress-vip <ip>              # IP addr for application ingress 
+     -A, --api-vip <ip>                  # IP addr for cluster API
+     -G, --ingress-vip <ip>              # IP addr for application ingress 
      -I, --int-connection <proxy|direct> # Install from the public mirror over the Internet
 
    aba run --cmd "oc command"            # Run this oc command on the current cluster
@@ -84,7 +84,7 @@ Usage:
      -P, --op-sets [<operator set list>] # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted
      -e, --editor <editor command>       # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
      -a, --ask                           # Prompt user when needed
-     -y, --noask                         # Do not prompt, assume default answers
+     -Y, --yes-permanent                 # Permanently accept defaults (writes ask=false to aba.conf)
      -o, --out <file|->                  # Bundle archive output destination, e.g. file or stdout (-)
      -f, --force                         # Only used for 'aba reset --force'
      -V, --vmware                        # Apply this VMware config file (for govc)

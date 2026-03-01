@@ -81,7 +81,7 @@ _assert "Pool Quay running on 8443" \
 # Configure aba (needed for all tests)
 echo "  Setting up aba.conf ..."
 _con "cd ~/aba && aba reset -f 2>/dev/null; true"
-_con "cd ~/aba && aba -A --platform vmw --channel stable --version p --base-domain p${POOL}.example.com" 2>&1 | tail -1
+_con "cd ~/aba && aba --noask --platform vmw --channel stable --version p --base-domain p${POOL}.example.com" 2>&1 | tail -1
 _con "cd ~/aba && aba -d mirror mirror.conf" 2>&1 | tail -1
 
 _assert "mirror.conf exists" _con "test -f ~/aba/mirror/mirror.conf"
