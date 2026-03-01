@@ -431,6 +431,16 @@ elif [ "$1" = "--light" ]; then
 		make -sC $ABA_ROOT/mirror mirror.conf force=yes
 		replace-value-conf -n reg_path -v "$2" -f $ABA_ROOT/mirror/mirror.conf
 		shift 2
+	elif [ "$1" = "--pull-secret-mirror" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[ ! -f "$2" ] && aba_abort "file not found: $2"
+		BUILD_COMMAND="$BUILD_COMMAND pull_secret_mirror='$2'"
+		shift 2
+	elif [ "$1" = "--ca-cert" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[ ! -f "$2" ] && aba_abort "file not found: $2"
+		BUILD_COMMAND="$BUILD_COMMAND ca_cert='$2'"
+		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
@@ -732,11 +742,10 @@ elif [ "$1" = "--light" ]; then
 		shift
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		if [ "$cur_target" = "cluster" ]; then
-			BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
+		if [ "$cur_target" = "cluster" -o "$cur_target" = "mirror" ]; then
+			BUILD_COMMAND="$BUILD_COMMAND name='$2'"
 		else
-			aba_abort "can only use option $1 after target 'cluster'.  See aba cluster -h" 
-
+			aba_abort "option $1 requires target 'cluster' or 'mirror'.  See aba cluster -h or aba mirror -h"
 			exit 1
 		fi
 
@@ -913,6 +922,13 @@ aba_debug "interactive_mode=[$interactive_mode]"
 
 # Sanitize $BUILD_COMMAND
 BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
+
+# Auto-inject 'register' target when --pull-secret-mirror and --ca-cert are given without an explicit target
+if echo "$BUILD_COMMAND" | grep -q "pull_secret_mirror=" && echo "$BUILD_COMMAND" | grep -q "ca_cert="; then
+	if [ -z "$cur_target" ]; then
+		BUILD_COMMAND="register $BUILD_COMMAND"
+	fi
+fi
 
 aba_debug "ABA_ROOT=[$ABA_ROOT]" 
 aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 

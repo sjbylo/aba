@@ -27,6 +27,7 @@ Usage: Create a install 'bundle archive'
 
 Usage: Set up and load mirror registry
    aba --dir mirror <command>            # Connect to existing, or create a, mirror registry. 
+   aba mirror --name <name> [options]    # Create a named mirror directory (for enclaves)
    <<options>>:
      -H, --reg-host <hostname>            # The hostname of the target mirror registry
      -u, --reg-user <username>           # The username used to access the registry (default it 'init')
@@ -34,6 +35,8 @@ Usage: Set up and load mirror registry
      -U, --reg-ssh-user myuser           # Username to use to access the remote host via ssh
          --data-dir /path/to/dir         # Install Quay files/images under this directory
          --reg-path <path>               # The path to use to store images in the mirror reg
+         --pull-secret-mirror <file>     # Register existing registry: path to pull secret JSON
+         --ca-cert <file>                # Register existing registry: path to root CA cert
 
    aba -d mirror install                 # Install mirror registry
    aba -d mirror sync                    # Copy images from the Internet into the mirror registry

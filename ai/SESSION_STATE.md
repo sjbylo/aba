@@ -1,26 +1,31 @@
 # Session State
 
 ## Current goal
-Designing "mirror --name" and existing-registry registration feature. Plan refined with enclave use case.
+Implemented "mirror --name" and existing-registry registration feature. Awaiting commit approval.
 
 ## Done this session
 - Committed 127f6c3: notifications, force-deploy fix, cleanup prompts, VIP placeholder removal
 - Committed 4264d4c: full CLI flag cleanup (17 files changed)
-- Created and refined plan: `mirror_name_and_register_5ecd9095.plan.md`
+- Committed 8b34af2: backlog, indentation fix, regcreds setup in suite
+- Implemented mirror --name + register feature:
+  - scripts/reg-register.sh (NEW): register existing registry creds
+  - scripts/reg-uninstall-existing.sh (NEW): safe deregister
+  - aba.sh: --pull-secret-mirror, --ca-cert flags; --name works for mirror; auto-inject register target
+  - Makefile: mirror target for named dirs
+  - mirror/Makefile: create-mirror-dir + register targets
+  - Help files updated
 
 ## Scope of this chat
 - **This chat**: coding, refactoring, new features ONLY
 - **Separate chat**: E2E test monitoring, pool management
 
 ## Next steps
-- Finalize and implement mirror --name + register feature
-- Follow-up: rename .installed/.uninstalled to .available/.unavailable (separate commit)
+- Commit and push (awaiting approval)
+- Follow-up: rename .installed/.uninstalled to .available/.unavailable (backlog B1)
+- Follow-up: simplify E2E suite regcreds to use new register command
 
 ## Decisions / notes
-- Primary use case: oc-mirror v2 enclaves (multiple registries behind disconnected networks)
-- REG_VENDOR=existing marks externally-managed registries in state.sh
-- reg-uninstall-existing.sh: only cleans local creds, never touches external registry
-- --pull-secret copies file as-is; interactive flow stays in 'aba mirror password'
-- Both --pull-secret and --ca-cert -> touch .installed
-- mirror/Makefile .init target is self-bootstrapping (symlinks via relative paths)
-- aba mirror --name just needs: mkdir + cp Makefile + make init
+- REG_VENDOR=existing in state.sh marks externally-managed registries
+- reg-uninstall.sh dispatches to reg-uninstall-existing.sh (backs up creds, never touches registry)
+- Primary use case: oc-mirror v2 enclaves
+- mirror/Makefile .init target self-bootstraps symlinks for named dirs

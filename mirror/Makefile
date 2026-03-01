@@ -61,6 +61,14 @@ init: .init
 	ln -sfn ~/.aba/mirror/$$(basename $$PWD) regcreds
 	touch .init
 
+# Register an existing (externally-managed) mirror registry.
+# Copies the provided pull secret and CA cert into regcreds, trusts the CA, and marks as .installed.
+.PHONY: register
+register: .init mirror.conf
+	@[ "$(pull_secret_mirror)" ] || { echo "[ABA] Error: pull_secret_mirror= is required (path to pull secret JSON file)"; exit 1; }
+	@[ "$(ca_cert)" ] || { echo "[ABA] Error: ca_cert= is required (path to CA certificate file)"; exit 1; }
+	$(SCRIPTS)/reg-register.sh "$(pull_secret_mirror)" "$(ca_cert)"
+
 # If aba.conf does not exist, must abort!
 ../aba.conf:
 	echo [ABA] "aba/aba.conf file missing! Please read the README.md on how to get started!"
