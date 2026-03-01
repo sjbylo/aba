@@ -100,6 +100,10 @@ $(MIRROR_CMDS):
 #	@echo "  aba -d mirror $@"
 #	@echo "  cd mirror && aba $@"
 
+.PHONY: mirror
+mirror: aba.conf  ## Create a named mirror directory, e.g. aba mirror --name mymirror [--reg-host <host>] [--pull-secret-mirror <file> --ca-cert <file>]
+	$(SCRIPTS)/setup-mirror.sh name=$(name) pull_secret_mirror=$(pull_secret_mirror) ca_cert=$(ca_cert)
+
 .PHONY: cluster
 cluster:  aba.conf  ## Initialize install dir and install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
 	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
