@@ -1,30 +1,26 @@
 # Session State
 
 ## Current goal
-CLI Flag Cleanup plan -- fully implemented, awaiting commit/push approval.
+Designing "mirror --name" and existing-registry registration feature. Plan refined with enclave use case.
 
 ## Done this session
 - Committed 127f6c3: notifications, force-deploy fix, cleanup prompts, VIP placeholder removal
-- Executed full CLI Flag Cleanup plan (12 todos, 16 files changed, 1 deleted):
-  - Removed fake short flags (-dd, -PP)
-  - Renamed --data-disk to --data-disk-gb (alias kept)
-  - Added --yes-permanent alias for -Y
-  - Reassigned -A from --noask to --api-vip
-  - Added -G for --ingress-vip
-  - Added --reg-host (primary), kept --mirror-hostname/-H as aliases
-  - Consolidated --incl-platform into --excl-platform true/false
-  - Added --num-workers/-W, --num-masters, --vlan, --ssh-key, --proxy, --no-proxy
-  - Replaced all aba -A with aba --noask in 9 test files
-  - Updated 4 help files, fixed Makefile comment, deleted .options.md
-- Pre-commit checks passed
+- Committed 4264d4c: full CLI flag cleanup (17 files changed)
+- Created and refined plan: `mirror_name_and_register_5ecd9095.plan.md`
+
+## Scope of this chat
+- **This chat**: coding, refactoring, new features ONLY
+- **Separate chat**: E2E test monitoring, pool management
 
 ## Next steps
-1. Commit and push (awaiting user approval)
-2. Deploy to pools and test
-3. Clean up .backup/ after successful commit
+- Finalize and implement mirror --name + register feature
+- Follow-up: rename .installed/.uninstalled to .available/.unavailable (separate commit)
 
 ## Decisions / notes
-- -A = --api-vip, -G = --ingress-vip
-- --mirror-hostname kept as alias (used in Red Hat blog)
-- --noask stays as hidden long-form deprecated alias
-- Blog safe: https://developers.redhat.com/articles/2025/10/14/simplify-openshift-installation-air-gapped-environments
+- Primary use case: oc-mirror v2 enclaves (multiple registries behind disconnected networks)
+- REG_VENDOR=existing marks externally-managed registries in state.sh
+- reg-uninstall-existing.sh: only cleans local creds, never touches external registry
+- --pull-secret copies file as-is; interactive flow stays in 'aba mirror password'
+- Both --pull-secret and --ca-cert -> touch .installed
+- mirror/Makefile .init target is self-bootstrapping (symlinks via relative paths)
+- aba mirror --name just needs: mkdir + cp Makefile + make init

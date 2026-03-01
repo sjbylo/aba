@@ -92,6 +92,15 @@ ABA core fixes are deferred -- only framework/suite fixes applied immediately.
   6. **Prefix with `[e2e]`**: `_e2e_notify_prefix()` adds `[e2e] pool${N}/${host}` to every message.
 - **Fix**: Refactored `_e2e_notify_prefix()`, `_e2e_notify()`, `_e2e_notify_stdin()`, and all 3 call sites in `framework.sh`.
 
+## Backlog
+
+### B1. Rename .installed/.uninstalled to .available/.unavailable
+- **Status**: PENDING (separate commit)
+- **Severity**: Low (cosmetic / semantic clarity)
+- **Reason**: With `REG_VENDOR=existing` for externally-managed registries, `.installed` is misleading (ABA didn't install it). `.available` better conveys "a mirror registry is ready for use" regardless of who manages it.
+- **Scope**: ~46 occurrences across ~18 files (Makefiles, scripts, tests, .gitignore)
+- **Plan**: Mechanical find-and-replace in a dedicated commit after `mirror --name` feature lands.
+
 ## ABA Core Issues (deferred to tomorrow)
 
 ### A. Cluster VMs created in wrong vCenter folder
