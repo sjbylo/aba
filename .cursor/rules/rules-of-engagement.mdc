@@ -69,14 +69,34 @@ alwaysApply: true
 - Symlinks handle cross-directory access (scripts use same paths everywhere)
 - Ensure ABA can always be used via make too, so the make targets always work directly with make as well.
 
+## Documentation
+
+- Prefer adding documentation as comments inside the code vs in a file under `ai/`
+- Code comments are the primary source of truth -- they stay with the code and don't drift
+
 ## E2E test golden rules
 
 - Tests MUST fail on error -- never mask underlying issues!
 - Never use `2>/dev/null` or `|| true` in test commands unless there is a good reason to do so (use `e2e_diag` for diagnostic-only commands, or explicit precondition checks)
 - When a test fails, check if the fix belongs in ABA code FIRST -- never "fix" a test just to make it pass!
+- No safety nets in framework code -- if a suite doesn't clean up, fix the suite, don't paper over it
 - Uninstall from the same host that installed (e.g. registry installed from conN must be uninstalled from conN)
 - Never remove tools before operations that need them (e.g. `dnf remove make` before `aba reset`)
 - Verify cleanup actually worked (assert service is down, directory is gone)
 - Prefer `aba` commands over raw `make` / scripts -- eat your own dog food
+
+## E2E resource lifecycle
+
+- A suite ALWAYS cleans up resources it created before suite_end
+- SNO clusters: shutdown only (small, useful for post-suite debugging)
+- Compact / Standard clusters: MUST delete (large, hold VIPs)
+- Mirrors on disN: MUST uninstall
+- OOB pool registry: NEVER touched by suites (managed by `setup-pool-registry.sh`)
+- Register every cluster (`e2e_register_cluster`) and mirror (`e2e_register_mirror`) immediately before install -- enables crash recovery via `_pre_suite_cleanup`
+- A suite NEVER installs a resource and leaves it for another suite
+
+## ABA operational rules
+
+- Always run `aba day2` after `mirror load` or `mirror sync` (applies IDMS/ITMS/CatalogSources)
 
 ## For full details see `ai/RULES_OF_ENGAGEMENT.md`
