@@ -69,6 +69,12 @@ register: .init mirror.conf
 	@[ "$(ca_cert)" ] || { echo "[ABA] Error: ca_cert= is required (path to CA certificate file)"; exit 1; }
 	$(SCRIPTS)/reg-register.sh "$(pull_secret_mirror)" "$(ca_cert)"
 
+# Deregister an externally-managed mirror registry.
+# Only removes local credentials -- never touches the actual registry.
+.PHONY: unregister
+unregister: .init
+	$(SCRIPTS)/reg-unregister.sh
+
 # If aba.conf does not exist, must abort!
 ../aba.conf:
 	echo [ABA] "aba/aba.conf file missing! Please read the README.md on how to get started!"

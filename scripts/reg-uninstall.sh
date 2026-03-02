@@ -19,6 +19,14 @@ export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 if [ -s "$regcreds_dir/state.sh" ]; then
 	source "$regcreds_dir/state.sh"
 
+	# Externally-managed registries must use 'unregister', not 'uninstall'
+	if [ "$REG_VENDOR" = "existing" ]; then
+		aba_abort \
+			"This is an externally-managed registry (registered, not installed by ABA)." \
+			"Use 'aba -d $(basename $PWD) unregister' to remove the local credentials." \
+			"The registry itself will not be modified."
+	fi
+
 	if [ "$REG_SSH_KEY" ]; then
 		exec scripts/reg-uninstall-remote.sh "$REG_VENDOR" "$@"
 	else

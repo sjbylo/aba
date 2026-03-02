@@ -60,7 +60,7 @@ Examples of registering an existing (externally-managed) mirror registry:
     aba mirror --name enclave1 --reg-host registry.enc1.in --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
 
   Deregister (only removes local credentials, never modifies the external registry):
-    aba -d enclave1 uninstall
+    aba -d enclave1 unregister
 
 The 'install' command can be substituted with save, load, or sync. When these commands are used, 'install' will be triggered automatically if required.
 The options above [-k, -U, -H etc] can be used also for 'save', 'load' and/or 'sync' and will be passed to the 'install' command, if needed. 
