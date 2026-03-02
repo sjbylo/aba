@@ -41,6 +41,7 @@ source "$_RUN_DIR/lib/constants.sh"
 
 # --- CLI Variables -----------------------------------------------------------
 
+CLI_COMMAND=""
 CLI_SUITE=""
 CLI_ALL=""
 CLI_POOLS=1
@@ -59,6 +60,7 @@ CLI_LIST=""
 CLI_ATTACH=""
 CLI_DEPLOY=""
 CLI_RESTART=""
+CLI_RESCHEDULE=""
 CLI_STATUS=""
 CLI_START=""
 _CLI_POOLS_SET=""
@@ -71,40 +73,38 @@ _usage() {
 	cat <<-'USAGE'
 	E2E Test Framework v2 -- Coordinator
 
-	Usage:
-	  run.sh --all                   Run all suites (1 pool, work-queue dispatch)
-	  run.sh --all --pools 3         Run all suites across 3 pools
-	  run.sh --suite NAME            Run one suite on a free pool
-	  run.sh --suite X --pool 2      Run suite on a specific pool
-	  run.sh --resume --pool 3       Reconnect and start scheduling again for a specific pool
-	  run.sh --list                  List available suites
-	  run.sh stop [--pool N]         Kill runner(s) (all pools, or just pool N)
-	  run.sh start [--pool N]        Power on pool VMs (conN + disN)
-	  run.sh --destroy               Destroy all pool VMs
-	  run.sh deploy [--pool N]       Sync local ABA repo to conN host(s)
-	  run.sh restart [--pool N]      Stop + deploy + re-run last suite on pool N (or all)
-	  run.sh restart --pool N --resume  Resume: skip previously-passed tests
-	  run.sh status [--pool N]       Show what's running on pool N (or all)
-	  run.sh attach conN             Attach to conN's tmux session
-	  run.sh live [N]                Interactive multi-pane dashboard (read-write, handles prompts)
-	  run.sh dash [N]                Open multi-pane summary dashboard (auto-detects from pools.conf)
-	  run.sh dash [N] log            Open multi-pane full log dashboard
-	  run.sh --verify                Verify all pool VMs (no suite dispatch)
-	  run.sh --verify --pools 3     Verify pools 1-3
-	  run.sh --dry-run               Show plan without executing
+	Commands:
+	  run.sh run [--suite X] [--pools N]   Run suites (default: --all)
+	  run.sh run --pools 3                 Run all suites across 3 pools
+	  run.sh run --suite X --pool 2        Run suite on a specific pool
+	  run.sh run --pool 3 --resume         Re-run last suite, skip passed tests
+	  run.sh reschedule [--suite X] [--pools N]  Re-queue completed suites
+	  run.sh deploy [--pool N] [--force]   Sync local ABA repo to conN host(s)
+	  run.sh restart [--pool N] [--resume] Stop + deploy + re-run last suite
+	  run.sh stop [--pool N]               Kill runner(s)
+	  run.sh start [--pool N]              Power on pool VMs (conN + disN)
+	  run.sh status [--pool N]             Show what's running
+	  run.sh verify [--pools N|--pool N]   Verify pool VMs (no dispatch)
+	  run.sh list                          List available suites
+	  run.sh destroy                       Destroy all pool VMs
+	  run.sh attach conN                   Attach to conN's tmux session
+	  run.sh live [N]                      Interactive multi-pane dashboard
+	  run.sh dash [N] [log]                Read-only summary dashboard
 
-	Options:
-	  --pools N              Number of pools (default: 1)
-	  --recreate-golden      Force rebuild golden VM from template
-	  --recreate-vms         Force reclone all conN/disN from golden
-	  --clean                Clear checkpoints before running
-	  --pool N               Target a specific pool (default: round-robin)
-	  --resume               Reconnect to running suite(s) and continue scheduling on --pool N
-	  -y, --yes              Auto-accept prompts (e.g. broken VM replacement)
-	  -f, --force            Clean slate: wipe suite state on conN before dispatching
-	                         Combine with --pool N or --suite X for targeted cleanup
-	  -q, --quiet            CI mode: no interactive prompts (implies -y)
-	  --dry-run              Show dispatch plan, don't execute
+	Options (modifiers):
+	  --suite X,Y          Select specific suite(s)
+	  --all                Select all suites (default for run/reschedule)
+	  --pools N            Number of pools (default: 1)
+	  --pool N             Target a specific pool
+	  --force              Wipe suite state before dispatching / hot-deploy
+	  --resume             Skip previously-passed tests (run, restart)
+	  --dry-run            Show dispatch plan, don't execute
+	  --clean              Clear checkpoints before running
+	  --recreate-golden    Force rebuild golden VM from template
+	  --recreate-vms       Force reclone all conN/disN from golden
+	  -y, --yes            Auto-accept prompts
+	  -q, --quiet          CI mode: no interactive prompts (implies -y)
+	  --pools-file F       Custom pools.conf path
 
 	The script auto-detects VM state and only creates/configures
 	what's missing. No --setup flag needed.
@@ -113,39 +113,78 @@ _usage() {
 
 # --- Parse Arguments ---------------------------------------------------------
 
+# Detect subcommand (first non-flag argument)
+if [ $# -gt 0 ]; then
+	case "$1" in
+		run|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash)
+			CLI_COMMAND="$1"; shift ;;
+	esac
+fi
+
+# Parse flags
 while [ $# -gt 0 ]; do
 	case "$1" in
-		--suite|--suites)  CLI_SUITE="$2"; shift 2 ;;
-		--all)             CLI_ALL=1; shift ;;
+		--suite|--suites)     CLI_SUITE="$2"; shift 2 ;;
+		--all)                CLI_ALL=1; shift ;;
 		-p|--pools)           CLI_POOLS="$2"; _CLI_POOLS_SET=1; shift 2 ;;
 		-G|--recreate-golden) CLI_RECREATE_GOLDEN=1; shift ;;
 		-R|--recreate-vms)    CLI_RECREATE_VMS=1; shift ;;
-		-y|--yes)          CLI_YES=1; shift ;;
-		-q|--quiet)        CLI_QUIET=1; CLI_YES=1; shift ;;
-		--clean)           CLI_CLEAN=1; shift ;;
-		--dry-run)         CLI_DRY_RUN=1; shift ;;
-		-f|--force)        CLI_FORCE=1; shift ;;
-		--pool)            CLI_POOL="$2"; shift 2 ;;
-		--resume)          CLI_RESUME=1; shift ;;
-		--destroy)         CLI_DESTROY=1; shift ;;
-		--verify)          CLI_VERIFY=1; shift ;;
-		--list|-l)         CLI_LIST=1; shift ;;
-		--pools-file)      CLI_POOLS_FILE="$2"; shift 2 ;;
-		attach)            CLI_ATTACH="$2"; shift 2 ;;
-		deploy)            CLI_DEPLOY=1; shift ;;
-		restart)           CLI_RESTART=1; shift ;;
-		status)            CLI_STATUS=1; shift ;;
-		live)              shift; CLI_LIVE=""
-		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_LIVE="$1"; shift; fi ;;
-		stop)              CLI_STOP=1; shift ;;
-		start)             CLI_START=1; shift ;;
-		dash)              shift; CLI_DASHBOARD=""; CLI_DASH_LOG="summary.log"
-		                   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then CLI_DASHBOARD="$1"; shift; fi
-		                   if [[ "${1:-}" == "log" ]]; then CLI_DASH_LOG="latest.log"; shift; fi ;;
-		--help|-h)         _usage; exit 0 ;;
+		-y|--yes)             CLI_YES=1; shift ;;
+		-q|--quiet)           CLI_QUIET=1; CLI_YES=1; shift ;;
+		--clean)              CLI_CLEAN=1; shift ;;
+		--dry-run)            CLI_DRY_RUN=1; shift ;;
+		-f|--force)           CLI_FORCE=1; shift ;;
+		--pool)               CLI_POOL="$2"; shift 2 ;;
+		--resume)             CLI_RESUME=1; shift ;;
+		--pools-file)         CLI_POOLS_FILE="$2"; shift 2 ;;
+		--help|-h)            _usage; exit 0 ;;
+		# Deprecated flag-as-subcommand forms (backwards compat)
+		--destroy)  echo "Note: use 'run.sh destroy' (--destroy is deprecated)" >&2
+		            CLI_COMMAND="destroy"; shift ;;
+		--verify)   echo "Note: use 'run.sh verify' (--verify is deprecated)" >&2
+		            CLI_COMMAND="verify"; shift ;;
+		--list|-l)  echo "Note: use 'run.sh list' (--list is deprecated)" >&2
+		            CLI_COMMAND="list"; shift ;;
 		*) echo "Unknown option: $1" >&2; _usage; exit 1 ;;
 	esac
 done
+
+# Infer "run" when --all/--suite/--resume used without a subcommand
+if [ -z "$CLI_COMMAND" ]; then
+	if [ -n "$CLI_ALL" ] || [ -n "$CLI_SUITE" ] || [ -n "$CLI_RESUME" ]; then
+		CLI_COMMAND="run"
+	fi
+fi
+
+# Map subcommand to CLI_* variables (bridges to existing execution blocks)
+case "${CLI_COMMAND:-}" in
+	run)          ;;
+	reschedule)   CLI_RESCHEDULE=1 ;;
+	deploy)       CLI_DEPLOY=1 ;;
+	restart)      CLI_RESTART=1 ;;
+	stop)         CLI_STOP=1 ;;
+	start)        CLI_START=1 ;;
+	status)       CLI_STATUS=1 ;;
+	verify)       CLI_VERIFY=1 ;;
+	list)         CLI_LIST=1 ;;
+	destroy)      CLI_DESTROY=1 ;;
+	attach)       if [ $# -lt 1 ]; then echo "ERROR: attach requires a host (e.g. con1)" >&2; exit 1; fi
+	              CLI_ATTACH="$1"; shift ;;
+	live)         CLI_LIVE=""
+	              if [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]+$ ]]; then CLI_LIVE="$1"; shift; fi ;;
+	dash)         CLI_DASHBOARD=""; CLI_DASH_LOG="summary.log"
+	              if [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]+$ ]]; then CLI_DASHBOARD="$1"; shift; fi
+	              if [ $# -gt 0 ] && [[ "$1" == "log" ]]; then CLI_DASH_LOG="latest.log"; shift; fi ;;
+	"")           echo "ERROR: No command specified. Use: run, reschedule, deploy, status, list, etc." >&2
+	              _usage; exit 1 ;;
+esac
+
+# For "run" and "reschedule": default to --all when no suite selector given
+if [ "$CLI_COMMAND" = "run" ] || [ "$CLI_COMMAND" = "reschedule" ]; then
+	if [ -z "$CLI_ALL" ] && [ -z "$CLI_SUITE" ] && [ -z "$CLI_RESUME" ]; then
+		CLI_ALL=1
+	fi
+fi
 
 # --- Pool flag adjustment ----------------------------------------------------
 
@@ -163,7 +202,9 @@ _OP_POOLS="$CLI_POOLS"
 # --- Source config -----------------------------------------------------------
 
 if [ -f "$_RUN_DIR/config.env" ]; then
+	set -a
 	source "$_RUN_DIR/config.env"
+	set +a
 fi
 
 # --- Ensure govc when we will use it (destroy or infra check / setup) ---------
@@ -191,7 +232,7 @@ _SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHost
 _create_tmux_dashboard() {
 	local _sess="$1" _np="$2" _logfile="${3:-summary.log}"
 	local _user="${CON_SSH_USER:-steve}"
-	local _domain="${VM_BASE_DOMAIN:-example.com}"
+	local _domain="${VM_BASE_DOMAIN}"
 
 	_dash_pane_cmd() {
 		local _p=$1
@@ -229,7 +270,7 @@ _create_tmux_dashboard() {
 if [ -n "$CLI_ATTACH" ]; then
 	host="${CLI_ATTACH}"
 	user="${CON_SSH_USER:-steve}"
-	domain="${VM_BASE_DOMAIN:-example.com}"
+	domain="${VM_BASE_DOMAIN}"
 
 	# Accept "conN" or "conN.domain"
 	case "$host" in
@@ -280,7 +321,7 @@ if [ -n "$CLI_DEPLOY" ]; then
 	echo ""
 	for i in "${_deploy_list[@]}"; do
 		user="${CON_SSH_USER:-steve}"
-		host="con${i}.${VM_BASE_DOMAIN:-example.com}"
+		host="con${i}.${VM_BASE_DOMAIN}"
 		target="${user}@${host}"
 		echo -n "    con${i}: "
 
@@ -321,7 +362,7 @@ fi
 if [ -n "$CLI_STOP" ]; then
 	_stop_ssh="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 	_user="${CON_SSH_USER:-steve}"
-	_domain="${VM_BASE_DOMAIN:-example.com}"
+	_domain="${VM_BASE_DOMAIN}"
 
 	# --pool N targets a single pool; --pools N targets 1..N
 	if [ -n "$CLI_POOL" ]; then
@@ -388,7 +429,7 @@ fi
 if [ -n "$CLI_RESTART" ]; then
 	_restart_ssh="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 	_user="${CON_SSH_USER:-steve}"
-	_domain="${VM_BASE_DOMAIN:-example.com}"
+	_domain="${VM_BASE_DOMAIN}"
 
 	# Determine target pools (--pool N = single, --pools N / auto-detect)
 	if [ -n "$CLI_POOL" ]; then
@@ -538,7 +579,7 @@ fi
 if [ -n "$CLI_STATUS" ]; then
 	_status_ssh="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 	_user="${CON_SSH_USER:-steve}"
-	_domain="${VM_BASE_DOMAIN:-example.com}"
+	_domain="${VM_BASE_DOMAIN}"
 
 	# --pool N targets a single pool; --pools N targets 1..N
 	if [ -n "$CLI_POOL" ]; then
@@ -620,7 +661,7 @@ if [ -n "${CLI_LIVE+set}" ]; then
 		_num_pools=$(grep -c '^[^#]' "$_RUN_DIR/pools.conf" 2>/dev/null || echo 3)
 	fi
 	_user="${CON_SSH_USER:-steve}"
-	_domain="${VM_BASE_DOMAIN:-example.com}"
+	_domain="${VM_BASE_DOMAIN}"
 	LIVE_SESSION="e2e-live"
 
 	tmux kill-session -t "$LIVE_SESSION" 2>/dev/null || true
@@ -748,9 +789,16 @@ fi
 # --- Verify mode -------------------------------------------------------------
 
 if [ -n "$CLI_VERIFY" ]; then
-	_infra_flags="--verify --pools $CLI_POOLS --pools-file $CLI_POOLS_FILE"
-	echo ""
-	echo "=== Verifying pool VMs (pools 1..$CLI_POOLS) ==="
+	_ver_pools="$_OP_POOLS"
+	_infra_flags="--verify --pools $_ver_pools --pools-file $CLI_POOLS_FILE"
+	if [ -n "$CLI_POOL" ]; then
+		_infra_flags+=" --pool $CLI_POOL"
+		echo ""
+		echo "=== Verifying pool $CLI_POOL ==="
+	else
+		echo ""
+		echo "=== Verifying pool VMs (pools 1..$_ver_pools) ==="
+	fi
 	"$BASH" "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Verification failed" >&2; exit 1; }
 	exit 0
 fi
@@ -776,7 +824,7 @@ if [ -n "$CLI_RESUME" ]; then
 		echo "ERROR: --resume requires --pool N" >&2
 		exit 1
 	fi
-	_last_host="con${CLI_POOL}.${VM_BASE_DOMAIN:-example.com}"
+	_last_host="con${CLI_POOL}.${VM_BASE_DOMAIN}"
 	_last_user="${CON_SSH_USER:-steve}"
 	_last_ssh="-o LogLevel=ERROR -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 	_last=$(ssh $_last_ssh "${_last_user}@${_last_host}" "cat /tmp/e2e-last-suites 2>/dev/null" || true)
@@ -791,7 +839,7 @@ elif [ -n "$CLI_ALL" ]; then
 elif [ -n "$CLI_SUITE" ]; then
 	IFS=',' read -ra suites_to_run <<< "$CLI_SUITE"
 else
-	echo "ERROR: Specify --suite NAME, --all, --resume, or --list" >&2
+	echo "ERROR: Specify a command (run, reschedule, list, etc.). See --help." >&2
 	_usage
 	exit 1
 fi
@@ -821,7 +869,7 @@ _SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHost
 _ssh_con() {
 	local pool_num="$1"; shift
 	local user="${CON_SSH_USER:-steve}"
-	local host="con${pool_num}.${VM_BASE_DOMAIN:-example.com}"
+	local host="con${pool_num}.${VM_BASE_DOMAIN}"
 	ssh $_SSH_OPTS "${user}@${host}" "$@"
 }
 
@@ -830,7 +878,7 @@ _ssh_con() {
 _vms_ready() {
 	local pool_num="$1"
 	local user="${CON_SSH_USER:-steve}"
-	local con="con${pool_num}.${VM_BASE_DOMAIN:-example.com}"
+	local con="con${pool_num}.${VM_BASE_DOMAIN}"
 	local _reason=""
 
 	if ! ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
@@ -913,7 +961,7 @@ echo ""
 echo "  Deploying test framework to conN hosts ..."
 for (( i=1; i<=CLI_POOLS; i++ )); do
 	user="${CON_SSH_USER:-steve}"
-	host="con${i}.${VM_BASE_DOMAIN:-example.com}"
+	host="con${i}.${VM_BASE_DOMAIN}"
 	target="${user}@${host}"
 
 	if scp -q $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/aba/test/e2e/config.env" &&
@@ -990,6 +1038,16 @@ _check_pool() {
 	if [ -n "$rc_content" ]; then
 		rc_content="${rc_content//[^0-9]/}"
 		echo "${rc_content:-255}"
+		return
+	fi
+
+	# No .rc file -- check if the tmux session is still alive.
+	# If the session is gone, the suite crashed or was killed (e.g. Ctrl-C).
+	local sess_alive
+	sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
+	if [ "$sess_alive" != "yes" ]; then
+		echo "  WARNING: Suite '$suite' on con${pool_num} died without writing .rc (killed/crashed)" >&2
+		echo "255"
 	fi
 }
 
@@ -1174,6 +1232,38 @@ else
 	_detect_running_and_completed
 fi
 
+# --- Reschedule: clear completed state for target suites ---------------------
+if [ -n "$CLI_RESCHEDULE" ]; then
+	_cleared=0
+	echo ""
+	echo "=== Reschedule: clearing completed suites ==="
+	for suite in "${suites_to_run[@]}"; do
+		if [ -n "${_completed[$suite]:-}" ]; then
+			for (( _rp=1; _rp<=CLI_POOLS; _rp++ )); do
+				_ssh_con "$_rp" "rm -f '${_RC_PREFIX}-${suite}.rc'" 2>/dev/null || true
+			done
+			unset '_completed[$suite]'
+			echo "  Cleared: $suite"
+			(( _cleared++ ))
+		else
+			# Check if it's currently running -- leave it alone
+			_is_running=""
+			for _bp in "${!_busy_pools[@]}"; do
+				[ "${_busy_pools[$_bp]}" = "$suite" ] && _is_running=1 && break
+			done
+			if [ -n "$_is_running" ]; then
+				echo "  Running: $suite (left alone)"
+			fi
+		fi
+	done
+	if [ $_cleared -eq 0 ]; then
+		echo "  No completed suites to reschedule."
+		exit 0
+	fi
+	echo "  Rescheduled $_cleared suite(s)."
+	echo ""
+fi
+
 # Seed _results with already-completed suites
 for s in "${!_completed[@]}"; do
 	_results[$s]="${_completed[$s]}"
@@ -1191,7 +1281,7 @@ echo "  Status: ${_num_completed} completed, ${_num_running} running, ${#_work_q
 
 if [ ${#_work_queue[@]} -eq 0 ] && [ $_num_running -eq 0 ]; then
 	if [ $_num_completed -gt 0 ]; then
-		echo "  All suites already completed (use --force to re-run)."
+		echo "  All suites already completed (use 'reschedule' or --force to re-run)."
 	else
 		echo "  Nothing to dispatch."
 	fi
@@ -1286,7 +1376,7 @@ done
 
 for p in "${!_pools_used[@]}"; do
 	user="${CON_SSH_USER:-steve}"
-	host="con${p}.${VM_BASE_DOMAIN:-example.com}"
+	host="con${p}.${VM_BASE_DOMAIN}"
 	local_dir="$_RUN_DIR/logs/pool-${p}"
 	mkdir -p "$local_dir"
 	if scp -r $_SSH_OPTS "${user}@${host}:~/aba/test/e2e/logs/*" "$local_dir/" 2>/dev/null; then

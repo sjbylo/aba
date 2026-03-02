@@ -42,9 +42,11 @@ setup_aba_from_scratch() {
     e2e_run "Reset aba" \
         "cd $aba_root && if [ -d mirror ]; then aba reset -f; else echo 'No mirror dir -- nothing to reset'; fi"
 
-    # podman prune/rmi with --force are idempotent (return 0 even when empty).
-    e2e_run "Clean podman images" \
-        "podman system prune --all --force; podman rmi --all --force; sudo rm -rf ~/.local/share/containers/storage"
+    # NOTE: No blanket "podman system prune / rmi / rm -rf storage" here.
+    # That nuclear cleanup belongs only in the one-time pool setup (setup-infra)
+    # before creating the pool-ready snapshot.  Between suites, targeted cleanup
+    # in runner.sh (_cleanup_con_quay, _cleanup_dis_aba) is sufficient and avoids
+    # destroying the pool registry on conN.
 
     # Remove oc-mirror caches
     e2e_run "Remove oc-mirror caches" \
@@ -179,9 +181,7 @@ cleanup_all() {
     e2e_run "Remove cluster directories" \
         "rm -rf $_sno $_compact $_standard"
 
-    # podman prune/rmi with --force are idempotent (return 0 even when empty).
-    e2e_run "Clean podman images" \
-        "podman system prune --all --force; podman rmi --all --force; sudo rm -rf ~/.local/share/containers/storage"
+    # NOTE: No blanket podman nuke here -- see setup_aba_from_scratch comment.
 
     # Remove caches
     e2e_run "Remove oc-mirror caches" \

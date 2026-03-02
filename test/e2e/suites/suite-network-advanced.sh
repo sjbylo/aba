@@ -29,8 +29,8 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-CON_HOST="con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
-DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
+DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 POOL_REG_DIR="$HOME/.e2e-pool-registry"

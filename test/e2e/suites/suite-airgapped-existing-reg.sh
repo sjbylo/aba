@@ -104,6 +104,14 @@ test_end
 # ============================================================================
 test_begin "Existing registry: register pool registry"
 
+# Ensure the pool registry is running on conN before registering it.
+# setup-pool-registry.sh is idempotent: skips install/sync if already done.
+_ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
+_ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
+
+e2e_run "Ensure pool registry running (OCP ${_ocp_channel} ${_ocp_version})" \
+    "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
+
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set reg_host to pool registry on conN" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
@@ -124,6 +132,10 @@ test_begin "Must-fail checks"
 # These commands should fail -- verify they do
 e2e_run_must_fail "Sync to unknown host should fail" \
     "aba -d mirror sync -H unknown.example.com --retry"
+
+# Restore reg_host after the must-fail test (the -H flag above overwrites mirror.conf)
+e2e_run "Restore reg_host after must-fail" \
+    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 
 # Pool registry runs on conN (localhost) -- installing another should fail
 e2e_run_must_fail "Install mirror to localhost where registry already exists should fail" \
@@ -162,9 +174,9 @@ e2e_run "Verify dnf install actually ran" \
 e2e_run "Verify dialog was reinstalled" \
     "rpm -q dialog"
 
-# Stage pool registry creds so they transfer with the tar-pipe
+# Stage pool registry creds into mirror/.test/ so they're included in the tar-pipe
 e2e_run "Stage pool registry creds for transfer" \
-    "cp ~/.e2e-pool-registry/quay-creds.json test/pool-reg-creds.json && cp ~/quay-install/quay-rootCA/rootCA.pem test/pool-reg-rootCA.pem"
+    "mkdir -p mirror/.test && cp ~/.e2e-pool-registry/quay-creds.json mirror/.test/pool-reg-creds.json && cp ~/quay-install/quay-rootCA/rootCA.pem mirror/.test/pool-reg-rootCA.pem"
 
 # Now do the real tar-pipe transfer
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
@@ -182,8 +194,9 @@ e2e_run_remote "Verify single dnf batch (no duplicate install)" \
     "cd ~/aba && test \$(grep -c 'Transaction Summary' .dnf-install.log) -eq 1"
 
 # Register the pool registry on disN using the staged creds
+# Paths are relative to mirror/ because aba -d mirror changes CWD there
 e2e_run_remote "Register pool registry on disN" \
-    "cd ~/aba && aba -d mirror register --pull-secret-mirror test/pool-reg-creds.json --ca-cert test/pool-reg-rootCA.pem"
+    "cd ~/aba && aba -d mirror register --pull-secret-mirror .test/pool-reg-creds.json --ca-cert .test/pool-reg-rootCA.pem"
 e2e_run_remote "Verify pool registry access from disN" \
     "cd ~/aba && aba -d mirror verify"
 

@@ -872,6 +872,55 @@ scripts/*.sh     → Task-specific scripts, called via Makefiles
 Makefiles        → Define targets and execution context
 ```
 
+### 5. `normalize*()` Functions: Config Values Only
+
+**CRITICAL RULE**: `normalize-aba-conf()`, `normalize-mirror-conf()`, and `normalize-cluster-conf()` must **only** echo config file values with sensible defaults. They must **never** compute derived values.
+
+**DON'T** put derived values in normalize functions:
+```bash
+# ❌ WRONG - in normalize-mirror-conf()
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name   # Derived from mirror_name!
+```
+
+**DO** compute derived values in the calling script:
+```bash
+# ✅ CORRECT - in the script that needs regcreds_dir
+source <(normalize-mirror-conf)
+regcreds_dir=$HOME/.aba/mirror/$mirror_name
+```
+
+**Why**: Two separate bugs were caused by putting derived values in normalize functions. The derived value was computed before dependent variables were set (e.g. `$mirror_name` was empty), producing wrong paths like `~/.aba/mirror/` instead of `~/.aba/mirror/sno`. The normalize function runs early in the pipeline and cannot know the calling context.
+
+**Rule of thumb**: If a value does not appear in `aba.conf`, `mirror.conf`, or `cluster.conf`, it does not belong in the corresponding normalize function.
+
+### 6. Make-First Architecture
+
+**Key Principle**: ABA was primarily make-based from the start. The `aba` CLI (`scripts/aba.sh`) is a convenience wrapper that resolves directories, parses CLI flags, and calls `make`.
+
+**Every operation must remain callable via `make` directly:**
+```bash
+# These must ALWAYS work, with or without the aba wrapper:
+make -C mirror install          # Install registry
+make -C mirror save             # Save images
+make -C sno cluster             # Create cluster
+make -C mirror unregister       # Deregister existing registry
+```
+
+**DON'T** put essential logic only in `aba.sh`:
+```bash
+# ❌ WRONG - logic that only works via "aba" CLI
+# Adding a critical step inside aba.sh's flag handling that make can't reach
+```
+
+**DO** keep logic in scripts called by Makefile targets:
+```bash
+# ✅ CORRECT - Makefile target calls script, aba.sh calls same Makefile target
+# mirror/Makefile:  unregister: ; $(SCRIPTS)/reg-unregister.sh
+# aba.sh:           make -C "$dir" unregister
+```
+
+**Why**: Advanced users and automation systems use `make` directly. Breaking `make` targets silently degrades the product for power users and CI pipelines.
+
 ## If Cursor Crashes
 
 ### What You'll Lose:

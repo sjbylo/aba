@@ -18,7 +18,7 @@ source "$_SUITE_DIR/../lib/setup.sh"
 # --- Configuration ----------------------------------------------------------
 
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
-CON_HOST="con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 
 # Pool-unique cluster names (avoid VM collisions when pools run in parallel)
 SNO="$(pool_cluster_name sno)"

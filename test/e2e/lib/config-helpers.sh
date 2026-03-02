@@ -149,17 +149,17 @@ pool_vlan_gateway() {
 # SSH target for the connected bastion: pool_connected_bastion [POOL_NUM]
 # Returns user@conN.domain suitable for ssh/rsync.
 pool_connected_bastion() {
-    local p="${1:-${POOL_NUM:-1}}"
-    local user="${CON_SSH_USER:-steve}"
-    echo "${user}@con${p}.${VM_BASE_DOMAIN:-example.com}"
+    local p="${1:-${POOL_NUM}}"
+    local user="${CON_SSH_USER}"
+    echo "${user}@con${p}.${VM_BASE_DOMAIN}"
 }
 
 # SSH target for the internal (air-gapped) bastion: pool_internal_bastion [POOL_NUM]
 # Returns user@disN.domain suitable for ssh/rsync.
 pool_internal_bastion() {
-    local p="${1:-${POOL_NUM:-1}}"
-    local user="${DIS_SSH_USER:-steve}"
-    echo "${user}@dis${p}.${VM_BASE_DOMAIN:-example.com}"
+    local p="${1:-${POOL_NUM}}"
+    local user="${DIS_SSH_USER}"
+    echo "${user}@dis${p}.${VM_BASE_DOMAIN}"
 }
 
 # --- gen_aba_conf -----------------------------------------------------------

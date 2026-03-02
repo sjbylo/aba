@@ -787,10 +787,10 @@ e2e_run() {
             if [ -n "$host" ]; then
                 _e2e_log "  Running on $host (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    ssh -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
                         >> "$_lf" 2>&1 || ret=$?
                 else
-                    ssh -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
                         2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             else
@@ -977,7 +977,7 @@ e2e_diag() {
     _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
 
     if [ -n "$host" ]; then
-        ssh -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+        ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
             2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
     else
         ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
@@ -1064,7 +1064,7 @@ e2e_run_must_fail_remote() {
     _e2e_summary "    $(_e2e_Cyan "($cmd)")"
 
     local ret=0
-    ssh -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$INTERNAL_BASTION" -- \
+    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$INTERNAL_BASTION" -- \
         ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
         2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
