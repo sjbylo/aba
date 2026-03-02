@@ -1,20 +1,26 @@
 # Session State
 
 ## Current goal
-Polishing `aba mirror --name` feature -- fixing prompt text for named mirror directories.
+Two plans: (1) Add `aba -d mirror unregister` command (core ABA change), (2) Refactor e2e existing-reg suite.
 
 ## Done this session
-- Simplified `scripts/setup-mirror.sh`: removed auto-registration, clean 2-step flow (committed `a4bc866`)
-- Simplified root `Makefile` mirror target (committed `a4bc866`)
-- Fixed `scripts/create-mirror-conf.sh`: prompt now shows correct dir name instead of hardcoded `mirror/mirror.conf`
-- Tested full flow: create, register, uninstall -- all working
+- Diagnosed con1 prompt hang: stale rootCA.pem + no stdin protection
+- Deep analysis of cleanup framework
+- Audited all mirror/cluster registrations
+- Created plan: refactor existing-reg suite to use pool registry
+- Created plan: add `aba -d mirror unregister` command (clean code separation)
 
 ## Next steps
-- Commit the create-mirror-conf.sh fix
-- Push all local commits (2 ahead of origin: `d5b74ac`, `a4bc866`, plus this fix)
-- Simplify E2E suites to use new `register` command (backlog)
-- Rename `.installed/.uninstalled` to `.available/.unavailable` (backlog B1)
+1. Execute `unregister` plan (core ABA change) -- user approved
+2. Then execute e2e refactoring plan
 
 ## Decisions / notes
-- Registration is a separate step from `aba mirror --name` (matches `aba cluster --name` pattern)
-- Chat scope: coding/refactoring only (E2E monitoring in separate chat)
+- `reg-unregister.sh` owns ALL deregistration logic (moved from `reg-uninstall-existing.sh`)
+- `reg-uninstall.sh` no longer dispatches to `existing` -- hard abort with helpful message
+- `reg-uninstall-existing.sh` deleted (no backward compat concern, only caller was reg-uninstall.sh)
+- Clean separation: register/unregister = creds only; install/uninstall = real software
+- No changes needed in aba.sh (Make targets pass through automatically)
+
+## Backlog
+- Why does suite-connected-public.sh use pool registry in Test 8? Consider splitting.
+- Rename local/remote parameter in e2e_register_* to something less ambiguous.
