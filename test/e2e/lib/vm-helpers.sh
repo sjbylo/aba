@@ -50,11 +50,14 @@ VM_DEFAULT_USER="${VM_DEFAULT_USER:-steve}"
 # --- SSH wrappers -----------------------------------------------------------
 
 _essh() {
-	ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+	ssh -o ConnectTimeout=10 -o BatchMode=yes \
+		-o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+		-o StrictHostKeyChecking=no \
 		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
 }
 _escp() {
-	scp -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+	scp -o ConnectTimeout=10 -o BatchMode=yes \
+		-o StrictHostKeyChecking=no \
 		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
 }
 
