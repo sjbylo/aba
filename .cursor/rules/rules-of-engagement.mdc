@@ -67,7 +67,8 @@ alwaysApply: true
 - Use relative paths -- avoid `$ABA_ROOT` (only `aba.sh` should use it)
 - Use `ensure_*()` functions for CLI tool installation
 - Symlinks handle cross-directory access (scripts use same paths everywhere)
-- Ensure ABA can always be used via make too, so the make targets always work directly with make as well.
+- `normalize*()` functions output ONLY config file values/defaults -- derived/computed values (e.g. `regcreds_dir`) belong in the calling script
+- ABA was originally make-based; `aba` is a wrapper around make. All `make <target>` invocations must continue to work directly (e.g. `make -C mirror install`, `make -C sno cluster`). Never add logic that only works via the `aba` CLI.
 
 ## Documentation
 

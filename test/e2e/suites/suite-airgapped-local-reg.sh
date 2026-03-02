@@ -29,7 +29,7 @@ source "$_SUITE_DIR/../lib/setup.sh"
 # --- Configuration ----------------------------------------------------------
 
 # L commands run on conN (this host). R commands SSH to disN.
-DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
@@ -361,6 +361,18 @@ test_begin "Upgrade: OSUS and cluster upgrade"
 # Save the target (newer) version images
 e2e_run "Set version to desired (upgrade target)" \
     "aba -v \$(cat /tmp/e2e-ocp-version-desired)"
+
+# Regenerate imageset config (incremental tests overwrote it with minimal config).
+# Then append cincinnati-operator for OSUS upgrade support.
+e2e_run "Regenerate full imageset config for upgrade" \
+    "rm -f mirror/save/imageset-config-save.yaml && aba -d mirror imagesetconf"
+e2e_run "Append cincinnati-operator to imageset config" \
+    "_ocp_major=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}' | cut -d. -f1-2) && \
+     echo '  operators:' >> mirror/save/imageset-config-save.yaml && \
+     echo \"  - catalog: registry.redhat.io/redhat/redhat-operator-index:v\${_ocp_major}\" >> mirror/save/imageset-config-save.yaml && \
+     echo '    packages:' >> mirror/save/imageset-config-save.yaml && \
+     grep -A2 'name: cincinnati-operator\$' mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml >> mirror/save/imageset-config-save.yaml"
+
 e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
 e2e_run "Transfer upgrade images to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
@@ -369,6 +381,10 @@ e2e_run_remote -r 3 2 "Load upgrade images" \
 
 e2e_run_remote "Apply day2 config (upgrade mirror resources)" \
     "cd ~/aba && aba --dir $SNO day2"
+
+# Wait for cincinnati-operator to appear in OperatorHub before applying OSUS
+e2e_run_remote -r 18 10 "Wait for cincinnati-operator in OperatorHub" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get packagemanifests' | grep ^cincinnati-operator"
 
 e2e_run_remote "Apply OSUS day2" \
     "cd ~/aba && aba --dir $SNO day2-osus"

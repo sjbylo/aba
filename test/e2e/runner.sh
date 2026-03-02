@@ -87,9 +87,11 @@ source "$_RUNNER_DIR/lib/config-helpers.sh"
 source "$_RUNNER_DIR/lib/vm-helpers.sh"
 source "$_RUNNER_DIR/lib/setup.sh"
 
-# Source config.env
+# Source config.env (set -a exports all variables so child processes -- suites -- inherit them)
 if [ -f "$_RUNNER_DIR/config.env" ]; then
+	set -a
 	source "$_RUNNER_DIR/config.env"
+	set +a
 fi
 
 # Setup framework environment
@@ -177,7 +179,7 @@ _revert_dis_snapshot() {
 	govc vm.power -on "$DIS_VM" 2>/dev/null || true
 	sleep "${VM_BOOT_DELAY:-8}"
 
-	local dis_host="${DIS_SSH_USER:-steve}@${DIS_VM}.${VM_BASE_DOMAIN:-example.com}"
+	local dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
 	echo "  Waiting for SSH on $dis_host ..."
 	local elapsed=0
 	while [ $elapsed -lt 120 ]; do
@@ -216,7 +218,7 @@ _revert_dis_snapshot() {
 #               via .cleanup/.mirror-cleanup files).
 
 _cleanup_dis_aba() {
-	local dis_host="${DIS_SSH_USER:-steve}@${DIS_VM}.${VM_BASE_DOMAIN:-example.com}"
+	local dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
 	echo ""
 	echo "  Cleaning disN ($dis_host) via ABA commands ..."
 

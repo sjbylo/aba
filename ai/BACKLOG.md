@@ -36,50 +36,6 @@ ABA core scripts do not use strict bash mode (`set -euo pipefail`). This means u
 - http://mywiki.wooledge.org/BashFAQ/105 (why `set -e` is unreliable)
 - The `(( running++ ))` bug in `download_all_catalogs()` was caused by `set -e` + post-increment returning 0
 
-### 13. `run.sh verify` -- Re-run Pool Verification Without Reconfiguring
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Medium  
-**Created:** 2026-02-23
-
-**Problem:**
-After `setup-infra.sh` creates and configures conN/disN VMs, the post-configuration verification checks are embedded inline in `_configure_con_vm` and `_configure_dis_vm`. There is no way to re-run just the verification without re-running the full configuration.
-
-This is useful when:
-- A pool setup failed and you want to verify the current state after a manual fix
-- VMs were rebooted and you want to confirm they are still correctly configured
-- Debugging infrastructure issues (DNS, VLAN, firewall, etc.)
-
-**Proposed solution:**
-1. Extract the con and dis verification blocks into standalone `_verify_con_vm()` and `_verify_dis_vm()` functions in `setup-infra.sh`
-2. Call those functions from the existing `_configure_con_vm` / `_configure_dis_vm` (so setup still verifies)
-3. Add a `--verify` flag to `setup-infra.sh` that only runs verification on all pools
-4. Add a `verify` subcommand to `run.sh` that calls `setup-infra.sh --verify`
-
-Usage: `run.sh verify` or `run.sh verify 3` (single pool)
-
-### 14. Dynamic Suite Dispatcher (Work-Queue Model)
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Medium  
-**Created:** 2026-02-23
-
-**Problem:**
-The current dispatcher in `run.sh` is static: suites are shuffled and round-robin assigned to pools at startup. Each pool's `runner.sh` receives its full suite list upfront and runs them sequentially. If one pool finishes fast suites while another is stuck on a slow one, the fast pool sits idle -- no rebalancing.
-
-**Proposed Solution -- Dynamic work-queue dispatch:**
-Pools receive one suite at a time. When a pool finishes, the dispatcher assigns the next suite from the queue. This maximises pool utilization when suite durations vary.
-
-The v1 framework (`test/e2e-v1/lib/parallel.sh`) has a complete working implementation with `dispatch_all()`, `_find_free_pool()`, `_wait_for_any()`, and `_record_result()`. Adapt this to the v2 architecture:
-
-1. **`run.sh`**: Replace the round-robin block (lines 327-459) with a dispatch loop that sends one suite at a time via `tmux send-keys` and polls for completion before dispatching the next
-2. **`runner.sh`**: Simplify to single-suite mode -- accept `POOL_NUM suite_name`, revert snapshot, run suite, write rc file, exit
-3. **Dashboard**: Keep as-is (tail summary logs per pool)
-
-**Reference:** `test/e2e-v1/lib/parallel.sh` (518 lines, complete implementation)
-
 ### 17. Mirror Config Flags Don't Work With Named Mirror Directories
 
 **Status:** Backlog  
@@ -104,21 +60,6 @@ fi
 Then replace all `$ABA_ROOT/mirror/mirror.conf` with `$MIRROR_CONF_DIR/mirror.conf` and `make -sC $ABA_ROOT/mirror` with `make -sC $MIRROR_CONF_DIR` in the 10 flag handlers. The `replace-value-conf` function already handles multiple files (skips non-existent), so a fallback pattern like `$MIRROR_CONF_DIR/mirror.conf $ABA_ROOT/mirror/mirror.conf` also works.
 
 **Where:** `scripts/aba.sh` lines 373-433 (10 flag handlers)
-
-### 18. Simplify E2E Suite Regcreds Setup With `aba register`
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Small  
-**Created:** 2026-03-01
-
-**Problem:**
-E2E suites that test existing-registry scenarios (e.g. `suite-airgapped-existing-reg.sh`) manually `mkdir -p` and `cp` registry credentials into `~/.aba/mirror/<name>/`. This is fragile and duplicates logic now available in ABA core.
-
-**Proposed Fix:**
-Replace manual `mkdir`/`cp` blocks with the new `aba -d <mirror> --pull-secret-mirror <file> --ca-cert <file>` register command, which handles credential copying, CA trust, state.sh creation, and `.installed` marker.
-
-**Where:** `test/e2e/suites/suite-airgapped-existing-reg.sh` and any other suites with manual regcreds setup.
 
 ---
 
@@ -156,24 +97,13 @@ Format the VM creation output to be more readable, e.g.:
 - Easier to read and verify at a glance
 - Each parameter on its own line aids troubleshooting
 
-### 5. Persistent Registry State in `~/.aba/registry/`
+### 5. Persistent Registry State in `~/.aba/mirror/`
 
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Large  
+**Status:** Completed  
+**Completed:** Already implemented  
 **Created:** 2026-02-21  
-**Design Doc:** `ai/DESIGN-docker-registry-first-class.md` section 9
 
-**Problem:**
-Registry install-time state (cert, pull-secret params, uninstall parameters) lives in `mirror/` which gets wiped by `aba reset -f` or `make clean`. After a reset, `aba -d mirror uninstall` fails because the Makefile can't find `aba.conf`:
-
-```
-Feb 21 06:32:21      >> cd /home/steve/aba && aba -d mirror uninstall
-Makefile:116: *** "Value 'ocp_version' not set in aba.conf! Run aba in the root of Aba's repository or read the README.md file on how to get started.".  Stop.
-```
-
-**Proposed Solution:**
-Move persistent registry state to `~/.aba/registry/state.sh` and `~/.aba/registry/rootCA.pem`. Uninstall reads from this persistent state instead of depending on workspace files. Full design in `ai/DESIGN-docker-registry-first-class.md`.
+**Resolution:** Registry state (`state.sh`, `pull-secret-mirror.json`, `rootCA.pem`) is already persisted in `~/.aba/mirror/<name>/` via `reg-common.sh` `reg_post_install()`. This directory is outside the workspace and survives `aba reset -f`. The `regcreds_dir` is derived as `$HOME/.aba/mirror/$(basename "$PWD")` in `reg_load_config()`.
 
 ### 6. `aba mirror uninstall` Must Fully Clean Up Quay
 
@@ -330,6 +260,18 @@ before the message.
 ---
 
 ## Completed
+
+### `run.sh verify` -- Pool Verification Subcommand
+**Completed:** 2026-03-02  
+Extracted `_verify_con_vm()` / `_verify_dis_vm()` into standalone functions in `setup-infra.sh`. Added `--verify` flag to `setup-infra.sh` and `verify` subcommand to `run.sh`. Supports `--pool N` for single-pool checks. Streaming output (no hang), separate per-VM logs, `_fail()` helper with bold red output, summary table with failure reasons. Auto-detects pool count from `pools.conf`.
+
+### Dynamic Suite Dispatcher (Work-Queue Model)
+**Completed:** 2026-03-02  
+`run.sh` dispatches one suite at a time to free pools, polls for completion, and assigns the next from the queue. Added `reschedule` subcommand to re-queue completed suites. Full CLI rationalization with consistent subcommand+flag structure.
+
+### Simplify E2E Suite Regcreds Setup With `aba register`
+**Completed:** 2026-03-02  
+Refactored `suite-airgapped-existing-reg.sh` to use `aba -d mirror register` with the pool registry on conN instead of manual `mkdir`/`cp` of credentials. Also added `aba -d mirror unregister` core command for externally-managed registries.
 
 ### E2E Suite Banner in tmux on Dispatch
 **Completed:** 2026-02-23  
