@@ -1,27 +1,25 @@
 # Session State
 
 ## Current goal
-Fix E2E test infrastructure issues and clean up verify output.
+Monitor E2E tests after deploying fixes.
 
 ## Done this session
-1. **Removed blanket podman nuke** (`lib/setup.sh`)
-2. **Defense-in-depth** (`suites/suite-airgapped-existing-reg.sh`): Added `setup-pool-registry.sh` call
-3. **SSH stdin protection** (`lib/framework.sh`): Added `ssh -n` to all SSH execution paths
-4. **Clean verify output** (`setup-infra.sh`): streaming, summary table, red FAIL, --pool N
-5. **`--pool N` for verify** (`run.sh`)
-6. **Fix: `verify` auto-detects all pools** from `pools.conf`
-7. **dis4 ens256 down**
-8. **Backlog #5 marked completed**
-9. **Backlog audit**
-10. **Fix: pool-reg creds staged into `mirror/.test/`**
-11. **Fix: restore reg_host after must-fail test**
-12. **Fix: dispatcher detects crashed suites** (backlog #15)
-13. **Fix: regenerate imageset config + append cincinnati-operator** (`suite-airgapped-local-reg.sh`)
-    - Matches old test5 approach: regenerate, manually append operator, wait for packagemanifest
+1. **Committed and pushed** `6ba3f7f` -- E2E fixes, verify improvements, crash detection
+2. **Deployed fixes** to con2 (airgapped-existing-reg) and con3 (airgapped-local-reg)
+3. All 4 pools running with updated code
+
+## Key fixes in this commit
+- Dispatcher crash detection (dead tmux = exit 255)
+- Verify: streaming output, summary table with failure reasons, --pool N
+- suite-airgapped-existing-reg: creds in mirror/.test/, restore reg_host after must-fail
+- suite-airgapped-local-reg: regenerate imageset + append cincinnati-operator
+- SSH stdin protection (ssh -n), config.env export (set -a), remove podman nuke
 
 ## Next steps
-- Deploy fixes to con2 and con3, reschedule suites
-- Wait for user to review and approve all changes before committing
+- Monitor running suites for verification of fixes
+- con2: airgapped-existing-reg (verify pool-reg creds staging + reg_host restore)
+- con3: airgapped-local-reg (verify imageset regeneration + cincinnati-operator)
 
 ## Decisions / notes
-- Files changed: `lib/setup.sh`, `lib/framework.sh`, `suites/suite-airgapped-existing-reg.sh`, `suites/suite-airgapped-local-reg.sh`, `setup-infra.sh`, `run.sh`, `ai/BACKLOG.md`
+- Branch: dev, up to date with origin/dev
+- Untracked: .cursor/cli.json, .cursor/rules/session-state.mdc, mirror/regcreds.bk/
