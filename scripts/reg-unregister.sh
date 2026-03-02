@@ -1,7 +1,9 @@
 #!/bin/bash
 # Deregister an externally-managed mirror registry.
 # Only removes local credentials (regcreds dir) -- never touches the actual registry.
-# Called by reg-uninstall.sh when state.sh contains REG_VENDOR=existing.
+#
+# Usage (called via mirror/Makefile unregister target):
+#   aba -d mirror unregister
 
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
@@ -11,6 +13,16 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
+
+# Guard: if state says ABA installed this registry, user should use 'uninstall'
+if [ -s "$regcreds_dir/state.sh" ]; then
+	source "$regcreds_dir/state.sh"
+	if [ "${REG_VENDOR:-}" != "existing" ]; then
+		aba_abort \
+			"This registry was installed by ABA (vendor=$REG_VENDOR)." \
+			"Use 'aba -d $(basename $PWD) uninstall' to remove it."
+	fi
+fi
 
 if [ ! -d "$regcreds_dir" ]; then
 	aba_info "No credentials found in $regcreds_dir -- nothing to deregister."
