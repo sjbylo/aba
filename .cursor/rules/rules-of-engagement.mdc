@@ -80,6 +80,9 @@ alwaysApply: true
 - Never use `2>/dev/null` or `|| true` in test commands unless there is a good reason to do so (use `e2e_diag` for diagnostic-only commands, or explicit precondition checks)
 - When a test fails, check if the fix belongs in ABA code FIRST -- never "fix" a test just to make it pass!
 - No safety nets in framework code -- if a suite doesn't clean up, fix the suite, don't paper over it
+- NEVER use band-aid fixes (e.g. raw `rm -rf` to work around cleanup failures) -- fix the root cause
+- If cleanup fails, the cleanup mechanism itself is broken -- fix IT, don't add out-of-band workarounds
+- Proper cleanup uses registered cleanup files (`.cleanup`, `.mirror-cleanup`) and `aba uninstall` / `aba delete` -- never bypass these with manual filesystem deletion
 - Uninstall from the same host that installed (e.g. registry installed from conN must be uninstalled from conN)
 - Never remove tools before operations that need them (e.g. `dnf remove make` before `aba reset`)
 - Verify cleanup actually worked (assert service is down, directory is gone)

@@ -80,6 +80,46 @@ The v1 framework (`test/e2e-v1/lib/parallel.sh`) has a complete working implemen
 
 **Reference:** `test/e2e-v1/lib/parallel.sh` (518 lines, complete implementation)
 
+### 17. Mirror Config Flags Don't Work With Named Mirror Directories
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-01
+
+**Problem:**
+All mirror config flags in `scripts/aba.sh` (`--vendor`, `--reg-host`, `--reg-port`, `--reg-user`, `--reg-password`, `--reg-path`, `--reg-ssh-key`, `--reg-ssh-user`, `--data-dir`) hardcode `$ABA_ROOT/mirror/mirror.conf`. When used with `-d <named-mirror>` (e.g. `aba -d mymirror --vendor auto install`), the flag writes to the default `mirror/mirror.conf` instead of `mymirror/mirror.conf`.
+
+**Impact:** Only affects named mirror directories (new feature). Default `mirror/` works fine.
+
+**Proposed Fix:**
+Compute a `MIRROR_CONF_DIR` variable in `aba.sh` based on whether `WORK_DIR` points to a mirror directory:
+```bash
+if [ -f "$WORK_DIR/Makefile" ] && grep -q "mirror.conf" "$WORK_DIR/Makefile" 2>/dev/null && [ "$WORK_DIR" != "$ABA_ROOT" ]; then
+    MIRROR_CONF_DIR=$WORK_DIR
+else
+    MIRROR_CONF_DIR=$ABA_ROOT/mirror
+fi
+```
+Then replace all `$ABA_ROOT/mirror/mirror.conf` with `$MIRROR_CONF_DIR/mirror.conf` and `make -sC $ABA_ROOT/mirror` with `make -sC $MIRROR_CONF_DIR` in the 10 flag handlers. The `replace-value-conf` function already handles multiple files (skips non-existent), so a fallback pattern like `$MIRROR_CONF_DIR/mirror.conf $ABA_ROOT/mirror/mirror.conf` also works.
+
+**Where:** `scripts/aba.sh` lines 373-433 (10 flag handlers)
+
+### 18. Simplify E2E Suite Regcreds Setup With `aba register`
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-01
+
+**Problem:**
+E2E suites that test existing-registry scenarios (e.g. `suite-airgapped-existing-reg.sh`) manually `mkdir -p` and `cp` registry credentials into `~/.aba/mirror/<name>/`. This is fragile and duplicates logic now available in ABA core.
+
+**Proposed Fix:**
+Replace manual `mkdir`/`cp` blocks with the new `aba -d <mirror> --pull-secret-mirror <file> --ca-cert <file>` register command, which handles credential copying, CA trust, state.sh creation, and `.installed` marker.
+
+**Where:** `test/e2e/suites/suite-airgapped-existing-reg.sh` and any other suites with manual regcreds setup.
+
 ---
 
 ## Low Priority
