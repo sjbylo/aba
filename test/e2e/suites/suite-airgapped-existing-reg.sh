@@ -2,12 +2,13 @@
 # =============================================================================
 # Suite: Airgapped with Existing Registry (rewrite of test2)
 # =============================================================================
-# Purpose: Air-gapped workflow with a pre-existing registry. Save images,
-#          tar-pipe transfer, load into existing registry, install cluster,
-#          deploy app, install ACM.
+# Purpose: Air-gapped workflow using the pool registry on conN as an
+#          "existing" (externally-managed) registry. Save images, tar-pipe
+#          transfer, load into existing registry, install cluster, deploy
+#          app, install ACM.
 #
-# Unique: must-fail checks, existing registry integration, ACM/MCH,
-#         NTP chronyc verification.
+# Unique: pool registry registration via `aba register`, must-fail checks,
+#         existing registry integration, ACM/MCH, NTP chronyc verification.
 # =============================================================================
 
 set -u
@@ -22,7 +23,8 @@ source "$_SUITE_DIR/../lib/setup.sh"
 # --- Configuration ----------------------------------------------------------
 # L commands run on conN (this host). R commands SSH to disN.
 
-DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
+DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
@@ -37,7 +39,7 @@ e2e_setup
 plan_tests \
     "Setup: install aba and configure" \
     "Setup: reset internal bastion" \
-    "Existing registry: install on bastion" \
+    "Existing registry: register pool registry" \
     "Must-fail checks" \
     "Save images to disk" \
     "Tar-pipe transfer to bastion" \
@@ -98,21 +100,19 @@ e2e_run "Set operator sets (re-apply)" \
 test_end
 
 # ============================================================================
-# 2. Install "existing" registry on internal bastion
+# 2. Register pool registry on conN as the "existing" registry
 # ============================================================================
-test_begin "Existing registry: install on bastion"
-
-e2e_run -r 2 2 "Download mirror-registry tarball" \
-    "aba --dir test mirror-registry-amd64.tar.gz"
+test_begin "Existing registry: register pool registry"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-e2e_run "Set mirror hostname in mirror.conf" \
-    "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
+e2e_run "Set reg_host to pool registry on conN" \
+    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
 
-e2e_register_mirror "$PWD/mirror" remote
-e2e_run "Install test registry on internal bastion" \
-    "test/reg-test-install-remote.sh ${DIS_HOST}"
+e2e_run "Register pool registry with ABA" \
+    "aba -d mirror register --pull-secret-mirror ~/.e2e-pool-registry/quay-creds.json --ca-cert ~/quay-install/quay-rootCA/rootCA.pem"
+e2e_run "Verify pool registry access" \
+    "aba -d mirror verify"
 
 test_end
 
@@ -125,10 +125,8 @@ test_begin "Must-fail checks"
 e2e_run_must_fail "Sync to unknown host should fail" \
     "aba -d mirror sync -H unknown.example.com --retry"
 
-e2e_run_must_fail "Install mirror to host where mirror already exists should fail" \
-    "aba -d mirror -k ~/.ssh/id_rsa -H $DIS_HOST install"
-
-e2e_run_must_fail "Install to localhost (no mirror on localhost) should fail" \
+# Pool registry runs on conN (localhost) -- installing another should fail
+e2e_run_must_fail "Install mirror to localhost where registry already exists should fail" \
     "aba -d mirror install"
 
 test_end
@@ -164,6 +162,10 @@ e2e_run "Verify dnf install actually ran" \
 e2e_run "Verify dialog was reinstalled" \
     "rpm -q dialog"
 
+# Stage pool registry creds so they transfer with the tar-pipe
+e2e_run "Stage pool registry creds for transfer" \
+    "cp ~/.e2e-pool-registry/quay-creds.json test/pool-reg-creds.json && cp ~/quay-install/quay-rootCA/rootCA.pem test/pool-reg-rootCA.pem"
+
 # Now do the real tar-pipe transfer
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
@@ -179,14 +181,11 @@ e2e_run_remote "Verify dialog was reinstalled" \
 e2e_run_remote "Verify single dnf batch (no duplicate install)" \
     "cd ~/aba && test \$(grep -c 'Transaction Summary' .dnf-install.log) -eq 1"
 
-# Populate regcreds dir on disN so ABA can talk to the existing registry.
-# reg-install.sh puts creds in ~/.docker/config.json and CA in ~/quay-install/.
-e2e_run_remote "Create regcreds dir" \
-    "mkdir -p ~/.aba/mirror/mirror"
-e2e_run_remote "Copy pull secret to regcreds" \
-    "cp -v ~/.docker/config.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
-e2e_run_remote "Copy root CA to regcreds" \
-    "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"
+# Register the pool registry on disN using the staged creds
+e2e_run_remote "Register pool registry on disN" \
+    "cd ~/aba && aba -d mirror register --pull-secret-mirror test/pool-reg-creds.json --ca-cert test/pool-reg-rootCA.pem"
+e2e_run_remote "Verify pool registry access from disN" \
+    "cd ~/aba && aba -d mirror verify"
 
 test_end
 
@@ -335,14 +334,19 @@ e2e_run_remote "Shutdown SNO cluster" \
 test_end
 
 # ============================================================================
-# End-of-suite cleanup: uninstall registry on disN + verify
+# End-of-suite cleanup: deregister pool registry on both conN and disN
 # ============================================================================
-test_begin "Cleanup: uninstall registry on disN"
+test_begin "Cleanup: deregister pool registry"
 
-e2e_run "Uninstall registry on internal bastion" \
-    "aba -d mirror uninstall"
-e2e_run "Verify registry unreachable on disN" \
-    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/health/instance"
+e2e_run "Deregister pool registry on conN" \
+    "aba -d mirror unregister"
+e2e_run "Verify conN regcreds removed" \
+    "test ! -f ~/.aba/mirror/mirror/pull-secret-mirror.json"
+
+e2e_run_remote "Deregister pool registry on disN" \
+    "cd ~/aba && aba -d mirror unregister"
+e2e_run_remote "Verify disN regcreds removed" \
+    "test ! -f ~/.aba/mirror/mirror/pull-secret-mirror.json"
 
 test_end
 

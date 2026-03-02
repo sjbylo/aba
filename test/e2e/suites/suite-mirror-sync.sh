@@ -96,7 +96,8 @@ e2e_run_remote "Bring down firewalld" \
 e2e_diag_remote "Show firewalld status (should be down)" \
     "sudo systemctl status firewalld"
 
-e2e_register_mirror "$PWD/mirror" remote
+# Mirror is installed from conN (via sync -H), so cleanup runs on conN (local)
+e2e_register_mirror "$PWD/mirror"
 e2e_run -r 3 2 "Sync images to remote registry" \
     "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
