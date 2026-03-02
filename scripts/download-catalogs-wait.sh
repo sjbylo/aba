@@ -4,10 +4,7 @@
 
 set -eo pipefail
 
-# Scripts called from mirror/Makefile should cd to mirror/
-# Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-cd "$SCRIPT_DIR/../mirror" || exit 1
+# CWD is set by mirror/Makefile to the correct mirror directory
 
 # Enable INFO messages by default when called directly from make
 # (unless explicitly disabled by parent process via --quiet)
