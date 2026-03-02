@@ -273,6 +273,7 @@ if [ -n "$CLI_DEPLOY" ]; then
 		--exclude='*.tar.gz' \
 		--exclude='.dnf-install.log' \
 		--exclude='*.bk' \
+		--exclude='mirror/.installed' \
 		.
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 	echo "  Tarball: $_deploy_size"
@@ -402,7 +403,7 @@ if [ -n "$CLI_RESTART" ]; then
 
 	# 1) Stop
 	echo ""
-	echo "  [1/3] Stopping suites ..."
+	echo "  [1/4] Stopping suites ..."
 	for p in "${_restart_pools[@]}"; do
 		_host="con${p}.${_domain}"
 		printf "    con${p}: "
@@ -417,9 +418,51 @@ if [ -n "$CLI_RESTART" ]; then
 		fi
 	done
 
-	# 2) Deploy
+	# 2) Process cleanup files BEFORE wiping the tree -- clusters get deleted
+	#    and mirrors get uninstalled via `aba` while the aba tree (and its
+	#    mirror.conf / cluster dirs) still exists on conN.
 	echo ""
-	echo "  [2/3] Deploying ..."
+	echo "  [2/4] Cleaning up registered resources ..."
+	for p in "${_restart_pools[@]}"; do
+		_host="con${p}.${_domain}"
+		_target="${_user}@${_host}"
+		printf "    con${p}: "
+		ssh $_restart_ssh "${_target}" 'set -f
+			_found=""
+			_log_dir="$HOME/aba/test/e2e/logs"
+			_ssh="ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+
+			for f in "$_log_dir"/*.cleanup; do
+				[ -f "$f" ] || continue
+				_found=1
+				_file_ok=1
+				while IFS=" " read -r tgt path; do
+					[ -z "$path" ] && continue
+					echo "  cluster: $tgt $path"
+					$_ssh "$tgt" "[ -d '\''$path'\'' ] && aba -y -d '\''$path'\'' delete || echo '\''  (dir not found)'\''" 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
+				done < "$f"
+				[ -n "$_file_ok" ] && rm -f "$f" || echo "  WARNING: keeping $(basename $f) -- some entries failed"
+			done
+
+			for f in "$_log_dir"/*.mirror-cleanup; do
+				[ -f "$f" ] || continue
+				_found=1
+				_file_ok=1
+				while IFS=" " read -r tgt path; do
+					[ -z "$path" ] && continue
+					echo "  mirror: $tgt $path"
+					$_ssh "$tgt" "[ -d '\''$path'\'' ] && aba -y -d '\''$path'\'' uninstall || echo '\''  (dir not found)'\''" 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
+				done < "$f"
+				[ -n "$_file_ok" ] && rm -f "$f" || echo "  WARNING: keeping $(basename $f) -- some entries failed"
+			done
+
+			[ -n "$_found" ] && echo "done" || echo "nothing to clean"
+		' 2>/dev/null || echo "unreachable"
+	done
+
+	# 3) Deploy
+	echo ""
+	echo "  [3/4] Deploying ..."
 	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
 	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
 		--exclude='.git' \
@@ -437,6 +480,7 @@ if [ -n "$CLI_RESTART" ]; then
 		--exclude='*.tar.gz' \
 		--exclude='.dnf-install.log' \
 		--exclude='*.bk' \
+		--exclude='mirror/.installed' \
 		.
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 	echo "    Tarball: $_deploy_size"
@@ -454,9 +498,9 @@ if [ -n "$CLI_RESTART" ]; then
 	done
 	rm -f "$_deploy_tar"
 
-	# 3) Re-launch last suite on each pool
+	# 4) Re-launch last suite on each pool
 	echo ""
-	echo "  [3/3] Re-launching last suite(s) ..."
+	echo "  [4/4] Re-launching last suite(s) ..."
 	_restart_ok=0
 	_restart_fail=0
 	for p in "${_restart_pools[@]}"; do

@@ -221,18 +221,25 @@ _cleanup_dis_aba() {
 	echo "  Cleaning disN ($dis_host) via ABA commands ..."
 
 	# 1. Uninstall any aba-installed registry from conN (Rule 6: uninstall from installer host)
-	local _testing_aba="$HOME/testing/aba"
-	for _dir in "$_testing_aba" "$_ABA_ROOT"; do
+	#    Skip if .installed exists but state.sh is missing -- the marker is stale
+	#    (e.g. shipped via deploy tarball from the bastion) and aba would prompt.
+	local _regcreds="$HOME/.aba/mirror/mirror"
+	for _dir in "$_ABA_ROOT"; do
 		if [ -f "$_dir/mirror/.installed" ]; then
+			if [ ! -f "$_regcreds/state.sh" ]; then
+				echo "  Removing stale .installed marker in $_dir (no state.sh)"
+				rm -f "$_dir/mirror/.installed"
+				continue
+			fi
 			echo "  Uninstalling registry via aba (from $_dir) ..."
 			( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
 		fi
 	done
 
-	# 2. Clean disN filesystem: aba tree, quay data, caches, container storage
+	# 2. Stop containers first, then clean disN filesystem
 	echo "  Cleaning disN filesystem ..."
-	_essh "$dis_host" "rm -rf ~/aba ~/quay-install ~/quay-storage ~/.ssh/quay_installer*" 2>&1 || true
 	_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
+	_essh "$dis_host" "rm -rf ~/aba ~/quay-install ~/quay-storage ~/.ssh/quay_installer*" 2>&1 || true
 	_essh "$dis_host" "rm -rf ~/.cache/agent ~/.oc-mirror" 2>&1 || true
 	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage" 2>&1 || true
 
@@ -317,30 +324,44 @@ _pre_suite_cleanup() {
 		[ -f "$cleanup_file" ] || continue
 		found=1
 		echo "  Found leftover: $(basename "$cleanup_file") -- deleting registered clusters ..."
-		local target abs_path
+		local target abs_path _cleanup_ok=1
 		while IFS=' ' read -r target abs_path; do
 			[ -z "$abs_path" ] && continue
 			echo "    $target: aba -y -d $abs_path delete"
-			( _essh "$target" \
+			if ! ( _essh "$target" \
 				"[ -d '$abs_path' ] && aba -y -d '$abs_path' delete || echo '  (dir not found -- already cleaned)'" \
-				2>&1 || true )
+				2>&1 ); then
+				echo "  WARNING: cleanup SSH failed for $target:$abs_path"
+				_cleanup_ok=""
+			fi
 		done < "$cleanup_file"
-		rm -f "$cleanup_file"
+		if [ -n "$_cleanup_ok" ]; then
+			rm -f "$cleanup_file"
+		else
+			echo "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+		fi
 	done
 
 	for cleanup_file in "${_RUNNER_DIR}"/logs/*.mirror-cleanup; do
 		[ -f "$cleanup_file" ] || continue
 		found=1
 		echo "  Found leftover: $(basename "$cleanup_file") -- uninstalling registered mirrors ..."
-		local target abs_path
+		local target abs_path _mirror_ok=1
 		while IFS=' ' read -r target abs_path; do
 			[ -z "$abs_path" ] && continue
 			echo "    $target: aba -y -d $abs_path uninstall"
-			( _essh "$target" \
+			if ! ( _essh "$target" \
 				"[ -d '$abs_path' ] && aba -y -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
-				2>&1 || true )
+				2>&1 ); then
+				echo "  WARNING: cleanup SSH failed for $target:$abs_path"
+				_mirror_ok=""
+			fi
 		done < "$cleanup_file"
-		rm -f "$cleanup_file"
+		if [ -n "$_mirror_ok" ]; then
+			rm -f "$cleanup_file"
+		else
+			echo "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+		fi
 	done
 
 	[ -n "$found" ] && echo "  Pre-suite cleanup complete."

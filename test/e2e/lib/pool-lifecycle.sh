@@ -68,11 +68,14 @@ VM_DEFAULT_USER="${VM_DEFAULT_USER:-steve}"
 # All SSH/SCP calls in _vm_* functions go through these wrappers to ensure
 # consistent options: no host-key prompts, connection timeouts, clean logs.
 _essh() {
-    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+    ssh -o ConnectTimeout=10 -o BatchMode=yes \
+        -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
 }
 _escp() {
-    scp -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+    scp -o ConnectTimeout=10 -o BatchMode=yes \
+        -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
 }
 

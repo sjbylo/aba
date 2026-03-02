@@ -207,7 +207,6 @@ cleanup_all() {
 #        registry used by network-advanced and cluster-ops suites.
 #
 _cleanup_con_quay() {
-    local _testing_aba="$HOME/testing/aba"
     local _aba_root
     _aba_root="$(cd "$_E2E_LIB_DIR_SU/../../.." && pwd)"
 
@@ -217,7 +216,7 @@ _cleanup_con_quay() {
     [ -d "$HOME/.e2e-pool-registry" ] && _pool_reg_present=1
 
     # Tier 1: use aba's own uninstall for any aba-installed registry
-    for _dir in "$_testing_aba" "$_aba_root"; do
+    for _dir in "$_aba_root"; do
         if [ -f "$_dir/mirror/.installed" ]; then
             if [ -n "$_pool_reg_present" ]; then
                 echo "  [cleanup] Found .installed in $_dir/mirror -- removing marker only (pool registry protected)"
@@ -225,7 +224,7 @@ _cleanup_con_quay() {
                 _did_uninstall=1
             else
                 echo "  [cleanup] Found .installed in $_dir/mirror -- running aba uninstall"
-                ( cd "$_dir" && aba -d mirror uninstall ) && _did_uninstall=1 || {
+                ( cd "$_dir" && aba -y -d mirror uninstall ) && _did_uninstall=1 || {
                     echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
                 }
             fi
