@@ -17,15 +17,19 @@ name=
 if [ ! -d "$name" ]; then
 	mkdir "$name"
 	cd "$name"
-	cp ../mirror/Makefile .
+	ln -fs ../templates/Makefile.mirror Makefile
 	make -s init
 else
 	if [ -s "$name/Makefile" ]; then
-		cd "$name"
-		make -s init
+		if grep -q "Mirror Makefile" "$name/Makefile"; then
+			cd "$name"
+			make -s init
+		else
+			aba_abort "Error: Directory $name is not a valid mirror dir."
+		fi
 	else
 		cd "$name"
-		cp ../mirror/Makefile .
+		ln -fs ../templates/Makefile.mirror Makefile
 		make -s init
 	fi
 fi

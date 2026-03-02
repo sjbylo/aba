@@ -19,7 +19,7 @@ type=standard
 if [ ! -d "$name" ]; then
 	mkdir $name
 	cd $name
-	ln -fs ../templates/Makefile 
+	ln -fs ../templates/Makefile.cluster Makefile
 	make -s init
 else
 	if [ -s $name/Makefile ]; then
@@ -33,7 +33,7 @@ else
 		fi
 	else
 		cd $name
-		ln -fs ../templates/Makefile 
+		ln -fs ../templates/Makefile.cluster Makefile
 		make -s init
 	fi
 fi
