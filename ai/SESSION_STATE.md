@@ -1,24 +1,19 @@
 # Session State
 
 ## Current goal
-Makefile consolidation: move both Makefiles into `templates/` with explicit names, use symlinks consistently, and fix mirror config flags in `aba.sh`.
+Fix named mirror directory `cd` bug -- 7 mirror scripts hardcoded `cd "$SCRIPT_DIR/../mirror"` which always navigated to the default `mirror/` dir, breaking named mirror dirs like `xxx/`.
 
 ## Done this session
-- Committed previous session state
-- Renamed `templates/Makefile` → `templates/Makefile.cluster` with compat symlink
-- Moved `mirror/Makefile` → `templates/Makefile.mirror` (added header); replaced with symlink
-- Updated `setup-cluster.sh`: symlink to `Makefile.cluster` (2 locations)
-- Updated `setup-mirror.sh`: symlink to `Makefile.mirror` (2 locations) + validation
-- Fixed 9 mirror flag handlers in `aba.sh`: `$ABA_ROOT/mirror` → `$WORK_DIR` (backlog #17)
-- Added `_require_mirror_dir()` guard in `aba.sh`
-- Pre-commit checks pass
+- Diagnosed the root cause: `pwd -P` resolved the `scripts` symlink, so `../mirror` always pointed to the default mirror dir
+- Fixed all 7 affected scripts: `reg-sync.sh`, `reg-load.sh`, `reg-save.sh`, `reg-create-imageset-config-sync.sh`, `reg-create-imageset-config-save.sh`, `download-catalogs-start.sh`, `download-catalogs-wait.sh`
+- Tested: `aba sync` from `xxx/` now correctly probes `bastion.example.com:8443`
+- Regression tested: `aba sync` from default `mirror/` still reads its own config
+- Pre-commit checks pass (all 123 shell scripts valid syntax)
 
 ## Next steps
-- Commit and push when user approves
-- Test: `aba -d mirror --reg-host test` (should work), `aba --reg-host test` from root (should abort with guard message)
-- Mark backlog #17 as completed
+- Commit and push the fix (awaiting user approval)
+- Monitor E2E tests after the fix is deployed
 
 ## Decisions / notes
-- Both Makefiles now live in `templates/` with `.cluster` and `.mirror` suffixes
-- Compat symlink `templates/Makefile → Makefile.cluster` preserves existing cluster dirs
-- Guard pattern matches root Makefile's `MIRROR_CMDS` approach
+- The fix simply removes the `cd` preamble; CWD is already correct (set by Makefile)
+- Consistent with how `reg-install.sh`, `reg-uninstall.sh`, etc. already work

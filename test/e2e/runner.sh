@@ -249,8 +249,10 @@ _cleanup_dis_aba() {
 	echo "  Cleaning disN filesystem ..."
 	_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
 	_essh "$dis_host" "rm -rf ~/aba ~/quay-install ~/quay-storage ~/.ssh/quay_installer*" 2>&1 || true
-	_essh "$dis_host" "rm -rf ~/.cache/agent ~/.oc-mirror" 2>&1 || true
+	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1 || true
 	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage" 2>&1 || true
+	# Remove stale CA trust anchors from previous registry installs
+	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1 || true
 
 	# 3. Restore baseline system state (firewalld on, as created by setup-infra)
 	_essh "$dis_host" "sudo systemctl enable firewalld 2>/dev/null; sudo systemctl start firewalld 2>/dev/null" 2>&1 || true
