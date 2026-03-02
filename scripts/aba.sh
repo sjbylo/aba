@@ -23,7 +23,7 @@
 ABA_VERSION=20260226143439
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260301204853
+ABA_BUILD=20260302233048
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -174,6 +174,13 @@ export RUN_ONCE_CLEANED=1 # Be sure it's only run once!
 aba_debug DEBUG_ABA=$DEBUG_ABA
 aba_debug "Starting: $0 $*"
 aba_debug "ABA_ROOT=[$ABA_ROOT]"
+
+# Guard: mirror config flags require WORK_DIR to be a mirror directory.
+# Same pattern as root Makefile's MIRROR_CMDS guard (tells user to use -d mirror).
+_require_mirror_dir() {
+	grep -q "Mirror Makefile" "$WORK_DIR/Makefile" 2>/dev/null && return
+	aba_abort "Mirror config flags require a mirror directory. Use: aba -d mirror $1 ..."
+}
 
 # This will be the actual 'make' command that will eventually be run
 BUILD_COMMAND=
@@ -371,65 +378,74 @@ elif [ "$1" = "--light" ]; then
 		shift 2
 		ocp_version=$ver
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
+		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_host -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_host -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-ssh-key" -o "$1" = "-k" ]; then
+		_require_mirror_dir "$1"
 		# The ssh key used to access the linux registry host
 		# If no value, remove from mirror.conf
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_key= || { reg_ssh_key=$2; shift; }
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_ssh_key -v "$reg_ssh_key" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_ssh_key -v "$reg_ssh_key" -f $WORK_DIR/mirror.conf
 		shift
 	elif [ "$1" = "--reg-ssh-user" -o "$1" = "-U" ]; then
+		_require_mirror_dir "$1"
 		# The ssh username used to access the linux registry host
 		# If no value, remove from mirror.conf
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_user_val= || { reg_ssh_user_val=$2; shift; }
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $WORK_DIR/mirror.conf
 		shift
 	elif [ "$1" = "--data-dir" ]; then
+		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n data_dir -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n data_dir -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--vendor" ]; then
+		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		[[ "$2" =~ ^(auto|quay|docker)$ ]] || aba_abort "invalid vendor '$2' -- must be auto, quay, or docker"
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_vendor -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_vendor -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-port" ]; then
+		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		[[ "$2" =~ ^[0-9]+$ ]] || aba_abort "invalid port '$2' -- must be a number"
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_port -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_port -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-user" ]; then
+		_require_mirror_dir "$1"
 		# The username used to access the mirror registry 
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_user -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_user -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-password" ]; then
+		_require_mirror_dir "$1"
 		# The password used to access the mirror registry 
 		# Add a password in ='password'
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_pw_value= || { reg_pw_value="$2"; shift; }
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $WORK_DIR/mirror.conf
 		shift
 	elif [ "$1" = "--reg-path" ]; then
+		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" >&2 
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_path -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_path -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--pull-secret-mirror" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
