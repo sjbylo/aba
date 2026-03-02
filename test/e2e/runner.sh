@@ -220,9 +220,10 @@ _cleanup_dis_aba() {
 	echo ""
 	echo "  Cleaning disN ($dis_host) via ABA commands ..."
 
-	# 1. Uninstall any aba-installed registry from conN (Rule 6: uninstall from installer host)
+	# 1. Clean up any registry from conN (Rule 6: uninstall from installer host)
 	#    Skip if .installed exists but state.sh is missing -- the marker is stale
 	#    (e.g. shipped via deploy tarball from the bastion) and aba would prompt.
+	#    Use 'unregister' for externally-managed registries, 'uninstall' for ABA-installed.
 	local _regcreds="$HOME/.aba/mirror/mirror"
 	for _dir in "$_ABA_ROOT"; do
 		if [ -f "$_dir/mirror/.installed" ]; then
@@ -231,8 +232,14 @@ _cleanup_dis_aba() {
 				rm -f "$_dir/mirror/.installed"
 				continue
 			fi
-			echo "  Uninstalling registry via aba (from $_dir) ..."
-			( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
+			source "$_regcreds/state.sh"
+			if [ "${REG_VENDOR:-}" = "existing" ]; then
+				echo "  Deregistering existing registry (from $_dir) ..."
+				( cd "$_dir" && aba -y -d mirror unregister ) 2>&1 || echo "  WARNING: aba unregister failed in $_dir (rc=$?)"
+			else
+				echo "  Uninstalling registry via aba (from $_dir) ..."
+				( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
+			fi
 		fi
 	done
 

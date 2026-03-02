@@ -509,6 +509,9 @@ should_skip_checkpoint() {
 _E2E_CLEANUP_FILE=""
 
 # Register a cluster for cleanup.  Call DIRECTLY before the install command.
+# The "local"/"remote" perspective is ALWAYS from conN (the host running the
+# suite script).  "local" = cleanup on conN, "remote" = cleanup on disN
+# (INTERNAL_BASTION) via SSH.
 #   e2e_register_cluster "$PWD/$SNO"              # local cluster (on conN)
 #   e2e_register_cluster "$PWD/$COMPACT" remote   # remote cluster (on disN)
 e2e_register_cluster() {
@@ -571,6 +574,9 @@ e2e_cleanup_clusters() {
 _E2E_MIRROR_CLEANUP_FILE=""
 
 # Register a mirror for cleanup.  Call DIRECTLY before the install/load/sync.
+# The "local"/"remote" perspective is ALWAYS from conN (the host running the
+# suite script).  "local" = cleanup on conN, "remote" = cleanup on disN
+# (INTERNAL_BASTION) via SSH.
 #   e2e_register_mirror "$PWD/mirror"              # local mirror (on conN)
 #   e2e_register_mirror "$PWD/mirror" remote       # remote mirror (on disN)
 e2e_register_mirror() {

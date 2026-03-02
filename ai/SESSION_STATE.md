@@ -1,28 +1,23 @@
 # Session State
 
 ## Current goal
-Implement `aba -d mirror unregister` command (core ABA change), then refactor e2e existing-reg suite.
+Execute e2e plan: refactor suite-airgapped-existing-reg to use pool registry on conN.
 
 ## Done this session
 - E2E framework hardening (committed `662fe3d`)
-- Rules, backlog, handoff context updates (committed `eb1bb76`)
-- Implemented and tested `aba -d mirror unregister`:
-  - New `scripts/reg-unregister.sh` — deregistration logic + vendor guard
-  - Guard in `scripts/reg-uninstall.sh` — aborts for `REG_VENDOR=existing`
-  - Deleted `scripts/reg-uninstall-existing.sh`
-  - Added `unregister` target to `mirror/Makefile`
-  - Updated `others/help-mirror.txt`
-  - Updated `README.md` (4 places: existing-reg prereqs, sync desc, arm64, cleanup)
-  - All 3 manual tests pass (guard both ways + happy path)
+- Rules, backlog, handoff context (committed `eb1bb76`)
+- `aba -d mirror unregister` command (committed `7847929`)
+- Updated e2e plan to account for `unregister`: suite cleanup, runner.sh dispatch
 
 ## Next steps
-1. Commit the unregister changes
-2. Execute e2e refactoring plan (pool registry for existing-reg suite)
+1. Execute e2e plan (8 todos)
+2. Deploy and restart tests on all pools
 
 ## Decisions / notes
-- Clean code separation: register/unregister = creds only; install/uninstall = real software
-- `aba uninstall` on existing registry → hard abort pointing to `unregister`
-- `aba unregister` on ABA-installed registry → hard abort pointing to `uninstall`
+- End-of-suite cleanup uses `unregister` on both conN and disN
+- runner.sh _cleanup_dis_aba checks state.sh to dispatch unregister vs uninstall
+- Pool registry NOT registered via e2e_register_mirror (no .mirror-cleanup entry)
+- _pre_suite_cleanup and run.sh restart don't need changes
 
 ## Backlog
 - Why does suite-connected-public.sh use pool registry in Test 8? Consider splitting.
