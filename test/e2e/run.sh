@@ -709,8 +709,12 @@ if [ -n "$CLI_STATUS" ]; then
 				elif [[ "$_tline" == *FAIL* ]]; then
 					_tline="${_tline/FAIL/$'\033[1;31mFAIL\033[0m'}"
 				elif [[ "$_tline" == *RUNNING* ]]; then
-					_tline="${_tline/RUNNING.../$'\033[1;36mRUNNING...\033[0m'}"
-					# Append the last command output to the RUNNING line
+					if [[ "$_state" == "PAUSED" ]]; then
+						_tline="${_tline/RUNNING.../$'\033[1;33mPAUSED...\033[0m'}"
+					else
+						_tline="${_tline/RUNNING.../$'\033[1;36mRUNNING...\033[0m'}"
+					fi
+					# Append the last command output to the RUNNING/PAUSED line
 					if [[ ( "$_state" == "RUNNING" || "$_state" == "PAUSED" ) && -n "$_detail" ]]; then
 						_tline+="  $_detail"
 						_detail=""

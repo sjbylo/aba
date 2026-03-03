@@ -1,27 +1,27 @@
 # Session State
 
 ## Current goal
-Switch E2E pool registry from Quay to Docker registry at `/opt/pool-reg`, plus related fixes.
+Fix E2E suite failures and improve status display consistency.
 
 ## Done this session
-1. **Rewrote `test/e2e/scripts/setup-pool-registry.sh`** -- Docker registry instead of Quay, data at `/opt/pool-reg`
-2. **Added `POOL_REG_DIR` to `test/e2e/lib/constants.sh`** -- single source of truth
-3. **Sourced `constants.sh` from `framework.sh`** -- all suites get `POOL_REG_DIR` automatically
-4. **Updated all references across 11 files** -- `$POOL_REG_DIR` everywhere, health checks `/v2/`, cleanup guards by container name
-5. **Added oc-mirror cache purge to `_pre_suite_cleanup()`** in `runner.sh`
-6. **Fixed `POOL_REG_DIR: unbound variable`** in `setup-infra.sh` -- added `source constants.sh`
-7. **Removed `stale podman images (steve)` verify check** -- not a real violation
-8. **Fixed Ctrl-C/skip showing PASS** -- added `_E2E_USER_SKIPPED` flag; `test_end` records SKIP
-9. **Suppressed "Terminated" message** in `cluster-startup.sh` -- `wait $pid` reaps background CSR process
-10. **Fixed Makefile.cluster `cluster.conf` target** -- added 6 missing vars (`starting_ip`, `num_masters`, `num_workers`, `ports`, `vlan`, `ssh_key_file`), removed duplicates
-11. **Added `rm -rf $STANDARD` cleanup** in `suite-airgapped-local-reg.sh` before standard cluster creation
+1. **Rewrote `setup-pool-registry.sh`** -- Docker registry at `/opt/pool-reg` instead of Quay
+2. **Added `POOL_REG_DIR` to `constants.sh`** -- single source of truth, sourced from `framework.sh`
+3. **Updated all references across 11 files** -- `$POOL_REG_DIR` everywhere, `/v2/` health checks
+4. **Added oc-mirror cache purge** to `_pre_suite_cleanup()` in `runner.sh`
+5. **Fixed `POOL_REG_DIR: unbound variable`** in `setup-infra.sh`
+6. **Removed stale podman images verify check**
+7. **Fixed Ctrl-C/skip showing PASS** -- `_E2E_USER_SKIPPED` flag records SKIP
+8. **Suppressed "Terminated" CSR message** in `cluster-startup.sh`
+9. **Fixed Makefile.cluster `cluster.conf` target** -- added 6 missing vars, removed duplicates
+10. **Added `rm -rf $STANDARD` cleanup** before standard cluster creation
+11. **Added missing vote-app sync** in `suite-airgapped-existing-reg` (save+scp+load+day2)
+12. **Fixed PAUSED/RUNNING inconsistency** in `run.sh status` -- table now shows `PAUSED...` in yellow
 
 ## Next steps
-- Deploy updated code to conN hosts (`run.sh deploy --force`)
-- On each conN: remove old Quay pool registry, run new `setup-pool-registry.sh`
-- Verify pool registry works and suites pass
+- Commit and push pending changes
+- Deploy updated code to conN hosts
+- Monitor suite runs
 
 ## Decisions / notes
 - `POOL_REG_DIR="/opt/pool-reg"` defined once in `constants.sh`
-- Container name: `pool-registry`; port 8443; auth: `init`/`p4ssw0rd`
-- Makefile variable pass-through: added explicit args as belt-and-suspenders (make env export works too)
+- Vote-app transfer uses `scp` (not `aba tar`) to avoid working-dir corruption
