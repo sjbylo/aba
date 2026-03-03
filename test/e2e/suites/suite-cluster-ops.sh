@@ -24,7 +24,6 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
-POOL_REG_DIR="$HOME/.e2e-pool-registry"
 
 SNO="$(pool_cluster_name sno)"
 COMPACT="$(pool_cluster_name compact)"
@@ -135,7 +134,7 @@ e2e_run "Clear reg_ssh_user (local registry)" \
 # Set up regcreds/ with the pre-populated registry's CA and pull secret
 e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"
 e2e_run "Copy Quay root CA to regcreds" \
-    "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"
+    "cp -v $POOL_REG_DIR/certs/ca.crt ~/.aba/mirror/mirror/rootCA.pem"
 
 # Generate pull-secret-mirror.json for the local registry
 e2e_run "Generate mirror pull secret" \
@@ -166,10 +165,7 @@ test_begin "ABI config: sno/compact/standard"
 
 for ctype in sno compact standard; do
     cname="$(pool_cluster_name $ctype)"
-    local_starting_ip=""
-    [ "$ctype" = "sno" ] && local_starting_ip=$(pool_sno_ip)
-    [ "$ctype" = "compact" ] && local_starting_ip=$(pool_compact_api_vip)
-    [ "$ctype" = "standard" ] && local_starting_ip=$(pool_standard_api_vip)
+    local_starting_ip=$(pool_starting_ip "$ctype")
 
     e2e_run "Create cluster.conf for $cname" \
         "rm -rf $cname && aba cluster -n $cname -t $ctype -i $local_starting_ip --step cluster.conf"

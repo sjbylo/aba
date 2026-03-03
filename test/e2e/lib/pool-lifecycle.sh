@@ -131,6 +131,7 @@ _vm_install_packages() {
 		    git \
 		    make \
 		    podman \
+		    rsync \
 		    dnsmasq \
 		    bind-utils \
 		    chrony \

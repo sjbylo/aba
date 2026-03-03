@@ -259,6 +259,139 @@ before the message.
 
 ---
 
+## Unimplemented plans (from sessions)
+
+*These were raised in sessions or other docs; added here so we don't forget them.*
+
+### 18. E2E `--resume` Remaining Bugs (3 of 4)
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03  
+**Ref:** HANDOFF_CONTEXT.md §2
+
+- **Bug 2:** `suite_begin` truncates state file when resuming — same path for `E2E_STATE_FILE` and `E2E_RESUME_FILE`; truncate wipes checkpoints. Fix: copy to `.resume` backup before truncating.
+- **Bug 3:** `test_begin`/`test_end` don't check resume checkpoint — only `run_test()` does. Fix: add skip-block in `test_begin`/`e2e_run`/`test_end` (see HANDOFF).
+- **Bug 4:** `--resume` not passed through parallel dispatch — `_build_remote_cmd` in parallel.sh doesn't append `--resume`.
+
+### 19. E2E dnsmasq Registry DNS Record
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03  
+**Ref:** HANDOFF_CONTEXT.md §3
+
+`dig registry.pN.example.com +short` returns nothing on conN. `_vm_setup_dnsmasq` doesn't add a record for `registry.pN.example.com`. An incomplete fix exists in `git stash`.
+
+### 20. E2E Error Suppression Audit (remaining files)
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03  
+**Ref:** HANDOFF_CONTEXT.md §4
+
+Audit `|| true` and `2>/dev/null` in: `test/e2e/lib/remote.sh`, `framework.sh`, `parallel.sh`, `config-helpers.sh`. Never silently swallow failures in test suites.
+
+### 21. E2E Pool Affinity for Dispatch
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Medium  
+**Created:** 2026-03-03  
+**Ref:** HANDOFF_CONTEXT.md §6
+
+Dispatcher assigns next suite to first free pool. Suites that share prerequisites (e.g. `cluster-ops` + `network-advanced` both use pool registry) could be chained to the same pool to reuse registry. Add lightweight chaining hints.
+
+### 22. Rename `.installed` / `.uninstalled` to `.available` / `.unavailable`
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03  
+**Ref:** E2E_FIXES_LOG.md B1
+
+With `REG_VENDOR=existing`, `.installed` is misleading. `.available` = "mirror registry ready for use". ~46 occurrences across ~18 files. Mechanical find-and-replace in a dedicated commit (after mirror --name / named dirs are stable).
+
+### 23. Cluster VMs in Wrong vCenter Folder
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03  
+**Ref:** E2E_FIXES_LOG.md A
+
+Compact/cluster VMs land in shared `abatesting` folder instead of pool-specific folder (e.g. `pool3/`). vCenter folder path during cluster creation should incorporate pool number.
+
+### 24. `run.sh deploy --force` Confirmation Prompt
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Trivial  
+**Created:** 2026-03-03
+
+When using `deploy --force`, prompt user: "Really do this? (Y/N)?" to avoid accidental wipe of remote state.
+
+### 25. E2E PAUSED State: Clear Flag File Promptly
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Trivial  
+**Created:** 2026-03-03
+
+Clear the PAUSED flag file as soon as it is reasonable so it doesn't persist and confuse status. Documented during run.sh status / interactive menu work.
+
+### 26. E2E Spring-Clean Function
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03
+
+Function to remove state data and run verification routines to bring conN/disN back to a known good state (e.g. before a fresh full run or after debugging).
+
+### 27. E2E `--loop` Option for Continuous Dispatch
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Medium  
+**Created:** 2026-03-03
+
+Option to continuously re-queue completed (or failed) suites so pools keep getting work without user re-running `reschedule`. Deferred in favor of one-shot retry + reschedule.
+
+### 28. Investigate: Why Does `suite-connected-public` Install a Registry?
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03
+
+Suite only tests public registry path; clarify whether installing a reg is necessary or leftover. Add to backlog for investigation.
+
+### 29. Docker Registry as First-Class Citizen (design)
+
+**Status:** Backlog (design doc exists)  
+**Priority:** Medium  
+**Estimated Effort:** Large  
+**Created:** 2026-03-03  
+**Ref:** ai/DESIGN-docker-registry-first-class.md
+
+Full design for consistent script layout, mirror.conf config, and TUI persistence for Docker registry. Status: PLANNED, not yet implemented.
+
+### 30. CLI Ensure Analysis — Add Ensures to 6 Scripts
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Medium  
+**Created:** 2026-03-03  
+**Ref:** ai/CLI_ENSURE_ANALYSIS.md
+
+When moving logic out of Makefiles, add "ensure" patterns to 6 scripts as proposed in CLI_ENSURE_ANALYSIS.md.
+
+---
+
 ## Completed
 
 ### `run.sh verify` -- Pool Verification Subcommand

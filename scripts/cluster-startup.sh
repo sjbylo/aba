@@ -107,7 +107,7 @@ check_and_approve_csrs() {
 
 (check_and_approve_csrs) &>/dev/null & 
 pid=$!
-myexit() { [ "$pid" ] && { kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; }; exit $1; }
+myexit() { [ "$pid" ] && { kill $pid &>/dev/null; wait $pid 2>/dev/null; }; exit $1; }
 trap myexit EXIT
 
 # Wait for all nodes in Ready state

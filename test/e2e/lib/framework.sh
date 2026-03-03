@@ -75,6 +75,8 @@
 _E2E_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _E2E_DIR="$(cd "$_E2E_LIB_DIR/.." && pwd)"
 
+source "$_E2E_LIB_DIR/constants.sh"
+
 # --- Globals ----------------------------------------------------------------
 
 # Interactive mode: prompt on failure (retry/skip/abort). Set by run.sh.
@@ -107,9 +109,25 @@ _E2E_SKIP_BLOCK=""
 # Skip-suite flag: when set, ALL remaining test blocks and e2e_run calls are no-ops
 _E2E_SUITE_SKIPPED=""
 
+# User-skip flag: set when user picks [s]kip from interactive menu; test_end records SKIP
+_E2E_USER_SKIPPED=""
+
 # Progress plan -- parallel arrays
 declare -a _E2E_PLAN_NAMES=()
 declare -a _E2E_PLAN_STATUS=()  # PENDING | RUNNING | PASS | FAIL | SKIP | DONE
+
+# --- Duration formatting ----------------------------------------------------
+
+_e2e_fmt_duration() {
+	local secs=$1
+	if [ $secs -ge 3600 ]; then
+		printf '%dh %dm %ds' $((secs/3600)) $((secs%3600/60)) $((secs%60))
+	elif [ $secs -ge 60 ]; then
+		printf '%dm %ds' $((secs/60)) $((secs%60))
+	else
+		printf '%ds' "$secs"
+	fi
+}
 
 # --- Color helpers ----------------------------------------------------------
 
@@ -185,15 +203,34 @@ _e2e_notify_prefix() {
 }
 
 _e2e_notify() {
+    # #region agent log
+    local _dbg_rc=0
+    printf '{"sessionId":"23cf03","hypothesisId":"H3-H4","location":"framework.sh:_e2e_notify","message":"_e2e_notify called","data":{"NOTIFY_CMD":"%s","args":"%s","suite":"%s"},"timestamp":%s}\n' \
+        "${NOTIFY_CMD:-EMPTY}" "$*" "${_E2E_SUITE_NAME:-?}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+    # #endregion
     if [ -n "$NOTIFY_CMD" ]; then
-        $NOTIFY_CMD "$(_e2e_notify_prefix) $*" < /dev/null 2>/dev/null || true
+        # #region agent log
+        _dbg_rc=0
+        $NOTIFY_CMD "$(_e2e_notify_prefix) $*" < /dev/null >/dev/null 2>/tmp/e2e-debug-notify-stderr.log; _dbg_rc=$?
+        printf '{"sessionId":"23cf03","hypothesisId":"H4","location":"framework.sh:_e2e_notify:post","message":"notify cmd result","data":{"rc":%d,"stderr":"%s"},"timestamp":%s}\n' \
+            "$_dbg_rc" "$(head -1 /tmp/e2e-debug-notify-stderr.log 2>/dev/null | tr '"' "'")" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+        # #endregion
     fi
 }
 
 _e2e_notify_stdin() {
     local subject="$1"
+    # #region agent log
+    printf '{"sessionId":"23cf03","hypothesisId":"H3-H4","location":"framework.sh:_e2e_notify_stdin","message":"_e2e_notify_stdin called","data":{"NOTIFY_CMD":"%s","subject":"%s","suite":"%s"},"timestamp":%s}\n' \
+        "${NOTIFY_CMD:-EMPTY}" "$subject" "${_E2E_SUITE_NAME:-?}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+    # #endregion
     if [ -n "$NOTIFY_CMD" ]; then
-        $NOTIFY_CMD "$(_e2e_notify_prefix) $subject" 2>/dev/null || true
+        # #region agent log
+        local _dbg_rc2=0
+        $NOTIFY_CMD "$(_e2e_notify_prefix) $subject" >/dev/null 2>/tmp/e2e-debug-notify-stdin-stderr.log; _dbg_rc2=$?
+        printf '{"sessionId":"23cf03","hypothesisId":"H4","location":"framework.sh:_e2e_notify_stdin:post","message":"notify_stdin cmd result","data":{"rc":%d,"stderr":"%s"},"timestamp":%s}\n' \
+            "$_dbg_rc2" "$(head -1 /tmp/e2e-debug-notify-stdin-stderr.log 2>/dev/null | tr '"' "'")" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+        # #endregion
     else
         cat > /dev/null  # drain stdin
     fi
@@ -363,22 +400,28 @@ suite_end() {
     local elapsed=$(( $(date +%s) - _E2E_START_TIME ))
     local mins=$(( elapsed / 60 ))
     local secs=$(( elapsed % 60 ))
+    local _total_dur; _total_dur=$(_e2e_fmt_duration $elapsed)
 
     echo ""
     _e2e_draw_line "="
     _e2e_log_and_print "SUITE COMPLETE: $_E2E_SUITE_NAME"
     _e2e_log_and_print "  Total: $_E2E_TEST_COUNT  Pass: $_E2E_PASS_COUNT  Fail: $_E2E_FAIL_COUNT  Skip: $_E2E_SKIP_COUNT"
-    _e2e_log_and_print "  Duration: ${mins}m ${secs}s"
+    _e2e_log_and_print "  Duration: $_total_dur"
     _e2e_draw_line "="
 
     _print_progress
 
     if [ "$_E2E_FAIL_COUNT" -gt 0 ]; then
-        _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, ${mins}m ${secs}s) ==========")"
+        _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, $_total_dur) ==========")"
+        # #region agent log
+        printf '{"sessionId":"23cf03","hypothesisId":"H2","location":"framework.sh:finalize_suite:FAIL","message":"about to send suite FAIL notification","data":{"suite":"%s","fail_count":%d,"NOTIFY_CMD":"%s"},"timestamp":%s}\n' \
+            "$_E2E_SUITE_NAME" "$_E2E_FAIL_COUNT" "${NOTIFY_CMD:-EMPTY}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+        # #endregion
+        _e2e_notify "FAILED: $_E2E_SUITE_NAME -- ${_E2E_FAIL_COUNT} failures ($_total_dur)"
         return 1
     else
-        _e2e_summary "$(_e2e_Green "========== PASSED: $_E2E_SUITE_NAME  (${_E2E_PASS_COUNT} passed, ${mins}m ${secs}s) ==========")"
-        _e2e_notify "PASSED: $_E2E_SUITE_NAME -- ${_E2E_PASS_COUNT} tests (${mins}m ${secs}s)"
+        _e2e_summary "$(_e2e_Green "========== PASSED: $_E2E_SUITE_NAME  (${_E2E_PASS_COUNT} passed, $_total_dur) ==========")"
+        _e2e_notify "PASSED: $_E2E_SUITE_NAME -- ${_E2E_PASS_COUNT} tests ($_total_dur)"
         return 0
     fi
 }
@@ -431,6 +474,18 @@ test_end() {
     # If suite was skipped during this test, record as FAIL
     if [ -n "$_E2E_SUITE_SKIPPED" ] && [ "$result" -eq 0 ]; then
         result=1
+    fi
+
+    # If user picked [s]kip from interactive menu, record as SKIP
+    if [ -n "$_E2E_USER_SKIPPED" ]; then
+        _E2E_USER_SKIPPED=""
+        (( _E2E_SKIP_COUNT++ )) || true
+        _update_plan "$test_name" "SKIP"
+        _e2e_log_and_print "$(_e2e_yellow "  SKIP: $test_name")"
+        _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
+        _checkpoint_write "$test_name" "SKIP"
+        _E2E_CURRENT_TEST=""
+        return 0
     fi
 
     if [ "$result" -eq 0 ]; then
@@ -637,6 +692,10 @@ _interactive_prompt() {
         return 1
     fi
 
+    local _paused_file="/tmp/e2e-paused-${_E2E_SUITE_NAME:-unknown}"
+    echo "${_E2E_CURRENT_TEST:-$description}" > "$_paused_file"
+    local _clock_stopped=""
+
     while true; do
         echo ""
         local _ctx=""
@@ -645,28 +704,48 @@ _interactive_prompt() {
         [ -n "$description" ] && _ctx="${_ctx:+$_ctx | }Step: $description"
         [ -n "$_ctx" ] && _e2e_log_and_print "$(_e2e_yellow "$_ctx")"
         _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
-        printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd]: ")"
         read -t 0 -n 10000 </dev/tty 2>/dev/null || true
-        read -r ans </dev/tty
+        if [ "$_clock_stopped" ]; then
+            printf "%s" "$(_e2e_red "PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd]: ")"
+            read -r ans </dev/tty
+        else
+            printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] (20m timeout): ")"
+            if ! read -t 1200 -r ans </dev/tty; then
+                rm -f "$_paused_file"
+                _e2e_log_and_print "  >> $(_e2e_red "No input for 20 mins -- auto-aborting suite")"
+                e2e_cleanup_clusters
+                e2e_cleanup_mirrors
+                exit 1
+            fi
+        fi
 
         case "$ans" in
+            p|P)
+                _clock_stopped=1
+                _e2e_log_and_print "  >> $(_e2e_yellow "PAUSED -- clock stopped. Pick any option to continue.")"
+                continue
+                ;;
             r|R|"")
+                rm -f "$_paused_file"
                 _e2e_log_and_print "  >> $(_e2e_cyan "Retrying ...")"
                 return 2
                 ;;
             s)
+                rm -f "$_paused_file"
                 _e2e_log_and_print "  >> $(_e2e_yellow "Skipping test -- cleaning up ...")"
                 e2e_cleanup_clusters
                 e2e_cleanup_mirrors
                 return 0
                 ;;
             S)
+                rm -f "$_paused_file"
                 _e2e_log_and_print "  >> $(_e2e_yellow "Skipping entire suite -- cleaning up ...")"
                 e2e_cleanup_clusters
                 e2e_cleanup_mirrors
                 return 3
                 ;;
             0)
+                rm -f "$_paused_file"
                 _e2e_log_and_print "  >> $(_e2e_cyan "Restarting suite -- cleaning up first ...")"
                 e2e_cleanup_clusters
                 e2e_cleanup_mirrors
@@ -678,6 +757,7 @@ _interactive_prompt() {
                 e2e_cleanup_mirrors
                 ;;
             a|A)
+                rm -f "$_paused_file"
                 _e2e_log_and_print "  >> $(_e2e_red "Aborting -- cleaning up ...")"
                 e2e_cleanup_clusters
                 e2e_cleanup_mirrors
@@ -691,6 +771,7 @@ _interactive_prompt() {
                 local new_rc=${PIPESTATUS[0]}
                 if [ $new_rc -eq 0 ]; then
                     _e2e_log "User command succeeded"
+                    rm -f "$_paused_file"
                     return 0
                 else
                     _e2e_log "User command failed (exit=$new_rc)"
@@ -811,12 +892,13 @@ e2e_run() {
 
             if [ $ret -eq 0 ]; then
                 local _elapsed=$(( $(date +%s) - _step_start ))
+                local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
                 if [ $attempt -gt 1 ]; then
-                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description (${_elapsed}s)"
+                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description ($_dur)"
                 fi
-                _e2e_log_and_print "    $(_e2e_green "OK") (${_elapsed}s)"
-                _e2e_summary "    $(_e2e_Green "OK (${_elapsed}s)")"
-                _e2e_log "  OK (attempt $attempt, ${_elapsed}s)"
+                _e2e_log_and_print "    $(_e2e_green "OK") ($_dur)"
+                _e2e_summary "    $(_e2e_Green "OK ($_dur)")"
+                _e2e_log "  OK (attempt $attempt, $_dur)"
                 rm -f "$_cmd_output_file"
                 return 0
             fi
@@ -824,28 +906,11 @@ e2e_run() {
             local _exi; _exi="$(_e2e_exit_info $ret)"
             _e2e_log "  Attempt $attempt/$tot_cnt failed ($_exi)"
 
-            if [ $attempt -ge $tot_cnt ]; then
-                _e2e_log "  All $tot_cnt attempts exhausted"
-                _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
-                _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
-                _e2e_summary "    $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
-                (
-                    echo "$(date '+%H:%M:%S') EXHAUSTED $tot_cnt attempts"
-                    echo "Suite: $_E2E_SUITE_NAME"
-                    echo "Test: ${_E2E_CURRENT_TEST:-$description}"
-                    echo "Command: $cmd"
-                    echo "Host: ${host:-$(hostname -s)}"
-                    echo "--- Last 20 lines of suite log ---"
-                    tail -20 "$E2E_LOG_FILE" 2>/dev/null
-                    echo "--- Last 20 lines of command output ---"
-                    tail -20 "$_cmd_output_file" 2>/dev/null
-                ) | _e2e_notify_stdin "EXHAUSTED: $description"
-                break
-            fi
-
-            _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description") -- retrying ..."
-            _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description -- retrying ..."
-
+            # Notify on the very first failure (before exhausted check so tot_cnt=1 still fires)
+            # #region agent log
+            printf '{"sessionId":"23cf03","hypothesisId":"H1","location":"framework.sh:retry_loop","message":"failure in retry loop","data":{"attempt":%d,"tot_cnt":%d,"description":"%s","ret":%d},"timestamp":%s}\n' \
+                "$attempt" "$tot_cnt" "$description" "$ret" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+            # #endregion
             if [ $attempt -eq 1 ]; then
                 (
                     echo "$(date '+%H:%M:%S') FIRST FAILURE"
@@ -859,6 +924,30 @@ e2e_run() {
                     tail -20 "$_cmd_output_file" 2>/dev/null
                 ) | _e2e_notify_stdin "FIRST FAIL: $description"
             fi
+
+            if [ $attempt -ge $tot_cnt ]; then
+                _e2e_log "  All $tot_cnt attempts exhausted"
+                _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
+                _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
+                _e2e_summary "    $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
+                if [ $tot_cnt -gt 1 ]; then
+                    (
+                        echo "$(date '+%H:%M:%S') EXHAUSTED $tot_cnt attempts"
+                        echo "Suite: $_E2E_SUITE_NAME"
+                        echo "Test: ${_E2E_CURRENT_TEST:-$description}"
+                        echo "Command: $cmd"
+                        echo "Host: ${host:-$(hostname -s)}"
+                        echo "--- Last 20 lines of suite log ---"
+                        tail -20 "$E2E_LOG_FILE" 2>/dev/null
+                        echo "--- Last 20 lines of command output ---"
+                        tail -20 "$_cmd_output_file" 2>/dev/null
+                    ) | _e2e_notify_stdin "EXHAUSTED: $description"
+                fi
+                break
+            fi
+
+            _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description") -- retrying ..."
+            _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description -- retrying ..."
 
             (( attempt++ ))
             echo "    Next attempt ($attempt/$tot_cnt) in ${sleep_time}s ..."
@@ -875,7 +964,10 @@ e2e_run() {
             continue
         elif [ $prompt_rc -eq 0 ]; then
             local _elapsed=$(( $(date +%s) - _step_start ))
-            _e2e_log_and_print "    $(_e2e_green "OK (user skip)") (${_elapsed}s)"
+            local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
+            _e2e_log_and_print "    $(_e2e_yellow "SKIP (user)") ($_dur)"
+            _e2e_summary "    $(_e2e_Yellow "SKIP (user): $description") ($_dur)"
+            _E2E_USER_SKIPPED=1
             rm -f "$_cmd_output_file"
             return 0
         elif [ $prompt_rc -eq 3 ]; then
@@ -936,6 +1028,45 @@ e2e_poll_remote() {
     local timeout="$1" interval="$2"; shift 2
     e2e_run_remote "$1 (max $((timeout/60))m)" \
         "end=\$((SECONDS + $timeout)); while [ \$SECONDS -lt \$end ]; do ( $2 ) && exit 0; sleep $interval; done; exit 1"
+}
+
+# --- Operator readiness helpers ---------------------------------------------
+#
+# Reusable wait functions for OpenShift cluster operator stabilization.
+# Both use wall-clock-bounded polling (e2e_poll / e2e_poll_remote).
+#
+# Usage:
+#   e2e_wait_operators_available $SNO           # local, AVAILABLE=True only
+#   e2e_wait_operators_available $SNO remote    # remote (disN)
+#   e2e_wait_operators_ready $SNO remote        # remote, strict 3-column check
+#
+
+# Loose check: all operators have AVAILABLE=True (ignores PROGRESSING/DEGRADED).
+# 10 min timeout, 30s interval.
+e2e_wait_operators_available() {
+	local cluster_dir="$1"
+	local location="${2:-local}"
+	local _cmd="cd ~/aba && aba --dir $cluster_dir run | tail -n +2 | awk '{print \$3}' | tail -n +2 | grep -v '^True\$' | wc -l | grep ^0\$"
+
+	if [ "$location" = "remote" ]; then
+		e2e_poll_remote 600 30 "Wait for all operators available" "$_cmd"
+	else
+		e2e_poll 600 30 "Wait for all operators available" "$_cmd"
+	fi
+}
+
+# Strict check: all operators AVAILABLE=True, PROGRESSING=False, DEGRADED=False.
+# 10 min timeout, 30s interval.
+e2e_wait_operators_ready() {
+	local cluster_dir="$1"
+	local location="${2:-local}"
+	local _cmd="cd ~/aba && aba --dir $cluster_dir run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
+
+	if [ "$location" = "remote" ]; then
+		e2e_poll_remote 600 30 "Wait for all operators fully ready" "$_cmd"
+	else
+		e2e_poll 600 30 "Wait for all operators fully ready" "$_cmd"
+	fi
 }
 
 # --- e2e_diag ---------------------------------------------------------------

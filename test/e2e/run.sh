@@ -198,6 +198,7 @@ _pool_count_from_conf() {
 }
 _OP_POOLS="$CLI_POOLS"
 [ -z "$_CLI_POOLS_SET" ] && _OP_POOLS=$(_pool_count_from_conf)
+CLI_POOLS="$_OP_POOLS"
 
 # --- Source config -----------------------------------------------------------
 
@@ -309,12 +310,25 @@ if [ -n "$CLI_DEPLOY" ]; then
 		--exclude='bundles*' \
 		--exclude='ai' \
 		--exclude='demo*' \
-		--exclude='sno' \
+		--exclude='sno*' \
+		--exclude='xxx*' \
+		--exclude='cli/*.gz' \
+		--exclude='cli/*.tar*' \
+		--exclude='mirror/save' \
+		--exclude='mirror/mirror' \
+		--exclude='mirror/regcreds*' \
+		--exclude='mirror/docker-reg-image*' \
+		--exclude='mirror/mirror-registry' \
+		--exclude='.oc-mirror.log' \
 		--exclude='*.tar' \
 		--exclude='*.tar.gz' \
 		--exclude='.dnf-install.log' \
 		--exclude='*.bk' \
 		--exclude='mirror/.installed' \
+		--exclude='aba.conf' \
+		--exclude='vmware.conf' \
+		--exclude='*/mirror.conf' \
+		--exclude='*/cluster.conf' \
 		.
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 	echo "  Tarball: $_deploy_size"
@@ -326,13 +340,14 @@ if [ -n "$CLI_DEPLOY" ]; then
 		echo -n "    con${i}: "
 
 		# Skip pools with running suites unless --force is used
-		if [ -z "$CLI_FORCE" ]; then
-			_running_sess=$(ssh $_SSH_OPTS "${target}" \
-				"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
-			if [ "$_running_sess" = "yes" ]; then
+		_running_sess=$(ssh $_SSH_OPTS "${target}" \
+			"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
+		if [ "$_running_sess" = "yes" ]; then
+			if [ -z "$CLI_FORCE" ]; then
 				echo "RUNNING (skipped -- use --force to deploy anyway)"
 				continue
 			fi
+			echo -n "RUNNING (hot-deploy) "
 		fi
 
 		# --force hot-deploy: extract on top of existing dir (preserves logs/, state)
@@ -363,6 +378,15 @@ if [ -n "$CLI_STOP" ]; then
 	_stop_ssh="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 	_user="${CON_SSH_USER:-steve}"
 	_domain="${VM_BASE_DOMAIN}"
+
+	# Kill any running dispatcher on bastion first
+	if [ -f "$E2E_DISPATCHER_PID" ]; then
+		_dpid=$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)
+		if [ -n "$_dpid" ] && kill -0 "$_dpid" 2>/dev/null; then
+			kill "$_dpid" 2>/dev/null && echo "Dispatcher (pid $_dpid) stopped."
+		fi
+		rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE"
+	fi
 
 	# --pool N targets a single pool; --pools N targets 1..N
 	if [ -n "$CLI_POOL" ]; then
@@ -516,12 +540,25 @@ if [ -n "$CLI_RESTART" ]; then
 		--exclude='bundles*' \
 		--exclude='ai' \
 		--exclude='demo*' \
-		--exclude='sno' \
+		--exclude='sno*' \
+		--exclude='xxx*' \
+		--exclude='cli/*.gz' \
+		--exclude='cli/*.tar*' \
+		--exclude='mirror/save' \
+		--exclude='mirror/mirror' \
+		--exclude='mirror/regcreds*' \
+		--exclude='mirror/docker-reg-image*' \
+		--exclude='mirror/mirror-registry' \
+		--exclude='.oc-mirror.log' \
 		--exclude='*.tar' \
 		--exclude='*.tar.gz' \
 		--exclude='.dnf-install.log' \
 		--exclude='*.bk' \
 		--exclude='mirror/.installed' \
+		--exclude='aba.conf' \
+		--exclude='vmware.conf' \
+		--exclude='*/mirror.conf' \
+		--exclude='*/cluster.conf' \
 		.
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 	echo "    Tarball: $_deploy_size"
@@ -589,7 +626,7 @@ if [ -n "$CLI_STATUS" ]; then
 		for (( _ssp=1; _ssp<=_OP_POOLS; _ssp++ )); do _status_list+=("$_ssp"); done
 	fi
 
-	printf "\n  %-6s  %-10s  %-40s  %s\n" "POOL" "STATE" "SUITE" "LAST OUTPUT"
+	printf "  %-6s  %-10s  %-40s  %s\n" "POOL" "STATE" "SUITE" "LAST OUTPUT"
 	printf "  %-6s  %-10s  %-40s  %s\n" "------" "----------" "----------------------------------------" "--------------------"
 
 	for p in "${_status_list[@]}"; do
@@ -599,11 +636,13 @@ if [ -n "$CLI_STATUS" ]; then
 			if tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then
 				suite=\${suite:-unknown}
 				rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
+				last=\$(tail -1 ~/aba/test/e2e/logs/summary.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
 				if [ -f \"\$rc_file\" ]; then
 					rc=\$(cat \"\$rc_file\" 2>/dev/null)
 					echo \"DONE|\${suite}|exit=\${rc}\"
+				elif [ -f \"/tmp/e2e-paused-\${suite}\" ]; then
+					echo \"PAUSED|\${suite}|\${last}\"
 				else
-					last=\$(tail -1 ~/aba/test/e2e/logs/summary.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
 					echo \"RUNNING|\${suite}|\${last}\"
 				fi
 			else
@@ -619,11 +658,24 @@ if [ -n "$CLI_STATUS" ]; then
 					echo \"IDLE|-|-\"
 				fi
 			fi
+			echo '|||TABLE|||'
+			tac ~/aba/test/e2e/logs/summary.log 2>/dev/null \
+				| awk 'BEGIN{p=0} /====/{if(p)exit; p=1; next} p{print}' \
+				| tac \
+				| sed 's/\x1b\[[0-9;]*m//g' \
+				| grep -E 'PASS|FAIL|SKIP|RUNNING|PENDING|  --' \
+				| sed 's/^[0-9: ]*//'
 		" 2>/dev/null || echo "UNREACHABLE|-|-")
 
-		IFS='|' read -r _state _suite _detail <<< "$_info"
+		_status_line="${_info%%|||TABLE|||*}"
+		_table_data="${_info#*|||TABLE|||}"
+		# Trim leading/trailing whitespace from table data
+		_table_data="$(echo "$_table_data" | sed '/^[[:space:]]*$/d')"
+
+		IFS='|' read -r _state _suite _detail <<< "$_status_line"
 		case "$_state" in
 			RUNNING)     _sc="\033[1;32m" ;;  # bold green
+			PAUSED)      _sc="\033[1;33m" ;;  # bold yellow
 			DONE)        if [[ "$_detail" == *"exit=0"* ]]; then
 			                 _sc="\033[1;32m"  # bold green (pass)
 			             else
@@ -638,17 +690,87 @@ if [ -n "$CLI_STATUS" ]; then
 			UNREACHABLE) _sc="\033[90m" ;;     # dim grey
 			*)           _sc="\033[0m" ;;
 		esac
-		printf "  con%-3s  ${_sc}%-10s\033[0m  %-40s  %s\033[0m\n" "$p" "$_state" "$_suite" "$_detail"
+		# Show detail on header for DONE/FINISHED/IDLE (exit code). RUNNING/PAUSED put detail on the RUNNING... table line.
+		if [[ "$_state" == "RUNNING" || "$_state" == "PAUSED" ]]; then
+			printf "  con%-3s  ${_sc}%-10s\033[0m  %s\033[0m\n" "$p" "$_state" "$_suite"
+		else
+			printf "  con%-3s  ${_sc}%-10s\033[0m  %-40s  %s\033[0m\n" "$p" "$_state" "$_suite" "$_detail"
+		fi
+
+		if [ -n "$_table_data" ]; then
+			# For FINISHED (failed) suites, replace stale RUNNING... with FAIL
+			if [[ "$_state" == "FINISHED" && "$_detail" != *"exit=0"* ]]; then
+				_table_data="${_table_data//RUNNING.../FAIL}"
+			fi
+			while IFS= read -r _tline; do
+				[[ "$_tline" == *---* ]] && continue
+				if [[ "$_tline" == *PASS* ]]; then
+					_tline="${_tline/PASS/$'\033[32mPASS\033[0m'}"
+				elif [[ "$_tline" == *FAIL* ]]; then
+					_tline="${_tline/FAIL/$'\033[1;31mFAIL\033[0m'}"
+				elif [[ "$_tline" == *RUNNING* ]]; then
+					_tline="${_tline/RUNNING.../$'\033[1;36mRUNNING...\033[0m'}"
+					# Append the last command output to the RUNNING line
+					if [[ ( "$_state" == "RUNNING" || "$_state" == "PAUSED" ) && -n "$_detail" ]]; then
+						_tline+="  $_detail"
+						_detail=""
+					fi
+				elif [[ "$_tline" == *SKIP* ]]; then
+					_tline="${_tline/SKIP/$'\033[33mSKIP\033[0m'}"
+				fi
+				printf "           %s\n" "$_tline"
+			done <<< "$_table_data"
+		fi
 	done
 
 	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)" 2>/dev/null; then
-		printf "\n  Dispatcher: \033[1;32mRUNNING\033[0m (pid %s)\n" "$(cat "$E2E_DISPATCHER_PID")"
+		printf "  Dispatcher: \033[1;32mRUNNING\033[0m (pid %s)" "$(cat "$E2E_DISPATCHER_PID")"
+		if [ -f "$E2E_DISPATCH_STATE" ]; then
+			_ds_pending=$(grep '^PENDING=' "$E2E_DISPATCH_STATE" 2>/dev/null | cut -d= -f2-)
+			_ds_running=$(grep '^RUNNING=' "$E2E_DISPATCH_STATE" 2>/dev/null | cut -d= -f2-)
+			_ds_done=$(grep '^DONE=' "$E2E_DISPATCH_STATE" 2>/dev/null | cut -d= -f2-)
+			_ds_done_list=$(grep '^DONE_LIST=' "$E2E_DISPATCH_STATE" 2>/dev/null | cut -d= -f2-)
+			echo ""
+		if [ -n "$_ds_running" ]; then
+			# shellcheck disable=SC2086
+			set -- $_ds_running; _n_active=$#
+			printf "    Active (%d):  %s\n" "$_n_active" "${_ds_running// /  |  }"
+		fi
+		# Merge any externally injected suites (from reschedule) into Pending
+		_ds_injected=""
+		if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+			_ds_injected=$(tr '\n' ' ' < "$E2E_INJECT_QUEUE" | sed 's/ *$//')
+		fi
+		if [ -n "$_ds_injected" ] && [ -n "$_ds_pending" ]; then
+			_ds_pending="$_ds_injected $_ds_pending"
+		elif [ -n "$_ds_injected" ]; then
+			_ds_pending="$_ds_injected"
+		fi
+		if [ -n "$_ds_pending" ]; then
+			# shellcheck disable=SC2086
+			set -- $_ds_pending; _n_pending=$#
+			printf "    Pending (%d): %s\n" "$_n_pending" "${_ds_pending// /  |  }"
+		fi
+		if [ -n "$_ds_done" ] && [ "$_ds_done" -gt 0 ] 2>/dev/null; then
+				_done_summary=""
+				for _entry in $_ds_done_list; do
+					_s="${_entry%%:*}"; _rc="${_entry#*:}"
+					if [ "$_rc" = "0" ]; then
+						_done_summary+="$_s (\033[32mPASS\033[0m) "
+					else
+						_done_summary+="$_s (\033[1;31mFAIL\033[0m/exit=$_rc) "
+					fi
+				done
+				printf "    Done (%s):    %b\n" "$_ds_done" "${_done_summary% }"
+			fi
+		else
+			echo ""
+		fi
 	else
-		printf "\n  Dispatcher: \033[90mnot running\033[0m"
+		printf "  Dispatcher: \033[90mnot running\033[0m"
 		_last_cmd="./run.sh --all --pools $_OP_POOLS"
 		printf " -- reconnect with: %s\n" "$_last_cmd"
 	fi
-	echo ""
 	exit 0
 fi
 
@@ -693,12 +815,11 @@ if [ -n "${CLI_LIVE+set}" ]; then
 		echo "    echo 'Another live dashboard took over con${p}. Exiting.'"
 		echo '    exit 0'
 		echo '  fi'
+		echo '  clear'
 		echo "  ssh -t $_so ${_user}@${_h} \"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && exec tmux attach -d -t '$E2E_TMUX_SESSION'\" 2>/dev/null || {"
-		echo "    echo 'No e2e session on con${p}. Tailing summary...'"
-		echo "    ssh $_so ${_user}@${_h} 'tail -n 50 ~/aba/test/e2e/logs/summary.log 2>/dev/null' || echo '(con${p} unreachable)'"
+		echo "    echo 'No e2e session on con${p}. Waiting for suite to start...'"
 		echo '  }'
-			echo '  echo "Reconnecting in 5s ..."'
-			echo '  sleep 5'
+		echo '  sleep 5'
 			echo 'done'
 		} > "$_script"
 		chmod +x "$_script"
@@ -863,6 +984,33 @@ if [ -z "$CLI_RESUME" ]; then
 	done
 fi
 
+# --- Reschedule: inject suites into the running dispatcher's queue -----------
+# Lightweight command: writes to the inject-queue file and exits immediately.
+# The running dispatcher polls this file and picks up injected suites.
+if [ -n "$CLI_RESCHEDULE" ]; then
+	echo ""
+	echo "=== Reschedule: injecting into dispatcher queue ==="
+	for suite in "${suites_to_run[@]}"; do
+		# Prepend to inject queue (front of queue = dispatched first)
+		if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+			_existing=$(cat "$E2E_INJECT_QUEUE")
+			printf '%s\n%s\n' "$suite" "$_existing" > "$E2E_INJECT_QUEUE"
+		else
+			echo "$suite" > "$E2E_INJECT_QUEUE"
+		fi
+		printf "  Queued: \033[1;36m%s\033[0m (front)\n" "$suite"
+	done
+	echo ""
+	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)" 2>/dev/null; then
+		echo "  Dispatcher is running -- will pick this up on its next cycle (~30s)."
+	else
+		echo "  WARNING: No dispatcher running. Start one with: run.sh run --all"
+	fi
+	echo "  Tip: if you changed suite code, run 'deploy --force' first."
+	echo ""
+	exit 0
+fi
+
 # --- SSH helpers --------------------------------------------------------------
 
 _SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
@@ -1014,17 +1162,34 @@ _dispatch_suite() {
 
 	echo "  DISPATCH: $suite -> pool $pool_num (con${pool_num})"
 
-	# Kill any stale session
+	# Kill any stale session and orphaned runner processes
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true"
+	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null || true"
 	# Remove old rc/lock files
 	_ssh_con "$pool_num" "rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock'"
 
-	local runner_cmd="bash ~/aba/test/e2e/runner.sh $pool_num $suite"
+	# Sync latest test code to conN before launching
+	local _user="${CON_SSH_USER:-steve}"
+	local _host="con${pool_num}.${VM_BASE_DOMAIN}"
+	local _target="${_user}@${_host}"
+	if ! { scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh" "${_target}:~/aba/test/e2e/runner.sh" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/config.env" "${_target}:~/aba/test/e2e/config.env" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/lib/*.sh    "${_target}:~/aba/test/e2e/lib/" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${_target}:~/aba/test/e2e/suites/" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/scripts/*.sh "${_target}:~/aba/test/e2e/scripts/"; }; then
+		echo "    ERROR: scp to con${pool_num} failed -- skipping dispatch"
+		return 1
+	fi
+
+	local _retry_arg=""
+	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"
+	local runner_cmd="bash ~/aba/test/e2e/runner.sh $pool_num $suite$_retry_arg"
 	_ssh_con "$pool_num" "tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'"
 
 	_busy_pools[$pool_num]="$suite"
 	_result_pool[$suite]="$pool_num"
 	echo "    tmux session '$_TMUX_SESSION' started on con${pool_num}"
+	# Suite-start notification is sent from runner.sh on conN (where notify.sh is deployed)
 }
 
 # --- Check if a pool's suite has completed ------------------------------------
@@ -1232,37 +1397,7 @@ else
 	_detect_running_and_completed
 fi
 
-# --- Reschedule: clear completed state for target suites ---------------------
-if [ -n "$CLI_RESCHEDULE" ]; then
-	_cleared=0
-	echo ""
-	echo "=== Reschedule: clearing completed suites ==="
-	for suite in "${suites_to_run[@]}"; do
-		if [ -n "${_completed[$suite]:-}" ]; then
-			for (( _rp=1; _rp<=CLI_POOLS; _rp++ )); do
-				_ssh_con "$_rp" "rm -f '${_RC_PREFIX}-${suite}.rc'" 2>/dev/null || true
-			done
-			unset '_completed[$suite]'
-			echo "  Cleared: $suite"
-			(( _cleared++ ))
-		else
-			# Check if it's currently running -- leave it alone
-			_is_running=""
-			for _bp in "${!_busy_pools[@]}"; do
-				[ "${_busy_pools[$_bp]}" = "$suite" ] && _is_running=1 && break
-			done
-			if [ -n "$_is_running" ]; then
-				echo "  Running: $suite (left alone)"
-			fi
-		fi
-	done
-	if [ $_cleared -eq 0 ]; then
-		echo "  No completed suites to reschedule."
-		exit 0
-	fi
-	echo "  Rescheduled $_cleared suite(s)."
-	echo ""
-fi
+# (reschedule is handled earlier -- exits before reaching this point)
 
 # Seed _results with already-completed suites
 for s in "${!_completed[@]}"; do
@@ -1281,7 +1416,15 @@ echo "  Status: ${_num_completed} completed, ${_num_running} running, ${#_work_q
 
 if [ ${#_work_queue[@]} -eq 0 ] && [ $_num_running -eq 0 ]; then
 	if [ $_num_completed -gt 0 ]; then
-		echo "  All suites already completed (use 'reschedule' or --force to re-run)."
+		echo "  All suites already completed:"
+		for _cs in "${!_completed[@]}"; do
+			if [ "${_completed[$_cs]}" -eq 0 ] 2>/dev/null; then
+				printf "    \033[32mPASS\033[0m  %s\n" "$_cs"
+			else
+				printf "    \033[1;31mFAIL\033[0m  %s (exit=%s)\n" "$_cs" "${_completed[$_cs]}"
+			fi
+		done
+		echo "  Use 'reschedule' or --force to re-run."
 	else
 		echo "  Nothing to dispatch."
 	fi
@@ -1317,8 +1460,53 @@ if [ ${#_work_queue[@]} -gt 0 ] || [ $_num_running -gt 0 ]; then
 	echo ""
 fi
 
+_write_dispatch_state() {
+	local _queued_left=$(( ${#_work_queue[@]} - _queue_idx ))
+	{
+		echo "REQUESTED=${_work_queue[*]:-}"
+		echo "QUEUED_IDX=$_queue_idx"
+		echo "QUEUED_TOTAL=${#_work_queue[@]}"
+		local _q_remaining=()
+		for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+			_q_remaining+=("${_work_queue[$_qi]}")
+		done
+		echo "PENDING=${_q_remaining[*]:-}"
+		local _bp_str=""
+		for _bp in "${!_busy_pools[@]}"; do
+			_bp_str+="${_busy_pools[$_bp]} "
+		done
+		echo "RUNNING=${_bp_str% }"
+		echo "DONE=${#_results[@]}"
+		local _done_str=""
+		for _ds in "${!_results[@]}"; do
+			_done_str+="${_ds}:${_results[$_ds]} "
+		done
+		echo "DONE_LIST=${_done_str% }"
+	} > "$E2E_DISPATCH_STATE"
+}
+
+# Check for an existing dispatcher
+if [ -f "$E2E_DISPATCHER_PID" ]; then
+	_old_dpid=$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)
+	if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
+		echo ""
+		printf "  \033[1;33mWARNING: Another dispatcher is already running (pid %s)\033[0m\n" "$_old_dpid"
+		printf "  Kill it and take over? (Y/n): "
+		read -r -t 30 _answer || _answer="n"
+		if [[ "$_answer" =~ ^[Yy]?$ ]]; then
+			kill "$_old_dpid" 2>/dev/null || true
+			sleep 1
+			echo "  Killed old dispatcher."
+		else
+			echo "  Aborted. Existing dispatcher left running."
+			exit 1
+		fi
+	fi
+fi
 echo $$ > "$E2E_DISPATCHER_PID"
-trap 'rm -f "$E2E_DISPATCHER_PID"' EXIT
+trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE"' EXIT
+
+declare -A _retried=()
 
 while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 
@@ -1332,13 +1520,58 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		fi
 	done
 
+	# Check for externally injected suites (from "reschedule" command)
+	if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+		while IFS= read -r _inj_suite; do
+			[ -z "$_inj_suite" ] && continue
+			_work_queue+=("$_inj_suite")
+			printf "  [%s] INJECTED: %s (from reschedule)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+		done < "$E2E_INJECT_QUEUE"
+		> "$E2E_INJECT_QUEUE"
+	fi
+
 	# Dispatch to free pools
 	while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
 		free=$(_find_free_pool) || break
 		suite="${_work_queue[$_queue_idx]}"
-		_dispatch_suite "$free" "$suite"
+		if ! _dispatch_suite "$free" "$suite"; then
+			_record_result "$suite" "99"
+		fi
 		(( _queue_idx++ ))
 	done
+
+	# Inline retry: when queue is drained and pools are free, re-queue
+	# failed suites (once per suite, skip exit=3 skips)
+	if [ $_queue_idx -ge ${#_work_queue[@]} ] && _find_free_pool >/dev/null 2>&1; then
+		_retry_added=0
+		for _rs in "${!_results[@]}"; do
+			_rrc="${_results[$_rs]}"
+			if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ -z "${_retried[$_rs]:-}" ]; then
+				_retried[$_rs]=1
+				_rp="${_result_pool[$_rs]:-}"
+				if [ -n "$_rp" ]; then
+					_ssh_con "$_rp" "rm -f '${_RC_PREFIX}-${_rs}.rc'" 2>/dev/null || true
+				fi
+				unset '_results[$_rs]'
+				_work_queue+=("$_rs")
+				printf "  [%s] RETRY: queuing %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "$_rs" "$_rrc"
+				(( _retry_added++ ))
+			fi
+		done
+		# Dispatch newly queued retries immediately
+		if [ "$_retry_added" -gt 0 ]; then
+			while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
+				free=$(_find_free_pool) || break
+				suite="${_work_queue[$_queue_idx]}"
+				if ! _dispatch_suite "$free" "$suite"; then
+					_record_result "$suite" "99"
+				fi
+				(( _queue_idx++ ))
+			done
+		fi
+	fi
+
+	_write_dispatch_state
 
 	# Print status only when something changed
 	if [ ${#_busy_pools[@]} -gt 0 ]; then

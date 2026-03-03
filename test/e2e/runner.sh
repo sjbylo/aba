@@ -34,14 +34,15 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
-if [ $# -ne 2 ]; then
-	echo "Usage: runner.sh [--resume] POOL_NUM suite_name"
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+	echo "Usage: runner.sh [--resume] POOL_NUM suite_name [retry]"
 	exit 1
 fi
 
 POOL_NUM="$1"; shift
 export POOL_NUM
 SUITE="$1"; shift
+E2E_IS_RETRY="${1:-}"   # optional: "retry" when run.sh re-dispatched this suite after failure
 
 LOCK_FILE="${E2E_RC_PREFIX}-${SUITE}.lock"
 RC_FILE="${E2E_RC_PREFIX}-${SUITE}.rc"
@@ -96,6 +97,22 @@ fi
 
 # Setup framework environment
 e2e_setup
+
+# Notify when suite starts (conN has notify.sh deployed by run.sh; bastion may not)
+# #region agent log
+printf '{"sessionId":"23cf03","hypothesisId":"H5","location":"runner.sh:start_notify","message":"suite start notify check","data":{"NOTIFY_CMD":"%s","SUITE":"%s","POOL_NUM":"%s"},"timestamp":%s}\n' \
+	"${NOTIFY_CMD:-EMPTY}" "$SUITE" "$POOL_NUM" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+# #endregion
+if [ -n "${NOTIFY_CMD:-}" ]; then
+	_label="STARTED"
+	[ "$E2E_IS_RETRY" = "retry" ] && _label="RETRY"
+	# #region agent log
+	_dbg_start_rc=0
+	$NOTIFY_CMD "[e2e] ${_label}: $SUITE -> con${POOL_NUM}" < /dev/null 2>/tmp/e2e-debug-start-stderr.log; _dbg_start_rc=$?
+	printf '{"sessionId":"23cf03","hypothesisId":"H5","location":"runner.sh:start_notify:post","message":"start notify result","data":{"rc":%d,"label":"%s","stderr":"%s"},"timestamp":%s}\n' \
+		"$_dbg_start_rc" "$_label" "$(head -1 /tmp/e2e-debug-start-stderr.log 2>/dev/null | tr '"' "'")" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+	# #endregion
+fi
 
 # Interactive mode always on
 export _E2E_INTERACTIVE=1
@@ -248,7 +265,7 @@ _cleanup_dis_aba() {
 	# 2. Stop containers first, then clean disN filesystem
 	echo "  Cleaning disN filesystem ..."
 	_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
-	_essh "$dis_host" "rm -rf ~/aba ~/quay-install ~/quay-storage ~/.ssh/quay_installer*" 2>&1 || true
+	_essh "$dis_host" "rm -rf ~/aba" 2>&1 || true
 	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1 || true
 	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage" 2>&1 || true
 	# Remove stale CA trust anchors from previous registry installs
@@ -270,7 +287,7 @@ _cleanup_dis_aba() {
 	fi
 
 	# 5. Verify clean state
-	if _essh "$dis_host" "[ ! -d ~/aba ] && [ ! -d ~/quay-install ] && ! podman ps -q 2>/dev/null | grep -q ." 2>/dev/null; then
+	if _essh "$dis_host" "[ ! -d ~/aba ] && ! podman ps -q 2>/dev/null | grep -q ." 2>/dev/null; then
 		echo "  disN cleanup verified: clean state"
 	else
 		echo "  WARNING: disN cleanup may be incomplete -- check manually"
@@ -330,6 +347,10 @@ _pre_suite_cleanup() {
 		echo "  Killed stale oc-mirror process(es)"
 		sleep 2
 	fi
+
+	# Purge all oc-mirror caches (can grow to many GB across nested dirs)
+	sudo find ~/ -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf
+	echo "  Purged oc-mirror caches"
 
 	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do
 		[ -f "$cleanup_file" ] || continue

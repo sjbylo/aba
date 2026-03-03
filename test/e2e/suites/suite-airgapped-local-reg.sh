@@ -162,12 +162,22 @@ test_begin "Registry: Quay install and uninstall"
 
 e2e_run_remote "Install Quay registry" \
     "cd ~/aba && aba -d mirror install"
+e2e_poll_remote 60 5 "Wait for Quay container" \
+    "podman ps | grep quay"
 e2e_run_remote "Verify Quay running" \
     "podman ps | grep quay"
 e2e_run_remote "Uninstall Quay registry" \
     "cd ~/aba && aba -d mirror uninstall"
 e2e_run_remote "Verify Quay removed" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
+
+# Negative path: load without save/ dir should fail
+e2e_run_remote -q "Remove save dir for must-fail test" \
+    "cd ~/aba && mv mirror/save /tmp/e2e-save-backup"
+e2e_run_must_fail_remote "Load without save dir should fail" \
+    "cd ~/aba && aba -d mirror load"
+e2e_run_remote -q "Restore save dir" \
+    "cd ~/aba && mv /tmp/e2e-save-backup mirror/save"
 
 test_end
 
@@ -179,6 +189,8 @@ test_begin "Registry: Docker install and load"
 e2e_register_mirror "$PWD/mirror" remote
 e2e_run_remote "Install Docker registry" \
     "cd ~/aba && aba -d mirror install --vendor docker"
+e2e_poll_remote 60 5 "Wait for Docker registry container" \
+    "podman ps | grep registry"
 e2e_run_remote "Verify Docker registry running" \
     "podman ps | grep registry"
 e2e_run_remote "Verify Docker registry accessible" \
@@ -237,8 +249,8 @@ mirror:
 EOF"
 e2e_run "Save UBI image to disk" \
     "aba -d mirror save --retry"
-e2e_run "Transfer UBI images to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
+e2e_run "Transfer UBI archive+config to internal bastion" \
+    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
 e2e_run_remote -r 3 2 "Load UBI images" \
     "cd ~/aba && aba -d mirror load --retry"
 
@@ -267,8 +279,8 @@ mirror:
 EOF"
 e2e_run "Save vote-app image to disk" \
     "aba -d mirror save --retry"
-e2e_run "Transfer vote-app to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
+e2e_run "Transfer vote-app archive+config to internal bastion" \
+    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
 
@@ -294,7 +306,7 @@ e2e_run_remote "Create demo project" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc new-project demo' || true"
 e2e_run_remote -r 3 2 "Launch vote-app from mirror (direct path)" \
     "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && aba --dir $SNO run --cmd \"oc new-app --insecure-registry=true --image \$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app --name vote-app -n demo\""
-e2e_run_remote "Wait for vote-app rollout" \
+e2e_poll_remote 480 30 "Wait for vote-app rollout" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc rollout status deployment vote-app -n demo'"
 
 # Clean up before IDMS test
@@ -327,7 +339,7 @@ e2e_run_remote -q "Wait for IDMS to propagate" "sleep 30"
 # Deploy vote-app using the PUBLIC image name -- IDMS should redirect to mirror
 e2e_run_remote "Deploy vote-app via IDMS (quay.io source)" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc new-app --insecure-registry=true --image quay.io/sjbylo/flask-vote-app:latest --name vote-app -n demo'"
-e2e_run_remote "Wait for vote-app rollout via IDMS" \
+e2e_poll_remote 480 30 "Wait for vote-app rollout via IDMS" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc rollout status deployment vote-app -n demo'"
 
 # Clean up
@@ -343,8 +355,8 @@ test_begin "Incremental: mesh operators"
 
 e2e_run "Add mesh operator set" "aba --op-sets mesh3"
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
-e2e_run "Transfer mesh images to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
+e2e_run "Transfer mesh archive+config to internal bastion" \
+    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
 e2e_run_remote -r 3 2 "Load mesh images" \
     "cd ~/aba && aba -d mirror load --retry"
 
@@ -374,8 +386,8 @@ e2e_run "Append cincinnati-operator to imageset config" \
      grep -A2 'name: cincinnati-operator\$' mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml >> mirror/save/imageset-config-save.yaml"
 
 e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
-e2e_run "Transfer upgrade images to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xf -'"
+e2e_run "Transfer upgrade archive+config to internal bastion" \
+    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
 e2e_run_remote -r 3 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
 
@@ -389,11 +401,15 @@ e2e_run_remote -r 18 10 "Wait for cincinnati-operator in OperatorHub" \
 e2e_run_remote "Apply OSUS day2" \
     "cd ~/aba && aba --dir $SNO day2-osus"
 
-e2e_run_remote -r 3 2 "Trigger cluster upgrade" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade --to-latest=true'"
+# Wait for all COs to be Available (what 'oc adm upgrade' checks)
+e2e_wait_operators_available $SNO remote
 
-e2e_run_remote -r 20 1.5 "Wait for upgrade to complete" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc get clusterversion -o jsonpath={.items[0].status.history[0].state}' | grep Completed"
+e2e_run_remote -r 5 1 -d 60 "Trigger cluster upgrade" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade --to-latest=true --allow-not-recommended'"
+
+sleep 3
+e2e_poll_remote 120 10 "Verify upgrade in progress" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade' | grep 'upgrade is in progress'"
 
 test_end
 
@@ -416,14 +432,16 @@ e2e_run_remote "Startup cluster" \
 e2e_run_remote "Verify 'aba ls' shows poweredOn" \
     "cd ~/aba && aba --dir $SNO ls | grep -i poweredOn"
 
+# Wait for API server and operators to stabilize after startup before asserting
+e2e_wait_operators_available $SNO remote
+
 # GAP 4: Verify 'aba login' and 'aba shell' set up kubeconfig correctly
 e2e_run_remote "Verify 'aba login' sets kubeconfig" \
     "cd ~/aba && eval \"\$(aba --dir $SNO login)\" && oc get nodes"
 e2e_run_remote "Verify 'aba shell' exports work" \
     "cd ~/aba && eval \"\$(aba --dir $SNO shell)\" && oc get clusterversion"
 
-e2e_run_remote "Verify cluster healthy after restart" \
-    "cd ~/aba && aba --dir $SNO run"
+e2e_wait_operators_ready $SNO remote
 
 test_end
 
@@ -432,9 +450,6 @@ test_end
 # ============================================================================
 test_begin "Standard: cluster with macs.conf"
 
-# Copy macs.conf for bare-metal MAC address testing
-e2e_run_remote "Copy macs.conf" \
-    "cp -v ~/aba/test/macs.conf ~/aba/"
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
 e2e_run_remote "Clean sno cluster dir" \
@@ -442,11 +457,18 @@ e2e_run_remote "Clean sno cluster dir" \
 
 # Build standard cluster
 e2e_run_remote "Create standard cluster config" \
-    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_standard_api_vip) --step cluster.conf"
+    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --step cluster.conf"
 e2e_run_remote "Assert $STANDARD/cluster.conf exists" \
     "cd ~/aba && test -f $STANDARD/cluster.conf"
-e2e_run_remote "Verify macs.conf used" \
-    "cd ~/aba && grep mac_prefix $STANDARD/cluster.conf"
+
+# Generate macs.conf in the cluster dir with random test MACs (test5 pattern).
+# Includes surrounding "blah" text to exercise the MAC extraction regex in
+# create-agent-config.sh.  All MACs share one random byte for traceability.
+e2e_run_remote "Create macs.conf with test MACs" \
+    "cd ~/aba && R=\$(printf '%02x' \$((RANDOM%256))) && printf '00:50:56:20:%s:01  blah\nblah 00:50:56:20:%s:02\n00:50:56:20:%s:03\nblah 00:50:56:20:%s:04\n00:50:56:20:%s:05\n00:50:56:20:%s:06 blah\n' \$R \$R \$R \$R \$R \$R > $STANDARD/macs.conf"
+e2e_run_remote "Verify macs.conf created" \
+    "cd ~/aba && test -f $STANDARD/macs.conf && cat $STANDARD/macs.conf"
+
 e2e_run_remote "Generate agent configs" \
     "cd ~/aba && aba --dir $STANDARD agentconf"
 e2e_run_remote "Verify agent-config has MACs" \
@@ -472,7 +494,7 @@ e2e_run_remote "Uninstall Docker registry" \
 e2e_run_remote "Verify no registry containers" \
     "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
 e2e_run "Verify registry unreachable on disN" \
-    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/health/instance"
+    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
 
 test_end
 

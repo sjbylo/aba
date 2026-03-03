@@ -143,7 +143,7 @@ reset_internal_bastion() {
 
     # 2. Verify the registry is actually down.
     e2e_run "Verify registry is down on $_dis_bare" \
-        "! curl -sk --connect-timeout 5 https://${_dis_bare}:8443/health/instance"
+        "! curl -sk --connect-timeout 5 https://${_dis_bare}:8443/v2/"
 
     # 3. Clean slate on disN: remove aba tree, caches, container storage.
     e2e_run_remote "Remove aba tree on internal bastion" \
@@ -192,19 +192,19 @@ cleanup_all() {
 
 # --- _cleanup_con_quay ------------------------------------------------------
 #
-# Pre-suite cleanup of Quay/registry state on conN. Called by runner.sh
-# before each suite to prevent stale state (e.g. Redis password mismatch)
-# from a previous crashed or incomplete suite run.
+# Pre-suite cleanup of registry state on conN. Called by runner.sh
+# before each suite to prevent stale state from a previous crashed or
+# incomplete suite run.
 #
 # Two-tier approach:
 #   Tier 1 (aba way): If aba's mirror/.installed marker exists, use
 #          'aba -d mirror uninstall' -- the proper uninstall path.
-#   Tier 2 (brute-force): If tier 1 didn't clean up and Quay remnants
-#          remain (containers, ~/quay-install), force-remove everything.
+#   Tier 2 (brute-force): If tier 1 didn't clean up and registry remnants
+#          remain (containers), force-remove everything except the pool
+#          registry container.
 #
-# Guard: If the pool registry marker (~/.e2e-pool-registry/) exists, the
-#        brute-force tier is skipped to avoid destroying the pre-populated
-#        registry used by network-advanced and cluster-ops suites.
+# Guard: The pool registry container ("pool-registry") is always excluded
+#        from brute-force cleanup.
 #
 _cleanup_con_quay() {
     local _aba_root
@@ -213,7 +213,7 @@ _cleanup_con_quay() {
     local _did_uninstall=""
 
     local _pool_reg_present=""
-    [ -d "$HOME/.e2e-pool-registry" ] && _pool_reg_present=1
+    [ -d "$POOL_REG_DIR" ] && _pool_reg_present=1
 
     # Tier 1: use aba's own uninstall for any aba-installed registry
     for _dir in "$_aba_root"; do
@@ -232,26 +232,24 @@ _cleanup_con_quay() {
     done
 
     # Tier 2: brute-force fallback -- only if no pool registry is present
-    if [ -d "$HOME/.e2e-pool-registry" ]; then
+    if [ -d "$POOL_REG_DIR" ]; then
         [ -z "$_did_uninstall" ] && echo "  [cleanup] Pool registry present -- skipping brute-force cleanup"
         return 0
     fi
 
-    local _quay_detected=""
-    podman ps -a 2>/dev/null | grep quay && _quay_detected=1
-    [ -d "$HOME/quay-install" ] && _quay_detected=1
+    local _stale_detected=""
+    podman ps -a 2>/dev/null | grep -v -e pool-registry -e CONTAINER | grep -q . && _stale_detected=1
 
-    if [ -n "$_quay_detected" ]; then
-        echo "  [cleanup] Stale Quay remnants detected -- brute-force cleanup"
-        podman stop -a 2>/dev/null || true
-        podman rm -a -f 2>/dev/null || true
+    if [ -n "$_stale_detected" ]; then
+        echo "  [cleanup] Stale registry remnants detected -- brute-force cleanup"
+        for _cid in $(podman ps -a -q --filter "name!=pool-registry" 2>/dev/null); do
+            podman stop "$_cid" 2>/dev/null || true
+            podman rm -f "$_cid" 2>/dev/null || true
+        done
         podman volume rm -a -f 2>/dev/null || true
-        rm -rf ~/quay-install
-        rm -rf ~/quay-storage
-        rm -f ~/.ssh/quay_installer*
         echo "  [cleanup] Brute-force cleanup complete"
     elif [ -z "$_did_uninstall" ]; then
-        echo "  [cleanup] No Quay state detected -- nothing to clean"
+        echo "  [cleanup] No stale registry state detected -- nothing to clean"
     fi
 }
 
