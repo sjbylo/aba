@@ -221,17 +221,20 @@ _vm_setup_network_connected() {
 		    nmcli connection modify "Wired connection 2" connection.id ens256
 
 		nmcli connection modify ens192 \
+		    802-3-ethernet.mtu 1500 \
 		    ipv4.never-default yes \
 		    ipv6.method disabled
 		nmcli connection up ens192
 
 		nmcli connection modify ens256 \
+		    802-3-ethernet.mtu 1500 \
 		    ipv4.never-default no \
 		    ipv4.ignore-auto-dns yes \
 		    ipv6.method disabled
 		nmcli connection up ens256
 
 		nmcli connection modify ens224 \
+		    802-3-ethernet.mtu 1500 \
 		    ipv4.method disabled \
 		    ipv4.never-default yes \
 		    ipv6.method disabled
@@ -240,7 +243,8 @@ _vm_setup_network_connected() {
 		nmcli -g NAME connection show | grep "^ens224\.10$" && \
 		    nmcli connection delete ens224.10
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
-		    id 10 ipv4.method manual ipv4.addresses $vlan_ip ipv4.never-default yes
+		    id 10 ethernet.mtu 1500 \
+		    ipv4.method manual ipv4.addresses $vlan_ip ipv4.never-default yes
 
 		hostnamectl set-hostname $clone_name
 
@@ -268,6 +272,7 @@ _vm_setup_network_disconnected() {
 		    nmcli connection modify "Wired connection 2" connection.id ens256
 
 		nmcli connection modify ens256 \
+		    802-3-ethernet.mtu 1500 \
 		    autoconnect no \
 		    ipv4.method disabled \
 		    ipv6.method disabled
@@ -275,11 +280,13 @@ _vm_setup_network_disconnected() {
 		ip link set ens256 down
 
 		nmcli connection modify ens192 \
+		    802-3-ethernet.mtu 1500 \
 		    ipv4.never-default yes \
 		    ipv6.method disabled
 		nmcli connection up ens192
 
 		nmcli connection modify ens224 \
+		    802-3-ethernet.mtu 1500 \
 		    ipv4.method disabled \
 		    ipv4.never-default yes \
 		    ipv6.method disabled
@@ -288,7 +295,8 @@ _vm_setup_network_disconnected() {
 		nmcli -g NAME connection show | grep "^ens224\.10$" && \
 		    nmcli connection delete ens224.10
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
-		    id 10 ipv4.method manual ipv4.addresses $vlan_ip \
+		    id 10 ethernet.mtu 1500 \
+		    ipv4.method manual ipv4.addresses $vlan_ip \
 		    ipv4.gateway $gateway_ip
 
 		cat > /etc/NetworkManager/conf.d/no-dns.conf << 'NMEOF'
@@ -491,9 +499,8 @@ _vm_cleanup_podman() {
 }
 
 # --- _vm_cleanup_home -------------------------------------------------------
-# Quay/mirror-registry uses systemd user services; stop/disable them first, then
-# stop containers, then rm. Use sudo for the rm so root-owned Quay files under
-# ~/my-quay-mirror-test1, ~/quay-install, ~/quay-storage are removed.
+# Stop containers and clean up home directory on a VM.
+# Uses sudo for rm so root-owned container data files are removed.
 
 _vm_cleanup_home() {
 	local host="$1"

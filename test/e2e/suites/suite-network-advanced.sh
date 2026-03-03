@@ -33,7 +33,6 @@ CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
-POOL_REG_DIR="$HOME/.e2e-pool-registry"
 
 # --- Suite ------------------------------------------------------------------
 
@@ -117,7 +116,7 @@ e2e_run "Clear reg_ssh_user (local registry)" \
 
 e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"
 e2e_run "Copy Quay root CA to regcreds" \
-    "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"
+    "cp -v $POOL_REG_DIR/certs/ca.crt ~/.aba/mirror/mirror/rootCA.pem"
 
 e2e_run "Generate mirror pull secret" \
     "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > ~/.aba/mirror/mirror/pull-secret-mirror.json <<EOPS
@@ -132,9 +131,6 @@ EOPS"
 
 e2e_run "Verify mirror registry access" "aba -d mirror verify"
 
-e2e_run "Link oc-mirror working-dir" \
-    "mkdir -p mirror/sync && ln -sfn ${POOL_REG_DIR}/sync/working-dir mirror/sync/working-dir"
-
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
 test_end
@@ -144,8 +140,8 @@ test_end
 # ============================================================================
 test_begin "VLAN: verify interface"
 
-e2e_run_remote "Verify VLAN interface ens224.10 exists on disN" \
-    "ip addr show ens224.10"
+e2e_run_remote "Verify VLAN interface ens224.10 is UP on disN" \
+    "ip addr show ens224.10 | grep 'state UP'"
 e2e_run_remote "Verify VLAN IP $(pool_vlan_gateway) on disN" \
     "ip addr show ens224.10 | grep '$(pool_vlan_gateway)'"
 

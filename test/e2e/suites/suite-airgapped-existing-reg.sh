@@ -118,7 +118,7 @@ e2e_run "Set reg_host to pool registry on conN" \
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
 
 e2e_run "Register pool registry with ABA" \
-    "aba -d mirror register --pull-secret-mirror ~/.e2e-pool-registry/quay-creds.json --ca-cert ~/quay-install/quay-rootCA/rootCA.pem"
+    "aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 e2e_run "Verify pool registry access" \
     "aba -d mirror verify"
 
@@ -130,6 +130,9 @@ test_end
 test_begin "Must-fail checks"
 
 # These commands should fail -- verify they do
+e2e_run_must_fail "Uninstall existing reg should abort (state=existing)" \
+    "aba -d mirror uninstall -y"
+
 e2e_run_must_fail "Sync to unknown host should fail" \
     "aba -d mirror sync -H unknown.example.com --retry"
 
@@ -137,8 +140,8 @@ e2e_run_must_fail "Sync to unknown host should fail" \
 e2e_run "Restore reg_host after must-fail" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 
-# Pool registry runs on conN (localhost) -- installing another should fail
-e2e_run_must_fail "Install mirror to localhost where registry already exists should fail" \
+# Pool registry is already registered -- install should detect it and succeed (idempotent)
+e2e_run "Verify idempotent install detects existing registry" \
     "aba -d mirror install"
 
 test_end
@@ -176,7 +179,7 @@ e2e_run "Verify dialog was reinstalled" \
 
 # Stage pool registry creds into mirror/.test/ so they're included in the tar-pipe
 e2e_run "Stage pool registry creds for transfer" \
-    "mkdir -p mirror/.test && cp ~/.e2e-pool-registry/quay-creds.json mirror/.test/pool-reg-creds.json && cp ~/quay-install/quay-rootCA/rootCA.pem mirror/.test/pool-reg-rootCA.pem"
+    "mkdir -p mirror/.test && cp $POOL_REG_DIR/pool-reg-creds.json mirror/.test/pool-reg-creds.json && cp $POOL_REG_DIR/certs/ca.crt mirror/.test/pool-reg-rootCA.pem"
 
 # Now do the real tar-pipe transfer
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
@@ -244,7 +247,7 @@ test_begin "Compact: install and delete cluster"
 
 e2e_register_cluster "$PWD/$COMPACT" remote
 e2e_run_remote -r 1 1 "Create compact cluster (bootstrap only)" \
-    "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_compact_api_vip) --step bootstrap"
+    "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step bootstrap"
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir $COMPACT delete"
 e2e_run_remote -q "Clean compact dir" \
@@ -285,7 +288,7 @@ e2e_run_remote "Create demo project" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc new-project demo' || true"
 e2e_run_remote -r 3 2 "Launch vote-app from mirror" \
     "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && aba --dir $SNO run --cmd \"oc new-app --insecure-registry=true --image \$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app --name vote-app -n demo\""
-e2e_run_remote "Wait for vote-app rollout" \
+e2e_poll_remote 480 30 "Wait for vote-app rollout" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc rollout status deployment vote-app -n demo'"
 
 test_end

@@ -203,9 +203,9 @@ e2e_run "Clear reg_ssh_user (local registry)" \
 # Set up regcreds/ with the pre-populated registry's CA and pull secret
 e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"
 e2e_run "Copy Quay root CA to regcreds" \
-    "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"
+    "cp -v $POOL_REG_DIR/certs/ca.crt ~/.aba/mirror/mirror/rootCA.pem"
 e2e_run "Copy pull secret from pool registry" \
-    "cp -v ~/.e2e-pool-registry/quay-creds.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
+    "cp -v $POOL_REG_DIR/pool-reg-creds.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
 
 e2e_run "Verify mirror registry access" "aba -d mirror verify"
 

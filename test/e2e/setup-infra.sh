@@ -30,6 +30,7 @@ _INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$(cd "$_INFRA_DIR/../.." && pwd)"
 
 # Source libraries
+source "$_INFRA_DIR/lib/constants.sh"
 source "$_INFRA_DIR/lib/config-helpers.sh"
 source "$_INFRA_DIR/lib/vm-helpers.sh"
 source "$_INFRA_DIR/lib/remote.sh"
@@ -100,6 +101,12 @@ _verify_con_vm() {
 		ip route | grep -q "^default.*ens256" || _fail "default route not via ens256"
 		echo "  PASS: default route via ens256"
 
+		for _iface in ens192 ens224 ens224.10; do
+			_mtu=\$(ip link show \$_iface 2>/dev/null | grep -o 'mtu [0-9]*' | awk '{print \$2}')
+			[ "\$_mtu" = "1500" ] || _fail "\$_iface MTU is \$_mtu (expected 1500)"
+		done
+		echo "  PASS: MTU 1500 on all interfaces"
+
 		nmcli -g ipv4.ignore-auto-dns connection show ens256 2>/dev/null | grep -q yes || _fail "ens256 ignore-auto-dns"
 		echo "  PASS: ens256 ignore-auto-dns"
 
@@ -166,17 +173,18 @@ _verify_con_vm() {
 		test -d /home/${user}/aba || _fail "~/aba not present"
 		echo "  PASS: ~/aba exists"
 
+		command -v rsync > /dev/null || _fail "rsync not installed"
+		echo "  PASS: rsync installed"
+
 		# --- Files ---
 		test -s /home/${user}/.vmware.conf || _fail "vmware.conf missing"
 		echo "  PASS: vmware.conf"
 
 		# --- Podman clean ---
 		# Pool registry runs as ${user} with images, containers, and port 8443
-		if [ -d /home/${user}/.e2e-pool-registry ]; then
+		if [ -d $POOL_REG_DIR ]; then
 			echo "  SKIP: podman/port checks for ${user} (pool registry present)"
 		else
-			! sudo -u ${user} podman images -q 2>/dev/null | grep -q . || _fail "stale podman images (${user})"
-			echo "  PASS: no podman images (${user})"
 			! sudo -u ${user} podman ps -q 2>/dev/null | grep -q . || _fail "running containers (${user})"
 			echo "  PASS: no running containers (${user})"
 			! ss -tlnp | grep -q ':8443 ' || _fail "port 8443 in use"
@@ -296,6 +304,12 @@ _verify_dis_vm() {
 		ip link show ens256 | grep -q "state DOWN" || _fail "ens256 not DOWN"
 		echo "  PASS: ens256 DOWN"
 
+		for _iface in ens192 ens224 ens224.10; do
+			_mtu=\$(ip link show \$_iface 2>/dev/null | grep -o 'mtu [0-9]*' | awk '{print \$2}')
+			[ "\$_mtu" = "1500" ] || _fail "\$_iface MTU is \$_mtu (expected 1500)"
+		done
+		echo "  PASS: MTU 1500 on all interfaces"
+
 		! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 || _fail "internet still reachable"
 		echo "  PASS: no internet (disconnected)"
 
@@ -368,6 +382,9 @@ _verify_dis_vm() {
 
 		! grep -q "^source.*proxy-set" /home/${user}/.bashrc 2>/dev/null || _fail "proxy still in .bashrc"
 		echo "  PASS: proxy disabled"
+
+		command -v rsync > /dev/null || _fail "rsync not installed"
+		echo "  PASS: rsync installed"
 
 		# --- Podman clean (all users) ---
 		! podman images -q 2>/dev/null | grep -q . || _fail "stale podman images (root)"

@@ -28,6 +28,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 VF="${VMWARE_CONF:-~/.vmware.conf}"
+DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 STANDARD="$(pool_cluster_name standard)"
 
 # --- Suite ------------------------------------------------------------------
@@ -93,6 +94,11 @@ e2e_run -q "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run -q "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run -q "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
 e2e_run -q "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
+
+# Negative path: VM creation without vmware.conf should fail
+e2e_run -q "Ensure no vmware.conf" "rm -f vmware.conf"
+e2e_run_must_fail "Create VMs without vmware.conf should fail" \
+    "aba cluster -n e2e-neg-test -t sno -s install"
 
 # Copy vmware.conf and set the test VM folder
 e2e_run "Copy vmware.conf" "cp -v $VF vmware.conf"
@@ -288,7 +294,7 @@ e2e_run_remote "Clean standard cluster dir" \
     "cd ~/aba && rm -rf $STANDARD"
 e2e_register_cluster "$PWD/$STANDARD" remote
 e2e_run_remote "Create agent configs (bare-metal)" \
-    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_standard_api_vip) -s agentconf"
+    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) -s agentconf"
 e2e_run_remote "Verify cluster.conf" "ls ~/aba/$STANDARD/cluster.conf"
 e2e_run_remote "Verify agent configs" \
     "ls ~/aba/$STANDARD/install-config.yaml ~/aba/$STANDARD/agent-config.yaml"

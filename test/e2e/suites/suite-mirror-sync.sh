@@ -96,6 +96,14 @@ e2e_run_remote "Bring down firewalld" \
 e2e_diag_remote "Show firewalld status (should be down)" \
     "sudo systemctl status firewalld"
 
+# Negative path: sync without pull secret should fail
+e2e_run -q "Hide pull secret for must-fail test" \
+    "mv ~/.pull-secret.json ~/.pull-secret.json.bak"
+e2e_run_must_fail "Sync without pull secret should fail" \
+    "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+e2e_run -q "Restore pull secret" \
+    "mv ~/.pull-secret.json.bak ~/.pull-secret.json"
+
 # Mirror is installed from conN (via sync -H), so cleanup runs on conN (local)
 e2e_register_mirror "$PWD/mirror"
 e2e_run -r 3 2 "Sync images to remote registry" \
@@ -117,7 +125,7 @@ e2e_run_remote "Show firewalld status (should be up)" \
 e2e_run_remote "Verify port 8443 is open" \
     "sudo firewall-cmd --list-all | grep 'ports: .*8443/tcp'"
 e2e_run "Verify registry reachable through firewall" \
-    "curl -sk --connect-timeout 10 https://${DIS_HOST}:8443/health/instance"
+    "curl -sk --connect-timeout 10 https://${DIS_HOST}:8443/v2/"
 
 test_end
 
@@ -256,7 +264,7 @@ e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
 e2e_run "Clean standard cluster dir" "rm -rf $STANDARD"
 e2e_register_cluster "$PWD/$STANDARD"
 e2e_run "Create agent configs (bare-metal)" \
-    "aba cluster -n $STANDARD -t standard -i $(pool_standard_api_vip) -s agentconf"
+    "aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) -s agentconf"
 e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"
 e2e_run "Verify agent configs" "ls -l $STANDARD/install-config.yaml $STANDARD/agent-config.yaml"
 e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso"
@@ -277,7 +285,7 @@ e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
 e2e_run_remote "Verify no registry containers on disN" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 e2e_run "Verify registry unreachable on disN" \
-    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/health/instance"
+    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
 
 test_end
 

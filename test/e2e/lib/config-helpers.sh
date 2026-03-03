@@ -101,11 +101,16 @@ pool_cluster_name() {
 }
 
 # Get starting IP for a cluster type: pool_starting_ip <sno|compact|standard> [POOL_NUM]
+# SNO: node_ip (.x2) -- single node, no VIPs needed
+# Compact/Standard: after VIPs (.x5) -- leaves room for api_vip (.x3) and apps_vip (.x4)
 pool_starting_ip() {
     local ctype="$1"
     local p="${2:-${POOL_NUM:-1}}"
-    # All types share pool_node_ip as the starting/rendezvous IP
-    pool_node_ip "$p"
+    if [ "$ctype" = "sno" ]; then
+        pool_node_ip "$p"
+    else
+        echo "${POOL_SUBNET:-10.0.2}.$((p * 10 + 5))"
+    fi
 }
 
 # Get the VLAN node IP for cluster-on-VLAN tests: pool_vlan_node_ip [POOL_NUM]

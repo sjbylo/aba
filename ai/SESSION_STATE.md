@@ -1,19 +1,25 @@
 # Session State
 
 ## Current goal
-Fix named mirror directory `cd` bug -- 7 mirror scripts hardcoded `cd "$SCRIPT_DIR/../mirror"` which always navigated to the default `mirror/` dir, breaking named mirror dirs like `xxx/`.
+Switch E2E pool registry from Quay to Docker registry at `/opt/pool-reg`, plus related cleanup improvements.
 
 ## Done this session
-- Diagnosed the root cause: `pwd -P` resolved the `scripts` symlink, so `../mirror` always pointed to the default mirror dir
-- Fixed all 7 affected scripts: `reg-sync.sh`, `reg-load.sh`, `reg-save.sh`, `reg-create-imageset-config-sync.sh`, `reg-create-imageset-config-save.sh`, `download-catalogs-start.sh`, `download-catalogs-wait.sh`
-- Tested: `aba sync` from `xxx/` now correctly probes `bastion.example.com:8443`
-- Regression tested: `aba sync` from default `mirror/` still reads its own config
-- Pre-commit checks pass (all 123 shell scripts valid syntax)
+1. **Rewrote `test/e2e/scripts/setup-pool-registry.sh`** -- Docker registry instead of Quay, data at `/opt/pool-reg`
+2. **Added `POOL_REG_DIR` to `test/e2e/lib/constants.sh`** -- single source of truth
+3. **Sourced `constants.sh` from `framework.sh`** -- all suites get `POOL_REG_DIR` automatically
+4. **Updated all references across 11 files** -- `$POOL_REG_DIR` everywhere, health checks `/v2/`, cleanup guards by container name
+5. **Added oc-mirror cache purge to `_pre_suite_cleanup()`** in `runner.sh`
+6. **Fixed `POOL_REG_DIR: unbound variable`** in `setup-infra.sh` -- added `source constants.sh`
+7. **Removed `stale podman images (steve)` verify check** -- not a real violation
+8. **Fixed Ctrl-C/skip showing PASS** -- added `_E2E_USER_SKIPPED` flag; `test_end` records SKIP
+9. **Suppressed "Terminated" message** in `cluster-startup.sh` -- `wait $pid` reaps background CSR process silently
 
 ## Next steps
-- Commit and push the fix (awaiting user approval)
-- Monitor E2E tests after the fix is deployed
+- Deploy updated code to conN hosts (`run.sh deploy --force`)
+- On each conN: remove old Quay pool registry, run new `setup-pool-registry.sh`
+- Verify pool registry works and suites pass
 
 ## Decisions / notes
-- The fix simply removes the `cd` preamble; CWD is already correct (set by Makefile)
-- Consistent with how `reg-install.sh`, `reg-uninstall.sh`, etc. already work
+- `POOL_REG_DIR="/opt/pool-reg"` defined once in `constants.sh`
+- Container name: `pool-registry`; port 8443; auth: `init`/`p4ssw0rd`
+- Old `~/quay-install`/`~/quay-storage` dirs on conN should be manually removed after deploy
