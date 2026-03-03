@@ -267,7 +267,7 @@ _cleanup_dis_aba() {
 	_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
 	_essh "$dis_host" "rm -rf ~/aba" 2>&1 || true
 	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1 || true
-	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage" 2>&1 || true
+	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage ~/quay-install" 2>&1 || true
 	# Remove stale CA trust anchors from previous registry installs
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1 || true
 
