@@ -87,7 +87,7 @@ vmware.conf: .init ## Use VMware vCenter or ESXi to create cluster.
 	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo [ABA] vmware.conf initialized || true
 
 cluster.conf: .init mirror.conf  ## Initialize the OpenShift cluster.conf file.
-	$(SCRIPTS)/create-cluster-conf.sh name=$(name) type=$(type) int_connection=$(int_connection) master_mem=$(master_mem) master_cpu_count=$(master_cpu_count) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem)  worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip) ingress_vip=$(ingress_vip)
+	$(SCRIPTS)/create-cluster-conf.sh name=$(name) type=$(type) starting_ip=$(starting_ip) int_connection=$(int_connection) num_masters=$(num_masters) num_workers=$(num_workers) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip) ingress_vip=$(ingress_vip) ports=$(ports) vlan=$(vlan) ssh_key_file=$(ssh_key_file)
 	@mirror_name=$$(grep '^mirror_name=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
 	 mirror_name=$${mirror_name:-mirror}; \
 	 ln -sfn ../$$mirror_name mirror; \
