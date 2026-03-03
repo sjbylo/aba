@@ -276,13 +276,30 @@ e2e_run_remote "Apply day2 config" \
 test_end
 
 # ============================================================================
-# 11. Deploy vote-app
+# 11. Incremental: vote-app image load
 # ============================================================================
 test_begin "Deploy vote-app"
 
-# Pre-check: verify vote-app image exists in mirror before attempting deploy
+e2e_run "Create fresh imageset config for vote-app only" \
+    "tee mirror/save/imageset-config-save.yaml <<'EOF'
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/sjbylo/flask-vote-app:latest
+EOF"
+e2e_run -r 3 2 "Save vote-app image to disk" \
+    "aba -d mirror save --retry"
+e2e_run "Transfer vote-app archive+config to internal bastion" \
+    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
+e2e_run_remote -r 3 2 "Load vote-app images" \
+    "cd ~/aba && aba -d mirror load --retry"
+
 e2e_run_remote "Verify vote-app image in mirror (skopeo)" \
     "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && skopeo inspect --tls-verify=false docker://\$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app:latest"
+
+e2e_run_remote "Apply day2 config (vote-app mirror resources)" \
+    "cd ~/aba && aba --dir $SNO day2"
 
 e2e_run_remote "Create demo project" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc new-project demo' || true"
