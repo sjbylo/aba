@@ -49,7 +49,7 @@ source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
 verify-cluster-conf || exit 1
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 [ -z "${ISO_DATASTORE:-}" ] && ISO_DATASTORE=$GOVC_DATASTORE
 

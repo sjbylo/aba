@@ -52,7 +52,7 @@ install_rpms $(cat templates/rpms-external.txt) || exit 1
 
 aba_debug "Normalizing and verifying aba.conf"
 source <(normalize-aba-conf)
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_channel"
 
 if [ "$bundle_dest_file" = "-" ]; then

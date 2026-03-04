@@ -10,7 +10,7 @@ aba_debug "Starting: $0 $*"
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 
 pw=$(cat iso-agent-based/auth/kubeadmin-password 2>/dev/null)

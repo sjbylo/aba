@@ -40,7 +40,7 @@ yaml2json()
 
 source <(normalize-aba-conf)
 
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 aba_ocp_ver=$ocp_version
 aba_ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)

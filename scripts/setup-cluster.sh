@@ -6,7 +6,7 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)   # Fetch the domain name
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 # Set defaults
 name=standard
