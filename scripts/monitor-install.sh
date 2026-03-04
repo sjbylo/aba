@@ -12,8 +12,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval $(scripts/cluster-config.sh $@ || exit 1)
 fi
 
-echo
-echo "[ABA] ================================================================================="
+aba_info "================================================================================="
 
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
@@ -51,14 +50,12 @@ declare -A wait_for_exit_reasons=(
 [ $ret -eq 8 ] && exit 0
 
 if [ $ret -ne 0 ]; then
-	echo 
 	echo_red "[ABA] Error: Something went wrong with the installation.  Fix the problem and try again!" >&2
 	[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
 
 	exit $ret
 fi
 
-echo 
 aba_info_ok "The cluster has been successfully installed!"
 aba_info_ok "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
 aba_info_ok "Run '. <(aba login)' to log into the cluster using kubeadmin's password."

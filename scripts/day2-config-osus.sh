@@ -58,11 +58,11 @@ tmp_line8=$(echo "$ingress_cert" | head -8 | tail -1)
 tmp_line12=$(echo "$ingress_cert" | head -12 | tail -1)
 
 if echo "$ca_bundle_crt" | grep -q "$tmp_line8" && echo "$ca_bundle_crt" | grep -q "$tmp_line12"; then
-	aba_info "CA cert already added"
+	echo_white "CA cert already added"
 else
 	ca_bundle_crt="$ca_bundle_crt\n$ingress_cert_json"
 	oc patch cm user-ca-bundle -n openshift-config --type='merge' -p '{"data":{"ca-bundle.crt":"'"$ca_bundle_crt"'"}}'
-	aba_info_ok CA cert added
+	echo_green "CA cert added"
 fi
 
 aba_info Adding trustedCA to cluster proxy ...
@@ -160,7 +160,7 @@ aba_info -n "Obtaining the policy engine route ... "
 
 while sleep 1; do POLICY_ENGINE_GRAPH_URI="$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph{"\n"}' updateservice "${NAME}")"; SCHEME="${POLICY_ENGINE_GRAPH_URI%%:*}"; if test "${SCHEME}" = http -o "${SCHEME}" = https; then break; fi; done
 
-aba_info_ok $POLICY_ENGINE_GRAPH_URI
+echo_green "$POLICY_ENGINE_GRAPH_URI"
 
 CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
 aba_debug CH=$CH
