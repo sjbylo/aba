@@ -24,7 +24,7 @@ export ARCH=$(uname -m)
 # Source user overrides (e.g. OC_MIRROR_IMAGE_TIMEOUT) if present
 [[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 
-_ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+_ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.conf or run aba or ./abatui."
 
 # ===========================
 # Color Echo Functions

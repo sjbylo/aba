@@ -333,12 +333,15 @@ test_end
 # ============================================================================
 test_begin "ACM: MultiClusterHub"
 
+e2e_run "Copy ACM YAML files to internal bastion" \
+    "ssh ${INTERNAL_BASTION} 'mkdir -p ~/aba/test' && scp ~/aba/test/acm-subs.yaml ~/aba/test/acm-mch.yaml ${INTERNAL_BASTION}:aba/test/"
+
 e2e_run_remote "Install ACM subscription" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f test/acm-subs.yaml'"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f ~/aba/test/acm-subs.yaml'"
 e2e_run_remote -r 10 1.5 "Wait for ACM operator" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get csv -n open-cluster-management -o name | grep advanced-cluster-management'"
 e2e_run_remote "Install MultiClusterHub" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f test/acm-mch.yaml'"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f ~/aba/test/acm-mch.yaml'"
 e2e_run_remote -r 20 1.5 "Wait for MCH ready" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get multiclusterhub -n open-cluster-management -o jsonpath={.items[0].status.phase} | grep Running'"
 
