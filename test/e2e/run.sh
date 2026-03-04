@@ -1257,8 +1257,25 @@ _detect_running_and_completed() {
 	local _rc_base
 	_rc_base=$(basename "$_RC_PREFIX")
 
+	# Pass 1: detect running suites (live tmux takes precedence over stale .rc)
+	local -A _running_suites=()
 	for (( p=1; p<=CLI_POOLS; p++ )); do
-		# Check for completed suites (rc files)
+		local sess_exists
+		sess_exists=$(_ssh_con "$p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
+		if [ "$sess_exists" = "yes" ]; then
+			local suite
+			suite=$(_ssh_con "$p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null || true)
+			if [ -n "$suite" ]; then
+				_busy_pools[$p]="$suite"
+				_result_pool[$suite]="$p"
+				_running_suites[$suite]=1
+				echo "    con${p}: $suite still running"
+			fi
+		fi
+	done
+
+	# Pass 2: detect completed suites (.rc files), skipping any that are running
+	for (( p=1; p<=CLI_POOLS; p++ )); do
 		local rc_files
 		rc_files=$(_ssh_con "$p" "ls ${_RC_PREFIX}-*.rc 2>/dev/null" 2>/dev/null || true)
 		if [ -n "$rc_files" ]; then
@@ -1267,6 +1284,10 @@ _detect_running_and_completed() {
 				local fname
 				fname=$(basename "$rc_file" .rc)
 				local suite="${fname#${_rc_base}-}"
+				if [ -n "${_running_suites[$suite]:-}" ]; then
+					echo "    con${p}: $suite .rc ignored (suite is running on another pool)"
+					continue
+				fi
 				local rc
 				rc=$(_ssh_con "$p" "cat '$rc_file' 2>/dev/null" 2>/dev/null || true)
 				rc="${rc//[^0-9]/}"
@@ -1274,19 +1295,6 @@ _detect_running_and_completed() {
 				_result_pool[$suite]="$p"
 				echo "    con${p}: $suite completed (exit=${_completed[$suite]})"
 			done <<< "$rc_files"
-		fi
-
-		# Check for running suite (static tmux session)
-		local sess_exists
-		sess_exists=$(_ssh_con "$p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
-		if [ "$sess_exists" = "yes" ]; then
-			local suite
-			suite=$(_ssh_con "$p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null || true)
-			if [ -n "$suite" ] && [ -z "${_completed[$suite]:-}" ]; then
-				_busy_pools[$p]="$suite"
-				_result_pool[$suite]="$p"
-				echo "    con${p}: $suite still running"
-			fi
 		fi
 	done
 }
@@ -1511,6 +1519,7 @@ echo $$ > "$E2E_DISPATCHER_PID"
 trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE"' EXIT
 
 declare -A _retried=()
+_MAX_RETRIES=2
 
 while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 
@@ -1544,21 +1553,22 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		(( _queue_idx++ ))
 	done
 
-	# Inline retry: when queue is drained and pools are free, re-queue
-	# failed suites (once per suite, skip exit=3 skips)
-	if [ $_queue_idx -ge ${#_work_queue[@]} ] && _find_free_pool >/dev/null 2>&1; then
+	# Inline retry: when queue is drained and ALL pools are idle, re-queue
+	# failed suites. Waiting for all pools gives the user time to deploy
+	# fixes before retries start (instead of retrying immediately).
+	if [ $_queue_idx -ge ${#_work_queue[@]} ] && [ ${#_busy_pools[@]} -eq 0 ]; then
 		_retry_added=0
 		for _rs in "${!_results[@]}"; do
 			_rrc="${_results[$_rs]}"
-			if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ -z "${_retried[$_rs]:-}" ]; then
-				_retried[$_rs]=1
+			if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
+				_retried[$_rs]=$(( ${_retried[$_rs]:-0} + 1 ))
 				_rp="${_result_pool[$_rs]:-}"
 				if [ -n "$_rp" ]; then
 					_ssh_con "$_rp" "rm -f '${_RC_PREFIX}-${_rs}.rc'" 2>/dev/null || true
 				fi
 				unset '_results[$_rs]'
 				_work_queue+=("$_rs")
-				printf "  [%s] RETRY: queuing %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "$_rs" "$_rrc"
+				printf "  [%s] RETRY %d/%d: queuing %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "${_retried[$_rs]}" "$_MAX_RETRIES" "$_rs" "$_rrc"
 				(( _retry_added++ ))
 			fi
 		done

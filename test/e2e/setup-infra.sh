@@ -143,7 +143,11 @@ _verify_con_vm() {
 		systemctl is-active --quiet chronyd || _fail "chronyd not active"
 		echo "  PASS: chronyd active"
 
-		ping -c 1 -W 3 ${_ntp} > /dev/null || _fail "NTP server ${_ntp} unreachable"
+		for _try in 1 2 3 4 5; do
+			ping -c 1 -W 3 ${_ntp} > /dev/null && break
+			[ "\$_try" -eq 5 ] && _fail "NTP server ${_ntp} unreachable"
+			sleep 5
+		done
 		echo "  PASS: NTP server ${_ntp} reachable"
 
 		# --- SSH ---
@@ -301,8 +305,8 @@ _verify_dis_vm() {
 		ip addr show ens224.10 | grep -q "${_dis_vlan}" || _fail "VLAN IP ${_dis_vlan} not on ens224.10"
 		echo "  PASS: VLAN IP ${_dis_vlan} on ens224.10"
 
-		ip link show ens256 | grep -q "state DOWN" || _fail "ens256 not DOWN"
-		echo "  PASS: ens256 DOWN"
+		! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 || _fail "internet still reachable (should be air-gapped)"
+		echo "  PASS: no internet (disconnected)"
 
 		for _iface in ens192 ens224 ens224.10; do
 			_mtu=\$(ip link show \$_iface 2>/dev/null | grep -o 'mtu [0-9]*' | awk '{print \$2}')
@@ -339,14 +343,26 @@ _verify_dis_vm() {
 		test -f /etc/NetworkManager/conf.d/no-dns.conf || _fail "NM dns=none missing"
 		echo "  PASS: NM dns=none"
 
-		getent hosts ${con_vm}.${_base_domain} | grep -q "${_con_lab_ip}" || _fail "cannot resolve ${con_vm}.${_base_domain} -> ${_con_lab_ip}"
+		for _try in 1 2 3 4 5; do
+			getent hosts ${con_vm}.${_base_domain} | grep -q "${_con_lab_ip}" && break
+			[ "\$_try" -eq 5 ] && _fail "cannot resolve ${con_vm}.${_base_domain} -> ${_con_lab_ip}"
+			sleep 5
+		done
 		echo "  PASS: DNS ${con_vm}.${_base_domain} -> ${_con_lab_ip}"
 
-		getent hosts ${vm}.${_base_domain} | grep -q "${_dis_lab_ip}" || _fail "cannot resolve ${vm}.${_base_domain} -> ${_dis_lab_ip}"
+		for _try in 1 2 3 4 5; do
+			getent hosts ${vm}.${_base_domain} | grep -q "${_dis_lab_ip}" && break
+			[ "\$_try" -eq 5 ] && _fail "cannot resolve ${vm}.${_base_domain} -> ${_dis_lab_ip}"
+			sleep 5
+		done
 		echo "  PASS: DNS ${vm}.${_base_domain} -> ${_dis_lab_ip}"
 
 		# --- Lab connectivity ---
-		ping -c 1 -W 3 ${_ntp} > /dev/null || _fail "lab server ${_ntp} unreachable via ens192"
+		for _try in 1 2 3 4 5; do
+			ping -c 1 -W 3 ${_ntp} > /dev/null && break
+			[ "\$_try" -eq 5 ] && _fail "lab server ${_ntp} unreachable via ens192"
+			sleep 5
+		done
 		echo "  PASS: lab server ${_ntp} reachable"
 
 		# --- Time ---

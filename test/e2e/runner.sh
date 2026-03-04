@@ -126,7 +126,7 @@ export _E2E_INTERACTIVE=1
 if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 	if ! command -v govc &>/dev/null; then
 		echo "  Bootstrapping govc ..."
-		cd "$_ABA_ROOT" && aba --dir cli govc || {
+		make -sC "$_ABA_ROOT/cli" govc || {
 			echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
 			exit 1
 		}
