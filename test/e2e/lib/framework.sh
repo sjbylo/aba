@@ -986,6 +986,8 @@ e2e_run() {
                 test_end "$ret"
             fi
             rm -f "$_cmd_output_file"
+            e2e_cleanup_clusters
+            e2e_cleanup_mirrors
             exit 1
         fi
     done

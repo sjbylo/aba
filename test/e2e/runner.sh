@@ -71,6 +71,10 @@ echo "$$ $(date +%s)" > "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 rm -f "$RC_FILE"
 
+# After framework.sh is sourced (below), the trap is upgraded to also
+# clean up registered clusters/mirrors.  This ensures VMs are deleted
+# even when the suite aborts, is killed, or hits an unhandled exit path.
+
 echo "$SUITE" > /tmp/e2e-last-suites
 
 echo ""
@@ -87,6 +91,9 @@ source "$_RUNNER_DIR/lib/framework.sh"
 source "$_RUNNER_DIR/lib/config-helpers.sh"
 source "$_RUNNER_DIR/lib/vm-helpers.sh"
 source "$_RUNNER_DIR/lib/setup.sh"
+
+# Upgrade EXIT trap: clean up registered clusters/mirrors on ANY exit
+trap 'e2e_cleanup_clusters 2>/dev/null || true; e2e_cleanup_mirrors 2>/dev/null || true; rm -f "$LOCK_FILE"' EXIT
 
 # Source config.env (set -a exports all variables so child processes -- suites -- inherit them)
 if [ -f "$_RUNNER_DIR/config.env" ]; then

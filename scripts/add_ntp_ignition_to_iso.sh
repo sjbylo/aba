@@ -10,7 +10,7 @@ ARCH=$(uname -m)
 [ "$ARCH" = "amd64" ] && ARCH=x86_64
 
 source <(normalize-aba-conf)
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 [ ! "$ntp_servers" ] && aba_info "Not configuring NTP in early bootstrap node because 'ntp_servers' not defined in aba.conf or cluster.conf." && exit 0
 

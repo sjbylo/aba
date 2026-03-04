@@ -14,7 +14,7 @@ source scripts/include_all.sh
 
 # Get OCP version from aba.conf
 source <(normalize-aba-conf)
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 # Extract major.minor version (e.g., 4.20.8 -> 4.20)
 ocp_ver_short="${ocp_version%.*}"

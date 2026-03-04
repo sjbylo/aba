@@ -380,6 +380,26 @@ Suite only tests public registry path; clarify whether installing a reg is neces
 
 Full design for consistent script layout, mirror.conf config, and TUI persistence for Docker registry. Status: PLANNED, not yet implemented.
 
+### 31. CLI Download Retry Gaps
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-04
+
+**Problem:**
+Two gaps in CLI download retry coverage:
+
+1. **`run_once` level:** If a CLI download/install task fails with a regular exit code (e.g., exit 1 from checksum failure or disk full), `run_once` records the failure and never retries. Only signal kills (exit 128-165) trigger automatic restart. A failed task stays failed until manually reset (`run_once -r`).
+
+2. **`curl --retry` scope:** All downloads use `curl --retry 8` with default exponential backoff (1s, 2s, 4s... up to ~4 min total). However, `--retry` only covers transient HTTP errors (5xx, 408) and connection failures. HTTP 4xx errors (404, 403) are treated as permanent and not retried. Adding `--retry-all-errors` would cover these cases.
+
+**Proposed Fix (if needed):**
+- Add `--retry-all-errors` to curl invocations in `cli/Makefile` (trivial, one-line per call)
+- Consider adding a `run_once -w --retry N` flag that clears exit state and restarts on non-zero exit (more complex, only if flaky failures recur)
+
+**Current mitigation:** curl's `--retry 8` handles most transient issues. E2E test framework has its own `e2e_run -r` retry logic. Issue would only manifest during persistent CDN/mirror outages.
+
 ### 30. CLI Ensure Analysis — Add Ensures to 6 Scripts
 
 **Status:** Backlog  

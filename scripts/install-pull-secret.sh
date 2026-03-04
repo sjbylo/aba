@@ -10,7 +10,7 @@ umask 077
 
 source <(normalize-aba-conf)
 
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 # Pull secret file exists
 if [ -s $pull_secret_file ]; then

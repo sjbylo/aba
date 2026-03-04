@@ -31,7 +31,7 @@ umask 077
 aba_debug "Loading and validating configuration"
 source <(normalize-aba-conf)
 
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration validated"
 
 # Still downloading?

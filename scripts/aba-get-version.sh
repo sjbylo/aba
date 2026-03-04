@@ -14,7 +14,7 @@ if [ ! -f aba.conf ]; then
 fi
 source <(normalize-aba-conf)
 
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 # Include aba bin path and common scripts
 export PATH=$PWD/bin:$PATH

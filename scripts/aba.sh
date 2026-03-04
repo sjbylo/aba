@@ -23,7 +23,7 @@
 ABA_VERSION=20260226143439
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260302233048
+ABA_BUILD=20260304105041
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1340,7 +1340,7 @@ scripts/install-rpms.sh external
 
 ##############################################################################################################################
 source <(normalize-aba-conf)
-verify-aba-conf || aba_abort "Invalid or incomplete aba.conf. Check the errors above and fix aba.conf."
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 export ask=1 # Must set for interactive mode!
 
 ##############################################################################################################################
