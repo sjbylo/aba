@@ -371,6 +371,9 @@ elif [ "$1" = "--light" ]; then
 	# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 	aba_debug Downloading operator index for version $ver 
 
+	# Catalog downloads need oc-mirror; ensure it's at least downloading
+	scripts/cli-download-all.sh oc-mirror
+
 	# Use new helper function for parallel catalog downloads
 	ver_short="${ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
 	download_all_catalogs "$ver_short" 86400  # 1-day TTL
@@ -1309,17 +1312,18 @@ fi
 
 # Now we know the desired openshift version...
 
+# Trigger download of all CLI binaries first -- catalog downloads need oc-mirror
+# Note: Non-interactive mode already started these at line ~205
+# Note: Another place this is checked is in "scripts/reg-save.sh"
+scripts/cli-download-all.sh
+
 # Fetch the operator indexes (in the background to save time).
 # Use new helper function for parallel catalog downloads (runs in background)
+# NOTE: must come AFTER cli-download-all.sh since catalogs need oc-mirror
 ocp_ver_short="${target_ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
 download_all_catalogs "$ocp_ver_short" 86400  # 1-day TTL
 # Note: Catalogs wait/check happens in scripts that actually need them
 # (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
-
-# Trigger download of all CLI binaries (for interactive mode only)
-# Note: Non-interactive mode already started these at line ~205
-# Note: Another place this is checked is in "scripts/reg-save.sh"
-scripts/cli-download-all.sh
 
 # Initiate download of mirror-install and docker-reg image
 run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- make -s -C mirror download-registries

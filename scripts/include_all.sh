@@ -314,8 +314,8 @@ verify-aba-conf() {
 	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
 	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
 
-	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  See: aba --help" >&2; ret=1; }
-	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  See: aba --help" >&2; ret=1; }
+	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
 	echo $platform    | grep -q -E "bm|vmw" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
@@ -2275,7 +2275,8 @@ ensure_oc_mirror() {
 	# Wait for oc-mirror download to complete before extracting
 	# (cli-download-all.sh starts downloads in background; extracting a
 	#  partially-downloaded tarball causes "gzip: unexpected end of file" errors)
-	run_once -q -w -i "cli:download:oc-mirror"
+	# Provide command so run_once can start the download if task was reset
+	run_once -q -w -i "cli:download:oc-mirror" -- make -sC cli download-oc-mirror
 	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
 }
 
