@@ -7,7 +7,7 @@
 #          No VMs are created -- suite should complete in under 5 minutes.
 #
 # What it tests:
-#   - aba.conf validation (bad version, channel, domain, dns, ntp, prefix)
+#   - aba.conf validation (bad version, channel, domain, dns, ntp, machine_network)
 #   - aba clean / mirror clean (state removal)
 #   - Version mismatch detection
 #   - Bundle errors (invalid operator, op-set, permissions)
@@ -63,35 +63,35 @@ test_end 0
 test_begin "aba.conf validation"
 
 e2e_run "Set bad ocp_version" "sed -i 's/^ocp_version=.*/ocp_version=NOTAVERSION/' aba.conf"
-e2e_run_must_fail "Bad ocp_version rejected" "aba -d mirror save"
+e2e_run_must_fail "Bad ocp_version rejected" "make -sC mirror checkversion"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad ocp_channel" "sed -i 's/^ocp_channel=.*/ocp_channel=boguschannel/' aba.conf"
-e2e_run_must_fail "Bad ocp_channel rejected" "aba -d mirror save"
+e2e_run_must_fail "Bad ocp_channel rejected" "make -sC mirror checkversion"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad domain" "sed -i 's/^domain=.*/domain=!!!invalid!!!/' aba.conf"
-e2e_run_must_fail "Bad domain rejected" "aba -d mirror save"
+e2e_run_must_fail "Bad domain rejected" "make -sC mirror checkversion"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad dns_servers" "sed -i 's/^dns_servers=.*/dns_servers=not.an.ip.addr/' aba.conf"
-e2e_run_must_fail "Bad dns_servers rejected" "aba -d mirror save"
+e2e_run_must_fail "Bad dns_servers rejected" "make -sC mirror checkversion"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad ntp_servers" "sed -i 's/^ntp_servers=.*/ntp_servers=@@@invalid/' aba.conf"
-e2e_run_must_fail "Bad ntp_servers rejected" "aba -d mirror save"
+e2e_run_must_fail "Bad ntp_servers rejected" "make -sC mirror checkversion"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
-e2e_run "Set bad prefix_length" "sed -i 's/^prefix_length=.*/prefix_length=99/' aba.conf"
-e2e_run_must_fail "Bad prefix_length rejected" "aba -d mirror save"
+e2e_run "Set bad machine_network CIDR" "sed -i 's/^machine_network=.*/machine_network=NOTACIDR/' aba.conf"
+e2e_run_must_fail "Bad machine_network rejected" "make -sC mirror checkversion"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad platform" "sed -i 's/^platform=.*/platform=bogus/' aba.conf"
-e2e_run_must_fail "Bad platform rejected" "aba -d mirror save"
+e2e_run_must_fail "Bad platform rejected" "make -sC mirror checkversion"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set empty ocp_version" "sed -i 's/^ocp_version=.*/ocp_version=/' aba.conf"
-e2e_run_must_fail "Empty ocp_version rejected" "aba -d mirror save"
+e2e_run_must_fail "Empty ocp_version rejected" "make -sC mirror checkversion"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 test_end 0
@@ -125,7 +125,7 @@ test_begin "Version mismatch"
 e2e_run "Ensure CLIs are installed" "aba -d cli install"
 e2e_run "Save current version" "grep '^ocp_version=' aba.conf > /tmp/e2e-saved-version"
 e2e_run "Set mismatched version" "sed -i 's/^ocp_version=.*/ocp_version=4.14.0/' aba.conf"
-e2e_run_must_fail "Version mismatch detected" "aba -d mirror save"
+e2e_run_must_fail "Version mismatch detected" "make -sC mirror checkversion"
 e2e_run "Restore version" "source /tmp/e2e-saved-version && sed -i \"s/^ocp_version=.*/ocp_version=\$ocp_version/\" aba.conf"
 
 test_end 0
