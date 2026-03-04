@@ -29,9 +29,7 @@ fi
 CP_MAC_ADDRS_ARRAY=($CP_MAC_ADDRS)
 WKR_MAC_ADDRS_ARRAY=($WKR_MAC_ADDRS)
 
-echo
-echo_magenta "[ABA] Provisioning VMs to build the cluster ..."
-echo
+aba_info "Provisioning VMs to build the cluster ..."
 
 cluster_folder="$VC_FOLDER"
 # If we are accessing vCenter (and not ESXi directly) 
@@ -88,8 +86,7 @@ create_node() {
 		local idx=$(( i * num_ports_per_node ))
 		local mac=${mac_array[$idx]}
 
-		aba_info -n "Create VM: "
-		aba_info "$vm_name: [${cpu_count}C/${mem_gb}G] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
+		aba_info "Create VM: $vm_name: [${cpu_count}C/${mem_gb}G] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 
 		cmd="govc vm.create \
 			-annotation='Created on $(date) as ${role} node for OpenShift cluster ${CLUSTER_NAME}.${base_domain} version v${ocp_version} from $(hostname):$PWD' \
@@ -176,7 +173,6 @@ create_node "control" "$CP_NAMES" CP_MAC_ADDRS_ARRAY "$master_cpu_count" "$maste
 # Invoke for workers:
 create_node "worker" "$WORKER_NAMES" WKR_MAC_ADDRS_ARRAY "$worker_cpu_count" "$worker_mem" "$worker_nested_hv"
 
-echo
 if [ -n "${START_VM:-}" ]; then
 	cp_arr=($CP_NAMES);		cp_cnt=${#cp_arr[*]}
 	wkr_arr=($WORKER_NAMES);	wkr_cnt=${#wkr_arr[*]}

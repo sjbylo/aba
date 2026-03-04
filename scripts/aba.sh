@@ -599,9 +599,9 @@ elif [ "$1" = "--light" ]; then
 					[ "$op_set_list" ] && op_set_list="$op_set_list,$1" || op_set_list=$1
 				else
 					aba_warning "No such operator set: $1" >&2
-					aba_info -n "Available operator sets are: " >&2
-					ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
-					aba_info "(as defined in files: aba/templates/operator-sets-*)" >&2
+				aba_info -n "Available operator sets are: " >&2
+				ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
+				echo_white "(as defined in files: aba/templates/operator-sets-*)" >&2
 
 					exit 1
 				fi
@@ -1389,7 +1389,7 @@ if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 		# Validate pull secret by testing authentication with registry.redhat.io
 		aba_info -n "Validating pull secret authentication..."
 		if validate_pull_secret "$pull_secret_file" >/dev/null 2>&1; then
-			aba_info " ✓ Authentication successful"
+			echo_white " ✓ Authentication successful"
 		else
 			echo
 			# validate_pull_secret already outputs detailed error with [ABA] prefix
