@@ -758,11 +758,14 @@ if [ -n "$CLI_STATUS" ]; then
 		if [ -n "$_ds_done" ] && [ "$_ds_done" -gt 0 ] 2>/dev/null; then
 				_done_summary=""
 				for _entry in $_ds_done_list; do
-					_s="${_entry%%:*}"; _rc="${_entry#*:}"
+					_s="${_entry%%:*}"
+					_rc_pool="${_entry#*:}"
+					_rc="${_rc_pool%%@*}"
+					_pool="${_rc_pool#*@}"
 					if [ "$_rc" = "0" ]; then
 						_done_summary+="$_s (\033[32mPASS\033[0m) "
 					else
-						_done_summary+="$_s (\033[1;31mFAIL\033[0m/exit=$_rc) "
+						_done_summary+="$_s (\033[1;31mFAIL\033[0m/exit=$_rc,con$_pool) "
 					fi
 				done
 				printf "    Done (%s):    %b\n" "$_ds_done" "${_done_summary% }"
@@ -1188,7 +1191,7 @@ _dispatch_suite() {
 	local _retry_arg=""
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"
 	local runner_cmd="bash ~/aba/test/e2e/runner.sh $pool_num $suite$_retry_arg"
-	_ssh_con "$pool_num" "tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'"
+	_ssh_con "$pool_num" "tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'"
 
 	_busy_pools[$pool_num]="$suite"
 	_result_pool[$suite]="$pool_num"
@@ -1491,7 +1494,7 @@ _write_dispatch_state() {
 		echo "DONE=${#_results[@]}"
 		local _done_str=""
 		for _ds in "${!_results[@]}"; do
-			_done_str+="${_ds}:${_results[$_ds]} "
+			_done_str+="${_ds}:${_results[$_ds]}@${_result_pool[$_ds]:-?} "
 		done
 		echo "DONE_LIST=${_done_str% }"
 	} > "$E2E_DISPATCH_STATE"
@@ -1553,10 +1556,9 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		(( _queue_idx++ ))
 	done
 
-	# Inline retry: when queue is drained and ALL pools are idle, re-queue
-	# failed suites. Waiting for all pools gives the user time to deploy
-	# fixes before retries start (instead of retrying immediately).
-	if [ $_queue_idx -ge ${#_work_queue[@]} ] && [ ${#_busy_pools[@]} -eq 0 ]; then
+	# Inline retry: when queue is drained and a free pool exists, re-queue
+	# failed suites so idle pools pick them up immediately.
+	if [ $_queue_idx -ge ${#_work_queue[@]} ] && _find_free_pool >/dev/null; then
 		_retry_added=0
 		for _rs in "${!_results[@]}"; do
 			_rrc="${_results[$_rs]}"
