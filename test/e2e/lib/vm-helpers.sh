@@ -161,9 +161,15 @@ _vm_dnf_update() {
 
 	cat <<-'DNFEOF' | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		dnf clean all
-		dnf update -y 2>&1 | tee /tmp/dnf-update.log
-		echo "dnf-update exit=${PIPESTATUS[0]}"
+		for attempt in 1 2 3; do
+			dnf clean all
+			if dnf update -y 2>&1 | tee /tmp/dnf-update.log; then
+				echo "dnf-update exit=0 (attempt $attempt)"
+				break
+			fi
+			echo "dnf-update attempt $attempt failed -- retrying in 30s ..."
+			sleep 30
+		done
 		dnf clean all
 	DNFEOF
 
