@@ -1,21 +1,26 @@
 # Session State
 
 ## Current goal
-Implement cleanup fixes for leftover VMs and refactor `_ABA_CONF_ERR` message variable.
+VM cleanup EXIT trap fix verified. Ready to commit and continue testing.
 
 ## Done this session
-- **EXIT trap in runner.sh**: Added upgraded trap that calls `e2e_cleanup_clusters` + `e2e_cleanup_mirrors` on any exit -- root cause fix for leftover standard1 VMs causing IP collisions.
-- **framework.sh abort path**: Added cleanup calls before `exit 1` on the FATAL abort path (line 989) -- belt-and-suspenders for direct suite execution.
-- **`_ABA_CONF_ERR` variable**: Added to `include_all.sh` and replaced the literal error string in all 36 scripts that call `verify-aba-conf || aba_abort`.
-- Pre-commit checks pass.
+- **EXIT trap in runner.sh**: `_runner_cleanup()` function resolves cleanup file paths from `$SUITE` (fixes variable scoping bug). Tested and verified:
+  - Abort path (con1): compact1 VMs cleaned up -- PASS
+  - Kill path (con3): sno3 VM cleaned up after `kill <pid>` -- PASS
+- **framework.sh abort path**: Added cleanup calls before `exit 1`.
+- **`_ABA_CONF_ERR` variable**: Added to `include_all.sh`, replaced in 36 scripts. Committed as `19232b1`.
+- **Retry logic**: Reverted to "any free pool" for immediate retry.
+- **Tmux window title**: Added suite name via `tmux rename-window`.
+- **Removed `2>/dev/null`** from cleanup calls and unnecessary `2>&1`.
+- Cleaned orphaned VMs from pool3.
+- All tests restarted fresh with `--force`.
 
 ## Next steps
-- Commit and push (awaiting user permission).
-- Deploy to conN hosts and restart tests.
-- Monitor test runs for cleanup behavior (standard1 VMs should now be cleaned up automatically).
-- Continue with backlog items (see `ai/BACKLOG.md`).
+- Commit runner.sh + run.sh fixes (not yet committed).
+- Push during lunchtime (12:30-13:30).
+- Monitor test runs.
 
 ## Decisions / notes
-- User explicitly said "no function, only a message variable" for the `_ABA_CONF_ERR` refactor.
-- The EXIT trap in runner.sh is the primary safety net; the framework.sh abort cleanup is secondary.
-- `e2e_cleanup_clusters` is safe to call multiple times (idempotent, checks for cleanup file).
+- Kill test confirmed: EXIT trap works for both abort and kill scenarios.
+- Retry strategy: "any free pool" (user's choice).
+- Dispatcher pid 3934816 running with 8 suites, 4 active.
