@@ -92,8 +92,17 @@ source "$_RUNNER_DIR/lib/config-helpers.sh"
 source "$_RUNNER_DIR/lib/vm-helpers.sh"
 source "$_RUNNER_DIR/lib/setup.sh"
 
-# Upgrade EXIT trap: clean up registered clusters/mirrors on ANY exit
-trap 'e2e_cleanup_clusters 2>/dev/null || true; e2e_cleanup_mirrors 2>/dev/null || true; rm -f "$LOCK_FILE"' EXIT
+# Upgrade EXIT trap: clean up registered clusters/mirrors on ANY exit.
+# _E2E_SUITE_NAME is set inside the child bash process (the suite script),
+# so we must set cleanup file paths explicitly from runner.sh's $SUITE var.
+_runner_cleanup() {
+	_E2E_CLEANUP_FILE="${E2E_LOG_DIR}/${SUITE}.cleanup"
+	_E2E_MIRROR_CLEANUP_FILE="${E2E_LOG_DIR}/${SUITE}.mirror-cleanup"
+	e2e_cleanup_clusters || true
+	e2e_cleanup_mirrors || true
+	rm -f "$LOCK_FILE"
+}
+trap '_runner_cleanup' EXIT
 
 # Source config.env (set -a exports all variables so child processes -- suites -- inherit them)
 if [ -f "$_RUNNER_DIR/config.env" ]; then
