@@ -1098,7 +1098,7 @@ ABA supports the following architectures, automatically detecting the host and d
 |---|---|---|
 | Intel/AMD | `x86_64` | Fully tested |
 | ARM | `aarch64` | Tested (see notes below) |
-| IBM Z (System Z) | `s390x` | Testing in progress! |
+| IBM Z (System Z) | `s390x` | Mirror sync and ISO creation, tested! |
 | IBM Power | `ppc64le` | Supported - should work |
 
 ### Notes on arm64

@@ -433,7 +433,7 @@ e2e_run_remote -r 18 10 "Wait for cincinnati-operator in OperatorHub" \
 e2e_run_remote "Apply OSUS day2" \
     "cd ~/aba && aba --dir $SNO day2-osus"
 
-# Wait for all COs to be Available (what 'oc adm upgrade' checks)
+# Wait for all COs to be available (AVAILABLE=True)
 e2e_wait_operators_available $SNO remote
 
 # Set the cluster update channel to fast (matching the imageset config)
@@ -441,7 +441,11 @@ _OCP_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cu
 e2e_run_remote "Set update channel to fast-${_OCP_MAJOR}" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade channel fast-${_OCP_MAJOR}'"
 
-e2e_run_remote -r 5 1 -d 60 "Trigger cluster upgrade" \
+# Wait until 'oc adm upgrade' shows updates are available (cluster is healthy and ready)
+e2e_poll_remote 600 30 "Wait for cluster ready to upgrade" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade --include-not-recommended' 2>&1 | grep -iE 'Updates .* available'"
+
+e2e_run_remote -r 3 1 -d 30 "Trigger cluster upgrade" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade --to-latest=true --allow-not-recommended'"
 
 sleep 3
