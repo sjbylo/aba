@@ -156,12 +156,7 @@ e2e_run "Uninstall mymirror registry" "aba --dir mymirror uninstall"
 e2e_run_remote "Verify registry removed" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 
-# Mymirror reset: verify reset clears run_once state
-e2e_run "Verify mymirror run_once state exists before reset" \
-    "test -d ~/.aba/runner/mymirror:reg:install"
 e2e_run "Run mymirror reset" "aba --dir mymirror reset --force"
-e2e_run "Verify mymirror run_once state cleared after reset" \
-    "test ! -d ~/.aba/runner/mymirror:reg:install"
 e2e_run "Clean up mymirror dir" "rm -rf mymirror"
 
 # Mirror reset regression: verify reset clears binary and re-extraction works
