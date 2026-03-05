@@ -34,7 +34,7 @@ plan_tests \
     "Proxy mode: create SNO config" \
     "Proxy mode: verify install-config.yaml" \
     "Proxy mode: install SNO cluster" \
-    "Proxy mode: verify and shutdown" \
+    "Proxy mode: verify and delete" \
     "Direct+mirror mode: config verification" \
     "Proxy-only mode: verify without direct internet" \
     "no_proxy validation"
@@ -157,15 +157,15 @@ e2e_run "Install SNO from public registry (proxy mode)" \
 test_end
 
 # ============================================================================
-# 7. Proxy mode: verify and shutdown
+# 7. Proxy mode: verify and delete
 # ============================================================================
-test_begin "Proxy mode: verify and shutdown"
+test_begin "Proxy mode: verify and delete"
 
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
-e2e_run "Shutdown cluster" "yes | aba --dir $SNO shutdown --wait"
+e2e_run "Delete cluster" "aba --dir $SNO delete"
 
 test_end
 

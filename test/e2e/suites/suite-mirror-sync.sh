@@ -229,7 +229,7 @@ e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Apply day2 config" "aba --dir $SNO day2"
-e2e_run "Shutdown cluster" "yes | aba --dir $SNO shutdown --wait"
+e2e_run "Delete cluster" "aba --dir $SNO delete"
 
 test_end
 

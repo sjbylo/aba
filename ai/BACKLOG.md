@@ -6,6 +6,31 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ## Medium Priority
 
+### Deduplicate `aba isconf` output
+
+**Status:** Backlog
+**Context:** `aba isconf` generates both `sync/imageset-config-sync.yaml` and `save/imageset-config-save.yaml`. Each target independently calls `add-operators-to-imageset.sh`, producing duplicate operator listings in the output. The user sees the same operator list printed twice, which looks like a bug.
+**Fix options:**
+- Suppress verbose operator output on the second run (e.g. a `--quiet` flag to `add-operators-to-imageset.sh`)
+- Consolidate: generate one base config then copy/adapt for sync vs save
+- Simply note in the first run's output that both configs are being generated
+
+### Option to preserve registry data on `aba uninstall`
+
+**Status:** Backlog
+**Context:** `aba uninstall` removes the Docker registry container/service AND deletes the data directory (e.g. `/home/steve/docker-reg`). Users may want to uninstall and reinstall without re-syncing/loading gigabytes of images.
+**Proposed UX:**
+```
+[ABA] Uninstall Docker registry on localhost at bastion.example.com:8443? (Y/n): Y
+[ABA] Also delete registry data at /home/steve/docker-reg? (y/N):
+```
+Default "No" for data deletion to be safe. This applies to Docker registries; Quay may have its own handling.
+
+### Wrong path in mirror credential error message
+
+**Status:** Backlog
+**Context:** When running `aba verify` (or `aba -d xxx verify`) from a mirror directory that has no registry credentials, the error message shows the internal `~/.aba/mirror/xxx/` path. The user sees `/home/steve/.aba/mirror/xxx/pull-secret-mirror.json` but the directory they'd naturally look at is `xxx/regcreds/` (symlink). The error should reference the user-facing `regcreds/` path instead of the internal `~/.aba/mirror/` storage path, or mention both.
+
 ### Suppress curl error output during registry probing
 
 **Status:** Backlog
@@ -74,6 +99,17 @@ Then replace all `$ABA_ROOT/mirror/mirror.conf` with `$MIRROR_CONF_DIR/mirror.co
 ---
 
 ## Low Priority
+
+### E2E: default to git-based aba install, not local repo copy
+
+**Status:** Backlog
+**Priority:** Low
+**Context:** `run.sh deploy` currently tars the entire local aba repo and scps it to conN. This is only needed by developers testing uncommitted changes. By default, the suites should install aba from git (the real user path), and `run.sh deploy` should only copy the test framework (`test/e2e/`).
+**Proposed design:**
+- Default: `run.sh deploy` copies only the test framework to conN. The suite setup step does `git clone`/`git pull` + `./install` to get aba -- testing the real user install path.
+- `--local` flag: copies the full local repo (current behaviour) for developers testing uncommitted changes. Suite setup skips git clone since aba is already present.
+- Benefits: tests the actual user journey, catches missing files in git, CI-ready.
+- The suite setup step needs a conditional: if aba repo already exists (local deploy), use it; otherwise, git clone from the configured branch.
 
 ### 4. Improve vmw-create.sh Output Formatting
 

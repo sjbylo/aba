@@ -51,7 +51,7 @@ plan_tests \
     "ACM: install operators" \
     "ACM: MultiClusterHub" \
     "NTP: day2 and chronyc verify" \
-    "Shutdown cluster"
+    "Delete cluster"
 
 suite_begin "airgapped-existing-reg"
 
@@ -395,12 +395,12 @@ e2e_run_remote -r 3 2 "Verify chronyc sources" \
 test_end
 
 # ============================================================================
-# 15. Shutdown
+# 15. Delete cluster
 # ============================================================================
-test_begin "Shutdown cluster"
+test_begin "Delete cluster"
 
-e2e_run_remote "Shutdown SNO cluster" \
-    "cd ~/aba && yes | aba --dir $SNO shutdown --wait"
+e2e_run_remote "Delete SNO cluster" \
+    "cd ~/aba && aba --dir $SNO delete"
 
 test_end
 

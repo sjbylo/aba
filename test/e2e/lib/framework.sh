@@ -52,7 +52,7 @@
 #
 # 11. A suite ALWAYS cleans up the resources it created (clusters AND mirrors).
 #     Before suite_end, explicitly:
-#       - SNO clusters: shutdown only (small, useful for post-suite debugging)
+#       - SNO clusters: DELETE (free resources for other suites)
 #       - Compact / Standard clusters: DELETE (large, hold VIPs)
 #       - Mirrors on disN: uninstall
 #     Do not rely on external cleanup or snapshot revert.
