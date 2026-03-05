@@ -267,7 +267,7 @@ e2e_run_remote "Generate SNO cluster.conf" \
 e2e_run_remote "Increase SNO resources for ACM" \
     "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=24/' $SNO/cluster.conf && \
      sed -i 's/^master_mem=.*/master_mem=40/' $SNO/cluster.conf"
-e2e_run_remote -r 1 1 "Install SNO cluster" \
+e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
