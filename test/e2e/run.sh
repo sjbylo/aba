@@ -1224,6 +1224,13 @@ _check_pool() {
 	local sess_alive
 	sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
 	if [ "$sess_alive" != "yes" ]; then
+		# Grace period: a manual restart (kill + relaunch) creates a brief
+		# window with no tmux session.  Wait and re-check before declaring crash.
+		sleep 5
+		sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
+		if [ "$sess_alive" = "yes" ]; then
+			return
+		fi
 		echo "  WARNING: Suite '$suite' on con${pool_num} died without writing .rc (killed/crashed)" >&2
 		echo "255"
 	fi
@@ -1234,6 +1241,11 @@ _check_pool() {
 _find_free_pool() {
 	for (( p=1; p<=CLI_POOLS; p++ )); do
 		if [ -z "${_busy_pools[$p]:-}" ]; then
+			# Also check for tmux sessions the dispatcher doesn't track
+			# (e.g. manual launches via ssh + tmux new-session)
+			local _has_sess
+			_has_sess=$(_ssh_con "$p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
+			[ "$_has_sess" = "yes" ] && continue
 			echo "$p"
 			return 0
 		fi
