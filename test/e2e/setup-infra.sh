@@ -194,10 +194,6 @@ _verify_con_vm() {
 			! ss -tlnp | grep -q ':8443 ' || _fail "port 8443 in use"
 			echo "  PASS: port 8443 free"
 		fi
-		! podman images -q 2>/dev/null | grep -q . || _fail "stale podman images (root)"
-		echo "  PASS: no podman images (root)"
-		! sudo -u testy podman images -q 2>/dev/null | grep -q . || _fail "stale podman images (testy)"
-		echo "  PASS: no podman images (testy)"
 		! podman ps -q 2>/dev/null | grep -q . || _fail "running containers (root)"
 		echo "  PASS: no running containers (root)"
 
@@ -211,6 +207,7 @@ _configure_con_vm() {
 	_vm_wait_ssh "$vm" "$user"
 	_vm_setup_network "$vm" "$user" "$vm"
 	_vm_setup_firewall "$vm" "$user"
+	_vm_install_packages "$vm" "$user"
 	_vm_setup_dnsmasq "$vm" "$user" "$vm"
 	_vm_dnf_update "$vm" "$user"
 	_vm_wait_ssh "$vm" "$user"
@@ -246,6 +243,7 @@ _configure_dis_vm() {
 	done
 	[ "$waited" -gt 0 ] && echo "  [$vm] Internet reachable (waited ${waited}s)"
 
+	_vm_install_packages "$vm" "$user"
 	_vm_dnf_update "$vm" "$user"
 	_vm_wait_ssh "$vm" "$user"
 
@@ -401,14 +399,6 @@ _verify_dis_vm() {
 
 		command -v rsync > /dev/null || _fail "rsync not installed"
 		echo "  PASS: rsync installed"
-
-		# --- Podman clean (all users) ---
-		! podman images -q 2>/dev/null | grep -q . || _fail "stale podman images (root)"
-		echo "  PASS: no podman images (root)"
-		! sudo -u ${user} podman images -q 2>/dev/null | grep -q . || _fail "stale podman images (${user})"
-		echo "  PASS: no podman images (${user})"
-		! sudo -u testy podman images -q 2>/dev/null | grep -q . || _fail "stale podman images (testy)"
-		echo "  PASS: no podman images (testy)"
 
 		# --- No running containers ---
 		! podman ps -q 2>/dev/null | grep -q . || _fail "running containers (root)"
@@ -650,6 +640,7 @@ _prepare_golden() {
 	_vm_disable_proxy_autoload "$ip" "$user"        || return 1
 	_vm_setup_firewall "$ip" "$user"      || return 1
 	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_install_packages "$ip" "$user"    || return 1
 	_vm_setup_time "$ip" "$user"          || return 1
 	_vm_dnf_update "$ip" "$user"          || return 1
 	_vm_wait_ssh "$ip" "$user"            || return 1

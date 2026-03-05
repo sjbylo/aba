@@ -120,6 +120,17 @@ _vm_setup_ssh_keys() {
 	SSHEOF
 }
 
+# --- _vm_install_packages ---------------------------------------------------
+
+_vm_install_packages() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+
+	echo "  [vm] Installing required packages on $host ..."
+
+	_essh "${user}@${host}" -- sudo dnf install -y chrony dnsmasq bind-utils podman rsync < /dev/null
+}
+
 # --- _vm_setup_time ---------------------------------------------------------
 
 _vm_setup_time() {
@@ -132,8 +143,6 @@ _vm_setup_time() {
 
 	cat <<-TIMEEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		dnf install chrony -y
-
 		cat > /etc/chrony.conf <<-CHRONYEOF
 		server $ntp_server iburst
 		driftfile /var/lib/chrony/drift
@@ -414,8 +423,6 @@ DNSEOF
 
 	cat <<-SETUPEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		dnf install -y dnsmasq bind-utils
-
 		# Remove any listen-address restriction from the default config
 		# so dnsmasq listens on ALL interfaces (lab, VLAN, loopback).
 		# RHEL 9 default or prior installs may have listen-address=127.0.0.1.
@@ -495,8 +502,6 @@ _vm_cleanup_podman() {
 
 	cat <<-'PODEOF' | _essh "${user}@${host}" -- bash
 		set -ex
-		command -v podman || sudo dnf install podman -y &> /tmp/dnf-podman.log
-		echo "dnf-podman exit=$?"
 		podman system prune --all --force
 		podman rmi --all --force 2>/dev/null || true
 		sudo rm -rf ~/.local/share/containers/storage

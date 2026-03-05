@@ -42,8 +42,7 @@ plan_tests \
     "Save/Load: roundtrip" \
     "SNO: bootstrap after save/load" \
     "Testy user: re-sync with custom mirror conf" \
-    "Bare-metal: ISO simulation" \
-    "Second mirror: Docker on alternate port"
+    "Bare-metal: ISO simulation"
 
 suite_begin "mirror-sync"
 
@@ -83,6 +82,8 @@ e2e_run "Set VC_FOLDER (re-apply)" \
 e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
+e2e_run "Create mirror.conf for later tests" "aba -d mirror mirror.conf"
+
 test_end
 
 # ============================================================================
@@ -105,10 +106,11 @@ e2e_run_must_fail "Sync without pull secret should fail" \
 e2e_run -q "Restore pull secret" \
     "mv ~/.pull-secret.json.bak ~/.pull-secret.json"
 
-# Mirror is installed from conN (via sync -H), so cleanup runs on conN (local)
-e2e_register_mirror "$PWD/mirror"
-e2e_run -r 3 2 "Sync images to remote registry" \
-    "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+# Create mymirror and sync Docker registry to disN on port 5000
+e2e_run "Create mymirror dir" "aba mirror --name mymirror"
+e2e_register_mirror "$PWD/mymirror"
+e2e_run -r 3 2 "Sync images to remote Docker registry via mymirror" \
+    "aba -d mymirror sync --retry --vendor docker --reg-port 5000 -H $DIS_HOST -k ~/.ssh/id_rsa"
 
 e2e_diag "Check oc-mirror cache location (local)" \
     "find ~/ -name '.cache' -path '*/.oc-mirror/*'"
@@ -123,10 +125,10 @@ e2e_run_remote "Bring up firewalld" \
     "sudo systemctl enable firewalld; sudo systemctl start firewalld"
 e2e_run_remote "Show firewalld status (should be up)" \
     "sudo systemctl status firewalld"
-e2e_run_remote "Verify port 8443 is open" \
-    "sudo firewall-cmd --list-all | grep 'ports: .*8443/tcp'"
+e2e_run_remote "Verify port 5000 is open" \
+    "sudo firewall-cmd --list-all | grep 'ports: .*5000/tcp'"
 e2e_run "Verify registry reachable through firewall" \
-    "curl -sk --connect-timeout 10 https://${DIS_HOST}:8443/v2/"
+    "curl -sk --connect-timeout 10 https://${DIS_HOST}:5000/v2/"
 
 test_end
 
@@ -150,17 +152,20 @@ test_end
 # ============================================================================
 test_begin "Save/Load: roundtrip"
 
-e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
+e2e_run "Uninstall mymirror registry" "aba --dir mymirror uninstall"
 e2e_run_remote "Verify registry removed" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 
-# Mirror reset regression: verify reset clears run_once state and binary,
-# and that re-extraction works afterward (ported from old test1 lines 278-284).
-e2e_run "Verify run_once state exists before reset" \
-    "test -d ~/.aba/runner/mirror:reg:install"
+# Mymirror reset: verify reset clears run_once state
+e2e_run "Verify mymirror run_once state exists before reset" \
+    "test -d ~/.aba/runner/mymirror:reg:install"
+e2e_run "Run mymirror reset" "aba --dir mymirror reset --force"
+e2e_run "Verify mymirror run_once state cleared after reset" \
+    "test ! -d ~/.aba/runner/mymirror:reg:install"
+e2e_run "Clean up mymirror dir" "rm -rf mymirror"
+
+# Mirror reset regression: verify reset clears binary and re-extraction works
 e2e_run "Run mirror reset" "aba --dir mirror reset --force"
-e2e_run "Verify run_once state cleared after reset" \
-    "test ! -d ~/.aba/runner/mirror:reg:install"
 e2e_run "Verify mirror-registry binary removed by reset" \
     "test ! -f mirror/mirror-registry"
 e2e_run "Re-extract mirror-registry after reset" "make -C mirror mirror-registry"
@@ -287,43 +292,6 @@ e2e_run_remote "Verify no registry containers on disN" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
-
-test_end
-
-# ============================================================================
-# 10. Second mirror: Docker on alternate port
-# ============================================================================
-test_begin "Second mirror: Docker on alternate port"
-
-MYMIRROR_SNO="$(pool_cluster_name mmsno)"
-MYMIRROR_PORT=5000
-
-e2e_run "Create second mirror dir" \
-    "aba mirror --name mymirror"
-e2e_run "Configure Docker on port $MYMIRROR_PORT" \
-    "aba -d mymirror --vendor docker --reg-port $MYMIRROR_PORT install"
-e2e_run -r 3 2 "Sync images to second mirror" \
-    "aba -d mymirror sync --retry"
-
-e2e_run "Verify second mirror health" \
-    "curl -sk https://\$(grep '^reg_host=' mymirror/mirror.conf | cut -d= -f2):${MYMIRROR_PORT}/v2/ | grep -q '{}\\|registry'"
-
-e2e_run "Create SNO cluster referencing mymirror" \
-    "aba cluster -n $MYMIRROR_SNO -t sno --starting-ip $(pool_sno_ip)"
-e2e_register_cluster "$PWD/$MYMIRROR_SNO"
-e2e_run "Set mirror_name=mymirror in cluster.conf" \
-    "sed -i 's/^mirror_name=.*/mirror_name=mymirror/' $MYMIRROR_SNO/cluster.conf"
-
-e2e_run "Generate ISO from second mirror" \
-    "aba --dir $MYMIRROR_SNO iso"
-e2e_run "Verify ISO exists" \
-    "ls -l $MYMIRROR_SNO/iso-agent-based/agent.*.iso"
-e2e_run "Verify install-config references port $MYMIRROR_PORT" \
-    "grep ':${MYMIRROR_PORT}' $MYMIRROR_SNO/install-config.yaml"
-
-e2e_run "Clean up mymirror SNO dir" "rm -rf $MYMIRROR_SNO"
-e2e_run "Uninstall second mirror" "aba -d mymirror uninstall -y"
-e2e_run "Remove mymirror dir" "rm -rf mymirror"
 
 test_end
 

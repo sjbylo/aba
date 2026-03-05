@@ -196,41 +196,20 @@ _e2e_summary() {
 #   - Include pool number and hostname (never "localhost")
 #   - Failure notifications include last ~20 lines of suite log for context
 
-_e2e_notify_prefix() {
-    local pool="${POOL_NUM:-?}"
-    local host="$(hostname -s)"
-    echo "[e2e] pool${pool}/${host}"
+_e2e_notify_suffix() {
+    echo "(pool${POOL_NUM:-?}/$(hostname -s))"
 }
 
 _e2e_notify() {
-    # #region agent log
-    local _dbg_rc=0
-    printf '{"sessionId":"23cf03","hypothesisId":"H3-H4","location":"framework.sh:_e2e_notify","message":"_e2e_notify called","data":{"NOTIFY_CMD":"%s","args":"%s","suite":"%s"},"timestamp":%s}\n' \
-        "${NOTIFY_CMD:-EMPTY}" "$*" "${_E2E_SUITE_NAME:-?}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
-    # #endregion
     if [ -n "$NOTIFY_CMD" ]; then
-        # #region agent log
-        _dbg_rc=0
-        $NOTIFY_CMD "$(_e2e_notify_prefix) $*" < /dev/null >/dev/null 2>/tmp/e2e-debug-notify-stderr.log; _dbg_rc=$?
-        printf '{"sessionId":"23cf03","hypothesisId":"H4","location":"framework.sh:_e2e_notify:post","message":"notify cmd result","data":{"rc":%d,"stderr":"%s"},"timestamp":%s}\n' \
-            "$_dbg_rc" "$(head -1 /tmp/e2e-debug-notify-stderr.log 2>/dev/null | tr '"' "'")" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
-        # #endregion
+        $NOTIFY_CMD "[e2e] $* $(_e2e_notify_suffix)" < /dev/null >/dev/null 2>&1
     fi
 }
 
 _e2e_notify_stdin() {
     local subject="$1"
-    # #region agent log
-    printf '{"sessionId":"23cf03","hypothesisId":"H3-H4","location":"framework.sh:_e2e_notify_stdin","message":"_e2e_notify_stdin called","data":{"NOTIFY_CMD":"%s","subject":"%s","suite":"%s"},"timestamp":%s}\n' \
-        "${NOTIFY_CMD:-EMPTY}" "$subject" "${_E2E_SUITE_NAME:-?}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
-    # #endregion
     if [ -n "$NOTIFY_CMD" ]; then
-        # #region agent log
-        local _dbg_rc2=0
-        $NOTIFY_CMD "$(_e2e_notify_prefix) $subject" >/dev/null 2>/tmp/e2e-debug-notify-stdin-stderr.log; _dbg_rc2=$?
-        printf '{"sessionId":"23cf03","hypothesisId":"H4","location":"framework.sh:_e2e_notify_stdin:post","message":"notify_stdin cmd result","data":{"rc":%d,"stderr":"%s"},"timestamp":%s}\n' \
-            "$_dbg_rc2" "$(head -1 /tmp/e2e-debug-notify-stdin-stderr.log 2>/dev/null | tr '"' "'")" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
-        # #endregion
+        $NOTIFY_CMD "[e2e] $subject $(_e2e_notify_suffix)" >/dev/null 2>&1
     else
         cat > /dev/null  # drain stdin
     fi
@@ -920,8 +899,6 @@ e2e_run() {
                     echo "Host: ${host:-$(hostname -s)}"
                     echo "--- Last 20 lines of suite log ---"
                     tail -20 "$E2E_LOG_FILE" 2>/dev/null
-                    echo "--- Last 20 lines of command output ---"
-                    tail -20 "$_cmd_output_file" 2>/dev/null
                 ) | _e2e_notify_stdin "FIRST FAIL: $description"
             fi
 
@@ -939,8 +916,6 @@ e2e_run() {
                         echo "Host: ${host:-$(hostname -s)}"
                         echo "--- Last 20 lines of suite log ---"
                         tail -20 "$E2E_LOG_FILE" 2>/dev/null
-                        echo "--- Last 20 lines of command output ---"
-                        tail -20 "$_cmd_output_file" 2>/dev/null
                     ) | _e2e_notify_stdin "EXHAUSTED: $description"
                 fi
                 break
