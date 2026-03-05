@@ -42,7 +42,8 @@ plan_tests \
     "Save/Load: roundtrip" \
     "SNO: bootstrap after save/load" \
     "Testy user: re-sync with custom mirror conf" \
-    "Bare-metal: ISO simulation"
+    "Bare-metal: ISO simulation" \
+    "Second mirror: Docker on alternate port"
 
 suite_begin "mirror-sync"
 
@@ -286,6 +287,43 @@ e2e_run_remote "Verify no registry containers on disN" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
+
+test_end
+
+# ============================================================================
+# 10. Second mirror: Docker on alternate port
+# ============================================================================
+test_begin "Second mirror: Docker on alternate port"
+
+MYMIRROR_SNO="$(pool_cluster_name mmsno)"
+MYMIRROR_PORT=5000
+
+e2e_run "Create second mirror dir" \
+    "aba mirror --name mymirror"
+e2e_run "Configure Docker on port $MYMIRROR_PORT" \
+    "aba -d mymirror --vendor docker --reg-port $MYMIRROR_PORT install"
+e2e_run -r 3 2 "Sync images to second mirror" \
+    "aba -d mymirror sync --retry"
+
+e2e_run "Verify second mirror health" \
+    "curl -sk https://\$(grep '^reg_host=' mymirror/mirror.conf | cut -d= -f2):${MYMIRROR_PORT}/v2/ | grep -q '{}\\|registry'"
+
+e2e_run "Create SNO cluster referencing mymirror" \
+    "aba cluster -n $MYMIRROR_SNO -t sno --starting-ip $(pool_sno_ip)"
+e2e_register_cluster "$PWD/$MYMIRROR_SNO"
+e2e_run "Set mirror_name=mymirror in cluster.conf" \
+    "sed -i 's/^mirror_name=.*/mirror_name=mymirror/' $MYMIRROR_SNO/cluster.conf"
+
+e2e_run "Generate ISO from second mirror" \
+    "aba --dir $MYMIRROR_SNO iso"
+e2e_run "Verify ISO exists" \
+    "ls -l $MYMIRROR_SNO/iso-agent-based/agent.*.iso"
+e2e_run "Verify install-config references port $MYMIRROR_PORT" \
+    "grep ':${MYMIRROR_PORT}' $MYMIRROR_SNO/install-config.yaml"
+
+e2e_run "Clean up mymirror SNO dir" "rm -rf $MYMIRROR_SNO"
+e2e_run "Uninstall second mirror" "aba -d mymirror uninstall -y"
+e2e_run "Remove mymirror dir" "rm -rf mymirror"
 
 test_end
 
