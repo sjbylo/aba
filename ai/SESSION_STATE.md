@@ -1,20 +1,19 @@
 # Session State
 
 ## Current goal
-Run all E2E test suites, fix failures, achieve full pass across all pools.
+Shared catalog index location via symlink -- changes applied, awaiting commit.
 
 ## Done this session
-- Fixed mirror-sync "Second mirror" DNS: added `registry.pN.example.com` -> conN IP to dnsmasq
-- Reverted unnecessary setup-pool-registry.sh changes (container-name check + enhanced done-marker)
-- Identified catalog file sharing issue: mymirror can't find .index/ files (hardcoded to mirror/.index)
-- User proposes moving catalogs to shared location (e.g. ~/aba/catalog/)
+- Committed & pushed E2E fixes: ACM/mesh/upgrade suites, registry DNS, second mirror test, config validation suite
+- Applied shared catalog index changes (3 files): download-catalog-index.sh, Makefile.mirror, backup.sh
 
 ## Next steps
-- Decide: core ABA change (shared catalog location) vs test-only workaround (symlink)
-- Fix `2>/dev/null` in suite code (suite-config-validation.sh line 51)
-- Retry mirror-sync to validate DNS fix
+1. Commit & push the shared catalog index changes
+2. Re-test suite-mirror-sync (mymirror) to validate the fix
+3. Continue E2E test monitoring loop
 
 ## Decisions / notes
-- No suite installs a mirror registry on conN -- only on disN (verified)
-- Catalog files are OCP-version-specific, not mirror-specific -- should be shared
-- Core files need explicit permission to modify
+- Symlink approach: Makefile.mirror init creates `.index -> ../.index` in every mirror dir
+- No need to add `.index/` to git repo -- `mkdir -p .index` in download script creates it
+- Helper YAMLs stay in `mirror/` -- only index/done files move to `aba/.index/`
+- `backup.sh` must explicitly include `.index` since `find` won't follow symlinks during traversal

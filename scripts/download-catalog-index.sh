@@ -28,9 +28,9 @@ scripts/create-containers-auth.sh >/dev/null
 
 # Setup paths - must be run from aba root directory
 # (download_all_catalogs in include_all.sh ensures CWD is correct)
-mkdir -p mirror/.index
-index_file="mirror/.index/${catalog_name}-index-v${ocp_ver_major}"
-done_file="mirror/.index/.${catalog_name}-index-v${ocp_ver_major}.done"
+mkdir -p .index
+index_file=".index/${catalog_name}-index-v${ocp_ver_major}"
+done_file=".index/.${catalog_name}-index-v${ocp_ver_major}.done"
 
 aba_debug "Index file: $index_file"
 aba_debug "Done file: $done_file"

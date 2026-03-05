@@ -6,6 +6,16 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ## Medium Priority
 
+### Suppress curl error output during registry probing
+
+**Status:** Backlog
+**Context:** Running `aba sync` (or any command that probes the mirror registry) shows raw curl errors to the user:
+- `curl: (7) Failed to connect to bastion.example.com port 8443: Connection refused`
+- `curl: (22) The requested URL returned error: 404`
+- `curl: (22) The requested URL returned error: 401`
+
+These are expected probe results (checking if registry is up), not real errors. The curl stderr should be suppressed (`2>/dev/null`) and ABA should report the result in its own messaging.
+
 ### 3. Evaluate Selective `set -euo pipefail` Adoption
 
 **Status:** Backlog  
