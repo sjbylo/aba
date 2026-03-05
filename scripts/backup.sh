@@ -64,6 +64,7 @@ file_list=$(find		\
 	"${repo_dir}/README.md"		\
 	"${repo_dir}/Troubleshooting.md"	\
 	"${repo_dir}/mirror"		\
+	"${repo_dir}/.index"		\
 								\
 	! -path "${repo_dir}/.git*"  					\
 	! -path "${repo_dir}/cli/.init"  				\
