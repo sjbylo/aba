@@ -101,7 +101,12 @@ e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_F
 e2e_run "Verify vmware.conf" "grep aba-e2e vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+# Include all operators that the pool registry synced: kiali-ossm (redhat via abatest),
+# plus cincinnati-operator (redhat), nginx-ingress-operator (certified), flux (community).
+# ABA regenerates the catalog index during ISO/agentconf based on configured operators,
+# so these must be in aba.conf to avoid overwriting the pool registry's catalog index.
 e2e_run "Set operator sets" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
+e2e_run "Add pool-registry test operators" "aba --ops cincinnati-operator nginx-ingress-operator flux"
 
 e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 
@@ -112,6 +117,7 @@ e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
+e2e_run "Add pool-registry test operators (re-apply)" "aba --ops cincinnati-operator nginx-ingress-operator flux"
 
 test_end
 

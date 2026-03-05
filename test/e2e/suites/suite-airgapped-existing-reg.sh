@@ -261,7 +261,13 @@ test_end
 test_begin "SNO: install cluster"
 
 e2e_register_cluster "$PWD/$SNO" remote
-e2e_run_remote -r 1 1 "Create SNO cluster" \
+# ACM/MCH requires significantly more resources than default SNO (old test uses 24 CPU / 40GB)
+e2e_run_remote "Generate SNO cluster.conf" \
+    "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+e2e_run_remote "Increase SNO resources for ACM" \
+    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=24/' $SNO/cluster.conf && \
+     sed -i 's/^master_mem=.*/master_mem=40/' $SNO/cluster.conf"
+e2e_run_remote -r 1 1 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
@@ -315,11 +321,29 @@ test_end
 # ============================================================================
 test_begin "ACM: install operators"
 
-# Add ACM operator to imageset and sync
+# Add ACM operator to imageset and sync.
+# For incremental operator saves, create a minimal imageset config with ONLY the
+# operators section (no platform).  oc-mirror v2 errors with "no release images
+# found" when the config includes a platform section but the delta tar doesn't
+# contain release images.  This matches the UBI/vote-app incremental pattern.
 e2e_run "Set op_sets=acm" "aba --op-sets acm"
+
+OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
+e2e_run "Create operators-only imageset config for ACM" \
+    "cat > mirror/save/imageset-config-save.yaml <<EOF
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v${OCP_VER_MAJOR}
+    packages:
+\$(grep -A2 'name: advanced-cluster-management\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
+\$(grep -A2 'name: multicluster-engine\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
+EOF"
+
 e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
-e2e_run -r 3 2 "Pipe ACM tar to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
+e2e_run "Transfer ACM archive+config to internal bastion" \
+    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
 e2e_run_remote -r 3 2 "Load ACM images" \
     "cd ~/aba && aba -d mirror load --retry"
 
@@ -333,16 +357,27 @@ test_end
 # ============================================================================
 test_begin "ACM: MultiClusterHub"
 
+# Wait for CatalogSource to be indexed and ACM to appear in packagemanifests
+e2e_run_remote -r 15 2 "Wait for ACM packagemanifest" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
+
 e2e_run "Copy ACM YAML files to internal bastion" \
     "ssh ${INTERNAL_BASTION} 'mkdir -p ~/aba/test' && scp ~/aba/test/acm-subs.yaml ~/aba/test/acm-mch.yaml ${INTERNAL_BASTION}:aba/test/"
 
-e2e_run_remote "Install ACM subscription" \
+# Set the correct channel from the mirrored catalog index
+OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
+ACM_CHANNEL=$(grep ^advanced-cluster-management mirror/.index/redhat-operator-index-v${OCP_VER_MAJOR} | awk '{print $NF}' | tail -1)
+[ -n "$ACM_CHANNEL" ] && \
+e2e_run_remote "Set ACM channel to $ACM_CHANNEL" \
+    "sed -i 's/^#.*channel:.*/  channel: ${ACM_CHANNEL}/' ~/aba/test/acm-subs.yaml"
+
+e2e_run_remote -r 5 1.5 "Install ACM subscription" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f ~/aba/test/acm-subs.yaml'"
-e2e_run_remote -r 10 1.5 "Wait for ACM operator" \
+e2e_run_remote -r 20 1.5 "Wait for ACM operator CSV" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get csv -n open-cluster-management -o name | grep advanced-cluster-management'"
-e2e_run_remote "Install MultiClusterHub" \
+e2e_run_remote -r 5 1.5 "Install MultiClusterHub" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f ~/aba/test/acm-mch.yaml'"
-e2e_run_remote -r 20 1.5 "Wait for MCH ready" \
+e2e_run_remote -r 30 1.5 "Wait for MCH ready" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get multiclusterhub -n open-cluster-management -o jsonpath={.items[0].status.phase} | grep Running'"
 
 test_end

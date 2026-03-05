@@ -546,6 +546,9 @@ address=/.apps.$(pool_cluster_name compact-vlan ${pool_num}).${domain}/${vlan_ap
 # --- VLAN Standard: api -> VLAN API VIP, apps -> VLAN APPS VIP ---
 address=/api.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_api_vip}
 address=/.apps.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_apps_vip}
+
+# --- Registry: registry.pN.example.com -> conN IP ---
+address=/registry.${domain}/${POOL_SUBNET:-10.0.2}.$((pool_num * 10))
 DNSEOF
 
     cat <<-SETUPEOF | _essh "${user}@${host}" -- sudo bash
@@ -604,6 +607,8 @@ RESOLVEOF
 		echo '--- Testing cluster DNS ---'
 		dig +short api.${sno_name}.${domain} @127.0.0.1
 		dig +short test.apps.${sno_name}.${domain} @127.0.0.1
+		echo '--- Testing registry DNS ---'
+		dig +short registry.${domain} @127.0.0.1
 		echo '--- Testing upstream forwarding ---'
 		dig +short google.com @127.0.0.1 | head -1
 	DNSEOF

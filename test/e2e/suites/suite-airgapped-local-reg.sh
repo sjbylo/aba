@@ -207,7 +207,13 @@ test_end
 test_begin "SNO: install cluster"
 
 e2e_register_cluster "$PWD/$SNO" remote
-e2e_run_remote -r 1 1 "Create and install SNO" \
+# Mesh operators + upgrade need more resources than default (old test uses 24 CPU / 24GB)
+e2e_run_remote "Generate SNO cluster.conf" \
+    "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+e2e_run_remote "Increase SNO resources for mesh/upgrade" \
+    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=24/' $SNO/cluster.conf && \
+     sed -i 's/^master_mem=.*/master_mem=24/' $SNO/cluster.conf"
+e2e_run_remote -r 1 1 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
@@ -354,6 +360,23 @@ test_end
 test_begin "Incremental: mesh operators"
 
 e2e_run "Add mesh operator set" "aba --op-sets mesh3"
+
+# For incremental operator saves, create a minimal imageset config with ONLY the
+# operators section (no platform).  oc-mirror v2 errors with "no release images
+# found" when the config includes a platform section but the delta tar doesn't
+# contain release images.
+OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
+e2e_run "Create operators-only imageset config for mesh" \
+    "cat > mirror/save/imageset-config-save.yaml <<EOF
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v${OCP_VER_MAJOR}
+    packages:
+\$(grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
+EOF"
+
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
 e2e_run "Transfer mesh archive+config to internal bastion" \
     "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
@@ -370,19 +393,28 @@ test_end
 # ============================================================================
 test_begin "Upgrade: OSUS and cluster upgrade"
 
-# Save the target (newer) version images
+# Save the target (newer) version images.
+# Must match the old test approach: minVersion=older, maxVersion=desired,
+# channel=fast (for upgrade graph), shortestPath enabled.
 e2e_run "Set version to desired (upgrade target)" \
     "aba -v \$(cat /tmp/e2e-ocp-version-desired)"
 
-# Regenerate imageset config (incremental tests overwrote it with minimal config).
-# Then append cincinnati-operator for OSUS upgrade support.
+# Regenerate imageset config (incremental tests overwrote it with minimal config)
 e2e_run "Regenerate full imageset config for upgrade" \
     "rm -f mirror/save/imageset-config-save.yaml && aba -d mirror imagesetconf"
+
+# Modify config for upgrade: fast channel, minVersion=older, enable shortestPath
+e2e_run "Configure imageset for upgrade path" \
+    "_older=\$(cat /tmp/e2e-ocp-version-older) && \
+     _desired=\$(cat /tmp/e2e-ocp-version-desired) && \
+     _major=\$(echo \$_desired | cut -d. -f1-2) && \
+     sed -i \"s/^    - name: stable-\${_major}/    - name: fast-\${_major}/\" mirror/save/imageset-config-save.yaml && \
+     sed -i \"s/^      minVersion: \${_desired}/      minVersion: \${_older}/\" mirror/save/imageset-config-save.yaml && \
+     sed -i 's/^#      shortestPath: true.*/      shortestPath: true/' mirror/save/imageset-config-save.yaml"
+
+# Append cincinnati-operator to the existing operators packages list (not a new section)
 e2e_run "Append cincinnati-operator to imageset config" \
     "_ocp_major=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}' | cut -d. -f1-2) && \
-     echo '  operators:' >> mirror/save/imageset-config-save.yaml && \
-     echo \"  - catalog: registry.redhat.io/redhat/redhat-operator-index:v\${_ocp_major}\" >> mirror/save/imageset-config-save.yaml && \
-     echo '    packages:' >> mirror/save/imageset-config-save.yaml && \
      grep -A2 'name: cincinnati-operator\$' mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml >> mirror/save/imageset-config-save.yaml"
 
 e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
@@ -403,6 +435,11 @@ e2e_run_remote "Apply OSUS day2" \
 
 # Wait for all COs to be Available (what 'oc adm upgrade' checks)
 e2e_wait_operators_available $SNO remote
+
+# Set the cluster update channel to fast (matching the imageset config)
+_OCP_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
+e2e_run_remote "Set update channel to fast-${_OCP_MAJOR}" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade channel fast-${_OCP_MAJOR}'"
 
 e2e_run_remote -r 5 1 -d 60 "Trigger cluster upgrade" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade --to-latest=true --allow-not-recommended'"

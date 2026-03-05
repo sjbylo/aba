@@ -238,7 +238,7 @@ _create_tmux_dashboard() {
 	_dash_pane_cmd() {
 		local _p=$1
 		local _h="con${_p}.${_domain}"
-		echo "printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; echo '=== Pool ${_p} (con${_p}) [${_logfile}] ==='; while true; do ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/aba/test/e2e/logs/${_logfile}' 2>/dev/null && break; echo 'Waiting for con${_p} ...'; sleep 10; done"
+		echo "while true; do _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/aba/test/e2e/logs/${_logfile}' 2>/dev/null && break; echo 'Waiting for con${_p} ...'; sleep 10; done"
 	}
 
 	tmux kill-session -t "$_sess" 2>/dev/null || true
@@ -702,6 +702,10 @@ if [ -n "$CLI_STATUS" ]; then
 			if [[ "$_state" == "FINISHED" && "$_detail" != *"exit=0"* ]]; then
 				_table_data="${_table_data//RUNNING.../FAIL}"
 			fi
+			# For IDLE pools with stale data, replace RUNNING... with INT (interrupted)
+			if [[ "$_state" == "IDLE" ]]; then
+				_table_data="${_table_data//RUNNING.../INT}"
+			fi
 			while IFS= read -r _tline; do
 				[[ "$_tline" == *---* ]] && continue
 				if [[ "$_tline" == *PASS* ]]; then
@@ -721,6 +725,8 @@ if [ -n "$CLI_STATUS" ]; then
 					fi
 				elif [[ "$_tline" == *SKIP* ]]; then
 					_tline="${_tline/SKIP/$'\033[33mSKIP\033[0m'}"
+				elif [[ "$_tline" == *INT* ]]; then
+					_tline="${_tline/INT/$'\033[90mINT\033[0m'}"
 				fi
 				printf "           %s\n" "$_tline"
 			done <<< "$_table_data"
@@ -813,7 +819,6 @@ if [ -n "${CLI_LIVE+set}" ]; then
 		local _script="${_live_script_dir}/pool${p}.sh"
 		{
 			echo '#!/bin/bash'
-			printf "printf '\\\\033]2;live | Pool %d (con%d)\\\\033\\\\\\\\'\n" "$p" "$p"
 			echo 'stty -ixon 2>/dev/null'
 			echo "_MY_ID='${_live_id}'"
 		echo 'while true; do'
@@ -822,6 +827,8 @@ if [ -n "${CLI_LIVE+set}" ]; then
 		echo "    echo 'Another live dashboard took over con${p}. Exiting.'"
 		echo '    exit 0'
 		echo '  fi'
+		echo "  _suite=\$(ssh $_so ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)"
+		printf "  printf '\\\\033]2;live | Pool %d (con%d)%%s\\\\033\\\\\\\\' \"\\\${_suite:+ | \\\$_suite}\"\n" "$p" "$p"
 		echo '  clear'
 		echo "  ssh -t $_so ${_user}@${_h} \"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && exec tmux attach -d -t '$E2E_TMUX_SESSION'\" 2>/dev/null || {"
 		echo "    echo 'No e2e session on con${p}. Waiting for suite to start...'"

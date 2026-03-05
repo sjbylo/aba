@@ -54,6 +54,7 @@ e2e_run "Configure aba.conf" \
 e2e_run "Set dns_servers" \
 	"sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 e2e_run "Backup good aba.conf" "cp aba.conf aba.conf.good"
+e2e_run "Ensure mirror dir initialised" "make -sC mirror init"
 
 test_end 0
 
@@ -62,36 +63,38 @@ test_end 0
 # ============================================================================
 test_begin "aba.conf validation"
 
+_ABA_VERIFY="cd mirror && bash -c 'source scripts/include_all.sh && source <(normalize-aba-conf) && verify-aba-conf'"
+
 e2e_run "Set bad ocp_version" "sed -i 's/^ocp_version=.*/ocp_version=NOTAVERSION/' aba.conf"
-e2e_run_must_fail "Bad ocp_version rejected" "make -sC mirror checkversion"
+e2e_run_must_fail "Bad ocp_version rejected" "$_ABA_VERIFY"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad ocp_channel" "sed -i 's/^ocp_channel=.*/ocp_channel=boguschannel/' aba.conf"
-e2e_run_must_fail "Bad ocp_channel rejected" "make -sC mirror checkversion"
+e2e_run_must_fail "Bad ocp_channel rejected" "$_ABA_VERIFY"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad domain" "sed -i 's/^domain=.*/domain=!!!invalid!!!/' aba.conf"
-e2e_run_must_fail "Bad domain rejected" "make -sC mirror checkversion"
+e2e_run_must_fail "Bad domain rejected" "$_ABA_VERIFY"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad dns_servers" "sed -i 's/^dns_servers=.*/dns_servers=not.an.ip.addr/' aba.conf"
-e2e_run_must_fail "Bad dns_servers rejected" "make -sC mirror checkversion"
+e2e_run_must_fail "Bad dns_servers rejected" "$_ABA_VERIFY"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad ntp_servers" "sed -i 's/^ntp_servers=.*/ntp_servers=@@@invalid/' aba.conf"
-e2e_run_must_fail "Bad ntp_servers rejected" "make -sC mirror checkversion"
+e2e_run_must_fail "Bad ntp_servers rejected" "$_ABA_VERIFY"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad machine_network CIDR" "sed -i 's/^machine_network=.*/machine_network=NOTACIDR/' aba.conf"
-e2e_run_must_fail "Bad machine_network rejected" "make -sC mirror checkversion"
+e2e_run_must_fail "Bad machine_network rejected" "$_ABA_VERIFY"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set bad platform" "sed -i 's/^platform=.*/platform=bogus/' aba.conf"
-e2e_run_must_fail "Bad platform rejected" "make -sC mirror checkversion"
+e2e_run_must_fail "Bad platform rejected" "$_ABA_VERIFY"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run "Set empty ocp_version" "sed -i 's/^ocp_version=.*/ocp_version=/' aba.conf"
-e2e_run_must_fail "Empty ocp_version rejected" "make -sC mirror checkversion"
+e2e_run_must_fail "Empty ocp_version rejected" "$_ABA_VERIFY"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 test_end 0
@@ -114,6 +117,7 @@ e2e_run "Reconfigure after clean" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 e2e_run "Set dns_servers" \
 	"sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
+e2e_run "Re-init mirror dir" "make -sC mirror init"
 
 test_end 0
 
@@ -123,10 +127,20 @@ test_end 0
 test_begin "Version mismatch"
 
 e2e_run "Ensure CLIs are installed" "aba -d cli install"
+e2e_run "Create dummy imageset-config for mismatch check" \
+	"mkdir -p mirror/save && touch mirror/save/.created && sleep 1 && cat > mirror/save/imageset-config-save.yaml <<'ENDYAML'
+mirror:
+  platform:
+    channels:
+    - name: stable-4.20
+      minVersion: 4.20.0
+      maxVersion: 4.20.14
+ENDYAML"
 e2e_run "Save current version" "grep '^ocp_version=' aba.conf > /tmp/e2e-saved-version"
 e2e_run "Set mismatched version" "sed -i 's/^ocp_version=.*/ocp_version=4.14.0/' aba.conf"
 e2e_run_must_fail "Version mismatch detected" "make -sC mirror checkversion"
 e2e_run "Restore version" "source /tmp/e2e-saved-version && sed -i \"s/^ocp_version=.*/ocp_version=\$ocp_version/\" aba.conf"
+e2e_run "Remove dummy imageset-config" "rm -f mirror/save/imageset-config-save.yaml"
 
 test_end 0
 
