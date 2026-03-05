@@ -112,6 +112,15 @@ case "$vendor" in
 
 		aba_info "Installing Docker registry on remote host $reg_host ..."
 
+		# Ensure Docker image tarball exists (download if on connected host).
+		# Unlike Quay's ensure_quay_registry()/run_once(), a simple make call
+		# suffices here: the Docker image pull is fast and the tarball is small,
+		# so there's no need for background extraction or deduplication.
+		if [ ! -f docker-reg-image.tgz ]; then
+			aba_info "Downloading Docker registry image ..."
+			make -s docker-reg-image.tgz
+		fi
+
 		# Ensure openssl and htpasswd on remote
 		$_ssh "rpm -q httpd-tools openssl || $SUDO dnf install httpd-tools openssl -y" >> .remote_host_check.out 2>&1
 
