@@ -184,6 +184,7 @@ e2e_run "Stage pool registry creds for transfer" \
 # Now do the real tar-pipe transfer
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
+e2e_run -q "Remove saved archives after transfer" "rm -f mirror/save/mirror_*.tar"
 
 e2e_run_remote "Remove dialog RPM to force dnf install path" \
     "sudo dnf remove -y dialog"
@@ -235,6 +236,7 @@ test_begin "Load images into existing registry"
 
 e2e_run_remote -r 3 2 "Load images into registry" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
 
 test_end
 
@@ -298,8 +300,10 @@ e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app archive+config to internal bastion" \
     "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
 
 e2e_run_remote "Verify vote-app image in mirror (skopeo)" \
     "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && skopeo inspect --tls-verify=false docker://\$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app:latest"
@@ -344,8 +348,10 @@ EOF"
 e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
 e2e_run "Transfer ACM archive+config to internal bastion" \
     "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load ACM images" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
 
 e2e_run_remote "Apply day2 config (ACM operator resources)" \
     "cd ~/aba && aba --dir $SNO day2"

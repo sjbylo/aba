@@ -198,6 +198,7 @@ e2e_run_remote "Verify Docker registry accessible" \
 
 e2e_run_remote -r 3 2 "Load images into Docker registry" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
 
 test_end
 
@@ -257,8 +258,10 @@ e2e_run "Save UBI image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer UBI archive+config to internal bastion" \
     "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load UBI images" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
 
 # Verify UBI image exists in mirror (fail fast instead of waiting for deploy timeout)
 e2e_run_remote "Verify UBI image in mirror (skopeo)" \
@@ -287,8 +290,10 @@ e2e_run "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app archive+config to internal bastion" \
     "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
 
 # Verify vote-app image exists in mirror (fail fast instead of waiting for deploy timeout)
 e2e_run_remote "Verify vote-app image in mirror (skopeo)" \
@@ -380,8 +385,10 @@ EOF"
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
 e2e_run "Transfer mesh archive+config to internal bastion" \
     "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load mesh images" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
 
 e2e_run_remote "Apply day2 config (mesh operator resources)" \
     "cd ~/aba && aba --dir $SNO day2"
@@ -420,8 +427,10 @@ e2e_run "Append cincinnati-operator to imageset config" \
 e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
 e2e_run "Transfer upgrade archive+config to internal bastion" \
     "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
 
 e2e_run_remote "Apply day2 config (upgrade mirror resources)" \
     "cd ~/aba && aba --dir $SNO day2"

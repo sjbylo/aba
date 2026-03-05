@@ -114,22 +114,6 @@ fi
 # Setup framework environment
 e2e_setup
 
-# Notify when suite starts (conN has notify.sh deployed by run.sh; bastion may not)
-# #region agent log
-printf '{"sessionId":"23cf03","hypothesisId":"H5","location":"runner.sh:start_notify","message":"suite start notify check","data":{"NOTIFY_CMD":"%s","SUITE":"%s","POOL_NUM":"%s"},"timestamp":%s}\n' \
-	"${NOTIFY_CMD:-EMPTY}" "$SUITE" "$POOL_NUM" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
-# #endregion
-if [ -n "${NOTIFY_CMD:-}" ]; then
-	_label="STARTED"
-	[ "$E2E_IS_RETRY" = "retry" ] && _label="RETRY"
-	# #region agent log
-	_dbg_start_rc=0
-	$NOTIFY_CMD "[e2e] ${_label}: $SUITE -> con${POOL_NUM}" < /dev/null 2>/tmp/e2e-debug-start-stderr.log; _dbg_start_rc=$?
-	printf '{"sessionId":"23cf03","hypothesisId":"H5","location":"runner.sh:start_notify:post","message":"start notify result","data":{"rc":%d,"label":"%s","stderr":"%s"},"timestamp":%s}\n' \
-		"$_dbg_start_rc" "$_label" "$(head -1 /tmp/e2e-debug-start-stderr.log 2>/dev/null | tr '"' "'")" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
-	# #endregion
-fi
-
 # Interactive mode always on
 export _E2E_INTERACTIVE=1
 
@@ -452,13 +436,12 @@ while true; do
 
 	if [ $_rc -eq 4 ]; then
 		echo ""
-		echo "  Suite $SUITE: RESTARTING by user request (resuming from last checkpoint) ..."
+		echo "  Suite $SUITE: RESTARTING by user request (from scratch) ..."
 		echo ""
-		# Enable resume: skip previously-passed tests on restart
-		if [ -f "$_STATE_FILE_PATH" ]; then
-			export E2E_RESUME_FILE="$_STATE_FILE_PATH"
-			echo "  Will skip $(grep -c '^0 ' "$_STATE_FILE_PATH" 2>/dev/null || echo 0) previously-passed test(s)."
-		fi
+		# Full restart: do NOT resume -- cleanup tears down everything,
+		# so previously-passed setup steps must run again.
+		unset E2E_RESUME_FILE 2>/dev/null || true
+		rm -f "$_STATE_FILE_PATH"
 		# Cleanup clusters BEFORE disN reset -- aba delete needs cluster dir
 		_pre_suite_cleanup
 		if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then

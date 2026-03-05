@@ -1203,7 +1203,6 @@ _dispatch_suite() {
 	_busy_pools[$pool_num]="$suite"
 	_result_pool[$suite]="$pool_num"
 	echo "    tmux session '$_TMUX_SESSION' started on con${pool_num}"
-	# Suite-start notification is sent from runner.sh on conN (where notify.sh is deployed)
 }
 
 # --- Check if a pool's suite has completed ------------------------------------
@@ -1258,6 +1257,20 @@ _record_result() {
 	else
 		printf "  COMPLETED: %-35s pool %-2s  \033[1;31mFAIL\033[0m (exit=%s)\n" "$suite" "$pool_num" "$rc"
 	fi
+}
+
+# --- Collect logs from conN and disN for a pool --------------------------------
+
+_collect_pool_logs() {
+	local pool_num="$1"
+	local user="${CON_SSH_USER:-steve}"
+	local con_host="con${pool_num}.${VM_BASE_DOMAIN}"
+	local dis_host="dis${pool_num}.${VM_BASE_DOMAIN}"
+	local log_dir="$_RUN_DIR/logs"
+
+	mkdir -p "$log_dir"
+	scp -r $_SSH_OPTS "${user}@${con_host}:~/aba/test/e2e/logs/*" "$log_dir/" 2>/dev/null || true
+	scp -r $_SSH_OPTS "${user}@${dis_host}:~/aba/test/e2e/logs/*" "$log_dir/" 2>/dev/null || true
 }
 
 # --- Detect running and completed suites on all conN (stateless reconnect) ----
@@ -1463,6 +1476,19 @@ else
 fi
 echo ""
 
+# Send a one-time "RUN STARTED" notification when the full queue is ready
+# and no suites have been dispatched yet (fresh start, not a reconnect).
+if [ ${#_work_queue[@]} -gt 0 ] && [ $_num_running -eq 0 ] && [ $_num_completed -eq 0 ]; then
+	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+		_queue_list=""
+		for _qs in "${_work_queue[@]}"; do
+			_queue_list="${_queue_list}
+  ${_qs}"
+		done
+		$NOTIFY_CMD "[e2e] RUN STARTED: ${#_work_queue[@]} suites queued${_queue_list}" < /dev/null >/dev/null 2>&1
+	fi
+fi
+
 # Open summary dashboard (if not quiet mode and multiple pools)
 DASH_SESSION=""
 if [ -z "$CLI_QUIET" ] && [ "$CLI_POOLS" -gt 1 ] && { [ ${#_work_queue[@]} -gt 0 ] || [ $_num_running -gt 0 ]; }; then
@@ -1539,6 +1565,7 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		rc=$(_check_pool "$p" "$local_suite")
 		if [ -n "$rc" ]; then
 			_record_result "$local_suite" "$rc"
+			_collect_pool_logs "$p"
 			unset '_busy_pools[$p]'
 		fi
 	done
@@ -1619,11 +1646,10 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 	fi
 done
 
-# --- Collect logs from each conN ----------------------------------------------
+# --- Collect logs from each conN and disN --------------------------------------
 
 echo ""
-echo "  Collecting logs ..."
-mkdir -p "$_RUN_DIR/logs"
+echo "  Collecting final logs ..."
 
 declare -A _pools_used=()
 for s in "${!_result_pool[@]}"; do
@@ -1631,15 +1657,7 @@ for s in "${!_result_pool[@]}"; do
 done
 
 for p in "${!_pools_used[@]}"; do
-	user="${CON_SSH_USER:-steve}"
-	host="con${p}.${VM_BASE_DOMAIN}"
-	local_dir="$_RUN_DIR/logs/pool-${p}"
-	mkdir -p "$local_dir"
-	if scp -r $_SSH_OPTS "${user}@${host}:~/aba/test/e2e/logs/*" "$local_dir/" 2>/dev/null; then
-		echo "    Pool $p logs -> $local_dir/"
-	else
-		echo "    Pool $p: WARNING: log collection failed"
-	fi
+	_collect_pool_logs "$p" && echo "    Pool $p: logs collected" || echo "    Pool $p: WARNING: log collection failed"
 done
 
 # --- Final summary ------------------------------------------------------------
