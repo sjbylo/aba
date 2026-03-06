@@ -94,7 +94,8 @@ ABA helps you with the following and more:
 1. Installs and integrates OpenShift Update Service (OSUS) to make upgrades a single-click.
 1. Helps configure OpenShift with your NTP servers.
 1. Enables graceful cluster shutdown and startup.
-1. Allows for the modification of generated configuration files (image-set & agent based), if more control is required. 
+1. Runs pre-flight validation before ISO generation — checks DNS/NTP reachability and detects IP conflicts using arping (Layer 2) with ping fallback.
+1. Allows for the modification of generated configuration files (image-set & agent based), if more control is required.
 
 All ABA commands are designed to be idempotent. If something goes wrong, fix it and run the command again — ABA will always try to do the right thing.
 
@@ -520,6 +521,26 @@ aba iso
 # boot the bare-metal node(s) with the generated ISO file.
 # This can be done using a USB stick or via the server's remote management interfaces (BMC etc).
 aba mon
+```
+
+### Pre-flight Validation
+
+Before generating the ISO, ABA automatically runs pre-flight checks to catch common issues early:
+
+| Check | What it does |
+| :---- | :----------- |
+| **DNS** | Verifies each DNS server in `dns_servers` is reachable (using `dig`) |
+| **NTP** | Verifies each NTP server in `ntp_servers` is reachable (using `chronyd -Q` or UDP port 123) |
+| **IP conflicts** | Checks that none of the planned node IPs or VIPs are already in use on the network |
+
+IP conflict detection uses `arping` (ARP, Layer 2) when available — this cannot be blocked by firewalls and is more reliable than ICMP ping. If `arping` is not installed or lacks permissions, ABA falls back to `ping` automatically.
+
+- **Warnings** (e.g. one DNS server down) are reported but do not block installation.
+- **Errors** (e.g. all DNS servers down, or IP conflicts) cause the pre-flight to abort before ISO generation.
+
+To see detailed output, run in debug mode:
+```
+aba -D iso
 ```
 
 If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme.
