@@ -65,22 +65,22 @@ init: .init
 	touch .init
 
 # Register an existing (externally-managed) mirror registry.
-# Copies the provided pull secret and CA cert into regcreds, trusts the CA, and marks as .installed.
+# Copies the provided pull secret and CA cert into regcreds, trusts the CA, and marks as .available.
 .PHONY: register
 register: .init mirror.conf
 	@[ "$(pull_secret_mirror)" ] || { echo "[ABA] Error: pull_secret_mirror= is required (path to pull secret JSON file)"; exit 1; }
 	@[ "$(ca_cert)" ] || { echo "[ABA] Error: ca_cert= is required (path to CA certificate file)"; exit 1; }
 	$(SCRIPTS)/reg-register.sh "$(pull_secret_mirror)" "$(ca_cert)"
-	@rm -f .uninstalled
-	@touch .installed
+	@rm -f .unavailable
+	@touch .available
 
 # Deregister an externally-managed mirror registry.
 # Only removes local credentials -- never touches the actual registry.
 .PHONY: unregister
 unregister: .init
 	$(SCRIPTS)/reg-unregister.sh
-	@rm -f .installed
-	@touch .uninstalled
+	@rm -f .available
+	@touch .unavailable
 
 # If aba.conf does not exist, must abort!
 ../aba.conf:
@@ -107,8 +107,8 @@ save/imageset-config-save.yaml: ../aba.conf catalogs-download catalogs-wait
 
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
-# Auth is verified only when building .installed (install); do not depend on verify here or we run
-# reg-verify.sh even when .installed is up-to-date (stale .installed => login fails before sync).
+# Auth is verified only when building .available (install); do not depend on verify here or we run
+# reg-verify.sh even when .available is up-to-date (stale .available => login fails before sync).
 .PHONY: sync
 sync: .init .rpmsint ~/.pull-secret.json                     install sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
@@ -191,45 +191,45 @@ $(DOCKER_REG_FILE):
 .PHONY: install-docker-registry
 install-docker-registry:
 	@REG_VENDOR_OVERRIDE=docker $(SCRIPTS)/reg-install.sh
-	@rm -f .uninstalled 
-	@touch .installed
+	@rm -f .unavailable 
+	@touch .available
 
 .PHONY: uninstall-docker-registry
 uninstall-docker-registry: 
 	@$(SCRIPTS)/reg-uninstall.sh
-	@touch .uninstalled
-	@rm -f .installed 
+	@touch .unavailable
+	@rm -f .available 
 
 # mirror.conf needs 'domain' from aba.conf when first created, but once it
 # exists create-mirror-conf.sh exits early so aba.conf is not required.
 mirror.conf: .init                                    ## Create the mirror.conf file.
 	$(SCRIPTS)/create-mirror-conf.sh -f $(force)
 
-install: .installed
-.installed: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into ~/.aba/mirror/ for existing registry.  See README.md.
+install: .available
+.available: .init .rpmsext mirror.conf  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into ~/.aba/mirror/ for existing registry.  See README.md.
 	$(SCRIPTS)/reg-install.sh
-	@rm -f .uninstalled 
-	@touch .installed
+	@rm -f .unavailable 
+	@touch .available
 
 .PHONY: installclean
 installclean:
-	@rm -f .installed
+	@rm -f .available
 
 .PHONY: password pw
 password: pw
 pw: 
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh
-	@touch .installed
+	@touch .available
 
 .PHONY: verify
 verify: .init ## Using the credential files in '~/.aba/mirror/' and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
 	@$(SCRIPTS)/reg-verify.sh
-	@rm -f .uninstalled 
-	@touch .installed
+	@rm -f .unavailable 
+	@touch .available
 
 #.PHONY: uninstallclean
 #uninstallclean:
-#	@rm -f .uninstalled
+#	@rm -f .unavailable
 
 .PHONY: tar
 tar:   ## Create a full tar backup of ~/aba & ~/bin, ready to be transported to your private network.
@@ -262,11 +262,11 @@ index: init catalogs-download catalogs-wait
 catalog: catalogs-download
 	@echo "[ABA] Warning: 'make catalog' is deprecated, use 'make catalogs-download' instead" >&2
 
-uninstall: .init .uninstalled     ## Uninstall any previously installed registry  
-.uninstalled:
+uninstall: .init .unavailable     ## Uninstall any previously installed registry  
+.unavailable:
 	$(SCRIPTS)/reg-uninstall.sh
-	@rm -f .installed
-	@touch .uninstalled
+	@rm -f .available
+	@touch .unavailable
 
 .PHONY: checkversion
 checkversion: init
@@ -278,7 +278,7 @@ cluster:
 
 .PHONY: tidy
 tidy:    # Tidy up so that this repo can be (re-)used to install/configure a registry again (assuming aba bundle repo on USB stick).
-	rm -f  .installed
+	rm -f  .available
 	rm -f  mirror.conf
 	rm -rf regcreds
 	rm -f  reg-uninstall.sh 
@@ -292,7 +292,7 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
 clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirror.conf, registry state, save/ and sync/.
-	@[ -f .installed ] && echo "[ABA] Note: registry is still running. Credentials in ~/.aba/mirror/ are untouched." || true
+	@[ -f .available ] && echo "[ABA] Note: registry is still running. Credentials in ~/.aba/mirror/ are untouched." || true
 	rm -f templates scripts cli mirror
 	rm -f aba.conf
 	rm -f .init 
@@ -310,7 +310,7 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 # Registry credentials and state are stored persistently in ~/.aba/mirror/ and survive clean/reset.
 .PHONY: reset
 reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
-	@[ -f .installed ] && echo "[ABA] Note: registry is still running and can be managed via 'aba -d mirror uninstall'." || true
+	@[ -f .available ] && echo "[ABA] Note: registry is still running and can be managed via 'aba -d mirror uninstall'." || true
 	make clean
 	rm -rf *.tar mirror-registry
 	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install" 2>/dev/null || true

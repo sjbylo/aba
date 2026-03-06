@@ -38,7 +38,7 @@ The following was captured from the **coding/refactor** chat so the E2E session 
 ### Recent commits (coding session)
 - `aba mirror --name` + existing-registry **register** (pull secret + CA cert → regcreds, `REG_VENDOR=existing`, safe uninstall). Setup flow matches `aba cluster --name` (dir + Makefile + init + mirror.conf edit prompt).
 - `create-mirror-conf.sh`: edit prompt now shows `$(basename $PWD)/mirror.conf` (e.g. `xxxx/mirror.conf`) instead of hardcoded `mirror/mirror.conf`.
-- Backlog: #17 mirror config flags for named dirs, #18 E2E regcreds via `aba register`, B1 rename `.installed`/`.uninstalled` to `.available`/`.unavailable`.
+- Backlog: #17 mirror config flags for named dirs, #18 E2E regcreds via `aba register`. B1 rename `.installed`/`.uninstalled` to `.available`/`.unavailable` is DONE.
 
 ### Retries and cleanup in E2E
 - Cluster installs/bootstrap use **single retry** (`-r 1`). No delete+recreate between attempts (ABA resumes from marker files).

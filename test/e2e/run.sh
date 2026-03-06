@@ -324,7 +324,7 @@ if [ -n "$CLI_DEPLOY" ]; then
 		--exclude='*.tar.gz' \
 		--exclude='.dnf-install.log' \
 		--exclude='*.bk' \
-		--exclude='mirror/.installed' \
+		--exclude='mirror/.available' \
 		--exclude='aba.conf' \
 		--exclude='vmware.conf' \
 		--exclude='*/mirror.conf' \
@@ -576,7 +576,7 @@ if [ -n "$CLI_RESTART" ]; then
 		--exclude='*.tar.gz' \
 		--exclude='.dnf-install.log' \
 		--exclude='*.bk' \
-		--exclude='mirror/.installed' \
+		--exclude='mirror/.available' \
 		--exclude='aba.conf' \
 		--exclude='vmware.conf' \
 		--exclude='*/mirror.conf' \

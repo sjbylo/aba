@@ -294,11 +294,11 @@ _cleanup_dis_aba() {
 	echo "  Cleaning disN ($dis_host) via ABA commands ..."
 
 	# 1. Clean up any registry from conN (Rule 6: uninstall from installer host).
-	#    Only ABA commands may remove .installed — never rm it directly.
+	#    Only ABA commands may remove .available — never rm it directly.
 	#    Use 'unregister' for externally-managed registries, 'uninstall' for ABA-installed.
 	local _regcreds="$HOME/.aba/mirror/mirror"
 	for _dir in "$_ABA_ROOT"; do
-		if [ -f "$_dir/mirror/.installed" ]; then
+		if [ -f "$_dir/mirror/.available" ]; then
 			if [ -f "$_regcreds/state.sh" ]; then
 				source "$_regcreds/state.sh"
 				if [ "${REG_VENDOR:-}" = "existing" ]; then
@@ -309,7 +309,7 @@ _cleanup_dis_aba() {
 					( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
 				fi
 			else
-				echo "  WARNING: .installed exists in $_dir but no state.sh -- running aba uninstall anyway"
+				echo "  WARNING: .available exists in $_dir but no state.sh -- running aba uninstall anyway"
 				( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
 			fi
 		fi

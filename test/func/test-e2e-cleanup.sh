@@ -179,7 +179,7 @@ _assert "Cluster dir remains (aba delete only removes VMs)" \
 _log "Final cleanup"
 _con "cd ~/aba && rm -rf $CLUSTER" 2>/dev/null || true
 _con "rm -f ~/aba/test/e2e/logs/cleanup-test.cleanup ~/aba/test/e2e/logs/cleanup-test.mirror-cleanup" 2>/dev/null || true
-# Reset mirror state via ABA (only ABA should manage .installed)
+# Reset mirror state via ABA (only ABA should manage .available)
 _con "cd ~/aba && aba -y -d mirror uninstall" 2>/dev/null || true
 echo "  Done."
 

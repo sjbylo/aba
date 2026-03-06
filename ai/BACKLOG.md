@@ -351,15 +351,15 @@ Audit `|| true` and `2>/dev/null` in: `test/e2e/lib/remote.sh`, `framework.sh`, 
 
 Dispatcher assigns next suite to first free pool. Suites that share prerequisites (e.g. `cluster-ops` + `network-advanced` both use pool registry) could be chained to the same pool to reuse registry. Add lightweight chaining hints.
 
-### 22. Rename `.installed` / `.uninstalled` to `.available` / `.unavailable`
+### 22. ~~Rename `.installed` / `.uninstalled` to `.available` / `.unavailable`~~
 
-**Status:** Backlog  
+**Status:** Done (2026-03-06)  
 **Priority:** Low  
 **Estimated Effort:** Small  
 **Created:** 2026-03-03  
 **Ref:** E2E_FIXES_LOG.md B1
 
-With `REG_VENDOR=existing`, `.installed` is misleading. `.available` = "mirror registry ready for use". ~46 occurrences across ~18 files. Mechanical find-and-replace in a dedicated commit (after mirror --name / named dirs are stable).
+Done. Renamed all marker files from `.installed`/`.uninstalled` to `.available`/`.unavailable` across the codebase.
 
 ### 23. Cluster VMs in Wrong vCenter Folder
 

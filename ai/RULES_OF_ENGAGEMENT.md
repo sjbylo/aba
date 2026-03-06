@@ -713,7 +713,7 @@ esac
 
 **Example from mirror/Makefile:**
 ```makefile
-.installed: .init .rpmsext mirror.conf
+.available: .init .rpmsext mirror.conf
 	@$(SCRIPTS)/ensure-cli.sh mirror-registry  # Waits/starts download, shows message
 	@make -sC . mirror-registry                 # Extracts tarball
 	$(SCRIPTS)/reg-install.sh                   # Installs registry
@@ -948,16 +948,16 @@ bash scripts/reg-uninstall.sh
 ```
 
 ```bash
-# ✅ CORRECT - Makefile manages .installed, .init, .uninstalled markers
+# ✅ CORRECT - Makefile manages .available, .init, .unavailable markers
 make -C mirror install
 make -C mirror uninstall
 aba -d mirror install
 aba -d mirror uninstall
 ```
 
-**Why**: Makefile targets manage dependency markers (`.installed`, `.init`, `.uninstalled`).
+**Why**: Makefile targets manage dependency markers (`.available`, `.init`, `.unavailable`).
 Calling scripts directly skips this, leaving markers out of sync with actual state.
-This also means scripts should NOT contain `rm -f .installed` or `touch .installed` —
+This also means scripts should NOT contain `rm -f .available` or `touch .available` —
 that is the Makefile's responsibility.
 
 ## If Cursor Crashes

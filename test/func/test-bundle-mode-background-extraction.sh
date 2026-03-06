@@ -199,12 +199,12 @@ echo ""
 echo "Test 5: Verify 'make -C mirror install' works"
 echo "----------------------------------------------"
 
-# Reset the .installed flag via ABA's own target (only ABA should manage this marker)
+# Reset the .available flag via ABA's own target (only ABA should manage this marker)
 make -sC mirror installclean
 
 # This should NOT re-extract (task already completed)
-echo "Running: make -C mirror .installed"
-if ! make -sC mirror .installed 2>&1 | tee /tmp/test-make-install.out; then
+echo "Running: make -C mirror .available"
+if ! make -sC mirror .available 2>&1 | tee /tmp/test-make-install.out; then
 	echo "ERROR: make -C mirror install failed!" >&2
 	cat /tmp/test-make-install.out >&2
 	rm -f .bundle

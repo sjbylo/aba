@@ -13,7 +13,7 @@ mirror/image-archive.tar
 mirror/imageset-config-sync.yaml
 mirror/imageset-config*yaml
 mirror/.initialized
-mirror/.installed
+mirror/.available
 mirror/mirror-registry
 mirror/mirror-registry.tar.gz
 mirror/.oc-mirror.log
@@ -31,7 +31,7 @@ mirror/templates
 mirror/*.sh
 mirror/sync
 mirror/.synced
-mirror/.uninstalled
+mirror/.unavailable
 mirror/.*
 mirror/mirror.conf.bk
 mirror/.redhat-operator-index*

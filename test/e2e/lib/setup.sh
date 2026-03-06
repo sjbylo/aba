@@ -36,7 +36,7 @@ setup_aba_from_scratch() {
 
     # _cleanup_con_quay (called by runner.sh before this) handles registry
     # uninstall via aba commands and cleans ~/.aba/mirror/.  No need to
-    # manually remove .installed here — only ABA should manage that marker.
+    # manually remove .available here — only ABA should manage that marker.
     e2e_run "Reset aba" \
         "cd $aba_root && if [ -d mirror ]; then aba reset -f; else echo 'No mirror dir -- nothing to reset'; fi"
 
@@ -195,7 +195,7 @@ cleanup_all() {
 # incomplete suite run.
 #
 # Two-tier approach:
-#   Tier 1 (aba way): If aba's mirror/.installed marker exists, use
+#   Tier 1 (aba way): If aba's mirror/.available marker exists, use
 #          'aba -d mirror uninstall' -- the proper uninstall path.
 #   Tier 2 (brute-force): If tier 1 didn't clean up and registry remnants
 #          remain (containers), force-remove everything except the pool
@@ -218,8 +218,8 @@ _cleanup_con_quay() {
     # registry state.sh describes (Quay/Docker on disN or conN), not the
     # pool-registry container (which lives under ~/.e2e-pool-registry/).
     for _dir in "$_aba_root"; do
-        if [ -f "$_dir/mirror/.installed" ]; then
-            echo "  [cleanup] Found .installed in $_dir/mirror -- running aba uninstall"
+        if [ -f "$_dir/mirror/.available" ]; then
+            echo "  [cleanup] Found .available in $_dir/mirror -- running aba uninstall"
             ( cd "$_dir" && aba -y -d mirror uninstall ) && _did_uninstall=1 || {
                 echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
             }
