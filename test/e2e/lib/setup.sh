@@ -34,11 +34,9 @@ setup_aba_from_scratch() {
 
     echo "=== setup_aba_from_scratch ==="
 
-    # disN is always reverted to snapshot before each suite, so any remote
-    # registry is already gone. Just clear the stale state marker on conN.
-    e2e_run "Clear stale registry state (disN reverted to snapshot)" \
-        "rm -f $aba_root/mirror/.installed"
-
+    # _cleanup_con_quay (called by runner.sh before this) handles registry
+    # uninstall via aba commands and cleans ~/.aba/mirror/.  No need to
+    # manually remove .installed here — only ABA should manage that marker.
     e2e_run "Reset aba" \
         "cd $aba_root && if [ -d mirror ]; then aba reset -f; else echo 'No mirror dir -- nothing to reset'; fi"
 
@@ -215,41 +213,45 @@ _cleanup_con_quay() {
     local _pool_reg_present=""
     [ -d "$POOL_REG_DIR" ] && _pool_reg_present=1
 
-    # Tier 1: use aba's own uninstall for any aba-installed registry
+    # Tier 1: use aba's own uninstall for any aba-installed registry.
+    # Safe even with pool registry present: aba uninstall targets whatever
+    # registry state.sh describes (Quay/Docker on disN or conN), not the
+    # pool-registry container (which lives under ~/.e2e-pool-registry/).
     for _dir in "$_aba_root"; do
         if [ -f "$_dir/mirror/.installed" ]; then
-            if [ -n "$_pool_reg_present" ]; then
-                echo "  [cleanup] Found .installed in $_dir/mirror -- removing marker only (pool registry protected)"
-                rm -f "$_dir/mirror/.installed"
-                _did_uninstall=1
-            else
-                echo "  [cleanup] Found .installed in $_dir/mirror -- running aba uninstall"
-                ( cd "$_dir" && aba -y -d mirror uninstall ) && _did_uninstall=1 || {
-                    echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
-                }
-            fi
+            echo "  [cleanup] Found .installed in $_dir/mirror -- running aba uninstall"
+            ( cd "$_dir" && aba -y -d mirror uninstall ) && _did_uninstall=1 || {
+                echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
+            }
         fi
     done
 
-    # Tier 2: brute-force fallback -- only if no pool registry is present
+    # Tier 2: brute-force container cleanup -- only if no pool registry is present
     if [ -d "$POOL_REG_DIR" ]; then
-        [ -z "$_did_uninstall" ] && echo "  [cleanup] Pool registry present -- skipping brute-force cleanup"
-        return 0
+        [ -z "$_did_uninstall" ] && echo "  [cleanup] Pool registry present -- skipping brute-force container cleanup"
+    else
+        local _stale_detected=""
+        podman ps -a 2>/dev/null | grep -v -e pool-registry -e CONTAINER | grep -q . && _stale_detected=1
+
+        if [ -n "$_stale_detected" ]; then
+            echo "  [cleanup] Stale registry remnants detected -- brute-force cleanup"
+            for _cid in $(podman ps -a -q --filter "name!=pool-registry" 2>/dev/null); do
+                podman stop "$_cid" 2>/dev/null || true
+                podman rm -f "$_cid" 2>/dev/null || true
+            done
+            podman volume rm -a -f 2>/dev/null || true
+            echo "  [cleanup] Brute-force cleanup complete"
+        elif [ -z "$_did_uninstall" ]; then
+            echo "  [cleanup] No stale registry state detected -- nothing to clean"
+        fi
     fi
 
-    local _stale_detected=""
-    podman ps -a 2>/dev/null | grep -v -e pool-registry -e CONTAINER | grep -q . && _stale_detected=1
-
-    if [ -n "$_stale_detected" ]; then
-        echo "  [cleanup] Stale registry remnants detected -- brute-force cleanup"
-        for _cid in $(podman ps -a -q --filter "name!=pool-registry" 2>/dev/null); do
-            podman stop "$_cid" 2>/dev/null || true
-            podman rm -f "$_cid" 2>/dev/null || true
-        done
-        podman volume rm -a -f 2>/dev/null || true
-        echo "  [cleanup] Brute-force cleanup complete"
-    elif [ -z "$_did_uninstall" ]; then
-        echo "  [cleanup] No stale registry state detected -- nothing to clean"
+    # Always clean cached registry credentials on conN.
+    # Pool registry is unaffected (uses ~/.e2e-pool-registry/, not ~/.aba/mirror/).
+    # This matches what _cleanup_dis_aba already does on disN (runner.sh).
+    if [ -d "$HOME/.aba/mirror" ]; then
+        echo "  [cleanup] Removing stale registry credentials (~/.aba/mirror/)"
+        rm -rf "$HOME/.aba/mirror"
     fi
 }
 

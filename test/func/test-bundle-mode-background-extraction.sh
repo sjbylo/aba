@@ -199,8 +199,8 @@ echo ""
 echo "Test 5: Verify 'make -C mirror install' works"
 echo "----------------------------------------------"
 
-# Reset the .installed flag to test the Makefile path
-rm -f mirror/.installed
+# Reset the .installed flag via ABA's own target (only ABA should manage this marker)
+make -sC mirror installclean
 
 # This should NOT re-extract (task already completed)
 echo "Running: make -C mirror .installed"

@@ -36,8 +36,8 @@ e2e_setup
 plan_tests \
     "Setup: install aba and configure" \
     "Setup: reset internal bastion" \
-    "Firewalld: bring down and sync" \
-    "Firewalld: bring up and verify port" \
+    "Docker mymirror: install and verify" \
+    "Firewalld: port persistence" \
     "OC_MIRROR_CACHE: custom cache location" \
     "Save/Load: roundtrip" \
     "SNO: bootstrap after save/load" \
@@ -87,16 +87,9 @@ e2e_run "Create mirror.conf for later tests" "aba -d mirror mirror.conf"
 test_end
 
 # ============================================================================
-# 2. Firewalld: bring down, sync, bring up, verify port
+# 2. Docker mymirror: install and verify (firewalld stays UP)
 # ============================================================================
-test_begin "Firewalld: bring down and sync"
-
-e2e_diag_remote "Show firewalld status" \
-    "sudo firewall-offline-cmd --list-all; sudo systemctl status firewalld"
-e2e_run_remote "Bring down firewalld" \
-    "sudo systemctl disable firewalld; sudo systemctl stop firewalld"
-e2e_diag_remote "Show firewalld status (should be down)" \
-    "sudo systemctl status firewalld"
+test_begin "Docker mymirror: install and verify"
 
 # Negative path: sync without pull secret should fail
 e2e_run -q "Hide pull secret for must-fail test" \
@@ -106,29 +99,31 @@ e2e_run_must_fail "Sync without pull secret should fail" \
 e2e_run -q "Restore pull secret" \
     "mv ~/.pull-secret.json.bak ~/.pull-secret.json"
 
-# Create mymirror and sync Docker registry to disN on port 5000
+# Create mymirror and install Docker registry on disN (port 5000).
+# Full image sync is skipped here: rootless podman 4.x on RHEL 8 has a lock
+# corruption bug under high concurrent I/O that crashes the container.
+# Image sync is already covered by the Quay registry tests (save/load).
 e2e_run "Create mymirror dir" "aba mirror --name mymirror"
-e2e_register_mirror "$PWD/mymirror"
-e2e_run -r 3 2 "Sync images to remote Docker registry via mymirror" \
-    "aba -d mymirror sync --retry --vendor docker --reg-port 5000 -H $DIS_HOST -k ~/.ssh/id_rsa"
-
-e2e_diag "Check oc-mirror cache location (local)" \
-    "find ~/ -name '.cache' -path '*/.oc-mirror/*'"
-e2e_diag_remote "Check oc-mirror cache location (remote)" \
-    "find ~/ -name .cache -path '*/.oc-mirror/*'"
+e2e_add_to_mirror_cleanup "$PWD/mymirror"
+e2e_run "Install Docker registry on remote host" \
+    "aba -d mymirror install --vendor docker --reg-port 5000 --reg-user e2euser --reg-password e2epass --data-dir '~/mymirror-data' -H $DIS_HOST -k ~/.ssh/id_rsa"
+e2e_run "Verify mymirror registry access" "aba -d mymirror verify"
 
 test_end
 
-test_begin "Firewalld: bring up and verify port"
+# ============================================================================
+# 3. Firewalld: verify port rule persists across firewalld restart
+# ============================================================================
+test_begin "Firewalld: port persistence"
 
-e2e_run_remote "Bring up firewalld" \
+e2e_diag_remote "Show firewalld status before cycle" \
+    "sudo systemctl status firewalld; sudo firewall-cmd --list-all"
+e2e_run_remote "Stop firewalld" \
+    "sudo systemctl stop firewalld"
+e2e_run_remote "Start firewalld" \
     "sudo systemctl enable firewalld; sudo systemctl start firewalld"
-e2e_run_remote "Show firewalld status (should be up)" \
-    "sudo systemctl status firewalld"
-e2e_run_remote "Verify port 5000 is open" \
+e2e_run_remote "Verify port 5000 persisted across restart" \
     "sudo firewall-cmd --list-all | grep 'ports: .*5000/tcp'"
-e2e_run "Verify registry reachable through firewall" \
-    "curl -sk --connect-timeout 10 https://${DIS_HOST}:5000/v2/"
 
 test_end
 
@@ -161,6 +156,9 @@ e2e_run "Clean up mymirror dir" "rm -rf mymirror"
 
 # Mirror reset regression: verify reset clears binary and re-extraction works
 e2e_run "Run mirror reset" "aba --dir mirror reset --force"
+# No need to manually clear ~/.aba/mirror/mirror/ — pre-suite cleanup
+# (_cleanup_con_quay) already removed it, and reg_detect_existing() has a
+# host/port guard that prevents stale fast-path if mirror.conf changed.
 e2e_run "Verify mirror-registry binary removed by reset" \
     "test ! -f mirror/mirror-registry"
 e2e_run "Re-extract mirror-registry after reset" "make -C mirror mirror-registry"
@@ -174,6 +172,22 @@ e2e_run "Reconfigure remote registry after reset" \
 # Save/load reinstall regression: verify save+load auto-reinstalls the
 # registry when it was uninstalled (ported from old test1 lines 376-380).
 e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load"
+
+# Regression test: verify reg_detect_existing() skips fast-path when cached
+# state.sh references a different host than mirror.conf (the stale-credentials bug).
+e2e_run "Regression: reg_detect_existing detects stale host in cached state" \
+    "cd mirror && INFO_ABA=1 bash -c '
+        source scripts/include_all.sh
+        source <\(normalize-aba-conf\)
+        source <\(normalize-mirror-conf\)
+        export regcreds_dir=\$HOME/.aba/mirror/\$(basename \$PWD)
+        reg_host=stale-regression-test.example.com
+        reg_port=9999
+        reg_url=https://stale-regression-test.example.com:9999
+        output=\$(reg_detect_existing 2>&1)
+        echo \"\$output\"
+        echo \"\$output\" | grep -q \"host/port changed\"
+    '"
 
 e2e_diag "Check oc-mirror cache (local)" \
     "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*'"
@@ -191,7 +205,7 @@ e2e_run "Test small CIDR (cluster.conf)" \
 e2e_run "Test small CIDR (ISO creation)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step iso"
 e2e_run "Clean and recreate with normal CIDR" "rm -rf $SNO"
-e2e_register_cluster "$PWD/$SNO"
+e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
@@ -222,7 +236,7 @@ e2e_run "Clean saved data" "rm -rf mirror/save"
 e2e_run -r 3 2 "Sync images with testy user config" "aba --dir mirror sync --retry"
 
 e2e_run "Clean sno cluster dir" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
-e2e_register_cluster "$PWD/$SNO"
+e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
@@ -263,9 +277,9 @@ e2e_run "Run download-all (should re-download govc)" "aba -d cli download-all"
 e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
 
 e2e_run "Clean standard cluster dir" "rm -rf $STANDARD"
-e2e_register_cluster "$PWD/$STANDARD"
+e2e_add_to_cluster_cleanup "$PWD/$STANDARD"
 e2e_run "Create agent configs (bare-metal)" \
-    "aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) -s agentconf"
+    "aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --workers 2 -s agentconf"
 e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"
 e2e_run "Verify agent configs" "ls -l $STANDARD/install-config.yaml $STANDARD/agent-config.yaml"
 e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso"

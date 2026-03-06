@@ -91,12 +91,18 @@ reg_check_fqdn() {
 # If a registry is detected at the URL: abort with instructions to provide
 # credentials rather than installing on top of it.
 reg_detect_existing() {
-	# Fast-path: credentials already exist and we have install state -- just verify and exit
-	# If pull-secret exists but state.sh is missing/stale, do not fast-path; proceed with install so reg_post_install can refresh creds.
+	# Fast-path: credentials already exist and we have install state -- just verify and exit.
+	# Guard: if the cached state references a different host/port than mirror.conf,
+	# the credentials are stale (e.g. user reconfigured after reset) — skip fast-path.
 	if [ -s "$regcreds_dir/pull-secret-mirror.json" ] && [ -s "$regcreds_dir/state.sh" ]; then
-		aba_debug "Found existing pull secret and state at $regcreds_dir"
-		scripts/reg-verify.sh
-		exit
+		if (source "$regcreds_dir/state.sh"
+		    [ "${REG_HOST:-}" = "$reg_host" ] && [ "${REG_PORT:-}" = "$reg_port" ]) 2>/dev/null; then
+			aba_debug "Found existing pull secret and state at $regcreds_dir"
+			scripts/reg-verify.sh
+			exit
+		else
+			aba_info "Registry host/port changed (cached state differs from mirror.conf) -- proceeding with fresh install"
+		fi
 	fi
 
 	# Probe for Quay health endpoint
