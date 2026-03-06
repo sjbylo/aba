@@ -178,8 +178,8 @@ e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror sav
 e2e_run "Regression: reg_detect_existing detects stale host in cached state" \
     "cd mirror && INFO_ABA=1 bash -c '
         source scripts/include_all.sh
-        source <\(normalize-aba-conf\)
-        source <\(normalize-mirror-conf\)
+        source <(normalize-aba-conf)
+        source <(normalize-mirror-conf)
         export regcreds_dir=\$HOME/.aba/mirror/\$(basename \$PWD)
         reg_host=stale-regression-test.example.com
         reg_port=9999

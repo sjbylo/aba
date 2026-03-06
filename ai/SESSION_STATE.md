@@ -1,20 +1,17 @@
 # Session State
 
 ## Current goal
-Renamed all `.installed`/`.uninstalled` marker files to `.available`/`.unavailable` across the codebase.
+Fixed regression test escaping bug in suite-mirror-sync.sh; renamed markers to .available/.unavailable.
 
 ## Done this session
-- Committed + pushed the "scripts-must-not-manage-markers" changes (commit dd29d8a)
-- Renamed `.installed` -> `.available` and `.uninstalled` -> `.unavailable` in 17 files
-- Confirmed `mirror/Makefile` is already a symlink to `templates/Makefile.mirror`
-- Verified zero stale references remain (only historical docs + OpenShift API `installedCSV`)
-- Pre-commit checks pass
+- Committed + pushed "scripts-must-not-manage-markers" changes (dd29d8a)
+- Renamed .installed -> .available and .uninstalled -> .unavailable across 17 files (a57cd7f)
+- Fixed regression test: removed backslash escaping before parentheses in `bash -c` single-quoted block
 
 ## Next steps
-- User to approve commit and push of the rename
-- Continue with gotest directive after commit
+- Commit + push the regression test fix
+- Deploy to pools and continue gotest
 
 ## Decisions / notes
-- Forward-only rename: no migration logic for existing mirror directories
-- `scripts/day2-config-osus.sh` excluded: `installedCSV` is an OpenShift API field
-- Historical docs (BACKLOG, E2E_FIXES_LOG, HANDOFF_CONTEXT) mention old names in done/history context
+- `\(` inside single quotes in `bash -c '...'` is literal, breaking `<(...)` process substitution
+- Fix: use unescaped `<(normalize-aba-conf)` since single quotes protect from eval
