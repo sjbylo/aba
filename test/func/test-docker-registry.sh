@@ -262,7 +262,7 @@ _assert "Pool Quay still running on 8443" \
 _log "Final cleanup"
 _con "rm -rf ~/my-docker-test ~/my-docker-test2 ~/docker-reg" 2>/dev/null || true
 _dis "rm -rf ~/my-docker-test2 ~/docker-reg" 2>/dev/null || true
-# Reset mirror state via ABA (only ABA should manage .installed)
+# Reset mirror state via ABA (only ABA should manage .available)
 _con "cd ~/aba && aba -y -d mirror uninstall" 2>/dev/null || true
 echo "  Done."
 

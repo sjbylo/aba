@@ -484,7 +484,7 @@ REG_INSTALLED_AT="2026-01-25 14:30:00" # timestamp for reference
 
 2. **Survive clean/reset**: Credentials in `~/.aba/mirror/mirror/` are untouched by `aba clean` or `aba reset`. Everything works immediately after re-init -- no regeneration, no symlinks.
 
-3. **Detect orphaned registries**: If `~/.aba/mirror/mirror/state.sh` exists but `mirror/.installed` doesn't, ABA knows there's a registry out there that this workspace hasn't connected to yet.
+3. **Detect orphaned registries**: If `~/.aba/mirror/mirror/state.sh` exists but `mirror/.available` doesn't, ABA knows there's a registry out there that this workspace hasn't connected to yet.
 
 4. **Multi-mirror ready**: Each mirror directory gets its own credential store. `mirror2/` -> `~/.aba/mirror/mirror2/`.
 
@@ -524,19 +524,19 @@ In `mirror/Makefile`:
 ```makefile
 # Unified install -- dispatcher handles vendor + local/remote
 .PHONY: install
-install: .installed
-.installed: .init .rpmsext mirror.conf
+install: .available
+.available: .init .rpmsext mirror.conf
     @$(SCRIPTS)/reg-install.sh
-    @rm -f .uninstalled
-    @touch .installed
+    @rm -f .unavailable
+    @touch .available
 
 # Unified uninstall -- dispatcher handles vendor + local/remote
 .PHONY: uninstall
-uninstall: .init .uninstalled
-.uninstalled:
+uninstall: .init .unavailable
+.unavailable:
     $(SCRIPTS)/reg-uninstall.sh
-    @rm -f .installed
-    @touch .uninstalled
+    @rm -f .available
+    @touch .unavailable
 ```
 
 Backward-compat aliases:
@@ -545,11 +545,11 @@ Backward-compat aliases:
 .PHONY: install-docker-registry uninstall-docker-registry
 install-docker-registry:
     @REG_VENDOR_OVERRIDE=docker $(SCRIPTS)/reg-install.sh
-    @rm -f .uninstalled && touch .installed
+    @rm -f .unavailable && touch .available
 
 uninstall-docker-registry:
     @REG_VENDOR_OVERRIDE=docker $(SCRIPTS)/reg-uninstall.sh
-    @touch .uninstalled && rm -f .installed
+    @touch .unavailable && rm -f .available
 ```
 
 ### 12. Vendor marker file (`.reg_vendor`)

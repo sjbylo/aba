@@ -94,10 +94,10 @@ ABA core fixes are deferred -- only framework/suite fixes applied immediately.
 
 ## Backlog
 
-### B1. Rename .installed/.uninstalled to .available/.unavailable
+### B1. ~~Rename .installed/.uninstalled to .available/.unavailable~~ (DONE 2026-03-06)
 - **Status**: PENDING (separate commit)
 - **Severity**: Low (cosmetic / semantic clarity)
-- **Reason**: With `REG_VENDOR=existing` for externally-managed registries, `.installed` is misleading (ABA didn't install it). `.available` better conveys "a mirror registry is ready for use" regardless of who manages it.
+- **Reason**: With `REG_VENDOR=existing` for externally-managed registries, `.installed` was misleading (ABA didn't install it). `.available` better conveys "a mirror registry is ready for use" regardless of who manages it. Renamed across the entire codebase.
 - **Scope**: ~46 occurrences across ~18 files (Makefiles, scripts, tests, .gitignore)
 - **Plan**: Mechanical find-and-replace in a dedicated commit after `mirror --name` feature lands.
 

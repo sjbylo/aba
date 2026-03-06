@@ -2,7 +2,7 @@
 # Register an existing (externally-managed) mirror registry with ABA.
 # Copies the user-provided pull secret and CA cert into the regcreds dir,
 # trusts the CA system-wide, writes state.sh with REG_VENDOR=existing,
-# and marks the mirror as .installed.
+# and marks the mirror as .available.
 #
 # Usage (called via mirror/Makefile register target):
 #   scripts/reg-register.sh <pull_secret_file> <ca_cert_file>

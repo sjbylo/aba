@@ -69,8 +69,8 @@ alwaysApply: true
 - Symlinks handle cross-directory access (scripts use same paths everywhere)
 - `normalize*()` functions output ONLY config file values/defaults -- derived/computed values (e.g. `regcreds_dir`) belong in the calling script
 - ABA was originally make-based; `aba` is a wrapper around make. All `make <target>` invocations must continue to work directly (e.g. `make -C mirror install`, `make -C sno cluster`). Never add logic that only works via the `aba` CLI.
-- Scripts in `scripts/` must NEVER be called directly — only via Makefile targets or `aba` CLI. Calling scripts directly bypasses make's dependency tracking and marker management (.installed, .init, etc.)
-- Scripts must NOT manage markers (.installed, .uninstalled) — that is the Makefile's responsibility
+- Scripts in `scripts/` must NEVER be called directly — only via Makefile targets or `aba` CLI. Calling scripts directly bypasses make's dependency tracking and marker management (.available, .init, etc.)
+- Scripts must NOT manage markers (.available, .unavailable) — that is the Makefile's responsibility
 
 ## Documentation
 
