@@ -209,7 +209,7 @@ test_end
 test_begin "SNO: install cluster"
 
 e2e_run "Clean up previous $SNO cluster dir" "rm -rf $SNO"
-e2e_register_cluster "$PWD/$SNO"
+e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create and install SNO cluster" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"

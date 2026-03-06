@@ -88,8 +88,6 @@ if ask "Uninstall $vendor registry on remote host $REG_SSH_USER@$REG_HOST:$REG_R
 	esac
 
 	rm -rf "${regcreds_dir:?}/"*
-	rm -f .installed
-	touch .uninstalled
 
 	aba_info_ok "Remote $vendor registry uninstall successful"
 	exit 0

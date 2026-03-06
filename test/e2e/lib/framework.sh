@@ -64,8 +64,8 @@
 #     across suites.  It is managed by setup-pool-registry.sh, NOT suites.
 #     Suites must NEVER register or uninstall the OOB registry.
 #
-# 14. Register every cluster (e2e_register_cluster) and mirror
-#     (e2e_register_mirror) immediately before the install command.
+# 14. Add every cluster (e2e_add_to_cluster_cleanup) and mirror
+#     (e2e_add_to_mirror_cleanup) to the cleanup list immediately before the install command.
 #     This enables crash recovery: runner.sh _pre_suite_cleanup iterates
 #     ALL leftover .cleanup/.mirror-cleanup files before the next suite.
 #
@@ -533,22 +533,22 @@ should_skip_checkpoint() {
     return 1  # no, don't skip
 }
 
-# --- Cluster Cleanup Registration -------------------------------------------
+# --- Cluster Cleanup List ---------------------------------------------------
 #
-# Suites register clusters RIGHT BEFORE the install command so cleanup knows
-# which clusters exist and where to delete them.  The .cleanup file stores
-# one entry per line: "user@fqdn /absolute/path/to/cluster_dir".
+# Suites add clusters to the cleanup list RIGHT BEFORE the install command so
+# cleanup knows which clusters exist and where to delete them.  The .cleanup file
+# stores one entry per line: "user@fqdn /absolute/path/to/cluster_dir".
 # Cleanup SSHs to the stored target and runs 'aba -d <path> delete'.
 
 _E2E_CLEANUP_FILE=""
 
-# Register a cluster for cleanup.  Call DIRECTLY before the install command.
+# Add a cluster to the cluster cleanup list.  Call DIRECTLY before the install command.
 # The "local"/"remote" perspective is ALWAYS from conN (the host running the
 # suite script).  "local" = cleanup on conN, "remote" = cleanup on disN
 # (INTERNAL_BASTION) via SSH.
-#   e2e_register_cluster "$PWD/$SNO"              # local cluster (on conN)
-#   e2e_register_cluster "$PWD/$COMPACT" remote   # remote cluster (on disN)
-e2e_register_cluster() {
+#   e2e_add_to_cluster_cleanup "$PWD/$SNO"              # local cluster (on conN)
+#   e2e_add_to_cluster_cleanup "$PWD/$COMPACT" remote   # remote cluster (on disN)
+e2e_add_to_cluster_cleanup() {
 	local abs_path="$1"
 	local location="${2:-local}"
 
@@ -567,16 +567,16 @@ e2e_register_cluster() {
 	grep -qxF "$entry" "$_E2E_CLEANUP_FILE" 2>/dev/null || \
 		echo "$entry" >> "$_E2E_CLEANUP_FILE"
 
-	_e2e_log "  Registered cluster for cleanup: $entry"
+	_e2e_log "  Added cluster to cleanup list: $entry"
 }
 
-# Delete all registered cluster VMs.  Safe to call multiple times.
+# Delete all clusters in the cleanup list.  Safe to call multiple times.
 # SSHs to each stored user@fqdn and runs 'aba -d <path> delete'.
 e2e_cleanup_clusters() {
 	local cleanup_file="${_E2E_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.cleanup}"
 	[ -f "$cleanup_file" ] || return 0
 
-	_e2e_log_and_print "  Cleaning up registered clusters ..."
+	_e2e_log_and_print "  Cleaning up clusters (from cleanup list) ..."
 	local target abs_path _all_ok=1
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue
@@ -596,24 +596,24 @@ e2e_cleanup_clusters() {
 	_e2e_log_and_print "  Cleanup complete."
 }
 
-# --- Mirror Cleanup Registration --------------------------------------------
+# --- Mirror Cleanup List ----------------------------------------------------
 #
-# Same pattern as cluster registration but for mirrors installed on disN.
+# Same pattern as cluster cleanup list but for mirrors installed on disN.
 # The .mirror-cleanup file stores one entry per line: "user@fqdn /abs/path".
 # Cleanup SSHs to the target and runs 'aba -d <path> uninstall'.
 # NOTE: This is for mirrors the SUITE installed (on disN).  The OOB pool
 #       registry on conN is managed by setup-pool-registry.sh and must
-#       NEVER be registered here.
+#       NEVER be added to mirror cleanup here.
 
 _E2E_MIRROR_CLEANUP_FILE=""
 
-# Register a mirror for cleanup.  Call DIRECTLY before the install/load/sync.
+# Add a mirror to the mirror cleanup list.  Call DIRECTLY before the install/load/sync.
 # The "local"/"remote" perspective is ALWAYS from conN (the host running the
 # suite script).  "local" = cleanup on conN, "remote" = cleanup on disN
 # (INTERNAL_BASTION) via SSH.
-#   e2e_register_mirror "$PWD/mirror"              # local mirror (on conN)
-#   e2e_register_mirror "$PWD/mirror" remote       # remote mirror (on disN)
-e2e_register_mirror() {
+#   e2e_add_to_mirror_cleanup "$PWD/mirror"              # local mirror (on conN)
+#   e2e_add_to_mirror_cleanup "$PWD/mirror" remote       # remote mirror (on disN)
+e2e_add_to_mirror_cleanup() {
 	local abs_path="$1"
 	local location="${2:-local}"
 
@@ -632,15 +632,15 @@ e2e_register_mirror() {
 	grep -qxF "$entry" "$_E2E_MIRROR_CLEANUP_FILE" 2>/dev/null || \
 		echo "$entry" >> "$_E2E_MIRROR_CLEANUP_FILE"
 
-	_e2e_log "  Registered mirror for cleanup: $entry"
+	_e2e_log "  Added mirror to cleanup list: $entry"
 }
 
-# Uninstall all registered mirrors.  Safe to call multiple times.
+# Uninstall all mirrors in the cleanup list.  Safe to call multiple times.
 e2e_cleanup_mirrors() {
 	local cleanup_file="${_E2E_MIRROR_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.mirror-cleanup}"
 	[ -f "$cleanup_file" ] || return 0
 
-	_e2e_log_and_print "  Cleaning up registered mirrors ..."
+	_e2e_log_and_print "  Cleaning up mirrors (from cleanup list) ..."
 	local target abs_path _all_ok=1
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue

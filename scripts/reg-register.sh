@@ -57,10 +57,6 @@ REG_INSTALLED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
 EOF
 aba_info "Saved registry state to $regcreds_dir/state.sh"
 
-# Mark mirror as ready
-touch .installed
-rm -f .uninstalled
-
 echo
 aba_info_ok "Existing registry registered: $reg_host:$reg_port"
 aba_info "Credentials stored in: $regcreds_dir/"

@@ -186,7 +186,7 @@ test_end
 # ============================================================================
 test_begin "Registry: Docker install and load"
 
-e2e_register_mirror "$PWD/mirror" remote
+e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run_remote "Install Docker registry" \
     "cd ~/aba && aba -d mirror install --vendor docker"
 e2e_poll_remote 60 5 "Wait for Docker registry container" \
@@ -207,7 +207,7 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster"
 
-e2e_register_cluster "$PWD/$SNO" remote
+e2e_add_to_cluster_cleanup "$PWD/$SNO" remote
 # Mesh operators + upgrade need more resources than default (old test uses 24 CPU / 24GB)
 e2e_run_remote "Generate SNO cluster.conf" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
@@ -509,7 +509,7 @@ e2e_run_remote "Clean sno cluster dir" \
 e2e_run_remote "Clean standard cluster dir" \
     "cd ~/aba && rm -rf $STANDARD"
 e2e_run_remote "Create standard cluster config" \
-    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --step cluster.conf"
+    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --workers 2 --step cluster.conf"
 e2e_run_remote "Assert $STANDARD/cluster.conf exists" \
     "cd ~/aba && test -f $STANDARD/cluster.conf"
 
@@ -528,7 +528,7 @@ e2e_run_remote "Verify agent-config has MACs" \
 # Bootstrap only (saves ~30 min vs full install) -- proves agent configs are
 # valid and control plane comes up.  Full operator verification is done on
 # the SNO cluster earlier in this suite.
-e2e_register_cluster "$PWD/$STANDARD" remote
+e2e_add_to_cluster_cleanup "$PWD/$STANDARD" remote
 e2e_run_remote "Bootstrap standard cluster" \
     "cd ~/aba && aba --dir $STANDARD bootstrap"
 e2e_run_remote "Delete standard cluster" \

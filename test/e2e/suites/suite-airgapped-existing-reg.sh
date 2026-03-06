@@ -247,7 +247,7 @@ test_end
 # ============================================================================
 test_begin "Compact: install and delete cluster"
 
-e2e_register_cluster "$PWD/$COMPACT" remote
+e2e_add_to_cluster_cleanup "$PWD/$COMPACT" remote
 e2e_run_remote -r 1 1 "Create compact cluster (bootstrap only)" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step bootstrap"
 e2e_run_remote "Delete compact cluster" \
@@ -262,7 +262,7 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster"
 
-e2e_register_cluster "$PWD/$SNO" remote
+e2e_add_to_cluster_cleanup "$PWD/$SNO" remote
 # ACM/MCH requires significantly more resources than default SNO (old test uses 24 CPU / 40GB)
 e2e_run_remote "Generate SNO cluster.conf" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"

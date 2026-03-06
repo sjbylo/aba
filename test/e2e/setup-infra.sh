@@ -123,6 +123,11 @@ _verify_con_vm() {
 		firewall-cmd --list-services | grep -q dns || _fail "dns not in firewall"
 		echo "  PASS: firewall dns service"
 
+		# No stale test ports (only pool registry 8443/tcp and ssh 22/tcp expected)
+		_stale=\$(firewall-cmd --list-ports | tr ' ' '\n' | grep -vE '^(8443/tcp|22/tcp)?\$' || true)
+		[ -z "\$_stale" ] || _fail "stale firewall ports: \$_stale"
+		echo "  PASS: no stale firewall ports"
+
 		# --- DNS / dnsmasq ---
 		systemctl is-active --quiet dnsmasq || _fail "dnsmasq not active"
 		echo "  PASS: dnsmasq active"
@@ -153,6 +158,9 @@ _verify_con_vm() {
 		# --- SSH ---
 		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config || _fail "sshd ClientAliveInterval"
 		echo "  PASS: sshd ClientAliveInterval"
+
+		test -f /home/${user}/.ssh/authorized_keys || _fail "steve authorized_keys missing"
+		echo "  PASS: steve authorized_keys exists"
 
 		# --- Users / environment ---
 		id testy > /dev/null 2>&1 || _fail "testy user missing"
@@ -205,6 +213,7 @@ _configure_con_vm() {
 	local vm="$1" user="$2"
 
 	_vm_wait_ssh "$vm" "$user"
+	_vm_setup_ssh_keys "$vm" "$user"
 	_vm_setup_network "$vm" "$user" "$vm"
 	_vm_setup_firewall "$vm" "$user"
 	_vm_install_packages "$vm" "$user"
@@ -333,6 +342,11 @@ _verify_dis_vm() {
 
 		firewall-cmd --query-masquerade > /dev/null || _fail "masquerade not enabled"
 		echo "  PASS: masquerade enabled"
+
+		# No test ports should be present on disN at baseline (keep 22/tcp if present)
+		_stale=\$(firewall-cmd --list-ports | tr ' ' '\n' | grep -vE '^(22/tcp)?\$' || true)
+		[ -z "\$_stale" ] || _fail "stale firewall ports: \$_stale"
+		echo "  PASS: no stale firewall ports"
 
 		# --- DNS resolution ---
 		grep -q "nameserver ${_con_vlan}" /etc/resolv.conf || _fail "resolv.conf not ${_con_vlan}"
@@ -725,12 +739,28 @@ for prefix in con dis; do
 			ok)
 				echo "  $vm_name: exists + SSH OK -- reusing"
 				;;
-			revert)
-				echo "  $vm_name: exists but SSH failed -- reverting to $_SNAPSHOT_NAME"
-				govc snapshot.revert -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: revert $vm_name failed" >&2; _clone_failed=1; continue; }
-				govc vm.power -on "$vm_name" 2>/dev/null || true
-				;;
-		broken)
+		revert)
+			echo "  $vm_name: exists but SSH failed -- reverting to $_SNAPSHOT_NAME"
+			govc snapshot.revert -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: revert $vm_name failed" >&2; _clone_failed=1; continue; }
+			govc vm.power -on "$vm_name" 2>/dev/null || true
+			# After revert, re-add the bastion's SSH key to the user account.
+			# The pool-ready snapshot only has root's authorized_keys; the user
+			# key was added later.  Wait for SSH then fix user keys.
+			_revert_host="${vm_name}.${VM_BASE_DOMAIN:-example.com}"
+			_revert_user="$VM_DEFAULT_USER"
+			echo "  $vm_name: waiting for SSH after revert ..."
+			if _vm_wait_ssh "$_revert_host" "$_revert_user" 2>/dev/null \
+				|| _vm_wait_ssh "$_revert_host" "root" 2>/dev/null; then
+				_vm_setup_ssh_keys "$_revert_host" "$_revert_user" 2>/dev/null \
+					|| echo "  $vm_name: WARNING: could not set up SSH keys after revert"
+				# Remove stale firewall ports that may have been baked into the snapshot
+				_vm_setup_firewall "$_revert_host" "$_revert_user" 2>/dev/null \
+					|| echo "  $vm_name: WARNING: firewall reset failed after revert"
+			else
+				echo "  $vm_name: WARNING: SSH still down after revert"
+			fi
+			;;
+	broken)
 			echo "  $vm_name: broken (SSH down, no '$_SNAPSHOT_NAME' snapshot)"
 			if _confirm "  Replace $vm_name? (Y/n)"; then
 				govc vm.power -off "$vm_name" 2>/dev/null || true

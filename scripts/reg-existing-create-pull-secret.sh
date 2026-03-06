@@ -34,5 +34,3 @@ fi
 	aba_warning -p IMPORTANT \
 		"Fetch the root CA file for $reg_host and copy it to $regcreds_dir/rootCA.pem.  After the file is in place, run: aba -d mirror verify"
 
-# Add flag so 'aba -d mirror install' is complete.  Assume the user will also add the rootCA.pem file to complete intergation with the existing mirror
-touch .installed 

@@ -71,12 +71,16 @@ register: .init mirror.conf
 	@[ "$(pull_secret_mirror)" ] || { echo "[ABA] Error: pull_secret_mirror= is required (path to pull secret JSON file)"; exit 1; }
 	@[ "$(ca_cert)" ] || { echo "[ABA] Error: ca_cert= is required (path to CA certificate file)"; exit 1; }
 	$(SCRIPTS)/reg-register.sh "$(pull_secret_mirror)" "$(ca_cert)"
+	@rm -f .uninstalled
+	@touch .installed
 
 # Deregister an externally-managed mirror registry.
 # Only removes local credentials -- never touches the actual registry.
 .PHONY: unregister
 unregister: .init
 	$(SCRIPTS)/reg-unregister.sh
+	@rm -f .installed
+	@touch .uninstalled
 
 # If aba.conf does not exist, must abort!
 ../aba.conf:
@@ -215,6 +219,7 @@ installclean:
 password: pw
 pw: 
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh
+	@touch .installed
 
 .PHONY: verify
 verify: .init ## Using the credential files in '~/.aba/mirror/' and the values in 'aba/mirror/mirror.conf', verify access to the registry. 

@@ -36,9 +36,6 @@ rm -rf "${regcreds_dir}.bk"
 mv "$regcreds_dir" "${regcreds_dir}.bk"
 aba_info "Credentials backed up to ${regcreds_dir}.bk/"
 
-rm -f .installed
-touch .uninstalled
-
 echo
 aba_info_ok "Existing registry deregistered (registry itself was not modified)."
 aba_info "Credentials backed up to: ${regcreds_dir}.bk/"

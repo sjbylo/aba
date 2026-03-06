@@ -69,6 +69,8 @@ alwaysApply: true
 - Symlinks handle cross-directory access (scripts use same paths everywhere)
 - `normalize*()` functions output ONLY config file values/defaults -- derived/computed values (e.g. `regcreds_dir`) belong in the calling script
 - ABA was originally make-based; `aba` is a wrapper around make. All `make <target>` invocations must continue to work directly (e.g. `make -C mirror install`, `make -C sno cluster`). Never add logic that only works via the `aba` CLI.
+- Scripts in `scripts/` must NEVER be called directly — only via Makefile targets or `aba` CLI. Calling scripts directly bypasses make's dependency tracking and marker management (.installed, .init, etc.)
+- Scripts must NOT manage markers (.installed, .uninstalled) — that is the Makefile's responsibility
 
 ## Documentation
 
@@ -78,7 +80,14 @@ alwaysApply: true
 ## E2E test golden rules
 
 - Tests MUST fail on error -- never mask underlying issues!
-- Never use `2>/dev/null` or `|| true` in test commands unless there is a good reason to do so (use `e2e_diag` for diagnostic-only commands, or explicit precondition checks)
+- **ABSOLUTELY NEVER use `2>/dev/null` or `|| true` in test commands!  Only use ' `>/dev/null`' if there is a good reason to!**
+  - This includes inside `e2e_run`, `e2e_run_remote`, `e2e_run_must_fail`, or any command string passed to the framework
+  - Stderr output is diagnostic gold -- suppressing it wastes HOURS of debugging when something goes wrong
+  - Even "harmless" cleanup commands (e.g. `podman rm -af 2>/dev/null`) hide real failures
+  - If a command might fail harmlessly, use `e2e_diag` or `e2e_diag_remote` (exit code is ignored, but output is preserved)
+  - If a file might not exist, use `rm -f` (already ignores missing files) NOT `rm 2>/dev/null`
+  - If a precondition is uncertain, use an explicit check: `if [ -f X ]; then ...; fi`
+  - If error suppression is truly unavoidable (extremely rare), it MUST have a comment explaining WHY
 - When a test fails, check if the fix belongs in ABA code FIRST -- never "fix" a test just to make it pass!
 - No safety nets in framework code -- if a suite doesn't clean up, fix the suite, don't paper over it
 - NEVER use band-aid fixes (e.g. raw `rm -rf` to work around cleanup failures) -- fix the root cause
@@ -103,13 +112,14 @@ alwaysApply: true
 
 - Always run `aba day2` after `mirror load` or `mirror sync` (applies IDMS/ITMS/CatalogSources)
 
-## "Run the tests" directive
+## gotest directive
 
-When the user says "run the tests", enter an autonomous loop:
-- Keep testing, monitoring, fixing test code or suites (only under `~/aba/test`), stopping suites, deploying changes, and re-testing
+When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E test loop. Full definition: **`ai/GOTEST.md`** (so you can find it after a Cursor crash).
+
+- Keep testing, monitoring, fixing test code or suites (only under `~/aba/test` and `ai/`), stopping suites, deploying changes, and re-testing
 - Do NOT stop to ask questions -- the user is away
 - Do NOT change any ABA core files (only `test/` and `ai/`)
-- Always keep ALL pools busy -- queue additional suites on idle pools, even if they have already been tested.
+- Always keep ALL pools busy -- queue additional suites on idle pools, even if they have already been tested
 - Report back a summary when the user returns
 - If a fix requires core ABA changes, note it and move on
 

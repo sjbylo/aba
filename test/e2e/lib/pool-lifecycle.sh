@@ -449,6 +449,14 @@ _vm_setup_firewall() {
 		echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-ipforward.conf
 
 		firewall-cmd --permanent --zone=public --add-masquerade
+
+		# Remove stale test ports left over from previous runs (keep ssh)
+		for _port in 8443/tcp 5000/tcp 80/tcp; do
+		    firewall-cmd --query-port="$_port" --permanent 2>/dev/null \
+		        && firewall-cmd --remove-port="$_port" --permanent \
+		        && echo "Removed stale port $_port"
+		done
+
 		firewall-cmd --reload
 		sleep 5
 
