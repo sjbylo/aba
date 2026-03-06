@@ -150,7 +150,7 @@ test_end
 # ============================================================================
 test_begin "Proxy mode: install SNO cluster"
 
-e2e_register_cluster "$PWD/$SNO"
+e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Install SNO from public registry (proxy mode)" \
     "aba -d $SNO install"
 

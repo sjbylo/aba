@@ -392,6 +392,25 @@ if [[ -f "$pid_file" ]]; then
 fi
 ```
 
+#### Never Pipe SSH Keys Through Multi-Hop SSH Chains
+
+**CRITICAL**: Piping file content through multi-hop SSH (e.g. `cat key | ssh hop1 'ssh hop2 "cat >> authorized_keys"'`) can introduce **invisible corruption** — missing newlines, null bytes, or encoding artifacts that make the file unparsable by `sshd`, even though `cat` shows correct-looking content.
+
+```bash
+# ❌ DANGEROUS - Can corrupt authorized_keys silently
+cat ~/.ssh/id_rsa.pub | ssh hop1 'ssh hop2 "cat >> ~/.ssh/authorized_keys"'
+
+# ✅ SAFE - Use scp or write the key on the target host directly
+scp ~/.ssh/id_rsa.pub hop1:/tmp/key.pub
+ssh hop1 'scp /tmp/key.pub hop2:/tmp/key.pub'
+ssh hop1 'ssh hop2 "cat /tmp/key.pub >> ~/.ssh/authorized_keys"'
+
+# ✅ SAFEST - Recreate the file from scratch on the target
+ssh target 'cp ~/.ssh/id_rsa.pub ~/.ssh/authorized_keys'
+```
+
+**Real example:** Multi-hop append corrupted `authorized_keys` on con3, breaking SSH for ALL sources. The file looked correct in `cat` output. `sshd` logged NO auth failures (silent rejection). Recreating the file from scratch fixed it.
+
 #### Stderr Redirection Best Practice
 
 **RULE**: Only use `2>/dev/null` or `2>&1` IF there is an **explicit reason** to do so.
@@ -921,6 +940,26 @@ make -C mirror unregister       # Deregister existing registry
 
 **Why**: Advanced users and automation systems use `make` directly. Breaking `make` targets silently degrades the product for power users and CI pipelines.
 
+**DON'T** call scripts directly:
+```bash
+# ❌ WRONG - bypasses Makefile dependency tracking and marker management
+bash scripts/reg-install.sh
+bash scripts/reg-uninstall.sh
+```
+
+```bash
+# ✅ CORRECT - Makefile manages .installed, .init, .uninstalled markers
+make -C mirror install
+make -C mirror uninstall
+aba -d mirror install
+aba -d mirror uninstall
+```
+
+**Why**: Makefile targets manage dependency markers (`.installed`, `.init`, `.uninstalled`).
+Calling scripts directly skips this, leaving markers out of sync with actual state.
+This also means scripts should NOT contain `rm -f .installed` or `touch .installed` —
+that is the Makefile's responsibility.
+
 ## If Cursor Crashes
 
 ### What You'll Lose:
@@ -1047,8 +1086,28 @@ documented at the top of `test/e2e/lib/framework.sh`.
    **Especially in test/infrastructure code: never silently skip over or work around
    an unexpected state.  Surface it loudly so the operator can act.**
 
-2. **Never use `2>/dev/null` in test commands.**
-   Stderr output is diagnostic gold.  Suppressing it hides root causes.
+2. **ABSOLUTELY NEVER use `2>/dev/null`, `>/dev/null`, or `>/dev/null 2>&1` in test commands.**
+   Stderr output is diagnostic gold.  Suppressing it hides root causes and wastes
+   hours of debugging when something goes wrong.  This applies to ALL commands inside
+   `e2e_run`, `e2e_run_remote`, `e2e_run_must_fail`, and any command string passed to
+   the E2E framework.
+
+   **How to avoid it:**
+   - If a command might fail harmlessly → use `e2e_diag` or `e2e_diag_remote`
+     (exit code is ignored, but ALL output is preserved in the log)
+   - If a file might not exist → use `rm -f` (already ignores missing files)
+   - If a precondition is uncertain → use an explicit check:
+     `if [ -f X ]; then rm X; fi`
+   - If a container might not exist → `podman rm -f name` already tolerates
+     "no such container" without needing `2>/dev/null`
+   - If a service might already be stopped → check first:
+     `systemctl is-active svc && systemctl stop svc`
+
+   **Why this matters (real example):** A test added `podman system renew 2>/dev/null;
+   podman rm -af 2>/dev/null; true` as a "harmless cleanup" step.  This masked the
+   real error (podman lock corruption) and wasted an entire debug cycle before the
+   root cause was discovered.  Without the suppression, the error would have been
+   visible immediately in the test log.
 
 3. **Never use `|| true` in test commands.**
    If a command can legitimately fail, use `e2e_diag` (diagnostic only) or embed an
@@ -1109,16 +1168,24 @@ documented at the top of `test/e2e/lib/framework.sh`.
     must stay as `L` since the execution starts locally.  (b) Commands using custom SSH keys
     (`ssh -i ~/.ssh/testy_rsa`) may stay inline when testing specific key-based access.
 
-15. **Legitimate error suppression MUST have a comment explaining WHY.**
-    If `2>/dev/null`, `|| true`, or `|| echo ...` is genuinely needed (not a
-    workaround), add a comment on the line above or inline explaining the
-    specific reason.  Uncommented suppression is treated as a bug.
+15. **Error suppression in test code is almost NEVER acceptable.**
+    In the rare case where `2>/dev/null`, `|| true`, or `|| echo ...` is genuinely
+    needed (not a workaround), it MUST have a comment explaining the specific
+    reason.  Uncommented suppression is treated as a bug.  Before adding any
+    suppression, first consider these alternatives:
+    - `e2e_diag` / `e2e_diag_remote` — runs command, logs output, ignores exit code
+    - `rm -f` — already ignores "no such file"
+    - `podman rm -f name` — already tolerates "no such container"
+    - Explicit precondition: `if systemctl is-active svc; then systemctl stop svc; fi`
     ```bash
-    # ✅ GOOD - reason is documented
+    # ✅ BEST - use e2e_diag instead of suppression
+    e2e_diag "Power off VM (may already be off)" "govc vm.power -off $vm"
+
+    # ✅ ACCEPTABLE - documented reason, no e2e_diag alternative
     # Tolerate exit 1: VM may already be powered off
     govc vm.power -off "$vm" 2>/dev/null || true
 
-    # ❌ BAD - no explanation
+    # ❌ BAD - no explanation, hides real errors
     govc vm.power -off "$vm" 2>/dev/null || true
     ```
 

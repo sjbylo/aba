@@ -363,7 +363,29 @@ if [ -n "$CLI_DEPLOY" ]; then
 		   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
 			echo "done"
 		else
-			echo "FAILED (unreachable?)"
+			echo -n "FAILED -- attempting SSH repair via conN hop ... "
+			_repaired=false
+			for (( j=1; j<=${_OP_POOLS}; j++ )); do
+				[ "$j" -eq "$i" ] && continue
+				_hop="${user}@con${j}.${VM_BASE_DOMAIN}"
+				# Copy bastion's key to the hop host, then scp it to the target
+				# (avoids piping key through multi-hop SSH which can corrupt the file)
+				if scp $_SSH_OPTS ~/.ssh/id_rsa.pub "${_hop}:/tmp/_bastion_key.pub" 2>/dev/null &&
+				   ssh $_SSH_OPTS "$_hop" \
+					"scp -o BatchMode=yes -o StrictHostKeyChecking=no /tmp/_bastion_key.pub ${host}:/tmp/_bastion_key.pub && \
+					 ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 ${host} \
+					 'mkdir -p ~/.ssh && cat /tmp/_bastion_key.pub > ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && rm -f /tmp/_bastion_key.pub' && \
+					 rm -f /tmp/_bastion_key.pub" 2>/dev/null; then
+					if ssh $_SSH_OPTS "${target}" "$_remote_prep" 2>/dev/null &&
+					   scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
+					   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
+						echo "REPAIRED via con${j}, done"
+						_repaired=true
+						break
+					fi
+				fi
+			done
+			$_repaired || echo "FAILED (unreachable)"
 		fi
 	done
 	rm -f "$_deploy_tar"
@@ -487,7 +509,7 @@ if [ -n "$CLI_RESTART" ]; then
 	#    and mirrors get uninstalled via `aba` while the aba tree (and its
 	#    mirror.conf / cluster dirs) still exists on conN.
 	echo ""
-	echo "  [2/4] Cleaning up registered resources ..."
+	echo "  [2/4] Cleaning up resources in cleanup lists ..."
 	for p in "${_restart_pools[@]}"; do
 		_host="con${p}.${_domain}"
 		_target="${_user}@${_host}"
@@ -1139,8 +1161,7 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 		fi
 		echo "    con${i}: framework + config deployed"
 	else
-		echo "    con${i}: FAILED to deploy framework" >&2
-		exit 1
+		echo "    con${i}: FAILED to deploy framework (skipping)" >&2
 	fi
 done
 

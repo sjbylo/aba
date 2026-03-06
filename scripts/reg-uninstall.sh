@@ -43,8 +43,6 @@ if [ -s reg-uninstall.sh ]; then
 
 		rm -rf "${regcreds_dir:?}/"*
 		rm -f ./reg-uninstall.sh
-		rm -f .installed
-		touch .uninstalled
 
 		exit 0
 	fi
@@ -103,7 +101,5 @@ else
 fi
 
 rm -rf "${regcreds_dir:?}/"*
-rm -f .installed
-touch .uninstalled
 
 aba_info_ok "Registry uninstall successful"
