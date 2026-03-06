@@ -72,10 +72,14 @@ trap 'rm -f "$LOCK_FILE"' EXIT
 rm -f "$RC_FILE"
 
 # After framework.sh is sourced (below), the trap is upgraded to also
-# clean up registered clusters/mirrors.  This ensures VMs are deleted
+# clean up clusters/mirrors in the cleanup lists.  This ensures VMs are deleted
 # even when the suite aborts, is killed, or hits an unhandled exit path.
 
 echo "$SUITE" > /tmp/e2e-last-suites
+
+# So the tmux window shows the suite name for all launch paths (dispatcher, restart, manual).
+# Tolerate failure: runner may be invoked outside tmux (e.g. direct bash invocation)
+tmux rename-window "$SUITE" 2>/dev/null || true
 
 echo ""
 echo "========================================"
@@ -92,7 +96,51 @@ source "$_RUNNER_DIR/lib/config-helpers.sh"
 source "$_RUNNER_DIR/lib/vm-helpers.sh"
 source "$_RUNNER_DIR/lib/setup.sh"
 
-# Upgrade EXIT trap: clean up registered clusters/mirrors on ANY exit.
+# Wasteful dirs: test data dirs (--data-dir / reg roots) to remove on conN and disN.
+# Add new dirs here when suites create them so cleanup stays in sync.
+_E2E_WASTEFUL_DIRS='~/my-quay-mirror-test1 ~/mymirror-data ~/docker-reg'
+
+# Stale firewall ports: test suites add these with --permanent; they persist
+# across firewalld restarts and must be explicitly removed before each suite.
+# Add new ports here when suites open them so cleanup stays in sync.
+_E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 80/tcp"
+
+_cleanup_wasteful_dirs_local() {
+	rm -rf $_E2E_WASTEFUL_DIRS
+}
+
+# Reset firewall on conN: remove stale test ports, preserve pool registry (8443).
+_reset_con_firewall() {
+	echo "  Resetting firewall ports on conN ..."
+	local _removed=""
+	for _port in $_E2E_STALE_FW_PORTS; do
+		case "$_port" in
+			8443/tcp|22/tcp) continue ;;  # pool registry + ssh — do not touch
+		esac
+		if sudo firewall-cmd --query-port="$_port" --permanent &>/dev/null; then
+			sudo firewall-cmd --remove-port="$_port" --permanent
+			_removed="$_removed $_port"
+		fi
+	done
+	if [ -n "$_removed" ]; then
+		sudo firewall-cmd --reload
+		echo "  Removed stale ports:$_removed"
+	fi
+
+	# Verify: only pool registry port should remain
+	local _ports _unexpected=""
+	_ports=$(sudo firewall-cmd --list-ports 2>/dev/null)
+	for _p in $_ports; do
+		case "$_p" in 8443/tcp|22/tcp) ;; *) _unexpected="$_unexpected $_p" ;; esac
+	done
+	if [ -n "$_unexpected" ]; then
+		echo "  WARNING: conN has unexpected firewall ports after reset:$_unexpected"
+	else
+		echo "  conN firewall verified: clean"
+	fi
+}
+
+# Upgrade EXIT trap: clean up clusters/mirrors in cleanup lists on ANY exit.
 # _E2E_SUITE_NAME is set inside the child bash process (the suite script),
 # so we must set cleanup file paths explicitly from runner.sh's $SUITE var.
 _runner_cleanup() {
@@ -202,6 +250,12 @@ _revert_dis_snapshot() {
 	while [ $elapsed -lt 120 ]; do
 		if _essh -o BatchMode=yes -o ConnectTimeout=5 "$dis_host" -- "date" 2>/dev/null; then
 			echo "  SSH ready on $dis_host"
+			# Remove stale firewall ports that may have been baked into the snapshot
+			echo "  Resetting firewall ports on $DIS_VM ..."
+			for _port in $_E2E_STALE_FW_PORTS; do
+				_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1 || true
+			done
+			_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1 || true
 			# Fix VC_FOLDER on disN after snapshot revert (snapshot has base value,
 			# not pool-specific). The bundle/tar only copies aba repo files, not ~/.vmware.conf.
 			if [ -n "${VC_FOLDER:-}" ]; then
@@ -239,24 +293,23 @@ _cleanup_dis_aba() {
 	echo ""
 	echo "  Cleaning disN ($dis_host) via ABA commands ..."
 
-	# 1. Clean up any registry from conN (Rule 6: uninstall from installer host)
-	#    Skip if .installed exists but state.sh is missing -- the marker is stale
-	#    (e.g. shipped via deploy tarball from the bastion) and aba would prompt.
+	# 1. Clean up any registry from conN (Rule 6: uninstall from installer host).
+	#    Only ABA commands may remove .installed — never rm it directly.
 	#    Use 'unregister' for externally-managed registries, 'uninstall' for ABA-installed.
 	local _regcreds="$HOME/.aba/mirror/mirror"
 	for _dir in "$_ABA_ROOT"; do
 		if [ -f "$_dir/mirror/.installed" ]; then
-			if [ ! -f "$_regcreds/state.sh" ]; then
-				echo "  Removing stale .installed marker in $_dir (no state.sh)"
-				rm -f "$_dir/mirror/.installed"
-				continue
-			fi
-			source "$_regcreds/state.sh"
-			if [ "${REG_VENDOR:-}" = "existing" ]; then
-				echo "  Deregistering existing registry (from $_dir) ..."
-				( cd "$_dir" && aba -y -d mirror unregister ) 2>&1 || echo "  WARNING: aba unregister failed in $_dir (rc=$?)"
+			if [ -f "$_regcreds/state.sh" ]; then
+				source "$_regcreds/state.sh"
+				if [ "${REG_VENDOR:-}" = "existing" ]; then
+					echo "  Deregistering existing registry (from $_dir) ..."
+					( cd "$_dir" && aba -y -d mirror unregister ) 2>&1 || echo "  WARNING: aba unregister failed in $_dir (rc=$?)"
+				else
+					echo "  Uninstalling registry via aba (from $_dir) ..."
+					( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
+				fi
 			else
-				echo "  Uninstalling registry via aba (from $_dir) ..."
+				echo "  WARNING: .installed exists in $_dir but no state.sh -- running aba uninstall anyway"
 				( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
 			fi
 		fi
@@ -266,7 +319,7 @@ _cleanup_dis_aba() {
 	echo "  Cleaning disN filesystem ..."
 	_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
 	_essh "$dis_host" "rm -rf ~/aba" 2>&1 || true
-	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1 || true
+	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror $_E2E_WASTEFUL_DIRS" 2>&1 || true
 	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage ~/quay-install" 2>&1 || true
 	# Remove stale CA trust anchors from previous registry installs
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1 || true
@@ -274,7 +327,23 @@ _cleanup_dis_aba() {
 	# 3. Restore baseline system state (firewalld on, as created by setup-infra)
 	_essh "$dis_host" "sudo systemctl enable firewalld 2>/dev/null; sudo systemctl start firewalld 2>/dev/null" 2>&1 || true
 
-	# 4. Ensure VC_FOLDER / GOVC_DATASTORE are correct on disN
+	# 4. Remove stale firewall ports from permanent config (survive restart)
+	echo "  Resetting firewall ports on disN ..."
+	for _port in $_E2E_STALE_FW_PORTS; do
+		_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1 || true
+	done
+	_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1 || true
+
+	# Verify no stale ports remain on disN
+	local _dis_fw_ports
+	_dis_fw_ports=$(_essh "$dis_host" "sudo firewall-cmd --list-ports" 2>/dev/null) || true
+	if [ -n "$_dis_fw_ports" ]; then
+		echo "  WARNING: disN still has firewall ports after reset: $_dis_fw_ports"
+	else
+		echo "  disN firewall verified: no test ports"
+	fi
+
+	# 5. Ensure VC_FOLDER / GOVC_DATASTORE are correct on disN
 	if [ -n "${VC_FOLDER:-}" ]; then
 		_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" 2>/dev/null \
 			&& echo "  Set VC_FOLDER=${VC_FOLDER} on $dis_host" \
@@ -286,7 +355,7 @@ _cleanup_dis_aba() {
 			|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
 	fi
 
-	# 5. Verify clean state
+	# 6. Verify clean state
 	if _essh "$dis_host" "[ ! -d ~/aba ] && ! podman ps -q 2>/dev/null | grep -q ." 2>/dev/null; then
 		echo "  disN cleanup verified: clean state"
 	else
@@ -355,7 +424,7 @@ _pre_suite_cleanup() {
 	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do
 		[ -f "$cleanup_file" ] || continue
 		found=1
-		echo "  Found leftover: $(basename "$cleanup_file") -- deleting registered clusters ..."
+		echo "  Found leftover: $(basename "$cleanup_file") -- deleting clusters from cleanup list ..."
 		local target abs_path _cleanup_ok=1
 		while IFS=' ' read -r target abs_path; do
 			[ -z "$abs_path" ] && continue
@@ -377,7 +446,7 @@ _pre_suite_cleanup() {
 	for cleanup_file in "${_RUNNER_DIR}"/logs/*.mirror-cleanup; do
 		[ -f "$cleanup_file" ] || continue
 		found=1
-		echo "  Found leftover: $(basename "$cleanup_file") -- uninstalling registered mirrors ..."
+		echo "  Found leftover: $(basename "$cleanup_file") -- uninstalling mirrors from cleanup list ..."
 		local target abs_path _mirror_ok=1
 		while IFS=' ' read -r target abs_path; do
 			[ -z "$abs_path" ] && continue
@@ -421,6 +490,8 @@ if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 
 	# Clean up any stale Quay/registry state on conN from previous suite
 	_cleanup_con_quay
+	_cleanup_wasteful_dirs_local
+	_reset_con_firewall
 else
 	echo "  (Skipping disN cleanup and Quay cleanup -- E2E_SKIP_SNAPSHOT_REVERT=1)"
 fi
@@ -455,6 +526,8 @@ while true; do
 				_cleanup_dis_aba
 			fi
 			_cleanup_con_quay
+			_cleanup_wasteful_dirs_local
+			_reset_con_firewall
 		fi
 		continue
 	fi
