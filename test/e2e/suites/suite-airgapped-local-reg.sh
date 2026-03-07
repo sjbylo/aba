@@ -436,7 +436,7 @@ e2e_run_remote "Apply day2 config (upgrade mirror resources)" \
     "cd ~/aba && aba --dir $SNO day2"
 
 # Wait for cincinnati-operator to appear in OperatorHub before applying OSUS
-e2e_run_remote -r 18 10 "Wait for cincinnati-operator in OperatorHub" \
+e2e_poll_remote 180 15 "Wait for cincinnati-operator in OperatorHub" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get packagemanifests' | grep ^cincinnati-operator"
 
 e2e_run_remote "Apply OSUS day2" \

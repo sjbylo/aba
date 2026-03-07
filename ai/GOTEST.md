@@ -6,6 +6,7 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous loop a
 
 - **Test, monitor, fix, deploy, re-test** in a loop:
   - Run E2E tests (`test/e2e/run.sh`), monitor status and logs
+  - Do not wait more that 10 mins between checking the status, otherwise you may miss a failed suite! 
   - Fix only **test code or suites** under `~/aba/test` (and `ai/` for docs/notes)
   - Stop suites if needed, deploy changes (`run.sh deploy --force`), re-run tests
 - **Always ensure the dispatcher is running** — check at every monitoring cycle.
@@ -16,6 +17,7 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous loop a
 - **Keep ALL pools busy** — queue additional suites on idle pools, even if already tested
 - **Report a summary** when the user returns
 - If a fix would require core ABA changes, **note it and move on** (do not change core)
+- Do not add band-aids to any code, always find the root cause first!
 
 ## How to find this again
 

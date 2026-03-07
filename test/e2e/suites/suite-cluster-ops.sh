@@ -4,8 +4,8 @@
 # =============================================================================
 # Purpose: ABI config generation, YAML validation against known-good examples,
 #          SNO cluster install/verify, and operator availability check.
-#          Uses a pre-populated mirror registry on conN (installed out-of-band)
-#          so tests start immediately without waiting for sync/save/load.
+#          Uses a pre-populated mirror registry on conN (OCP images out-of-band)
+#          and syncs operators via 'aba mirror sync' before cluster install.
 #
 # Prerequisite: Internet-connected host with aba installed.
 #               Pre-populated Quay on conN (via setup-pool-registry.sh).
@@ -37,6 +37,7 @@ plan_tests \
     "Setup: ensure pre-populated registry" \
     "Setup: install aba and configure" \
     "Setup: configure mirror for local registry" \
+    "Setup: sync operators to registry" \
     "ABI config: sno/compact/standard" \
     "ABI config: diff against known-good examples" \
     "SNO: install cluster" \
@@ -101,12 +102,9 @@ e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_F
 e2e_run "Verify vmware.conf" "grep aba-e2e vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
-# Must match what the pool registry's catalog indexes actually contain:
-# redhat: advanced-cluster-management, certified: nginx-ingress-operator, community: flux.
-# ABA regenerates the catalog index during ISO/agentconf based on configured operators,
-# so these must be in aba.conf to avoid overwriting the pool registry's catalog index.
-e2e_run "Set operator sets" "aba --op-sets acm"
-e2e_run "Add pool-registry test operators" "aba --ops nginx-ingress-operator flux"
+# Operators verified after cluster install (one per catalog).
+# The sync step (below) ensures these are actually in the registry.
+e2e_run "Set test operators" "aba --ops cincinnati-operator nginx-ingress-operator flux"
 
 e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 
@@ -116,8 +114,8 @@ e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmwa
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
-e2e_run "Set operator sets (re-apply)" "aba --op-sets acm"
-e2e_run "Add pool-registry test operators (re-apply)" "aba --ops nginx-ingress-operator flux"
+e2e_run "Set test operators (re-apply)" \
+    "aba --ops cincinnati-operator nginx-ingress-operator flux"
 
 test_end
 
@@ -126,10 +124,8 @@ test_end
 # ============================================================================
 test_begin "Setup: configure mirror for local registry"
 
-# Create mirror.conf pointing to conN's local Quay (not disN)
+# Create mirror.conf pointing to conN's local pool registry (not disN)
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-
-# Override mirror.conf to point at the local pre-populated registry
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_key (local registry)" \
@@ -137,14 +133,9 @@ e2e_run "Clear reg_ssh_key (local registry)" \
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
 
-# Set up regcreds/ with the pre-populated registry's CA and pull secret
-e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"
-e2e_run "Copy Quay root CA to regcreds" \
-    "cp -v $POOL_REG_DIR/certs/ca.crt ~/.aba/mirror/mirror/rootCA.pem"
-
-# Generate pull-secret-mirror.json for the local registry
-e2e_run "Generate mirror pull secret" \
-    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > ~/.aba/mirror/mirror/pull-secret-mirror.json <<EOPS
+# Generate the pull secret for the pool registry
+e2e_run "Generate pool-registry pull secret" \
+    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > /tmp/pool-reg-pull-secret.json <<EOPS
 {
   \"auths\": {
     \"${CON_HOST}:8443\": {
@@ -154,18 +145,31 @@ e2e_run "Generate mirror pull secret" \
 }
 EOPS"
 
+# Register the pool registry as an existing external registry via ABA.
+# This creates state.sh (REG_VENDOR=existing) so reg-install.sh's fast-path
+# skips installation and just verifies, allowing 'aba mirror sync' to work.
+e2e_run "Register pool registry" \
+    "aba -d mirror register pull_secret_mirror=/tmp/pool-reg-pull-secret.json ca_cert=$POOL_REG_DIR/certs/ca.crt"
+
 e2e_run "Verify mirror registry access" "aba -d mirror verify"
-
-# Link oc-mirror working-dir so day2 can find IDMS/ITMS/CatalogSources
-e2e_run "Link oc-mirror working-dir for day2" \
-    "mkdir -p mirror/sync && ln -sfn ${POOL_REG_DIR}/sync/working-dir mirror/sync/working-dir"
-
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
 test_end
 
 # ============================================================================
-# 4. ABI config: generate and verify agent configs for sno/compact/standard
+# 4. Sync operators to registry
+# ============================================================================
+# Pool registry has OCP release images pre-populated (setup-pool-registry.sh).
+# This incremental sync adds the operators configured in aba.conf and generates
+# the working-dir (CatalogSources, IDMS/ITMS) that day2 needs.
+test_begin "Setup: sync operators to registry"
+
+e2e_run -r 3 2 "Sync images to local registry" "aba -d mirror sync --retry"
+
+test_end
+
+# ============================================================================
+# 5. ABI config: generate and verify agent configs for sno/compact/standard
 # ============================================================================
 test_begin "ABI config: sno/compact/standard"
 
@@ -188,7 +192,7 @@ done
 test_end
 
 # ============================================================================
-# 5. ABI config: diff against known-good examples
+# 6. ABI config: diff against known-good examples
 # ============================================================================
 test_begin "ABI config: diff against known-good examples"
 
@@ -201,10 +205,14 @@ for ctype in sno compact standard; do
         "yaml_diff $cname/agent-config.yaml test/$ctype/agent-config.yaml.example"
 done
 
+# Clean up compact/standard dirs -- only needed for config validation, not cluster install
+e2e_run "Remove compact cluster dir (config-only)" "rm -rf $COMPACT"
+e2e_run "Remove standard cluster dir (config-only)" "rm -rf $STANDARD"
+
 test_end
 
 # ============================================================================
-# 6. SNO: install cluster from pre-populated registry
+# 7. SNO: install cluster
 # ============================================================================
 test_begin "SNO: install cluster"
 
@@ -223,17 +231,17 @@ e2e_run "Apply day2 configuration" "aba --dir $SNO day2"
 test_end
 
 # ============================================================================
-# 7. SNO: verify operators from all three catalogs
+# 8. SNO: verify operators from all three catalogs
 # ============================================================================
 test_begin "SNO: verify operators from all catalogs"
 
 # After day2 applies CatalogSources, operators should appear in packagemanifests.
 # Allow time for catalog pods to start and index.
-e2e_run -r 20 15 "Wait for advanced-cluster-management (redhat catalog)" \
-    "aba --dir $SNO run --cmd 'oc get packagemanifests' | grep advanced-cluster-management"
-e2e_run -r 20 15 "Wait for nginx-ingress-operator (certified catalog)" \
+e2e_poll 180 15 "Wait for cincinnati-operator (redhat catalog)" \
+    "aba --dir $SNO run --cmd 'oc get packagemanifests' | grep ^cincinnati-operator"
+e2e_poll 180 15 "Wait for nginx-ingress-operator (certified catalog)" \
     "aba --dir $SNO run --cmd 'oc get packagemanifests' | grep nginx-ingress-operator"
-e2e_run -r 20 15 "Wait for flux (community catalog)" \
+e2e_poll 180 15 "Wait for flux (community catalog)" \
     "aba --dir $SNO run --cmd 'oc get packagemanifests' | grep flux"
 
 e2e_diag "Show all packagemanifests" "aba --dir $SNO run --cmd 'oc get packagemanifests'"
