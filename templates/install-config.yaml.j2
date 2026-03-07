@@ -49,7 +49,7 @@ platform:
 {%- if GOVC_RESOURCE_POOL is defined and GOVC_RESOURCE_POOL %}
         resourcePool: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}/Resources/{{ GOVC_RESOURCE_POOL }}"
 {%- else %}
-        resourcePool: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}/Resources"
+#        resourcePool: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}/Resources/"
 {%- endif %}
         folder: "{{ VC_FOLDER }}"
       zone: zone-{{ cluster_name }}

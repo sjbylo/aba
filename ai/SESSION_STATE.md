@@ -1,21 +1,20 @@
 # Session State
 
 ## Current goal
-User stopped all tests. Awaiting next instructions.
+Restore resourcePool as commented-out by default for old E2E test compat.
 
 ## Done this session
-- Found root cause of missing operator images: sync step was removed from cluster-ops
-- Added sync step back: `aba -d mirror sync --retry` after configuring operators
-- Fixed sync failure: replaced manual regcreds with `aba -d mirror register`
-- Changed e2e_run -r (count retries) to e2e_poll (wall-clock wait) for operator verification
-- Added cleanup of compact/standard cluster dirs after diff step (saves ~3.8 GB)
-- Removed raw `make -sC mirror .rpmsint .rpmsext` band-aid
-- User stopped all tests
+- Committed and pushed cluster-ops fix (45cde6e)
+- Completed full audit comparing old vs new test coverage
+- Fixed install-config.yaml.j2: resourcePool commented out by default,
+  uncommented only when GOVC_RESOURCE_POOL is explicitly set
 
 ## Next steps
-- Awaiting user instructions
-- Uncommitted changes: compact4/standard4 cleanup in suite-cluster-ops.sh
+- User to commit this change
+- User plans to validate with OLD e2e tests (test[12345]*)
+- E2E framework hardening plan still pending
 
 ## Decisions / notes
-- Pool registry registered via `aba -d mirror register` (REG_VENDOR=existing)
-- cluster-ops has not yet passed with the latest fixes (was running on con1)
+- resourcePool defense kept for when GOVC_RESOURCE_POOL is set
+- Default output now matches test/*/install-config.yaml.example files
+- Old E2E tests should pass the diff comparison step
