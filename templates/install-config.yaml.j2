@@ -46,7 +46,11 @@ platform:
         datastore: "/{{ GOVC_DATACENTER }}/datastore/{{ GOVC_DATASTORE }}"
         networks:
         - {{ GOVC_NETWORK }}
-#        resourcePool: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}/Resources/{{ GOVC_RESOURCE_POOL }}"
+{%- if GOVC_RESOURCE_POOL is defined and GOVC_RESOURCE_POOL %}
+        resourcePool: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}/Resources/{{ GOVC_RESOURCE_POOL }}"
+{%- else %}
+        resourcePool: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}/Resources"
+{%- endif %}
         folder: "{{ VC_FOLDER }}"
       zone: zone-{{ cluster_name }}
     vcenters:
