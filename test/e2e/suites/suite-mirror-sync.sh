@@ -178,6 +178,7 @@ e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror sav
 e2e_run "Regression: reg_detect_existing detects stale host in cached state" \
     "cd mirror && INFO_ABA=1 bash -c '
         source scripts/include_all.sh
+        source scripts/reg-common.sh
         source <(normalize-aba-conf)
         source <(normalize-mirror-conf)
         export regcreds_dir=\$HOME/.aba/mirror/\$(basename \$PWD)
@@ -279,7 +280,7 @@ e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
 e2e_run "Clean standard cluster dir" "rm -rf $STANDARD"
 e2e_add_to_cluster_cleanup "$PWD/$STANDARD"
 e2e_run "Create agent configs (bare-metal)" \
-    "aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --workers 2 -s agentconf"
+    "aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 -s agentconf"
 e2e_run "Verify cluster.conf" "ls -l $STANDARD/cluster.conf"
 e2e_run "Verify agent configs" "ls -l $STANDARD/install-config.yaml $STANDARD/agent-config.yaml"
 e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso"

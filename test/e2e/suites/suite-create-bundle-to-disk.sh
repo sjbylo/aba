@@ -54,13 +54,8 @@ suite_begin "create-bundle-to-disk"
 # ============================================================================
 test_begin "Setup: clean slate"
 
-# podman prune/rmi with --force are idempotent (return 0 even when empty).
-e2e_run "Clean podman" \
-    "podman system prune --all --force; podman rmi --all --force; sudo rm -rf ~/.local/share/containers/storage"
-
-# Remove oc-mirror caches
-e2e_run -q "Remove oc-mirror caches" \
-    "rm -rf ~/.cache/agent; rm -rf \$HOME/*/.oc-mirror/.cache"
+# runner.sh already cleaned podman (containers, caches, wasteful dirs) before
+# the suite started -- no need to repeat it here.
 
 # Clean up leftover state from previous test runs
 e2e_run -q "Remove old files" \
@@ -294,7 +289,7 @@ e2e_run_remote "Clean standard cluster dir" \
     "cd ~/aba && rm -rf $STANDARD"
 e2e_add_to_cluster_cleanup "$PWD/$STANDARD" remote
 e2e_run_remote "Create agent configs (bare-metal)" \
-    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --workers 2 -s agentconf"
+    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 -s agentconf"
 e2e_run_remote "Verify cluster.conf" "ls ~/aba/$STANDARD/cluster.conf"
 e2e_run_remote "Verify agent configs" \
     "ls ~/aba/$STANDARD/install-config.yaml ~/aba/$STANDARD/agent-config.yaml"

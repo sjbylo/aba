@@ -34,6 +34,12 @@ setup_aba_from_scratch() {
 
     echo "=== setup_aba_from_scratch ==="
 
+    # Ensure aba is installed (runner.sh cleanup removes ~/bin).
+    if ! command -v aba &>/dev/null; then
+        echo "  aba not in PATH -- reinstalling ..."
+        ( cd "$aba_root" && ./install )
+    fi
+
     # _cleanup_con_quay (called by runner.sh before this) handles registry
     # uninstall via aba commands and cleans ~/.aba/mirror/.  No need to
     # manually remove .available here — only ABA should manage that marker.

@@ -107,6 +107,10 @@ _E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 80/tcp"
 
 _cleanup_wasteful_dirs_local() {
 	rm -rf $_E2E_WASTEFUL_DIRS
+	# ABA-extracted CLI tools; suite reinstalls via setup_aba_from_scratch → make install
+	rm -rf ~/bin
+	# oc-mirror cache and stale mirror state (same cleanup as disN gets)
+	rm -rf ~/.oc-mirror ~/.cache/agent
 }
 
 # Reset firewall on conN: remove stale test ports, preserve pool registry (8443).
@@ -137,6 +141,47 @@ _reset_con_firewall() {
 		echo "  WARNING: conN has unexpected firewall ports after reset:$_unexpected"
 	else
 		echo "  conN firewall verified: clean"
+	fi
+}
+
+# Ensure the pool-registry container is running on conN.
+# If a suite (e.g. create-bundle-to-disk) removed it, restart from existing data.
+_ensure_pool_registry() {
+	[ -d "$POOL_REG_DIR" ] || return 0
+
+	if podman ps --format '{{.Names}}' 2>/dev/null | grep -q '^pool-registry$'; then
+		echo "  pool-registry: running"
+		return 0
+	fi
+
+	echo "  pool-registry: NOT running -- restarting from $POOL_REG_DIR ..."
+
+	# Remove stale container entry if it exists (stopped/dead)
+	podman rm -f pool-registry 2>/dev/null || true
+
+	local _reg_host
+	_reg_host="$(hostname -f)"
+
+	podman run -d \
+		-p 8443:5000 \
+		--restart=always \
+		--name pool-registry \
+		-v "${POOL_REG_DIR}/data:/var/lib/registry:Z" \
+		-v "${POOL_REG_DIR}/certs:/certs:Z" \
+		-v "${POOL_REG_DIR}/auth:/auth:Z" \
+		-e REGISTRY_HTTP_ADDR=0.0.0.0:5000 \
+		-e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
+		-e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
+		-e REGISTRY_AUTH=htpasswd \
+		-e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" \
+		-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
+		docker.io/library/registry:latest
+
+	sleep 2
+	if curl -sfk -o /dev/null -u "init:p4ssw0rd" "https://${_reg_host}:8443/v2/"; then
+		echo "  pool-registry: restarted successfully"
+	else
+		echo "  WARNING: pool-registry restart failed -- curl check unsuccessful"
 	fi
 }
 
@@ -318,9 +363,9 @@ _cleanup_dis_aba() {
 	# 2. Stop containers first, then clean disN filesystem
 	echo "  Cleaning disN filesystem ..."
 	_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
-	_essh "$dis_host" "rm -rf ~/aba" 2>&1 || true
-	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror $_E2E_WASTEFUL_DIRS" 2>&1 || true
-	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage ~/quay-install" 2>&1 || true
+	_essh "$dis_host" "rm -rf ~/aba ~/bin" 2>&1 || true
+	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1 || true
+	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage ~/quay-install $_E2E_WASTEFUL_DIRS" 2>&1 || true
 	# Remove stale CA trust anchors from previous registry installs
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1 || true
 
@@ -492,9 +537,46 @@ if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 	_cleanup_con_quay
 	_cleanup_wasteful_dirs_local
 	_reset_con_firewall
+	_ensure_pool_registry
 else
 	echo "  (Skipping disN cleanup and Quay cleanup -- E2E_SKIP_SNAPSHOT_REVERT=1)"
 fi
+
+# Ensure conN ~/.vmware.conf has the correct pool-specific VC_FOLDER + GOVC_DATASTORE.
+# The golden template bakes in default values; suites cp ~/.vmware.conf → ./vmware.conf,
+# so the source must be correct before any suite starts.
+if [ -f ~/.vmware.conf ]; then
+	if [ -n "${VC_FOLDER:-}" ]; then
+		sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g" ~/.vmware.conf
+		echo "  conN vmware.conf: VC_FOLDER=${VC_FOLDER}"
+	fi
+	if [ -n "${VM_DATASTORE:-}" ]; then
+		sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
+		echo "  conN vmware.conf: GOVC_DATASTORE=${VM_DATASTORE}"
+	fi
+fi
+
+# Post-cleanup filesystem snapshot (debug: catch leftover files before suite starts)
+echo ""
+echo "  === Pre-suite filesystem snapshot (conN: $(hostname)) ==="
+echo "  --- ls -ltr ~/ ---"
+ls -ltr ~/
+echo "  --- ls -ltr ~/* ---"
+ls -ltr ~/* 2>/dev/null || true
+echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
+sudo du -am ~/ 2>/dev/null | sort -rn | head -30
+if [ -n "${DIS_VM:-}" ]; then
+	_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+	echo ""
+	echo "  === Pre-suite filesystem snapshot (disN: ${DIS_VM}) ==="
+	echo "  --- ls -ltr ~/ ---"
+	_essh "$_dis" "ls -ltr ~/" 2>&1 || true
+	echo "  --- ls -ltr ~/* ---"
+	_essh "$_dis" "ls -ltr ~/*" 2>&1 || true
+	echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
+	_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1 || true
+fi
+echo ""
 
 _rc=0
 
@@ -528,7 +610,34 @@ while true; do
 			_cleanup_con_quay
 			_cleanup_wasteful_dirs_local
 			_reset_con_firewall
+			_ensure_pool_registry
 		fi
+		# Re-apply pool-specific vmware.conf on conN (same as initial path)
+		if [ -f ~/.vmware.conf ]; then
+			[ -n "${VC_FOLDER:-}" ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g" ~/.vmware.conf
+			[ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
+		fi
+		# Post-cleanup filesystem snapshot (debug: catch leftover files on restart)
+		echo ""
+		echo "  === Pre-suite filesystem snapshot (conN: $(hostname)) ==="
+		echo "  --- ls -ltr ~/ ---"
+		ls -ltr ~/
+		echo "  --- ls -ltr ~/* ---"
+		ls -ltr ~/* 2>/dev/null || true
+		echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
+		sudo du -am ~/ 2>/dev/null | sort -rn | head -30
+		if [ -n "${DIS_VM:-}" ]; then
+			_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+			echo ""
+			echo "  === Pre-suite filesystem snapshot (disN: ${DIS_VM}) ==="
+			echo "  --- ls -ltr ~/ ---"
+			_essh "$_dis" "ls -ltr ~/" 2>&1 || true
+			echo "  --- ls -ltr ~/* ---"
+			_essh "$_dis" "ls -ltr ~/*" 2>&1 || true
+			echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
+			_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1 || true
+		fi
+		echo ""
 		continue
 	fi
 	break

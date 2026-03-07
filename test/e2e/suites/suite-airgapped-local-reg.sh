@@ -509,7 +509,7 @@ e2e_run_remote "Clean sno cluster dir" \
 e2e_run_remote "Clean standard cluster dir" \
     "cd ~/aba && rm -rf $STANDARD"
 e2e_run_remote "Create standard cluster config" \
-    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --workers 2 --step cluster.conf"
+    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 --step cluster.conf"
 e2e_run_remote "Assert $STANDARD/cluster.conf exists" \
     "cd ~/aba && test -f $STANDARD/cluster.conf"
 

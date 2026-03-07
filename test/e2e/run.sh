@@ -77,11 +77,13 @@ _usage() {
 	  run.sh run [--suite X] [--pools N]   Run suites (default: --all)
 	  run.sh run --pools 3                 Run all suites across 3 pools
 	  run.sh run --suite X --pool 2        Run suite on a specific pool
+	  run.sh run --suite X --pool 2 --force -y  Force onto pool (works with running dispatcher)
 	  run.sh run --pool 3 --resume         Re-run last suite, skip passed tests
 	  run.sh reschedule [--suite X] [--pools N]  Re-queue completed suites
 	  run.sh deploy [--pool N] [--force]   Sync local ABA repo to conN host(s)
 	  run.sh restart [--pool N] [--resume] Stop + deploy + re-run last suite
-	  run.sh stop [--pool N]               Kill runner(s)
+	  run.sh restart --suite X --pool N    Stop + deploy + run suite X on pool N
+	  run.sh stop [--pool N]               Kill runner(s) (--pool: keep dispatcher)
 	  run.sh start [--pool N]              Power on pool VMs (conN + disN)
 	  run.sh status [--pool N]             Show what's running
 	  run.sh verify [--pools N|--pool N]   Verify pool VMs (no dispatch)
@@ -401,13 +403,17 @@ if [ -n "$CLI_STOP" ]; then
 	_user="${CON_SSH_USER:-steve}"
 	_domain="${VM_BASE_DOMAIN}"
 
-	# Kill any running dispatcher on bastion first
-	if [ -f "$E2E_DISPATCHER_PID" ]; then
-		_dpid=$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)
-		if [ -n "$_dpid" ] && kill -0 "$_dpid" 2>/dev/null; then
-			kill "$_dpid" 2>/dev/null && echo "Dispatcher (pid $_dpid) stopped."
+	# Kill the dispatcher only when stopping ALL pools (no --pool flag).
+	# When stopping a single pool, leave the dispatcher running so it can
+	# detect the freed pool and dispatch the next queued suite.
+	if [ -z "$CLI_POOL" ]; then
+		if [ -f "$E2E_DISPATCHER_PID" ]; then
+			_dpid=$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)
+			if [ -n "$_dpid" ] && kill -0 "$_dpid" 2>/dev/null; then
+				kill "$_dpid" 2>/dev/null && echo "Dispatcher (pid $_dpid) stopped."
+			fi
+			rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE"
 		fi
-		rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE"
 	fi
 
 	# --pool N targets a single pool; --pools N targets 1..N
@@ -423,7 +429,7 @@ if [ -n "$CLI_STOP" ]; then
 		printf "  con${p}: "
 		if ssh $_stop_ssh "${_user}@${_host}" "
 			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null || true
-			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock
+			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock /tmp/e2e-paused-*
 			echo stopped
 		" 2>/dev/null; then
 			:
@@ -605,7 +611,11 @@ if [ -n "$CLI_RESTART" ]; then
 	_restart_fail=0
 	for p in "${_restart_pools[@]}"; do
 		_host="con${p}.${_domain}"
-		_last=$(ssh $_restart_ssh "${_user}@${_host}" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null || true)
+		if [ -n "$CLI_SUITE" ]; then
+			_last="$CLI_SUITE"
+		else
+			_last=$(ssh $_restart_ssh "${_user}@${_host}" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null || true)
+		fi
 		if [ -z "$_last" ]; then
 			echo "    con${p}: skipped (no previous suite or unreachable)"
 			(( _restart_fail++ ))
@@ -616,7 +626,7 @@ if [ -n "$CLI_RESTART" ]; then
 			_resume_flag=""
 			[ -n "${CLI_RESUME:-}" ] && _resume_flag="--resume"
 			_runner_cmd="bash ~/aba/test/e2e/runner.sh $_resume_flag $p $suite"
-			if ssh $_restart_ssh "${_user}@${_host}" "tmux new-session -d -s '$E2E_TMUX_SESSION' '$_runner_cmd'" 2>/dev/null; then
+			if ssh $_restart_ssh "${_user}@${_host}" "tmux new-session -d -s '$E2E_TMUX_SESSION' '$_runner_cmd'; tmux rename-window -t '$E2E_TMUX_SESSION' '$suite'" 2>/dev/null; then
 				echo "    con${p}: dispatched $suite (tmux: $E2E_TMUX_SESSION)"
 				(( _restart_ok++ ))
 			else
@@ -1200,8 +1210,8 @@ _dispatch_suite() {
 	# Kill any stale session and orphaned runner processes
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true"
 	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null || true"
-	# Remove old rc/lock files
-	_ssh_con "$pool_num" "rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock'"
+	# Remove old rc/lock/pause files (stale pause files cause false PAUSED status)
+	_ssh_con "$pool_num" "rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
 
 	# Sync latest test code to conN before launching
 	local _user="${CON_SSH_USER:-steve}"
@@ -1362,7 +1372,7 @@ _force_clean_all() {
 	for (( p=1; p<=CLI_POOLS; p++ )); do
 		_ssh_con "$p" "
 			tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
-			rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock
+			rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
 		" 2>/dev/null || true
 		echo "    con${p}: cleaned"
 	done
@@ -1375,7 +1385,7 @@ _force_clean_pool() {
 	echo "  --force --pool $pool_num: wiping suite state on con${pool_num} ..."
 	_ssh_con "$pool_num" "
 		tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
-		rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock
+		rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
 	" 2>/dev/null || true
 
 	# Remove any entries associated with this pool
@@ -1404,7 +1414,7 @@ _force_clean_suite() {
 			if [ \"\$running\" = '$suite' ]; then
 				tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
 			fi
-			rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock'
+			rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
 		" 2>/dev/null || true
 	done
 
@@ -1509,16 +1519,19 @@ else
 fi
 echo ""
 
-# Send a one-time "RUN STARTED" notification when the full queue is ready
-# and no suites have been dispatched yet (fresh start, not a reconnect).
-if [ ${#_work_queue[@]} -gt 0 ] && [ $_num_running -eq 0 ] && [ $_num_completed -eq 0 ]; then
+# Send "DISPATCHER STARTED" notification only on a 100% clean start
+# (nothing completed, nothing running — a real fresh test run).
+# Exceptional events (retries, reschedules) send their own notifications.
+if [ $_num_completed -eq 0 ] && [ $_num_running -eq 0 ] && [ ${#_work_queue[@]} -gt 0 ]; then
 	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-		_queue_list=""
+		_notify_detail="
+Queued:"
 		for _qs in "${_work_queue[@]}"; do
-			_queue_list="${_queue_list}
+			_notify_detail+="
   ${_qs}"
 		done
-		$NOTIFY_CMD "[e2e] RUN STARTED: ${#_work_queue[@]} suites queued${_queue_list}" < /dev/null >/dev/null 2>&1
+		_notify_msg="[e2e] DISPATCHER STARTED: ${#_work_queue[@]} suites queued${_notify_detail}"
+		$NOTIFY_CMD "$_notify_msg" < /dev/null >/dev/null 2>&1
 	fi
 fi
 
@@ -1566,14 +1579,41 @@ _write_dispatch_state() {
 	} > "$E2E_DISPATCH_STATE"
 }
 
+# --- One-shot force dispatch: --suite X --pool N --force with running dispatcher
+# Instead of replacing the dispatcher, dispatch directly and signal it.
+if [ -n "$CLI_FORCE" ] && [ -n "$CLI_POOL" ] && [ -n "$CLI_SUITE" ]; then
+	if [ -f "$E2E_DISPATCHER_PID" ]; then
+		_old_dpid=$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)
+		if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
+			echo ""
+			echo "  Dispatcher running (pid $_old_dpid) -- performing one-shot dispatch"
+			echo "  FORCE DISPATCH: $CLI_SUITE -> pool $CLI_POOL"
+
+			declare -A _retried=()
+			_dispatch_suite "$CLI_POOL" "$CLI_SUITE"
+
+			echo "$CLI_POOL $CLI_SUITE" >> "$E2E_FORCED_DISPATCH"
+			echo ""
+			echo "  Done. Dispatcher notified via $E2E_FORCED_DISPATCH."
+			echo "  Monitor: run.sh status --pools $_OP_POOLS"
+			echo "  Attach:  run.sh attach con${CLI_POOL}"
+			exit 0
+		fi
+	fi
+fi
+
 # Check for an existing dispatcher
 if [ -f "$E2E_DISPATCHER_PID" ]; then
 	_old_dpid=$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)
 	if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
 		echo ""
 		printf "  \033[1;33mWARNING: Another dispatcher is already running (pid %s)\033[0m\n" "$_old_dpid"
-		printf "  Kill it and take over? (Y/n): "
-		read -r -t 30 _answer || _answer="n"
+		if [ -n "$CLI_YES" ]; then
+			_answer="y"
+		else
+			printf "  Kill it and take over? (Y/n): "
+			read -r -t 30 _answer || _answer="n"
+		fi
 		if [[ "$_answer" =~ ^[Yy]?$ ]]; then
 			kill "$_old_dpid" 2>/dev/null || true
 			sleep 1
@@ -1585,7 +1625,7 @@ if [ -f "$E2E_DISPATCHER_PID" ]; then
 	fi
 fi
 echo $$ > "$E2E_DISPATCHER_PID"
-trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE"' EXIT
+trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH"' EXIT
 
 declare -A _retried=()
 _MAX_RETRIES=2
@@ -1605,12 +1645,33 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 
 	# Check for externally injected suites (from "reschedule" command)
 	if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+		_inj_count=0
+		_inj_list=""
 		while IFS= read -r _inj_suite; do
 			[ -z "$_inj_suite" ] && continue
 			_work_queue+=("$_inj_suite")
+			_inj_list+="  ${_inj_suite}
+"
+			(( _inj_count++ ))
 			printf "  [%s] INJECTED: %s (from reschedule)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
 		done < "$E2E_INJECT_QUEUE"
 		> "$E2E_INJECT_QUEUE"
+		if [ "$_inj_count" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+			$NOTIFY_CMD "[e2e] RESCHEDULE: ${_inj_count} suite(s) injected into queue:
+${_inj_list}" < /dev/null >/dev/null 2>&1
+		fi
+	fi
+
+	# Pick up one-shot forced dispatches (from "run --suite X --pool N --force")
+	if [ -f "$E2E_FORCED_DISPATCH" ] && [ -s "$E2E_FORCED_DISPATCH" ]; then
+		while IFS=' ' read -r _fd_pool _fd_suite; do
+			[ -z "$_fd_pool" ] && continue
+			_busy_pools[$_fd_pool]="$_fd_suite"
+			_result_pool[$_fd_suite]="$_fd_pool"
+			printf "  [%s] EXTERNAL: %s dispatched to pool %s\n" \
+				"$(date '+%H:%M:%S')" "$_fd_suite" "$_fd_pool"
+		done < "$E2E_FORCED_DISPATCH"
+		> "$E2E_FORCED_DISPATCH"
 	fi
 
 	# Dispatch to free pools
@@ -1641,6 +1702,16 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 				(( _retry_added++ ))
 			fi
 		done
+		# Notify on retries (exceptional circumstance)
+		if [ "$_retry_added" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+			_retry_list=""
+			for (( _ri = _queue_idx; _ri < ${#_work_queue[@]}; _ri++ )); do
+				_retry_list+="  ${_work_queue[$_ri]} (retry ${_retried[${_work_queue[$_ri]}]:-?}/${_MAX_RETRIES})
+"
+			done
+			$NOTIFY_CMD "[e2e] RETRY: ${_retry_added} failed suite(s) re-queued:
+${_retry_list}" < /dev/null >/dev/null 2>&1
+		fi
 		# Dispatch newly queued retries immediately
 		if [ "$_retry_added" -gt 0 ]; then
 			while [ $_queue_idx -lt ${#_work_queue[@]} ]; do

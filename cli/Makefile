@@ -135,10 +135,15 @@ help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  aba \033[36mcommand\033[0m\n"} /^(\s|[\$\.\(\)\~\/a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 # Keep this like it is, otherwise the deps don't work!
+# ~/bin may be removed externally (e.g. E2E cleanup) while .init sentinel persists,
+# so every ~/bin/* target also depends on the ~/bin directory via order-only prerequisite.
 .init:
 	mkdir -p ~/bin
 	ln -fs ../scripts
 	touch .init
+
+~/bin:
+	mkdir -p ~/bin
 
 # aba.conf should never be missing!
 ../aba.conf:
@@ -203,7 +208,7 @@ out-download-no-version:
 ########################################
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
 oc: ~/bin/oc  ## Install oc into ~/bin
-~/bin/oc: .init $(local_oc_tar_file)
+~/bin/oc: .init $(local_oc_tar_file) | ~/bin
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for oc download" -i "cli:download:oc:$(ocp_version)" || true
 	file $(local_oc_tar_file) | grep -q "gzip compressed data"
 	@echo [ABA] Extracting $(local_oc_tar_file) to ~/bin/oc
@@ -237,7 +242,7 @@ $(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
 ########################################
 
 openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/bin
-~/bin/openshift-install: .init $(openshift_install_file)
+~/bin/openshift-install: .init $(openshift_install_file) | ~/bin
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for openshift-install download" -i "cli:download:openshift-install:$(ocp_version)" || true
 	@echo [ABA] Extracting  $(openshift_install_file) to $@
 	tar -C ~/bin -xmzf $(openshift_install_file) openshift-install
@@ -256,7 +261,7 @@ $(openshift_install_file):  ## Download openshift-install tarball
 
 ########################################
 oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
-~/bin/oc-mirror: .init $(local_oc_mirror_tar)
+~/bin/oc-mirror: .init $(local_oc_mirror_tar) | ~/bin
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for oc-mirror download" -i "cli:download:oc-mirror" || true
 	@echo [ABA] Extracting $(local_oc_mirror_tar) to ~/bin/oc-mirror
 	tar -C ~/bin -xmzf $(local_oc_mirror_tar) oc-mirror
@@ -287,7 +292,7 @@ oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 ########################################
 # Use either x86_64 or arm64 
 govc: ~/bin/govc  ## Install govc to ~/bin/govc
-~/bin/govc: .init $(govc_tar_file)
+~/bin/govc: .init $(govc_tar_file) | ~/bin
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc download" -i "cli:download:govc" || true
 	@echo [ABA] Extracting $(govc_tar_file) to ~/bin/govc
 	tar -C ~/bin -xmzf $(govc_tar_file) govc
@@ -305,7 +310,7 @@ $(govc_tar_file):   ## Download govc tarball
 # Use either amd64 or aarch64 
 .PHONY: butane
 butane: ~/bin/butane ## Install butane to ~/bin/butane
-~/bin/butane: $(butane_binary_file)
+~/bin/butane: $(butane_binary_file) | ~/bin
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for butane download" -i "cli:download:butane" || true
 	@echo [ABA] Copying butane binary to $@
 	cp $(butane_binary_file) $@

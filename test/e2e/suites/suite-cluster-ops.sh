@@ -101,12 +101,12 @@ e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_F
 e2e_run "Verify vmware.conf" "grep aba-e2e vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
-# Include all operators that the pool registry synced: kiali-ossm (redhat via abatest),
-# plus cincinnati-operator (redhat), nginx-ingress-operator (certified), flux (community).
+# Must match what the pool registry's catalog indexes actually contain:
+# redhat: advanced-cluster-management, certified: nginx-ingress-operator, community: flux.
 # ABA regenerates the catalog index during ISO/agentconf based on configured operators,
 # so these must be in aba.conf to avoid overwriting the pool registry's catalog index.
-e2e_run "Set operator sets" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
-e2e_run "Add pool-registry test operators" "aba --ops cincinnati-operator nginx-ingress-operator flux"
+e2e_run "Set operator sets" "aba --op-sets acm"
+e2e_run "Add pool-registry test operators" "aba --ops nginx-ingress-operator flux"
 
 e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 
@@ -116,8 +116,8 @@ e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmwa
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
-e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
-e2e_run "Add pool-registry test operators (re-apply)" "aba --ops cincinnati-operator nginx-ingress-operator flux"
+e2e_run "Set operator sets (re-apply)" "aba --op-sets acm"
+e2e_run "Add pool-registry test operators (re-apply)" "aba --ops nginx-ingress-operator flux"
 
 test_end
 
@@ -229,8 +229,8 @@ test_begin "SNO: verify operators from all catalogs"
 
 # After day2 applies CatalogSources, operators should appear in packagemanifests.
 # Allow time for catalog pods to start and index.
-e2e_run -r 20 15 "Wait for cincinnati-operator (redhat catalog)" \
-    "aba --dir $SNO run --cmd 'oc get packagemanifests' | grep cincinnati-operator"
+e2e_run -r 20 15 "Wait for advanced-cluster-management (redhat catalog)" \
+    "aba --dir $SNO run --cmd 'oc get packagemanifests' | grep advanced-cluster-management"
 e2e_run -r 20 15 "Wait for nginx-ingress-operator (certified catalog)" \
     "aba --dir $SNO run --cmd 'oc get packagemanifests' | grep nginx-ingress-operator"
 e2e_run -r 20 15 "Wait for flux (community catalog)" \
