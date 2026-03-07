@@ -897,7 +897,9 @@ e2e_run() {
                     echo "Test: ${_E2E_CURRENT_TEST:-$description}"
                     echo "Command: $cmd"
                     echo "Host: ${host:-$(hostname -s)}"
+                    echo ""
                     echo "--- Last 20 lines of suite log ---"
+                    echo ""
                     tail -20 "$E2E_LOG_FILE" 2>/dev/null
                 ) | _e2e_notify_stdin "FIRST FAIL: $description"
             fi
@@ -914,7 +916,9 @@ e2e_run() {
                         echo "Test: ${_E2E_CURRENT_TEST:-$description}"
                         echo "Command: $cmd"
                         echo "Host: ${host:-$(hostname -s)}"
+                        echo ""
                         echo "--- Last 20 lines of suite log ---"
+                        echo ""
                         tail -20 "$E2E_LOG_FILE" 2>/dev/null
                     ) | _e2e_notify_stdin "EXHAUSTED: $description"
                 fi

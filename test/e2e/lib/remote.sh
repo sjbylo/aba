@@ -216,6 +216,21 @@ clone_vm() {
         echo "  WARNING: No NICs found on clone '$clone_name', skipping MAC setup."
     fi
 
+    # Expand disk if VM_DISK_EXTRA_GB is set (expand-home.service grows /home on boot)
+    if [ "${VM_DISK_EXTRA_GB:-0}" -gt 0 ] 2>/dev/null; then
+        local _cur_kb _new_gb
+        _cur_kb=$(govc device.info -vm "$clone_name" -json disk-1000-0 2>/dev/null \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['devices'][0]['capacityInKB'])" 2>/dev/null) || true
+        if [ -n "$_cur_kb" ] && [ "$_cur_kb" -gt 0 ] 2>/dev/null; then
+            _new_gb=$(( (_cur_kb / 1048576) + VM_DISK_EXTRA_GB ))
+            echo "  Expanding disk by ${VM_DISK_EXTRA_GB}GB (total: ${_new_gb}GB) ..."
+            govc vm.disk.change -vm "$clone_name" -disk.label "Hard disk 1" -size "${_new_gb}G" || \
+                echo "  WARNING: disk expansion failed (non-fatal)"
+        else
+            echo "  WARNING: could not read disk size -- skipping expansion"
+        fi
+    fi
+
     echo "  Powering on clone '$clone_name' ..."
     # Tolerate exit 1: VM may already be powered on (e.g. retry or race)
     govc vm.power -on "$clone_name" 2>/dev/null || true
