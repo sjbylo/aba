@@ -84,46 +84,31 @@ reg_check_fqdn() {
 }
 
 # --- reg_detect_existing ------------------------------------------------------
-# Check if registry credentials already exist (fast-path) or if a registry
-# is already running at reg_url.
+# Safety check: abort if an unknown external registry is already running at
+# reg_url.  This prevents ABA from blindly installing on top of a registry
+# it did not create.
 #
-# If credentials exist: run verify and exit (nothing to install).
-# If a registry is detected at the URL: abort with instructions to provide
-# credentials rather than installing on top of it.
+# NOTE: This function does NOT track ABA's own install state -- that is
+# handled by the Makefile's .available/.unavailable markers.  If .available
+# is missing, Make calls reg-install.sh and the registry will be installed.
 reg_detect_existing() {
-	# Fast-path: credentials already exist and we have install state -- just verify and exit.
-	# Guard: if the cached state references a different host/port than mirror.conf,
-	# the credentials are stale (e.g. user reconfigured after reset) — skip fast-path.
-	if [ -s "$regcreds_dir/pull-secret-mirror.json" ] && [ -s "$regcreds_dir/state.sh" ]; then
-		if (source "$regcreds_dir/state.sh"
-		    [ "${REG_HOST:-}" = "$reg_host" ] && [ "${REG_PORT:-}" = "$reg_port" ]) 2>/dev/null; then
-			aba_debug "Found existing pull secret and state at $regcreds_dir"
-			scripts/reg-verify.sh
-			exit
-		else
-			aba_info "Registry host/port changed (cached state differs from mirror.conf) -- proceeding with fresh install"
-		fi
-	fi
-
-	# Probe for Quay health endpoint
+	# Probe for Quay health endpoint (stderr suppressed -- probes are expected to fail)
 	aba_info "Probing $reg_url/health/instance"
-	if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
+	if probe_host "$reg_url/health/instance" "Quay registry health endpoint" 2>/dev/null; then
 		aba_abort \
 			"Existing Quay registry found at $reg_url/health/instance" \
-			"To use this registry, copy its pull secret and root CA into '$regcreds_dir/' and try again." \
-			"Files needed: 'pull-secret-mirror.json' and 'rootCA.pem'" \
-			"The pull secret can also be created via 'aba -d mirror password'" \
+			"If this is your registry, register it with: aba -d $(basename "$PWD") --pull-secret-mirror <file> --ca-cert <file>" \
+			"The pull secret can also be created via 'aba -d $(basename "$PWD") password'" \
 			"See the README.md for further information."
 	fi
 
 	# Probe for any registry at the URL
 	aba_info "Probing $reg_url/"
-	if probe_host "$reg_url/" "registry root endpoint"; then
+	if probe_host "$reg_url/" "registry root endpoint" 2>/dev/null; then
 		aba_abort \
 			"Endpoint found at $reg_url/" \
-			"If this is your existing registry, copy its pull secret and root CA into '$regcreds_dir/' and try again." \
-			"Files needed: 'pull-secret-mirror.json' and 'rootCA.pem'" \
-			"The pull secret can also be created via 'aba -d mirror password'" \
+			"If this is your registry, register it with: aba -d $(basename "$PWD") --pull-secret-mirror <file> --ca-cert <file>" \
+			"The pull secret can also be created via 'aba -d $(basename "$PWD") password'" \
 			"See the README.md for further information."
 	fi
 }

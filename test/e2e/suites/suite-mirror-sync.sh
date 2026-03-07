@@ -157,8 +157,7 @@ e2e_run "Clean up mymirror dir" "rm -rf mymirror"
 # Mirror reset regression: verify reset clears binary and re-extraction works
 e2e_run "Run mirror reset" "aba --dir mirror reset --force"
 # No need to manually clear ~/.aba/mirror/mirror/ — pre-suite cleanup
-# (_cleanup_con_quay) already removed it, and reg_detect_existing() has a
-# host/port guard that prevents stale fast-path if mirror.conf changed.
+# (_cleanup_con_quay) already removed it.
 e2e_run "Verify mirror-registry binary removed by reset" \
     "test ! -f mirror/mirror-registry"
 e2e_run "Re-extract mirror-registry after reset" "make -C mirror mirror-registry"
@@ -172,23 +171,6 @@ e2e_run "Reconfigure remote registry after reset" \
 # Save/load reinstall regression: verify save+load auto-reinstalls the
 # registry when it was uninstalled (ported from old test1 lines 376-380).
 e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load"
-
-# Regression test: verify reg_detect_existing() skips fast-path when cached
-# state.sh references a different host than mirror.conf (the stale-credentials bug).
-e2e_run "Regression: reg_detect_existing detects stale host in cached state" \
-    "cd mirror && INFO_ABA=1 bash -c '
-        source scripts/include_all.sh
-        source scripts/reg-common.sh
-        source <(normalize-aba-conf)
-        source <(normalize-mirror-conf)
-        export regcreds_dir=\$HOME/.aba/mirror/\$(basename \$PWD)
-        reg_host=stale-regression-test.example.com
-        reg_port=9999
-        reg_url=https://stale-regression-test.example.com:9999
-        output=\$(reg_detect_existing 2>&1)
-        echo \"\$output\"
-        echo \"\$output\" | grep -q \"host/port changed\"
-    '"
 
 e2e_diag "Check oc-mirror cache (local)" \
     "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*'"
