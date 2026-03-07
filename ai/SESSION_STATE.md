@@ -1,26 +1,21 @@
 # Session State
 
 ## Current goal
-Stabilize E2E test suite via "gotest" directive (autonomous run/monitor/fix loop).
+User stopped all tests. Awaiting next instructions.
 
 ## Done this session
-- Diagnosed pool-registry killed by nuclear podman cleanup; added `_ensure_pool_registry()`
-- Removed redundant podman cleanup from `suite-create-bundle-to-disk.sh`
-- Removed unrealistic `rm -rf ~/.oc-mirror` cache purges from airgapped suites
-- Fixed GOVC_DATASTORE on con2/3/4; added conN vmware.conf patching to runner.sh
-- Tested expand-home.service on golden VM (works: 200G→400G)
-- Fixed ~/bin missing: cli/Makefile `| ~/bin` order-only prerequisite (universal fix)
-- Fixed `aba: command not found` in setup_aba_from_scratch() (reinstall if missing)
-- Added VM_DISK_EXTRA_GB=300 to config.env + disk expansion in clone_vm()
-- All 4 pools running suites
+- Found root cause of missing operator images: sync step was removed from cluster-ops
+- Added sync step back: `aba -d mirror sync --retry` after configuring operators
+- Fixed sync failure: replaced manual regcreds with `aba -d mirror register`
+- Changed e2e_run -r (count retries) to e2e_poll (wall-clock wait) for operator verification
+- Added cleanup of compact/standard cluster dirs after diff step (saves ~3.8 GB)
+- Removed raw `make -sC mirror .rpmsint .rpmsext` band-aid
+- User stopped all tests
 
 ## Next steps
-- User reclones pool VMs from updated golden template (with expand-home.service)
-- New clones auto-expand /home by 300GB on first boot
-- Continue gotest monitoring
+- Awaiting user instructions
+- Uncommitted changes: compact4/standard4 cleanup in suite-cluster-ops.sh
 
 ## Decisions / notes
-- `/opt/pool-reg/` must NEVER be cleaned (pool registry data)
-- Purging ~/.oc-mirror is unrealistic -- removed; VMs get larger /home instead
-- cli/Makefile fix is universal (benefits all users, not just E2E)
-- VM_DISK_EXTRA_GB=300 adds 300G to disk; expand-home.service grows /home on boot
+- Pool registry registered via `aba -d mirror register` (REG_VENDOR=existing)
+- cluster-ops has not yet passed with the latest fixes (was running on con1)
