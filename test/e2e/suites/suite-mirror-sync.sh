@@ -135,7 +135,7 @@ test_begin "OC_MIRROR_CACHE: custom cache location"
 e2e_run "Create custom cache dir" "mkdir -pv \$HOME/.custom_oc_mirror_cache"
 e2e_run -q "Clean custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache/*"
 
-e2e_run "Verify OC_MIRROR_CACHE env var is respected" \
+e2e_run -r 3 2 "Verify OC_MIRROR_CACHE env var is respected" \
     "export OC_MIRROR_CACHE=\$HOME/.custom_oc_mirror_cache && aba -d mirror save --retry && test -d \$HOME/.custom_oc_mirror_cache/.oc-mirror"
 
 e2e_run -q "Clean up custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache"
@@ -170,7 +170,7 @@ e2e_run "Reconfigure remote registry after reset" \
 
 # Save/load reinstall regression: verify save+load auto-reinstalls the
 # registry when it was uninstalled (ported from old test1 lines 376-380).
-e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load"
+e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load --retry"
 
 e2e_diag "Check oc-mirror cache (local)" \
     "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*'"
@@ -222,7 +222,7 @@ test_end
 test_begin "Testy user: re-sync with custom mirror conf"
 
 e2e_run "Uninstall registry" "aba --dir mirror uninstall"
-e2e_run -r 3 2 "Save and reload images" "aba --dir mirror save load"
+e2e_run -r 3 2 "Save and reload images" "aba --dir mirror save load --retry"
 
 # Uninstall before changing mirror.conf: config changes make mirror.conf newer
 # than .available, so Make would try to reinstall.  reg_detect_existing() aborts

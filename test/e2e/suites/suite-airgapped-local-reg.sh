@@ -253,7 +253,7 @@ mirror:
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
 EOF"
-e2e_run "Save UBI image to disk" \
+e2e_run -r 3 2 "Save UBI image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer UBI archive+config to internal bastion" \
     "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
@@ -285,7 +285,7 @@ mirror:
   additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
 EOF"
-e2e_run "Save vote-app image to disk" \
+e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app archive+config to internal bastion" \
     "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
