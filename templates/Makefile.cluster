@@ -69,16 +69,18 @@ init: .init
 	@ln -fs $(TEMPLATES)
 	@ln -fs $(SCRIPTS)
 	@ln -fs ../cli
-	@ln -fs ../mirror
-	@ln -sfn ~/.aba/mirror/mirror regcreds
+	@mirror_name=$$(grep '^mirror_name=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
+	 mirror_name=$${mirror_name:-mirror}; \
+	 ln -sfn ../$$mirror_name mirror; \
+	 ln -sfn ~/.aba/mirror/$$mirror_name regcreds
+	@ln -fs mirror/mirror.conf
 	@ln -fs ../aba.conf
 	@$(SCRIPTS)/cli-install-all.sh --wait
 	@touch .init
 	@echo [ABA] Initialized cluster directory `pwd` successfully
 
-mirror.conf: .init ## Set up the aba/mirror/mirror.conf file.
+mirror.conf:
 	@ln -fs mirror/mirror.conf
-	@echo [ABA] Using `pwd`/mirror.conf file 
 
 vmware.conf: .init ## Use VMware vCenter or ESXi to create cluster.
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc CLI tool" -i cli:install:govc -- make -sC cli govc
