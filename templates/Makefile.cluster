@@ -78,7 +78,6 @@ init: .init
 
 mirror.conf: .init ## Set up the aba/mirror/mirror.conf file.
 	@ln -fs mirror/mirror.conf
-	@touch mirror.conf
 	@echo [ABA] Using `pwd`/mirror.conf file 
 
 vmware.conf: .init ## Use VMware vCenter or ESXi to create cluster.
