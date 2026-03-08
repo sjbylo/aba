@@ -29,7 +29,18 @@ Default "No" for data deletion to be safe. This applies to Docker registries; Qu
 ### Wrong path in mirror credential error message
 
 **Status:** Backlog
-**Context:** When running `aba verify` (or `aba -d xxx verify`) from a mirror directory that has no registry credentials, the error message shows the internal `~/.aba/mirror/xxx/` path. The user sees `/home/steve/.aba/mirror/xxx/pull-secret-mirror.json` but the directory they'd naturally look at is `xxx/regcreds/` (symlink). The error should reference the user-facing `regcreds/` path instead of the internal `~/.aba/mirror/` storage path, or mention both.
+**Context:** When running `aba verify` (or `aba -d xxx verify`) from a mirror directory that has no registry credentials, the error message shows the internal `~/.aba/mirror/xxx/` path. The user sees `/home/steve/.aba/mirror/xxx/pull-secret-mirror.json` but the directory they'd naturally look at is `xxx/regcreds/` (symlink). Users must NEVER see `~/.aba/...` paths -- this is internal only.
+
+The error should reference user-facing paths and commands instead. For example:
+```
+[ABA] Error: No mirror registry credentials found.
+[ABA]        You have two options:
+[ABA]        - To install a registry: aba -d mirror install (see aba mirror --help)
+[ABA]        - To use an existing registry: aba -d mirror register --pull-secret-mirror <file> --ca-cert <file>
+[ABA]        See the README.md for more.
+```
+
+**Where:** `scripts/reg-verify.sh` lines 27-34. Also audit ALL `aba_abort` / `aba_warning` messages across `scripts/reg-*.sh` for any references to `$regcreds_dir` or `~/.aba/mirror/`.
 
 ### Suppress curl error output during registry probing
 
@@ -426,7 +437,188 @@ Suite only tests public registry path; clarify whether installing a reg is neces
 
 Full design for consistent script layout, mirror.conf config, and TUI persistence for Docker registry. Status: PLANNED, not yet implemented.
 
-### 31. CLI Download Retry Gaps
+### 31. Warn When Registry Data Directory Already Contains Data
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-08
+
+**Problem:**
+When installing a Quay or Docker registry, if the destination `data_dir` already exists and contains data from a previous installation (or unrelated files), ABA silently proceeds. This can lead to confusing failures or data corruption.
+
+**Proposed Fix:**
+In `reg-install-quay.sh` and `reg-install-docker.sh` (and the remote variants), after `reg_setup_data_dir` resolves the path, check if the directory exists and is non-empty. If so, show a prominent red warning via `aba_warning`:
+```bash
+if [ -d "$data_dir" ] && [ "$(ls -A "$data_dir" 2>/dev/null)" ]; then
+    aba_warning "Data directory '$data_dir' already exists and is not empty!" \
+        "This may contain data from a previous registry installation." \
+        "Proceeding will install on top of existing data."
+fi
+```
+For remote installs, the check should run on the remote host via SSH.
+
+### 32. Skip Remote Copy of Registry Tarball if Already Present (and valid)
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-08
+
+**Problem:**
+`reg-install-remote.sh` always copies `mirror-registry-amd64.tar.gz` (~1GB) to the remote host via `scp`, even if an identical copy already exists there from a previous install. The same may apply to the Docker registry image (`docker-reg-image.tgz`). On slow links this wastes significant time.
+
+**Proposed Fix:**
+Before copying, check if the file already exists on the remote host with a matching size (or checksum):
+```bash
+local_size=$(stat -c %s "$tarball")
+remote_size=$(ssh "$remote" "stat -c %s '$remote_path' 2>/dev/null" || echo 0)
+if [ "$local_size" != "$remote_size" ]; then
+    scp "$tarball" "$remote:$remote_path"
+fi
+```
+Or use `rsync --checksum` / `rsync --size-only` instead of `scp` for a one-line fix.
+
+### 39. Improve `.install.source` Breadcrumb File UX
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-08
+
+**Problem:**
+After registry installation, ABA leaves a hidden `.install.source` file in the registry's `reg_root` directory on the target host. This file is hard to discover (hidden dot-file) and contains minimal information:
+```
+Registry installed from bastion.example.com:/home/steve/aba/mirror
+```
+
+**Proposed Improvements:**
+
+1. **Rename to a visible, descriptive name** -- e.g., `README_INSTALLATION.md` or `INSTALLED_BY_ABA.md` so the user can easily find it.
+
+2. **Include verify and uninstall commands** so the user knows how to manage the registry:
+   ```
+   Mirror registry installed by ABA
+   Installed from: bastion.example.com:/home/steve/aba/mirror
+   Date: 2026-03-08 10:08:09
+
+   To verify:    cd ~/aba/mirror && aba verify
+   To uninstall: cd ~/aba/mirror && aba uninstall
+   ```
+
+3. **Create the file for Docker registries too** -- currently only Quay (`reg-install-quay.sh` line 72) and remote installs (`reg-install-remote.sh` line 192) create it. `reg-install-docker.sh` does not.
+
+**Where:**
+- `scripts/reg-install-quay.sh` line 72
+- `scripts/reg-install-remote.sh` line 192
+- `scripts/reg-install-docker.sh` (missing -- needs adding)
+
+### 33. `verify` Target Runs Multiple Times Unnecessarily
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-08
+
+**Problem:**
+When running `aba` commands, the Make `verify` target is executed multiple times in a row, which is unnecessary and wastes time. Need to investigate what triggers repeated `verify` runs and ensure it only executes once per invocation.
+
+**Action:** Trace which Make dependency chains pull in `verify` and add appropriate sentinel files or order-only prerequisites to prevent redundant runs.
+
+### 34. Mirror-Registry Install Files Sometimes Missing on Remote Host
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Medium  
+**Created:** 2026-03-08
+
+**Problem:**
+During remote Quay registry installation (`aba -d mirror install -H <host>`), the `mirror-registry` binary or its supporting files are sometimes not found on the remote host, causing `./mirror-registry: No such file or directory` errors. This has been seen on `registry4` and other hosts. The root cause may involve `run_once` markers persisting across `clean`/`reset` cycles, or files not being properly copied/extracted on the remote side.
+
+**Action:** Make the remote install flow more robust:
+- Verify the binary exists on the remote host before attempting to run it
+- Re-copy/re-extract if missing, regardless of `run_once` state
+- Add pre-flight checks in `reg-install-remote.sh`
+
+### 38. `aba register` Should Validate Required Options Before Invoking Make
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-08
+
+**Problem:**
+Running `aba register` without the required `--pull-secret-mirror` and `--ca-cert` flags produces a raw Make error:
+```
+[ABA] Error: pull_secret_mirror= is required (path to pull secret JSON file)
+make: *** [Makefile:73: register] Error 1
+```
+The error comes from the Makefile recipe, not from `aba.sh`. The UX should catch missing required options early in `aba.sh` (before invoking `make`) and show a helpful message with correct usage, e.g.:
+```
+[ABA] Error: 'aba register' requires --pull-secret-mirror and --ca-cert options.
+[ABA] Usage: aba -d mirror register --pull-secret-mirror <file> --ca-cert <file>
+[ABA] See 'aba mirror --help' for details.
+```
+
+**Action:** In `aba.sh`, when `cur_target` is `mirror` and `BUILD_COMMAND` contains `register`, verify that `pull_secret_mirror=` and `ca_cert=` are present in `BUILD_COMMAND` before calling `eval make`. If missing, print usage and exit. The same pattern could apply to other targets that require specific options (e.g., `password` requiring `--reg-host`).
+
+### 35. Consolidate `mirror/save` and `mirror/sync` Into `mirror/data`
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Large  
+**Created:** 2026-03-08
+
+**Problem:**
+The current split between `mirror/save/` and `mirror/sync/` directories adds complexity. Both hold imageset configs and oc-mirror workspace data for essentially the same purpose (getting images into the mirror registry). Consolidating them into a single `mirror/data/` directory would simplify the codebase, reduce user confusion, and eliminate duplicated imageset config generation logic.
+
+**Action:** Design and implement the consolidation. Key considerations:
+- Unified imageset config (currently separate `imageset-config-save.yaml` and `imageset-config-sync.yaml`)
+- Backward compatibility for existing users with save/sync directories
+- Impact on `aba save`, `aba load`, `aba sync` CLI commands
+- Bundle workflow (save on connected side, load on disconnected side)
+
+### 40. Improve `day2.sh` Screen Output and UX
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Medium  
+**Created:** 2026-03-08
+
+**Problem:**
+The `day2.sh` script output is noisy and hard to follow. Users see walls of `oc apply` output, raw YAML, and unclear progress indicators. The script should provide a cleaner, step-by-step experience showing what it's doing and whether each step succeeded.
+
+**Action:** Review and improve `day2.sh` output:
+- Clear step headers (e.g., "Step 1/4: Configuring OperatorHub...")
+- Suppress raw `oc apply` output unless in debug mode
+- Show success/failure status per step
+- Summarize what was applied at the end
+
+### 41. Improve Overall ABA UX and Screen Output
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Large  
+**Created:** 2026-03-08
+
+**Problem:**
+ABA's screen output across all commands could be more polished and user-friendly. Issues include:
+- Inconsistent `[ABA]` prefix formatting (sometimes indented, sometimes missing)
+- Raw `make` errors shown to users instead of friendly messages
+- Internal paths (`~/.aba/...`) exposed in error messages
+- Verbose output from underlying tools (curl, podman, oc-mirror) not suppressed in normal mode
+- No clear progress indication for long-running operations
+- No summary at completion of multi-step operations
+
+**Action:** Systematic UX audit across all user-facing commands:
+- Audit all `aba_abort`, `aba_warning`, `aba_info` messages for clarity and consistency
+- Ensure `[ABA]` prefix is always left-justified (see backlog #16)
+- Suppress tool output unless `--debug` is set
+- Add progress indicators or step counters for long operations (sync, save, load, install)
+- Wrap `make` errors with user-friendly messages in `aba.sh`
+- Never expose internal paths to users (see "Wrong path in mirror credential error message")
+
+### 36. CLI Download Retry Gaps
 
 **Status:** Backlog  
 **Priority:** Low  
@@ -446,7 +638,7 @@ Two gaps in CLI download retry coverage:
 
 **Current mitigation:** curl's `--retry 8` handles most transient issues. E2E test framework has its own `e2e_run -r` retry logic. Issue would only manifest during persistent CDN/mirror outages.
 
-### 30. CLI Ensure Analysis — Add Ensures to 6 Scripts
+### 37. CLI Ensure Analysis — Add Ensures to 6 Scripts
 
 **Status:** Backlog  
 **Priority:** Low  

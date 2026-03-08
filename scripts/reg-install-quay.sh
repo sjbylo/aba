@@ -69,4 +69,12 @@ eval $cmd --initPassword $reg_pw
 
 reg_post_install "$reg_root/quay-rootCA/rootCA.pem" quay
 
-eval "echo Registry installed from $(hostname -f):$PWD > $reg_root/.install.source"
+cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
+	Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
+	Installed from: $(hostname -f):$PWD
+	Date: $(date '+%Y-%m-%d %H:%M:%S')
+
+	On host $(hostname -f):
+	To verify:    cd $PWD && aba verify
+	To uninstall: cd $PWD && aba uninstall
+BREADCRUMB

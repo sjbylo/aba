@@ -1312,8 +1312,8 @@ _collect_pool_logs() {
 	local log_dir="$_RUN_DIR/logs"
 
 	mkdir -p "$log_dir"
-	scp -r $_SSH_OPTS "${user}@${con_host}:~/aba/test/e2e/logs/*" "$log_dir/" 2>/dev/null || true
-	scp -r $_SSH_OPTS "${user}@${dis_host}:~/aba/test/e2e/logs/*" "$log_dir/" 2>/dev/null || true
+	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/aba/test/e2e/logs/*" "$log_dir/" 2>/dev/null || true
+	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/aba/test/e2e/logs/*" "$log_dir/" 2>/dev/null || true
 }
 
 # --- Detect running and completed suites on all conN (stateless reconnect) ----
