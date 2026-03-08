@@ -187,6 +187,29 @@ e2e_run_must_fail "Install to localhost with remote key must fail" \
 e2e_run "Restore mirror.conf after localhost test" \
 	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf && sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/' mirror/mirror.conf"
 
+# Reinstall detection: reg_detect_existing() must abort when state.sh shows
+# ABA already installed a registry at this host.
+e2e_run "Set reg_host for reinstall test" \
+	"aba -d mirror -H \$(hostname -f)"
+e2e_run "Create fake state.sh for reinstall test" \
+	"mkdir -p ~/.aba/mirror/mirror && echo REG_HOST=\$(hostname -f) > ~/.aba/mirror/mirror/state.sh"
+e2e_run "Remove .available to trigger install path" \
+	"rm -f mirror/.available"
+e2e_run_must_fail "Reinstall of existing registry must abort" \
+	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_check_fqdn && reg_detect_existing'"
+e2e_run "Cleanup reinstall test state" \
+	"rm -f ~/.aba/mirror/mirror/state.sh && sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+
+# Verify without credentials: must fail with user-friendly message
+e2e_run "Set reg_host for verify test" \
+	"aba -d mirror -H \$(hostname -f)"
+e2e_run "Ensure no credentials exist" \
+	"rm -f ~/.aba/mirror/mirror/pull-secret-mirror.json ~/.aba/mirror/mirror/rootCA.pem"
+e2e_run_must_fail "Verify without credentials must fail" \
+	"aba -d mirror verify"
+e2e_run "Restore mirror.conf after verify test" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+
 test_end 0
 
 # ============================================================================

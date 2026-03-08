@@ -101,3 +101,13 @@ if ! curl -k -fsSL --connect-timeout 10 "$reg_url/v2/" \
 fi
 
 reg_post_install "$REGISTRY_CERTS_DIR/ca.crt" docker
+
+cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
+	Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
+	Installed from: $(hostname -f):$PWD
+	Date: $(date '+%Y-%m-%d %H:%M:%S')
+
+	On host $(hostname -f):
+	To verify:    cd $PWD && aba verify
+	To uninstall: cd $PWD && aba uninstall
+BREADCRUMB

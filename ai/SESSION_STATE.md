@@ -1,25 +1,18 @@
 # Session State
 
 ## Current goal
-Fix Makefile.mirror dependency and ordering issues (plan: "Fix Makefile dependencies").
+Stabilizing E2E test suites and improving ABA UX.
 
 ## Done this session
-- Added `mirror-registry` back as order-only prereq of `.available`
-- Fixed `clean` ordering: symlink deletion moved to last line (after run-once.sh calls)
-- Fixed `reset` ordering: run-once.sh calls moved before `make clean`; removed redundant marker reset
-- Removed `2>/dev/null || true` from all 4 run-once.sh calls
-- Previous uncommitted: `.rpmsext` moved to order-only for `.available`, added to `register` target
-- Tested on bastion: `make clean` then `make install` correctly re-extracts mirror-registry binary
-- Pre-commit checks pass
-- Added "clean vs reset" documentation section to ai/RULES_OF_ENGAGEMENT.md
+- Updated `INSTALLED_BY_ABA.md` breadcrumb format in all 3 registry install scripts to include GitHub URL and originating hostname.
+- Fixed root cause of Error 18 (Docker port conflict): added `.check-save-dir` phony target in `templates/Makefile.mirror` so `load` fails fast when `save/` is missing, before `install` is triggered.
+- Tested on bastion: `make -sC mirror load` fails immediately with clear error, no registry reinstall.
 
 ## Next steps
-1. Commit and push (awaiting user approval)
-2. Deploy to registry4 and test `make -C mirror install` standalone
-3. User re-running test1 on registry2; may need to address `save load` / `reg_detect_existing` issue separately
+- Commit and push both changes (breadcrumb format + load save-dir check) pending user approval.
+- Continue with pending backlog items and E2E stabilization.
 
 ## Decisions / notes
-- `mirror-registry` as order-only: avoids timestamp-triggered reinstall after clean
-- `run-once.sh -r` exits 0 silently -- no reason for error suppression
-- `clean` = mid-workflow restart (derived files); `reset` = distclean (full restore)
-- SSH hang to registry4 during real test was unrelated (stale connection)
+- `.check-save-dir` is phony and placed before `install` in `load` prerequisites for left-to-right evaluation.
+- `reg-load.sh` line 79 check kept as defense-in-depth.
+- `testload: save install load` unaffected since `save` creates the directory first.

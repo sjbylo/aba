@@ -26,12 +26,11 @@ reg_url=https://$reg_host:$reg_port
 # Check for existing reg. creds
 if [ ! -s "$regcreds_dir/pull-secret-mirror.json" ]; then
 	aba_abort \
-		"No mirror registry credential file found in: $regcreds_dir/pull-secret-mirror.json" \
+		"No mirror registry credentials found for host: $reg_host" \
 		"You have two options:" \
-		"- To install a registry, see: aba mirror --help" \
-		"- To use an existing mirror registry, copy its pull secret and root CA files into: $regcreds_dir/ and try again." \
-		"  The files must be named \"$regcreds_dir/pull-secret-mirror.json\" and \"$regcreds_dir/rootCA.pem\" respectively." \
-		"See the README.md for more."
+		"- To install a new registry:  aba -d $(basename "$PWD") install" \
+		"- To use an existing registry: aba -d $(basename "$PWD") register --pull-secret-mirror <file> --ca-cert <file>" \
+		"See 'aba mirror --help' or the README.md for more."
 fi
 
 if [ -s "$regcreds_dir/rootCA.pem" ]; then

@@ -127,9 +127,14 @@ save: .init .rpmsext ~/.pull-secret.json                                        
 	@$(MAKE) download-registries 2>&1 || echo "[ABA] Warning: Registry binary download failed (non-fatal). You can download it later or use a Docker registry."
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
+# Fail fast if save/ is missing, before Make triggers 'install' (which would reinstall the registry needlessly).
+.PHONY: .check-save-dir
+.check-save-dir:
+	@[ -d save ] || { echo "[ABA] Error: Missing 'mirror/save' directory!  Run 'aba -d mirror save' first on a connected host."; exit 1; }
+
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: .init               .rpmsint install  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
+load: .init               .rpmsint .check-save-dir install  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-load.sh          $(retry)
 
 .PHONY: testload

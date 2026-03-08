@@ -188,7 +188,15 @@ esac
 # --- Fetch CA and run local post-install ---
 reg_post_install "$_target:$remote_ca" "$vendor" --ssh
 
-# Leave breadcrumb on remote
-echo "Registry installed from $(hostname):$PWD" | $_ssh "cat > $reg_root/.install.source"
+# Leave breadcrumb on remote so the user knows how to manage this registry
+$_ssh "cat > $reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
+	Mirror registry installed by ABA: https://github.com/sjbylo/aba.git
+	Installed from: $(hostname -f):$PWD
+	Date: $(date '+%Y-%m-%d %H:%M:%S')
+
+	On host $(hostname -f):
+	To verify:    cd $PWD && aba verify
+	To uninstall: cd $PWD && aba uninstall
+BREADCRUMB
 
 # Cleanup handled by EXIT trap
