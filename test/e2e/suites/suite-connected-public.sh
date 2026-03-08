@@ -222,7 +222,7 @@ e2e_run "Verify no httpProxy in mirror+direct mode" \
 e2e_run "Verify additionalTrustBundle present for mirror CA" \
     "grep additionalTrustBundle $SNO_MIRROR/install-config.yaml"
 
-e2e_run "Clean up sno-mirror cluster dir" "rm -rf $SNO_MIRROR"
+e2e_run "Clean up sno-mirror cluster dir" "aba --dir $SNO_MIRROR clean"
 
 test_end
 
@@ -260,7 +260,7 @@ assert_file_exists "$SNO_PROXY_ONLY/cluster.conf"
 e2e_run "Verify int_connection=proxy in cluster.conf" \
     "grep 'int_connection=proxy' $SNO_PROXY_ONLY/cluster.conf"
 
-e2e_run "Clean up sno-proxyonly cluster dir" "rm -rf $SNO_PROXY_ONLY"
+e2e_run "Clean up sno-proxyonly cluster dir" "aba --dir $SNO_PROXY_ONLY clean"
 
 # Restore direct internet
 e2e_run "Restore direct internet" \
@@ -307,7 +307,7 @@ e2e_run "Verify install-config noProxy includes node subnet or domain" \
     "grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep -E '10\\.' || \
      grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep example.com"
 
-e2e_run "Clean up sno-noproxy cluster dir" "rm -rf $SNO_NOPROXY"
+e2e_run "Clean up sno-noproxy cluster dir" "aba --dir $SNO_NOPROXY clean"
 
 test_end
 

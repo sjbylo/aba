@@ -88,10 +88,21 @@ reg_check_fqdn() {
 # reg_url.  This prevents ABA from blindly installing on top of a registry
 # it did not create.
 #
-# NOTE: This function does NOT track ABA's own install state -- that is
-# handled by the Makefile's .available/.unavailable markers.  If .available
-# is missing, Make calls reg-install.sh and the registry will be installed.
+# Skipped when ABA already manages a registry at this host (state.sh exists
+# with matching REG_HOST).  This allows mirror.conf changes (e.g. data_dir,
+# reg_user) to trigger a reinstall without the detection aborting on ABA's
+# own registry.
 reg_detect_existing() {
+	# Skip detection if ABA previously installed/registered a registry at this host
+	if [ -s "$regcreds_dir/state.sh" ]; then
+		local _saved_host
+		_saved_host=$(grep '^REG_HOST=' "$regcreds_dir/state.sh" 2>/dev/null | cut -d= -f2)
+		if [ "$_saved_host" = "$reg_host" ]; then
+			aba_info "Registry at $reg_host is ABA-managed (state.sh) -- skipping external detection"
+			return 0
+		fi
+	fi
+
 	# Probe for Quay health endpoint (stderr suppressed -- probes are expected to fail)
 	aba_info "Probing $reg_url/health/instance"
 	if probe_host "$reg_url/health/instance" "Quay registry health endpoint" 2>/dev/null; then

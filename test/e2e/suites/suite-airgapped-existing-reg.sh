@@ -136,13 +136,23 @@ e2e_run_must_fail "Uninstall existing reg should abort (state=existing)" \
 e2e_run_must_fail "Sync to unknown host should fail" \
     "aba -d mirror sync -H unknown.example.com --retry"
 
-# Restore reg_host after the must-fail test (the -H flag above overwrites mirror.conf)
+# Restore reg_host after the must-fail test (the -H flag above overwrites mirror.conf).
 e2e_run "Restore reg_host after must-fail" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 
 # Pool registry is already registered -- install should detect it and succeed (idempotent)
 e2e_run "Verify idempotent install detects existing registry" \
     "aba -d mirror install"
+
+# Existing registry detection (ported from old test2 line 178):
+# Unregister first so ABA doesn't know about the registry, then try to install.
+# reg_detect_existing() should detect the running pool Quay and abort.
+e2e_run "Unregister pool registry for must-fail test" \
+    "aba -d mirror unregister"
+e2e_run_must_fail "Install when registry already exists must fail" \
+    "aba -d mirror install"
+e2e_run "Re-register pool registry after must-fail test" \
+    "aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 test_end
 
@@ -253,7 +263,7 @@ e2e_run_remote -r 1 1 "Create compact cluster (bootstrap only)" \
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir $COMPACT delete"
 e2e_run_remote -q "Clean compact dir" \
-    "cd ~/aba && rm -rf $COMPACT"
+    "cd ~/aba && aba --dir $COMPACT clean"
 
 test_end
 
