@@ -75,11 +75,12 @@ test_begin "Setup: install aba and configure"
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
 
-e2e_run "Remove make (verify aba auto-installs it)" \
-    "sudo dnf remove make -y --disableplugin=subscription-manager && ! which make"
+# Clean-start bootstrap: remove packages ABA must auto-reinstall (ported from old test1-5)
+e2e_run "Remove packages to test clean bootstrap" \
+    "sudo dnf remove -y git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer --disableplugin=subscription-manager || true"
 
-e2e_run "Install aba" "./install"
-e2e_run "Verify make was auto-installed" "which make"
+e2e_run "Install aba (must reinstall removed packages)" "./install"
+e2e_run "Verify key tools restored" "which git make jq openssl skopeo hostname"
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
 # GAP 2: Verify aba auto-update mechanism (modifying scripts/aba.sh triggers re-install)
@@ -206,8 +207,8 @@ for ctype in sno compact standard; do
 done
 
 # Clean up compact/standard dirs -- only needed for config validation, not cluster install
-e2e_run "Remove compact cluster dir (config-only)" "rm -rf $COMPACT"
-e2e_run "Remove standard cluster dir (config-only)" "rm -rf $STANDARD"
+e2e_run "Clean compact cluster dir (config-only)" "aba --dir $COMPACT clean"
+e2e_run "Clean standard cluster dir (config-only)" "aba --dir $STANDARD clean"
 
 test_end
 

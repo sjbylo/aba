@@ -503,7 +503,7 @@ test_begin "Standard: cluster with macs.conf"
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
 e2e_run_remote "Clean sno cluster dir" \
-    "cd ~/aba && rm -rf $SNO"
+    "cd ~/aba && aba --dir $SNO clean"
 
 # Build standard cluster
 e2e_run_remote "Clean standard cluster dir" \

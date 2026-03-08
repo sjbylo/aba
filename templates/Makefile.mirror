@@ -66,8 +66,10 @@ init: .init
 
 # Register an existing (externally-managed) mirror registry.
 # Copies the provided pull secret and CA cert into regcreds, trusts the CA, and marks as .available.
+# .rpmsext is included so it's built before .available is touched (avoids timestamp race where
+# .rpmsext ends up newer than .available, causing sync to unnecessarily rebuild .available).
 .PHONY: register
-register: .init mirror.conf
+register: .init .rpmsext mirror.conf
 	@[ "$(pull_secret_mirror)" ] || { echo "[ABA] Error: pull_secret_mirror= is required (path to pull secret JSON file)"; exit 1; }
 	@[ "$(ca_cert)" ] || { echo "[ABA] Error: ca_cert= is required (path to CA certificate file)"; exit 1; }
 	$(SCRIPTS)/reg-register.sh "$(pull_secret_mirror)" "$(ca_cert)"
@@ -206,10 +208,11 @@ mirror.conf: .init                                    ## Create the mirror.conf 
 	$(SCRIPTS)/create-mirror-conf.sh -f $(force)
 
 install: .available
-# .init is order-only (|) so its timestamp doesn't trigger a rebuild of .available.
-# Without this, "aba save" after "aba reset" rebuilds .init (new timestamp), causing
-# "aba load" to unnecessarily re-run reg-install.sh even though the registry is already up.
-.available: .rpmsext mirror.conf | .init  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into ~/.aba/mirror/ for existing registry.  See README.md.
+# .init and .rpmsext are order-only (|) so their timestamps don't trigger a rebuild of .available.
+# Without this, operations that rebuild .init or .rpmsext (new timestamp) cause subsequent commands
+# to unnecessarily re-run reg-install.sh even though the registry is already up.
+# Only mirror.conf changes should trigger a registry reinstall.
+.available: mirror.conf | .init .rpmsext mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into ~/.aba/mirror/ for existing registry.  See README.md.
 	$(SCRIPTS)/reg-install.sh
 	@rm -f .unavailable 
 	@touch .available
@@ -296,7 +299,6 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 .PHONY: clean
 clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirror.conf, registry state, save/ and sync/.
 	@[ -f .available ] && echo "[ABA] Note: registry is still running. Credentials in ~/.aba/mirror/ are untouched." || true
-	rm -f templates scripts cli mirror
 	rm -f aba.conf
 	rm -f .init 
 	rm -f .rpmsext .rpmsint
@@ -307,23 +309,23 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 	rm -f .cmd.out
 	rm -f .reg_vendor
 	rm -f mirror-registry image-archive.tar execution-environment.tar sqlite3.tar
-	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install"
+	rm -f templates scripts cli mirror
 
 
 # Registry credentials and state are stored persistently in ~/.aba/mirror/ and survive clean/reset.
 .PHONY: reset
 reset:                # Clean up all files. Only use if you know what you're doing! Only used to re-distribute the repository.
 	@[ -f .available ] && echo "[ABA] Note: registry is still running and can be managed via 'aba -d mirror uninstall'." || true
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download"
+	@$(SCRIPTS)/run-once.sh -r -i "mirror:download:docker-reg-image.tgz"
 	make clean
 	rm -rf *.tar mirror-registry
-	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install" 2>/dev/null || true
 	rm -rf regcreds
 	@[ -f mirror.conf ] && mv mirror.conf mirror.conf.bk && echo "[ABA] mirror.conf backed up to mirror.conf.bk" || true
 	rm -rf          oc-mirror-workspace 
 	rm -f $(DOCKER_REG_FILE)
 	rm -rf mirror-registry-*.tar.gz
-	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:download" 2>/dev/null || true
-	@$(SCRIPTS)/run-once.sh -r -i "mirror:download:docker-reg-image.tgz" 2>/dev/null || true
 	rm -f *.conf *.yaml 
 	rm -rf save sync 
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh

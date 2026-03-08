@@ -312,7 +312,7 @@ e2e_run_remote "Verify ISO created" \
 
 # Clean up and restore platform on both sides
 e2e_run_remote -q "Clean up BM test dir on internal bastion" \
-    "cd ~/aba && rm -rf $STANDARD && aba --platform vmw"
+    "cd ~/aba && aba --dir $STANDARD clean && aba --platform vmw"
 e2e_run -q "Restore VMware platform" "aba --platform vmw"
 
 test_end 0

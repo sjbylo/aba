@@ -891,7 +891,28 @@ scripts/*.sh     → Task-specific scripts, called via Makefiles
 Makefiles        → Define targets and execution context
 ```
 
-### 5. `normalize*()` Functions: Config Values Only
+### 5. `clean` vs `reset` — Know the Difference
+
+**`aba clean` / `make clean`**: Removes derived/temporary files only. The user can
+continue using ABA afterwards — all workflows (save, load, sync, install, etc.)
+will regenerate what they need.  Config files (`mirror.conf`, `cluster.conf`),
+tarballs, registry state, and `~/.aba/mirror/` credentials are preserved.
+
+**`aba reset` / `make reset`**: Nuclear option — returns the ABA directory to its
+original post-clone state (like `make distclean`).  Deletes everything `clean`
+does, plus tarballs, saved images, config files, and more.  ABA is **not expected
+to work normally** after a reset without re-running `./install` and reconfiguring.
+This is an internal/maintenance command and is not shown in user-facing help.
+
+**Rules:**
+- Use `clean` for mid-workflow restarts (e.g. repeat a `save` or `install`).
+- Use `reset` only when the repo **must** be returned to its original state.
+- Never use `reset` in the middle of a test suite — it destroys state that
+  subsequent steps depend on.
+- In E2E tests, prefer `aba clean` for end-of-test cleanup.  Use `rm -rf` only
+  for pre-test removal of entire cluster directories.
+
+### 6. `normalize*()` Functions: Config Values Only
 
 **CRITICAL RULE**: `normalize-aba-conf()`, `normalize-mirror-conf()`, and `normalize-cluster-conf()` must **only** echo config file values with sensible defaults. They must **never** compute derived values.
 
@@ -912,7 +933,7 @@ regcreds_dir=$HOME/.aba/mirror/$mirror_name
 
 **Rule of thumb**: If a value does not appear in `aba.conf`, `mirror.conf`, or `cluster.conf`, it does not belong in the corresponding normalize function.
 
-### 6. Make-First Architecture
+### 7. Make-First Architecture
 
 **Key Principle**: ABA was primarily make-based from the start. The `aba` CLI (`scripts/aba.sh`) is a convenience wrapper that resolves directories, parses CLI flags, and calls `make`.
 

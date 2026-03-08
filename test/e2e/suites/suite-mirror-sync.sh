@@ -183,11 +183,28 @@ test_end
 test_begin "SNO: bootstrap after save/load"
 
 e2e_run "Clean sno cluster directory" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
-e2e_run "Test small CIDR (cluster.conf)" \
+
+# CIDR variation tests (ported from old test1 lines 353-360)
+e2e_run "Test /29 small CIDR (cluster.conf)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step cluster.conf"
-e2e_run "Test small CIDR (ISO creation)" \
+e2e_run "Verify /29 CIDR in cluster.conf" \
+    "grep 'machine_network=.*/' $SNO/cluster.conf"
+e2e_run "Test /29 small CIDR (ISO creation)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step iso"
-e2e_run "Clean and recreate with normal CIDR" "rm -rf $SNO"
+e2e_run "Clean for /30 CIDR test" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+
+e2e_run "Test /30 CIDR (cluster.conf)" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_sno_ip)/30' --step cluster.conf"
+e2e_run "Verify /30 CIDR in cluster.conf" \
+    "grep 'machine_network=.*/30' $SNO/cluster.conf"
+e2e_run "Clean for /20 CIDR test" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+
+e2e_run "Test /20 large CIDR (cluster.conf + ISO)" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '10.0.0.0/20' --step iso"
+e2e_run "Verify /20 CIDR in cluster.conf" \
+    "grep 'machine_network=10.0.0.0/20' $SNO/cluster.conf"
+
+e2e_run "Clean and recreate with pool CIDR for install" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"

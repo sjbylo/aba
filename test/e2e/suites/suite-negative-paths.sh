@@ -175,6 +175,18 @@ e2e_run_must_fail "Mirror with bad vendor" \
 e2e_run_must_fail_remote "Load without save dir on internal bastion" \
 	"cd ~/aba && rm -rf mirror/save && aba -d mirror load"
 
+# Registry install negative tests (ported from old test2 lines 176-179)
+# These verify reg_detect_existing() and reg_check_fqdn() catch bad installs.
+e2e_run_must_fail "Install to unknown host must fail" \
+	"aba -d mirror install -H unknown.example.com"
+e2e_run "Restore reg_host after unknown-host test" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+
+e2e_run_must_fail "Install to localhost with remote key must fail" \
+	"aba -d mirror install -k ~/.ssh/id_rsa -H \$(hostname -f)"
+e2e_run "Restore mirror.conf after localhost test" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf && sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/' mirror/mirror.conf"
+
 test_end 0
 
 # ============================================================================

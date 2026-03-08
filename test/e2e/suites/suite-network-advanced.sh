@@ -194,7 +194,7 @@ _net_test() {
             "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" aba.conf"
     fi
 
-    e2e_run "Remove $cname cluster dir" "rm -rf $cname"
+    e2e_run "Clean $cname cluster dir" "rm -rf $cname"
 
     e2e_run "Generate cluster.conf for $cname" \
         "aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"

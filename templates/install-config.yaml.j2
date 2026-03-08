@@ -49,6 +49,9 @@ platform:
 {%- if GOVC_RESOURCE_POOL is defined and GOVC_RESOURCE_POOL %}
         resourcePool: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}/Resources/{{ GOVC_RESOURCE_POOL }}"
 {%- else %}
+{#- NOTE: openshift-install 4.20+ may require an explicit resourcePool.
+    If you hit "Invalid value: /Datacenter/host/Resources", set GOVC_RESOURCE_POOL
+    in vmware.conf (even to an empty value) to emit the explicit path above. #}
 #        resourcePool: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}/Resources/"
 {%- endif %}
         folder: "{{ VC_FOLDER }}"

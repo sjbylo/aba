@@ -1,20 +1,25 @@
 # Session State
 
 ## Current goal
-Fix `reg_detect_existing()` regression that blocked fresh registry installation when stale credentials persisted in `~/.aba/mirror/mirror/` across `aba reset`.
+Fix Makefile.mirror dependency and ordering issues (plan: "Fix Makefile dependencies").
 
 ## Done this session
-- Traced root cause: commit `9b3ec78` (persistent credentials migration) moved creds to `~/.aba/mirror/mirror/`. `make reset` only removes the `regcreds` symlink, not the persistent dir contents. `reg_detect_existing()` found stale creds and exited with failed `reg-verify.sh` instead of installing.
-- Fixed `reg_detect_existing()` in `scripts/reg-common.sh`: removed the entire pull-secret/state.sh fast-path block. Function now only probes URLs for unknown external registries. ABA's own install state is tracked by `.available`/`.unavailable` markers in the Makefile.
-- Updated abort messages to reference `aba -d mirror register` command.
-- Removed stale regression test and comments from `test/e2e/suites/suite-mirror-sync.sh`.
-- All pre-commit checks pass.
+- Added `mirror-registry` back as order-only prereq of `.available`
+- Fixed `clean` ordering: symlink deletion moved to last line (after run-once.sh calls)
+- Fixed `reset` ordering: run-once.sh calls moved before `make clean`; removed redundant marker reset
+- Removed `2>/dev/null || true` from all 4 run-once.sh calls
+- Previous uncommitted: `.rpmsext` moved to order-only for `.available`, added to `register` target
+- Tested on bastion: `make clean` then `make install` correctly re-extracts mirror-registry binary
+- Pre-commit checks pass
+- Added "clean vs reset" documentation section to ai/RULES_OF_ENGAGEMENT.md
 
 ## Next steps
-- Commit and push the fix (awaiting user approval).
-- User is testing with old E2E tests on registry2. Re-run the old test to verify fix.
+1. Commit and push (awaiting user approval)
+2. Deploy to registry4 and test `make -C mirror install` standalone
+3. User re-running test1 on registry2; may need to address `save load` / `reg_detect_existing` issue separately
 
 ## Decisions / notes
-- `~/.aba/` persistent dir is correct and stays.
-- `reg_detect_existing()` is ONLY a safety net against unknown external registries -- NOT ABA's install-state mechanism.
-- The Makefile's `.available`/`.unavailable` markers are the sole mechanism for ABA's own install tracking.
+- `mirror-registry` as order-only: avoids timestamp-triggered reinstall after clean
+- `run-once.sh -r` exits 0 silently -- no reason for error suppression
+- `clean` = mid-workflow restart (derived files); `reset` = distclean (full restore)
+- SSH hang to registry4 during real test was unrelated (stale connection)
