@@ -32,8 +32,27 @@ mkdir -p .index
 index_file=".index/${catalog_name}-index-v${ocp_ver_major}"
 done_file=".index/.${catalog_name}-index-v${ocp_ver_major}.done"
 
+yaml_file="mirror/imageset-config-${catalog_name}-catalog-v${ocp_ver_major}.yaml"
+
 aba_debug "Index file: $index_file"
 aba_debug "Done file: $done_file"
+aba_debug "YAML file: $yaml_file"
+
+# Regenerate the helper YAML from an existing index file if it was
+# removed (e.g. by 'aba clean').  The index data in .index/ survives
+# clean because clean only removes the mirror/.index symlink, not the
+# actual <aba_root>/.index/ directory.
+_generate_yaml_if_needed() {
+	[ -s "$yaml_file" ] && return 0
+	[ -s "$index_file" ] || return 0
+	aba_debug "Regenerating helper YAML (missing after cleanup)"
+	cat "$index_file" | awk '{print $1,$NF}' | while read op_name op_default_channel; do
+		echo "    - name: $op_name"
+		echo "      channels:"
+		echo "      - name: \"$op_default_channel\""
+	done > "$yaml_file"
+	aba_info "Regenerated $yaml_file"
+}
 
 # Cleanup on interrupt
 handle_interrupt() {
@@ -47,6 +66,7 @@ trap 'handle_interrupt' INT TERM
 if [[ -s "$index_file" && -f "$done_file" ]]; then
 	aba_debug "Index already exists and is complete"
 	aba_info "Operator index $catalog_name v$ocp_ver_major already downloaded"
+	_generate_yaml_if_needed
 	exit 0
 fi
 aba_debug "Index not found or incomplete - starting download"
@@ -104,16 +124,7 @@ touch "$done_file"
 aba_info_ok "Downloaded $catalog_name index v$ocp_ver_major successfully"
 
 # Generate helper YAML file (in mirror/ dir for consistency with other files)
-yaml_file="mirror/imageset-config-${catalog_name}-catalog-v${ocp_ver_major}.yaml"
-aba_debug "Generating helper YAML: $yaml_file"
-
-#tail -n +3 "$index_file" | awk '{print $1,$NF}' | while read op_name op_default_channel; do
-cat "$index_file" | awk '{print $1,$NF}' | while read op_name op_default_channel; do
-	echo "    - name: $op_name"
-	echo "      channels:"
-	echo "      - name: \"$op_default_channel\""
-done > "$yaml_file"
-
+_generate_yaml_if_needed
 aba_info "Generated $yaml_file for reference"
 
 exit 0

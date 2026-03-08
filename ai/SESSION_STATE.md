@@ -1,25 +1,23 @@
 # Session State
 
 ## Current goal
-Stabilizing E2E test suites and improving ABA UX.
+Fix missing catalog YAML files (root cause in download-catalog-index.sh) and E2E suite bugs.
 
 ## Done this session
-- Updated `INSTALLED_BY_ABA.md` breadcrumb format in all 3 registry install scripts (GitHub URL + hostname).
-- Fixed `reg_detect_existing()` to abort with uninstall/install instructions (no silent reinstall).
-- Fixed `reg-verify.sh` error message to not expose `~/.aba/` paths, includes host name.
-- Added `.check-save-dir` guard in Makefile `load` target (root cause fix for Error 18).
-- Added E2E tests for reinstall abort and verify-without-credentials.
-- Suppressed scp noise in `run.sh` log collection.
-- Added backlog items 31-41.
-- Committed and pushed as `a8020d0`.
-- Fixed save-dir rename in suite-airgapped-local-reg.sh (same-fs mv, uncommitted).
-- Diagnosed negative-paths Version mismatch test failure: pre-existing bug in
-  `check-version-mismatch.sh` where sync/ early-exit skips save/ check.
+1. Root-caused missing `imageset-config-*-catalog-v*.yaml` files: `download-catalog-index.sh` exits early when index+done exist, skipping YAML generation after `aba clean`
+2. Fixed `scripts/download-catalog-index.sh`: extracted `_generate_yaml_if_needed()` function, called from both cached and fresh-download paths
+3. Fixed `suite-airgapped-local-reg.sh`: removed stale "Setup: reset internal bastion" from plan_tests, added `catalogs-wait` + verify before mesh/upgrade grep
+4. Fixed `suite-mirror-sync.sh`: added `uninstall` between `save load` and config changes in testy-user test
+5. Added three new E2E golden rules (no direct file creation, no internal function calls, no mid-process `aba reset`) to rules-of-engagement.mdc, RULES_OF_ENGAGEMENT.md, and framework.sh
+6. Improved `catalogs-download` UX: uses `run_once -p` (peek) to conditionally show "running in background" vs "already available"
 
 ## Next steps
-- Fix `check-version-mismatch.sh` early-exit logic (skip per-file, not global exit 0).
-- Commit and push all pending changes.
+- Commit and push all changes (awaiting user approval)
+- Queue `airgapped-local-reg` and `mirror-sync` suites for E2E testing to verify fixes
+- Monitor for the mesh operators and testy-user tests passing
 
 ## Decisions / notes
-- Bug: `sync/.created -nt sync/imageset-config-sync.yaml` exits 0, skipping save/ check entirely.
-- `sync/` persists across `clean` (only `reset` removes it), so prior test data causes false skip.
+- `_cleanup_dis_aba()` in runner.sh already handles pre-suite disN cleanup -- no extra test needed
+- The `cat > imageset-config-save.yaml` heredoc for mesh operators stays (valid exception) but now has a comment
+- `aba reset` usage in E2E was audited -- all 7 usages are justified
+- `catalogs-download` stays non-blocking; UX improved with peek-based conditional messaging

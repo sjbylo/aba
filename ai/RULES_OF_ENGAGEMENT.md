@@ -1220,6 +1220,36 @@ documented at the top of `test/e2e/lib/framework.sh`.
     cluster.  Without it, the cluster has no mirror configuration for newly
     loaded images and deployments will fail with "image not found".
 
+18. **Tests MUST NEVER create ABA-internal or ABA-generated files directly.**
+    Do not write files like `cat > mirror/save/imageset-config-save.yaml <<EOF`
+    unless there is no `aba` or `make` target that produces the needed format.
+    Use `aba` CLI or `make` targets to generate files.
+
+    **Exception:** Creating a minimal/custom config for an incremental operation
+    that has no `aba` equivalent (e.g. operators-only imageset config without a
+    platform section).  When this is unavoidable, the test MUST include a comment
+    explaining why.
+
+19. **Tests MUST NEVER call ABA-internal functions directly.**
+    Do not call `run_once()`, `download_all_catalogs()`, `reg_detect_existing()`,
+    or similar internal functions from test code.  Tests simulate user actions via
+    `aba` CLI or `make` targets only.
+
+    **Exception:** Sourcing `include_all.sh` for access to utility functions
+    (e.g. `aba_info`) is acceptable in framework code.
+
+20. **Tests MUST NOT use `aba reset` as a mid-process cleanup mechanism.**
+    `aba reset` is a "distclean" -- it returns the repo to its original unpacked
+    state.  It should only be used when a 100% fresh clean repo is genuinely
+    required for the following test cases.  Valid uses:
+    - Setup helpers like `setup_aba_from_scratch` (need pristine starting point)
+    - Dedicated regression tests for reset behavior itself
+    - Destroying a named mirror directory that is no longer needed
+
+    For cleaning up derived files between test steps, use `aba clean`, targeted
+    `aba uninstall` / `aba delete`, or `rm -rf` on specific directories.
+    From the user's perspective, `aba reset` should almost never be needed.
+
 ### Documentation
 
 **Prefer adding documentation as comments inside the code** rather than in

@@ -48,6 +48,20 @@
 #      bundle transfer from conN.  If something is missing on disN, the
 #      bundle creation failed -- never try to fetch from the internet.
 #
+# ===========================  TEST HYGIENE  =================================
+#
+# 10c. Tests MUST NEVER create ABA-internal or ABA-generated files directly.
+#      Use 'aba' or 'make' targets to generate files.  Exception: creating a
+#      minimal/custom config that has no aba/make equivalent (must have comment).
+#
+# 10d. Tests MUST NEVER call ABA-internal functions directly
+#      (e.g. run_once(), download_all_catalogs()).  Use 'aba' CLI or 'make'.
+#
+# 10e. Tests MUST NOT use 'aba reset' as a mid-process cleanup mechanism.
+#      Only use when a 100% fresh repo is needed (e.g. setup_aba_from_scratch)
+#      or for dedicated reset regression tests.  For mid-process cleanup use
+#      'aba clean', 'aba uninstall', or 'aba delete'.
+#
 # ===========================  RESOURCE LIFECYCLE  ===========================
 #
 # 11. A suite ALWAYS cleans up the resources it created (clusters AND mirrors).

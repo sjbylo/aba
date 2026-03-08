@@ -30,5 +30,19 @@ ensure_oc_mirror || aba_debug "Warning: oc-mirror not yet available, catalogs ma
 # Start downloads in parallel (non-blocking, 1-day TTL)
 download_all_catalogs "$ocp_ver_short" 86400
 
-aba_debug "Catalog download tasks started in background"
+# Peek at task status: only show "in background" if downloads are actually running
+_any_running=
+for catalog in redhat-operator certified-operator community-operator; do
+	if ! run_once -p -i "catalog:${ocp_ver_short}:${catalog}"; then
+		_any_running=1
+		break
+	fi
+done
+
+if [ -n "$_any_running" ]; then
+	aba_info "Catalog downloads running in background. This may take a while to complete."
+	aba_info "Run 'aba save' / 'aba sync' to continue (which waits automatically)."
+else
+	aba_info_ok "All operator catalogs already available for OCP $ocp_ver_short."
+fi
 
