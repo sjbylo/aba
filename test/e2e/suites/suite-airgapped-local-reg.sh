@@ -173,11 +173,11 @@ e2e_run_remote "Verify Quay removed" \
 
 # Negative path: load without save/ dir should fail
 e2e_run_remote -q "Remove save dir for must-fail test" \
-    "cd ~/aba && mv mirror/save /tmp/e2e-save-backup"
+    "cd ~/aba && mv mirror/save mirror/save.bk"
 e2e_run_must_fail_remote "Load without save dir should fail" \
     "cd ~/aba && aba -d mirror load"
 e2e_run_remote -q "Restore save dir" \
-    "cd ~/aba && mv /tmp/e2e-save-backup mirror/save"
+    "cd ~/aba && mv mirror/save.bk mirror/save"
 
 test_end
 
