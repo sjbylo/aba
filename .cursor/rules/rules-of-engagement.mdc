@@ -100,6 +100,7 @@ alwaysApply: true
 - Tests MUST NEVER create ABA-internal or ABA-generated files directly (e.g. `cat > mirror/save/imageset-config-save.yaml`) -- use `aba` or `make` targets instead. Exception: creating a minimal/custom config for an incremental operation with no `aba` equivalent -- must include a comment explaining why.
 - Tests MUST NEVER call ABA-internal functions directly (e.g. `run_once()`, `download_all_catalogs()`) -- use `aba` CLI or `make` targets to simulate user actions. Exception: sourcing `include_all.sh` for utility functions in framework code is acceptable.
 - Tests MUST NOT use `aba reset` as a mid-process cleanup mechanism -- `aba reset` is a "distclean" that returns the repo to its original unpacked state. Only use it when a 100% fresh clean repo is genuinely required (e.g. `setup_aba_from_scratch`, or dedicated reset regression tests). For mid-process cleanup use `aba clean`, `aba uninstall`, or `aba delete`.
+- Every suite that creates clusters or mirrors MUST have an explicit `test_begin "Cleanup: ..."` block at the end that runs `aba delete` / `aba uninstall` / `aba unregister` for every resource created. The EXIT trap and `_pre_suite_cleanup` are safety nets for crashes -- NOT the primary cleanup path. Explicit cleanup also tests `aba delete`, `aba uninstall`, and `aba unregister`.
 
 ## E2E resource lifecycle
 

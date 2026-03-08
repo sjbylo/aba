@@ -56,7 +56,8 @@ plan_tests \
     "Incremental: mesh operators" \
     "Upgrade: OSUS and cluster upgrade" \
     "Lifecycle: shutdown/startup" \
-    "Standard: cluster with macs.conf"
+    "Standard: cluster with macs.conf" \
+    "Cleanup: uninstall registry on disN"
 
 suite_begin "airgapped-local-reg"
 
@@ -563,6 +564,9 @@ e2e_run_remote "Verify no registry containers" \
     "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
+
+e2e_run "Verify /home disk usage < 10GB after cleanup" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 test_end
 

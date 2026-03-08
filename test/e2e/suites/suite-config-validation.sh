@@ -48,7 +48,7 @@ e2e_run "Create throwaway SNO cluster dir" \
 	"aba cluster -n e2etmp -t sno --starting-ip $(pool_sno_ip)"
 
 e2e_run "Ensure mirror dir initialised" \
-	"aba -d mirror install 2>/dev/null || true"
+	"aba -d mirror mirror.conf"
 
 test_end 0
 

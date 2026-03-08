@@ -37,7 +37,8 @@ plan_tests \
     "Proxy mode: verify and delete" \
     "Direct+mirror mode: config verification" \
     "Proxy-only mode: verify without direct internet" \
-    "no_proxy validation"
+    "no_proxy validation" \
+    "Cleanup: delete cluster"
 
 suite_begin "connected-public"
 
@@ -308,6 +309,19 @@ e2e_run "Verify install-config noProxy includes node subnet or domain" \
      grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep example.com"
 
 e2e_run "Clean up sno-noproxy cluster dir" "aba --dir $SNO_NOPROXY clean"
+
+test_end
+
+# ============================================================================
+# End-of-suite cleanup: delete cluster
+# ============================================================================
+test_begin "Cleanup: delete cluster"
+
+e2e_run "Delete SNO cluster" \
+    "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
+
+e2e_run "Verify /home disk usage < 10GB after cleanup" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 test_end
 

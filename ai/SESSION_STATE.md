@@ -1,23 +1,24 @@
 # Session State
 
 ## Current goal
-Fix missing catalog YAML files (root cause in download-catalog-index.sh) and E2E suite bugs.
+Stabilize E2E test suite -- fix plan_tests mismatches, add explicit end-of-suite cleanup blocks, fix audit gaps, add disk usage checks.
 
 ## Done this session
-1. Root-caused missing `imageset-config-*-catalog-v*.yaml` files: `download-catalog-index.sh` exits early when index+done exist, skipping YAML generation after `aba clean`
-2. Fixed `scripts/download-catalog-index.sh`: extracted `_generate_yaml_if_needed()` function, called from both cached and fresh-download paths
-3. Fixed `suite-airgapped-local-reg.sh`: removed stale "Setup: reset internal bastion" from plan_tests, added `catalogs-wait` + verify before mesh/upgrade grep
-4. Fixed `suite-mirror-sync.sh`: added `uninstall` between `save load` and config changes in testy-user test
-5. Added three new E2E golden rules (no direct file creation, no internal function calls, no mid-process `aba reset`) to rules-of-engagement.mdc, RULES_OF_ENGAGEMENT.md, and framework.sh
-6. Improved `catalogs-download` UX: uses `run_once -p` (peek) to conditionally show "running in background" vs "already available"
+- Synced `plan_tests` with `test_begin` in all 10 suites (verified all in sync)
+- Added explicit `test_begin "Cleanup: ..."` blocks at end of suites that were missing them
+- Fixed 5 audit gaps (missing uninstall/unregister/delete in cleanup blocks)
+- Made all cleanup delete/uninstall commands conditional (check dir exists first)
+- Added `/home` disk usage check (< 10GB) after every cleanup block in all 7 suites with resources
+- Fixed suite-config-validation.sh: replaced `aba -d mirror install 2>/dev/null || true` with `aba -d mirror mirror.conf`
+- Removed `rm -rf mymirror` from suite-mirror-sync.sh to allow cleanup block to handle it
+- Added new E2E Golden Rule #21 (explicit end-of-suite cleanup mandatory) to 3 rule files
 
 ## Next steps
-- Commit and push all changes (awaiting user approval)
-- Queue `airgapped-local-reg` and `mirror-sync` suites for E2E testing to verify fixes
-- Monitor for the mesh operators and testy-user tests passing
+- Commit and push these changes
+- Run pre-commit checks
+- Queue affected suites for testing on pools
 
 ## Decisions / notes
-- `_cleanup_dis_aba()` in runner.sh already handles pre-suite disN cleanup -- no extra test needed
-- The `cat > imageset-config-save.yaml` heredoc for mesh operators stays (valid exception) but now has a comment
-- `aba reset` usage in E2E was audited -- all 7 usages are justified
-- `catalogs-download` stays non-blocking; UX improved with peek-based conditional messaging
+- Cleanup commands are conditional: `if [ -d X ]; then aba --dir X delete; else echo already removed; fi`
+- Disk check uses `df /home --output=used -BG` and fails if > 10GB used after cleanup
+- EXIT trap and `_pre_suite_cleanup` are safety nets only -- explicit cleanup is the primary path

@@ -41,7 +41,8 @@ plan_tests \
     "ABI config: sno/compact/standard" \
     "ABI config: diff against known-good examples" \
     "SNO: install cluster" \
-    "SNO: verify operators from all catalogs"
+    "SNO: verify operators from all catalogs" \
+    "Cleanup: delete cluster and unregister mirror"
 
 suite_begin "cluster-ops"
 
@@ -248,6 +249,21 @@ e2e_poll 180 15 "Wait for flux (community catalog)" \
 e2e_diag "Show all packagemanifests" "aba --dir $SNO run --cmd 'oc get packagemanifests'"
 
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
+
+test_end
+
+# ============================================================================
+# End-of-suite cleanup: delete cluster and unregister mirror
+# ============================================================================
+test_begin "Cleanup: delete cluster and unregister mirror"
+
+e2e_run "Delete SNO cluster" \
+    "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
+e2e_run "Unregister pool registry" \
+    "aba -d mirror unregister"
+
+e2e_run "Verify /home disk usage < 10GB after cleanup" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 test_end
 

@@ -1250,6 +1250,14 @@ documented at the top of `test/e2e/lib/framework.sh`.
     `aba uninstall` / `aba delete`, or `rm -rf` on specific directories.
     From the user's perspective, `aba reset` should almost never be needed.
 
+21. **Every suite MUST have an explicit end-of-suite `Cleanup:` test block.**
+    Every suite that creates clusters or mirrors MUST have an explicit
+    `test_begin "Cleanup: ..."` block at the end that runs `aba delete` /
+    `aba uninstall` / `aba unregister` for every resource created during the
+    suite.  The EXIT trap and `_pre_suite_cleanup` are safety nets for crashes
+    -- they are NOT the primary cleanup path.  Explicit cleanup also serves as
+    a test of `aba delete`, `aba uninstall`, and `aba unregister`.
+
 ### Documentation
 
 **Prefer adding documentation as comments inside the code** rather than in

@@ -45,7 +45,8 @@ plan_tests \
     "All-operators imageset: generate and verify YAML" \
     "mirror clean: removes files and re-extraction works" \
     "Load bundle to internal bastion" \
-    "Bare-metal simulation: platform=bm two-step install"
+    "Bare-metal simulation: platform=bm two-step install" \
+    "Cleanup: delete cluster and uninstall mirror on disN"
 
 suite_begin "create-bundle-to-disk"
 
@@ -316,6 +317,21 @@ e2e_run_remote -q "Clean up BM test dir on internal bastion" \
 e2e_run -q "Restore VMware platform" "aba --platform vmw"
 
 test_end 0
+
+# ============================================================================
+# End-of-suite cleanup: delete cluster and uninstall mirror on disN
+# ============================================================================
+test_begin "Cleanup: delete cluster and uninstall mirror on disN"
+
+e2e_run_remote "Delete standard cluster on disN" \
+    "cd ~/aba && if [ -d $STANDARD ]; then aba --dir $STANDARD delete; else echo '[cleanup] $STANDARD already removed'; fi"
+e2e_run_remote "Uninstall mirror registry on disN" \
+    "cd ~/aba && aba -d mirror uninstall"
+
+e2e_run "Verify /home disk usage < 10GB after cleanup" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
+
+test_end
 
 # ============================================================================
 

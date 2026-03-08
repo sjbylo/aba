@@ -83,6 +83,13 @@
 #     This enables crash recovery: runner.sh _pre_suite_cleanup iterates
 #     ALL leftover .cleanup/.mirror-cleanup files before the next suite.
 #
+# 15. Every suite that creates clusters or mirrors MUST have an explicit
+#     test_begin "Cleanup: ..." block at the end that runs aba delete /
+#     aba uninstall / aba unregister for every resource created.  The EXIT
+#     trap and _pre_suite_cleanup are safety nets for crashes -- they are
+#     NOT the primary cleanup path.  Explicit cleanup also serves as a
+#     test of aba delete, aba uninstall, and aba unregister.
+#
 # ============================================================================
 
 # Resolve the directory this library lives in
