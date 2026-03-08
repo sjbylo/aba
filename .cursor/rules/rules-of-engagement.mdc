@@ -97,6 +97,9 @@ alwaysApply: true
 - Never remove tools before operations that need them (e.g. `dnf remove make` before `aba reset`)
 - Verify cleanup actually worked (assert service is down, directory is gone)
 - Prefer `aba` commands over raw `make` / scripts -- eat your own dog food
+- Tests MUST NEVER create ABA-internal or ABA-generated files directly (e.g. `cat > mirror/save/imageset-config-save.yaml`) -- use `aba` or `make` targets instead. Exception: creating a minimal/custom config for an incremental operation with no `aba` equivalent -- must include a comment explaining why.
+- Tests MUST NEVER call ABA-internal functions directly (e.g. `run_once()`, `download_all_catalogs()`) -- use `aba` CLI or `make` targets to simulate user actions. Exception: sourcing `include_all.sh` for utility functions in framework code is acceptable.
+- Tests MUST NOT use `aba reset` as a mid-process cleanup mechanism -- `aba reset` is a "distclean" that returns the repo to its original unpacked state. Only use it when a 100% fresh clean repo is genuinely required (e.g. `setup_aba_from_scratch`, or dedicated reset regression tests). For mid-process cleanup use `aba clean`, `aba uninstall`, or `aba delete`.
 
 ## E2E resource lifecycle
 

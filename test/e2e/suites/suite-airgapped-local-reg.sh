@@ -44,7 +44,6 @@ e2e_setup
 plan_tests \
     "Setup: install aba and configure" \
     "Setup: calculate older version for upgrade" \
-    "Setup: reset internal bastion" \
     "Bundle: create with older version" \
     "Bundle: transfer to bastion" \
     "Registry: Quay install and uninstall" \
@@ -366,11 +365,24 @@ test_begin "Incremental: mesh operators"
 
 e2e_run "Add mesh operator set" "aba --op-sets mesh3"
 
+# Simulate user waiting for background catalog downloads to complete.
+# In normal use, 'aba save' / 'aba sync' run catalogs-wait automatically via
+# Makefile dependencies (imageset-config-save.yaml depends on catalogs-download
+# catalogs-wait).  Here we call it explicitly because this test manually reads
+# values from the generated catalog YAML to build a custom imageset config --
+# the same thing a user would do by consulting the catalog reference file.
+OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
+e2e_run "Wait for catalog downloads" "make -sC mirror catalogs-wait"
+e2e_run "Verify catalog YAML exists" \
+    "test -s mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml"
+e2e_run "Verify servicemeshoperator3 in catalog" \
+    "grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml"
+
 # For incremental operator saves, create a minimal imageset config with ONLY the
 # operators section (no platform).  oc-mirror v2 errors with "no release images
 # found" when the config includes a platform section but the delta tar doesn't
-# contain release images.
-OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
+# contain release images.  No aba/make target generates this minimal format,
+# so the file is created directly here.
 e2e_run "Create operators-only imageset config for mesh" \
     "cat > mirror/save/imageset-config-save.yaml <<EOF
 kind: ImageSetConfiguration
@@ -419,7 +431,11 @@ e2e_run "Configure imageset for upgrade path" \
      sed -i \"s/^      minVersion: \${_desired}/      minVersion: \${_older}/\" mirror/save/imageset-config-save.yaml && \
      sed -i 's/^#      shortestPath: true.*/      shortestPath: true/' mirror/save/imageset-config-save.yaml"
 
-# Append cincinnati-operator to the existing operators packages list (not a new section)
+# Append cincinnati-operator to the existing operators packages list (not a new section).
+# The catalog YAML should already exist from the earlier catalogs-wait; verify it.
+e2e_run "Verify catalog YAML for upgrade" \
+    "_ocp_major=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}' | cut -d. -f1-2) && \
+     test -s mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml"
 e2e_run "Append cincinnati-operator to imageset config" \
     "_ocp_major=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}' | cut -d. -f1-2) && \
      grep -A2 'name: cincinnati-operator\$' mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml >> mirror/save/imageset-config-save.yaml"

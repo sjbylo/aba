@@ -224,6 +224,12 @@ test_begin "Testy user: re-sync with custom mirror conf"
 e2e_run "Uninstall registry" "aba --dir mirror uninstall"
 e2e_run -r 3 2 "Save and reload images" "aba --dir mirror save load"
 
+# Uninstall before changing mirror.conf: config changes make mirror.conf newer
+# than .available, so Make would try to reinstall.  reg_detect_existing() aborts
+# if a registry is already installed at this host.  Uninstall first, change
+# config, then sync (which triggers a fresh install with the new settings).
+e2e_run "Uninstall registry before config change" "aba --dir mirror uninstall"
+
 e2e_run "Set data_dir in mirror.conf" "aba -d mirror --data-dir '~/my-quay-mirror-test1'"
 e2e_run "Set empty reg_pw" "aba -d mirror --reg-password"
 e2e_run "Set reg_path=my/path" "aba -d mirror --reg-path my/path"
