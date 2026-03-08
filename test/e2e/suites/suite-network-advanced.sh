@@ -323,6 +323,22 @@ test_begin "Cleanup"
 
 e2e_diag "Show remaining cluster dirs" "ls -d sno* compact* standard* 2>/dev/null || echo 'none'"
 
+e2e_run "Delete VLAN SNO cluster" \
+    "if [ -d $_SNO_VLAN ]; then aba --dir $_SNO_VLAN delete; else echo '[cleanup] $_SNO_VLAN already removed'; fi"
+e2e_run "Delete VLAN compact cluster" \
+    "if [ -d $_COMPACT_VLAN ]; then aba --dir $_COMPACT_VLAN delete; else echo '[cleanup] $_COMPACT_VLAN already removed'; fi"
+e2e_run "Delete VLAN standard cluster" \
+    "if [ -d $_STANDARD_VLAN ]; then aba --dir $_STANDARD_VLAN delete; else echo '[cleanup] $_STANDARD_VLAN already removed'; fi"
+e2e_run "Delete non-VLAN SNO cluster" \
+    "if [ -d $_SNO ]; then aba --dir $_SNO delete; else echo '[cleanup] $_SNO already removed'; fi"
+e2e_run "Delete non-VLAN compact cluster" \
+    "if [ -d $_COMPACT ]; then aba --dir $_COMPACT delete; else echo '[cleanup] $_COMPACT already removed'; fi"
+e2e_run "Delete non-VLAN standard cluster" \
+    "if [ -d $_STANDARD ]; then aba --dir $_STANDARD delete; else echo '[cleanup] $_STANDARD already removed'; fi"
+
+e2e_run "Verify /home disk usage < 10GB after cleanup" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
+
 test_end
 
 # ============================================================================

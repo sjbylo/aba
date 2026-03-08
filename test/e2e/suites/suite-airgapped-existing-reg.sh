@@ -38,7 +38,6 @@ e2e_setup
 
 plan_tests \
     "Setup: install aba and configure" \
-    "Setup: reset internal bastion" \
     "Existing registry: register pool registry" \
     "Must-fail checks" \
     "Save images to disk" \
@@ -51,7 +50,8 @@ plan_tests \
     "ACM: install operators" \
     "ACM: MultiClusterHub" \
     "NTP: day2 and chronyc verify" \
-    "Delete cluster"
+    "Delete cluster" \
+    "Cleanup: deregister pool registry"
 
 suite_begin "airgapped-existing-reg"
 
@@ -434,6 +434,9 @@ e2e_run_remote "Deregister pool registry on disN" \
     "cd ~/aba && aba -d mirror unregister"
 e2e_run_remote "Verify disN regcreds removed" \
     "test ! -f ~/.aba/mirror/mirror/pull-secret-mirror.json"
+
+e2e_run "Verify /home disk usage < 10GB after cleanup" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 test_end
 

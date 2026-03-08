@@ -35,14 +35,14 @@ e2e_setup
 
 plan_tests \
     "Setup: install aba and configure" \
-    "Setup: reset internal bastion" \
     "Docker mymirror: install and verify" \
     "Firewalld: port persistence" \
     "OC_MIRROR_CACHE: custom cache location" \
     "Save/Load: roundtrip" \
     "SNO: bootstrap after save/load" \
     "Testy user: re-sync with custom mirror conf" \
-    "Bare-metal: ISO simulation"
+    "Bare-metal: ISO simulation" \
+    "Cleanup: delete clusters and uninstall mirrors"
 
 suite_begin "mirror-sync"
 
@@ -152,7 +152,6 @@ e2e_run_remote "Verify registry removed" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 
 e2e_run "Run mymirror reset" "aba --dir mymirror reset --force"
-e2e_run "Clean up mymirror dir" "rm -rf mymirror"
 
 # Mirror reset regression: verify reset clears binary and re-extraction works
 e2e_run "Run mirror reset" "aba --dir mirror reset --force"
@@ -307,6 +306,27 @@ e2e_run_remote "Verify no registry containers on disN" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
+
+test_end
+
+# ============================================================================
+# End-of-suite cleanup: delete clusters and uninstall mirrors
+# ============================================================================
+test_begin "Cleanup: delete clusters and uninstall mirrors"
+
+e2e_run "Delete SNO cluster" \
+    "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
+e2e_run "Delete standard cluster" \
+    "if [ -d $STANDARD ]; then aba --dir $STANDARD delete; else echo '[cleanup] $STANDARD already removed'; fi"
+e2e_run "Uninstall mymirror registry" \
+    "if [ -d mymirror ]; then aba --dir mymirror uninstall; else echo '[cleanup] mymirror already removed'; fi"
+e2e_run "Uninstall mirror registry on disN" \
+    "aba --dir mirror uninstall"
+e2e_run_remote "Verify no registry containers on disN" \
+    "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
+
+e2e_run "Verify /home disk usage < 10GB after cleanup" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 test_end
 
