@@ -354,7 +354,7 @@ reg_post_install() {
 	REG_HOST=$reg_host
 	REG_PORT=$reg_port
 	REG_USER=$reg_user
-	REG_PW=$reg_pw
+	REG_PW='$reg_pw'
 	REG_ROOT=$reg_root
 	REG_SSH_KEY=${reg_ssh_key:-}
 	REG_SSH_USER=${reg_ssh_user:-}

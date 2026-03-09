@@ -860,7 +860,7 @@ if [ -n "${CLI_LIVE+set}" ]; then
 		echo '    exit 0'
 		echo '  fi'
 		echo "  _suite=\$(ssh $_so ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)"
-		printf "  printf '\\\\033]2;live | Pool %d (con%d)%%s\\\\033\\\\\\\\' \"\\\${_suite:+ | \\\$_suite}\"\n" "$p" "$p"
+		printf "  printf '\\\\033]2;live | Pool %d (con%d)%%s\\\\033\\\\\\\\' \"\${_suite:+ | \$_suite}\"\n" "$p" "$p"
 		echo '  clear'
 		echo "  ssh -t $_so ${_user}@${_h} \"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && exec tmux attach -d -t '$E2E_TMUX_SESSION'\" 2>/dev/null || {"
 		echo "    echo 'No e2e session on con${p}. Waiting for suite to start...'"

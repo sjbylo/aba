@@ -220,14 +220,22 @@ test_end
 # ============================================================================
 test_begin "Testy user: re-sync with custom mirror conf"
 
+_marker_snap() { echo "--- mirror/ markers ---"; ls -la mirror/.available mirror/.unavailable 2>&1; echo "--- state.sh ---"; cat ~/.aba/mirror/mirror/state.sh 2>/dev/null || echo "(absent)"; }
+
+e2e_diag "Markers: before uninstall-1" "_marker_snap"
 e2e_run "Uninstall registry" "aba --dir mirror uninstall"
-e2e_run -r 3 2 "Save and reload images" "aba --dir mirror save load --retry"
+e2e_diag "Markers: after uninstall-1" "_marker_snap"
+
+e2e_run -r 3 2 "Save and reload images (should install mirror)" "aba --dir mirror save load --retry"
+e2e_diag "Markers: after save-load" "_marker_snap"
 
 # Uninstall before changing mirror.conf: config changes make mirror.conf newer
 # than .available, so Make would try to reinstall.  reg_detect_existing() aborts
 # if a registry is already installed at this host.  Uninstall first, change
 # config, then sync (which triggers a fresh install with the new settings).
+e2e_diag "Markers: before uninstall-2" "_marker_snap"
 e2e_run "Uninstall registry before config change" "aba --dir mirror uninstall"
+e2e_diag "Markers: after uninstall-2" "_marker_snap"
 
 e2e_run "Set data_dir in mirror.conf" "aba -d mirror --data-dir '~/my-quay-mirror-test1'"
 e2e_run "Set empty reg_pw" "aba -d mirror --reg-password"
@@ -238,7 +246,8 @@ e2e_run "Set reg_ssh_key" "aba -d mirror --reg-ssh-key '~/.ssh/testy_rsa'"
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
 e2e_run "Clean saved data" "rm -rf mirror/save"
-e2e_run -r 3 2 "Sync images with testy user config" "aba --dir mirror sync --retry"
+e2e_diag "Markers: before sync" "_marker_snap"
+e2e_run -r 3 2 "Sync images with testy user config (should install mirror)" "aba --dir mirror sync --retry"
 
 e2e_run "Clean sno cluster dir" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
