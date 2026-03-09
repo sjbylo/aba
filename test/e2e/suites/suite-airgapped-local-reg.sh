@@ -471,7 +471,11 @@ e2e_run_remote "Set update channel to fast-${_OCP_MAJOR}" \
 e2e_poll_remote 600 30 "Wait for cluster ready to upgrade" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade' 2>&1 | grep 'Recommended updates'"
 
-e2e_run_remote -r 3 1 -d 30 "Trigger cluster upgrade" \
+# Re-verify operator health right before triggering -- cluster can degrade between
+# the poll above and the trigger (imagestream reconciliation after mesh/OSUS install)
+e2e_wait_operators_available $SNO remote
+
+e2e_run_remote -r 5 2 -d 60 "Trigger cluster upgrade" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade --to-latest=true --allow-not-recommended'"
 
 sleep 3

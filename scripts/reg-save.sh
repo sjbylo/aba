@@ -14,7 +14,7 @@ aba_debug "Starting: $0 $*"
 # Check internet connection to the registries oc-mirror pulls from
 aba_info "Checking Internet access to registry.redhat.io"
 
-if ! probe_host "https://registry.redhat.io/v2/" "Red Hat container registry"; then
+if ! curl -sILk --connect-timeout 10 --max-time 15 --retry 2 https://registry.redhat.io/v2/ >/dev/null 2>&1; then
 	aba_abort "Cannot access https://registry.redhat.io/" \
 		"Access to registry.redhat.io is required to save images to disk."
 fi
