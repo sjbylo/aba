@@ -467,9 +467,9 @@ _OCP_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cu
 e2e_run_remote "Set update channel to fast-${_OCP_MAJOR}" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade channel fast-${_OCP_MAJOR}'"
 
-# Wait until 'oc adm upgrade' shows updates are available (cluster is healthy and ready)
+# Wait until 'oc adm upgrade' lists recommended updates (cluster is healthy and ready)
 e2e_poll_remote 600 30 "Wait for cluster ready to upgrade" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade --include-not-recommended' 2>&1 | grep -iE 'Updates .* available'"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade' 2>&1 | grep 'Recommended updates'"
 
 e2e_run_remote -r 3 1 -d 30 "Trigger cluster upgrade" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade --to-latest=true --allow-not-recommended'"
@@ -564,9 +564,6 @@ e2e_run_remote "Verify no registry containers" \
     "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
-
-e2e_run "Verify /home disk usage < 10GB after cleanup" \
-    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 test_end
 

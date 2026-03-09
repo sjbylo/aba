@@ -78,8 +78,14 @@ test_end
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
+e2e_run "Reset aba to clean state" \
+    "cd ~/aba && aba reset --force"
+
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+
+e2e_run "Verify /home disk usage < 10GB after reset" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 e2e_run "Install aba" "./install"
 
@@ -335,9 +341,6 @@ e2e_run "Delete non-VLAN compact cluster" \
     "if [ -d $_COMPACT ]; then aba --dir $_COMPACT delete; else echo '[cleanup] $_COMPACT already removed'; fi"
 e2e_run "Delete non-VLAN standard cluster" \
     "if [ -d $_STANDARD ]; then aba --dir $_STANDARD delete; else echo '[cleanup] $_STANDARD already removed'; fi"
-
-e2e_run "Verify /home disk usage < 10GB after cleanup" \
-    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 test_end
 

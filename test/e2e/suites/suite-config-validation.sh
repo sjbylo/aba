@@ -38,6 +38,15 @@ suite_begin "config-validation"
 # ============================================================================
 test_begin "Setup: install and configure"
 
+e2e_run "Reset aba to clean state" \
+	"cd ~/aba && aba reset --force"
+
+e2e_run "Remove oc-mirror caches" \
+	"sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+
+e2e_run "Verify /home disk usage < 10GB after reset" \
+	"used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
+
 e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"

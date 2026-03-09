@@ -66,9 +66,14 @@ e2e_run -q "Remove old files" \
 e2e_run -q "Ensure make is installed" \
     "which make || sudo dnf install make -y"
 
-# Conditional: aba may not be installed yet (first run).
-e2e_run "Reset aba (if installed)" \
-    "if command -v aba >/dev/null 2>&1 && [ -d mirror ]; then aba reset -f; else echo 'aba not installed or no mirror dir -- skipping reset'; fi"
+e2e_run "Reset aba to clean state" \
+    "aba reset -f"
+
+e2e_run "Remove oc-mirror caches" \
+    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+
+e2e_run "Verify /home disk usage < 10GB after reset" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 test_end 0
 
@@ -327,9 +332,6 @@ e2e_run_remote "Delete standard cluster on disN" \
     "cd ~/aba && if [ -d $STANDARD ]; then aba --dir $STANDARD delete; else echo '[cleanup] $STANDARD already removed'; fi"
 e2e_run_remote "Uninstall mirror registry on disN" \
     "cd ~/aba && aba -d mirror uninstall"
-
-e2e_run "Verify /home disk usage < 10GB after cleanup" \
-    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 test_end
 
