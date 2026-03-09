@@ -32,7 +32,7 @@ acquire_lock
 
 cd $(dirname $0)
 
-vers_track="20 19"
+vers_track="21 20"
 
 which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
 
@@ -48,7 +48,7 @@ arr_op_sets+=("ocp mesh3");		arr_name+=(mesh3);	arr_tests+=(ocp mesh3);
 arr_op_sets+=("ocp odf sec acm");	arr_name+=(opp);	arr_tests+=(odf acm acs);
 arr_op_sets+=("ocp odf ocpv");		arr_name+=(ocpv);	arr_tests+=(odf virt);
 arr_op_sets+=("ocp sec");		arr_name+=(sec);	arr_tests+=(acs);
-arr_op_sets+=("ocp gpu ai"); 		arr_name+=(ai);		arr_tests+=(ai);
+#arr_op_sets+=("ocp gpu ai"); 		arr_name+=(ai);		arr_tests+=(ai);
 
 export OC_MIRROR_CACHE=$HOME  # Set this so that multiple oc-mirror invocations can use the cache and we save time & bandwidth.
 # Can also delete $OC_MIRROR_CACHE/.oc-mirror dir
