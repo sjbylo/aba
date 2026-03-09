@@ -76,5 +76,5 @@ fi
 
 # This is needed since sometimes an existing registry may already be available
 aba_debug "Creating containers auth file"
-scripts/create-containers-auth.sh
+scripts/create-containers-auth.sh || exit 1
 

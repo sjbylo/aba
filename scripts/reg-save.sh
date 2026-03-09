@@ -11,13 +11,12 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-# Check internet connection...
-aba_info "Checking Internet access to https://api.openshift.com/"
+# Check internet connection to the registries oc-mirror pulls from
+aba_info "Checking Internet access to registry.redhat.io"
 
-if ! probe_host "https://api.openshift.com/" "OpenShift API"; then
-	aba_abort "Cannot access https://api.openshift.com/" \
-		"Access to the Internet is required to save images to disk." \
-		"Check curl error above for details."
+if ! probe_host "https://registry.redhat.io/v2/" "Red Hat container registry"; then
+	aba_abort "Cannot access https://registry.redhat.io/" \
+		"Access to registry.redhat.io is required to save images to disk."
 fi
 
 # Script called with args "debug" and/or "retry"
@@ -56,7 +55,7 @@ aba_debug "oc-mirror is ready"
 
 # Ensure the RH pull secret files are located in the right places
 aba_debug "Creating containers auth file"
-scripts/create-containers-auth.sh
+scripts/create-containers-auth.sh || exit 1
 
 # Check disk space before downloading images
 aba_debug "Checking disk space in save/ directory"
