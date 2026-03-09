@@ -2025,15 +2025,14 @@ probe_host() {
 	aba_debug "curl -sSf --connect-timeout 5 --max-time 15 --retry 2 -ILk $url"
 	
 	# -s: silent (no progress bar)
-	# -S: show errors even when silent
 	# -f: fail on HTTP errors (4xx, 5xx)
-	# Result: Errors shown, but no progress bars!
-	if curl -sSf \
+	# Stderr suppressed: expected 404/401 from non-matching endpoints is not an error
+	if curl -sf \
 		--connect-timeout 5 \
 		--max-time 15 \
 		--retry 2 \
 		-ILk \
-		"$url" >/dev/null; then
+		"$url" >/dev/null 2>&1; then
 		return 0
 	fi
 	

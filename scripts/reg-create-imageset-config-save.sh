@@ -21,7 +21,7 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 mkdir -p save
 
 # Ensure the RH pull secret files are located in the right places
-scripts/create-containers-auth.sh
+scripts/create-containers-auth.sh || exit 1
 
 # Generate first imageset-config file for saving images.  
 # Do not overwrite the file if it has been modified. Allow users to add images and operators to imageset-config-save.yaml and run "make save" again. 

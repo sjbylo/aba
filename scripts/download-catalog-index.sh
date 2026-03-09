@@ -24,7 +24,7 @@ aba_debug "Catalog: $catalog_name, version: $ocp_ver_major"
 
 # Prepare container auth
 aba_debug "Creating container auth file"
-scripts/create-containers-auth.sh >/dev/null
+scripts/create-containers-auth.sh >/dev/null || exit 1
 
 # Setup paths - must be run from aba root directory
 # (download_all_catalogs in include_all.sh ensures CWD is correct)

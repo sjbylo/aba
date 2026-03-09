@@ -51,13 +51,12 @@ else
 		"Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)"
 fi
 
-# Check internet connection...
-aba_info "Checking Internet access to https://api.openshift.com/"
+# Check internet connection to the registries oc-mirror pulls from
+aba_info "Checking Internet access to registry.redhat.io"
 
-if ! probe_host "https://api.openshift.com/" "OpenShift API"; then
-	aba_abort "Cannot access https://api.openshift.com/" \
-		"Access to the Internet is required to sync images to your registry." \
-		"Check curl error above for details."
+if ! probe_host "https://registry.redhat.io/v2/" "Red Hat container registry"; then
+	aba_abort "Cannot access https://registry.redhat.io/" \
+		"Access to registry.redhat.io is required to sync images to your registry."
 fi
 
 export reg_url=https://$reg_host:$reg_port
@@ -79,13 +78,12 @@ elif probe_host "$reg_url/" "registry root"; then
 else
 	aba_abort "Cannot reach mirror registry at $reg_url" \
 		"Registry must be accessible before syncing images" \
-		"Tried: /health/instance (Quay), /v2/ (Docker), / (generic)" \
-		"Check curl errors above for details"
+		"Tried: /health/instance (Quay), /v2/ (Docker), / (generic)"
 fi
 
 # This is needed since sometimes an existing registry may already be available
 aba_debug "Creating containers auth file"
-scripts/create-containers-auth.sh
+scripts/create-containers-auth.sh || exit 1
 
 [ ! "$data_dir" ] && data_dir=\~
 reg_root=$data_dir/quay-install

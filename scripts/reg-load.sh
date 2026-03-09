@@ -56,12 +56,11 @@ elif probe_host "$reg_url/" "registry root"; then
 else
 	aba_abort "Cannot reach mirror registry at $reg_url" \
 		"Registry must be accessible before loading images" \
-		"Tried: /health/instance (Quay), /v2/ (Docker), / (generic)" \
-		"Check curl errors above for details"
+		"Tried: /health/instance (Quay), /v2/ (Docker), / (generic)"
 fi
 
 aba_debug "Creating containers auth file for load operation"
-scripts/create-containers-auth.sh --load   # --load option indicates that the public pull secret is NOT needed.
+scripts/create-containers-auth.sh --load || exit 1   # --load option indicates that the public pull secret is NOT needed.
 
 # Check if the cert needs to be updated
 aba_debug "Checking for root CA certificate"
