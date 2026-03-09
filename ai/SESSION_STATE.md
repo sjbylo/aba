@@ -1,24 +1,24 @@
 # Session State
 
 ## Current goal
-Stabilize E2E test suite -- fix plan_tests mismatches, add explicit end-of-suite cleanup blocks, fix audit gaps, add disk usage checks.
+Stabilize E2E test suites via autonomous gotest loop.
 
 ## Done this session
-- Synced `plan_tests` with `test_begin` in all 10 suites (verified all in sync)
-- Added explicit `test_begin "Cleanup: ..."` blocks at end of suites that were missing them
-- Fixed 5 audit gaps (missing uninstall/unregister/delete in cleanup blocks)
-- Made all cleanup delete/uninstall commands conditional (check dir exists first)
-- Added `/home` disk usage check (< 10GB) after every cleanup block in all 7 suites with resources
-- Fixed suite-config-validation.sh: replaced `aba -d mirror install 2>/dev/null || true` with `aba -d mirror mirror.conf`
-- Removed `rm -rf mymirror` from suite-mirror-sync.sh to allow cleanup block to handle it
-- Added new E2E Golden Rule #21 (explicit end-of-suite cleanup mandatory) to 3 rule files
+- Moved disk usage check (<10GB) from end-of-suite to start-of-suite in ALL 10 suites
+- Added missing oc-mirror cache cleanup to 4 suites
+- Fixed false-positive upgrade grep in suite-airgapped-local-reg
+- Fixed missing error handling: added `|| exit 1` after all 7 `create-containers-auth.sh` calls
+- Suppressed noisy curl probe stderr in `probe_host()` (include_all.sh)
+- Removed stale "Check curl error above" from abort messages
+- Changed internet probe in reg-save.sh and reg-sync.sh from api.openshift.com to registry.redhat.io/v2/
+- Updated GOTEST.md with guidance to reschedule failed suites immediately
+- Force-dispatched airgapped-existing-reg to Pool 1 -- "Load without regcreds" now PASSES
 
 ## Next steps
-- Commit and push these changes
-- Run pre-commit checks
-- Queue affected suites for testing on pools
+- Monitor both pools through current suite runs
+- Continue gotest autonomous loop
 
 ## Decisions / notes
-- Cleanup commands are conditional: `if [ -d X ]; then aba --dir X delete; else echo already removed; fi`
-- Disk check uses `df /home --output=used -BG` and fails if > 10GB used after cleanup
-- EXIT trap and `_pre_suite_cleanup` are safety nets only -- explicit cleanup is the primary path
+- `api.openshift.com` is an API gateway, not a container registry. `oc-mirror` pulls from `registry.redhat.io` and `quay.io`. Probing the wrong host could pass while the actual registry is unreachable.
+- `probe_host()` stderr suppressed: 404/401 from cascade probes are expected, not user-facing errors.
+- `create-containers-auth.sh` caches auth to `~/.docker/config.json`. `|| exit 1` fix prevents proceeding when managed creds are missing.
