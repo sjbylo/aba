@@ -230,7 +230,7 @@ installclean:
 password: pw
 pw: 
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh
-#	@touch .available  #FIXME: is this really needed?
+	@touch .available
 
 .PHONY: verify
 verify: .init ## Using the credential files in '~/.aba/mirror/' and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
@@ -273,8 +273,8 @@ index: init catalogs-download catalogs-wait
 catalog: catalogs-download
 	@echo "[ABA] Warning: 'make catalog' is deprecated, use 'make catalogs-download' instead" >&2
 
-uninstall: .init .unavailable     ## Uninstall any previously installed registry  
-.unavailable:
+.PHONY: uninstall
+uninstall: .init                  ## Uninstall any previously installed registry
 	$(SCRIPTS)/reg-uninstall.sh
 	@rm -f .available
 	@touch .unavailable
