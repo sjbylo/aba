@@ -6,6 +6,12 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ## Medium Priority
 
+### `aba shutdown` Must Retry and Verify `sudo shutdown` Command
+
+**Status:** Backlog
+**Priority:** Medium
+**Context:** The `sudo shutdown` command issued by `aba shutdown` can silently fail (e.g., SSH drops, permission issue, node unresponsive). When it fails, the node never powers off, and `aba shutdown --wait` blocks forever waiting for a power-off state that never comes. Fix: after issuing `sudo shutdown`, verify the node is actually shutting down (e.g., poll VM power state or SSH reachability). If it's still up after a timeout, retry the shutdown command. Don't blindly assume one `sudo shutdown` succeeded.
+
 ### Deduplicate `aba isconf` output
 
 **Status:** Backlog
@@ -110,6 +116,12 @@ Then replace all `$ABA_ROOT/mirror/mirror.conf` with `$MIRROR_CONF_DIR/mirror.co
 ---
 
 ## Low Priority
+
+### Suppress `[ABA] Using .../mirror.conf file` for Simple Commands
+
+**Status:** Backlog
+**Priority:** Low
+**Context:** Running `aba ls` (or other quick informational commands) outputs `[ABA] Using /home/steve/testing/aba/sno/mirror.conf file`, which is noise for the user. This message should be downgraded to `aba_debug` so it only appears with `-v`/verbose mode, or suppressed entirely for simple read-only commands like `ls`, `status`, `run --cmd`.
 
 ### E2E: default to git-based aba install, not local repo copy
 

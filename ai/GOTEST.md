@@ -15,6 +15,9 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous loop a
 - **Do NOT stop to ask questions** — the user is away
 - **Do NOT change any ABA core files** — only `test/` and `ai/`
 - **Keep ALL pools busy** — queue additional suites on idle pools, even if already tested
+- **Re-test failed suites immediately** — after fixing and deploying, reschedule the failed suite
+  at the front of the queue (or force-dispatch it to the same pool) so the fix is validated right away.
+  Use: `run.sh run --suite <name> --pool <N> --force`
 - **Report a summary** when the user returns
 - If a fix would require core ABA changes, **note it and move on** (do not change core)
 - Do not add band-aids to any code, always find the root cause first!
