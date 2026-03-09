@@ -113,15 +113,44 @@ if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
 fi
 
 aba_info Shutting down all nodes ... | tee -a $logfile
-for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}');
-do
-	$OC --request-timeout=30s debug node/${node} -- chroot /host shutdown -h 1 &
-done >> $logfile 2>&1
 
-wait
+max_attempts=3
+delay=20
+failed_nodes=()
 
-echo 
-aba_info_ok "All servers in the cluster will complete shutdown and power off shortly!" | tee -a $logfile
+nodes=$($OC get nodes -o jsonpath='{.items[*].metadata.name}')
+
+for attempt in $(seq 1 $max_attempts); do
+	if [ $attempt -gt 1 ]; then
+		aba_warning "Retry attempt $attempt/$max_attempts for: ${failed_nodes[*]}" | tee -a $logfile
+		sleep $delay
+		nodes="${failed_nodes[*]}"
+		failed_nodes=()
+	fi
+
+	declare -A pids=()
+	for node in $nodes; do
+		$OC --request-timeout=30s debug node/${node} -- chroot /host shutdown -h 1 >> $logfile 2>&1 &
+		pids[$node]=$!
+	done
+
+	for node in "${!pids[@]}"; do
+		if ! wait ${pids[$node]}; then
+			failed_nodes+=("$node")
+			echo_red "[ABA] Warning: shutdown failed for node $node (attempt $attempt/$max_attempts)" | tee -a $logfile
+		fi
+	done
+
+	[ ${#failed_nodes[@]} -eq 0 ] && break
+done
+
+echo
+if [ ${#failed_nodes[@]} -gt 0 ]; then
+	echo_red "[ABA] WARNING: Could not shut down these nodes after $max_attempts attempts: ${failed_nodes[*]}" | tee -a $logfile
+	echo_red "[ABA] Check node status manually or power off via hypervisor." | tee -a $logfile
+else
+	aba_info_ok "All servers in the cluster will complete shutdown and power off shortly!" | tee -a $logfile
+fi
 
 # Only wait if installed on VMs
 if [ "$wait" -a -s vmware.conf ]; then
