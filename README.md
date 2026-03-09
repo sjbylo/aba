@@ -610,7 +610,7 @@ aba bundle \
 - If needed, add individual operators after "--ops".
 - *If known*, set values --domain, --machine-network, --dns and --ntp (otherwise, these must be set in `aba.conf` after unpacking the bundle in the air-gapped env.).
 - Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
-- Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`.
+- Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`
 - Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_* | tee CHECKSUM.txt`.  It is important to use these checksum values to verify the files after copying them into the air-gapped environment!
 - Warning: --force will overwrite any existing image-set files under aba/mirror/save!
 - See `aba bundle --help` for more.

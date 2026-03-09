@@ -25,6 +25,7 @@ alwaysApply: true
 
 - Work on the `dev` branch
 - Default: commit AND push together (unless told otherwise)
+- Default: AI decides how to batch commits -- group by logical scope (e.g. core / test / docs) unless user specifies otherwise
 - Run `build/pre-commit-checks.sh` before committing code changes
 - Run `build/pre-commit-checks.sh --skip-version` for docs-only commits
 
