@@ -10,10 +10,11 @@ Stabilize E2E test suite via gotest loop on Pools 1 and 2; fix ABA code issues.
 - Deployed fixes to con1/con2, removed stale Quay on dis1, restarted Pool 1
 - Force-restarted mirror-sync on Pool 1 with reverted Makefile to reproduce uninstall bug
 - Added robust retry logic to `scripts/cluster-graceful-shutdown.sh` shutdown loop
+- Added gzip guard + tar error handling to openshift-install extraction in `cli/Makefile`
 
 ## Next steps
+- Commit and push latest changes (gzip guard)
 - Monitor Pools 1 and 2 for pass/fail (mirror-sync instrumentation)
-- Commit and push when user approves
 - Continue gotest loop
 
 ## Decisions / notes
@@ -21,3 +22,4 @@ Stabilize E2E test suite via gotest loop on Pools 1 and 2; fix ABA code issues.
 - REG_PW now single-quoted in state.sh, matching mirror.conf
 - `pw` target's `@touch .available` commented out by user (FIXME)
 - Shutdown script now retries 3x with 20s delay, warns on per-node failure
+- openshift-install now has same gzip guard as oc and mirror-registry
