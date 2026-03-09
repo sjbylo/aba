@@ -39,7 +39,7 @@ suite_begin "config-validation"
 test_begin "Setup: install and configure"
 
 e2e_run "Reset aba to clean state" \
-	"cd ~/aba && aba reset --force"
+	"cd ~/aba && { command -v aba >/dev/null 2>&1 || ./install; } && aba reset --force"
 
 e2e_run "Remove oc-mirror caches" \
 	"sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"

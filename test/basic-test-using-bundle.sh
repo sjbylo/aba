@@ -68,6 +68,7 @@ cd aba
 [ "$LIGHT" ] && mv -v $TEST_DIR_CONN/aba-vX/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
 rm -rf $TEST_DIR_CONN/aba   # Not needed anymore
 aba     # Show the bundle instructions
+aba | grep -i "bundle .*detected"  # Verify it's the bundle!
 aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME
 aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s install -y

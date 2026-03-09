@@ -63,6 +63,7 @@ cd aba
 # If "light" bundle, show the bundle instructions and move the ISC archive into place
 [ "$LIGHT" ] && aba && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
 aba     # Show the bundle instructions again
+aba | grep -i "bundle .*detected"  # Verify it's the bundle!
 aba -d mirror -H $MY_HOST install-docker-registry   # Preempt mirror installation and use docker (works on arm64)
 aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME

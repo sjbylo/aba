@@ -67,7 +67,7 @@ e2e_run -q "Ensure make is installed" \
     "which make || sudo dnf install make -y"
 
 e2e_run "Reset aba to clean state" \
-    "aba reset -f"
+    "cd ~/aba && { command -v aba >/dev/null 2>&1 || ./install; } && aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
