@@ -230,7 +230,7 @@ installclean:
 password: pw
 pw: 
 	$(SCRIPTS)/reg-existing-create-pull-secret.sh
-	@touch .available
+#	@touch .available  #FIXME: is this really needed?
 
 .PHONY: verify
 verify: .init ## Using the credential files in '~/.aba/mirror/' and the values in 'aba/mirror/mirror.conf', verify access to the registry. 

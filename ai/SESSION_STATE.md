@@ -1,19 +1,23 @@
 # Session State
 
 ## Current goal
-Stabilize E2E test suite via `gotest` directive — monitor, fix, deploy, re-test.
+Stabilize E2E test suite via gotest loop on Pools 1 and 2; fix ABA code issues.
 
 ## Done this session
-- Fixed Pool 2 upgrade trigger: added `e2e_wait_operators_available` before trigger + increased retries (5x60s) in `suite-airgapped-local-reg.sh`
-- Fixed "aba: command not found" in 5 suites — guard `aba reset` with `command -v aba || ./install`
-- Deployed and verified all fixes on both con1 and con2
-- Still need to fix live pane title showing literal `${_suite:+ | $_suite}` and noisy file listing
+- Reverted `templates/Makefile.mirror` to original `.available`/`.unavailable` pattern
+- Added `_marker_snap()` instrumentation to `suite-mirror-sync.sh` test 7
+- Quoted `REG_PW` in `scripts/reg-common.sh` state.sh heredoc
+- Deployed fixes to con1/con2, removed stale Quay on dis1, restarted Pool 1
+- Force-restarted mirror-sync on Pool 1 with reverted Makefile to reproduce uninstall bug
+- Added robust retry logic to `scripts/cluster-graceful-shutdown.sh` shutdown loop
 
 ## Next steps
-- Fix live pane title variable expansion issue in `run.sh` line 863
-- Fix noisy file listing in live pane output
-- Continue monitoring both pools (gotest)
+- Monitor Pools 1 and 2 for pass/fail (mirror-sync instrumentation)
+- Commit and push when user approves
+- Continue gotest loop
 
 ## Decisions / notes
-- Upgrade trigger failure was a timing issue, not a grep issue
-- The `aba reset --force` guard pattern matches `setup_aba_from_scratch()` from `lib/setup.sh`
+- User rejected `.PHONY: uninstall` as band-aid; wants root cause via instrumentation
+- REG_PW now single-quoted in state.sh, matching mirror.conf
+- `pw` target's `@touch .available` commented out by user (FIXME)
+- Shutdown script now retries 3x with 20s delay, warns on per-node failure
