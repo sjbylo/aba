@@ -181,8 +181,8 @@ e2e_run_must_fail "Mirror command on non-existent dir" \
 e2e_run_must_fail "Mirror with bad vendor" \
 	"aba mirror --vendor bogusvendor"
 
-e2e_run_must_fail_remote "Load without save dir on internal bastion" \
-	"cd ~/aba && rm -rf mirror/save && aba -d mirror load"
+# "Load without save dir" moved to suite-airgapped-existing-reg (where a
+# registry is already registered on disN, avoiding accidental Quay install).
 
 # Registry install negative tests (ported from old test2 lines 176-179)
 # These verify reg_detect_existing() and reg_check_fqdn() catch bad installs.

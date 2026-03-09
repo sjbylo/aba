@@ -7,19 +7,22 @@ Stabilize E2E test suite via gotest loop on Pools 1 and 2; fix ABA code issues.
 - Reverted `templates/Makefile.mirror` to original `.available`/`.unavailable` pattern
 - Added `_marker_snap()` instrumentation to `suite-mirror-sync.sh` test 7
 - Quoted `REG_PW` in `scripts/reg-common.sh` state.sh heredoc
-- Deployed fixes to con1/con2, removed stale Quay on dis1, restarted Pool 1
-- Force-restarted mirror-sync on Pool 1 with reverted Makefile to reproduce uninstall bug
 - Added robust retry logic to `scripts/cluster-graceful-shutdown.sh` shutdown loop
-- Added gzip guard + tar error handling to openshift-install extraction in `cli/Makefile`
+- Hardened all CLI tarball extractions in `cli/Makefile`:
+  - Removed dangerous `|| true` from all 5 run-once download waits
+  - Added gzip guard to all 4 tar extraction targets
+  - Added tar error handling to oc-mirror and govc
+- Fixed accidental revert of Makefile.mirror (caused by pre-commit git pull)
+- Added rule: verify edited files after pre-commit checks
+- Moved "Load without save dir" test from negative-paths to airgapped-existing-reg
+  to prevent accidental Quay install on disN
 
 ## Next steps
-- Commit and push latest changes (gzip guard)
-- Monitor Pools 1 and 2 for pass/fail (mirror-sync instrumentation)
-- Continue gotest loop
+- Commit and push latest changes
+- Deploy to pools and continue gotest loop
+- Monitor mirror-sync instrumentation for uninstall bug data
 
 ## Decisions / notes
-- User rejected `.PHONY: uninstall` as band-aid; wants root cause via instrumentation
-- REG_PW now single-quoted in state.sh, matching mirror.conf
-- `pw` target's `@touch .available` commented out by user (FIXME)
-- Shutdown script now retries 3x with 20s delay, warns on per-node failure
-- openshift-install now has same gzip guard as oc and mirror-registry
+- `negative-paths` was accidentally installing Quay on disN via Makefile load→install dep
+- `|| true` on run-once waits was the root cause of corrupt tarball extractions
+- Pre-commit git pull can silently overwrite uncommitted changes -- added to rules

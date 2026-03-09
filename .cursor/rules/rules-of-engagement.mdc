@@ -28,6 +28,7 @@ alwaysApply: true
 - Default: AI decides how to batch commits -- group by logical scope (e.g. core / test / docs) unless user specifies otherwise
 - Run `build/pre-commit-checks.sh` before committing code changes
 - Run `build/pre-commit-checks.sh --skip-version` for docs-only commits
+- IMPORTANT: `pre-commit-checks.sh` runs `git pull` which can overwrite local uncommitted changes. After running pre-commit checks, ALWAYS verify that edited files still contain the intended changes (e.g. `git diff` the files) before staging and committing.
 
 ## Backup uncommitted changes before editing
 

@@ -43,6 +43,7 @@ plan_tests \
     "Save images to disk" \
     "Tar-pipe transfer to bastion" \
     "Load without regcreds (must fail)" \
+    "Load without save dir (must fail)" \
     "Load images into existing registry" \
     "Compact: install and delete cluster" \
     "SNO: install cluster" \
@@ -236,6 +237,22 @@ e2e_run_remote "Restore regcreds from backup" \
     "rm -rf ~/.aba/mirror/mirror && cp -a /tmp/e2e-regcreds-backup ~/.aba/mirror/mirror && rm -rf /tmp/e2e-regcreds-backup"
 e2e_run_remote "Verify registry access with restored regcreds" \
     "cd ~/aba && aba -d mirror verify"
+
+test_end
+
+# ============================================================================
+# 7b. Load without save dir -- must fail
+# ============================================================================
+test_begin "Load without save dir (must fail)"
+
+e2e_run_remote -q "Move save dir aside" \
+	"cd ~/aba && mv mirror/save mirror/save.bak"
+
+e2e_run_must_fail_remote "Load without save dir should fail" \
+	"cd ~/aba && aba -d mirror load"
+
+e2e_run_remote -q "Restore save dir" \
+	"cd ~/aba && mv mirror/save.bak mirror/save"
 
 test_end
 
