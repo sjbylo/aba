@@ -320,9 +320,6 @@ test_begin "Cleanup: delete cluster"
 e2e_run "Delete SNO cluster" \
     "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
 
-e2e_run "Verify /home disk usage < 10GB after cleanup" \
-    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
-
 test_end
 
 # ============================================================================

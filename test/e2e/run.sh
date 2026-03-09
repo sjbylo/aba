@@ -240,7 +240,7 @@ _create_tmux_dashboard() {
 	_dash_pane_cmd() {
 		local _p=$1
 		local _h="con${_p}.${_domain}"
-		echo "while true; do _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/aba/test/e2e/logs/${_logfile}' 2>/dev/null && break; echo 'Waiting for con${_p} ...'; sleep 10; done"
+		echo "echo 'Waiting for con${_p} ...'; while true; do _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/aba/test/e2e/logs/${_logfile}' 2>/dev/null && break; sleep 10; done"
 	}
 
 	tmux kill-session -t "$_sess" 2>/dev/null || true

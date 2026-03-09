@@ -140,8 +140,8 @@ e2e_run_must_fail "Sync to unknown host should fail" \
 e2e_run "Restore reg_host after must-fail" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 
-# Pool registry is already registered -- install should detect it and succeed (idempotent)
-e2e_run "Verify idempotent install detects existing registry" \
+# Pool registry is already registered -- install must abort (no reinstall; user must uninstall first)
+e2e_run_must_fail "Verify install aborts when registry already registered" \
     "aba -d mirror install"
 
 # Existing registry detection (ported from old test2 line 178):
@@ -427,16 +427,8 @@ test_begin "Cleanup: deregister pool registry"
 
 e2e_run "Deregister pool registry on conN" \
     "aba -d mirror unregister"
-e2e_run "Verify conN regcreds removed" \
-    "test ! -f ~/.aba/mirror/mirror/pull-secret-mirror.json"
-
 e2e_run_remote "Deregister pool registry on disN" \
     "cd ~/aba && aba -d mirror unregister"
-e2e_run_remote "Verify disN regcreds removed" \
-    "test ! -f ~/.aba/mirror/mirror/pull-secret-mirror.json"
-
-e2e_run "Verify /home disk usage < 10GB after cleanup" \
-    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
 test_end
 

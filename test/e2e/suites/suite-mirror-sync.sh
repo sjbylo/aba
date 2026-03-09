@@ -325,9 +325,6 @@ e2e_run "Uninstall mirror registry on disN" \
 e2e_run_remote "Verify no registry containers on disN" \
     "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
 
-e2e_run "Verify /home disk usage < 10GB after cleanup" \
-    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[cleanup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
-
 test_end
 
 # ============================================================================

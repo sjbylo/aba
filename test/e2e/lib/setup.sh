@@ -44,7 +44,7 @@ setup_aba_from_scratch() {
     # uninstall via aba commands and cleans ~/.aba/mirror/.  No need to
     # manually remove .available here — only ABA should manage that marker.
     e2e_run "Reset aba" \
-        "cd $aba_root && if [ -d mirror ]; then aba reset -f; else echo 'No mirror dir -- nothing to reset'; fi"
+        "cd $aba_root && aba reset -f"
 
     # NOTE: No blanket "podman system prune / rmi / rm -rf storage" here.
     # That nuclear cleanup belongs only in the one-time pool setup (setup-infra)
@@ -55,6 +55,9 @@ setup_aba_from_scratch() {
     # Remove oc-mirror caches
     e2e_run "Remove oc-mirror caches" \
         "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+
+    e2e_run "Verify /home disk usage < 10GB after reset" \
+        "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
 
     echo "=== setup_aba_from_scratch complete ==="
 }
@@ -173,9 +176,8 @@ cleanup_all() {
 
     echo "=== cleanup_all ==="
 
-    # Reset aba.  Conditional: mirror dir may not exist on first run.
-    e2e_run "Reset aba mirror state" \
-        "if [ -d mirror ]; then aba reset -f; else echo 'No mirror dir -- nothing to reset'; fi"
+    e2e_run "Reset aba to clean state" \
+        "cd $aba_root && aba reset -f"
 
     # Remove cluster directories (pool-specific names)
     local _sno _compact _standard
