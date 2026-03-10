@@ -118,6 +118,12 @@ alwaysApply: true
 
 - Always run `aba day2` after `mirror load` or `mirror sync` (applies IDMS/ITMS/CatalogSources)
 
+## E2E pool usage
+
+- When only pools 1 and 2 are active, ALWAYS pass `--pools 2` on every `run.sh` invocation (run, deploy, restart, stop, status, verify, reschedule)
+- Using `--pool N` without `--pools` can trigger infrastructure setup for ALL pools in pools.conf, powering on VMs that should stay off
+- Rule of thumb: if you know how many pools are in use, always pass `--pools N`
+
 ## gotest directive
 
 When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E test loop. Full definition: **`ai/GOTEST.md`** (so you can find it after a Cursor crash).
