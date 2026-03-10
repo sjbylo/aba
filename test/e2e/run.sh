@@ -198,8 +198,16 @@ fi
 _pool_count_from_conf() {
 	grep -c '^[^#]' "$CLI_POOLS_FILE" 2>/dev/null || echo "$CLI_POOLS"
 }
-_OP_POOLS="$CLI_POOLS"
-[ -z "$_CLI_POOLS_SET" ] && _OP_POOLS=$(_pool_count_from_conf)
+if [ -z "$_CLI_POOLS_SET" ]; then
+	if [ -n "$CLI_POOL" ]; then
+		# --pool N without --pools: limit scope to pool N (avoid touching higher pools)
+		_OP_POOLS="$CLI_POOL"
+	else
+		_OP_POOLS=$(_pool_count_from_conf)
+	fi
+else
+	_OP_POOLS="$CLI_POOLS"
+fi
 CLI_POOLS="$_OP_POOLS"
 
 # --- Source config -----------------------------------------------------------
@@ -240,7 +248,7 @@ _create_tmux_dashboard() {
 	_dash_pane_cmd() {
 		local _p=$1
 		local _h="con${_p}.${_domain}"
-		echo "echo 'Waiting for con${_p} ...'; while true; do _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/aba/test/e2e/logs/${_logfile}' 2>/dev/null && break; sleep 10; done"
+		echo "while true; do if ssh $_SSH_OPTS ${_user}@${_h} 'tmux has-session -t ${E2E_TMUX_SESSION:-e2e-suite} 2>/dev/null' 2>/dev/null; then _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/aba/test/e2e/logs/${_logfile}' 2>/dev/null; else printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; clear; echo 'No e2e session on con${_p}. Waiting for suite to start...'; sleep 5; fi; done"
 	}
 
 	tmux kill-session -t "$_sess" 2>/dev/null || true
@@ -1290,15 +1298,23 @@ _record_result() {
 	local suite="$1"
 	local rc="$2"
 	local pool_num="${_result_pool[$suite]:-?}"
+	local _status
 
 	_results[$suite]="$rc"
 
 	if [ "$rc" -eq 0 ]; then
+		_status="PASS"
 		printf "  COMPLETED: %-35s pool %-2s  \033[1;32mPASS\033[0m\n" "$suite" "$pool_num"
 	elif [ "$rc" -eq 3 ]; then
+		_status="SKIP"
 		printf "  COMPLETED: %-35s pool %-2s  \033[1;33mSKIP\033[0m\n" "$suite" "$pool_num"
 	else
+		_status="FAIL (exit=$rc)"
 		printf "  COMPLETED: %-35s pool %-2s  \033[1;31mFAIL\033[0m (exit=%s)\n" "$suite" "$pool_num" "$rc"
+	fi
+
+	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+		$NOTIFY_CMD "[e2e] ${_status}: ${suite} (pool ${pool_num})" < /dev/null >/dev/null 2>&1 &
 	fi
 }
 
@@ -1802,6 +1818,10 @@ echo ""
 echo "  Total: $_total  Passed: $_passed  Failed: $_failed  Skipped: $_skipped"
 echo "  Logs: $_RUN_DIR/logs/"
 echo "========================================"
+
+if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+	$NOTIFY_CMD "[e2e] ALL DONE: ${_passed} passed, ${_failed} failed, ${_skipped} skipped (of ${_total})" < /dev/null >/dev/null 2>&1
+fi
 
 # Cleanup dashboard
 if [ -n "$DASH_SESSION" ]; then
