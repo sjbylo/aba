@@ -1,23 +1,25 @@
 # Session State
 
 ## Current goal
-Re-apply lost uncommitted changes (Cursor fileWatcher deletion); then continue with README updates plan.
+TUI improvements: screenshots, operator search test, mirror/.index path fixes.
 
 ## Done this session
-- Diagnosed 91 deleted files from Cursor fileWatcher race condition (known issue)
-- User ran `git restore .` to recover working tree
-- Re-applied E2E pool usage rule to rules-of-engagement.mdc
-- Re-applied _essh and 57GB backlog items to BACKLOG.md
-- Re-applying run.sh fixes (pool flag, dash idle, notifications)
+- Removed bogus 'aba doctor' from TUI error dialog (tui/abatui.sh)
+- Added fallback commands to 5 cli/Makefile run-once.sh -w calls
+- Added fallback commands to 4 ensure_*() download-wait calls in include_all.sh
+- Fixed fresh-install basket bug: changed mirror/.index to .index in abatui.sh (2 lines)
+- Created test-tui-basket.sh and test-tui-basket-fresh.sh
+- Added test-tui-basket.sh to integration tests in run-all-tests.sh
+- Added screenshots to test-tui-early-exit.sh, test-tui-basic.sh, test-tui-basket.sh, test-tui-basket-fresh.sh
+- Added "Search Operator Names" test to test-tui-basket.sh (searches local-storage, verifies basket count increase)
+- Fixed mirror/.index -> .index in 8 files (scripts, E2E tests, func tests)
+- All tests pass: basket (18/18), wizard (31/31), basic (17/17), early-exit (6/6), fresh (21/21), basket-fresh (15/15)
 
 ## Next steps
-- Complete run.sh re-application (pool flag, dash idle, notifications)
-- Commit and push re-applied changes
-- Execute README updates plan (Docker first-class, named mirrors, TUI, FAQ, backlog)
-- Resume gotest on pools 1 and 2
+- Commit and push all changes (awaiting user approval)
+- Execute README updates plan
 
 ## Decisions / notes
-- Cursor fileWatcher fix (exclude .git/) may have been lost -- user should verify User Settings
-- Backup rule was not followed in previous session -- must back up before editing going forward
-- Version bump NOT needed in README -- release.sh handles it
-- Do NOT change existing README headings (permalinks from blog articles)
+- mirror/.index is a symlink to ../.index, only exists after make -C mirror .init
+- Canonical catalog index location is .index/ (top-level)
+- test-tui-basket-fresh.sh excluded from run-all-tests.sh (too slow, ~2.5 min)

@@ -29,7 +29,7 @@ echo ""
 # Clean up any previous test state
 echo "Cleaning up previous test state..."
 rm -f ~/bin/oc-mirror
-rm -rf mirror/.index/*-operator-index-*
+rm -rf .index/*-operator-index-*
 rm -rf ~/.aba/runner/cli:install:oc-mirror
 rm -rf ~/.aba/runner/catalog:*
 
@@ -84,9 +84,9 @@ wait_for_all_catalogs "$ocp_version" >&2
 
 # Verify catalog files exist and are not empty
 catalog_files=(
-	"mirror/.index/redhat-operator-index-v${ocp_version}"
-	"mirror/.index/certified-operator-index-v${ocp_version}"
-	"mirror/.index/community-operator-index-v${ocp_version}"
+	".index/redhat-operator-index-v${ocp_version}"
+	".index/certified-operator-index-v${ocp_version}"
+	".index/community-operator-index-v${ocp_version}"
 )
 
 for catalog_file in "${catalog_files[@]}"; do

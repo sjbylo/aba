@@ -130,6 +130,7 @@ sleep 1
 
 if wait_for "$TUI_TITLE_ACTION_MENU" 5; then
 	log_pass "Returned to action menu from Settings"
+	screenshot "action-menu-after-settings"
 else
 	log_fail "Did not return to action menu from Settings"
 fi

@@ -399,7 +399,7 @@ e2e_run "Copy ACM YAML files to internal bastion" \
 
 # Set the correct channel from the mirrored catalog index
 OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
-ACM_CHANNEL=$(grep ^advanced-cluster-management mirror/.index/redhat-operator-index-v${OCP_VER_MAJOR} | awk '{print $NF}' | tail -1)
+ACM_CHANNEL=$(grep ^advanced-cluster-management .index/redhat-operator-index-v${OCP_VER_MAJOR} | awk '{print $NF}' | tail -1)
 [ -n "$ACM_CHANNEL" ] && \
 e2e_run_remote "Set ACM channel to $ACM_CHANNEL" \
     "sed -i 's/^#.*channel:.*/  channel: ${ACM_CHANNEL}/' ~/aba/test/acm-subs.yaml"
