@@ -2287,7 +2287,7 @@ ensure_oc() {
 		aba_debug "ensure_oc: ocp_version not set, skipping"
 		return 0
 	fi
-	run_once -q -w -i "cli:download:oc:${ocp_version}"
+	run_once -q -w -i "cli:download:oc:${ocp_version}" -- make -sC cli download-oc
 	run_once -w -m "Installing oc to ~/bin" -i "$TASK_OC" -- make -sC cli oc
 }
 
@@ -2297,19 +2297,19 @@ ensure_openshift_install() {
 		aba_debug "ensure_openshift_install: ocp_version not set, skipping"
 		return 0
 	fi
-	run_once -q -w -i "cli:download:openshift-install:${ocp_version}"
+	run_once -q -w -i "cli:download:openshift-install:${ocp_version}" -- make -sC cli download-openshift-install
 	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL" -- make -sC cli openshift-install
 }
 
 # Ensure govc is installed in ~/bin
 ensure_govc() {
-	run_once -q -w -i "cli:download:govc"
+	run_once -q -w -i "cli:download:govc" -- make -sC cli download-govc
 	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
 }
 
 # Ensure butane is installed in ~/bin
 ensure_butane() {
-	run_once -q -w -i "cli:download:butane"
+	run_once -q -w -i "cli:download:butane" -- make -sC cli download-butane
 	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
 }
 
