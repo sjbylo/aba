@@ -78,7 +78,7 @@ add_op() {
 		END
 	fi
 	else
-		aba_warning "Operator '$op' not found in index file mirror/.index/$catalog-index-v$ocp_ver_major"
+		aba_warning "Operator '$op' not found in index file .index/$catalog-index-v$ocp_ver_major"
 	fi
 }
 

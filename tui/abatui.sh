@@ -1862,7 +1862,7 @@ add_set_to_basket() {
 		[[ -z "$op" ]] && continue
 
 		# Validate operator exists in catalog index (silent filtering)
-		if grep -q "^$op[[:space:]]" "$ABA_ROOT"/mirror/.index/* 2>/dev/null; then
+		if grep -q "^$op[[:space:]]" "$ABA_ROOT"/.index/* 2>/dev/null; then
 			log "Adding operator from set: $op (validated in catalog)"
 			OP_BASKET["$op"]=1
 			((added++))
@@ -1944,8 +1944,7 @@ $error_msg
 
 \ZbWhat to try:\Zn
   1. Check your internet connection
-  2. Press OK and go back to retry
-  3. Run 'aba doctor' for diagnostics" 0 0
+  2. Press OK and go back to retry" 0 0
 		
 		DIALOG_RC="back"
 		return
@@ -2194,7 +2193,7 @@ image synchronization process." 0 0 || true
 				[[ -n "${seen_ops[$op_name]:-}" ]] && continue
 				seen_ops["$op_name"]=1
 				echo "$line"
-			done < <(cat "$ABA_ROOT"/mirror/.index/* 2>/dev/null)
+			done < <(cat "$ABA_ROOT"/.index/* 2>/dev/null)
 		)
 		
 		# Now progressively filter by each search term
