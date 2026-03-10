@@ -69,6 +69,7 @@ start_tui
 log_info "Test 1: Welcome dialog"
 if wait_for "$TUI_TITLE_WELCOME" 15; then
 	log_pass "Welcome dialog appeared"
+	screenshot "welcome"
 else
 	log_fail "Welcome dialog did not appear"
 	exit 1
@@ -79,6 +80,7 @@ sleep 2
 log_info "Test 2: Pull secret required dialog (resume skipped)"
 if wait_for "$TUI_TITLE_PULL_SECRET_REQUIRED" 20; then
 	log_pass "Pull secret required dialog appeared (fresh start, no resume)"
+	screenshot "pull-secret-required"
 else
 	log_fail "Pull secret required dialog did not appear"
 	exit 1
@@ -107,6 +109,7 @@ sleep 1
 # Confirm quit dialog should appear
 if wait_for "$TUI_TITLE_CONFIRM_EXIT" 5; then
 	log_pass "Confirm exit dialog appeared"
+	screenshot "confirm-exit"
 else
 	log_fail "Confirm exit dialog did not appear"
 	exit 1
