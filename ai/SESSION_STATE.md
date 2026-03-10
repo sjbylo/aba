@@ -1,28 +1,23 @@
 # Session State
 
 ## Current goal
-Stabilize E2E test suite via gotest loop on Pools 1 and 2; fix ABA code issues.
+Re-apply lost uncommitted changes (Cursor fileWatcher deletion); then continue with README updates plan.
 
 ## Done this session
-- Reverted `templates/Makefile.mirror` to original `.available`/`.unavailable` pattern
-- Added `_marker_snap()` instrumentation to `suite-mirror-sync.sh` test 7
-- Quoted `REG_PW` in `scripts/reg-common.sh` state.sh heredoc
-- Added robust retry logic to `scripts/cluster-graceful-shutdown.sh` shutdown loop
-- Hardened all CLI tarball extractions in `cli/Makefile`:
-  - Removed dangerous `|| true` from all 5 run-once download waits
-  - Added gzip guard to all 4 tar extraction targets
-  - Added tar error handling to oc-mirror and govc
-- Fixed accidental revert of Makefile.mirror (caused by pre-commit git pull)
-- Added rule: verify edited files after pre-commit checks
-- Moved "Load without save dir" test from negative-paths to airgapped-existing-reg
-  to prevent accidental Quay install on disN
+- Diagnosed 91 deleted files from Cursor fileWatcher race condition (known issue)
+- User ran `git restore .` to recover working tree
+- Re-applied E2E pool usage rule to rules-of-engagement.mdc
+- Re-applied _essh and 57GB backlog items to BACKLOG.md
+- Re-applying run.sh fixes (pool flag, dash idle, notifications)
 
 ## Next steps
-- Commit and push latest changes
-- Deploy to pools and continue gotest loop
-- Monitor mirror-sync instrumentation for uninstall bug data
+- Complete run.sh re-application (pool flag, dash idle, notifications)
+- Commit and push re-applied changes
+- Execute README updates plan (Docker first-class, named mirrors, TUI, FAQ, backlog)
+- Resume gotest on pools 1 and 2
 
 ## Decisions / notes
-- `negative-paths` was accidentally installing Quay on disN via Makefile load→install dep
-- `|| true` on run-once waits was the root cause of corrupt tarball extractions
-- Pre-commit git pull can silently overwrite uncommitted changes -- added to rules
+- Cursor fileWatcher fix (exclude .git/) may have been lost -- user should verify User Settings
+- Backup rule was not followed in previous session -- must back up before editing going forward
+- Version bump NOT needed in README -- release.sh handles it
+- Do NOT change existing README headings (permalinks from blog articles)

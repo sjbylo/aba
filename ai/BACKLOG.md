@@ -115,6 +115,24 @@ Then replace all `$ABA_ROOT/mirror/mirror.conf` with `$MIRROR_CONF_DIR/mirror.co
 
 ---
 
+### E2E: `_essh: command not found` in Framework Cleanup Paths
+
+**Status:** Backlog (deferred -- re-apply if it recurs)
+**Priority:** Medium
+**Context:** `runner.sh` runs suites as `bash "$suite_file"`, so functions defined in `runner.sh`'s shell (like `_essh` from `vm-helpers.sh`) are not available inside the suite's bash subprocess. `e2e_cleanup_clusters` and `e2e_cleanup_mirrors` in `framework.sh` call `_essh` directly, failing during auto-abort/skip paths.
+**Fix:** Add `source "$_E2E_LIB_DIR/vm-helpers.sh"` to `test/e2e/lib/framework.sh` (after line ~99).
+
+---
+
+### E2E: `create-bundle-to-disk` Leaves 57GB on conN After Cleanup
+
+**Status:** Backlog (deferred -- re-apply if it recurs)
+**Priority:** Medium
+**Context:** The `suite-create-bundle-to-disk.sh` creates large bundles (OCP images in `mirror/save/`, oc-mirror caches) on conN, but its end-of-suite cleanup only cleans up on disN (remote). These artifacts remain on conN. Although the next suite's `aba reset -f` would clean it, a disk check at the end of the suite can fail.
+**Fix:** Add conN self-cleanup (`aba reset -f` and `sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf`) to the end-of-suite cleanup block in `test/e2e/suites/suite-create-bundle-to-disk.sh`.
+
+---
+
 ## Low Priority
 
 ### Suppress `[ABA] Using .../mirror.conf file` for Simple Commands
