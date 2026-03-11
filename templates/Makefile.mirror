@@ -27,6 +27,13 @@ else
 endif
 MR_TARBALL := mirror-registry-$(MR_ARCH).tar.gz
 
+# Quay mirror-registry binary is not available for arm64; use Docker registry instead.
+ifeq ($(arch),aarch64)
+  _REGISTRY_PREREQ := docker-reg-image.tgz
+else
+  _REGISTRY_PREREQ := mirror-registry
+endif
+
 ##########################
 # Allow env variable to force plain output (e.g., PLAIN_OUTPUT=1)
 # Otherwise auto-detect from TTY
@@ -166,7 +173,7 @@ mirror-registry: $(MR_TARBALL) ## Extract the mirror-registry binary
 	tar xmvzf $(MR_TARBALL)
 
 .PHONY: download-registries
-download-registries: $(MR_TARBALL) docker-reg-image.tgz
+download-registries: $(if $(filter aarch64,$(arch)),,$(MR_TARBALL)) docker-reg-image.tgz
 
 mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/latest
 
@@ -227,7 +234,7 @@ install: .available
 # Without this, operations that rebuild .init or .rpmsext (new timestamp) cause subsequent commands
 # to unnecessarily re-run reg-install.sh even though the registry is already up.
 # Only mirror.conf changes should trigger a registry reinstall.
-.available: mirror.conf | .init .rpmsext mirror-registry  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into ~/.aba/mirror/ for existing registry.  See README.md.
+.available: mirror.conf | .init .rpmsext $(_REGISTRY_PREREQ)  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into ~/.aba/mirror/ for existing registry.  See README.md.
 	$(SCRIPTS)/reg-install.sh
 	@rm -f .unavailable 
 	@touch .available
