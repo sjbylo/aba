@@ -1,19 +1,30 @@
-# ABA User Configuration
-# This file is copied to ~/.aba/config during installation
-# Settings here affect ABA behavior system-wide for this user
+# ABA User Configuration (~/.aba/config)
+# This file is copied to ~/.aba/config during installation.
+# Settings here affect ABA behavior system-wide for this user.
+# Uncomment and adjust values as needed.
 
-# Catalog download timeout in MINUTES (default: 20)
-# Large operator catalog indexes can take time to download on slow networks
-CATALOG_DOWNLOAD_TIMEOUT_MINS=20
+# --- Catalog Index Settings ---
 
-# Catalog cache TTL in SECONDS (default: 86400 = 24 hours)
-# How long to cache downloaded catalog indexes before re-downloading
-CATALOG_CACHE_TTL_SECS=86400
+# Cache TTL in SECONDS for downloaded operator catalog indexes (default: 43200 = 12 hours).
+# Indexes are re-downloaded when older than this value.
+# Increase for stable environments; decrease if upstream catalog changes cause oc-mirror errors.
+CATALOG_CACHE_TTL_SECS=43200
 
-# oc-mirror --image-timeout value (default: 30m)
-# Increase for slow networks or large operator images
+# Download timeout in MINUTES for catalog index downloads (default: 20).
+# This controls how long 'aba' waits for the small operator index files (.index/*) to download.
+# Increase for slow networks. Not related to oc-mirror image mirroring (see OC_MIRROR_IMAGE_TIMEOUT).
+CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS=20
+
+# Max concurrent catalog downloads (default: 3 = all three catalogs in parallel).
+# Set to 1 for sequential downloads on constrained systems.
+# CATALOG_MAX_PARALLEL=3
+
+# --- oc-mirror Settings ---
+
+# oc-mirror --image-timeout value (default: 30m).
+# Increase for slow networks or large operator images.
 # OC_MIRROR_IMAGE_TIMEOUT=30m
 
-# oc-mirror --parallel-images value (default: 8)
+# oc-mirror --parallel-images value (default: 8).
 # Number of images to mirror concurrently. Reduce on slow or unreliable networks.
 # OC_MIRROR_PARALLEL_IMAGES=8

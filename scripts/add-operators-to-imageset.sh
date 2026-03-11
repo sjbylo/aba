@@ -33,6 +33,8 @@ fi
 
 aba_debug "Starting: $0 --output $OUTPUT_FILE"
 
+# aba.conf is sourced first (global defaults), then mirror.conf (per-mirror overrides).
+# mirror.conf can override ops and op_sets to use different operators per mirror directory.
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")

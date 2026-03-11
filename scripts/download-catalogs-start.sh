@@ -27,8 +27,8 @@ aba_info "  • community-operator"
 # Catalog downloads need oc-mirror; ensure it's at least downloading
 ensure_oc_mirror || aba_debug "Warning: oc-mirror not yet available, catalogs may retry"
 
-# Start downloads in parallel (non-blocking, 1-day TTL)
-download_all_catalogs "$ocp_ver_short" 86400
+# Start downloads in parallel (non-blocking, TTL from ~/.aba/config)
+download_all_catalogs "$ocp_ver_short"
 
 # Peek at task status: only show "in background" if downloads are actually running
 _any_running=

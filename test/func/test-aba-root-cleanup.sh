@@ -76,7 +76,7 @@ echo "Using OCP version: $ocp_version"
 
 # Start catalog downloads
 aba_info "Starting catalog downloads for OCP $ocp_version..." >&2
-download_all_catalogs "$ocp_version" 86400 >&2
+download_all_catalogs "$ocp_version" >&2
 
 # Wait for catalogs
 aba_info "Waiting for catalogs to complete..." >&2

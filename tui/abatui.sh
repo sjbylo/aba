@@ -1236,7 +1236,7 @@ Try again." 0 0 || true
 		
 		# Start catalog downloads for this version (immediate, non-blocking)
 		log "Starting parallel catalog downloads for OCP ${OCP_VERSION} (${version_short})"
-		download_all_catalogs "$version_short" 86400 >>"$LOG_FILE" 2>&1
+		download_all_catalogs "$version_short" >>"$LOG_FILE" 2>&1
 		
 		# Also trigger full prefetch (handles previous minor version too)
 		log "Triggering catalog prefetch for selected version + previous minor"
@@ -1910,7 +1910,7 @@ select_operators() {
 	fi
 	
 	# Ensure all 3 catalogs are running in parallel (no-op if already started)
-	download_all_catalogs "$version_short" 86400 >>"$LOG_FILE" 2>&1
+	download_all_catalogs "$version_short" >>"$LOG_FILE" 2>&1
 	
 	# Now wait for all 3 — they're already running in parallel
 	local failed_catalogs=()

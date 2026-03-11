@@ -101,10 +101,20 @@ unregister: .init
 imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the initial image set config file with all provided values and operators
 isconf: imagesetconf ## Same as imagesetconf
 
-sync/imageset-config-sync.yaml: ../aba.conf catalogs-download catalogs-wait
+# ISC (ImageSet Config) generation dependencies:
+#   ../aba.conf              - ocp_version, ocp_channel, ARCH, ops, op_sets, excl_platform
+#   mirror.conf              - per-mirror ops/op_sets override (optional, may not exist)
+#   catalogs-download/wait   - PHONY: ensure catalog indexes are downloaded before generation
+#   .index/*-operator-index-* - operator names + default channels from downloaded catalogs
+#
+# Regeneration is controlled by the script's internal guard (save/.created marker):
+#   - ISC is always regenerated UNLESS the user has edited it after generation.
+#   - The .created file is touched after each generation; if the ISC file is newer
+#     than .created, it means the user modified it and their changes are preserved.
+sync/imageset-config-sync.yaml: ../aba.conf $(wildcard mirror.conf) catalogs-download catalogs-wait $(wildcard ../.index/*-operator-index-*)
 	$(SCRIPTS)/reg-create-imageset-config-sync.sh
 
-save/imageset-config-save.yaml: ../aba.conf catalogs-download catalogs-wait
+save/imageset-config-save.yaml: ../aba.conf $(wildcard mirror.conf) catalogs-download catalogs-wait $(wildcard ../.index/*-operator-index-*)
 	$(SCRIPTS)/reg-create-imageset-config-save.sh
 
 

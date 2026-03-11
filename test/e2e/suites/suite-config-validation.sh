@@ -29,7 +29,8 @@ e2e_setup
 plan_tests \
 	"Setup: install and configure" \
 	"cluster.conf validation" \
-	"mirror.conf validation"
+	"mirror.conf validation" \
+	"mirror.conf ops/op_sets override"
 
 suite_begin "config-validation"
 
@@ -126,6 +127,46 @@ e2e_run "Restore mirror.conf" "cp mirror/mirror.conf.good mirror/mirror.conf"
 e2e_run "Set empty reg_host" "sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 e2e_run_must_fail "Empty reg_host rejected" "$_MIRROR_VERIFY"
 e2e_run "Restore mirror.conf" "cp mirror/mirror.conf.good mirror/mirror.conf"
+
+test_end 0
+
+# ============================================================================
+# 4. mirror.conf ops/op_sets override
+# ============================================================================
+test_begin "mirror.conf ops/op_sets override"
+
+e2e_run "Backup aba.conf and mirror.conf" \
+	"cp aba.conf aba.conf.bak && cp mirror/mirror.conf mirror/mirror.conf.bak"
+
+e2e_run "Set global op_sets=ocp in aba.conf" \
+	"sed -i 's/^op_sets=.*/op_sets=ocp/' aba.conf"
+
+e2e_run "Override op_sets=acm in mirror.conf" \
+	"echo 'op_sets=acm' >> mirror/mirror.conf"
+
+e2e_run "Remove existing ISC and .created marker" \
+	"rm -f mirror/save/imageset-config-save.yaml mirror/save/.created"
+
+e2e_run "Download catalogs" \
+	"aba -d mirror catalogs-download catalogs-wait"
+
+e2e_run "Generate ISC with mirror.conf override" \
+	"aba -d mirror imagesetconf"
+
+e2e_run "Verify ISC contains ACM (from mirror.conf override)" \
+	"grep 'advanced-cluster-management' mirror/save/imageset-config-save.yaml"
+
+e2e_run "Verify ISC contains multicluster-engine (ACM dependency)" \
+	"grep 'multicluster-engine' mirror/save/imageset-config-save.yaml"
+
+e2e_run_must_fail "Verify ISC does NOT contain web-terminal (ocp set, should be absent)" \
+	"grep 'web-terminal' mirror/save/imageset-config-save.yaml"
+
+e2e_run "Restore aba.conf and mirror.conf" \
+	"cp aba.conf.bak aba.conf && cp mirror/mirror.conf.bak mirror/mirror.conf && rm -f aba.conf.bak mirror/mirror.conf.bak"
+
+e2e_run "Clean up generated ISC" \
+	"rm -f mirror/save/imageset-config-save.yaml mirror/save/.created"
 
 test_end 0
 

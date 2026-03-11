@@ -57,7 +57,7 @@ ocp_version="${ocp_version%.*}"  # Extract major.minor (e.g., 4.19.21 -> 4.19)
 echo "Using OCP version: $ocp_version"
 
 # Start catalog downloads
-download_all_catalogs "$ocp_version" 86400 >&2
+download_all_catalogs "$ocp_version" >&2
 
 # Wait for catalogs
 wait_for_all_catalogs "$ocp_version" >&2

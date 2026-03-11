@@ -1914,23 +1914,24 @@ run_once() {
 
 # Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
-# Example: download_all_catalogs "4.19" 86400
+# Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL_SECS from ~/.aba/config)
+# Example: download_all_catalogs "4.19" 5        (explicit TTL override, e.g. for tests)
 download_all_catalogs() {
 	local version_short="${1}"
-	local ttl="${2:-86400}"  # Default: 1 day (86400 seconds)
+	local ttl="${2:-}"
 
 	if [[ -z "$version_short" ]]; then
 		echo_red "[ABA] Error: download_all_catalogs requires version (e.g., 4.19)" >&2
 		return 1
 	fi
 
-	# Max concurrent catalog downloads (default: 3 = all parallel)
-	# User can set CATALOG_MAX_PARALLEL=1 in ~/.aba/config for sequential
+	# Read user config for TTL and parallelism (defaults: 12h TTL, 3 parallel)
 	local max_parallel="${CATALOG_MAX_PARALLEL:-3}"
 	if [[ -f "$HOME/.aba/config" ]]; then
 		source "$HOME/.aba/config"
 		max_parallel="${CATALOG_MAX_PARALLEL:-3}"
 	fi
+	[[ -z "$ttl" ]] && ttl="${CATALOG_CACHE_TTL_SECS:-43200}"
 
 	local catalogs=(redhat-operator certified-operator community-operator)
 	local running=0
@@ -1971,7 +1972,7 @@ wait_for_all_catalogs() {
 	local timeout_mins=20
 	if [[ -f "$HOME/.aba/config" ]]; then
 		source "$HOME/.aba/config"
-		timeout_mins="${CATALOG_DOWNLOAD_TIMEOUT_MINS:-20}"
+		timeout_mins="${CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS:-${CATALOG_DOWNLOAD_TIMEOUT_MINS:-20}}"
 	fi
 	local timeout_secs=$((timeout_mins * 60))
 	

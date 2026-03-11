@@ -376,7 +376,7 @@ elif [ "$1" = "--light" ]; then
 
 	# Use new helper function for parallel catalog downloads
 	ver_short="${ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
-	download_all_catalogs "$ver_short" 86400  # 1-day TTL
+	download_all_catalogs "$ver_short"
 
 		shift 2
 		ocp_version=$ver
@@ -1321,7 +1321,7 @@ scripts/cli-download-all.sh
 # Use new helper function for parallel catalog downloads (runs in background)
 # NOTE: must come AFTER cli-download-all.sh since catalogs need oc-mirror
 ocp_ver_short="${target_ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
-download_all_catalogs "$ocp_ver_short" 86400  # 1-day TTL
+download_all_catalogs "$ocp_ver_short"
 # Note: Catalogs wait/check happens in scripts that actually need them
 # (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
 
