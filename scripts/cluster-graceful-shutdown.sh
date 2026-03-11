@@ -82,9 +82,7 @@ else
 fi
 
 echo
-aba_info -n "Gracefully shut down the cluster? (Y/n): "
-read yn
-[ "$yn" = "n" ] && exit 1
+ask "Gracefully shut down the cluster" || exit 1
 
 # wait for all debug pods to have completed successfully.
 wait
