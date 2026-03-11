@@ -38,15 +38,16 @@ if [ -s "$regcreds_dir/rootCA.pem" ]; then
 	trust_root_ca "$regcreds_dir/rootCA.pem"
 else
 	aba_abort \
-		"Mirror registry pull secret file 'pull-secret-mirror.json' found in \"$regcreds_dir/\" but no 'rootCA.pem' cert file found." \
-		"CA file missing: rootCA.pem.  Copy your registry's root CA file into \"$regcreds_dir/rootCA.pem\" and try again."
+		"Mirror registry pull secret file 'pull-secret-mirror.json' found in regcreds/ but no 'rootCA.pem' cert file found." \
+		"Either copy your registry's root CA file into regcreds/rootCA.pem," \
+		"or re-register with: aba -d $(basename "$PWD") register --pull-secret-mirror <file> --ca-cert <file>"
 fi
 
 # Check valid config in mirror.conf
 mirrors=$(jq -r '.auths | keys[]' "$regcreds_dir/pull-secret-mirror.json")
 if ! echo "$mirrors" | grep -q "^$reg_host:$reg_port$"; then
 	aba_warning \
-		"Values in aba/mirror/mirror.conf do not match the values in pull secret: $regcreds_dir/pull-secret-mirror.json!" \
+		"Values in mirror.conf do not match the values in pull secret: regcreds/pull-secret-mirror.json!" \
 		"Value in mirror.conf: $reg_host:$reg_port" \
 		"Value in pull-secret-mirror.json: $(echo $mirrors | tr '\n' ' ')" \
 		"Mirror authentication/verification may fail.  Fix the issue and try again!"
@@ -61,7 +62,7 @@ cmd="podman login --authfile $regcreds_dir/pull-secret-mirror.json $reg_url"
 aba_info "Running: $cmd"
 $cmd
 
-aba_info_ok "Success! Valid registry credential file(s) found in $regcreds_dir/ for registry $reg_url"
+aba_info_ok "Success! Valid registry credential file(s) found in regcreds/ for registry $reg_url"
 
 exit 0
 

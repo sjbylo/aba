@@ -117,7 +117,8 @@ out-install-all:
 .check-ocp-version:
 	@if [ -z "$(ocp_version)" ]; then \
 		echo "[ABA] Error: ocp_version not set in aba.conf!"; \
-		echo "[ABA] Set it or run 'aba' in the root directory. See README.md."; \
+		echo "[ABA] Run 'aba --version <x.y.z>' or edit aba.conf to set ocp_version."; \
+		echo "[ABA] See README.md for getting started."; \
 		exit 1; \
 	fi
 

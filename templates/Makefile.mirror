@@ -234,7 +234,7 @@ install: .available
 
 .PHONY: installclean
 installclean:
-	@rm -f .available
+	@rm -f .available .verified
 
 .PHONY: password pw
 password: pw
@@ -243,10 +243,13 @@ pw:
 #	@touch .available  #FIXME: is this really needed?
 
 .PHONY: verify
-verify: .init ## Using the credential files in '~/.aba/mirror/' and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
+verify: .verified ## Using the credential files in '~/.aba/mirror/' and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
+
+.verified: .init mirror.conf
 	@$(SCRIPTS)/reg-verify.sh
-	@rm -f .unavailable 
+	@rm -f .unavailable
 	@touch .available
+	@touch .verified
 
 #.PHONY: uninstallclean
 #uninstallclean:
@@ -286,7 +289,7 @@ catalog: catalogs-download
 uninstall: .init .unavailable     ## Uninstall any previously installed registry  
 .unavailable:
 	$(SCRIPTS)/reg-uninstall.sh
-	@rm -f .available
+	@rm -f .available .verified
 	@touch .unavailable
 
 .PHONY: checkversion
@@ -299,7 +302,7 @@ cluster:
 
 .PHONY: tidy
 tidy:    # Tidy up so that this repo can be (re-)used to install/configure a registry again (assuming aba bundle repo on USB stick).
-	rm -f  .available
+	rm -f  .available .verified
 	rm -f  mirror.conf
 	rm -rf regcreds
 	rm -f  reg-uninstall.sh 
@@ -347,6 +350,6 @@ reset:                # Clean up all files. Only use if you know what you're doi
 	rm -f *.log .*.log
 	rm -f .ssh.conf
 	rm -f .redhat-operator-index* 
-	rm -f .init 
+	rm -f .init .verified
 	rm -f *sha256sum.txt
 
