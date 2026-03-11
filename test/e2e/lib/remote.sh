@@ -265,7 +265,7 @@ destroy_vm() {
 #
 power_off_vm() {
     local vm_name="$1"
-    govc vm.power -off "$vm_name" 2>/dev/null || true
+    govc vm.power -s -force "$vm_name" 2>/dev/null || true
 }
 
 # --- power_on_vm ------------------------------------------------------------

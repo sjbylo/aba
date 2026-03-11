@@ -66,6 +66,7 @@ CLI_START=""
 _CLI_POOLS_SET=""
 CLI_VERIFY=""
 CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
+CLI_OS=""
 
 # --- Usage (defined before arg parsing so --help works) ----------------------
 
@@ -88,7 +89,7 @@ _usage() {
 	  run.sh status [--pool N]             Show what's running
 	  run.sh verify [--pools N|--pool N]   Verify pool VMs (no dispatch)
 	  run.sh list                          List available suites
-	  run.sh destroy                       Destroy all pool VMs
+	  run.sh destroy [--clean]             Destroy pool VMs (--clean: delete clusters first)
 	  run.sh attach conN                   Attach to conN's tmux session
 	  run.sh live [N]                      Interactive multi-pane dashboard
 	  run.sh dash [N] [log]                Read-only summary dashboard
@@ -106,6 +107,7 @@ _usage() {
 	  --recreate-vms       Force reclone all conN/disN from golden
 	  -y, --yes            Auto-accept prompts
 	  -q, --quiet          CI mode: no interactive prompts (implies -y)
+	  --os rhel8|rhel9     RHEL version for pool VMs (default: config.env)
 	  --pools-file F       Custom pools.conf path
 
 	The script auto-detects VM state and only creates/configures
@@ -138,6 +140,7 @@ while [ $# -gt 0 ]; do
 		-f|--force)           CLI_FORCE=1; shift ;;
 		--pool)               CLI_POOL="$2"; shift 2 ;;
 		--resume)             CLI_RESUME=1; shift ;;
+		--os)                 CLI_OS="$2"; shift 2 ;;
 		--pools-file)         CLI_POOLS_FILE="$2"; shift 2 ;;
 		--help|-h)            _usage; exit 0 ;;
 		# Deprecated flag-as-subcommand forms (backwards compat)
@@ -217,6 +220,9 @@ if [ -f "$_RUN_DIR/config.env" ]; then
 	source "$_RUN_DIR/config.env"
 	set +a
 fi
+
+# --os overrides INT_BASTION_RHEL_VER from config.env
+[ -n "$CLI_OS" ] && export INT_BASTION_RHEL_VER="$CLI_OS"
 
 # --- Ensure govc when we will use it (destroy or infra check / setup) ---------
 _ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
@@ -946,6 +952,63 @@ if [ -n "$CLI_DESTROY" ]; then
 	fi
 	source "$_RUN_DIR/lib/remote.sh"
 
+	# --clean: SSH to each conN and delete test clusters / uninstall mirrors
+	# before destroying VMs. Processes .cleanup and .mirror-cleanup files
+	# that suites leave in ~/aba/test/e2e/logs/.
+	if [ -n "$CLI_CLEAN" ]; then
+		echo "=== Cleaning up test clusters and mirrors on pool VMs ==="
+		_cssh="-o LogLevel=ERROR -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+		_user="${CON_SSH_USER:-steve}"
+		_domain="${VM_BASE_DOMAIN}"
+		_e2e_logs="aba/test/e2e/logs"
+
+		for (( i=1; i<=10; i++ )); do
+			_host="con${i}.${_domain}"
+			# Skip unreachable hosts or hosts with no cleanup files
+			_has_files=$(ssh $_cssh "${_user}@${_host}" \
+				"ls ~/$_e2e_logs/*.cleanup ~/$_e2e_logs/*.mirror-cleanup 2>/dev/null | head -1" 2>/dev/null) || continue
+			[ -z "$_has_files" ] && continue
+
+			echo "  con${i}: processing cleanup files ..."
+
+			ssh $_cssh "${_user}@${_host}" bash <<-REMOTE
+				_ssh_opts="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+				_logs="\$HOME/$_e2e_logs"
+
+				for f in "\$_logs"/*.cleanup; do
+					[ -f "\$f" ] || continue
+					echo "    Processing \$(basename "\$f") ..."
+					_ok=1
+					while IFS=' ' read -r target abs_path; do
+						[ -z "\$abs_path" ] && continue
+						echo "      \$target: aba -y -d \$abs_path delete"
+						ssh \$_ssh_opts "\$target" \
+							"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete || echo '      (dir not found)'" \
+							2>&1 || { echo "      WARNING: SSH failed"; _ok=; }
+					done < "\$f"
+					[ -n "\$_ok" ] && rm -f "\$f"
+				done
+
+				for f in "\$_logs"/*.mirror-cleanup; do
+					[ -f "\$f" ] || continue
+					echo "    Processing \$(basename "\$f") ..."
+					_ok=1
+					while IFS=' ' read -r target abs_path; do
+						[ -z "\$abs_path" ] && continue
+						echo "      \$target: aba -y -d \$abs_path uninstall"
+						ssh \$_ssh_opts "\$target" \
+							"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall || echo '      (dir not found)'" \
+							2>&1 || { echo "      WARNING: SSH failed"; _ok=; }
+					done < "\$f"
+					[ -n "\$_ok" ] && rm -f "\$f"
+				done
+			REMOTE
+			echo "  con${i}: cleanup done."
+		done
+		echo "=== Cleanup complete ==="
+		echo ""
+	fi
+
 	echo "=== Destroying all pool VMs ==="
 	for (( i=1; i<=10; i++ )); do
 		for prefix in con dis; do
@@ -957,6 +1020,51 @@ if [ -n "$CLI_DESTROY" ]; then
 			fi
 		done
 	done
+
+	# Sweep pool folders for orphaned cluster VMs (e.g. sno1-sno1, compact1-master1)
+	# that were not cleaned up by the --clean step or aba delete.
+	_base="/Datacenter/vm/aba-e2e"
+	echo ""
+	echo "=== Sweeping pool folders for orphaned cluster VMs ==="
+	_all_orphans=""
+	for (( i=1; i<=10; i++ )); do
+		_pfolder="${_base}/pool${i}"
+		_orphans=$(govc find "$_pfolder" -type m 2>/dev/null) || continue
+		[ -z "$_orphans" ] && continue
+		_all_orphans+="$_orphans"$'\n'
+	done
+	_all_orphans="${_all_orphans%$'\n'}"
+
+	if [ -z "$_all_orphans" ]; then
+		echo "  No orphaned VMs found in pool folders."
+	else
+		echo "  The following VMs will be DESTROYED:"
+		while IFS= read -r _ovm; do
+			[ -z "$_ovm" ] && continue
+			echo "    $_ovm"
+		done <<< "$_all_orphans"
+		echo ""
+
+		_answer=""
+		if [ -n "$CLI_YES" ]; then
+			_answer="y"
+		else
+			printf "  Destroy these VMs? (Y/n): "
+			read -r -t 60 _answer || _answer="n"
+		fi
+
+		if [[ "$_answer" =~ ^[Yy]?$ ]]; then
+			while IFS= read -r _ovm; do
+				[ -z "$_ovm" ] && continue
+				echo "  Destroying $_ovm ..."
+				govc vm.power -off "$_ovm" 2>/dev/null || true
+				govc vm.destroy "$_ovm" || true
+			done <<< "$_all_orphans"
+		else
+			echo "  Skipped orphan cleanup."
+		fi
+	fi
+
 	echo "=== Done ==="
 	exit 0
 fi

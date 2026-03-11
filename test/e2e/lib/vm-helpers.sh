@@ -436,10 +436,12 @@ DNSEOF
 
 	cat <<-SETUPEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		# Remove any listen-address restriction from the default config
-		# so dnsmasq listens on ALL interfaces (lab, VLAN, loopback).
-		# RHEL 9 default or prior installs may have listen-address=127.0.0.1.
-		sed -i '/^listen-address/d' /etc/dnsmasq.conf
+		# Remove listen-address, bind-interfaces, and interface= from the
+		# default config. RHEL 9 ships with bind-interfaces and interface=lo
+		# which conflict with bind-dynamic and restrict dnsmasq to loopback.
+		# We use bind-dynamic so dnsmasq listens on ALL interfaces (lab,
+		# VLAN, loopback) including those added after startup.
+		sed -i '/^listen-address/d; /^bind-interfaces/d; /^interface=/d' /etc/dnsmasq.conf
 
 		cat > /etc/dnsmasq.d/e2e-pool.conf << 'CONFEOF'
 ${dnsmasq_conf}

@@ -836,21 +836,16 @@ for (( i=1; i<=_POOLS; i++ )); do
 	echo "  Configuring pool $i ($con_vm + $dis_vm) ..."
 	echo "    Logs: $con_log  |  $dis_log"
 
+	# con then dis sequentially within each pool (dis needs con's dnsmasq),
+	# but pools run in parallel with each other.
 	(
 		set -e
 		export VC_FOLDER="$pool_folder"
-		_configure_con_vm "$con_vm" "$user"
-	) >> "$con_log" 2>&1 &
+		_configure_con_vm "$con_vm" "$user" >> "$con_log" 2>&1
+		_configure_dis_vm "$dis_vm" "$user" "$con_vm" >> "$dis_log" 2>&1
+	) &
 	_cfg_pids+=($!)
-	_cfg_labels+=("configure $con_vm")
-
-	(
-		set -e
-		export VC_FOLDER="$pool_folder"
-		_configure_dis_vm "$dis_vm" "$user" "$con_vm"
-	) >> "$dis_log" 2>&1 &
-	_cfg_pids+=($!)
-	_cfg_labels+=("configure $dis_vm")
+	_cfg_labels+=("configure pool $i ($con_vm + $dis_vm)")
 	_cfg_logs+=("$con_log" "$dis_log")
 done
 
@@ -895,8 +890,9 @@ for (( i=1; i<=_POOLS; i++ )); do
 				continue
 			fi
 		fi
-		echo "  Powering off $vm_name before snapshot ..."
-		govc vm.power -off "$vm_name" || true
+		echo "  Shutting down $vm_name before snapshot ..."
+		govc vm.power -s -force "$vm_name" || true
+		sleep 15
 		echo "  Creating snapshot '$_SNAPSHOT_NAME' on $vm_name ..."
 		govc snapshot.create -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: snapshot $vm_name failed" >&2; exit 1; }
 		echo "  Powering on $vm_name ..."
