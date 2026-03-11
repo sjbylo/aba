@@ -26,6 +26,7 @@ alwaysApply: true
 - Work on the `dev` branch
 - Default: commit AND push together (unless told otherwise)
 - Default: AI decides how to batch commits -- group by logical scope (e.g. core / test / docs) unless user specifies otherwise
+- **NEVER commit code changes without testing first!** If there is no automated test covering the change, ask the user to verify manually before committing. Docs-only changes are exempt.
 - Run `build/pre-commit-checks.sh` before committing code changes
 - Run `build/pre-commit-checks.sh --skip-version` for docs-only commits
 - IMPORTANT: `pre-commit-checks.sh` runs `git pull` which can overwrite local uncommitted changes. After running pre-commit checks, ALWAYS verify that edited files still contain the intended changes (e.g. `git diff` the files) before staging and committing.
