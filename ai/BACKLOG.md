@@ -6,6 +6,30 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ## Medium Priority
 
+### `aba install` Downloads Quay Binary Even When `reg_vendor=docker`
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-11
+
+**Problem:**
+Running `aba install` with `reg_vendor=docker` in `mirror.conf` downloads and extracts `mirror-registry-amd64.tar.gz` (the Quay appliance binary). This is wrong — Docker installs only need the Docker registry image, not the ~1GB Quay tarball. Wastes time and bandwidth.
+
+**Root cause:**
+In `templates/Makefile.mirror` line 230, `.available` has `mirror-registry` as an order-only prerequisite:
+```makefile
+.available: mirror.conf | .init .rpmsext mirror-registry
+```
+This runs the `mirror-registry` target (line 164, extracts Quay tarball) unconditionally before every install, regardless of `reg_vendor`.
+
+**Proposed fix:**
+Make the `mirror-registry` prerequisite conditional on vendor. Options:
+- Use a Make conditional: `$(if $(filter quay auto,$(reg_vendor)),mirror-registry)`
+- Or move the `ensure_quay_registry` call into `reg-install.sh` / `reg-install-quay.sh` and remove `mirror-registry` from the `.available` prerequisites entirely (let the script handle it)
+
+**Where:** `templates/Makefile.mirror` line 230
+
 ### Deduplicate `aba isconf` output
 
 **Status:** Backlog

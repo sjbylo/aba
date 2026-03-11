@@ -14,7 +14,6 @@ reg_generate_password
 reg_verify_localhost
 
 REGISTRY_NAME="registry"
-INTERNAL_PORT=5000
 REGISTRY_DATA_DIR="$reg_root/data"
 REGISTRY_CERTS_DIR="$REGISTRY_DATA_DIR/.docker-certs"
 REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
@@ -68,15 +67,18 @@ if podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
 fi
 
 # --- Start the registry container ---
+# Use --network host to avoid rootless podman pasta hairpin NAT bug:
+# with -p port mapping, connections from the host to its own FQDN/external IP
+# go through pasta's userspace proxy, which breaks the TLS handshake.
 aba_info "Starting Docker registry at $reg_url (data: $REGISTRY_DATA_DIR) ..."
 podman run -d \
-	-p "${reg_port}:${INTERNAL_PORT}" \
+	--network host \
 	--restart=always \
 	--name "$REGISTRY_NAME" \
 	-v "${REGISTRY_DATA_DIR}:/var/lib/registry:Z" \
 	-v "${REGISTRY_CERTS_DIR}:/certs:Z" \
 	-v "${REGISTRY_AUTH_DIR}:/auth:Z" \
-	-e REGISTRY_HTTP_ADDR=0.0.0.0:${INTERNAL_PORT} \
+	-e REGISTRY_HTTP_ADDR=0.0.0.0:${reg_port} \
 	-e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
 	-e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
 	-e REGISTRY_AUTH=htpasswd \
@@ -86,20 +88,8 @@ podman run -d \
 
 reg_open_firewall
 
-# Quick connectivity check -- fail fast before spending time on CA trust / pull secret
-if ! curl -k -fsSL --connect-timeout 10 "$reg_url/v2/" \
-	-u "$reg_user:$reg_pw" >/dev/null 2>&1; then
-	aba_abort \
-		"Registry at $reg_url is not reachable after starting." \
-		"The container is running but network connectivity failed." \
-		"Common causes:" \
-		"  - Firewall is blocking port $reg_port" \
-		"  - nftables NOTRACK rules interfere with podman networking" \
-		"  - FORWARD chain has a DROP/REJECT policy" \
-		"Try: sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT" \
-		"Also try: sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD"
-fi
-
+# Save credentials and state BEFORE the connectivity check, so the user
+# can recover with 'aba verify' or 'aba uninstall' if networking fails.
 reg_post_install "$REGISTRY_CERTS_DIR/ca.crt" docker
 
 cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
@@ -111,3 +101,18 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	To verify:    cd $PWD && aba verify
 	To uninstall: cd $PWD && aba uninstall
 BREADCRUMB
+
+# Verify connectivity after saving state
+if ! curl -k -fsSL --connect-timeout 10 "$reg_url/v2/" \
+	-u "$reg_user:$reg_pw" >/dev/null 2>&1; then
+	aba_abort \
+		"Registry at $reg_url is not reachable after starting." \
+		"The container is running but network connectivity failed." \
+		"Common causes:" \
+		"  - Firewall is blocking port $reg_port" \
+		"  - nftables NOTRACK rules interfere with podman networking" \
+		"  - FORWARD chain has a DROP/REJECT policy" \
+		"Try: sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT" \
+		"Also try: sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD" \
+		"Credentials have been saved. After fixing networking, run: aba -d $(basename "$PWD") verify"
+fi
