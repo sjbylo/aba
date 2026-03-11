@@ -475,6 +475,23 @@ The error comes from the Makefile recipe, not from `aba.sh`. The UX should catch
 
 **Action:** In `aba.sh`, when `cur_target` is `mirror` and `BUILD_COMMAND` contains `register`, verify that `pull_secret_mirror=` and `ca_cert=` are present in `BUILD_COMMAND` before calling `eval make`. If missing, print usage and exit. The same pattern could apply to other targets that require specific options (e.g., `password` requiring `--reg-host`).
 
+### Re-enable Quay Mirror-Registry on arm64
+
+**Status:** Backlog (waiting on Red Hat)
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-11
+
+**Problem:**
+Quay mirror-registry binary is not published for arm64 (as of 2026-03). We added conditionals to skip the download and use Docker registry instead. When Red Hat publishes the arm64 binary, we need to re-enable Quay support.
+
+**What to change (3 places):**
+1. `templates/Makefile.mirror` lines 30-35: Remove `_REGISTRY_PREREQ` conditional — revert to just `mirror-registry`
+2. `templates/Makefile.mirror` `download-registries` target: Remove `$(if $(filter aarch64,...))` — revert to `$(MR_TARBALL) docker-reg-image.tgz`
+3. `scripts/reg-install.sh`: Update `auto` resolution logic to allow `auto` -> `quay` on arm64
+
+**How to verify:** Check `https://mirror.openshift.com/pub/cgw/mirror-registry/latest/` for `mirror-registry-arm64.tar.gz`.
+
 ### 35. Consolidate `mirror/save` and `mirror/sync` Into `mirror/data`
 
 **Status:** Backlog  

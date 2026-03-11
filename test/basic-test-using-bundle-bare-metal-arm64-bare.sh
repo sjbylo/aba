@@ -26,6 +26,7 @@ sudo rm -fv $(which aba)
 rm -rf ~/.oc-mirror/.cache
 rm -fv ~/bin/{oc-mirror,oc,openshift-install}
 rm -rf $TEST_DIR_CONN/aba 
+rm -rf $TEST_DIR_DISCO/aba 
 rm -f ~/.aba/.first_cluster_success
 
 # Install aba

@@ -1,22 +1,19 @@
 # Session State
 
 ## Current goal
-Docker registry fixes committed, shutdown ask fix applied, ready for commit.
+Stabilize E2E test suite on RHEL 9 + fix arm64 support.
 
 ## Done this session
-- Diagnosed pasta hairpin NAT bug in rootless podman Docker registry install
-- Fixed reg-install-docker.sh: --network host, reorder reg_post_install, recovery hint
-- Fixed reg-uninstall.sh: vendor-aware fallback, respect -y flag
-- Added 3 e2e tests to suite-negative-paths.sh
-- Added backlog: aba install downloads Quay binary when reg_vendor=docker
-- Committed as 3af0a27
-- Fixed cluster-graceful-shutdown.sh: use ask() instead of raw read (uncommitted)
+- Fixed arm64: skip Quay binary download, use Docker registry instead (3 changes in Makefile.mirror)
+- Added backlog item for re-enabling Quay on arm64 when binary is published
 
 ## Next steps
-- Commit shutdown fix
-- Push all to origin/dev
-- Deploy to conN and run full e2e suite
+- Commit and push arm64 fix + backlog update
+- Run pre-commit checks
+- Monitor running e2e tests
+- Quay sqlite permissions bug: ~/quay-install not cleaned between retries
 
 ## Decisions / notes
-- --network host chosen over -p port mapping to eliminate pasta hairpin NAT
-- ask() respects -y flag and ask=false from aba.conf
+- On arm64, `_REGISTRY_PREREQ` = `docker-reg-image.tgz`; on x86_64, = `mirror-registry`
+- `aba save` on x86_64 still downloads BOTH registry installers (no change)
+- 3 places to revert when arm64 Quay binary becomes available (documented in BACKLOG.md)
