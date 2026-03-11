@@ -40,6 +40,7 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
   - [Enable OpenShift Update Service (OSUS)](#enable-openshift-update-service-osus)
 - [Advanced Use](#advanced-use)
   - [User Configuration (\`~/.aba/config\`)](#user-configuration-abaconfig)
+  - [Named Mirror Directories (Enclaves)](#named-mirror-directories-enclaves)
   - [Supported Architectures](#supported-architectures)
   - [Running ABA in a container](#running-aba-in-a-container)
   - [Creating an Install bundle on a restricted VM or Laptop](#creating-an-install-bundle-on-a-restricted-vm-or-laptop)
@@ -78,7 +79,7 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
 ABA helps you with the following and more:
 
 1. Helps install your first OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
-1. Installs the `Mirror Registry for Red Hat OpenShift` (Quay) or Docker Registry for you or makes use of your existing container registry.
+1. Installs a mirror registry -- Quay or Docker -- locally or on a remote host, or connects to your existing registry.
 1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
 1. Triggers the generation of the agent-based boot ISO.
 1. Configures NTP during installation to prevent time synchronization issues caused by nodes with incorrect date and time settings
@@ -87,6 +88,7 @@ ABA helps you with the following and more:
 1. Allows for adding more images (e.g. Operators) when synchronizing the mirror registry (day 1 or 2 operation).
 1. Configures the OperatorHub integration with the mirror registry.
 1. Can create an "install bundle" containing all the files needed to complete a fully disconnected installation.
+1. Supports named mirror directories for managing multiple enclaves (`aba -d mymirror install`).
 1. Executes several workarounds, if needed, for some typical issues with disconnected environments.
 1. Works with oc-mirror v2.
 1. Installs and integrates OpenShift Update Service (OSUS) to make upgrades a single-click.
@@ -96,7 +98,7 @@ ABA helps you with the following and more:
 
 All ABA commands are designed to be idempotent. If something goes wrong, fix it and run the command again — ABA will always try to do the right thing.
 
-**New:** ABA also includes a TUI (Text User Interface) wizard that guides you through configuration and setup interactively. See [Install ABA](#install-aba) for details.
+ABA includes a TUI (Text User Interface) wizard that guides you through configuration and setup interactively, including registry type selection (Quay/Docker). See [Install ABA](#install-aba) for details.
 
 
 # About Installing OpenShift in a Disconnected Environment
@@ -316,7 +318,7 @@ Note that 'aba' will create the `aba.conf` file which contains some values that 
 ```bash
 ./abatui    # Interactive wizard to configure and prepare your environment
 ```
-Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI walks you through selecting OpenShift version, operators, and creating install bundles or syncing to registries.
+Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI walks you through selecting OpenShift version, operators, registry type (Auto/Quay/Docker), and creating install bundles or syncing to registries.
 
 
 Now, continue with either [Partially Disconnected Scenario](#partially-disconnected-scenario) or [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario) below.
@@ -414,7 +416,7 @@ aba -d mirror load -H registry.example.com
    - if required, installs _Mirror Registry for Red Hat OpenShift_ (Quay) onto `localhost` and then loads the images into it (disk2mirror).
    - checks the FQDN `registry.example.com` is resolvable *and* reaches your internal bastion via ssh.
 
->> Note: if you are having difficulties pushing images into Quay, see the below FAQ on how to replace it with the Docker Registry. 
+>> Tip: If you experience issues pushing images into Quay, consider using the Docker Registry instead — set `reg_vendor=docker` in `mirror.conf` or select Docker in the TUI. See the [FAQ](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do) for details.
 
 ### Install Quay and load images to a remote host
 
@@ -426,7 +428,7 @@ aba -d mirror load -H registry.example.com -k ~/.ssh/id_rsa
    - if required, installs _Mirror Registry for Red Hat OpenShift_ (Quay) onto the remote host `registry.example.com` and then loads the images into it.
    - checks the FQDN `registry.example.com` is resolvable *and* can be reached via ssh.
 
->> Note: if you are having difficulties pushing images into Quay, see the below FAQ on how to replace it with the Docker Registry. 
+>> Tip: If you experience issues pushing images into Quay, consider using the Docker Registry instead — set `reg_vendor=docker` in `mirror.conf` or select Docker in the TUI. See the [FAQ](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do) for details.
 
 Now continue with [Installing OpenShift](#installing-openshift) below.
 
@@ -1095,6 +1097,37 @@ vi ~/.aba/config
 OC_MIRROR_PARALLEL_IMAGES=4
 ```
 
+## Named Mirror Directories (Enclaves)
+
+ABA supports named mirror directories for managing multiple independent registries — useful for serving different enclaves, teams, or use-cases from a single bastion host.
+
+**Create a named mirror:**
+
+```bash
+aba mirror --name mymirror
+```
+
+This creates a `mymirror/` directory with a fresh `mirror.conf`. Edit `mymirror/mirror.conf` to set the registry host, port, vendor, and other settings for that mirror.
+
+**One-liner with options:**
+
+```bash
+aba mirror --name mymirror --vendor docker --reg-port 5000
+```
+
+**Use the named mirror:**
+
+```bash
+aba -d mymirror install     # Install the registry
+aba -d mymirror sync        # Sync images from the Internet to the registry
+aba -d mymirror verify      # Verify registry access
+aba -d mymirror uninstall   # Uninstall the registry
+```
+
+Each named mirror has its own `mirror.conf` and credentials stored in `~/.aba/mirror/mymirror/`.
+
+You can also override `ops` and `op_sets` in each mirror's `mirror.conf` to use different operators per mirror (see the [configuration files table](#about-the-aba-configuration-files)).
+
 ## Supported Architectures
 
 ABA supports the following architectures, automatically detecting the host and downloading the correct OpenShift binaries:
@@ -1228,9 +1261,19 @@ We need help!  Here are some ideas for new features and enhancements.
 
 - ~~Finish full testing for arm64, partial testing complete.~~
 
-- ~~Added ability to use the Docker Registry instead of Quay (see the below FAQ)~~
+- ~~Added ability to use the Docker Registry instead of Quay — now first-class with remote install, CLI, and TUI support.~~
 
 - ~~Auto-refresh the Operator Catalogs (indexes) after they become stale (e.g. after 1 day).~~
+
+- ~~Named mirror directories for managing multiple enclaves (`aba mirror --name mymirror`).~~
+
+- ~~`aba register`/`unregister` for externally-managed registries.~~
+
+- ~~Graceful cluster shutdown retry logic with per-node failure reporting.~~
+
+- Improve `day2.sh` screen output and UX (clearer step headers, less noise).
+
+- Warn when registry data directory already contains data from a previous installation.
 
 - ~~Enable any number of ports for interface bonding, using `ports` value instead of `port0` and `port1` values in `cluster.conf`.~~
 
@@ -1470,14 +1513,15 @@ echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 
 ## Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?
 
-**Use Docker Registry instead!** To replace Quay with the Docker Registry, run:
+Docker Registry is a fully supported registry type in ABA — available via CLI (`aba mirror --vendor docker`), TUI, and for both local and remote installations. It is lighter weight and generally more reliable for mirroring than Quay.
+
+To switch from Quay to Docker Registry:
 
 ```
 aba -d mirror uninstall                        # Uninstall the current registry (Quay or Docker).
 
-                                               # Assuming aba/mirror/mirror.conf is set up correctly:
                                                # Set reg_vendor=docker in mirror.conf, then:
-aba -d mirror install                          # Install the configured registry (auto/quay/docker). Also works in disconnected env.
+aba -d mirror install                          # Install the configured registry. Also works in disconnected env.
 aba -d mirror verify                           # If verification is successful, use aba as usual (e.g. aba load/save).
 ```
 
@@ -1486,7 +1530,7 @@ To uninstall the registry, run:
 ```
 aba -d mirror uninstall                        # Remove the registry (reads install-time state to determine type).
 ```
-- Note: Like all tools that ABA uses, the Quay mirror registry is supported by Red Hat but the Docker Registry is not.
+- Note: The Quay mirror registry is supported by Red Hat but the Docker Registry is not.
 - The `install-docker-registry` and `uninstall-docker-registry` targets are still supported for backward compatibility.
 
 [Back to top](#who-should-use-aba)
