@@ -41,7 +41,6 @@ done
 
 if [ -n "$_any_running" ]; then
 	aba_info "Catalog downloads running in background. This may take a while to complete."
-	aba_info "Run 'aba save' / 'aba sync' to continue (which waits automatically)."
 else
 	aba_info_ok "All operator catalogs already available for OCP $ocp_ver_short."
 fi
