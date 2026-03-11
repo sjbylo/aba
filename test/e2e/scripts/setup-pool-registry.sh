@@ -236,6 +236,9 @@ fi
 if [[ ! -f "$DONE_MARKER" ]]; then
     echo "[4/4] Syncing images to ${reg_host}:${REG_PORT} (this may take 30+ minutes) ..."
 
+    # Clear stale oc-mirror workspace to avoid corrupted OCI index after interrupted syncs
+    rm -rf "$SYNC_DIR/working-dir" "$SYNC_DIR/.oc-mirror" "$HOME/.oc-mirror"
+
     [[ -x "$HOME/bin/oc-mirror" ]] && export PATH="$HOME/bin:$PATH"
 
     _oc_mirror_tmp_installed=""
