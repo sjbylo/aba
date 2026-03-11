@@ -147,16 +147,16 @@ else
         sudo firewall-cmd --reload
     fi
 
-    # Start the registry
+    # Start the registry (--network host avoids rootless podman pasta hairpin bug)
     echo "  Starting Docker registry (data: $DATA_DIR) ..."
     podman run -d \
-        -p "${REG_PORT}:${INTERNAL_PORT}" \
+        --network host \
         --restart=always \
         --name "$CONTAINER_NAME" \
         -v "${DATA_DIR}:/var/lib/registry:Z" \
         -v "${CERTS_DIR}:/certs:Z" \
         -v "${AUTH_DIR}:/auth:Z" \
-        -e REGISTRY_HTTP_ADDR=0.0.0.0:${INTERNAL_PORT} \
+        -e REGISTRY_HTTP_ADDR=0.0.0.0:${REG_PORT} \
         -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
         -e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
         -e REGISTRY_AUTH=htpasswd \
