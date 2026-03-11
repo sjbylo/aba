@@ -64,40 +64,92 @@ if [ ! "$data_dir" ]; then
 fi
 if [ ! "$reg_ssh_user" ]; then reg_ssh_user=$(whoami); fi
 
+# Determine vendor from mirror.conf (reg_vendor is set by normalize-mirror-conf)
+vendor="${reg_vendor:-auto}"
+[ "$vendor" = "auto" ] && vendor="quay"
+
 ssh_conf_file=~/.aba/ssh.conf
 
-export ASK_OVERRIDE=
+# Enable interactive prompting, but respect -y flag if the user passed it
 export ask=1
 
-if [ "$reg_ssh_key" ] && ssh -F $ssh_conf_file $reg_ssh_user@$reg_host podman ps 2>/dev/null | grep -q registry; then
-	reg_root=$data_dir/quay-install
-	reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
+# Get container names (including stopped) from local or remote host
+_is_remote=
+_podman_ps=""
+if [ "$reg_ssh_key" ]; then
+	_is_remote=1
+	_podman_ps=$(ssh -F $ssh_conf_file $reg_ssh_user@$reg_host "podman ps -a --format '{{.Names}}'" 2>/dev/null || true)
+else
+	_podman_ps=$(podman ps -a --format '{{.Names}}' 2>/dev/null || true)
+fi
 
-	if ask "Registry detected on host $reg_host. Uninstall this mirror registry"; then
-		ensure_quay_registry
-		cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
-		aba_info "Running command: $cmd"
-		if [ -d "$regcreds_dir" ]; then rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"; fi
-		$cmd || exit 1
+# Detect registry container or data directory based on vendor type
+_found=
+case "$vendor" in
+	docker)
+		reg_root=$data_dir/docker-reg
+		echo "$_podman_ps" | grep -q "^registry$" && _found=1
+		;;
+	quay)
+		reg_root=$data_dir/quay-install
+		reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
+		echo "$_podman_ps" | grep -q "quay-app\|quay" && _found=1
+		;;
+esac
+
+# Also check if registry data directory exists (container may be gone but data remains)
+if [ ! "$_found" ]; then
+	if [ "$_is_remote" ]; then
+		ssh -F $ssh_conf_file $reg_ssh_user@$reg_host "[ -d '$reg_root' ]" 2>/dev/null && _found=1
 	else
-		exit 1
+		[ -d "$reg_root" ] && _found=1
 	fi
-elif podman ps 2>/dev/null | grep -q registry; then
-	reg_root=$data_dir/quay-install
-	reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
+fi
 
-	if ask "Mirror registry detected on localhost. Uninstall this mirror registry"; then
-		ensure_quay_registry
-		cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
-		aba_info "Running command: $cmd"
-		if [ -d "$regcreds_dir" ]; then rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"; fi
-		$cmd || exit 1
+if [ ! "$_found" ]; then
+	aba_info "No $vendor registry detected (no container or data at $reg_root). Nothing to uninstall."
+	exit 0
+fi
+
+_location="localhost"
+[ "$_is_remote" ] && _location="$reg_ssh_user@$reg_host"
+
+if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall this registry"; then
+	if [ -d "$regcreds_dir" ]; then
+		rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"
+	fi
+
+	if [ "$_is_remote" ]; then
+		_ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
+		case "$vendor" in
+			docker)
+				aba_info "Removing Docker registry container and data on $reg_host ..."
+				$_ssh "podman rm -f registry; sudo rm -rf $reg_root" || true
+				;;
+			quay)
+				ensure_quay_registry
+				cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
+				aba_info "Running command: $cmd"
+				$cmd || exit 1
+				;;
+		esac
 	else
-		exit 1
+		case "$vendor" in
+			docker)
+				aba_info "Removing Docker registry container and data ..."
+				podman rm -f registry || true
+				[ -d "$reg_root" ] && rm -rf "$reg_root"
+				;;
+			quay)
+				ensure_quay_registry
+				cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
+				aba_info "Running command: $cmd"
+				$cmd || exit 1
+				;;
+		esac
 	fi
 else
-	aba_info "No mirror registry to uninstall"
-	exit 0
+	exit 1
 fi
 
 rm -rf "${regcreds_dir:?}/"*

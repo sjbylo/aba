@@ -1,29 +1,24 @@
 # Session State
 
 ## Current goal
-All changes implemented. Awaiting commit approval.
+All Docker registry fixes and e2e tests implemented, ready for commit.
 
 ## Done this session
-- Fixed Makefile.mirror: added $(wildcard mirror.conf) and $(wildcard ../.index/*-operator-index-*) as ISC deps
-- Added commented-out ops/op_sets to end of templates/mirror.conf.j2
-- Added ISC dependency chain documentation in Makefile.mirror
-- Expanded ISC regeneration guard comments in both ISC generation scripts
-- Added override mechanism comment in add-operators-to-imageset.sh
-- Added E2E test for mirror.conf ops/op_sets override in suite-config-validation.sh
-- Changed catalog index TTL default from 24h to 12h (43200s)
-- Made TTL configurable via CATALOG_CACHE_TTL_SECS in ~/.aba/config
-- Added CATALOG_MAX_PARALLEL to config template (commented out)
-- Removed hardcoded 86400 from all download_all_catalogs callers (10 call sites)
-- Renamed CATALOG_DOWNLOAD_TIMEOUT_MINS to CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS
-- Updated README: added CATALOG_MAX_PARALLEL to config table, per-mirror override tip
+- Diagnosed pasta hairpin NAT bug in rootless podman Docker registry install
+- Fixed reg-install-docker.sh: --network host, reorder reg_post_install, recovery hint
+- User tested: aba install + aba verify both pass from xxx/
+- Fixed reg-uninstall.sh: removed ASK_OVERRIDE clearing in fallback path
+- Added 3 e2e tests to suite-negative-paths.sh (install, recovery, stateless uninstall)
+- Added backlog: aba install downloads Quay binary when reg_vendor=docker
+- Fixed reg-uninstall.sh fallback v2 (previous session, also uncommitted)
 
 ## Next steps
-- Commit and push all changes (awaiting user approval)
-- Run pre-commit checks
+- Commit and push all pending changes
+- Deploy to conN and run full e2e suite to verify
 
 ## Decisions / notes
-- Script guard is correct (not a bug): protects user-edited ISCs
-- Unpinned channels rejected: mirrors ALL channels (huge payload)
-- 12h TTL is reasonable middle ground; configurable via ~/.aba/config
-- mirror.conf override works with no script changes (source order: aba.conf then mirror.conf)
-- Backwards-compat: old CATALOG_DOWNLOAD_TIMEOUT_MINS still works as fallback
+- --network host chosen over -p port mapping to eliminate pasta hairpin NAT
+- reg_post_install runs before connectivity check so state is always saved
+- Test C exercises reg-uninstall.sh fallback by deleting ~/.aba/mirror/xxx/
+- Test B uses iptables REJECT to simulate connectivity failure
+- ASK_OVERRIDE fix in reg-uninstall.sh respects -y flag in fallback path
