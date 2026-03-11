@@ -23,8 +23,11 @@ mkdir -p save
 # Ensure the RH pull secret files are located in the right places
 scripts/create-containers-auth.sh || exit 1
 
-# Generate first imageset-config file for saving images.  
-# Do not overwrite the file if it has been modified. Allow users to add images and operators to imageset-config-save.yaml and run "make save" again. 
+# ISC regeneration guard:
+#   Regenerate if: ISC doesn't exist/empty OR .created marker is newer than ISC.
+#   Skip if: user edited the ISC after generation (ISC is newer than .created).
+#   The .created file is touched at the end of each generation cycle.
+#   This allows users to customize the ISC and run 'aba save' again without losing edits.
 if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-config-save.yaml ]; then
 	#rm -rf save/*  # Do not do this.  There may be image set archive files in thie dir which are still needed. 
 

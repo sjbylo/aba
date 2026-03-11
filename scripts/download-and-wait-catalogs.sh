@@ -20,8 +20,8 @@ ocp_ver_short="${ocp_version%.*}"
 
 aba_info "Downloading operator catalogs for OCP $ocp_ver_short"
 
-# Download all catalogs in parallel (1-day TTL)
-download_all_catalogs "$ocp_ver_short" 86400
+# Download all catalogs in parallel (TTL from ~/.aba/config)
+download_all_catalogs "$ocp_ver_short"
 
 # Wait for all to complete
 wait_for_all_catalogs "$ocp_ver_short"

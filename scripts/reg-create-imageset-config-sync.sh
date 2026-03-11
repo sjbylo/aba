@@ -41,8 +41,11 @@ aba_debug "reg_url=$reg_url reg_host=$reg_host reg_port=$reg_port"
 aba_debug "Creating sync/ directory"
 mkdir -p sync 
 
-# Generate first imageset-config file for syncing images.  
-# Do not overwrite the file if it has been modified. Allow users to add images and operators to imageset-config-sync.yaml and run "make sync" again. 
+# ISC regeneration guard:
+#   Regenerate if: ISC doesn't exist/empty OR .created marker is newer than ISC.
+#   Skip if: user edited the ISC after generation (ISC is newer than .created).
+#   The .created file is touched at the end of each generation cycle.
+#   This allows users to customize the ISC and run 'aba sync' again without losing edits.
 if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-config-sync.yaml ]; then
 	aba_debug "Generating new imageset-config-sync.yaml"
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"

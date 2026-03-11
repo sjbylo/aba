@@ -47,7 +47,7 @@ if [[ -z "$version_short" ]]; then
 fi
 
 # Download catalogs for the resolved version
-download_all_catalogs "$version_short" 86400
+download_all_catalogs "$version_short"
 
 # Wait for completion before starting previous (avoid 6 concurrent downloads)
 wait_for_all_catalogs "$version_short" || exit 0
@@ -58,5 +58,5 @@ minor="${version_short##*.}"
 if (( minor > 0 )); then
 	prev_short="${major}.$(( minor - 1 ))"
 	aba_debug "Pre-fetch: previous minor=$prev_short"
-	download_all_catalogs "$prev_short" 86400
+	download_all_catalogs "$prev_short"
 fi

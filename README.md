@@ -660,9 +660,13 @@ Run: `aba cluster --help` or see the [Installing OpenShift](#installing-openshif
 | Config file                       | Description |
 | :----------                       | :---------- |
 | `aba/aba.conf`                    | Global configuration file, sets the channel and version of OpenShift, your base domain name, internal network address, DNS IP etc |
-| `aba/mirror/mirror.conf`          | Describes your _internal mirror registry_ (either existing or to-be-installed)  |
+| `aba/mirror/mirror.conf`          | Describes your _internal mirror registry_ (either existing or to-be-installed). Can also override `ops` and `op_sets` from `aba.conf` for per-mirror operator selection. |
 | `aba/`cluster-name`/cluster.conf` | Describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, network interface bonding etc |
 | `aba/vmware.conf`                 | Optional vCenter/ESXi access configuration using `govc` CLI (optional) |
+
+> **Tip — Per-mirror operator override:** You can set `op_sets=` and/or `ops=` in `mirror.conf` to override the global values from `aba.conf` for that specific mirror directory.
+> This is useful when you need different operators for different environments (e.g. separate mirrors for different teams or clusters).
+> These values are commented out by default in `mirror.conf`; uncomment them to activate the override.
 
 ### Customizing Configuration files
 
@@ -1066,8 +1070,9 @@ Values are commented out by default; uncomment and edit to override.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `CATALOG_DOWNLOAD_TIMEOUT_MINS` | `20` | Timeout (minutes) for downloading operator catalog indexes. Increase on slow networks. |
-| `CATALOG_CACHE_TTL_SECS` | `86400` | How long (seconds) to cache downloaded catalog indexes before re-downloading (default 24 hours). |
+| `CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS` | `20` | Timeout (minutes) for downloading operator catalog index files. Increase on slow networks. |
+| `CATALOG_CACHE_TTL_SECS` | `43200` | How long (seconds) to cache downloaded catalog indexes before re-downloading (default 12 hours). |
+| `CATALOG_MAX_PARALLEL` | `3` | Number of catalog indexes to download concurrently (max 3: redhat, certified, community). Set to `1` for sequential downloads on constrained systems. |
 | `OC_MIRROR_IMAGE_TIMEOUT` | `30m` | Per-image timeout passed to `oc-mirror --image-timeout`. Increase for large operator images or slow connections (e.g. `60m`). |
 | `OC_MIRROR_PARALLEL_IMAGES` | `8` | Number of images to mirror concurrently via `oc-mirror --parallel-images`. Reduce on slow or unreliable networks. |
 

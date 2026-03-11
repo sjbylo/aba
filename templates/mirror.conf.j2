@@ -37,3 +37,9 @@ data_dir=				# Optional: Absolute path to storage for images and temporary files
 					# The key must allow passwordless SSH access to reg_host.
 
 #reg_ssh_user=				# Optional: SSH username for remote registry installation. Defaults to current user.
+
+# Override global operator settings from aba.conf for this mirror directory.
+# Uncomment to use different operators per mirror (e.g. separate mirrors for different teams).
+
+#op_sets=				# Override aba.conf op_sets for this mirror only (e.g. op_sets=acm,odf)
+#ops=					# Override aba.conf ops for this mirror only (e.g. ops=web-terminal)
