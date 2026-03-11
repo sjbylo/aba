@@ -6,12 +6,6 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ## Medium Priority
 
-### `aba shutdown` Must Retry and Verify `sudo shutdown` Command
-
-**Status:** Backlog
-**Priority:** Medium
-**Context:** The `sudo shutdown` command issued by `aba shutdown` can silently fail (e.g., SSH drops, permission issue, node unresponsive). When it fails, the node never powers off, and `aba shutdown --wait` blocks forever waiting for a power-off state that never comes. Fix: after issuing `sudo shutdown`, verify the node is actually shutting down (e.g., poll VM power state or SSH reachability). If it's still up after a timeout, retry the shutdown command. Don't blindly assume one `sudo shutdown` succeeded.
-
 ### Deduplicate `aba isconf` output
 
 **Status:** Backlog
@@ -34,29 +28,10 @@ Default "No" for data deletion to be safe. This applies to Docker registries; Qu
 
 ### Wrong path in mirror credential error message
 
-**Status:** Backlog
-**Context:** When running `aba verify` (or `aba -d xxx verify`) from a mirror directory that has no registry credentials, the error message shows the internal `~/.aba/mirror/xxx/` path. The user sees `/home/steve/.aba/mirror/xxx/pull-secret-mirror.json` but the directory they'd naturally look at is `xxx/regcreds/` (symlink). Users must NEVER see `~/.aba/...` paths -- this is internal only.
+**Status:** Partially done
+**Context:** Main credential error message (reg-verify.sh lines 28-33) now uses user-facing commands. However, lines 41-42, 49, and 64 still reference `$regcreds_dir` and expose `~/.aba/mirror/` internal paths.
 
-The error should reference user-facing paths and commands instead. For example:
-```
-[ABA] Error: No mirror registry credentials found.
-[ABA]        You have two options:
-[ABA]        - To install a registry: aba -d mirror install (see aba mirror --help)
-[ABA]        - To use an existing registry: aba -d mirror register --pull-secret-mirror <file> --ca-cert <file>
-[ABA]        See the README.md for more.
-```
-
-**Where:** `scripts/reg-verify.sh` lines 27-34. Also audit ALL `aba_abort` / `aba_warning` messages across `scripts/reg-*.sh` for any references to `$regcreds_dir` or `~/.aba/mirror/`.
-
-### Suppress curl error output during registry probing
-
-**Status:** Backlog
-**Context:** Running `aba sync` (or any command that probes the mirror registry) shows raw curl errors to the user:
-- `curl: (7) Failed to connect to bastion.example.com port 8443: Connection refused`
-- `curl: (22) The requested URL returned error: 404`
-- `curl: (22) The requested URL returned error: 401`
-
-These are expected probe results (checking if registry is up), not real errors. The curl stderr should be suppressed (`2>/dev/null`) and ABA should report the result in its own messaging.
+**Remaining:** Audit ALL `aba_abort` / `aba_warning` messages across `scripts/reg-*.sh` for any references to `$regcreds_dir` or `~/.aba/mirror/`. Replace with user-facing paths and commands.
 
 ### 3. Evaluate Selective `set -euo pipefail` Adoption
 
@@ -87,40 +62,6 @@ ABA core scripts do not use strict bash mode (`set -euo pipefail`). This means u
 **References:**
 - http://mywiki.wooledge.org/BashFAQ/105 (why `set -e` is unreliable)
 - The `(( running++ ))` bug in `download_all_catalogs()` was caused by `set -e` + post-increment returning 0
-
-### 17. Mirror Config Flags Don't Work With Named Mirror Directories
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Small  
-**Created:** 2026-03-01
-
-**Problem:**
-All mirror config flags in `scripts/aba.sh` (`--vendor`, `--reg-host`, `--reg-port`, `--reg-user`, `--reg-password`, `--reg-path`, `--reg-ssh-key`, `--reg-ssh-user`, `--data-dir`) hardcode `$ABA_ROOT/mirror/mirror.conf`. When used with `-d <named-mirror>` (e.g. `aba -d mymirror --vendor auto install`), the flag writes to the default `mirror/mirror.conf` instead of `mymirror/mirror.conf`.
-
-**Impact:** Only affects named mirror directories (new feature). Default `mirror/` works fine.
-
-**Proposed Fix:**
-Compute a `MIRROR_CONF_DIR` variable in `aba.sh` based on whether `WORK_DIR` points to a mirror directory:
-```bash
-if [ -f "$WORK_DIR/Makefile" ] && grep -q "mirror.conf" "$WORK_DIR/Makefile" 2>/dev/null && [ "$WORK_DIR" != "$ABA_ROOT" ]; then
-    MIRROR_CONF_DIR=$WORK_DIR
-else
-    MIRROR_CONF_DIR=$ABA_ROOT/mirror
-fi
-```
-Then replace all `$ABA_ROOT/mirror/mirror.conf` with `$MIRROR_CONF_DIR/mirror.conf` and `make -sC $ABA_ROOT/mirror` with `make -sC $MIRROR_CONF_DIR` in the 10 flag handlers. The `replace-value-conf` function already handles multiple files (skips non-existent), so a fallback pattern like `$MIRROR_CONF_DIR/mirror.conf $ABA_ROOT/mirror/mirror.conf` also works.
-
-**Where:** `scripts/aba.sh` lines 373-433 (10 flag handlers)
-
----
-
-### E2E: `_essh: command not found` in Framework Cleanup Paths
-
-**Status:** Backlog (deferred -- re-apply if it recurs)
-**Priority:** Medium
-**Context:** `runner.sh` runs suites as `bash "$suite_file"`, so functions defined in `runner.sh`'s shell (like `_essh` from `vm-helpers.sh`) are not available inside the suite's bash subprocess. `e2e_cleanup_clusters` and `e2e_cleanup_mirrors` in `framework.sh` call `_essh` directly, failing during auto-abort/skip paths.
-**Fix:** Add `source "$_E2E_LIB_DIR/vm-helpers.sh"` to `test/e2e/lib/framework.sh` (after line ~99).
 
 ---
 
@@ -265,52 +206,6 @@ cluster.conf (sno)  OK  (nodes=1, network=10.0.1.0/24)
 Cluster (sno)       NOT INSTALLED
 ```
 
-### 10. Rename `CATALOG_CACHE_TTL_SECS` to `CATALOG_CACHE_TTL_MINS`
-
-**Status:** Backlog  
-**Priority:** Low  
-**Estimated Effort:** Small  
-**Created:** 2026-02-20
-
-**Problem:**
-The variable name `CATALOG_CACHE_TTL_SECS` is misleading if the value is typically in minutes. Rename for clarity.
-
-### 15. E2E Dispatcher: Detect Crashed Suites (No RC File)
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Small  
-**Created:** 2026-02-28
-
-**Problem:**
-`_check_pool()` in `run.sh` only detects suite completion by polling for `.rc` files.
-If a suite crashes without writing an RC file (e.g., from a corrupted framework file,
-OOM kill, or SSH disconnection), the dispatcher waits forever thinking the suite is
-still running.
-
-**Proposed Solution:**
-Add a fallback liveness check: if no `.rc` file exists but the `e2e-suite-*` tmux
-session is gone, treat the suite as crashed (exit=255). This prevents the dispatcher
-from hanging indefinitely.
-
-```bash
-_check_pool() {
-    local pool_num="$1" suite="$2"
-    local rc_content
-    rc_content=$(_ssh_con "$pool_num" "cat '${_RC_PREFIX}-${suite}.rc' 2>/dev/null" 2>/dev/null || true)
-    if [ -n "$rc_content" ]; then
-        echo "${rc_content//[^0-9]/}"
-    else
-        # Fallback: if tmux session is gone, suite crashed without writing RC
-        local sess_exists
-        sess_exists=$(_ssh_con "$pool_num" "tmux has-session -t 'e2e-suite-${suite}' 2>/dev/null && echo yes" 2>/dev/null || true)
-        if [ -z "$sess_exists" ]; then
-            echo "255"  # crashed
-        fi
-    fi
-}
-```
-
 ### 16. Audit All `[ABA]` Output for Left-Justification
 
 **Status:** Backlog  
@@ -350,17 +245,17 @@ before the message.
 
 *These were raised in sessions or other docs; added here so we don't forget them.*
 
-### 18. E2E `--resume` Remaining Bugs (3 of 4)
+### 18. E2E `--resume` Remaining Bug (1 of 4)
 
-**Status:** Backlog  
+**Status:** Backlog (bugs 2 & 3 fixed)  
 **Priority:** Medium  
 **Estimated Effort:** Small  
 **Created:** 2026-03-03  
 **Ref:** HANDOFF_CONTEXT.md §2
 
-- **Bug 2:** `suite_begin` truncates state file when resuming — same path for `E2E_STATE_FILE` and `E2E_RESUME_FILE`; truncate wipes checkpoints. Fix: copy to `.resume` backup before truncating.
-- **Bug 3:** `test_begin`/`test_end` don't check resume checkpoint — only `run_test()` does. Fix: add skip-block in `test_begin`/`e2e_run`/`test_end` (see HANDOFF).
-- **Bug 4:** `--resume` not passed through parallel dispatch — `_build_remote_cmd` in parallel.sh doesn't append `--resume`.
+- ~~**Bug 2:** Fixed — `suite_begin` now copies resume file to `.resume` backup before truncating.~~
+- ~~**Bug 3:** Fixed — `test_begin`/`test_end`/`e2e_run` now use `should_skip_checkpoint` and `_E2E_SKIP_BLOCK`.~~
+- **Bug 4:** `--resume` not passed through dispatch — `_dispatch_suite` in run.sh doesn't append `--resume` to `runner_cmd`. Only restart mode passes it.
 
 ### 19. E2E dnsmasq Registry DNS Record
 
@@ -457,15 +352,13 @@ Option to continuously re-queue completed (or failed) suites so pools keep getti
 
 Suite only tests public registry path; clarify whether installing a reg is necessary or leftover. Add to backlog for investigation.
 
-### 29. Docker Registry as First-Class Citizen (design)
+### ~~29. Docker Registry as First-Class Citizen~~
 
-**Status:** Backlog (design doc exists)  
-**Priority:** Medium  
-**Estimated Effort:** Large  
+**Status:** Done (2026-03-10)  
 **Created:** 2026-03-03  
 **Ref:** ai/DESIGN-docker-registry-first-class.md
 
-Full design for consistent script layout, mirror.conf config, and TUI persistence for Docker registry. Status: PLANNED, not yet implemented.
+Done. Docker registry is now first-class: `reg-install-docker.sh`, `reg-uninstall-docker.sh`, remote install via `reg-install-remote.sh`, TUI support (Auto/Quay/Docker), `reg_vendor` config in `mirror.conf`, CLI `--vendor docker`.
 
 ### 31. Warn When Registry Data Directory Already Contains Data
 
@@ -508,40 +401,6 @@ if [ "$local_size" != "$remote_size" ]; then
 fi
 ```
 Or use `rsync --checksum` / `rsync --size-only` instead of `scp` for a one-line fix.
-
-### 39. Improve `.install.source` Breadcrumb File UX
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Small  
-**Created:** 2026-03-08
-
-**Problem:**
-After registry installation, ABA leaves a hidden `.install.source` file in the registry's `reg_root` directory on the target host. This file is hard to discover (hidden dot-file) and contains minimal information:
-```
-Registry installed from bastion.example.com:/home/steve/aba/mirror
-```
-
-**Proposed Improvements:**
-
-1. **Rename to a visible, descriptive name** -- e.g., `README_INSTALLATION.md` or `INSTALLED_BY_ABA.md` so the user can easily find it.
-
-2. **Include verify and uninstall commands** so the user knows how to manage the registry:
-   ```
-   Mirror registry installed by ABA
-   Installed from: bastion.example.com:/home/steve/aba/mirror
-   Date: 2026-03-08 10:08:09
-
-   To verify:    cd ~/aba/mirror && aba verify
-   To uninstall: cd ~/aba/mirror && aba uninstall
-   ```
-
-3. **Create the file for Docker registries too** -- currently only Quay (`reg-install-quay.sh` line 72) and remote installs (`reg-install-remote.sh` line 192) create it. `reg-install-docker.sh` does not.
-
-**Where:**
-- `scripts/reg-install-quay.sh` line 72
-- `scripts/reg-install-remote.sh` line 192
-- `scripts/reg-install-docker.sh` (missing -- needs adding)
 
 ### 33. `verify` Target Runs Multiple Times Unnecessarily
 
@@ -681,6 +540,34 @@ When moving logic out of Makefiles, add "ensure" patterns to 6 scripts as propos
 ---
 
 ## Completed
+
+### `aba shutdown` Retry and Verify
+**Completed:** 2026-03-10  
+`cluster-graceful-shutdown.sh` has 3-attempt retry logic (lines 116-145) and verification via `make -s ls` when `wait=1` and `vmware.conf` exists.
+
+### Suppress Curl Error Output During Registry Probing
+**Completed:** 2026-03-10  
+`probe_host()` in `include_all.sh` suppresses curl stderr during probing. ABA reports results in its own messaging.
+
+### Mirror Config Flags Work With Named Mirror Directories (#17)
+**Completed:** 2026-03-10  
+`aba.sh` uses `$WORK_DIR/mirror.conf` dynamically. With `-d mymirror`, `WORK_DIR` points to the named mirror directory.
+
+### E2E `_essh: command not found` in Framework Cleanup
+**Completed:** 2026-03-10  
+`runner.sh` sources `vm-helpers.sh` before `framework.sh`, making `_essh` available in cleanup paths.
+
+### E2E Dispatcher: Detect Crashed Suites (#15)
+**Completed:** 2026-03-10  
+`_check_pool()` in `run.sh` has tmux session fallback: if no `.rc` file and tmux session is gone after 5s grace, returns 255 ("Suite died without writing .rc").
+
+### Improve `.install.source` Breadcrumb File UX (#39)
+**Completed:** 2026-03-10  
+Renamed to `INSTALLED_BY_ABA.md` with verify/uninstall commands and date. Created by Quay, Docker, and remote install scripts.
+
+### Rename `CATALOG_CACHE_TTL_SECS` to `CATALOG_CACHE_TTL_MINS` (#10)
+**Status:** Won't fix  
+Name is accurate — value is in seconds (`43200`), so `_SECS` suffix is correct.
 
 ### `run.sh verify` -- Pool Verification Subcommand
 **Completed:** 2026-03-02  
