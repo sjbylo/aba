@@ -2661,12 +2661,10 @@ handle_action_local_quay() {
 	replace-value-conf -q -n reg_ssh_key -v "" -f mirror/mirror.conf
 	log "Cleared SSH parameters for local registry installation"
 	
-	# Write reg_vendor to mirror.conf so the dispatcher uses the correct vendor
-	replace-value-conf -q -n reg_vendor -v "$(reg_vendor_from_tui)" -f mirror/mirror.conf
-	log "Set reg_vendor=$(reg_vendor_from_tui) in mirror.conf"
-
-	# Unified command: dispatcher handles vendor selection, install is a sync dependency
-	local cmd="aba -d mirror $retry_flag sync -H '$reg_host' $y_flag"
+	# --vendor ensures mirror.conf is created (if needed) and vendor is set
+	local vendor="$(reg_vendor_from_tui)"
+	local cmd="aba -d mirror --vendor $vendor $retry_flag sync -H '$reg_host' $y_flag"
+	log "Local registry command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -2745,12 +2743,9 @@ handle_action_local_docker() {
 	replace-value-conf -q -n reg_ssh_key -v "" -f mirror/mirror.conf
 	log "Cleared SSH parameters for local registry installation"
 	
-	# Force Docker vendor in mirror.conf
-	replace-value-conf -q -n reg_vendor -v "docker" -f mirror/mirror.conf
-	log "Set reg_vendor=docker in mirror.conf"
-
-	# Unified command: dispatcher handles vendor selection, install is a sync dependency
-	local cmd="aba -d mirror $retry_flag sync -H '$reg_host' $y_flag"
+	# --vendor ensures mirror.conf is created (if needed) and vendor is set
+	local cmd="aba -d mirror --vendor docker $retry_flag sync -H '$reg_host' $y_flag"
+	log "Local Docker command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -2832,12 +2827,10 @@ handle_action_remote_quay() {
 	replace-value-conf -q -n reg_ssh_key -v "$reg_ssh_key" -f mirror/mirror.conf
 	replace-value-conf -q -n reg_ssh_user -v "$reg_ssh_user" -f mirror/mirror.conf
 	
-	# Write reg_vendor to mirror.conf so the dispatcher uses the correct vendor
-	replace-value-conf -q -n reg_vendor -v "$(reg_vendor_from_tui)" -f mirror/mirror.conf
-	log "Set reg_vendor=$(reg_vendor_from_tui) in mirror.conf"
-
-	# Unified command: dispatcher handles vendor + remote selection via reg_ssh_key
-	local cmd="aba -d mirror $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
+	# --vendor ensures mirror.conf is created (if needed) and vendor is set
+	local vendor="$(reg_vendor_from_tui)"
+	local cmd="aba -d mirror --vendor $vendor $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
+	log "Remote registry command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
