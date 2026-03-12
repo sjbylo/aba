@@ -262,7 +262,7 @@ RETRY_COUNT="2"  # Values: "off", "2", "8"
 # aba.conf: ask=true → prompt user (auto-answer OFF), ask= or ask=false → auto-answer ON
 ABA_AUTO_ANSWER="yes"  # Values: "yes", "no"
 if [[ -f "$ABA_ROOT/aba.conf" ]]; then
-	_saved_ask=$(grep -E '^ask=' "$ABA_ROOT/aba.conf" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
+	_saved_ask=$(grep -E '^ask=' "$ABA_ROOT/aba.conf" 2>/dev/null | sed 's/#.*//' | cut -d= -f2 | tr -d '[:space:]')
 	[[ "$_saved_ask" == "true" ]] && ABA_AUTO_ANSWER="no"
 	unset _saved_ask
 fi
@@ -270,7 +270,7 @@ fi
 # Registry type selection — load from mirror.conf if available
 ABA_REGISTRY_TYPE="Auto"  # Values: "Auto", "Quay", "Docker"
 if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-	_saved_vendor=$(grep -E '^reg_vendor=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
+	_saved_vendor=$(grep -E '^reg_vendor=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | sed 's/#.*//' | cut -d= -f2 | tr -d '[:space:]')
 	case "$_saved_vendor" in
 		quay)   ABA_REGISTRY_TYPE="Quay" ;;
 		docker) ABA_REGISTRY_TYPE="Docker" ;;
