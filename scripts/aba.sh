@@ -23,7 +23,7 @@
 ABA_VERSION=20260226143439
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260312180512
+ABA_BUILD=20260312232122
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -234,14 +234,22 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # bandwidth contention that could slow down reaching the user prompts.
 # When ocp_version is unknown, still download version-independent tools
 # (oc-mirror, butane, govc) via --no-version to save time.
+# Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
-	if [ "$ocp_version" ]; then
-		aba_debug "Non-interactive mode - starting all CLI downloads early"
-		$ABA_ROOT/scripts/cli-download-all.sh
-	else
-		aba_debug "Non-interactive mode - starting version-independent CLI downloads early"
-		$ABA_ROOT/scripts/cli-download-all.sh --no-version
-	fi
+	case " $* " in
+		*" clean "*|*" reset "*|*" help "*)
+			aba_debug "Housekeeping command - skipping early CLI downloads"
+			;;
+		*)
+			if [ "$ocp_version" ]; then
+				aba_debug "Non-interactive mode - starting all CLI downloads early"
+				$ABA_ROOT/scripts/cli-download-all.sh
+			else
+				aba_debug "Non-interactive mode - starting version-independent CLI downloads early"
+				$ABA_ROOT/scripts/cli-download-all.sh --no-version
+			fi
+			;;
+	esac
 fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 

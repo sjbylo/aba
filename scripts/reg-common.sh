@@ -190,7 +190,7 @@ reg_check_quay_resources() {
 		mem_kb=$($run grep MemTotal /proc/meminfo | awk '{print $2}')
 	fi
 	mem_gb=$(( mem_kb / 1024 / 1024 ))
-	if [ "$vcpus" -lt 3 ] || [ "$mem_gb" -lt 5 ]; then
+	if [ "$vcpus" -le 2 ] || [ "$mem_gb" -le 4 ]; then
 		aba_warning \
 			"Quay mirror registry requires at least 4 vCPUs and 8GB RAM." \
 			"This host has ${vcpus} vCPU(s) and ~${mem_gb}GB RAM." \

@@ -609,6 +609,26 @@ ABA's screen output across all commands could be more polished and user-friendly
 - Wrap `make` errors with user-friendly messages in `aba.sh`
 - Never expose internal paths to users (see "Wrong path in mirror credential error message")
 
+### Investigate Why `cli/Makefile` Is Missing on Bundle-Deployed Bastions
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-12
+
+**Problem:**
+On a s390x bastion that received ABA via a bundle, `cli/` was completely empty (no `Makefile`). This caused `aba clean` to fail with `No rule to make target 'out-download-all'` because `aba.sh` unconditionally calls `cli-download-all.sh`, which requires `cli/Makefile`.
+
+The immediate crash is fixed (skip CLI downloads for housekeeping commands). But the deeper question remains: why was `cli/Makefile` missing? `backup.sh` includes `${repo_dir}/cli` in the `find` list, so `cli/Makefile` should be in any bundle. Possible causes:
+- Bundle was created from a source where `cli/Makefile` was accidentally deleted
+- An older ABA version had a different `cli/` structure
+- The `install` script or `aba reset` somehow removes `cli/Makefile`
+- Bundle extraction issue on s390x
+
+**Action:** Reproduce on a clean s390x bundle deployment. Verify `cli/Makefile` is present in the tar archive (`tar tf bundle.tar | grep cli/Makefile`). Check if `./install` or `aba reset` removes it.
+
+**Where:** `scripts/backup.sh`, `install`, `cli/Makefile` reset target
+
 ### 36. CLI Download Retry Gaps
 
 **Status:** Backlog  
