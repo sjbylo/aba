@@ -6,6 +6,57 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ## Medium Priority
 
+### Empty Values in aba.conf Propagate Into cluster.conf via Template Generation
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-12
+
+**Problem:**
+When `cluster.conf` is generated from `templates/cluster.conf.j2`, it uses Jinja2 variables
+like `{{ machine_network }}/{{ prefix_length }}`. If aba.conf does not yet have these values
+set (e.g., the user hasn't finished the TUI wizard, or aba.conf was just created from the
+template with defaults), the rendered cluster.conf ends up with malformed entries such as:
+
+```
+machine_network=/               # CIDR for all cluster nodes
+```
+
+This causes `aba agentconf` to fail later with a confusing error like:
+```
+Error: machine_network is invalid (//24) in aba.conf
+```
+
+The error is misleading because aba.conf is actually correct — it's the stale cluster.conf
+that has the bad value. The flow is:
+1. `verify-config.sh` sources `normalize-aba-conf` (correct: `machine_network=148.100.112.0`)
+2. Then sources `normalize-cluster-conf`, which reads cluster.conf's `machine_network=/`
+3. This **overwrites** the good aba.conf value with `/`
+4. `verify-aba-conf` then validates the now-corrupted `machine_network` variable
+
+**Root Cause:**
+There is no guard preventing cluster.conf generation when required aba.conf fields are empty.
+The Jinja2 template blindly substitutes whatever values are available, including empty strings.
+
+**Potential Fixes (investigate):**
+- **Guard in create-cluster-conf.sh:** Refuse to generate cluster.conf if critical aba.conf
+  values (`machine_network`, `domain`, `ocp_version`) are empty. Abort with a clear message.
+- **Guard in the Jinja2 template:** Add a check at the top of `cluster.conf.j2` that fails
+  if required variables are undefined or empty.
+- **Guard in normalize-cluster-conf:** If cluster.conf has `machine_network=/` (no IP),
+  skip exporting it so the aba.conf value is preserved.
+- **Guard in verify-config.sh:** Source normalize-cluster-conf selectively — don't let it
+  overwrite aba.conf values for fields that are shared (machine_network, prefix_length).
+- **TUI ordering:** Verify the TUI wizard doesn't trigger cluster.conf generation before
+  aba.conf is fully populated. Check `summary_apply()` and the background `isconf` task.
+
+**User workaround:** Manually fix `machine_network=148.100.112.0/24` in cluster.conf, or
+delete cluster.conf and re-run `aba agentconf`.
+
+**Where:** `templates/cluster.conf.j2`, `scripts/create-cluster-conf.sh`,
+`scripts/verify-config.sh`, `scripts/include_all.sh:normalize-cluster-conf()`
+
 ### `reg_detect_existing()` Should Probe Before Aborting on Stale `state.sh`
 
 **Status:** Backlog
