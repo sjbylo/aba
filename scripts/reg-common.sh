@@ -159,7 +159,7 @@ reg_verify_localhost() {
 	rm -f "$flag_file"
 
 	local remote_hostname
-	if remote_hostname=$(ssh -F "$ssh_conf_file" "$reg_host" "touch $flag_file && hostname") >/dev/null 2>&1; then
+	if remote_hostname=$(ssh -F "$ssh_conf_file" "$reg_host" "touch $flag_file && hostname" 2>/dev/null); then
 		if [ ! -f "$flag_file" ]; then
 			aba_abort \
 				"Registry configured for *local* install (reg_ssh_key is not defined)." \
