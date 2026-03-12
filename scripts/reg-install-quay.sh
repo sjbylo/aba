@@ -12,6 +12,7 @@ reg_detect_existing
 reg_setup_data_dir quay
 reg_generate_password
 reg_verify_localhost
+reg_check_quay_resources
 
 # --- Quay-specific: SSH-to-localhost key setup ---
 # The Quay mirror-registry installer requires SSH access to the install host.
