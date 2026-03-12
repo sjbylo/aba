@@ -258,8 +258,25 @@ read -r TERM_ROWS TERM_COLS < <(stty size 2>/dev/null || echo "24 80")
 # Retry count for transient failures (applies to save/sync/bundle)
 RETRY_COUNT="2"  # Values: "off", "2", "8"
 
-# Registry type selection
+# Auto-answer setting — load from aba.conf if available
+# aba.conf: ask=true → prompt user (auto-answer OFF), ask= or ask=false → auto-answer ON
+ABA_AUTO_ANSWER="yes"  # Values: "yes", "no"
+if [[ -f "$ABA_ROOT/aba.conf" ]]; then
+	_saved_ask=$(grep -E '^ask=' "$ABA_ROOT/aba.conf" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
+	[[ "$_saved_ask" == "true" ]] && ABA_AUTO_ANSWER="no"
+	unset _saved_ask
+fi
+
+# Registry type selection — load from mirror.conf if available
 ABA_REGISTRY_TYPE="Auto"  # Values: "Auto", "Quay", "Docker"
+if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+	_saved_vendor=$(grep -E '^reg_vendor=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
+	case "$_saved_vendor" in
+		quay)   ABA_REGISTRY_TYPE="Quay" ;;
+		docker) ABA_REGISTRY_TYPE="Docker" ;;
+	esac
+	unset _saved_vendor
+fi
 
 ui_backtitle() {
 	echo "ABA TUI  |  channel: ${OCP_CHANNEL:-?}  version: ${OCP_VERSION:-?}"
@@ -3293,6 +3310,14 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 						ABA_AUTO_ANSWER="no"; log "Auto-answer toggled OFF"
 					else
 						ABA_AUTO_ANSWER="yes"; log "Auto-answer toggled ON"
+					fi
+					# Persist to aba.conf: ask=true means prompt (auto-answer OFF)
+					if [[ -f "$ABA_ROOT/aba.conf" ]]; then
+						if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
+							replace-value-conf -q -n ask -v "" -f aba.conf
+						else
+							replace-value-conf -q -n ask -v "true" -f aba.conf
+						fi
 					fi
 					settings_default="$TUI_SETTINGS_AUTO_ANSWER"
 					;;
