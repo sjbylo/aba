@@ -96,11 +96,18 @@ reg_detect_existing() {
 		local _saved_host
 		_saved_host=$(grep '^REG_HOST=' "$regcreds_dir/state.sh" 2>/dev/null | cut -d= -f2)
 		if [ "$_saved_host" = "$reg_host" ]; then
-			aba_abort \
-				"Mirror registry is already installed at $reg_host" \
-				"To apply mirror.conf changes, uninstall first and then reinstall:" \
-				"  aba -d $(basename "$PWD") uninstall" \
-				"  aba -d $(basename "$PWD") install"
+			if probe_host --any "$reg_url/v2/" "existing registry"; then
+				aba_abort \
+					"Mirror registry is already installed at $reg_host" \
+					"To apply mirror.conf changes, uninstall first and then reinstall:" \
+					"  aba -d $(basename "$PWD") uninstall" \
+					"  aba -d $(basename "$PWD") install"
+			else
+				aba_warning "Registry at $reg_host is unreachable but state.sh still exists." \
+					"The registry may have been removed externally." \
+					"Clearing stale state and proceeding with fresh install."
+				rm -f "$regcreds_dir/state.sh"
+			fi
 		fi
 	fi
 
