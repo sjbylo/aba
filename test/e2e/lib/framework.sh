@@ -98,6 +98,19 @@ _E2E_DIR="$(cd "$_E2E_LIB_DIR/.." && pwd)"
 
 source "$_E2E_LIB_DIR/constants.sh"
 
+# --- SSH wrapper ------------------------------------------------------------
+# Cleanup functions (e2e_cleanup_clusters, e2e_cleanup_mirrors) need _essh().
+# Suites run as child bash processes (runner.sh line 588: bash "$suite_file"),
+# so functions sourced by the runner are NOT inherited.  Suites that source
+# pool-lifecycle.sh or vm-helpers.sh get _essh() from there; suites that only
+# source framework.sh (e.g. negative-paths, create-bundle-to-disk) need it here.
+_essh() {
+	ssh -o ConnectTimeout=10 -o BatchMode=yes \
+		-o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+		-o StrictHostKeyChecking=no \
+		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
+}
+
 # --- Globals ----------------------------------------------------------------
 
 # Interactive mode: prompt on failure (retry/skip/abort). Set by run.sh.
