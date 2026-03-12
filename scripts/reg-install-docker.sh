@@ -7,8 +7,8 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_load_config
-reg_check_fqdn
 reg_detect_existing
+reg_check_fqdn
 reg_setup_data_dir docker
 reg_generate_password
 reg_verify_localhost
