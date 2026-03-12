@@ -11,6 +11,7 @@
 #   reg_check_fqdn         Verify registry hostname resolves to an IP
 #   reg_detect_existing     Check for existing credentials or running registry
 #   reg_verify_localhost    Confirm reg_host points to this machine (local installs)
+#   reg_check_quay_resources  Abort if host has <4 vCPUs or <8GB RAM (Quay only)
 #   reg_setup_data_dir      Validate and normalize data_dir + vendor root path
 #   reg_generate_password   Generate random password if reg_pw is empty
 #   reg_open_firewall       Open firewall port (firewalld/iptables, local or SSH)
@@ -171,6 +172,29 @@ reg_verify_localhost() {
 			rm -f "$flag_file"
 			aba_info "SSH access to localhost via '$reg_host' is working."
 		fi
+	fi
+}
+
+# --- reg_check_quay_resources -------------------------------------------------
+# Abort if the target host lacks minimum resources for Quay (4 vCPUs, 8GB RAM).
+# Usage: reg_check_quay_resources          # check localhost
+#        reg_check_quay_resources "$_ssh"   # check remote host via SSH command
+reg_check_quay_resources() {
+	local run="${1:-}"
+	local vcpus mem_kb mem_gb
+	if [ -z "$run" ]; then
+		vcpus=$(nproc)
+		mem_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+	else
+		vcpus=$($run nproc)
+		mem_kb=$($run grep MemTotal /proc/meminfo | awk '{print $2}')
+	fi
+	mem_gb=$(( mem_kb / 1024 / 1024 ))
+	if [ "$vcpus" -lt 3 ] || [ "$mem_gb" -lt 5 ]; then
+		aba_abort \
+			"Quay mirror registry requires at least 4 vCPUs and 8GB RAM." \
+			"This host has ${vcpus} vCPU(s) and ~${mem_gb}GB RAM." \
+			"Use a Docker registry instead: set reg_vendor=docker in mirror.conf."
 	fi
 }
 

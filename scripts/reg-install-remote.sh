@@ -83,6 +83,8 @@ _target="$reg_ssh_user@$reg_host"
 
 case "$vendor" in
 	quay)
+		reg_check_quay_resources "$_ssh"
+
 		ask "Install Quay mirror registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
 
 		aba_info "Installing Quay registry on remote host $reg_host ..."
