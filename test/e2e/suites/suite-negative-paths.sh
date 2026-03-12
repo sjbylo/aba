@@ -206,7 +206,7 @@ e2e_run "Create fake state.sh for reinstall test" \
 e2e_run "Remove .available to trigger install path" \
 	"rm -f mirror/.available"
 e2e_run_must_fail "Reinstall of existing registry must abort" \
-	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_check_fqdn && reg_detect_existing'"
+	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_detect_existing && reg_check_fqdn'"
 e2e_run "Cleanup reinstall test state" \
 	"rm -f ~/.aba/mirror/mirror/state.sh && sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 
