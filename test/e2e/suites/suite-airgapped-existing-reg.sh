@@ -357,6 +357,9 @@ test_begin "ACM: install operators"
 # operators section (no platform).  oc-mirror v2 errors with "no release images
 # found" when the config includes a platform section but the delta tar doesn't
 # contain release images.  This matches the UBI/vote-app incremental pattern.
+# The grep -A2 from the catalog YAML simulates a user manually editing the ISC
+# file (as documented in aba's workflow).  The catalog YAML must be kept in sync
+# with .index/ by download-catalog-index.sh for this to work correctly.
 e2e_run "Set op_sets=acm" "aba --op-sets acm"
 
 OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
