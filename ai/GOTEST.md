@@ -16,6 +16,8 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous monito
 - **Do NOT change ANY code** — no ABA core, no test code, no scripts. Read-only.
   The only files you may write to are `ai/SESSION_STATE.md` and plan files.
 - **Keep ALL pools busy** — queue additional suites on idle pools, even if already tested
+- **Don't wait for pools to free up** — if a pool just finished (pass or fail), force-dispatch
+  the suite you need onto it immediately: `run.sh run --suite <name> --pool N --force`
 - **Report a summary** when the user returns, including:
   - Which suites passed / failed
   - Root cause analysis for each failure

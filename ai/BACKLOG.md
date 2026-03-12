@@ -6,6 +6,52 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ## Medium Priority
 
+### `reg_detect_existing()` Should Probe Before Aborting on Stale `state.sh`
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-12
+
+**Problem:**
+`reg_detect_existing()` in `scripts/reg-common.sh` (lines 93-104) aborts if `~/.aba/mirror/<name>/state.sh` contains a `REG_HOST` matching the current `reg_host`. It trusts `state.sh` blindly, but the remote registry may no longer exist (e.g., VM was reverted to a snapshot, or the registry was manually removed). This causes `aba sync -H <host>` to fail with "Mirror registry is already installed" even when it isn't.
+
+**Root cause:**
+`state.sh` is designed to survive `aba clean` and `aba reset`. If the registry is removed by external means (VM revert, manual cleanup), `state.sh` becomes stale. The current code has no fallback — it aborts unconditionally.
+
+**Proposed fix:**
+Before aborting, probe the registry to verify it's actually running:
+```bash
+if [ "$_saved_host" = "$reg_host" ]; then
+    if probe_host "$reg_url/v2/" "existing registry" 2>/dev/null; then
+        aba_abort "Mirror registry is already installed at $reg_host" ...
+    else
+        aba_warning "Stale registry state: $reg_host is unreachable. Clearing state and proceeding with fresh install."
+        rm -f "$regcreds_dir/state.sh"
+    fi
+fi
+```
+
+**Where:** `scripts/reg-common.sh` function `reg_detect_existing()` (line 98)
+
+### Docker Registry v3.0.0 Debug Port Collision
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-12
+
+**Problem:**
+Docker registry v3.0.0 (`docker.io/library/registry:latest`) uses port 5001 for its debug/metrics interface by default. If a user sets `reg_port=5001` in `mirror.conf`, the main HTTP server and the debug server both try to bind to port 5001, causing the container to crash-loop with `bind: address already in use`.
+
+**Root cause:**
+In `scripts/reg-install-docker.sh`, the `podman run` command sets `REGISTRY_HTTP_ADDR=0.0.0.0:${reg_port}` but does not override the debug server address. The Docker registry v3.0.0 default debug addr is `:5001`.
+
+**Proposed fix:**
+Add `-e REGISTRY_HTTP_DEBUG_ADDR=127.0.0.1:0` (or a different port like `127.0.0.1:5002`) to the `podman run` command in `reg-install-docker.sh` to prevent the collision regardless of the user's chosen port.
+
+**Where:** `scripts/reg-install-docker.sh`, the `podman run` block (around line 74-87)
+
 ### `aba install` Downloads Quay Binary Even When `reg_vendor=docker`
 
 **Status:** Backlog
@@ -474,6 +520,21 @@ The error comes from the Makefile recipe, not from `aba.sh`. The UX should catch
 ```
 
 **Action:** In `aba.sh`, when `cur_target` is `mirror` and `BUILD_COMMAND` contains `register`, verify that `pull_secret_mirror=` and `ca_cert=` are present in `BUILD_COMMAND` before calling `eval make`. If missing, print usage and exit. The same pattern could apply to other targets that require specific options (e.g., `password` requiring `--reg-host`).
+
+### Validate vmware.conf Parameters Are Not Empty
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-12
+
+**Problem:**
+When `vmware.conf` is loaded, critical variables like `GOVC_URL`, `GOVC_DATACENTER`, `GOVC_CLUSTER`, `GOVC_DATASTORE`, `GOVC_NETWORK`, `GOVC_USERNAME`, `GOVC_PASSWORD` may be empty or undefined. ABA does not validate these before passing them to Jinja2 templates (`install-config.yaml.j2`) or to `govc` commands. Empty values cause cryptic template errors or silent misconfigurations (e.g., blank `server:` in failureDomains).
+
+**Proposed Fix:**
+Add a `verify-vmware-conf()` function (similar to `verify-aba-conf`) that checks all required GOVC variables are non-empty when `platform=vmw`. Call it early in the cluster config pipeline (e.g., in `scripts/setup-cluster.sh` or `scripts/create-cluster-conf.sh` after sourcing vmware.conf). Abort with a clear message listing which variables are missing.
+
+**Where:** New function in `scripts/include_all.sh` or `scripts/verify-config.sh`, called from cluster setup paths.
 
 ### Re-enable Quay Mirror-Registry on arm64
 

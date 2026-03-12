@@ -1677,6 +1677,9 @@ select_platform_network() {
 				dialog --backtitle "$(ui_backtitle)" --msgbox \
 "Platform & Network Configuration:
 
+These values pertain to the disconnected environment
+where OpenShift will be deployed (the bastion network).
+
 • Platform: bm (bare-metal) or vmw (VMware)
 • Base Domain: DNS domain for cluster (e.g., example.com)
 • Machine Network: CIDR for cluster nodes (e.g., 10.0.0.0/24)
@@ -1684,7 +1687,7 @@ select_platform_network() {
 • Default Route: Gateway IP for cluster network
 • NTP Servers: IPs or hostnames separated by spaces (e.g., pool.ntp.org 10.0.1.8)
 
-Leave blank to use auto-detected values." 0 0 || true
+Leave blank to auto-detect on the disconnected bastion." 0 0 || true
 				continue
 				;;
 			3)
