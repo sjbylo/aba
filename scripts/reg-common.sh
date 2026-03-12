@@ -176,7 +176,7 @@ reg_verify_localhost() {
 }
 
 # --- reg_check_quay_resources -------------------------------------------------
-# Abort if the target host lacks minimum resources for Quay (4 vCPUs, 8GB RAM).
+# Warn if the target host lacks minimum resources for Quay (4 vCPUs, 8GB RAM).
 # Usage: reg_check_quay_resources          # check localhost
 #        reg_check_quay_resources "$_ssh"   # check remote host via SSH command
 reg_check_quay_resources() {
@@ -191,10 +191,11 @@ reg_check_quay_resources() {
 	fi
 	mem_gb=$(( mem_kb / 1024 / 1024 ))
 	if [ "$vcpus" -lt 3 ] || [ "$mem_gb" -lt 5 ]; then
-		aba_abort \
+		aba_warning \
 			"Quay mirror registry requires at least 4 vCPUs and 8GB RAM." \
 			"This host has ${vcpus} vCPU(s) and ~${mem_gb}GB RAM." \
 			"Use a Docker registry instead: set reg_vendor=docker in mirror.conf."
+		ask "Continue with Quay installation anyway" || exit 1
 	fi
 }
 
