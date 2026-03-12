@@ -210,6 +210,21 @@ e2e_run_must_fail "Reinstall of existing registry must abort" \
 e2e_run "Cleanup reinstall test state" \
 	"rm -f ~/.aba/mirror/mirror/state.sh && sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 
+# Stale state detection: reg_detect_existing() must clear state.sh and proceed
+# when the saved registry host is unreachable (e.g. VM reverted, registry wiped).
+e2e_run "Create stale state.sh for gone registry" \
+	"mkdir -p ~/.aba/mirror/mirror && echo REG_HOST=gone-registry.example.com > ~/.aba/mirror/mirror/state.sh"
+e2e_run "Set reg_host to match stale state" \
+	"aba -d mirror -H gone-registry.example.com"
+e2e_run "Remove .available to trigger install path" \
+	"rm -f mirror/.available"
+e2e_run "Stale state must be detected and cleared" \
+	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_check_fqdn && reg_detect_existing' 2>&1 | grep -q 'unreachable'"
+e2e_run "Verify state.sh was removed" \
+	"test ! -f ~/.aba/mirror/mirror/state.sh"
+e2e_run "Cleanup stale state test" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+
 # Verify without credentials: must fail with user-friendly message
 e2e_run "Set reg_host for verify test" \
 	"aba -d mirror -H \$(hostname -f)"
@@ -228,7 +243,7 @@ test_end 0
 test_begin "Docker registry install and recovery"
 
 _DOCKER_MIRROR="e2e-docker-test"
-_DOCKER_PORT=5001
+_DOCKER_PORT=5005
 _DOCKER_NEG_MIRROR="e2e-docker-neg"
 _DOCKER_NEG_PORT=5002
 _DOCKER_FQDN="\$(hostname -f)"
