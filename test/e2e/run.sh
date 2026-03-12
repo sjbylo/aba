@@ -325,8 +325,10 @@ if [ -n "$CLI_DEPLOY" ]; then
 		--exclude='*/iso-agent-based*' \
 		--exclude='bundles*' \
 		--exclude='ai' \
-		--exclude='demo*' \
-		--exclude='sno*' \
+		--exclude='./demo*' \
+		--exclude='./sno*' \
+		--exclude='./compact*' \
+		--exclude='./standard*' \
 		--exclude='xxx*' \
 		--exclude='cli/*.gz' \
 		--exclude='cli/*.tar*' \
@@ -581,8 +583,10 @@ if [ -n "$CLI_RESTART" ]; then
 		--exclude='*/iso-agent-based*' \
 		--exclude='bundles*' \
 		--exclude='ai' \
-		--exclude='demo*' \
-		--exclude='sno*' \
+		--exclude='./demo*' \
+		--exclude='./sno*' \
+		--exclude='./compact*' \
+		--exclude='./standard*' \
 		--exclude='xxx*' \
 		--exclude='cli/*.gz' \
 		--exclude='cli/*.tar*' \

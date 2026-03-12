@@ -1361,6 +1361,30 @@ yaml_diff() {
     diff <(yaml_normalize "$file_a" $strip) <(yaml_normalize "$file_b" $strip)
 }
 
+# Adapt an example file written for pool 1 to the current pool.
+# On pool 1 the file is returned unchanged; on pool N the pool-specific
+# identifiers (domain, cluster names, IP decade, vCenter folder/datastore)
+# are remapped from pool 1 -> pool N.
+#   Usage: adapt_example_for_pool FILE [POOL_NUM]
+#   Output goes to stdout (use process substitution for yaml_diff).
+adapt_example_for_pool() {
+    local file="$1" pool="${2:-${POOL_NUM:-1}}"
+    if [ "$pool" = "1" ]; then
+        cat "$file"
+        return
+    fi
+    sed \
+        -e "s/p1\.example\.com/p${pool}.example.com/g" \
+        -e "s/con1\.example\.com/con${pool}.example.com/g" \
+        -e "s/\bsno1\b/sno${pool}/g" \
+        -e "s/\bcompact1\b/compact${pool}/g" \
+        -e "s/\bstandard1\b/standard${pool}/g" \
+        -e "s/10\.0\.2\.1\([0-9]\)/10.0.2.${pool}\1/g" \
+        -e "s/aba-e2e\/pool1/aba-e2e\/pool${pool}/g" \
+        -e "s/Datastore4-1/Datastore4-${pool}/g" \
+        "$file"
+}
+
 # --- Guards -----------------------------------------------------------------
 
 require_cluster() {
