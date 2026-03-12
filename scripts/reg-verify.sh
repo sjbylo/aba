@@ -55,6 +55,20 @@ if ! echo "$mirrors" | grep -q "^$reg_host:$reg_port$"; then
 fi
 # FIXME: Could do more here and check the actual cert content matches as well. 
 
+# Pre-flight: ensure the registry is reachable before attempting login
+# (avoids confusing interactive prompt when podman login can't connect)
+if ! probe_host --any "$reg_url/v2/" "registry"; then
+	aba_abort \
+		"Registry at $reg_url is not reachable." \
+		"Common causes:" \
+		"  - Registry container is not running (check: podman ps)" \
+		"  - Firewall is blocking port $reg_port" \
+		"  - nftables NOTRACK rules interfere with podman networking" \
+		"  - FORWARD chain has a DROP/REJECT policy" \
+		"Try: sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT" \
+		"Also try: sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD"
+fi
+
 # Test registry access with podman 
 aba_info "Checking registry access is working using podman login:"
 podman logout --all #>/dev/null 
