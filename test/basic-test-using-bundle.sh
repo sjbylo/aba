@@ -1,6 +1,8 @@
 #!/bin/bash -ex
 # Basic test script to show how to create a custom bundle (*light* or normal) and then install OpenShift disonnected
 
+. test/lib.sh
+
 [ "$1" ] && LIGHT="--light"   		# Test with *light* bundle with any arg.
 
 MY_HOST=$(hostname -f)    # This must be FQDN with A record pointing to IP address of this host
@@ -20,14 +22,7 @@ rm -rf $TEST_DIR_CONN/aba
 rm -rf $TEST_DIR_DISCO/aba 
 rm -f ~/.aba/.first_cluster_success
 
-# Go online
-if ip a| grep ens224; then
-	sudo nmcli con up ens224
-else
-	export no_proxy=.lan,.example.com
-	export http_proxy=http://10.0.1.8:3128
-	export https_proxy=http://10.0.1.8:3128
-fi
+int_up  # Internet up (from lib.sh)
 
 # Install aba
 cd $TEST_DIR_CONN
@@ -48,11 +43,7 @@ aba -y bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel fast 
 echo "aba bundle returned: $?"
 
 # Go offline
-if ip a| grep ens224; then
-	sudo nmcli con down ens224
-else
-	unset http_proxy https_proxy no_proxy # Go offline
-fi
+int_down  # Internet up (from lib.sh)
 
 # Clean up
 sudo rm -vf $(which aba)
