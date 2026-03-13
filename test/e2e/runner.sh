@@ -98,7 +98,7 @@ source "$_RUNNER_DIR/lib/setup.sh"
 
 # Wasteful dirs: test data dirs (--data-dir / reg roots) to remove on conN and disN.
 # Add new dirs here when suites create them so cleanup stays in sync.
-_E2E_WASTEFUL_DIRS='~/my-quay-mirror-test1 ~/mymirror-data ~/docker-reg'
+_E2E_WASTEFUL_DIRS='~/my-quay-mirror-test1 ~/mymirror-data ~/docker-reg ~/aba/e2e-docker-test ~/aba/e2e-docker-neg'
 
 # Stale firewall ports: test suites add these with --permanent; they persist
 # across firewalld restarts and must be explicitly removed before each suite.

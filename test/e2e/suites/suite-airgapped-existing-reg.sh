@@ -276,7 +276,12 @@ test_end
 test_begin "Compact: install and delete cluster"
 
 e2e_add_to_cluster_cleanup "$PWD/$COMPACT" remote
-e2e_run_remote -r 1 1 "Create compact cluster (bootstrap only)" \
+e2e_run_remote "Create compact cluster.conf" \
+    "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step cluster.conf"
+e2e_run_remote "Increase compact resources for reliable bootstrap" \
+    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=12/' $COMPACT/cluster.conf && \
+     sed -i 's/^master_mem=.*/master_mem=24/' $COMPACT/cluster.conf"
+e2e_run_remote -r 1 1 "Bootstrap compact cluster" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step bootstrap"
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir $COMPACT delete"

@@ -62,12 +62,8 @@ test_begin "Setup: clean slate"
 e2e_run -q "Remove old files" \
     "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
-# Ensure make is available (needed for aba reset)
-e2e_run -q "Ensure make is installed" \
-    "which make || sudo dnf install make -y"
-
 e2e_run "Reset aba to clean state" \
-    "cd ~/aba && { command -v aba >/dev/null 2>&1 || ./install; } && aba reset -f"
+    "cd ~/aba && ./install && aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
