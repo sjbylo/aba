@@ -231,7 +231,7 @@ The `####` shows TRANSIENT_FAILURE states, then the CatalogSources vanish entire
 
 ### TUI Operator Add Causes `aba sync` to Skip ISC Regeneration
 
-**Status:** Backlog
+**Status:** Fixed (2026-03-13)
 **Priority:** Medium
 **Estimated Effort:** Medium
 **Created:** 2026-03-13
@@ -239,36 +239,55 @@ The `####` shows TRANSIENT_FAILURE states, then the CatalogSources vanish entire
 **Problem:**
 After adding an operator via the TUI and running `aba sync`, ABA refuses to regenerate `sync/imageset-config-sync.yaml`, saying the file won't be updated. This means newly added operators never make it into the ImageSet Config (ISC).
 
-**Reproduction:**
-1. Add an operator via the TUI
-2. Run `aba sync`
-3. ABA states it will not update the ISC file — the new operator is ignored
+**Root cause (two bugs):**
 
-**Mechanism:**
-The ISC regeneration guard in `scripts/reg-create-imageset-config-sync.sh` (line 49) checks:
+1. **Erroneous `rm -f` of save ISC:** The TUI unconditionally deleted `mirror/save/imageset-config-save.yaml` every time the action menu was shown (`tui/abatui.sh` line 3214). This destroyed user edits silently.
 
-```bash
-if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-config-sync.yaml ]; then
-```
+2. **Race condition between background isconf and action handlers:** The TUI launched `aba -d mirror isconf` in the background (non-blocking `run_once` without `-w`) before showing the action menu. Only the "View ISC" handler waited for this task to complete. The other action handlers (local registry, remote registry, bundle, save) ran `aba` commands immediately, creating concurrent `make` processes that raced over `sync/imageset-config-sync.yaml` and `sync/.created` timestamps. When timing was unlucky, the ISC ended up newer than `.created`, tricking the regeneration guard into thinking the user had hand-edited the file.
 
-If the ISC file is newer than `sync/.created`, the script assumes the user manually edited the ISC and preserves it. Something in the TUI flow (or a command it triggers) is touching the ISC file's mtime after `.created` was written, tricking the guard into thinking the user hand-edited the file.
-
-**Investigation pointers:**
-- The TUI writes operators to `aba.conf` via `replace-value-conf` (`tui/abatui.sh` lines 3185-3186)
-- The Makefile ISC target depends on `../aba.conf` (`templates/Makefile.mirror` lines 121-122)
-- The `.created` sentinel is touched at generation time (`scripts/reg-create-imageset-config-sync.sh` lines 64, 68, 71)
-- Need to trace what the TUI does between operator selection and returning to the main menu — any `aba` or `make` command that indirectly triggers the ISC target could be the culprit
-- Same logic exists for the save ISC in `scripts/reg-create-imageset-config-save.sh`
+**Fix:**
+- Removed the `rm -f` of save ISC
+- Added `run_once -p/-w` wait blocks in all action handlers before they run `aba` commands, matching the pattern already used by `handle_action_view_isconf`
 
 ---
 
 ## Low Priority
+
+### Clean Up TUI Debug Logging
+
+**Status:** Backlog
+**Priority:** Low
+**Created:** 2026-03-13
+
+**Problem:**
+`tui/abatui.sh` contains leftover debug logging that writes to `/tmp/aba-tui-debug.log` (e.g., lines near the background isconf launch: `echo "[DEBUG ..." >> /tmp/aba-tui-debug.log`). These were added during investigation of the ISC regeneration bug and should be removed or converted to proper `log` calls.
+
+**Files:** `tui/abatui.sh` — search for `/tmp/aba-tui-debug.log`
+
+---
 
 ### Suppress `[ABA] Using .../mirror.conf file` for Simple Commands
 
 **Status:** Backlog
 **Priority:** Low
 **Context:** Running `aba ls` (or other quick informational commands) outputs `[ABA] Using /home/steve/testing/aba/sno/mirror.conf file`, which is noise for the user. This message should be downgraded to `aba_debug` so it only appears with `-v`/verbose mode, or suppressed entirely for simple read-only commands like `ls`, `status`, `run --cmd`.
+
+### Suppress `[ABA] Ensuring CLI binaries are installed` for VM Operations
+
+**Status:** Backlog
+**Priority:** Low
+**Created:** 2026-03-13
+
+**Problem:**
+Simple VM management commands like `aba shutdown`, `aba start`, `aba ls`, `aba delete` etc. print `[ABA] Ensuring CLI binaries are installed` before doing anything. This is unnecessary noise — these commands only need `govc` (already ensured separately), not the full OpenShift CLI stack.
+
+**Example:**
+```
+steve@bastion:demo1 (dev)$ aba shutdown
+[ABA] Ensuring CLI binaries are installed      <<<< not needed here
+```
+
+**Fix:** Skip the CLI binary check for VM-only operations (shutdown, start, ls, delete, ssh, etc.) or move it to `aba_debug` for those commands. The CLI ensure step should only run for commands that actually need `oc`, `openshift-install`, or `oc-mirror`.
 
 ### E2E: default to git-based aba install, not local repo copy
 
