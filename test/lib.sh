@@ -48,7 +48,7 @@ int_up() {
     sudo nmcli connection up "$con_name" >/dev/null 2>&1
     
     # Wait for carrier and DHCP
-    sleep 4 
+    sleep 1
 
     # Verify CIDR on the detected interface
     local current_cidr=$(ip -o -f inet addr show "$if_name" | awk '{print $4}' | head -n 1)
