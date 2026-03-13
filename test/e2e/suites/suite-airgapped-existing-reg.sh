@@ -141,18 +141,18 @@ e2e_run_must_fail "Sync to unknown host should fail" \
 e2e_run "Restore reg_host after must-fail" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 
-# Pool registry is already registered -- install must abort (no reinstall; user must uninstall first)
-e2e_run_must_fail "Verify install aborts when registry already registered" \
+# Pool registry is already registered -- idempotent install must succeed (skip)
+e2e_run "Install on already-registered registry succeeds (idempotent)" \
     "aba -d mirror install"
 
 # Existing registry detection (ported from old test2 line 178):
 # Unregister first so ABA doesn't know about the registry, then try to install.
-# reg_detect_existing() should detect the running pool Quay and abort.
-e2e_run "Unregister pool registry for must-fail test" \
+# reg_detect_existing() should detect the running pool Quay and skip (exit 0).
+e2e_run "Unregister pool registry for idempotent install test" \
     "aba -d mirror unregister"
-e2e_run_must_fail "Install when registry already exists must fail" \
+e2e_run "Install when registry already exists must succeed (idempotent)" \
     "aba -d mirror install"
-e2e_run "Re-register pool registry after must-fail test" \
+e2e_run "Re-register pool registry after idempotent install test" \
     "aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 test_end
