@@ -1,6 +1,8 @@
 #!/bin/bash -ex
 # Basic test script to show how to create a custom bundle (*light* or normal) and then install OpenShift disonnected
 
+. test/lib.sh
+
 [ "$1" ] && LIGHT="--light"   		# Test with *light* bundle with any arg.
 
 MY_HOST=$(hostname -f)    # This must be FQDN with A record pointing to IP address of this host
@@ -12,9 +14,7 @@ MAC=00:50:56:05:7B:01
 mkdir -p $TEST_DIR_CONN $TEST_DIR_DISCO
 
 # Go online
-export no_proxy=.lan,.example.com
-export http_proxy=http://10.0.1.8:3128
-export https_proxy=http://10.0.1.8:3128
+int_up  # Internet up (from lib.sh)
 
 # Clean up after last test
 ##cd $TEST_DIR_DISCO/aba 2>/dev/null && ./aba -d mirror uninstall -y && sudo rm -rf ~/quay-install || true  # Delete any existing mirror reg.
@@ -47,7 +47,7 @@ aba -y bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel fast 
 echo "aba bundle returned: $?"
 
 # Go offline
-unset http_proxy https_proxy no_proxy # Go offline
+int_down  # Internet up (from lib.sh)
 
 # Clean up
 sudo rm -vf $(which aba)
