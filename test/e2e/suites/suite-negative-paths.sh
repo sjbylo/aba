@@ -197,18 +197,33 @@ e2e_run_must_fail "Install to localhost with remote key must fail" \
 e2e_run "Restore mirror.conf after localhost test" \
 	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf && sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/' mirror/mirror.conf"
 
-# Reinstall detection: reg_detect_existing() must abort when state.sh shows
-# ABA already installed a registry at this host.
-e2e_run "Set reg_host for reinstall test" \
+# Idempotent install: reg_detect_existing() must skip install (exit 0) when
+# state.sh shows ABA already installed a healthy registry at this host.
+e2e_run "Set reg_host for idempotent install test" \
 	"aba -d mirror -H \$(hostname -f)"
-e2e_run "Create fake state.sh for reinstall test" \
+e2e_run "Create fake state.sh for idempotent install test" \
 	"mkdir -p ~/.aba/mirror/mirror && echo REG_HOST=\$(hostname -f) > ~/.aba/mirror/mirror/state.sh"
 e2e_run "Remove .available to trigger install path" \
 	"rm -f mirror/.available"
-e2e_run_must_fail "Reinstall of existing registry must abort" \
-	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_check_fqdn && reg_detect_existing'"
-e2e_run "Cleanup reinstall test state" \
+e2e_run "Idempotent install on healthy registry must succeed" \
+	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_detect_existing && reg_check_fqdn'"
+e2e_run "Cleanup idempotent install test state" \
 	"rm -f ~/.aba/mirror/mirror/state.sh && sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+
+# Stale state detection: reg_detect_existing() must clear state.sh and proceed
+# when the saved registry host is unreachable (e.g. VM reverted, registry wiped).
+e2e_run "Create stale state.sh for gone registry" \
+	"mkdir -p ~/.aba/mirror/mirror && echo REG_HOST=gone-registry.example.com > ~/.aba/mirror/mirror/state.sh"
+e2e_run "Set reg_host to match stale state" \
+	"aba -d mirror -H gone-registry.example.com"
+e2e_run "Remove .available to trigger install path" \
+	"rm -f mirror/.available"
+e2e_run "Stale state must be detected and cleared" \
+	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_detect_existing' 2>&1 | grep 'unreachable'"
+e2e_run "Verify state.sh was removed" \
+	"test ! -f ~/.aba/mirror/mirror/state.sh"
+e2e_run "Cleanup stale state test" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 
 # Verify without credentials: must fail with user-friendly message
 e2e_run "Set reg_host for verify test" \
@@ -228,7 +243,7 @@ test_end 0
 test_begin "Docker registry install and recovery"
 
 _DOCKER_MIRROR="e2e-docker-test"
-_DOCKER_PORT=5001
+_DOCKER_PORT=5005
 _DOCKER_NEG_MIRROR="e2e-docker-neg"
 _DOCKER_NEG_PORT=5002
 _DOCKER_FQDN="\$(hostname -f)"

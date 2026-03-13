@@ -1,6 +1,8 @@
 #!/bin/bash -e
 # Create an install bundle and test it's working by installing SNO
 
+. ../test/lib.sh
+
 #TEST_HOST=mirror.example.com  # Adjust this as needed
 #BASE_DOM=example.com
 BASE_DOM=$(hostname -d)
@@ -66,7 +68,9 @@ export ABA_TESTING=1   # No stats recorded
 
 set -x
 
-. ~steve/.proxy-set.sh  # Go online!
+#. ~steve/.proxy-set.sh  # Go online!
+int_up
+~/bin/intcheck.sh | grep UP
 # Test connectivity is not working
 echo_step Test internet connection with curl google.com ...
 curl -sfkIL google.com >/dev/null  # Must work
@@ -166,9 +170,9 @@ rm -rf aba
 export GIT_BRANCH=${GIT_BRANCH:-main}
 echo_step Install Aba from branch $GIT_BRANCH
 set +x
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- $GIT_BRANCH
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- $GIT_BRANCH
 #bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 set -x
 cd aba
 ####./install  # Done above
@@ -298,7 +302,9 @@ echo_step Removing unneeded aba repo at $WORK_DIR/aba
 rm -rf $WORK_DIR/aba # Remove the unneeded repo to save space
 
 echo_step Going offline to test the install bundle ...
-. ~steve/.proxy-unset.sh   # Go offline!
+##. ~steve/.proxy-unset.sh   # Go offline!
+int_down
+~/bin/intcheck.sh | grep DOWN
 # Test connectivity is not working
 echo_step Test internet connection with curl google.com ...
 ! curl -sfkIL google.com >/dev/null  # Must "Connection timed out"
@@ -541,7 +547,10 @@ aba -d mirror uninstall -y
 sudo rm -rf ~/quay-install
 sudo rm -rf ~/docker-reg
 
-. ~steve/.proxy-set.sh  # Go online!
+##. ~steve/.proxy-set.sh  # Go online!
+int_down
+~/bin/intcheck.sh | grep UP
+
 # Test connectivity is working
 echo_step Test internet connection with curl google.com ...
 curl -sfkIL google.com >/dev/null  # Must work

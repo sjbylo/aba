@@ -98,6 +98,19 @@ _E2E_DIR="$(cd "$_E2E_LIB_DIR/.." && pwd)"
 
 source "$_E2E_LIB_DIR/constants.sh"
 
+# --- SSH wrapper ------------------------------------------------------------
+# Cleanup functions (e2e_cleanup_clusters, e2e_cleanup_mirrors) need _essh().
+# Suites run as child bash processes (runner.sh line 588: bash "$suite_file"),
+# so functions sourced by the runner are NOT inherited.  Suites that source
+# pool-lifecycle.sh or vm-helpers.sh get _essh() from there; suites that only
+# source framework.sh (e.g. negative-paths, create-bundle-to-disk) need it here.
+_essh() {
+	ssh -o ConnectTimeout=10 -o BatchMode=yes \
+		-o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+		-o StrictHostKeyChecking=no \
+		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
+}
+
 # --- Globals ----------------------------------------------------------------
 
 # Interactive mode: prompt on failure (retry/skip/abort). Set by run.sh.
@@ -1359,6 +1372,30 @@ yaml.dump(yaml.safe_load(open('$file')), sys.stdout, default_flow_style=False, s
 yaml_diff() {
     local file_a="$1" file_b="$2" strip="${3:-}"
     diff <(yaml_normalize "$file_a" $strip) <(yaml_normalize "$file_b" $strip)
+}
+
+# Adapt an example file written for pool 1 to the current pool.
+# On pool 1 the file is returned unchanged; on pool N the pool-specific
+# identifiers (domain, cluster names, IP decade, vCenter folder/datastore)
+# are remapped from pool 1 -> pool N.
+#   Usage: adapt_example_for_pool FILE [POOL_NUM]
+#   Output goes to stdout (use process substitution for yaml_diff).
+adapt_example_for_pool() {
+    local file="$1" pool="${2:-${POOL_NUM:-1}}"
+    if [ "$pool" = "1" ]; then
+        cat "$file"
+        return
+    fi
+    sed \
+        -e "s/p1\.example\.com/p${pool}.example.com/g" \
+        -e "s/con1\.example\.com/con${pool}.example.com/g" \
+        -e "s/\bsno1\b/sno${pool}/g" \
+        -e "s/\bcompact1\b/compact${pool}/g" \
+        -e "s/\bstandard1\b/standard${pool}/g" \
+        -e "s/10\.0\.2\.1\([0-9]\)/10.0.2.${pool}\1/g" \
+        -e "s/aba-e2e\/pool1/aba-e2e\/pool${pool}/g" \
+        -e "s/Datastore4-1/Datastore4-${pool}/g" \
+        "$file"
 }
 
 # --- Guards -----------------------------------------------------------------

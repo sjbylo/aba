@@ -1,19 +1,24 @@
 # Session State
 
 ## Current goal
-Stabilize E2E test suite on RHEL 9 + fix arm64 support.
+Stabilize E2E test suite (feature freeze). Fix bugs and improve error messages.
 
 ## Done this session
-- Fixed arm64: skip Quay binary download, use Docker registry instead (3 changes in Makefile.mirror)
-- Added backlog item for re-enabling Quay on arm64 when binary is published
+- Committed E2E test for idempotent install (`suite-mirror-sync.sh`) - 4 new steps PASS
+- Fixed 3 `e2e_run_must_fail` tests broken by idempotent install change
+- Improved `day2-config-osus.sh` error message to mention CatalogSource sync
+- Fixed `grep -q` SIGPIPE bug in `suite-negative-paths.sh` stale-state test
+- Reverted `.verified` sentinel in Makefile.mirror (caused silent verify)
+- Restored `rm -f ~/bin/...` in cli/Makefile clean target
+- Full gotest run: 6 PASS, 4 FAIL (all failures = broken Quay on dis1/dis2)
 
 ## Next steps
-- Commit and push arm64 fix + backlog update
-- Run pre-commit checks
-- Monitor running e2e tests
-- Quay sqlite permissions bug: ~/quay-install not cleaned between retries
+- Commit cli clean fix (pending user approval)
+- Rebuild pool1 (dis1) and pool2 (dis2) to clear broken Quay state
+- Re-run full gotest after rebuild
 
 ## Decisions / notes
-- On arm64, `_REGISTRY_PREREQ` = `docker-reg-image.tgz`; on x86_64, = `mirror-registry`
-- `aba save` on x86_64 still downloads BOTH registry installers (no change)
-- 3 places to revert when arm64 Quay binary becomes available (documented in BACKLOG.md)
+- Feature freeze in effect: bug fixes only
+- `reg_detect_existing()` exits 0 on healthy registry (idempotent install)
+- `.verified` sentinel was a regression from commit 1dc83a1 (Mar 11)
+- Quay on dis1/dis2 broken: needs pool rebuild

@@ -40,7 +40,12 @@ aba_info "Accessing the cluster ..."
 #####################
 if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
 	if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
-		aba_abort "cincinnati-operator not available in OperatorHub for this cluster.  Load the operator into your registry and run 'aba day2' again?"
+		aba_abort \
+			"cincinnati-operator not available in OperatorHub for this cluster." \
+			"The CatalogSource may still be synchronizing -- wait a few minutes and try again:" \
+			"  oc get catalogsource -n openshift-marketplace" \
+			"  oc get packagemanifests | grep cincinnati" \
+			"If the operator is not loaded, run: aba day2"
 	fi
 fi
 
