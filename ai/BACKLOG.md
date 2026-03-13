@@ -195,6 +195,73 @@ ABA core scripts do not use strict bash mode (`set -euo pipefail`). This means u
 
 ---
 
+### `aba day2` CatalogSource Errors Go Unnoticed, Causing Downstream Operator Failures
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-13
+
+**Problem:**
+During `aba day2`, after IDMS/ITMS resources are applied, OpenShift may begin MachineConfigPool rollouts that cause temporary API unavailability. CatalogSources that were just applied can disappear (`NotFound`) during the rollout. The background wait sub-processes in `day2.sh` (lines 264-299) print errors to stderr but the overall script may not exit with non-zero, allowing execution to continue.
+
+This means downstream operator installs (e.g., `aba day2-osus`) fail with confusing "package not found" errors because the CatalogSources never became ready.
+
+**Observed output:**
+```
+[ABA] Waiting for CatalogSource certified-operators to become 'ready' ...
+[ABA] Waiting for CatalogSource community-operators to become 'ready' ...
+[ABA] Waiting for CatalogSource redhat-operators to become 'ready' ...
+####Error from server (NotFound): catalogsources.operators.coreos.com "certified-operators" not found
+Error from server (NotFound): catalogsources.operators.coreos.com "community-operators" not found
+```
+
+The `####` shows TRANSIENT_FAILURE states, then the CatalogSources vanish entirely. The script should exit non-zero here.
+
+**Investigation pointers:**
+- `scripts/day2.sh` lines 264-303: background sub-processes wait for CatalogSources
+- Line 268: `until oc get catalogsource "$cs_name" >/dev/null; do sleep 1; done` — stderr not suppressed, but loop keeps retrying. If the CatalogSource was deleted by MCP rollout, this loop spins forever or until the 99-iteration timeout
+- Line 303: `[ "$wait_for_cs" ] && wait` — need to verify this propagates non-zero exit from background processes
+- The `aba_abort` at line 298 exits the sub-process, but does `wait` in the parent properly capture and fail?
+- Consider: should `day2.sh` wait for MCP rollout to stabilize before applying CatalogSources?
+- Also check: should the `until` loop at line 268 have a timeout to avoid spinning indefinitely?
+- Consider adding retries: if a CatalogSource disappears during MCP rollout, the script could wait for the rollout to settle and then re-apply the CatalogSources rather than just failing
+
+---
+
+### TUI Operator Add Causes `aba sync` to Skip ISC Regeneration
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-13
+
+**Problem:**
+After adding an operator via the TUI and running `aba sync`, ABA refuses to regenerate `sync/imageset-config-sync.yaml`, saying the file won't be updated. This means newly added operators never make it into the ImageSet Config (ISC).
+
+**Reproduction:**
+1. Add an operator via the TUI
+2. Run `aba sync`
+3. ABA states it will not update the ISC file — the new operator is ignored
+
+**Mechanism:**
+The ISC regeneration guard in `scripts/reg-create-imageset-config-sync.sh` (line 49) checks:
+
+```bash
+if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-config-sync.yaml ]; then
+```
+
+If the ISC file is newer than `sync/.created`, the script assumes the user manually edited the ISC and preserves it. Something in the TUI flow (or a command it triggers) is touching the ISC file's mtime after `.created` was written, tricking the guard into thinking the user hand-edited the file.
+
+**Investigation pointers:**
+- The TUI writes operators to `aba.conf` via `replace-value-conf` (`tui/abatui.sh` lines 3185-3186)
+- The Makefile ISC target depends on `../aba.conf` (`templates/Makefile.mirror` lines 121-122)
+- The `.created` sentinel is touched at generation time (`scripts/reg-create-imageset-config-sync.sh` lines 64, 68, 71)
+- Need to trace what the TUI does between operator selection and returning to the main menu — any `aba` or `make` command that indirectly triggers the ISC target could be the culprit
+- Same logic exists for the save ISC in `scripts/reg-create-imageset-config-save.sh`
+
+---
+
 ## Low Priority
 
 ### Suppress `[ABA] Using .../mirror.conf file` for Simple Commands
