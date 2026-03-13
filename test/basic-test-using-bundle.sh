@@ -23,6 +23,7 @@ rm -rf $TEST_DIR_DISCO/aba
 rm -f ~/.aba/.first_cluster_success
 
 int_up  # Internet up (from lib.sh)
+ping -c3 -W3 -i.2 8.8.8.8 &>/dev/null && echo UP || echo DOWN
 
 # Install aba
 cd $TEST_DIR_CONN
@@ -44,6 +45,7 @@ echo "aba bundle returned: $?"
 
 # Go offline
 int_down  # Internet up (from lib.sh)
+ping -c3 -W3 -i.2 8.8.8.8 &>/dev/null && echo UP || echo DOWN
 
 # Clean up
 sudo rm -vf $(which aba)
@@ -63,7 +65,7 @@ aba     # Show the bundle instructions
 aba | grep -i "bundle .*detected"  # Verify it's the bundle!
 aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME
-aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s install -y
+aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s install -y || { sleep 60; aba -d $CLUSTER_NAME mon; } # wait and try again!
 aba -d $CLUSTER_NAME day2 
 . <(./aba -d $CLUSTER_NAME login)
 time until oc get packagemanifests | grep cincinnati-operator; do sleep 5; done

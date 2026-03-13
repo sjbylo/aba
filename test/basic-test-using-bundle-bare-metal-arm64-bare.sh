@@ -15,6 +15,7 @@ mkdir -p $TEST_DIR_CONN $TEST_DIR_DISCO
 
 # Go online
 int_up  # Internet up (from lib.sh)
+ping -c3 -W3 -i.2 8.8.8.8 &>/dev/null && echo UP || echo DOWN
 
 # Clean up after last test
 ##cd $TEST_DIR_DISCO/aba 2>/dev/null && ./aba -d mirror uninstall -y && sudo rm -rf ~/quay-install || true  # Delete any existing mirror reg.
@@ -48,6 +49,7 @@ echo "aba bundle returned: $?"
 
 # Go offline
 int_down  # Internet up (from lib.sh)
+ping -c3 -W3 -i.2 8.8.8.8 &>/dev/null && echo UP || echo DOWN
 
 # Clean up
 sudo rm -vf $(which aba)
