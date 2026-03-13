@@ -183,8 +183,10 @@ for ctype in sno compact standard; do
     cname="$(pool_cluster_name $ctype)"
     local_starting_ip=$(pool_starting_ip "$ctype")
 
+    _extra_args=""
+    [ "$ctype" = "standard" ] && _extra_args="-W 2"
     e2e_run "Create cluster.conf for $cname" \
-        "rm -rf $cname && aba cluster -n $cname -t $ctype -i $local_starting_ip --step cluster.conf"
+        "rm -rf $cname && aba cluster -n $cname -t $ctype -i $local_starting_ip $_extra_args --step cluster.conf"
     e2e_run "Fix mac_prefix for $cname" \
         "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $cname/cluster.conf"
     e2e_run "Generate install-config.yaml for $cname" \
@@ -205,10 +207,10 @@ test_begin "ABI config: diff against known-good examples"
 for ctype in sno compact standard; do
     cname="$(pool_cluster_name $ctype)"
     e2e_run "Diff $cname install-config.yaml against example" \
-        "yaml_diff $cname/install-config.yaml test/$ctype/install-config.yaml.example --strip-secrets"
+        "yaml_diff $cname/install-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/install-config.yaml.example) --strip-secrets"
 
     e2e_run "Diff $cname agent-config.yaml against example" \
-        "yaml_diff $cname/agent-config.yaml test/$ctype/agent-config.yaml.example"
+        "yaml_diff $cname/agent-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/agent-config.yaml.example)"
 done
 
 # Clean up compact/standard dirs -- only needed for config validation, not cluster install

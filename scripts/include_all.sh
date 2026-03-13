@@ -2019,16 +2019,18 @@ wait_for_all_catalogs() {
 #   probe_host "https://api.openshift.com/"
 #   probe_host "https://registry:8443/health/instance" "Quay registry"
 probe_host() {
+	# --any: accept any HTTP response (including 401); only fail on connection errors
+	local _pf="-f"
+	if [ "${1:-}" = "--any" ]; then _pf=""; shift; fi
 	local url="$1"
 	local desc="${2:-$url}"
 	
 	aba_debug "Probing $desc"
-	aba_debug "curl -sSf --connect-timeout 5 --max-time 15 --retry 2 -ILk $url"
+	aba_debug "curl -s ${_pf:+$_pf }--connect-timeout 5 --max-time 15 --retry 2 -ILk $url"
 	
 	# -s: silent (no progress bar)
-	# -f: fail on HTTP errors (4xx, 5xx)
-	# Stderr suppressed: expected 404/401 from non-matching endpoints is not an error
-	if curl -sf \
+	# -f: fail on HTTP errors (4xx, 5xx) — omitted when --any is used
+	if curl -s $_pf \
 		--connect-timeout 5 \
 		--max-time 15 \
 		--retry 2 \

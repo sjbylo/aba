@@ -79,8 +79,8 @@ init: .init
 register: .init .rpmsext mirror.conf
 	@[ "$(pull_secret_mirror)" ] || { echo "[ABA] Error: pull_secret_mirror= is required (path to pull secret JSON file)"; exit 1; }
 	@[ "$(ca_cert)" ] || { echo "[ABA] Error: ca_cert= is required (path to CA certificate file)"; exit 1; }
-	$(SCRIPTS)/reg-register.sh "$(pull_secret_mirror)" "$(ca_cert)"
 	@rm -f .unavailable
+	$(SCRIPTS)/reg-register.sh "$(pull_secret_mirror)" "$(ca_cert)"
 	@touch .available
 
 # Deregister an externally-managed mirror registry.
@@ -214,8 +214,8 @@ $(DOCKER_REG_FILE):
 
 .PHONY: install-docker-registry
 install-docker-registry:
+	@rm -f .unavailable
 	@REG_VENDOR_OVERRIDE=docker $(SCRIPTS)/reg-install.sh
-	@rm -f .unavailable 
 	@touch .available
 
 .PHONY: uninstall-docker-registry
@@ -235,13 +235,13 @@ install: .available
 # to unnecessarily re-run reg-install.sh even though the registry is already up.
 # Only mirror.conf changes should trigger a registry reinstall.
 .available: mirror.conf | .init .rpmsext $(_REGISTRY_PREREQ)  ## Set up the registry as per the settings in mirror.conf. Place credential file(s) into ~/.aba/mirror/ for existing registry.  See README.md.
+	@rm -f .unavailable
 	$(SCRIPTS)/reg-install.sh
-	@rm -f .unavailable 
 	@touch .available
 
 .PHONY: installclean
 installclean:
-	@rm -f .available .verified
+	@rm -f .available
 
 .PHONY: password pw
 password: pw
@@ -250,13 +250,10 @@ pw:
 #	@touch .available  #FIXME: is this really needed?
 
 .PHONY: verify
-verify: .verified ## Using the credential files in '~/.aba/mirror/' and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
-
-.verified: .init mirror.conf
-	@$(SCRIPTS)/reg-verify.sh
+verify: .init mirror.conf ## Using the credential files in '~/.aba/mirror/' and the values in 'aba/mirror/mirror.conf', verify access to the registry. 
 	@rm -f .unavailable
+	@$(SCRIPTS)/reg-verify.sh
 	@touch .available
-	@touch .verified
 
 #.PHONY: uninstallclean
 #uninstallclean:
@@ -296,7 +293,7 @@ catalog: catalogs-download
 uninstall: .init .unavailable     ## Uninstall any previously installed registry  
 .unavailable:
 	$(SCRIPTS)/reg-uninstall.sh
-	@rm -f .available .verified
+	@rm -f .available
 	@touch .unavailable
 
 .PHONY: checkversion
@@ -309,7 +306,7 @@ cluster:
 
 .PHONY: tidy
 tidy:    # Tidy up so that this repo can be (re-)used to install/configure a registry again (assuming aba bundle repo on USB stick).
-	rm -f  .available .verified
+	rm -f  .available
 	rm -f  mirror.conf
 	rm -rf regcreds
 	rm -f  reg-uninstall.sh 
@@ -322,7 +319,7 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
-clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirror.conf, registry state, save/ and sync/.
+clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirror.conf, registry state, save/ and sync/ (except working-dir).
 	@[ -f .available ] && echo "[ABA] Note: registry is still running. Credentials in ~/.aba/mirror/ are untouched." || true
 	rm -f aba.conf
 	rm -f .init 
@@ -333,6 +330,7 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f .cmd.out
 	rm -f .reg_vendor
+	rm -rf save/working-dir sync/working-dir
 	rm -f mirror-registry image-archive.tar execution-environment.tar sqlite3.tar
 	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install"
 	rm -f templates scripts cli mirror
@@ -357,6 +355,6 @@ reset:                # Clean up all files. Only use if you know what you're doi
 	rm -f *.log .*.log
 	rm -f .ssh.conf
 	rm -f .redhat-operator-index* 
-	rm -f .init .verified
+	rm -f .init
 	rm -f *sha256sum.txt
 

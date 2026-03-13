@@ -7,11 +7,12 @@ source scripts/reg-common.sh
 aba_debug "Starting: $0 $*"
 
 reg_load_config
-reg_check_fqdn
 reg_detect_existing
+reg_check_fqdn
 reg_setup_data_dir quay
 reg_generate_password
 reg_verify_localhost
+reg_check_quay_resources
 
 # --- Quay-specific: SSH-to-localhost key setup ---
 # The Quay mirror-registry installer requires SSH access to the install host.
@@ -36,10 +37,14 @@ if [ ! -s $temp_aba_key ]; then
 fi
 
 if [ -s $temp_aba_key ]; then
-	if ! ssh -F $ssh_conf_file -i $temp_aba_key $reg_host touch $flag_file >/dev/null; then
-		aba_abort \
-			"For local Quay installation, SSH must work to $reg_host. The Quay installer requires this." \
-			"Failed command: ssh -i $temp_aba_key $reg_host"
+	if ! ssh -F $ssh_conf_file -i $temp_aba_key $reg_host touch $flag_file >/dev/null 2>&1; then
+		aba_warning "SSH to '$reg_host' failed -- trying localhost instead ..."
+		if ! ssh -F $ssh_conf_file -i $temp_aba_key localhost touch $flag_file >/dev/null 2>&1; then
+			aba_abort \
+				"For local Quay installation, SSH must work to localhost. The Quay installer requires this." \
+				"Failed command: ssh -i $temp_aba_key localhost" \
+				"Also tried: ssh -i $temp_aba_key $reg_host"
+		fi
 	fi
 fi
 

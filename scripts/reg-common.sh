@@ -11,6 +11,7 @@
 #   reg_check_fqdn         Verify registry hostname resolves to an IP
 #   reg_detect_existing     Check for existing credentials or running registry
 #   reg_verify_localhost    Confirm reg_host points to this machine (local installs)
+#   reg_check_quay_resources  Abort if host has <4 vCPUs or <8GB RAM (Quay only)
 #   reg_setup_data_dir      Validate and normalize data_dir + vendor root path
 #   reg_generate_password   Generate random password if reg_pw is empty
 #   reg_open_firewall       Open firewall port (firewalld/iptables, local or SSH)
@@ -91,16 +92,20 @@ reg_check_fqdn() {
 # Also aborts if ABA already manages a registry at this host (state.sh with
 # matching REG_HOST).  There is no "reinstall" -- user must uninstall first.
 reg_detect_existing() {
-	# Abort if ABA already has a registry installed at this host
+	# Skip install if ABA already has a healthy registry at this host. This is also needed if user edits mirror.conf which triggers a installation
 	if [ -s "$regcreds_dir/state.sh" ]; then
 		local _saved_host
 		_saved_host=$(grep '^REG_HOST=' "$regcreds_dir/state.sh" 2>/dev/null | cut -d= -f2)
 		if [ "$_saved_host" = "$reg_host" ]; then
-			aba_abort \
-				"Mirror registry is already installed at $reg_host" \
-				"To apply mirror.conf changes, uninstall first and then reinstall:" \
-				"  aba -d $(basename "$PWD") uninstall" \
-				"  aba -d $(basename "$PWD") install"
+			if probe_host --any "$reg_url/v2/" "existing registry"; then
+				aba_debug "Registry already installed and healthy at $reg_host -- skipping install"
+				exit 0
+			else
+				aba_warning "Registry at $reg_host is unreachable but state.sh still exists." \
+					"The registry may have been removed externally." \
+					"Clearing stale state and proceeding with fresh install."
+				rm -f "$regcreds_dir/state.sh"
+			fi
 		fi
 	fi
 
@@ -152,7 +157,7 @@ reg_verify_localhost() {
 	rm -f "$flag_file"
 
 	local remote_hostname
-	if remote_hostname=$(ssh -F "$ssh_conf_file" "$reg_host" "touch $flag_file && hostname") >/dev/null 2>&1; then
+	if remote_hostname=$(ssh -F "$ssh_conf_file" "$reg_host" "touch $flag_file && hostname" 2>/dev/null); then
 		if [ ! -f "$flag_file" ]; then
 			aba_abort \
 				"Registry configured for *local* install (reg_ssh_key is not defined)." \
@@ -164,6 +169,30 @@ reg_verify_localhost() {
 			rm -f "$flag_file"
 			aba_info "SSH access to localhost via '$reg_host' is working."
 		fi
+	fi
+}
+
+# --- reg_check_quay_resources -------------------------------------------------
+# Warn if the target host lacks minimum resources for Quay (4 vCPUs, 8GB RAM).
+# Usage: reg_check_quay_resources          # check localhost
+#        reg_check_quay_resources "$_ssh"   # check remote host via SSH command
+reg_check_quay_resources() {
+	local run="${1:-}"
+	local vcpus mem_kb mem_gb
+	if [ -z "$run" ]; then
+		vcpus=$(nproc)
+		mem_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+	else
+		vcpus=$($run nproc)
+		mem_kb=$($run grep MemTotal /proc/meminfo | awk '{print $2}')
+	fi
+	mem_gb=$(( mem_kb / 1024 / 1024 ))
+	if [ "$vcpus" -le 2 ] || [ "$mem_gb" -le 4 ]; then
+		aba_warning \
+			"Quay mirror registry requires at least 4 vCPUs and 8GB RAM." \
+			"This host has ${vcpus} vCPU(s) and ~${mem_gb}GB RAM." \
+			"Use a Docker registry instead: set reg_vendor=docker in mirror.conf."
+		ask "Continue with Quay installation anyway" || exit 1
 	fi
 }
 

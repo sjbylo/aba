@@ -258,8 +258,25 @@ read -r TERM_ROWS TERM_COLS < <(stty size 2>/dev/null || echo "24 80")
 # Retry count for transient failures (applies to save/sync/bundle)
 RETRY_COUNT="2"  # Values: "off", "2", "8"
 
-# Registry type selection
+# Auto-answer setting — load from aba.conf if available
+# aba.conf: ask=true → prompt user (auto-answer OFF), ask= or ask=false → auto-answer ON
+ABA_AUTO_ANSWER="yes"  # Values: "yes", "no"
+if [[ -f "$ABA_ROOT/aba.conf" ]]; then
+	_saved_ask=$(grep -E '^ask=' "$ABA_ROOT/aba.conf" 2>/dev/null | sed 's/#.*//' | cut -d= -f2 | tr -d '[:space:]')
+	[[ "$_saved_ask" == "true" ]] && ABA_AUTO_ANSWER="no"
+	unset _saved_ask
+fi
+
+# Registry type selection — load from mirror.conf if available
 ABA_REGISTRY_TYPE="Auto"  # Values: "Auto", "Quay", "Docker"
+if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+	_saved_vendor=$(grep -E '^reg_vendor=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | sed 's/#.*//' | cut -d= -f2 | tr -d '[:space:]')
+	case "$_saved_vendor" in
+		quay)   ABA_REGISTRY_TYPE="Quay" ;;
+		docker) ABA_REGISTRY_TYPE="Docker" ;;
+	esac
+	unset _saved_vendor
+fi
 
 ui_backtitle() {
 	echo "ABA TUI  |  channel: ${OCP_CHANNEL:-?}  version: ${OCP_VERSION:-?}"
@@ -1677,6 +1694,9 @@ select_platform_network() {
 				dialog --backtitle "$(ui_backtitle)" --msgbox \
 "Platform & Network Configuration:
 
+These values pertain to the disconnected environment
+where OpenShift will be deployed (the bastion network).
+
 • Platform: bm (bare-metal) or vmw (VMware)
 • Base Domain: DNS domain for cluster (e.g., example.com)
 • Machine Network: CIDR for cluster nodes (e.g., 10.0.0.0/24)
@@ -1684,7 +1704,7 @@ select_platform_network() {
 • Default Route: Gateway IP for cluster network
 • NTP Servers: IPs or hostnames separated by spaces (e.g., pool.ntp.org 10.0.1.8)
 
-Leave blank to use auto-detected values." 0 0 || true
+Leave blank to auto-detect on the disconnected bastion." 0 0 || true
 				continue
 				;;
 			3)
@@ -2641,12 +2661,10 @@ handle_action_local_quay() {
 	replace-value-conf -q -n reg_ssh_key -v "" -f mirror/mirror.conf
 	log "Cleared SSH parameters for local registry installation"
 	
-	# Write reg_vendor to mirror.conf so the dispatcher uses the correct vendor
-	replace-value-conf -q -n reg_vendor -v "$(reg_vendor_from_tui)" -f mirror/mirror.conf
-	log "Set reg_vendor=$(reg_vendor_from_tui) in mirror.conf"
-
-	# Unified command: dispatcher handles vendor selection, install is a sync dependency
-	local cmd="aba -d mirror $retry_flag sync -H '$reg_host' $y_flag"
+	# --vendor ensures mirror.conf is created (if needed) and vendor is set
+	local vendor="$(reg_vendor_from_tui)"
+	local cmd="aba -d mirror --vendor $vendor $retry_flag sync -H '$reg_host' $y_flag"
+	log "Local registry command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -2725,12 +2743,9 @@ handle_action_local_docker() {
 	replace-value-conf -q -n reg_ssh_key -v "" -f mirror/mirror.conf
 	log "Cleared SSH parameters for local registry installation"
 	
-	# Force Docker vendor in mirror.conf
-	replace-value-conf -q -n reg_vendor -v "docker" -f mirror/mirror.conf
-	log "Set reg_vendor=docker in mirror.conf"
-
-	# Unified command: dispatcher handles vendor selection, install is a sync dependency
-	local cmd="aba -d mirror $retry_flag sync -H '$reg_host' $y_flag"
+	# --vendor ensures mirror.conf is created (if needed) and vendor is set
+	local cmd="aba -d mirror --vendor docker $retry_flag sync -H '$reg_host' $y_flag"
+	log "Local Docker command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -2812,12 +2827,10 @@ handle_action_remote_quay() {
 	replace-value-conf -q -n reg_ssh_key -v "$reg_ssh_key" -f mirror/mirror.conf
 	replace-value-conf -q -n reg_ssh_user -v "$reg_ssh_user" -f mirror/mirror.conf
 	
-	# Write reg_vendor to mirror.conf so the dispatcher uses the correct vendor
-	replace-value-conf -q -n reg_vendor -v "$(reg_vendor_from_tui)" -f mirror/mirror.conf
-	log "Set reg_vendor=$(reg_vendor_from_tui) in mirror.conf"
-
-	# Unified command: dispatcher handles vendor + remote selection via reg_ssh_key
-	local cmd="aba -d mirror $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
+	# --vendor ensures mirror.conf is created (if needed) and vendor is set
+	local vendor="$(reg_vendor_from_tui)"
+	local cmd="aba -d mirror --vendor $vendor $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
+	log "Remote registry command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -3290,6 +3303,14 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 						ABA_AUTO_ANSWER="no"; log "Auto-answer toggled OFF"
 					else
 						ABA_AUTO_ANSWER="yes"; log "Auto-answer toggled ON"
+					fi
+					# Persist to aba.conf: ask=true means prompt (auto-answer OFF)
+					if [[ -f "$ABA_ROOT/aba.conf" ]]; then
+						if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
+							replace-value-conf -q -n ask -v "" -f aba.conf
+						else
+							replace-value-conf -q -n ask -v "true" -f aba.conf
+						fi
 					fi
 					settings_default="$TUI_SETTINGS_AUTO_ANSWER"
 					;;
