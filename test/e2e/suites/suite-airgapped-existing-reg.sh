@@ -147,12 +147,13 @@ e2e_run "Install on already-registered registry succeeds (idempotent)" \
 
 # Existing registry detection (ported from old test2 line 178):
 # Unregister first so ABA doesn't know about the registry, then try to install.
-# reg_detect_existing() should detect the running pool Quay and skip (exit 0).
-e2e_run "Unregister pool registry for idempotent install test" \
+# Without state.sh, ABA probes the URL, finds a running registry it didn't install,
+# and correctly aborts — you can't install over an unknown existing registry.
+e2e_run "Unregister pool registry for must-fail install test" \
     "aba -d mirror unregister"
-e2e_run "Install when registry already exists must succeed (idempotent)" \
+e2e_run_must_fail "Install over unregistered existing registry must fail" \
     "aba -d mirror install"
-e2e_run "Re-register pool registry after idempotent install test" \
+e2e_run "Re-register pool registry after must-fail test" \
     "aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 test_end

@@ -1,24 +1,23 @@
 # Session State
 
 ## Current goal
-Stabilize E2E test suite (feature freeze). Fix bugs and improve error messages.
+Stabilize E2E test suites after pool rebuild; monitor gotest.
 
 ## Done this session
-- Committed E2E test for idempotent install (`suite-mirror-sync.sh`) - 4 new steps PASS
-- Fixed 3 `e2e_run_must_fail` tests broken by idempotent install change
-- Improved `day2-config-osus.sh` error message to mention CatalogSource sync
-- Fixed `grep -q` SIGPIPE bug in `suite-negative-paths.sh` stale-state test
-- Reverted `.verified` sentinel in Makefile.mirror (caused silent verify)
-- Restored `rm -f ~/bin/...` in cli/Makefile clean target
-- Full gotest run: 6 PASS, 4 FAIL (all failures = broken Quay on dis1/dis2)
+- Investigated both pools: identified two-layer Quay install failure (pasta hairpin + stale UID-mapped files)
+- Full VM recreation for pools 1 and 2 (`--recreate-vms`) — fixed the Quay issue
+- Pool 2: Quay install PASSED on fresh VMs, 10+ tests passing, running mesh operators
+- Pool 1: Compact cluster installing, 7+ tests passing
+- Fixed `suite-airgapped-existing-reg.sh`: reverted unregister+install test to `e2e_run_must_fail`
+- Added backlog: TUI operator add causes `aba sync` to skip ISC regeneration
+- Added backlog: `aba day2` CatalogSource errors go unnoticed, causing downstream operator failures
 
 ## Next steps
-- Commit cli clean fix (pending user approval)
-- Rebuild pool1 (dis1) and pool2 (dis2) to clear broken Quay state
-- Re-run full gotest after rebuild
+- Continue monitoring gotest on both pools
+- Commit pending changes (test fix + backlog entries) and deploy
+- Re-run airgapped-existing-reg suite with the must-fail fix after current run completes
 
 ## Decisions / notes
-- Feature freeze in effect: bug fixes only
-- `reg_detect_existing()` exits 0 on healthy registry (idempotent install)
-- `.verified` sentinel was a regression from commit 1dc83a1 (Mar 11)
-- Quay on dis1/dis2 broken: needs pool rebuild
+- Feature freeze in effect — only bug fixes
+- VM rebuild confirmed the Quay pasta issue was stale VM state, not systemic
+- Pending uncommitted: ai/BACKLOG.md, ai/SESSION_STATE.md, scripts/aba.sh, test/e2e/suites/suite-airgapped-existing-reg.sh
