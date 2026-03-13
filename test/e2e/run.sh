@@ -1390,8 +1390,20 @@ _check_pool() {
 # --- Find a free pool (no active suite) ---------------------------------------
 
 _find_free_pool() {
-	for (( p=1; p<=CLI_POOLS; p++ )); do
+	# Dynamic ceiling: use the larger of CLI_POOLS and pools.conf count so
+	# pools that come online after startup are discovered automatically.
+	local _max_pools
+	_max_pools=$(_pool_count_from_conf)
+	[ "$CLI_POOLS" -gt "$_max_pools" ] 2>/dev/null && _max_pools="$CLI_POOLS"
+	for (( p=1; p<=_max_pools; p++ )); do
 		if [ -z "${_busy_pools[$p]:-}" ]; then
+			# Fast reachability probe (5s) -- skip unreachable pools instead of
+			# letting _dispatch_suite burn ~2 min on SSH timeouts per attempt.
+			local _user="${CON_SSH_USER:-steve}"
+			local _host="con${p}.${VM_BASE_DOMAIN}"
+			ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
+				-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+				"${_user}@${_host}" "true" 2>/dev/null || continue
 			# Also check for tmux sessions the dispatcher doesn't track
 			# (e.g. manual launches via ssh + tmux new-session)
 			local _has_sess
@@ -1451,9 +1463,14 @@ _detect_running_and_completed() {
 	local _rc_base
 	_rc_base=$(basename "$_RC_PREFIX")
 
+	# Dynamic ceiling: discover all pools defined in pools.conf
+	local _max_pools
+	_max_pools=$(_pool_count_from_conf)
+	[ "$CLI_POOLS" -gt "$_max_pools" ] 2>/dev/null && _max_pools="$CLI_POOLS"
+
 	# Pass 1: detect running suites (live tmux takes precedence over stale .rc)
 	local -A _running_suites=()
-	for (( p=1; p<=CLI_POOLS; p++ )); do
+	for (( p=1; p<=_max_pools; p++ )); do
 		local sess_exists
 		sess_exists=$(_ssh_con "$p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
 		if [ "$sess_exists" = "yes" ]; then
@@ -1469,7 +1486,7 @@ _detect_running_and_completed() {
 	done
 
 	# Pass 2: detect completed suites (.rc files), skipping any that are running
-	for (( p=1; p<=CLI_POOLS; p++ )); do
+	for (( p=1; p<=_max_pools; p++ )); do
 		local rc_files
 		rc_files=$(_ssh_con "$p" "ls ${_RC_PREFIX}-*.rc 2>/dev/null" 2>/dev/null || true)
 		if [ -n "$rc_files" ]; then
@@ -1497,7 +1514,10 @@ _detect_running_and_completed() {
 
 _force_clean_all() {
 	echo "  --force: wiping all suite state on all pools ..."
-	for (( p=1; p<=CLI_POOLS; p++ )); do
+	local _max_pools
+	_max_pools=$(_pool_count_from_conf)
+	[ "$CLI_POOLS" -gt "$_max_pools" ] 2>/dev/null && _max_pools="$CLI_POOLS"
+	for (( p=1; p<=_max_pools; p++ )); do
 		_ssh_con "$p" "
 			tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
 			rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
