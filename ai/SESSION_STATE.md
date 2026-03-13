@@ -9,13 +9,13 @@ Stabilize E2E test suite (feature freeze). Fix bugs and improve error messages.
 - Improved `day2-config-osus.sh` error message to mention CatalogSource sync
 - Fixed `grep -q` SIGPIPE bug in `suite-negative-paths.sh` stale-state test
 - Reverted `.verified` sentinel in Makefile.mirror (caused silent verify)
+- Restored `rm -f ~/bin/...` in cli/Makefile clean target
 - Full gotest run: 6 PASS, 4 FAIL (all failures = broken Quay on dis1/dis2)
 
 ## Next steps
-- Commit verify fix (pending user approval)
+- Commit cli clean fix (pending user approval)
 - Rebuild pool1 (dis1) and pool2 (dis2) to clear broken Quay state
 - Re-run full gotest after rebuild
-- Verify `grep -q` fix passes on next negative-paths run
 
 ## Decisions / notes
 - Feature freeze in effect: bug fixes only
