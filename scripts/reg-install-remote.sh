@@ -190,6 +190,18 @@ esac
 # --- Fetch CA and run local post-install ---
 reg_post_install "$_target:$remote_ca" "$vendor" --ssh
 
+# Verify remote Docker registry is reachable from this host.
+# Quay's mirror-registry handles its own post-install verification.
+if [ "$vendor" = "docker" ]; then
+	if ! curl -k -fsSL --connect-timeout 10 "https://${reg_host}:${reg_port}/v2/" \
+		-u "$reg_user:$reg_pw" >/dev/null 2>&1; then
+		aba_abort \
+			"Registry container started on $reg_host but ${reg_host}:${reg_port} is not reachable from this host." \
+			"Check firewall rules on the remote host (port $reg_port must be open)." \
+			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
+	fi
+fi
+
 # Leave breadcrumb on remote so the user knows how to manage this registry
 $_ssh "cat > $reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	Mirror registry installed by ABA: https://github.com/sjbylo/aba.git

@@ -72,7 +72,7 @@ test_end
 test_begin "Setup: install aba and configure"
 
 e2e_run "Reset aba to clean state" \
-    "cd ~/aba && { command -v aba >/dev/null 2>&1 || ./install; } && aba reset --force"
+    "cd ~/aba && ./install && aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"

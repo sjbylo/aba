@@ -989,7 +989,7 @@ e2e_run() {
             return 3
         elif [ $prompt_rc -eq 4 ]; then
             rm -f "$_cmd_output_file"
-            return 4
+            exit 4
         else
             local _exf; _exf="$(_e2e_exit_info $ret)"
             _e2e_log "  FAILED: $description ($_exf)"

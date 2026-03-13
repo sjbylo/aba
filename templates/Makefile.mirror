@@ -139,9 +139,13 @@ sync: .init .rpmsint ~/.pull-secret.json                     install sync/images
 # Note that for a connected workstation or bastion there is no need to install all the required packages, only 'rpmsext' is needed.
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
 # Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
-# Registry binaries are downloaded best-effort (non-fatal) so the bundle includes them if possible.
+# Registry binaries: Quay tarball is required (fatal if missing); Docker image is best-effort (warn only).
 save: .init .rpmsext ~/.pull-secret.json                                                     save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar. Use --retry [count] to retry after failure.
-	@$(MAKE) download-registries 2>&1 || echo "[ABA] Warning: Registry binary download failed (non-fatal). You can download it later or use a Docker registry."
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for registry binary download" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
+ifneq ($(arch),aarch64)
+	@[ -f $(MR_TARBALL) ] || { echo "[ABA] Error: $(MR_TARBALL) download failed. Cannot create bundle without the Quay mirror-registry installer."; exit 1; }
+endif
+	@[ -f $(DOCKER_REG_FILE) ] || echo "[ABA] Warning: Docker registry image not available (docker.io may not be reachable). Bundle will include Quay registry only."
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
 # Fail fast if save/ is missing, before Make triggers 'install' (which would reinstall the registry needlessly).
@@ -169,8 +173,9 @@ rpmsclean:
 	@rm -f .rpms*
 
 mirror-registry: $(MR_TARBALL) ## Extract the mirror-registry binary 
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for mirror-registry download" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
 	@echo [ABA] Extracting $(MR_TARBALL) into $$PWD
-	tar xmvzf $(MR_TARBALL)
+	tar xmvzf $(MR_TARBALL) || { echo "[ABA] Error: $(MR_TARBALL) is corrupt or truncated. Deleting — re-run to re-download."; rm -f $(MR_TARBALL) mirror-registry execution-environment.tar image-archive.tar sqlite3.tar 2>/dev/null; exit 1; }
 
 .PHONY: download-registries
 download-registries: $(if $(filter aarch64,$(arch)),,$(MR_TARBALL)) docker-reg-image.tgz

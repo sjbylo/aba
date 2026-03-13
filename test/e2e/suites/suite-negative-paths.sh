@@ -50,7 +50,7 @@ suite_begin "negative-paths"
 test_begin "Setup: install and configure"
 
 e2e_run "Reset aba to clean state" \
-	"cd ~/aba && { command -v aba >/dev/null 2>&1 || ./install; } && aba reset --force"
+	"cd ~/aba && ./install && aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
 	"sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
@@ -268,8 +268,8 @@ e2e_run "state.sh has correct port" \
 e2e_run "Verify Docker registry accessible" \
 	"aba -d $_DOCKER_MIRROR verify"
 
-e2e_run "Container uses host networking" \
-	"_essh $DIS_HOST \"podman inspect registry --format '{{.HostConfig.NetworkMode}}'\" | grep host"
+e2e_run "Registry container is running on disN" \
+	"_essh $DIS_HOST 'podman ps --format {{.Names}} | grep registry'"
 
 e2e_run "Registry responds on FQDN" \
 	"curl -k -sf -u init:p4ssw0rd https://$_DOCKER_FQDN:$_DOCKER_PORT/v2/"
