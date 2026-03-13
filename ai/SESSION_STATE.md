@@ -9,20 +9,18 @@ Gotest monitoring and bug fixing under feature freeze.
 - Committed user's test/lib.sh refactoring (commit c04498b)
 - Deployed fixes to con1/con2, started gotest run
 - Flushed stale nftables on con2
-- Investigated Quay sqlite PermissionError root cause:
-  - Cross-suite cleanup (e2e_cleanup_mirrors) was broken by missing _essh -- NOW FIXED
-  - Pre-suite cleanup (_cleanup_dis_aba in runner.sh) was always working (runs in runner process)
-  - Within-retry stale data (Quay health check fails, leaves immutable quay_sqlite.db) is upstream Quay behavior
+- Made `aba install` idempotent (commit 69c1170) — reg_detect_existing() exits 0 when registry healthy
 - Added backlog item: "Smarter Catalog Index Download Scheduling"
+- Investigated Quay sqlite PermissionError:
+  - Pre-suite cleanup (_cleanup_dis_aba) was always working (runs in runner process with _essh from vm-helpers.sh)
+  - Cross-suite cleanup (e2e_cleanup_mirrors) was broken by missing _essh in suite child processes — now fixed
+  - Within-retry stale data is upstream Quay installer behavior
 
 ## Next steps
 1. Monitor ongoing gotest run
-2. Skipped Quay install failure on con2 (upstream sqlite bug) -- con2 continuing with remaining tests
-3. Con1 was bootstrapping compact cluster -- check progress
+2. Deploy latest code (idempotent install fix) to test pools
 
 ## Decisions / notes
 - Feature freeze: only bug fixes, no new features
-- ABA production code must NEVER delete user data dirs -- only test code may do that
-- Pre-suite cleanup (_cleanup_dis_aba) runs in runner process which has _essh from vm-helpers.sh -- was never broken
-- The _essh fix only affects suite child processes (cleanup at end of suite via e2e_cleanup_mirrors/clusters)
-- Quay sqlite PermissionError within retries is upstream Quay installer behavior, not an ABA cleanup issue
+- ABA production code must NEVER delete user data dirs
+- `aba install` is now idempotent: if registry healthy, skip silently (exit 0)

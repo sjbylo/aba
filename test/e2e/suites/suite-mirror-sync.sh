@@ -109,6 +109,16 @@ e2e_run "Install Docker registry on remote host" \
     "aba -d mymirror install --vendor docker --reg-port 5000 --reg-user e2euser --reg-password e2epass --data-dir '~/mymirror-data' -H $DIS_HOST -k ~/.ssh/id_rsa"
 e2e_run "Verify mymirror registry access" "aba -d mymirror verify"
 
+# Idempotent install: re-running install on a healthy registry must succeed
+e2e_run "Idempotent install (registry already running)" \
+    "aba -d mymirror install"
+e2e_run "Edit mirror.conf while registry is running" \
+    "aba -d mymirror --reg-path my/new/path"
+e2e_run "Install after mirror.conf edit must succeed" \
+    "aba -d mymirror install"
+e2e_run "Verify registry still accessible after idempotent install" \
+    "aba -d mymirror verify"
+
 test_end
 
 # ============================================================================
@@ -229,10 +239,11 @@ e2e_diag "Markers: after uninstall-1" "_marker_snap"
 e2e_run -r 3 2 "Save and reload images (should install mirror)" "aba --dir mirror save load --retry"
 e2e_diag "Markers: after save-load" "_marker_snap"
 
-# Uninstall before changing mirror.conf: config changes make mirror.conf newer
-# than .available, so Make would try to reinstall.  reg_detect_existing() aborts
-# if a registry is already installed at this host.  Uninstall first, change
-# config, then sync (which triggers a fresh install with the new settings).
+# Uninstall before changing mirror.conf: this test intentionally wants a
+# fresh install with completely different settings (data_dir, ssh_user,
+# ssh_key, reg_user).  Since reg_detect_existing() now skips install
+# when the registry is healthy, we must explicitly uninstall to get a
+# fresh install with the new configuration.
 e2e_diag "Markers: before uninstall-2" "_marker_snap"
 e2e_run "Uninstall registry before config change" "aba --dir mirror uninstall"
 e2e_diag "Markers: after uninstall-2" "_marker_snap"
