@@ -680,6 +680,28 @@ The immediate crash is fixed (skip CLI downloads for housekeeping commands). But
 
 **Where:** `scripts/backup.sh`, `install`, `cli/Makefile` reset target
 
+### Smarter Catalog Index Download Scheduling
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-13
+
+**Problem:**
+ABA downloads catalog indexes (via `download-catalog-index.sh` / `download_all_catalogs()`) eagerly, even when no operators are defined in `aba.conf` (`ops=` and `op_sets=` are empty). The download still has value (the indexes will be needed if the user later adds operators), but running it in the **foreground** blocks the user's current operation unnecessarily. If no operators are defined for this run, the indexes won't be consumed, so the user is waiting for something that has no immediate benefit.
+
+**Desired behavior:**
+- If operators ARE defined (`ops` or `op_sets` non-empty): download catalogs in the foreground as today (they're needed now).
+- If NO operators are defined: still download the catalogs (speculative prefetch), but do it in the **background** so it doesn't block the user's current command. The indexes will be ready if the user adds operators later.
+- If catalogs are already cached and fresh (within TTL): skip entirely regardless of operator config.
+
+**Where:** `scripts/include_all.sh` (`download_all_catalogs()`), `scripts/aba.sh` (where catalog downloads are triggered), `scripts/download-catalog-index.sh`
+
+**Considerations:**
+- Background downloads must not interfere with foreground operations (file locking, `run_once` state)
+- Need to handle the case where a background download is still running when the user adds operators and runs a command that needs the indexes
+- The `run_once` mechanism already provides locking; verify it handles concurrent foreground + background correctly
+
 ### 36. CLI Download Retry Gaps
 
 **Status:** Backlog  
