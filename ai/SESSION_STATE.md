@@ -4,21 +4,21 @@
 Stabilize E2E test suite (feature freeze). Fix bugs and improve error messages.
 
 ## Done this session
-- Committed and pushed E2E test for idempotent install (`suite-mirror-sync.sh`)
-- Fixed 3 `e2e_run_must_fail` tests broken by idempotent install change in `suite-airgapped-existing-reg.sh` and `suite-negative-paths.sh`
-- Deployed latest code to both pools (con1, con2)
-- Improved `day2-config-osus.sh` error message to mention CatalogSource sync delay
-- gotest running: `mirror-sync`, `negative-paths`, `network-advanced` pending
+- Committed E2E test for idempotent install (`suite-mirror-sync.sh`) - 4 new steps PASS
+- Fixed 3 `e2e_run_must_fail` tests broken by idempotent install change
+- Improved `day2-config-osus.sh` error message to mention CatalogSource sync
+- Fixed `grep -q` SIGPIPE bug in `suite-negative-paths.sh` stale-state test
+- Reverted `.verified` sentinel in Makefile.mirror (caused silent verify)
+- Full gotest run: 6 PASS, 4 FAIL (all failures = broken Quay on dis1/dis2)
 
 ## Next steps
-- Commit OSUS error message fix (pending user approval)
-- Monitor gotest for `mirror-sync` suite (new idempotent install tests)
-- Monitor `negative-paths` and `airgapped-existing-reg` for updated test assertions
-- Investigate `airgapped-local-reg` failure (Quay health check timeout on dis2)
-- Investigate `airgapped-existing-reg` failure (Save ACM images exit=2)
+- Commit verify fix (pending user approval)
+- Rebuild pool1 (dis1) and pool2 (dis2) to clear broken Quay state
+- Re-run full gotest after rebuild
+- Verify `grep -q` fix passes on next negative-paths run
 
 ## Decisions / notes
 - Feature freeze in effect: bug fixes only
-- `reg_detect_existing()` now exits 0 on healthy registry (idempotent install)
-- All tests expecting install to abort on existing registry updated to expect success
-- OSUS error message now suggests waiting for CatalogSource sync
+- `reg_detect_existing()` exits 0 on healthy registry (idempotent install)
+- `.verified` sentinel was a regression from commit 1dc83a1 (Mar 11)
+- Quay on dis1/dis2 broken: needs pool rebuild
