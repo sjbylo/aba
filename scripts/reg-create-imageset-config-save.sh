@@ -24,11 +24,13 @@ mkdir -p save
 scripts/create-containers-auth.sh || exit 1
 
 # ISC regeneration guard:
-#   Regenerate if: ISC doesn't exist/empty OR .created marker is newer than ISC.
-#   Skip if: user edited the ISC after generation (ISC is newer than .created).
+#   Regenerate if: ISC doesn't exist/empty OR ISC is NOT strictly newer than .created.
+#   Skip if: user edited the ISC after generation (ISC is strictly newer than .created).
+#   Using "! ISC -nt .created" instead of ".created -nt ISC" so that equal timestamps
+#   also trigger regeneration (needed on platforms like System Z/s390x).
 #   The .created file is touched at the end of each generation cycle.
 #   This allows users to customize the ISC and run 'aba save' again without losing edits.
-if [ ! -s save/imageset-config-save.yaml -o save/.created -nt save/imageset-config-save.yaml ]; then
+if [ ! -s save/imageset-config-save.yaml -o ! save/imageset-config-save.yaml -nt save/.created ]; then
 	#rm -rf save/*  # Do not do this.  There may be image set archive files in thie dir which are still needed. 
 
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"

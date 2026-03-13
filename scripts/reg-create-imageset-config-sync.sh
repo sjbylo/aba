@@ -42,11 +42,13 @@ aba_debug "Creating sync/ directory"
 mkdir -p sync 
 
 # ISC regeneration guard:
-#   Regenerate if: ISC doesn't exist/empty OR .created marker is newer than ISC.
-#   Skip if: user edited the ISC after generation (ISC is newer than .created).
+#   Regenerate if: ISC doesn't exist/empty OR ISC is NOT strictly newer than .created.
+#   Skip if: user edited the ISC after generation (ISC is strictly newer than .created).
+#   Using "! ISC -nt .created" instead of ".created -nt ISC" so that equal timestamps
+#   also trigger regeneration (needed on platforms like System Z/s390x).
 #   The .created file is touched at the end of each generation cycle.
 #   This allows users to customize the ISC and run 'aba sync' again without losing edits.
-if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-config-sync.yaml ]; then
+if [ ! -s sync/imageset-config-sync.yaml -o ! sync/imageset-config-sync.yaml -nt sync/.created ]; then
 	aba_debug "Generating new imageset-config-sync.yaml"
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
