@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Create an install bundle and test it's working by installing SNO
 
-../test/lib.sh
+. ../test/lib.sh
 
 #TEST_HOST=mirror.example.com  # Adjust this as needed
 #BASE_DOM=example.com
