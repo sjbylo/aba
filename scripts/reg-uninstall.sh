@@ -138,7 +138,7 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 			docker)
 				aba_info "Removing Docker registry container and data ..."
 				podman rm -f registry || true
-				[ -d "$reg_root" ] && rm -rf "$reg_root"
+				[ -d "$reg_root" ] && $SUDO rm -rf "$reg_root"
 				;;
 			quay)
 				ensure_quay_registry
