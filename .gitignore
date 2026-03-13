@@ -38,6 +38,7 @@ mirror/.redhat-operator-index*
 mirror/mirror-registry-amd64.tar.gz
 mirror/sqlite3.tar
 mirror/.??*
+mirror/mirror
 /sno*
 /demo*
 /compact*
@@ -78,3 +79,5 @@ ai/SESSION_STATE.md
 test/func/screenshots/
 vmware.conf.bk
 xxx/
+mirror/regcreds.bk
+.index

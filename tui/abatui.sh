@@ -2434,7 +2434,7 @@ handle_action_view_isconf() {
 	log "Waiting for ImageSet config generation to complete"
 	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nThis may take a moment." 6 50
 	
-	if ! run_once -q -w -i "tui:isconf:generate"; then
+	if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf"; then
 			log "ERROR: ImageSet config generation failed"
 			show_run_once_error "tui:isconf:generate" "ImageSet Config Generation Failed"
 			return 0
@@ -2472,6 +2472,12 @@ This file should have been generated automatically." 0 0 || true
 
 handle_action_bundle() {
 	log "Handling action: Create Bundle"
+	
+	# Wait for background isconf to finish (avoid racing two make processes)
+	if ! run_once -p -i "tui:isconf:generate"; then
+		log "Waiting for background isconf to complete"
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+	fi
 	
 	# Get output path from user
 	local default_bundle="/tmp/ocp-bundle"
@@ -2592,6 +2598,12 @@ Continue with full bundle anyway?" 0 0
 
 handle_action_local_quay() {
 	log "Handling action: Local Quay Registry"
+	
+	# Wait for background isconf to finish (avoid racing two make processes)
+	if ! run_once -p -i "tui:isconf:generate"; then
+		log "Waiting for background isconf to complete"
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+	fi
 	
 	# Load existing values from mirror.conf
 	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
@@ -2756,6 +2768,12 @@ handle_action_local_docker() {
 handle_action_remote_quay() {
 	log "Handling action: Remote Quay Registry"
 	
+	# Wait for background isconf to finish (avoid racing two make processes)
+	if ! run_once -p -i "tui:isconf:generate"; then
+		log "Waiting for background isconf to complete"
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+	fi
+	
 	# Load existing values from mirror.conf
 	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 		source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
@@ -2840,6 +2858,12 @@ handle_action_remote_quay() {
 
 handle_action_save() {
 	log "Handling action: Save Images"
+	
+	# Wait for background isconf to finish (avoid racing two make processes)
+	if ! run_once -p -i "tui:isconf:generate"; then
+		log "Waiting for background isconf to complete"
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+	fi
 	
 	# No form needed - just confirm and execute using global auto-answer setting
 	local y_flag=""
@@ -3209,9 +3233,6 @@ summary_apply() {
 		DIALOG_RC="back"
 		return
 	fi
-	
-	# Remove old ImageSet config files to force regeneration with current version
-	rm -f "$ABA_ROOT/mirror/save/imageset-config-save.yaml" 2>/dev/null || true
 	
 	# Reset and start isconf generation in background (non-blocking)
 	# Reset ensures regeneration if user changes operators and comes back
