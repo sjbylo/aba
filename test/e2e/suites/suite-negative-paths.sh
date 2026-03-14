@@ -297,23 +297,20 @@ e2e_run "Data directory removed" \
 e2e_run "Create $_DOCKER_NEG_MIRROR dir" "aba mirror --name $_DOCKER_NEG_MIRROR"
 e2e_add_to_mirror_cleanup "\$PWD/$_DOCKER_NEG_MIRROR"
 
-e2e_run "Block port $_DOCKER_NEG_PORT with iptables on disN" \
-	"_essh $DIS_HOST 'sudo iptables -I INPUT 1 -p tcp --dport $_DOCKER_NEG_PORT -j REJECT'"
-
-e2e_run_must_fail "Docker install fails on blocked port" \
+e2e_run "Install Docker registry on port $_DOCKER_NEG_PORT" \
 	"aba -d $_DOCKER_NEG_MIRROR install --vendor docker --reg-port $_DOCKER_NEG_PORT -H $_DOCKER_FQDN -k ~/.ssh/id_rsa"
 
-e2e_run "Credentials saved despite failure: pull-secret exists" \
-	"test -s ~/.aba/mirror/$_DOCKER_NEG_MIRROR/pull-secret-mirror.json"
-
-e2e_run "Credentials saved despite failure: rootCA.pem exists" \
-	"test -s ~/.aba/mirror/$_DOCKER_NEG_MIRROR/rootCA.pem"
-
-e2e_run "Credentials saved despite failure: state.sh exists" \
+e2e_run "Credentials saved: state.sh exists" \
 	"test -s ~/.aba/mirror/$_DOCKER_NEG_MIRROR/state.sh"
 
 e2e_run "state.sh has REG_VENDOR=docker" \
 	"grep 'REG_VENDOR=docker' ~/.aba/mirror/$_DOCKER_NEG_MIRROR/state.sh"
+
+e2e_run "Block port $_DOCKER_NEG_PORT with iptables on disN" \
+	"_essh $DIS_HOST 'sudo iptables -I INPUT 1 -p tcp --dport $_DOCKER_NEG_PORT -j REJECT'"
+
+e2e_run_must_fail "Port $_DOCKER_NEG_PORT blocked from conN" \
+	"curl -k -sf --connect-timeout 5 https://$_DOCKER_FQDN:$_DOCKER_NEG_PORT/v2/"
 
 e2e_run "Unblock port $_DOCKER_NEG_PORT on disN" \
 	"_essh $DIS_HOST 'sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT'"

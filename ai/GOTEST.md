@@ -23,6 +23,13 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous monito
   - Root cause analysis for each failure
   - Proposed fixes (in a plan, ready for user approval)
 - Do not add band-aids to any code, always find the root cause first!
+- **Be persistent** — if the shell or tools fail transiently (empty output, aborted commands,
+  connectivity loss), retry immediately. Do NOT stop the monitoring loop or wait for the user.
+  Transient failures (e.g. laptop restart, IDE reconnect) are expected; the dispatcher keeps
+  running independently. Retry with exponential backoff and resume polling as soon as the shell
+  recovers.
+- **Use `~/bin/notify.sh`** to send Telegram notifications while the user is AFK.
+  Only use it during gotest (not when the user is present in the chat).
 
 ## How to find this again
 
