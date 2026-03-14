@@ -98,7 +98,7 @@ source "$_RUNNER_DIR/lib/setup.sh"
 
 # Wasteful dirs: test data dirs (--data-dir / reg roots) to remove on conN and disN.
 # Add new dirs here when suites create them so cleanup stays in sync.
-_E2E_WASTEFUL_DIRS='~/my-quay-mirror-test1 ~/mymirror-data ~/docker-reg ~/aba/e2e-docker-test ~/aba/e2e-docker-neg'
+_E2E_WASTEFUL_DIRS="$HOME/my-quay-mirror-test1 $HOME/mymirror-data $HOME/docker-reg $HOME/aba/e2e-docker-test $HOME/aba/e2e-docker-neg"
 
 # Stale firewall ports: test suites add these with --permanent; they persist
 # across firewalld restarts and must be explicitly removed before each suite.
@@ -475,7 +475,15 @@ _pre_suite_cleanup() {
 			[ -z "$abs_path" ] && continue
 			echo "    $target: aba -y -d $abs_path delete"
 			if ! ( _essh "$target" \
-				"[ -d '$abs_path' ] && aba -y -d '$abs_path' delete || echo '  (dir not found -- already cleaned)'" \
+				"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' delete; else
+					echo '  (dir not found -- sweeping vSphere for orphan VMs)'
+					_cname=\$(basename '$abs_path')
+					for vm in \$(govc find '${VC_FOLDER:-/Datacenter/vm/aba-e2e}' -type m -name \"\${_cname}-*\" 2>/dev/null); do
+						echo \"    Destroying orphan: \$vm\"
+						govc vm.power -off \"\$vm\" 2>/dev/null || true
+						govc vm.destroy \"\$vm\" 2>/dev/null || true
+					done
+				fi" \
 				2>&1 ); then
 				echo "  WARNING: cleanup SSH failed for $target:$abs_path"
 				_cleanup_ok=""
