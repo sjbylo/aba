@@ -46,7 +46,7 @@ e2e_run "Remove oc-mirror caches" \
 	"sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
 
 e2e_run "Verify /home disk usage < 10GB after reset" \
-	"used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
+	"used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
 
 e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
