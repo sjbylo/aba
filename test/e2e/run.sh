@@ -244,6 +244,63 @@ _ensure_govc() {
 
 _SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
+_ssh_con() {
+	local pool_num="$1"; shift
+	local user="${CON_SSH_USER:-steve}"
+	local host="con${pool_num}.${VM_BASE_DOMAIN}"
+	ssh $_SSH_OPTS "${user}@${host}" "$@"
+}
+
+_sweep_pool_orphan_vms() {
+	local pool_num="$1"
+	local _base="${VC_FOLDER_BASE:-/Datacenter/vm/aba-e2e}"
+	local _pfolder="${_base}/pool${pool_num}"
+	local _known_vms="con${pool_num} dis${pool_num}"
+
+	local _all_vms
+	_all_vms=$(govc find "$_pfolder" -type m 2>/dev/null) || return 0
+	[ -z "$_all_vms" ] && return 0
+
+	while IFS= read -r _vm; do
+		[ -z "$_vm" ] && continue
+		local _vmname; _vmname=$(basename "$_vm")
+		local _is_known=""
+		for _k in $_known_vms; do
+			[ "$_vmname" = "$_k" ] && _is_known=1 && break
+		done
+		[ -n "$_is_known" ] && continue
+
+		echo "    Destroying orphan VM: $_vm"
+		govc vm.power -off "$_vm" 2>/dev/null || true
+		govc vm.destroy "$_vm" 2>/dev/null || true
+	done <<< "$_all_vms"
+}
+
+# Process .cleanup and .mirror-cleanup files on a pool before wiping state.
+_process_pool_cleanup_files() {
+	local pool_num="$1"
+	_ssh_con "$pool_num" "
+		_logs=\"\$HOME/aba/test/e2e/logs\"
+		for f in \"\$_logs\"/*.cleanup \"\$_logs\"/*.mirror-cleanup; do
+			[ -f \"\$f\" ] || continue
+			echo \"    Processing \$(basename \"\$f\") ...\"
+			_ssh_opts='-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
+			while IFS=' ' read -r target abs_path; do
+				[ -z \"\$abs_path\" ] && continue
+				if echo \"\$f\" | grep -q '\.cleanup$'; then
+					echo \"      \$target: aba -y -d \$abs_path delete\"
+					ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete\" 2>&1 || true
+				else
+					echo \"      \$target: aba -y -d \$abs_path uninstall\"
+					ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall\" 2>&1 || true
+				fi
+			done < \"\$f\"
+			rm -f \"\$f\"
+		done
+	" 2>/dev/null || true
+	_sweep_pool_orphan_vms "$pool_num"
+}
+
 # --- Shared: create a tmux dashboard with one tail pane per pool --------------
 # Usage: _create_tmux_dashboard SESSION_NAME NUM_POOLS LOG_FILE
 _create_tmux_dashboard() {
@@ -1179,16 +1236,6 @@ if [ -n "$CLI_RESCHEDULE" ]; then
 	exit 0
 fi
 
-# --- SSH helpers --------------------------------------------------------------
-
-_SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-_ssh_con() {
-	local pool_num="$1"; shift
-	local user="${CON_SSH_USER:-steve}"
-	local host="con${pool_num}.${VM_BASE_DOMAIN}"
-	ssh $_SSH_OPTS "${user}@${host}" "$@"
-}
-
 # --- Check if VMs are ready --------------------------------------------------
 
 _vms_ready() {
@@ -1510,64 +1557,6 @@ _detect_running_and_completed() {
 			done <<< "$rc_files"
 		fi
 	done
-}
-
-# --- Force-clean helpers ------------------------------------------------------
-
-# Sweep a pool folder for orphan cluster VMs and destroy them.
-# Only conN/disN VMs should exist in pool folders; anything else is an orphan.
-_sweep_pool_orphan_vms() {
-	local pool_num="$1"
-	local _base="${VC_FOLDER_BASE:-/Datacenter/vm/aba-e2e}"
-	local _pfolder="${_base}/pool${pool_num}"
-	local _known_vms="con${pool_num} dis${pool_num}"
-
-	local _all_vms
-	_all_vms=$(govc find "$_pfolder" -type m 2>/dev/null) || return 0
-	[ -z "$_all_vms" ] && return 0
-
-	while IFS= read -r _vm; do
-		[ -z "$_vm" ] && continue
-		local _vmname; _vmname=$(basename "$_vm")
-		# Skip known pool infrastructure VMs
-		local _is_known=""
-		for _k in $_known_vms; do
-			[ "$_vmname" = "$_k" ] && _is_known=1 && break
-		done
-		[ -n "$_is_known" ] && continue
-
-		echo "    Destroying orphan VM: $_vm"
-		govc vm.power -off "$_vm" 2>/dev/null || true
-		govc vm.destroy "$_vm" 2>/dev/null || true
-	done <<< "$_all_vms"
-}
-
-# Process .cleanup and .mirror-cleanup files on a pool before wiping state.
-# Runs from the bastion — SSHes to conN, which SSHes to targets for deletion.
-# Falls back to local govc orphan sweep if cleanup files can't be processed.
-_process_pool_cleanup_files() {
-	local pool_num="$1"
-	_ssh_con "$pool_num" "
-		_logs=\"\$HOME/aba/test/e2e/logs\"
-		for f in \"\$_logs\"/*.cleanup \"\$_logs\"/*.mirror-cleanup; do
-			[ -f \"\$f\" ] || continue
-			echo \"    Processing \$(basename \"\$f\") ...\"
-			_ssh_opts='-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
-			while IFS=' ' read -r target abs_path; do
-				[ -z \"\$abs_path\" ] && continue
-				if echo \"\$f\" | grep -q '\.cleanup$'; then
-					echo \"      \$target: aba -y -d \$abs_path delete\"
-					ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete\" 2>&1 || true
-				else
-					echo \"      \$target: aba -y -d \$abs_path uninstall\"
-					ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall\" 2>&1 || true
-				fi
-			done < \"\$f\"
-			rm -f \"\$f\"
-		done
-	" 2>/dev/null || true
-	# Safety net: sweep vSphere for any VMs that slipped through
-	_sweep_pool_orphan_vms "$pool_num"
 }
 
 # --- Force-clean: wipe rc files and tmux sessions -----------------------------
