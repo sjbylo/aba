@@ -18,49 +18,16 @@ flowchart TD
         GW["Gateway<br/>10.0.1.1"]
     end
 
-    subgraph pool1 [Pool 1 — p1.example.com]
-        con1["con1.example.com<br/>Lab: 10.0.2.10<br/>VLAN: 10.10.20.1<br/>Internet: ens256"]
-        dis1["dis1.example.com<br/>Lab: 10.0.2.11<br/>VLAN: 10.10.20.2<br/>No internet"]
-        cluster1["Cluster VMs<br/>Node: 10.0.2.12<br/>API VIP: 10.0.2.13<br/>Apps VIP: 10.0.2.14"]
+    subgraph poolN ["Pool N — pN.example.com (x4 pools)"]
+        conN["conN.example.com<br/>Lab: 10.0.2.N0 (ens192, DHCP)<br/>VLAN: 10.10.20.x (ens224.10, static)<br/>Internet: ens256 (DHCP)<br/>Services: dnsmasq, registry:8443, NAT"]
+        disN["disN.example.com<br/>Lab: 10.0.2.N1 (ens192, DHCP)<br/>VLAN: 10.10.20.x (ens224.10, static)<br/>No internet (ens256 disabled)"]
+        clusterN["Cluster VMs<br/>Node/SNO: 10.0.2.N2<br/>API VIP: 10.0.2.N3<br/>Apps VIP: 10.0.2.N4"]
     end
 
-    subgraph pool2 [Pool 2 — p2.example.com]
-        con2["con2.example.com<br/>Lab: 10.0.2.20<br/>VLAN: 10.10.20.3<br/>Internet: ens256"]
-        dis2["dis2.example.com<br/>Lab: 10.0.2.21<br/>VLAN: 10.10.20.4<br/>No internet"]
-        cluster2["Cluster VMs<br/>Node: 10.0.2.22<br/>API VIP: 10.0.2.23<br/>Apps VIP: 10.0.2.24"]
-    end
-
-    subgraph pool3 [Pool 3 — p3.example.com]
-        con3["con3.example.com<br/>Lab: 10.0.2.30<br/>VLAN: 10.10.20.5<br/>Internet: ens256"]
-        dis3["dis3.example.com<br/>Lab: 10.0.2.31<br/>VLAN: 10.10.20.6<br/>No internet"]
-        cluster3["Cluster VMs<br/>Node: 10.0.2.32<br/>API VIP: 10.0.2.33<br/>Apps VIP: 10.0.2.34"]
-    end
-
-    subgraph pool4 [Pool 4 — p4.example.com]
-        con4["con4.example.com<br/>Lab: 10.0.2.40<br/>VLAN: 10.10.20.7<br/>Internet: ens256"]
-        dis4["dis4.example.com<br/>Lab: 10.0.2.41<br/>VLAN: 10.10.20.8<br/>No internet"]
-        cluster4["Cluster VMs<br/>Node: 10.0.2.42<br/>API VIP: 10.0.2.43<br/>Apps VIP: 10.0.2.44"]
-    end
-
-    RunSh -->|SSH| con1
-    RunSh -->|SSH| con2
-    RunSh -->|SSH| con3
-    RunSh -->|SSH| con4
-
-    con1 -->|"VLAN 10.10.20.0/24"| dis1
-    con2 -->|"VLAN 10.10.20.0/24"| dis2
-    con3 -->|"VLAN 10.10.20.0/24"| dis3
-    con4 -->|"VLAN 10.10.20.0/24"| dis4
-
-    con1 -->|"Lab 10.0.0.0/20"| cluster1
-    con2 -->|"Lab 10.0.0.0/20"| cluster2
-    con3 -->|"Lab 10.0.0.0/20"| cluster3
-    con4 -->|"Lab 10.0.0.0/20"| cluster4
-
-    DNS_NTP -.->|upstream| con1
-    DNS_NTP -.->|upstream| con2
-    DNS_NTP -.->|upstream| con3
-    DNS_NTP -.->|upstream| con4
+    RunSh -->|SSH| conN
+    conN -->|"VLAN 10.10.20.0/24"| disN
+    conN -->|"Lab 10.0.0.0/20"| clusterN
+    DNS_NTP -.->|upstream| conN
 ```
 
 ### Network Segments
