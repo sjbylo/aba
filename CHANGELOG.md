@@ -1,13 +1,68 @@
 ## [Unreleased]
 
 ### New Features
+- **Named mirrors** - `aba mirror --name mymirror` creates an isolated mirror directory (like named clusters). Multiple enclaves each get their own credentials and config.
+- **Existing-registry registration** - Register an external registry with `--pull-secret-mirror` and `--ca-cert` flags. ABA stores credentials locally and never touches the registry. Deregister with `aba unregister`.
 - **Docker registry as first-class citizen** - New `reg_vendor` setting in `mirror.conf` (values: `auto`, `quay`, `docker`). `auto` selects Quay on x86_64/s390x/ppc64le, Docker on arm64. All install/uninstall commands now work through a unified dispatcher (`reg-install.sh`) that handles vendor selection, local/remote deployment, and the full lifecycle. Both Quay and Docker registries support remote installation via SSH.
+- **Expanded CLI options** - New flags: `--vendor`, `--reg-port`, `--reg-host`, `-A`/`--api-vip`, `-G`/`--ingress-vip`, `-W`/`--num-workers`, `--num-masters`, `--vlan`, `--ssh-key`, `--proxy`, `--no-proxy`, `--data-disk-gb`, `-Y`/`--yes-permanent`. Removed fake short flags that weren't wired up.
+- **Idempotent registry install** - If the registry is already healthy, `aba install` continues instead of failing.
+- **Wildcard DNS detection** - DNS checks now detect wildcard entries and soften failures to warnings instead of aborting.
+- **Shared catalog index** - Catalog index files stored in `aba/.index/` with symlinks per mirror dir, avoiding redundant downloads across mirrors.
+- **ISC dependency tracking** - ISC regeneration respects operator and `mirror.conf` changes; configurable catalog TTL.
+- **Single RPM install batch** - All RPMs installed in one `dnf` call instead of individually.
+- **Release hotfix mode** - `release.sh --hotfix` for quick patch releases.
 
 ### Changed
-- **Registry credentials moved to persistent location** - `mirror/regcreds/` contents (pull secret, root CA) now stored in `~/.aba/mirror/<mirror-name>/`, surviving `aba clean` and `aba reset`. A convenience symlink `mirror/regcreds -> ~/.aba/mirror/mirror/` is created for human browsing.
+- **Registry credentials moved to persistent location** - `mirror/regcreds/` contents (pull secret, root CA) now stored in `~/.aba/mirror/<mirror-name>/`, surviving `aba clean` and `aba reset`. A convenience symlink `mirror/regcreds -> ~/.aba/mirror/mirror/` is created for browsing.
 - **Multi-mirror support foundation** - New `mirror_name` setting in `cluster.conf` (default: `mirror`) binds a cluster to a specific mirror directory. Credentials scoped per mirror name.
-- **Registry script architecture** - Monolithic `reg-install.sh` (457 lines) refactored into thin dispatcher + shared library (`reg-common.sh`) + vendor-specific scripts (`reg-install-quay.sh`, `reg-install-docker.sh`) + generic SSH orchestrator (`reg-install-remote.sh`). Same pattern for uninstall. Shared functions extracted and improved (getent fallback for DNS, unified firewall handling).
-- **TUI uses unified dispatcher** - Registry type toggle in TUI settings now writes `reg_vendor` to `mirror.conf`. All install/uninstall commands use the unified `aba -d mirror install`/`uninstall` path.
+- **Registry script architecture** - Monolithic `reg-install.sh` refactored into thin dispatcher + shared library (`reg-common.sh`) + vendor-specific scripts (`reg-install-quay.sh`, `reg-install-docker.sh`) + generic SSH orchestrator (`reg-install-remote.sh`). Same pattern for uninstall. Shared functions extracted and improved (getent fallback for DNS, unified firewall handling).
+- **Makefiles consolidated** - Mirror and cluster Makefiles moved to `templates/`; mirror flags respect `-d`.
+- **Marker rename** - `.installed`/`.uninstalled` markers renamed to `.available`/`.unavailable` for clarity.
+- **Vendor-neutral messages** - Registry log and error messages no longer assume Quay.
+
+### TUI
+- **Settings persist** - Registry type (Quay/Docker) and "ask before big steps" saved to and reloaded from config files, including values with inline comments.
+- **Exit button on Pull Secret dialog** - Escape is no longer the only way out.
+- **ISC race condition fixed** - Background ISC generation no longer deletes save-dir ISC prematurely; System Z timestamp equality handled.
+- **Basket works on fresh install** - Empty basket no longer appears when no operators are selected on first run.
+
+### Bug Fixes
+- **Quay resource check warns, not aborts** - Pre-flight CPU/memory check logs a warning instead of blocking install.
+- **Docker `--network host`** - Docker registry and pool registries use host networking, fixing pasta/hairpin issues.
+- **CLI download race fixed** - `oc-mirror` and other CLI downloads complete before catalog fetches start.
+- **Stale credential detection** - Fresh installs no longer blocked by leftover credentials from previous runs.
+- **`aba reset` guarded** - Won't reset if registry is still installed; `aba clean` removes working-dir properly.
+- **`grep -q` removed everywhere** - Eliminates SIGPIPE killing bash in pipelines.
+- **Shutdown respects `-y`** - Cluster shutdown prompt honors `-y` flag and `ask=false`.
+- **Retry on cluster shutdown** - Retry logic and failure reporting added.
+- **Tarball extraction hardened** - Removed `|| true` masks; added gzip integrity guards.
+- **Remote registry fixes** - Correct auth/data-dir paths, Docker image tarball existence check before scp, uninstall fallbacks.
+- **Stale-state detection** - Reordered before FQDN check in registry install; Quay SSH fallback added.
+- **ISC regeneration guard for System Z** - Handles timestamp equality on platforms with coarse clocks.
+- **TUI vendor setting applied correctly** - Docker selection no longer lost when `mirror.conf` doesn't exist yet.
+- **TUI inline-comment handling** - Settings loaded from config files that have trailing `# comments`.
+- **Double `[ABA]` prefix removed** - Clean log output.
+- **OSUS error improved** - Mentions CatalogSource sync delay.
+- **Registry UX** - Breadcrumb navigation, reinstall warnings, load save-dir guard.
+- **Version mismatch check** - No longer skips `save/` when `sync/` is auto-generated.
+- **`run_once` validation** - Uses saved command+CWD pair for accurate state tracking.
+- **CLI downloads skipped for housekeeping** - `aba clean`, `aba reset`, and similar commands no longer trigger downloads.
+- **Catalog YAML always regenerated** - Fresh index download triggers ISC regeneration.
+- **`reg_detect_existing()` fixed** - No longer blocks fresh installs due to stale credentials.
+- **Docker remote install** - Ensures `docker-reg-image.tgz` exists before scp.
+
+### E2E Testing
+- **New test framework** - Pool-aware dispatch, golden VM snapshots, crash detection, checkpoint resume, `--pool N` flag, tmux-based suites.
+- **Negative-paths suite** - Tests for blocked ports, stale state, missing configs.
+- **Regression tests** - stdout purity, mirror reset, save/load, bare-metal ISO, idempotent install.
+- **Old v1 framework removed** - `test/e2e-v1` deleted.
+- **E2E README with network diagram** - Documents pool topology and test architecture.
+
+### TUI Automated Tests
+- **Centralised keystroke helpers** - `send_enter`, `send_tab_enter`, `send_input`, `send_tab_tab_enter`, `send_tab_tab_tab_enter` with configurable pause before Enter.
+- **Channel and version verified in ISC** - Every ISC verification asserts expected channel and OCP version.
+- **Varied channel/version selections** - Tests alternate between stable/Latest, fast/Previous, and candidate to catch regressions.
+- **Faster action tests** - `run_and_interrupt` detects oc-mirror output and sends Ctrl-C immediately instead of waiting 90s.
 
 ---
 
