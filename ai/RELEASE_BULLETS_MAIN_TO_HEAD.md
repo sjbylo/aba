@@ -41,16 +41,3 @@
 - **Double `[ABA]` prefix removed** – Clean log output.
 - **Breadcrumb and reinstall warnings** – Registry UX improved with clear context.
 
-## E2E testing
-
-- **New E2E framework** – Pool-aware dispatch, golden VM snapshots, crash detection, checkpoint resume, `--pool N` flag, tmux-based suites.
-- **Negative-paths suite** – Tests for blocked ports, stale state, missing configs.
-- **Regression tests** – stdout purity, mirror reset, save/load, bare-metal ISO, idempotent install.
-- **Old v1 framework removed.**
-
-## TUI automated tests
-
-- **Centralised keystroke helpers** – `send_enter`, `send_tab_enter`, `send_input`, `send_tab_tab_enter`, `send_tab_tab_tab_enter` with 1s pause before Enter. Change timing in one place.
-- **Channel and version verified in ISC** – Every ISC verification checks the expected channel and OCP version.
-- **Varied channel/version selections** – Tests alternate between stable/Latest, fast/Previous, and candidate to catch regressions.
-- **Faster action tests** – `run_and_interrupt` detects oc-mirror output and Ctrl-Cs immediately instead of waiting 90s.
