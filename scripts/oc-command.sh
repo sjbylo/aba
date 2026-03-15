@@ -15,6 +15,8 @@ echo "$cmd" | grep "^oc " && cmd=$(echo "$cmd" | cut -f2-  -d" ")  # Fix command
 #aba_info "Downloading CLI installation binaries"
 #scripts/cli-install-all.sh --wait oc
 
-aba_info "Running command: oc --kubeconfig=iso-agent-based/auth/kubeconfig $cmd"
-eval oc --kubeconfig=iso-agent-based/auth/kubeconfig $cmd
+export KUBECONFIG=iso-agent-based/auth/kubeconfig
+
+aba_info "Running command: oc $cmd"
+eval oc $cmd
 

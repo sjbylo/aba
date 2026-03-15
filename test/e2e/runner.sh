@@ -1,16 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # E2E Test Framework v2 -- Suite Runner (runs on conN inside tmux)
 # =============================================================================
-# Receives a list of suites from run.sh (via tmux send-keys), executes them
-# sequentially, reverts disN snapshot before each suite, prints per-pool
-# summary at the end.
+# Runs a SINGLE suite.  run.sh dispatches one suite at a time to each pool;
+# when the suite finishes, run.sh dispatches the next one.
 #
-# This script runs INSIDE the persistent tmux session on conN.
+# This script runs INSIDE a tmux session on conN (session: e2e-suite, same on all hosts).
 # Interactive mode is always on -- failures pause and wait for user input.
 #
 # Usage (sent by run.sh via tmux send-keys):
-#   bash ~/aba/test/e2e/runner.sh POOL_NUM suite1 suite2 ...
+#   bash ~/aba/test/e2e/runner.sh POOL_NUM suite_name
+#
+# Exit code is written to $E2E_RC_PREFIX-<suite>.rc so run.sh can poll it.
 #
 # Environment:
 #   Config files (config.env, pools.conf) are scp'd to conN by run.sh.
@@ -21,44 +22,69 @@ set -u
 _RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$(cd "$_RUNNER_DIR/../.." && pwd)"
 
-LOCK_FILE="/tmp/e2e-runner.lock"
-RC_FILE="/tmp/e2e-runner.rc"
-
-# --- Concurrent run protection -----------------------------------------------
-
-if [ -f "$LOCK_FILE" ]; then
-	_lock_pid=$(cat "$LOCK_FILE" 2>/dev/null)
-	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
-		echo "ERROR: runner.sh already executing on $(hostname) (pid $_lock_pid). Aborting."
-		echo "255" > "$RC_FILE"
-		exit 1
-	fi
-	echo "  Stale lock file found (pid ${_lock_pid:-unknown} dead) -- removing."
-	rm -f "$LOCK_FILE"
-fi
-
-echo $$ > "$LOCK_FILE"
-trap 'rm -f "$LOCK_FILE"' EXIT
-rm -f "$RC_FILE"
+source "$_RUNNER_DIR/lib/constants.sh"
 
 # --- Parse arguments ----------------------------------------------------------
 
-if [ $# -lt 2 ]; then
-	echo "Usage: runner.sh POOL_NUM suite1 [suite2 ...]"
-	echo "1" > "$RC_FILE"
+_RUNNER_RESUME=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--resume) _RUNNER_RESUME=1; shift ;;
+		*) break ;;
+	esac
+done
+
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+	echo "Usage: runner.sh [--resume] POOL_NUM suite_name [retry]"
 	exit 1
 fi
 
 POOL_NUM="$1"; shift
 export POOL_NUM
-SUITES=("$@")
+SUITE="$1"; shift
+E2E_IS_RETRY="${1:-}"   # optional: "retry" when run.sh re-dispatched this suite after failure
 
-echo "${SUITES[*]}" > /tmp/e2e-last-suites
+LOCK_FILE="${E2E_RC_PREFIX}-${SUITE}.lock"
+RC_FILE="${E2E_RC_PREFIX}-${SUITE}.rc"
+
+# --- Concurrent run protection -----------------------------------------------
+
+_LOCK_MAX_AGE=86400  # 24 hours
+
+if [ -f "$LOCK_FILE" ]; then
+	read -r _lock_pid _lock_ts _ < "$LOCK_FILE" 2>/dev/null || true
+	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
+		echo "ERROR: runner.sh for suite '$SUITE' already executing on $(hostname) (pid $_lock_pid). Aborting."
+		echo "255" > "$RC_FILE"
+		exit 1
+	fi
+	# Auto-expire: if lock is older than 24h, treat as stale regardless
+	_now=$(date +%s)
+	if [ -n "$_lock_ts" ] && [ $(( _now - _lock_ts )) -lt "$_LOCK_MAX_AGE" ] 2>/dev/null; then
+		: # Lock is recent but PID is dead -- fall through to stale removal
+	fi
+	echo "  Stale lock file found (pid ${_lock_pid:-unknown} dead) -- removing."
+	rm -f "$LOCK_FILE"
+fi
+
+echo "$$ $(date +%s)" > "$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"' EXIT
+rm -f "$RC_FILE"
+
+# After framework.sh is sourced (below), the trap is upgraded to also
+# clean up clusters/mirrors in the cleanup lists.  This ensures VMs are deleted
+# even when the suite aborts, is killed, or hits an unhandled exit path.
+
+echo "$SUITE" > /tmp/e2e-last-suites
+
+# So the tmux window shows the suite name for all launch paths (dispatcher, restart, manual).
+# Tolerate failure: runner may be invoked outside tmux (e.g. direct bash invocation)
+tmux rename-window "$SUITE" 2>/dev/null || true
 
 echo ""
 echo "========================================"
 echo "  E2E Runner on $(hostname) (pool $POOL_NUM)"
-echo "  Suites: ${SUITES[*]}"
+echo "  Suite: $SUITE"
 echo "  PID: $$"
 echo "========================================"
 echo ""
@@ -70,9 +96,112 @@ source "$_RUNNER_DIR/lib/config-helpers.sh"
 source "$_RUNNER_DIR/lib/vm-helpers.sh"
 source "$_RUNNER_DIR/lib/setup.sh"
 
-# Source config.env
+# Wasteful dirs: test data dirs (--data-dir / reg roots) to remove on conN and disN.
+# Add new dirs here when suites create them so cleanup stays in sync.
+_E2E_WASTEFUL_DIRS="$HOME/my-quay-mirror-test1 $HOME/mymirror-data $HOME/docker-reg $HOME/aba/e2e-docker-test $HOME/aba/e2e-docker-neg"
+
+# Stale firewall ports: test suites add these with --permanent; they persist
+# across firewalld restarts and must be explicitly removed before each suite.
+# Add new ports here when suites open them so cleanup stays in sync.
+_E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 80/tcp"
+
+_cleanup_wasteful_dirs_local() {
+	rm -rf $_E2E_WASTEFUL_DIRS
+	# ABA-extracted CLI tools; suite reinstalls via setup_aba_from_scratch → make install
+	rm -rf ~/bin
+	# oc-mirror cache and stale mirror state (same cleanup as disN gets)
+	rm -rf ~/.oc-mirror ~/.cache/agent
+}
+
+# Reset firewall on conN: remove stale test ports, preserve pool registry (8443).
+_reset_con_firewall() {
+	echo "  Resetting firewall ports on conN ..."
+	local _removed=""
+	for _port in $_E2E_STALE_FW_PORTS; do
+		case "$_port" in
+			8443/tcp|22/tcp) continue ;;  # pool registry + ssh — do not touch
+		esac
+		if sudo firewall-cmd --query-port="$_port" --permanent &>/dev/null; then
+			sudo firewall-cmd --remove-port="$_port" --permanent
+			_removed="$_removed $_port"
+		fi
+	done
+	if [ -n "$_removed" ]; then
+		sudo firewall-cmd --reload
+		echo "  Removed stale ports:$_removed"
+	fi
+
+	# Verify: only pool registry port should remain
+	local _ports _unexpected=""
+	_ports=$(sudo firewall-cmd --list-ports 2>/dev/null)
+	for _p in $_ports; do
+		case "$_p" in 8443/tcp|22/tcp) ;; *) _unexpected="$_unexpected $_p" ;; esac
+	done
+	if [ -n "$_unexpected" ]; then
+		echo "  WARNING: conN has unexpected firewall ports after reset:$_unexpected"
+	else
+		echo "  conN firewall verified: clean"
+	fi
+}
+
+# Ensure the pool-registry container is running on conN.
+# If a suite (e.g. create-bundle-to-disk) removed it, restart from existing data.
+_ensure_pool_registry() {
+	[ -d "$POOL_REG_DIR" ] || return 0
+
+	if podman ps --format '{{.Names}}' 2>/dev/null | grep -q '^pool-registry$'; then
+		echo "  pool-registry: running"
+		return 0
+	fi
+
+	echo "  pool-registry: NOT running -- restarting from $POOL_REG_DIR ..."
+
+	# Remove stale container entry if it exists (stopped/dead)
+	podman rm -f pool-registry 2>/dev/null || true
+
+	local _reg_host
+	_reg_host="$(hostname -f)"
+
+	podman run -d \
+		-p 8443:5000 \
+		--restart=always \
+		--name pool-registry \
+		-v "${POOL_REG_DIR}/data:/var/lib/registry:Z" \
+		-v "${POOL_REG_DIR}/certs:/certs:Z" \
+		-v "${POOL_REG_DIR}/auth:/auth:Z" \
+		-e REGISTRY_HTTP_ADDR=0.0.0.0:5000 \
+		-e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
+		-e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
+		-e REGISTRY_AUTH=htpasswd \
+		-e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" \
+		-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
+		docker.io/library/registry:latest
+
+	sleep 2
+	if curl -sfk -o /dev/null -u "init:p4ssw0rd" "https://${_reg_host}:8443/v2/"; then
+		echo "  pool-registry: restarted successfully"
+	else
+		echo "  WARNING: pool-registry restart failed -- curl check unsuccessful"
+	fi
+}
+
+# Upgrade EXIT trap: clean up clusters/mirrors in cleanup lists on ANY exit.
+# _E2E_SUITE_NAME is set inside the child bash process (the suite script),
+# so we must set cleanup file paths explicitly from runner.sh's $SUITE var.
+_runner_cleanup() {
+	_E2E_CLEANUP_FILE="${E2E_LOG_DIR}/${SUITE}.cleanup"
+	_E2E_MIRROR_CLEANUP_FILE="${E2E_LOG_DIR}/${SUITE}.mirror-cleanup"
+	e2e_cleanup_clusters || true
+	e2e_cleanup_mirrors || true
+	rm -f "$LOCK_FILE"
+}
+trap '_runner_cleanup' EXIT
+
+# Source config.env (set -a exports all variables so child processes -- suites -- inherit them)
 if [ -f "$_RUNNER_DIR/config.env" ]; then
+	set -a
 	source "$_RUNNER_DIR/config.env"
+	set +a
 fi
 
 # Setup framework environment
@@ -82,17 +211,32 @@ e2e_setup
 export _E2E_INTERACTIVE=1
 
 # --- Bootstrap: ensure govc is available -------------------------------------
+# Set E2E_SKIP_SNAPSHOT_REVERT=1 for lightweight suites (e.g. dummy-pass/fail)
+# that don't need VMware infrastructure.
+# govc is needed for: snapshot revert (opt-in via E2E_USE_SNAPSHOT_REVERT=1),
+# and cluster VM operations (aba delete uses govc underneath).
 
-if ! command -v govc &>/dev/null; then
-	echo "  Bootstrapping govc ..."
-	cd "$_ABA_ROOT" && aba --dir cli ~/bin/govc
-	export PATH="$HOME/bin:$PATH"
-fi
+if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
+	if ! command -v govc &>/dev/null; then
+		echo "  Bootstrapping govc ..."
+		make -sC "$_ABA_ROOT/cli" govc || {
+			echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
+			exit 1
+		}
+		export PATH="$HOME/bin:$PATH"
+		command -v govc &>/dev/null || {
+			echo "  ERROR: govc not found in PATH after bootstrap." >&2
+			exit 1
+		}
+	fi
 
-# Source VMware credentials for snapshot revert
-_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
-if [ -f "$_vmconf" ]; then
-	set -a; source "$_vmconf"; set +a
+	# Source VMware credentials for snapshot revert
+	_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+	if [ -f "$_vmconf" ]; then
+		set -a; source "$_vmconf"; set +a
+	fi
+else
+	echo "  (Skipping govc bootstrap -- E2E_SKIP_SNAPSHOT_REVERT=1)"
 fi
 
 # --- Load per-pool overrides from pools.conf ----------------------------------
@@ -127,21 +271,48 @@ _revert_dis_snapshot() {
 	echo ""
 	echo "  Reverting $DIS_VM to snapshot '$snapshot' ..."
 
-	if ! govc snapshot.tree -vm "$DIS_VM" 2>/dev/null | grep -q "$snapshot"; then
-		echo "  WARNING: Snapshot '$snapshot' not found on $DIS_VM -- skipping revert"
-		return 0
+	local snap_out
+	if ! snap_out=$(govc snapshot.tree -vm "$DIS_VM" 2>&1); then
+		echo "  ERROR: govc snapshot.tree failed for $DIS_VM:" >&2
+		echo "  $snap_out" >&2
+		return 1
+	fi
+
+	if ! echo "$snap_out" | grep -q "$snapshot"; then
+		echo "  ERROR: Snapshot '$snapshot' not found on $DIS_VM." >&2
+		echo "  Available snapshots: $snap_out" >&2
+		return 1
 	fi
 
 	govc snapshot.revert -vm "$DIS_VM" "$snapshot" || { echo "  ERROR: revert $DIS_VM failed" >&2; return 1; }
+	# Power on may fail if VM is already on after revert — that's benign
 	govc vm.power -on "$DIS_VM" 2>/dev/null || true
 	sleep "${VM_BOOT_DELAY:-8}"
 
-	local dis_host="${DIS_SSH_USER:-steve}@${DIS_VM}.${VM_BASE_DOMAIN:-example.com}"
+	local dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
 	echo "  Waiting for SSH on $dis_host ..."
 	local elapsed=0
 	while [ $elapsed -lt 120 ]; do
 		if _essh -o BatchMode=yes -o ConnectTimeout=5 "$dis_host" -- "date" 2>/dev/null; then
 			echo "  SSH ready on $dis_host"
+			# Remove stale firewall ports that may have been baked into the snapshot
+			echo "  Resetting firewall ports on $DIS_VM ..."
+			for _port in $_E2E_STALE_FW_PORTS; do
+				_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1 || true
+			done
+			_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1 || true
+			# Fix VC_FOLDER on disN after snapshot revert (snapshot has base value,
+			# not pool-specific). The bundle/tar only copies aba repo files, not ~/.vmware.conf.
+			if [ -n "${VC_FOLDER:-}" ]; then
+				_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" 2>/dev/null \
+					&& echo "  Set VC_FOLDER=${VC_FOLDER} on $dis_host" \
+					|| echo "  WARNING: could not set VC_FOLDER on $dis_host"
+			fi
+			if [ -n "${VM_DATASTORE:-}" ]; then
+				_essh "$dis_host" "sed -i \"s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g\" ~/.vmware.conf" 2>/dev/null \
+					&& echo "  Set GOVC_DATASTORE=${VM_DATASTORE} on $dis_host" \
+					|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
+			fi
 			return 0
 		fi
 		sleep 5
@@ -151,108 +322,357 @@ _revert_dis_snapshot() {
 	return 1
 }
 
-# --- Execute suites -----------------------------------------------------------
+# --- Clean disN via ABA commands (replaces snapshot revert) -------------------
+# Instead of reverting disN to a VMware snapshot, use ABA's own cleanup to
+# return disN to a clean state.  This exercises aba uninstall/reset code paths
+# and is faster (no VM reboot + SSH wait).
+#
+# Covers: registry uninstall, filesystem cleanup, podman prune, cache removal,
+#         firewalld baseline restore, VC_FOLDER/GOVC_DATASTORE patch.
+#
+# Prerequisite: _pre_suite_cleanup has already run (deletes clusters/mirrors
+#               via .cleanup/.mirror-cleanup files).
 
-_overall_rc=0
-_start_time=$(date +%s)
+_cleanup_dis_aba() {
+	local dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+	echo ""
+	echo "  Cleaning disN ($dis_host) via ABA commands ..."
 
-declare -a _suite_names=()
-declare -a _suite_results=()
-declare -a _suite_durations=()
+	# 1. Clean up any registry from conN (Rule 6: uninstall from installer host).
+	#    Only ABA commands may remove .available — never rm it directly.
+	#    Use 'unregister' for externally-managed registries, 'uninstall' for ABA-installed.
+	local _regcreds="$HOME/.aba/mirror/mirror"
+	for _dir in "$_ABA_ROOT"; do
+		if [ -f "$_dir/mirror/.available" ]; then
+			if [ -f "$_regcreds/state.sh" ]; then
+				source "$_regcreds/state.sh"
+				if [ "${REG_VENDOR:-}" = "existing" ]; then
+					echo "  Deregistering existing registry (from $_dir) ..."
+					( cd "$_dir" && aba -y -d mirror unregister ) 2>&1 || echo "  WARNING: aba unregister failed in $_dir (rc=$?)"
+				else
+					echo "  Uninstalling registry via aba (from $_dir) ..."
+					( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
+				fi
+			else
+				echo "  WARNING: .available exists in $_dir but no state.sh -- running aba uninstall anyway"
+				( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
+			fi
+		fi
+	done
 
-for suite in "${SUITES[@]}"; do
-	suite_file="$_RUNNER_DIR/suites/suite-${suite}.sh"
-	if [ ! -f "$suite_file" ]; then
-		echo "  ERROR: Suite file not found: $suite_file"
-		_suite_names+=("$suite")
-		_suite_results+=("FAIL")
-		_suite_durations+=("0")
-		_overall_rc=1
-		continue
+	# 2. Stop containers first, then clean disN filesystem
+	echo "  Cleaning disN filesystem ..."
+	_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
+	_essh "$dis_host" "rm -rf ~/aba ~/bin" 2>&1 || true
+	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1 || true
+	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage ~/quay-install $_E2E_WASTEFUL_DIRS" 2>&1 || true
+	# Remove stale CA trust anchors from previous registry installs
+	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1 || true
+
+	# 3. Restore baseline system state (firewalld on, as created by setup-infra)
+	_essh "$dis_host" "sudo systemctl enable firewalld 2>/dev/null; sudo systemctl start firewalld 2>/dev/null" 2>&1 || true
+
+	# 4. Remove stale firewall ports from permanent config (survive restart)
+	echo "  Resetting firewall ports on disN ..."
+	for _port in $_E2E_STALE_FW_PORTS; do
+		_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1 || true
+	done
+	_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1 || true
+
+	# Verify no stale ports remain on disN
+	local _dis_fw_ports
+	_dis_fw_ports=$(_essh "$dis_host" "sudo firewall-cmd --list-ports" 2>/dev/null) || true
+	if [ -n "$_dis_fw_ports" ]; then
+		echo "  WARNING: disN still has firewall ports after reset: $_dis_fw_ports"
+	else
+		echo "  disN firewall verified: no test ports"
 	fi
 
-	echo ""
-	echo ""
-	printf '%0.s#' {1..80}; echo
-	printf '%0.s#' {1..80}; echo
-	printf '##  %-74s##\n' ""
-	printf '##  %-74s##\n' "SUITE: $suite"
-	printf '##  %-74s##\n' "Pool $POOL_NUM  ($(hostname))    $(date '+%Y-%m-%d %H:%M:%S')"
-	printf '##  %-74s##\n' ""
-	printf '%0.s#' {1..80}; echo
-	printf '%0.s#' {1..80}; echo
-	echo ""
+	# 5. Ensure VC_FOLDER / GOVC_DATASTORE are correct on disN
+	if [ -n "${VC_FOLDER:-}" ]; then
+		_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" 2>/dev/null \
+			&& echo "  Set VC_FOLDER=${VC_FOLDER} on $dis_host" \
+			|| echo "  WARNING: could not set VC_FOLDER on $dis_host"
+	fi
+	if [ -n "${VM_DATASTORE:-}" ]; then
+		_essh "$dis_host" "sed -i \"s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g\" ~/.vmware.conf" 2>/dev/null \
+			&& echo "  Set GOVC_DATASTORE=${VM_DATASTORE} on $dis_host" \
+			|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
+	fi
 
-	# Revert disN to clean state before each suite
-	_revert_dis_snapshot "pool-ready" || {
-		echo "  WARNING: disN revert failed -- proceeding anyway"
-	}
+	# 6. Verify clean state
+	if _essh "$dis_host" "[ ! -d ~/aba ] && ! podman ps -q 2>/dev/null | grep -q ." 2>/dev/null; then
+		echo "  disN cleanup verified: clean state"
+	else
+		echo "  WARNING: disN cleanup may be incomplete -- check manually"
+	fi
+
+	echo "  disN cleanup complete."
+}
+
+# --- Execute suite ------------------------------------------------------------
+
+_start_time=$(date +%s)
+
+suite_file="$_RUNNER_DIR/suites/suite-${SUITE}.sh"
+if [ ! -f "$suite_file" ]; then
+	echo "  ERROR: Suite file not found: $suite_file"
+	echo "1" > "$RC_FILE"
+	exit 1
+fi
+
+# Resume mode: point E2E_RESUME_FILE at the previous run's state file
+_STATE_FILE_PATH="${_RUNNER_DIR}/logs/${SUITE}.state"
+if [ -n "$_RUNNER_RESUME" ] && [ -f "$_STATE_FILE_PATH" ]; then
+	export E2E_RESUME_FILE="$_STATE_FILE_PATH"
+	echo "  Resuming from state file: $_STATE_FILE_PATH"
+	echo "  Tests previously passed will be skipped."
+else
+	unset E2E_RESUME_FILE 2>/dev/null || true
+	if [ -n "$_RUNNER_RESUME" ]; then
+		echo "  --resume requested but no state file found at $_STATE_FILE_PATH"
+		echo "  Running suite from the beginning."
+	fi
+fi
+
+# Reset terminal state
+printf '\033c'
+tmux clear-history 2>/dev/null
+
+printf '%0.s#' {1..80}; echo
+printf '%0.s#' {1..80}; echo
+printf '##  %-74s##\n' ""
+printf '##  %-74s##\n' "SUITE: $SUITE"
+printf '##  %-74s##\n' "Pool $POOL_NUM  ($(hostname))    $(date '+%Y-%m-%d %H:%M:%S')"
+printf '##  %-74s##\n' ""
+printf '%0.s#' {1..80}; echo
+printf '%0.s#' {1..80}; echo
+echo ""
+
+# --- Pre-suite cleanup: delete leftover clusters/mirrors from crashed/abandoned runs
+# Iterates ALL .cleanup and .mirror-cleanup files, not just the current suite's.
+# Each conN is a separate host and only one suite runs per pool, so any leftover
+# file is from a previously finished/crashed suite and is safe to process.
+_pre_suite_cleanup() {
+	local found=""
+
+	# Kill stale oc-mirror processes from previous suite (they hold port 55000)
+	if pkill -f 'oc-mirror' 2>/dev/null; then
+		echo "  Killed stale oc-mirror process(es)"
+		sleep 2
+	fi
+
+	# Purge all oc-mirror caches (can grow to many GB across nested dirs)
+	sudo find ~/ -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf
+	echo "  Purged oc-mirror caches"
+
+	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do
+		[ -f "$cleanup_file" ] || continue
+		found=1
+		echo "  Found leftover: $(basename "$cleanup_file") -- deleting clusters from cleanup list ..."
+		local target abs_path _cleanup_ok=1
+		while IFS=' ' read -r target abs_path; do
+			[ -z "$abs_path" ] && continue
+			echo "    $target: aba -y -d $abs_path delete"
+			if ! ( _essh "$target" \
+				"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' delete; else
+					echo '  (dir not found -- sweeping vSphere for orphan VMs)'
+					_cname=\$(basename '$abs_path')
+					for vm in \$(govc find '${VC_FOLDER:-/Datacenter/vm/aba-e2e}' -type m -name \"\${_cname}-*\" 2>/dev/null); do
+						echo \"    Destroying orphan: \$vm\"
+						govc vm.power -off \"\$vm\" 2>/dev/null || true
+						govc vm.destroy \"\$vm\" 2>/dev/null || true
+					done
+				fi" \
+				2>&1 ); then
+				echo "  WARNING: cleanup SSH failed for $target:$abs_path"
+				_cleanup_ok=""
+			fi
+		done < "$cleanup_file"
+		if [ -n "$_cleanup_ok" ]; then
+			rm -f "$cleanup_file"
+		else
+			echo "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+		fi
+	done
+
+	for cleanup_file in "${_RUNNER_DIR}"/logs/*.mirror-cleanup; do
+		[ -f "$cleanup_file" ] || continue
+		found=1
+		echo "  Found leftover: $(basename "$cleanup_file") -- uninstalling mirrors from cleanup list ..."
+		local target abs_path _mirror_ok=1
+		while IFS=' ' read -r target abs_path; do
+			[ -z "$abs_path" ] && continue
+			echo "    $target: aba -y -d $abs_path uninstall"
+			if ! ( _essh "$target" \
+				"[ -d '$abs_path' ] && aba -y -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
+				2>&1 ); then
+				echo "  WARNING: cleanup SSH failed for $target:$abs_path"
+				_mirror_ok=""
+			fi
+		done < "$cleanup_file"
+		if [ -n "$_mirror_ok" ]; then
+			rm -f "$cleanup_file"
+		else
+			echo "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+		fi
+	done
+
+	[ -n "$found" ] && echo "  Pre-suite cleanup complete."
+	return 0
+}
+
+_pre_suite_cleanup
+
+if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
+	if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
+		# Legacy path: VMware snapshot revert (opt-in via E2E_USE_SNAPSHOT_REVERT=1)
+		_revert_dis_snapshot "pool-ready" || {
+			echo ""
+			echo "  ERROR: disN revert failed -- cannot proceed."
+			echo "  $DIS_VM must have a 'pool-ready' snapshot. Create it by running"
+			echo "  clone-and-check (or setup-infra Phase 3) for this pool."
+			echo ""
+			echo "1" > "$RC_FILE"
+			exit 1
+		}
+	else
+		# Default: clean disN using ABA's own commands (exercises product code paths)
+		_cleanup_dis_aba
+	fi
 
 	# Clean up any stale Quay/registry state on conN from previous suite
 	_cleanup_con_quay
+	_cleanup_wasteful_dirs_local
+	_reset_con_firewall
+	_ensure_pool_registry
+else
+	echo "  (Skipping disN cleanup and Quay cleanup -- E2E_SKIP_SNAPSHOT_REVERT=1)"
+fi
 
+# Ensure conN ~/.vmware.conf has the correct pool-specific VC_FOLDER + GOVC_DATASTORE.
+# The golden template bakes in default values; suites cp ~/.vmware.conf → ./vmware.conf,
+# so the source must be correct before any suite starts.
+if [ -f ~/.vmware.conf ]; then
+	if [ -n "${VC_FOLDER:-}" ]; then
+		sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g" ~/.vmware.conf
+		echo "  conN vmware.conf: VC_FOLDER=${VC_FOLDER}"
+	fi
+	if [ -n "${VM_DATASTORE:-}" ]; then
+		sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
+		echo "  conN vmware.conf: GOVC_DATASTORE=${VM_DATASTORE}"
+	fi
+fi
+
+# Post-cleanup filesystem snapshot (debug: catch leftover files before suite starts)
+echo ""
+echo "  === Pre-suite filesystem snapshot (conN: $(hostname)) ==="
+echo "  --- ls -ltr ~/ ---"
+ls -ltr ~/
+echo "  --- ls -ltr ~/* ---"
+ls -ltr ~/* 2>/dev/null || true
+echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
+sudo du -am ~/ 2>/dev/null | sort -rn | head -30
+if [ -n "${DIS_VM:-}" ]; then
+	_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+	echo ""
+	echo "  === Pre-suite filesystem snapshot (disN: ${DIS_VM}) ==="
+	echo "  --- ls -ltr ~/ ---"
+	_essh "$_dis" "ls -ltr ~/" 2>&1 || true
+	echo "  --- ls -ltr ~/* ---"
+	_essh "$_dis" "ls -ltr ~/*" 2>&1 || true
+	echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
+	_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1 || true
+fi
+echo ""
+
+_rc=0
+
+while true; do
 	cd "$_ABA_ROOT"
 	_suite_start=$(date +%s)
 
 	_rc=0
 	bash "$suite_file" || _rc=$?
 
-	_suite_elapsed=$(( $(date +%s) - _suite_start ))
-	_suite_mins=$(( _suite_elapsed / 60 ))
-	_suite_secs=$(( _suite_elapsed % 60 ))
-
-	_suite_names+=("$suite")
-	_suite_durations+=("${_suite_mins}m ${_suite_secs}s")
-
-	if [ $_rc -eq 0 ]; then
-		_suite_results+=("PASS")
+	if [ $_rc -eq 4 ]; then
 		echo ""
-		echo "  Suite $suite: PASS (${_suite_mins}m ${_suite_secs}s)"
-	elif [ $_rc -eq 3 ]; then
-		_suite_results+=("SKIP")
+		echo "  Suite $SUITE: RESTARTING by user request (from scratch) ..."
 		echo ""
-		echo "  Suite $suite: SKIPPED by user (${_suite_mins}m ${_suite_secs}s)"
-	else
-		_suite_results+=("FAIL")
-		_overall_rc=1
+		# Full restart: do NOT resume -- cleanup tears down everything,
+		# so previously-passed setup steps must run again.
+		unset E2E_RESUME_FILE 2>/dev/null || true
+		rm -f "$_STATE_FILE_PATH"
+		# Cleanup clusters BEFORE disN reset -- aba delete needs cluster dir
+		_pre_suite_cleanup
+		if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
+			if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
+				_revert_dis_snapshot "pool-ready" || {
+					echo "  ERROR: disN revert failed -- cannot restart. Fix snapshot then re-run."
+					echo "1" > "$RC_FILE"
+					exit 1
+				}
+			else
+				_cleanup_dis_aba
+			fi
+			_cleanup_con_quay
+			_cleanup_wasteful_dirs_local
+			_reset_con_firewall
+			_ensure_pool_registry
+		fi
+		# Re-apply pool-specific vmware.conf on conN (same as initial path)
+		if [ -f ~/.vmware.conf ]; then
+			[ -n "${VC_FOLDER:-}" ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g" ~/.vmware.conf
+			[ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
+		fi
+		# Post-cleanup filesystem snapshot (debug: catch leftover files on restart)
 		echo ""
-		echo "  Suite $suite: FAIL (exit=$_rc, ${_suite_mins}m ${_suite_secs}s)"
+		echo "  === Pre-suite filesystem snapshot (conN: $(hostname)) ==="
+		echo "  --- ls -ltr ~/ ---"
+		ls -ltr ~/
+		echo "  --- ls -ltr ~/* ---"
+		ls -ltr ~/* 2>/dev/null || true
+		echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
+		sudo du -am ~/ 2>/dev/null | sort -rn | head -30
+		if [ -n "${DIS_VM:-}" ]; then
+			_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+			echo ""
+			echo "  === Pre-suite filesystem snapshot (disN: ${DIS_VM}) ==="
+			echo "  --- ls -ltr ~/ ---"
+			_essh "$_dis" "ls -ltr ~/" 2>&1 || true
+			echo "  --- ls -ltr ~/* ---"
+			_essh "$_dis" "ls -ltr ~/*" 2>&1 || true
+			echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
+			_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1 || true
+		fi
+		echo ""
+		continue
 	fi
+	break
 done
 
-# --- Per-pool summary ---------------------------------------------------------
+_elapsed=$(( $(date +%s) - _start_time ))
+_mins=$(( _elapsed / 60 ))
+_secs=$(( _elapsed % 60 ))
 
-_total_elapsed=$(( $(date +%s) - _start_time ))
-_total_mins=$(( _total_elapsed / 60 ))
-_total_secs=$(( _total_elapsed % 60 ))
-
-_passed=0
-_failed=0
-_skipped=0
+if [ $_rc -eq 0 ]; then
+	echo ""
+	echo "  Suite $SUITE: PASS (${_mins}m ${_secs}s)"
+elif [ $_rc -eq 3 ]; then
+	echo ""
+	echo "  Suite $SUITE: SKIPPED by user (${_mins}m ${_secs}s)"
+else
+	echo ""
+	echo "  Suite $SUITE: FAIL (exit=$_rc, ${_mins}m ${_secs}s)"
+fi
 
 echo ""
 echo "========================================"
-echo "  Pool $POOL_NUM Summary ($(hostname))"
-echo "========================================"
-
-for i in "${!_suite_names[@]}"; do
-	_status="${_suite_results[$i]}"
-	_dur="${_suite_durations[$i]}"
-	case "$_status" in
-		PASS)  printf "  \033[1;32mPASS\033[0m  %-35s (%s)\n" "${_suite_names[$i]}" "$_dur"; (( _passed++ )) ;;
-		FAIL)  printf "  \033[1;31mFAIL\033[0m  %-35s (%s)\n" "${_suite_names[$i]}" "$_dur"; (( _failed++ )) ;;
-		SKIP)  printf "  \033[1;33mSKIP\033[0m  %-35s (%s)\n" "${_suite_names[$i]}" "$_dur"; (( _skipped++ )) ;;
-	esac
-done
-
-echo ""
-echo "  Result: $_passed/${#_suite_names[@]} passed"
-[ $_failed -gt 0 ] && echo "  Failed: $_failed"
-[ $_skipped -gt 0 ] && echo "  Skipped: $_skipped"
-echo "  Total time: ${_total_mins}m ${_total_secs}s"
+echo "  Pool $POOL_NUM Result: $SUITE"
+echo "  Exit code: $_rc  Time: ${_mins}m ${_secs}s"
 echo "========================================"
 echo ""
 
 # Write exit code for run.sh to read
-echo "$_overall_rc" > "$RC_FILE"
-exit "$_overall_rc"
+echo "$_rc" > "$RC_FILE"
+exit "$_rc"

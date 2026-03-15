@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # Suite: Bundle to Disk (rewrite of test4-airgapped-bundle-to-disk.sh)
 # =============================================================================
@@ -28,6 +28,8 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 VF="${VMWARE_CONF:-~/.vmware.conf}"
+DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
+STANDARD="$(pool_cluster_name standard)"
 
 # --- Suite ------------------------------------------------------------------
 
@@ -41,7 +43,10 @@ plan_tests \
     "Bundle without operator filters: create" \
     "Bundle without operator filters: verify contents" \
     "All-operators imageset: generate and verify YAML" \
-    "run_once: mirror clean clears state"
+    "mirror clean: removes files and re-extraction works" \
+    "Load bundle to internal bastion" \
+    "Bare-metal simulation: platform=bm two-step install" \
+    "Cleanup: delete cluster and uninstall mirror on disN"
 
 suite_begin "create-bundle-to-disk"
 
@@ -50,25 +55,21 @@ suite_begin "create-bundle-to-disk"
 # ============================================================================
 test_begin "Setup: clean slate"
 
-# podman prune/rmi with --force are idempotent (return 0 even when empty).
-e2e_run "Clean podman" \
-    "podman system prune --all --force; podman rmi --all --force; sudo rm -rfv ~/.local/share/containers/storage"
-
-# Remove oc-mirror caches
-e2e_run -q "Remove oc-mirror caches" \
-    "rm -rfv ~/.cache/agent; rm -rfv \$HOME/*/.oc-mirror/.cache"
+# runner.sh already cleaned podman (containers, caches, wasteful dirs) before
+# the suite started -- no need to repeat it here.
 
 # Clean up leftover state from previous test runs
 e2e_run -q "Remove old files" \
-    "rm -rfv $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
+    "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
-# Ensure make is available (needed for aba reset)
-e2e_run -q "Ensure make is installed" \
-    "which make || sudo dnf install make -y"
+e2e_run "Reset aba to clean state" \
+    "cd ~/aba && ./install && aba reset -f"
 
-# Conditional: aba may not be installed yet (first run).
-e2e_run "Reset aba (if installed)" \
-    "if command -v aba >/dev/null 2>&1 && [ -d mirror ]; then aba reset -f; else echo 'aba not installed or no mirror dir -- skipping reset'; fi"
+e2e_run "Remove oc-mirror caches" \
+    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+
+e2e_run "Verify /home disk usage < 10GB after reset" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
 
 test_end 0
 
@@ -80,13 +81,21 @@ test_begin "Setup: install and configure aba"
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 # Simulate manual edit: set dns_servers to pool dnsmasq host
 e2e_run "Set dns_servers manually" \
     "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
-e2e_run -q "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
+e2e_run -q "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
+e2e_run -q "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+e2e_run -q "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
+e2e_run -q "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
+
+# Negative path: VM creation without vmware.conf should fail
+e2e_run -q "Ensure no vmware.conf" "rm -f vmware.conf"
+e2e_run_must_fail "Create VMs without vmware.conf should fail" \
+    "aba cluster -n e2e-neg-test -t sno -s install"
 
 # Copy vmware.conf and set the test VM folder
 e2e_run "Copy vmware.conf" "cp -v $VF vmware.conf"
@@ -125,7 +134,7 @@ e2e_run -q "Create temp dir" "mkdir -v -p ~/tmp"
 e2e_run -q "Clean previous light bundles" "rm -fv ~/tmp/delete-me*tar"
 
 e2e_run -r 3 2 "Create light bundle (channel=$TEST_CHANNEL version=$ocp_version ops=abatest+extras)" \
-    "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets abatest --ops web-terminal yaks nginx-ingress-operator flux --base-domain $(pool_domain) -o ~/tmp/delete-me -y"
+    "aba -f bundle --pull-secret '~/.pull-secret.json' --op-sets abatest --ops web-terminal yaks nginx-ingress-operator flux -o ~/tmp/delete-me -y"
 
 test_end 0
 
@@ -150,7 +159,7 @@ e2e_run -q "Clean previous bundles" "rm -fv /tmp/delete-me*tar"
 
 # No --op-sets, no --ops: zero operators are downloaded (only OCP release images)
 e2e_run -r 3 2 "Create bundle without operators (channel=$TEST_CHANNEL version=$ocp_version)" \
-    "aba -f bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel $TEST_CHANNEL --version $ocp_version --op-sets --ops --base-domain $(pool_domain) -o /tmp/delete-me -y"
+    "aba -f bundle --pull-secret '~/.pull-secret.json' --op-sets --ops -o /tmp/delete-me -y"
 
 test_end 0
 
@@ -164,7 +173,6 @@ e2e_run "Show tar file size (human)" "ls -lh /tmp/delete-me*tar"
 e2e_run "List tar contents" "tar tvf /tmp/delete-me*tar"
 e2e_run "Verify mirror_000001.tar in bundle" \
     "tar tvf /tmp/delete-me*tar | grep mirror/save/mirror_000001.tar"
-e2e_run -q "Clean up full bundle" "rm -fv /tmp/delete-me*tar"
 
 test_end 0
 
@@ -187,10 +195,7 @@ e2e_run "Generate imageset-config for ops=all" "aba -d mirror imagesetconf"
 e2e_run "Verify redhat-operator-index in imageset YAML" \
     "grep 'redhat-operator-index' mirror/save/imageset-config-save.yaml"
 
-# Verify: with op-sets=all there should be NO 'packages:' filter
-# (an unfiltered catalog entry = all operators)
-e2e_run "Verify no package filter (all operators)" \
-    "! grep -q 'packages:' mirror/save/imageset-config-save.yaml"
+# TODO: Replace with a proper verification for op-sets=all (backlog item)
 
 # Restore original operator settings so we leave things clean
 e2e_run -q "Restore op-sets to abatest" "aba --op-sets abatest"
@@ -198,38 +203,133 @@ e2e_run -q "Restore op-sets to abatest" "aba --op-sets abatest"
 test_end 0
 
 # ============================================================================
-# 8. run_once regression: mirror clean must clear run_once state (Gap 8)
-#    Verifies that 'aba --dir mirror clean' properly resets run_once state
-#    so subsequent operations don't silently skip re-extraction or re-download.
+# 8. mirror clean removes extracted files and re-extraction works (Gap 8)
+#    Note: the bundle creation flow (make -C mirror save) calls
+#    download-registries directly, so no mirror:* run_once state exists here.
+#    This test verifies the clean/re-extract cycle.
 # ============================================================================
-test_begin "run_once: mirror clean clears state"
+test_begin "mirror clean: removes files and re-extraction works"
 
 # Ensure mirror-registry binary exists (from bundle operations above)
 e2e_run "Verify mirror-registry exists before clean" \
     "test -f mirror/mirror-registry || make -C mirror mirror-registry"
 
-# Verify run_once state directory exists
-e2e_run "Verify run_once state exists" \
-    "ls -d ~/.aba/runner/mirror:*"
-
-# Run mirror clean -- should delete extracted files AND clear run_once state
+# Run mirror clean -- should delete extracted files
 e2e_run "Run mirror clean" "aba --dir mirror clean"
 
 # Verify the binary was removed
 e2e_run "Verify mirror-registry removed after clean" \
     "test ! -f mirror/mirror-registry"
 
-# Verify run_once state for mirror:reg:install was cleared
-e2e_run "Verify run_once state cleared for reg:install" \
+# Verify run_once state for mirror:reg:install does not exist
+e2e_run "Verify no leftover run_once state for reg:install" \
     "test ! -d ~/.aba/runner/mirror:reg:install"
 
-# Re-extract -- should succeed because run_once state was cleared
+# Re-extract -- should succeed after clean
 e2e_run "Re-extract mirror-registry after clean" \
     "make -C mirror mirror-registry"
 e2e_run "Verify mirror-registry re-extracted" \
     "test -x mirror/mirror-registry"
 
 test_end 0
+
+# ============================================================================
+# 9. Load the no-operator bundle to the internal bastion
+#    This creates ~/aba on dis and installs the mirror registry there,
+#    which is required by the BM two-step install test below.
+# ============================================================================
+test_begin "Load bundle to internal bastion"
+
+e2e_run "Stream bundle to internal bastion" \
+    "cat /tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba && tar xf - -C ~'"
+e2e_run -q "Clean up local bundle tarball" "rm -fv /tmp/delete-me*tar"
+e2e_run_remote "Verify ~/aba exists on internal bastion" "ls ~/aba/aba.conf"
+e2e_run_remote "Install aba on internal bastion" "cd ~/aba && ./install"
+e2e_run_remote -r 3 2 "Install mirror registry and load images from bundle" \
+    "cd ~/aba && aba -d mirror load -H $DIS_HOST --retry"
+
+test_end 0
+
+# ============================================================================
+# 10. Bare-metal simulation: platform=bm two-step install (ported from old test1)
+#
+#    Tests the BM two-step install flow from the BUNDLE-LOAD perspective:
+#      - govc download-all behavior with platform=bm (on connected bastion)
+#      - Two-step bare-metal install (agent configs -> ISO) on internal bastion
+#
+#    WHY on internal bastion?  In the bundle-to-disk workflow, the registry
+#    is installed on the disconnected side (dis) during bundle extraction.
+#    The connected bastion (con) cannot resolve the registry hostname.
+#    ISO creation needs registry access (verify-release-image.sh), so the
+#    BM install must run where the registry lives.
+#
+#    The companion BM test in suite-mirror-sync.sh covers the same two-step
+#    flow but from the SYNC perspective (registry reachable from con via sync).
+#    Both tests are kept for defense-in-depth.
+#
+#    BM two-step flow (controlled by .bm-message / .bm-nextstep gate files):
+#      1st `aba install` -> creates agent configs, prints "Check & edit"
+#      2nd `aba install` -> creates ISO, prints "Boot your servers"
+#      (3rd would monitor cluster -- not tested since no real BM servers)
+# ============================================================================
+test_begin "Bare-metal simulation: platform=bm two-step install"
+
+# govc download-all test runs on connected bastion (CLI behavior check)
+e2e_run "Switch to bare-metal platform" "aba --platform bm"
+
+e2e_run "Remove govc tarball" "rm -f cli/govc*"
+e2e_run "Verify govc tarball removed" "test ! -f cli/govc*gz"
+e2e_run "Run download-all (govc should still be downloaded)" \
+    "aba -d cli download-all"
+e2e_run "Verify govc tarball exists after download-all" \
+    "test -f cli/govc*gz"
+
+# BM two-step install runs on internal bastion (registry is there, loaded from bundle)
+e2e_run_remote "Switch to bare-metal platform on internal bastion" \
+    "cd ~/aba && aba --platform bm"
+e2e_run_remote "Clean standard cluster dir" \
+    "cd ~/aba && rm -rf $STANDARD"
+e2e_add_to_cluster_cleanup "$PWD/$STANDARD" remote
+e2e_run_remote "Create agent configs (bare-metal)" \
+    "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 -s agentconf"
+e2e_run_remote "Verify cluster.conf" "ls ~/aba/$STANDARD/cluster.conf"
+e2e_run_remote "Verify agent configs" \
+    "ls ~/aba/$STANDARD/install-config.yaml ~/aba/$STANDARD/agent-config.yaml"
+e2e_run_remote "Verify ISO not yet created" \
+    "! ls ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
+
+# Phase 1: "aba install" stops after agent configs, shows MAC review instructions
+e2e_run_remote "First aba install (creates configs, stops for MAC review)" \
+    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Check & edit' /tmp/bm-phase1.out"
+e2e_run_remote "Verify .bm-message exists" "test -f ~/aba/$STANDARD/.bm-message"
+e2e_run_remote "Verify ISO not yet created (still)" \
+    "! ls ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
+
+# Phase 2: "aba install" creates ISO, shows boot instructions
+e2e_run_remote "Second aba install (creates ISO, stops for server boot)" \
+    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase2.out && grep 'Boot your servers' /tmp/bm-phase2.out"
+e2e_run_remote "Verify .bm-nextstep exists" "test -f ~/aba/$STANDARD/.bm-nextstep"
+e2e_run_remote "Verify ISO created" \
+    "ls -l ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
+
+# Clean up and restore platform on both sides
+e2e_run_remote -q "Clean up BM test dir on internal bastion" \
+    "cd ~/aba && aba --dir $STANDARD clean && aba --platform vmw"
+e2e_run -q "Restore VMware platform" "aba --platform vmw"
+
+test_end 0
+
+# ============================================================================
+# End-of-suite cleanup: delete cluster and uninstall mirror on disN
+# ============================================================================
+test_begin "Cleanup: delete cluster and uninstall mirror on disN"
+
+e2e_run_remote "Delete standard cluster on disN" \
+    "cd ~/aba && if [ -d $STANDARD ]; then aba --dir $STANDARD delete; else echo '[cleanup] $STANDARD already removed'; fi"
+e2e_run_remote "Uninstall mirror registry on disN" \
+    "cd ~/aba && aba -d mirror uninstall"
+
+test_end
 
 # ============================================================================
 

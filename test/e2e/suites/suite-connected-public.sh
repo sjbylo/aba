@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # Suite: Connected Public (rewrite of test3)
 # =============================================================================
@@ -18,7 +18,7 @@ source "$_SUITE_DIR/../lib/setup.sh"
 # --- Configuration ----------------------------------------------------------
 
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
-DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 
 # Pool-unique cluster names (avoid VM collisions when pools run in parallel)
 SNO="$(pool_cluster_name sno)"
@@ -34,10 +34,11 @@ plan_tests \
     "Proxy mode: create SNO config" \
     "Proxy mode: verify install-config.yaml" \
     "Proxy mode: install SNO cluster" \
-    "Proxy mode: verify and shutdown" \
+    "Proxy mode: verify and delete" \
     "Direct+mirror mode: config verification" \
     "Proxy-only mode: verify without direct internet" \
-    "no_proxy validation"
+    "no_proxy validation" \
+    "Cleanup: delete cluster"
 
 suite_begin "connected-public"
 
@@ -51,7 +52,7 @@ setup_aba_from_scratch
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 # Simulate manual edit: set dns_servers to the pool's dnsmasq host (conN)
 e2e_run "Set dns_servers manually" \
@@ -79,7 +80,7 @@ unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY
 
 e2e_run "Verify proxy is unset" "test -z \"\${http_proxy:-}\" && echo 'proxy unset OK'"
 
-e2e_run "Clean sno cluster dir" "rm -rfv $SNO"
+e2e_run "Clean sno cluster dir" "rm -rf $SNO"
 e2e_run "Create SNO config with -I direct" \
     "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I direct --step cluster.conf"
 e2e_run "Generate agent config" "aba -d $SNO agentconf"
@@ -94,15 +95,15 @@ test_begin "Direct mode: verify install-config.yaml"
 # Direct mode should NOT have mirror/digest sources or proxy config
 assert_file_exists "$SNO/install-config.yaml"
 e2e_run "Verify no ImageDigestSources in direct mode" \
-    "! grep -q ImageDigestSources $SNO/install-config.yaml"
+    "! grep ImageDigestSources $SNO/install-config.yaml"
 e2e_run "Verify no imageContentSources in direct mode" \
-    "! grep -q imageContentSources $SNO/install-config.yaml"
+    "! grep imageContentSources $SNO/install-config.yaml"
 e2e_run "Verify no additionalTrustBundle in direct mode" \
-    "! grep -q additionalTrustBundle $SNO/install-config.yaml"
+    "! grep additionalTrustBundle $SNO/install-config.yaml"
 e2e_run "Verify no proxy block in direct mode" \
-    "! grep -q httpProxy $SNO/install-config.yaml"
+    "! grep httpProxy $SNO/install-config.yaml"
 e2e_run "Verify public registry references" \
-    "grep -q registry.redhat.io $SNO/install-config.yaml || grep -q quay.io $SNO/install-config.yaml"
+    "grep registry.redhat.io $SNO/install-config.yaml || grep quay.io $SNO/install-config.yaml"
 
 test_end
 
@@ -121,7 +122,7 @@ fi
 
 e2e_run "Verify proxy is set" "test -n \"\${http_proxy:-}\" && echo \"proxy set: \$http_proxy\""
 
-e2e_run "Clean sno cluster dir" "rm -rfv $SNO"
+e2e_run "Clean sno cluster dir" "rm -rf $SNO"
 e2e_run "Create SNO config with -I proxy" \
     "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 e2e_run "Generate agent config" "aba -d $SNO agentconf"
@@ -135,13 +136,13 @@ test_begin "Proxy mode: verify install-config.yaml"
 
 assert_file_exists "$SNO/install-config.yaml"
 e2e_run "Verify proxy block in proxy mode" \
-    "grep -q httpProxy $SNO/install-config.yaml"
+    "grep httpProxy $SNO/install-config.yaml"
 e2e_run "Verify httpsProxy in proxy mode" \
-    "grep -q httpsProxy $SNO/install-config.yaml"
+    "grep httpsProxy $SNO/install-config.yaml"
 e2e_run "Verify noProxy in proxy mode" \
-    "grep -q noProxy $SNO/install-config.yaml"
+    "grep noProxy $SNO/install-config.yaml"
 e2e_run "Verify no ImageDigestSources in proxy mode" \
-    "! grep -q ImageDigestSources $SNO/install-config.yaml"
+    "! grep ImageDigestSources $SNO/install-config.yaml"
 
 test_end
 
@@ -150,21 +151,22 @@ test_end
 # ============================================================================
 test_begin "Proxy mode: install SNO cluster"
 
-e2e_run "Install SNO from public registry (proxy mode)" \
+e2e_add_to_cluster_cleanup "$PWD/$SNO"
+e2e_run -r 2 10 "Install SNO from public registry (proxy mode)" \
     "aba -d $SNO install"
 
 test_end
 
 # ============================================================================
-# 7. Proxy mode: verify and shutdown
+# 7. Proxy mode: verify and delete
 # ============================================================================
-test_begin "Proxy mode: verify and shutdown"
+test_begin "Proxy mode: verify and delete"
 
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
-e2e_run "Shutdown cluster" "yes | aba --dir $SNO shutdown --wait"
+e2e_run "Delete cluster" "aba --dir $SNO delete"
 
 test_end
 
@@ -177,23 +179,36 @@ test_begin "Direct+mirror mode: config verification"
 unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY
 [ -f ~/.proxy-unset.sh ] && source ~/.proxy-unset.sh
 
+# Ensure the pre-populated pool registry is running on conN.
+# setup-pool-registry.sh is idempotent: skips install/sync if already done.
+_ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
+_ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
+
+e2e_run "Ensure pre-populated registry (OCP ${_ocp_channel} ${_ocp_version})" \
+    "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
+
 SNO_MIRROR="$(pool_cluster_name sno-mirror)"
 
-e2e_run "Clean sno-mirror cluster dir" "rm -rfv $SNO_MIRROR"
+e2e_run "Clean sno-mirror cluster dir" "rm -rf $SNO_MIRROR"
 
 # Default int_connection (empty) = mirror mode.
-# Create mirror.conf pointing at the pool registry so aba generates mirror sources.
+# Create mirror.conf pointing at the pool registry on conN.
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-e2e_run "Set mirror hostname in mirror.conf" \
-    "sed -i \"s/registry.$(pool_domain)/${DIS_HOST}/g\" mirror/mirror.conf"
+e2e_run "Set reg_host to local registry" \
+    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
+e2e_run "Clear reg_ssh_key (local registry)" \
+    "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
+e2e_run "Clear reg_ssh_user (local registry)" \
+    "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
 
-# No real registry needed -- this test only verifies install-config.yaml generation.
-# Populate regcreds with minimal valid files so create-install-config.sh injects
-# imageDigestSources and additionalTrustBundle into the YAML.
-e2e_run "Create dummy pull secret for config verification" \
-    "echo '{\"auths\":{\"${DIS_HOST}:8443\":{\"auth\":\"dGVzdDp0ZXN0\"}}}' > mirror/regcreds/pull-secret-mirror.json"
-e2e_run "Create dummy CA cert for config verification" \
-    "openssl req -x509 -newkey rsa:2048 -keyout /dev/null -out mirror/regcreds/rootCA.pem -days 1 -nodes -subj '/CN=test' 2>/dev/null"
+# Set up regcreds/ with the pre-populated registry's CA and pull secret
+e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"
+e2e_run "Copy Quay root CA to regcreds" \
+    "cp -v $POOL_REG_DIR/certs/ca.crt ~/.aba/mirror/mirror/rootCA.pem"
+e2e_run "Copy pull secret from pool registry" \
+    "cp -v $POOL_REG_DIR/pool-reg-creds.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
+
+e2e_run "Verify mirror registry access" "aba -d mirror verify"
 
 e2e_run "Create SNO config (mirror mode, no proxy)" \
     "aba cluster -n $SNO_MIRROR -t sno -i $(pool_sno_ip) --step cluster.conf"
@@ -202,13 +217,13 @@ e2e_run "Generate agent config" "aba -d $SNO_MIRROR agentconf"
 # Verify: mirror sources present, no proxy block
 assert_file_exists "$SNO_MIRROR/install-config.yaml"
 e2e_run "Verify mirror sources in install-config" \
-    "grep -q 'imageDigestSources\|ImageDigestSources\|imageContentSources' $SNO_MIRROR/install-config.yaml"
+    "grep 'imageDigestSources\|ImageDigestSources\|imageContentSources' $SNO_MIRROR/install-config.yaml"
 e2e_run "Verify no httpProxy in mirror+direct mode" \
-    "! grep -q httpProxy $SNO_MIRROR/install-config.yaml"
+    "! grep httpProxy $SNO_MIRROR/install-config.yaml"
 e2e_run "Verify additionalTrustBundle present for mirror CA" \
-    "grep -q additionalTrustBundle $SNO_MIRROR/install-config.yaml"
+    "grep additionalTrustBundle $SNO_MIRROR/install-config.yaml"
 
-e2e_run "Clean up sno-mirror cluster dir" "rm -rfv $SNO_MIRROR"
+e2e_run "Clean up sno-mirror cluster dir" "aba --dir $SNO_MIRROR clean"
 
 test_end
 
@@ -238,15 +253,15 @@ e2e_run "Verify proxy curl works" \
 
 # Create a proxy-mode cluster config and verify it generates correctly
 SNO_PROXY_ONLY="$(pool_cluster_name sno-proxyonly)"
-e2e_run "Clean sno-proxyonly cluster dir" "rm -rfv $SNO_PROXY_ONLY"
+e2e_run "Clean sno-proxyonly cluster dir" "rm -rf $SNO_PROXY_ONLY"
 e2e_run "Create SNO config with -I proxy (proxy-only bastion)" \
     "aba cluster -n $SNO_PROXY_ONLY -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 
 assert_file_exists "$SNO_PROXY_ONLY/cluster.conf"
 e2e_run "Verify int_connection=proxy in cluster.conf" \
-    "grep -q 'int_connection=proxy' $SNO_PROXY_ONLY/cluster.conf"
+    "grep 'int_connection=proxy' $SNO_PROXY_ONLY/cluster.conf"
 
-e2e_run "Clean up sno-proxyonly cluster dir" "rm -rfv $SNO_PROXY_ONLY"
+e2e_run "Clean up sno-proxyonly cluster dir" "aba --dir $SNO_PROXY_ONLY clean"
 
 # Restore direct internet
 e2e_run "Restore direct internet" \
@@ -266,34 +281,44 @@ test_begin "no_proxy validation"
 
 # Verify the bastion's no_proxy covers all required local addresses
 e2e_run "Verify no_proxy includes localhost" \
-    "echo \"\$no_proxy\" | grep -q localhost"
+    "echo \"\$no_proxy\" | grep localhost"
 e2e_run "Verify no_proxy includes 127.0.0.1" \
-    "echo \"\$no_proxy\" | grep -q '127.0.0.1'"
+    "echo \"\$no_proxy\" | grep '127.0.0.1'"
 e2e_run "Verify no_proxy includes .example.com" \
-    "echo \"\$no_proxy\" | grep -q '.example.com'"
+    "echo \"\$no_proxy\" | grep '.example.com'"
 e2e_run "Verify no_proxy includes 10.0.0.0/8 or broad local range" \
-    "echo \"\$no_proxy\" | grep -qE '10\\.0\\.0\\.0|10\\.0\\.' "
+    "echo \"\$no_proxy\" | grep -E '10\\.0\\.0\\.0|10\\.0\\.' "
 
 # Verify aba's monitor/wait scripts append rendezvous IP to no_proxy.
 # Create a cluster dir and check agent-related scripts handle proxy correctly.
 SNO_NOPROXY="$(pool_cluster_name sno-noproxy)"
-e2e_run "Clean sno-noproxy cluster dir" "rm -rfv $SNO_NOPROXY"
+e2e_run "Clean sno-noproxy cluster dir" "rm -rf $SNO_NOPROXY"
 e2e_run "Create SNO config with -I proxy" \
     "aba cluster -n $SNO_NOPROXY -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
-e2e_run "Generate agent config" "aba -d $SNO_NOPROXY agentconf"
+e2e_run "Generate ISO (runs agent config + ISO validation)" "aba -d $SNO_NOPROXY iso"
 
 # Verify rendezvousIP file is created and contains a valid IP
 assert_file_exists "$SNO_NOPROXY/iso-agent-based/rendezvousIP"
 e2e_run "Verify rendezvousIP is a valid IP" \
-    "grep -qE '^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\$' $SNO_NOPROXY/iso-agent-based/rendezvousIP"
+    "grep -E '^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\$' $SNO_NOPROXY/iso-agent-based/rendezvousIP"
 
 # Verify install-config noProxy includes essential exclusions
 assert_file_exists "$SNO_NOPROXY/install-config.yaml"
 e2e_run "Verify install-config noProxy includes node subnet or domain" \
-    "grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep -qE '10\\.' || \
-     grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep -q example.com"
+    "grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep -E '10\\.' || \
+     grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep example.com"
 
-e2e_run "Clean up sno-noproxy cluster dir" "rm -rfv $SNO_NOPROXY"
+e2e_run "Clean up sno-noproxy cluster dir" "aba --dir $SNO_NOPROXY clean"
+
+test_end
+
+# ============================================================================
+# End-of-suite cleanup: delete cluster
+# ============================================================================
+test_begin "Cleanup: delete cluster"
+
+e2e_run "Delete SNO cluster" \
+    "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
 
 test_end
 

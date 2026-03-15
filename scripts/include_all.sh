@@ -24,6 +24,8 @@ export ARCH=$(uname -m)
 # Source user overrides (e.g. OC_MIRROR_IMAGE_TIMEOUT) if present
 [[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 
+_ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.conf or run aba or ./abatui."
+
 # ===========================
 # Color Echo Functions
 # ===========================
@@ -272,6 +274,8 @@ show_error() {
 [ -z "${1-}" ] && trap 'show_error' ERR && [ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
 normalize-aba-conf() {
+	# Output only the values from aba.conf (with defaults for backwards compat).
+	# Derived/computed values belong in the calling script, not here.
 	# Normalize or sanitize the config file
 	# Remove all chars from lines with <white-space>#<anything>
 	# Remove all white-space lines
@@ -312,8 +316,8 @@ verify-aba-conf() {
 	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
 	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
 
-	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  See: aba --help" >&2; ret=1; }
-	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  See: aba --help" >&2; ret=1; }
+	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
 	echo $platform    | grep -q -E "bm|vmw" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
@@ -354,6 +358,8 @@ verify-aba-conf() {
 
 normalize-mirror-conf()
 {
+	# Output only the values from mirror.conf (with defaults for backwards compat).
+	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
 	# Normalize or sanitize the config file
 	# Ensure any ~/ is masked, e.g. \~/ ('cos ~ may need to be expanded on remote host)
 	# Ensure data_disk has ~ masked in each case of: ^data_dir=$ ^data_disk=~ ^data_disk=  
@@ -364,6 +370,8 @@ normalize-mirror-conf()
 	# reg_path must not start with a /, if so, remove it
 	# Force tls_verify=true 
 	# Fix reg_path if it a) does not start with / or starts with anything other than space or tab, then prepend a '/'
+
+	grep -q '^reg_vendor=' mirror.conf 2>/dev/null	|| echo export reg_vendor=auto
 
 	[ ! -s mirror.conf ] &&                                                              return 0
 
@@ -379,7 +387,6 @@ normalize-mirror-conf()
 			awk '{print $1}' | \
 			sed	-e "s/^/export /g"
 
-		# Append always
 		#echo export tls_verify=true
 	)
 }
@@ -410,11 +417,15 @@ verify-mirror-conf() {
 
 	[ "$reg_ssh_key" ] && { echo $reg_ssh_key | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
 
+	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE '^(auto|quay|docker)$' || { echo_red "Error: reg_vendor must be auto, quay, or docker in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
+
 	return $ret
 }
 
 normalize-cluster-conf()
 {
+	# Output only the values from cluster.conf (with defaults for backwards compat).
+	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
 	# Normalize or sanitize the config file
 	# Remove all chars from lines with <white-space>#<anything>
 	# Remove all white-space lines
@@ -424,6 +435,8 @@ normalize-cluster-conf()
 	# Ensure only one arg after 'export'
 	# Prepend "export "
 	# Adjust new int_connection value for compatibility
+
+	grep -q ^mirror_name= cluster.conf 2>/dev/null	|| echo export mirror_name=mirror
 
 	[ ! -s cluster.conf ] &&                                                               return 0
 
@@ -638,16 +651,19 @@ normalize-vmware-conf()
 
 install_rpms() {
 	# Try to install the RPMs only if they are missing
+	# On RHEL 8, `rpm -q python3` fails even after `dnf install python3`
+	# because the actual RPM is `python36` (or `python3.11`, etc.).
+	# DNF resolves the virtual provide, but rpm -q does not.
+	# Check for /usr/bin/python3 instead to avoid re-running dnf every time.
 	local rpms_to_install=
 
 	for rpm in $@
 	do
+		# Skip python3 RPM check if the binary already exists (RHEL 8 compat)
+		[ "$rpm" = "python3" ] && [ -x /usr/bin/python3 ] && continue
 		# Check if each rpm is already installed.  Don't run dnf unless we have to.
 		rpm -q --quiet $rpm || rpms_to_install="$rpms_to_install $rpm" 
 	done
-
-	# Add the correct python3 package name depending on rhel8 or rhel9
-	rpm -q --quiet python3 || rpm -q --quiet python36 || rpms_to_install=" python3$rpms_to_install"
 
 	if [ "$rpms_to_install" ]; then
 		echo "Installing required rpm packages:$rpms_to_install (logging to .dnf-install.log). Please wait!" >&2  # send to stderr so this can be seen during "aba bundle -o -"
@@ -1417,7 +1433,7 @@ trust_root_ca() {
 		else
 			$SUDO install -m 644 $1 /etc/pki/ca-trust/source/anchors/ 
 			$SUDO update-ca-trust extract
-			aba_info "Cert 'regcreds/rootCA.pem' updated in system trust"
+			aba_info "Cert '$regcreds_dir/rootCA.pem' updated in system trust"
 		fi
 	else
 		aba_info "No $1 cert file found" 
@@ -1846,6 +1862,13 @@ run_once() {
 				saved_cwd="$(cat "$id_dir/cwd")"
 				cd "$saved_cwd" || aba_debug "Warning: Could not restore CWD to $saved_cwd"
 			fi
+
+			# Use saved command for validation (it was recorded with the saved CWD)
+			# Callers may pass a different command with different relative paths
+			if [[ -f "$id_dir/cmd.sh" ]]; then
+				source "$id_dir/cmd.sh"
+				aba_debug "Loaded saved command for validation: ${command[*]}"
+			fi
 			
 			# Run validation command directly (keep lock held to prevent races)
 			# NOTE: Do NOT delete exit_file before validation — concurrent readers
@@ -1891,23 +1914,24 @@ run_once() {
 
 # Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
-# Example: download_all_catalogs "4.19" 86400
+# Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL_SECS from ~/.aba/config)
+# Example: download_all_catalogs "4.19" 5        (explicit TTL override, e.g. for tests)
 download_all_catalogs() {
 	local version_short="${1}"
-	local ttl="${2:-86400}"  # Default: 1 day (86400 seconds)
+	local ttl="${2:-}"
 
 	if [[ -z "$version_short" ]]; then
 		echo_red "[ABA] Error: download_all_catalogs requires version (e.g., 4.19)" >&2
 		return 1
 	fi
 
-	# Max concurrent catalog downloads (default: 3 = all parallel)
-	# User can set CATALOG_MAX_PARALLEL=1 in ~/.aba/config for sequential
+	# Read user config for TTL and parallelism (defaults: 12h TTL, 3 parallel)
 	local max_parallel="${CATALOG_MAX_PARALLEL:-3}"
 	if [[ -f "$HOME/.aba/config" ]]; then
 		source "$HOME/.aba/config"
 		max_parallel="${CATALOG_MAX_PARALLEL:-3}"
 	fi
+	[[ -z "$ttl" ]] && ttl="${CATALOG_CACHE_TTL_SECS:-43200}"
 
 	local catalogs=(redhat-operator certified-operator community-operator)
 	local running=0
@@ -1948,7 +1972,7 @@ wait_for_all_catalogs() {
 	local timeout_mins=20
 	if [[ -f "$HOME/.aba/config" ]]; then
 		source "$HOME/.aba/config"
-		timeout_mins="${CATALOG_DOWNLOAD_TIMEOUT_MINS:-20}"
+		timeout_mins="${CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS:-${CATALOG_DOWNLOAD_TIMEOUT_MINS:-20}}"
 	fi
 	local timeout_secs=$((timeout_mins * 60))
 	
@@ -1995,21 +2019,23 @@ wait_for_all_catalogs() {
 #   probe_host "https://api.openshift.com/"
 #   probe_host "https://registry:8443/health/instance" "Quay registry"
 probe_host() {
+	# --any: accept any HTTP response (including 401); only fail on connection errors
+	local _pf="-f"
+	if [ "${1:-}" = "--any" ]; then _pf=""; shift; fi
 	local url="$1"
 	local desc="${2:-$url}"
 	
 	aba_debug "Probing $desc"
+	aba_debug "curl -s ${_pf:+$_pf }--connect-timeout 5 --max-time 15 --retry 2 -ILk $url"
 	
 	# -s: silent (no progress bar)
-	# -S: show errors even when silent
-	# -f: fail on HTTP errors (4xx, 5xx)
-	# Result: Errors shown, but no progress bars!
-	if curl -sSf \
+	# -f: fail on HTTP errors (4xx, 5xx) — omitted when --any is used
+	if curl -s $_pf \
 		--connect-timeout 5 \
 		--max-time 15 \
 		--retry 2 \
 		-ILk \
-		"$url" >/dev/null; then
+		"$url" >/dev/null 2>&1; then
 		return 0
 	fi
 	
@@ -2253,7 +2279,8 @@ ensure_oc_mirror() {
 	# Wait for oc-mirror download to complete before extracting
 	# (cli-download-all.sh starts downloads in background; extracting a
 	#  partially-downloaded tarball causes "gzip: unexpected end of file" errors)
-	run_once -q -w -i "cli:download:oc-mirror"
+	# Provide command so run_once can start the download if task was reset
+	run_once -q -w -i "cli:download:oc-mirror" -- make -sC cli download-oc-mirror
 	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
 }
 
@@ -2263,7 +2290,7 @@ ensure_oc() {
 		aba_debug "ensure_oc: ocp_version not set, skipping"
 		return 0
 	fi
-	run_once -q -w -i "cli:download:oc:${ocp_version}"
+	run_once -q -w -i "cli:download:oc:${ocp_version}" -- make -sC cli download-oc
 	run_once -w -m "Installing oc to ~/bin" -i "$TASK_OC" -- make -sC cli oc
 }
 
@@ -2273,26 +2300,24 @@ ensure_openshift_install() {
 		aba_debug "ensure_openshift_install: ocp_version not set, skipping"
 		return 0
 	fi
-	run_once -q -w -i "cli:download:openshift-install:${ocp_version}"
+	run_once -q -w -i "cli:download:openshift-install:${ocp_version}" -- make -sC cli download-openshift-install
 	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL" -- make -sC cli openshift-install
 }
 
 # Ensure govc is installed in ~/bin
 ensure_govc() {
-	run_once -q -w -i "cli:download:govc"
+	run_once -q -w -i "cli:download:govc" -- make -sC cli download-govc
 	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
 }
 
 # Ensure butane is installed in ~/bin
 ensure_butane() {
-	run_once -q -w -i "cli:download:butane"
+	run_once -q -w -i "cli:download:butane" -- make -sC cli download-butane
 	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
 }
 
 # Ensure mirror-registry (Quay) is installed (extracted)
 ensure_quay_registry() {
-	# Note: Download should already be started (like CLI tools)
-	# Called via ensure-cli.sh which cds to ABA_ROOT, so use -C mirror
 	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
 }
 

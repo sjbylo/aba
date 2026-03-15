@@ -7,11 +7,12 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
-verify-mirror-conf || exit 1
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 # These checks are actually also made in 'verify-cluster-conf'
 [ ! "$cluster_name" ] && aba_abort "missing cluster_name value in cluster.conf!"
@@ -92,34 +93,61 @@ fi
 [ ! "$actual_ip_of_api" ] && actual_ip_of_api="<empty>"
 [ ! "$actual_ip_of_ingress" ] && actual_ip_of_ingress="<empty>"
 
+_dns_warn=
+
 # If NOT SNO...
 if [ ! "$SNO" ]; then
 	# Ensure api DNS exists and points to correct ip
-	[ "$actual_ip_of_api" != "$api_vip" ] && \
-		aba_abort "DNS record: $cl_api_domain does not resolve to $api_vip, it resolves to $actual_ip_of_api!"
-
-	aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
+	if [ "$actual_ip_of_api" != "$api_vip" ]; then
+		aba_warning "DNS record: $cl_api_domain does not resolve to $api_vip, it resolves to $actual_ip_of_api!"
+		_dns_warn=1
+	else
+		aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
+	fi
 
 	# Ensure apps DNS exists and points to correct ip
-	[ "$actual_ip_of_ingress" != "$ingress_vip" ] && \
-		aba_abort "DNS record: $cl_ingress_domain does not resolve to $ingress_vip, it resolves to $actual_ip_of_ingress!"
-
-	aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
+	if [ "$actual_ip_of_ingress" != "$ingress_vip" ]; then
+		aba_warning "DNS record: $cl_ingress_domain does not resolve to $ingress_vip, it resolves to $actual_ip_of_ingress!"
+		_dns_warn=1
+	else
+		aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
+	fi
 else
 	# For SNO...
 	# Check values are both pointing to "rendezvous_ip"
-	# Ensure api DNS exists 
-	[ "$actual_ip_of_api" != "$rendezvous_ip" ] && \
-		aba_abort "DNS record $cl_api_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_api!"
+	# Ensure api DNS exists
+	if [ "$actual_ip_of_api" != "$rendezvous_ip" ]; then
+		aba_warning "DNS record $cl_api_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_api!"
+		_dns_warn=1
+	else
+		aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
+	fi
 
-	aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
-
-	# Ensure apps DNS exists 
-	[ "$actual_ip_of_ingress" != "$rendezvous_ip" ] && \
-		aba_abort "DNS record $cl_ingress_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_ingress!"
-
-	aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
+	# Ensure apps DNS exists
+	if [ "$actual_ip_of_ingress" != "$rendezvous_ip" ]; then
+		aba_warning "DNS record $cl_ingress_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_ingress!"
+		_dns_warn=1
+	else
+		aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
+	fi
 fi
+
+# Wildcard shadow detection: verify that api.X and *.apps.X are distinct
+# records, not just caught by a parent wildcard like *.X
+_wc_probe="aba-dns-wildcard-check.$cl_domain"
+_wc_ip=$(dig +time=8 +short "$_wc_probe" 2>/dev/null)
+
+if [ "$_wc_ip" ] && echo "$_wc_ip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+	aba_warning \
+		"Wildcard DNS detected: $_wc_probe resolves to $_wc_ip" \
+		"This means a catch-all record like *.$cl_domain exists." \
+		"The api and *.apps DNS checks above may be false positives!" \
+		"Please verify that distinct DNS records exist for:" \
+		"  api.$cl_domain  and  *.apps.$cl_domain"
+	_dns_warn=1
+fi
+
+[ "$_dns_warn" ] && sleep 2
 
 aba_info_ok "Cluster configuration is valid"
 

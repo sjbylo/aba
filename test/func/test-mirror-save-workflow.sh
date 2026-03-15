@@ -26,7 +26,7 @@ source scripts/include_all.sh
 # Clean up previous state to force fresh operations
 echo "Cleaning up previous state..."
 rm -f ~/bin/oc-mirror
-rm -rf mirror/.index/*-operator-index-*
+rm -rf .index/*-operator-index-*
 rm -rf ~/.aba/runner/cli:install:oc-mirror
 rm -rf ~/.aba/runner/catalog:*
 rm -rf mirror/save/mirror_*.tar 2>/dev/null || true
@@ -57,14 +57,14 @@ ocp_version="${ocp_version%.*}"  # Extract major.minor (e.g., 4.19.21 -> 4.19)
 echo "Using OCP version: $ocp_version"
 
 # Start catalog downloads
-download_all_catalogs "$ocp_version" 86400 >&2
+download_all_catalogs "$ocp_version" >&2
 
 # Wait for catalogs
 wait_for_all_catalogs "$ocp_version" >&2
 
 # Verify catalog files exist
 for catalog in redhat-operator certified-operator community-operator; do
-	index_file="mirror/.index/${catalog}-index-v${ocp_version}"
+	index_file=".index/${catalog}-index-v${ocp_version}"
 	if [ ! -s "$index_file" ]; then
 		aba_abort "Test 2 FAILED: Catalog file $index_file missing or empty"
 	fi

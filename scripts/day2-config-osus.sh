@@ -10,11 +10,12 @@ umask 077
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
-verify-mirror-conf || exit 1
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc
@@ -39,7 +40,12 @@ aba_info "Accessing the cluster ..."
 #####################
 if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
 	if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
-		aba_abort "cincinnati-operator not available in OperatorHub for this cluster.  Load the operator into your registry and run 'aba day2' again?"
+		aba_abort \
+			"cincinnati-operator not available in OperatorHub for this cluster." \
+			"The CatalogSource may still be synchronizing -- wait a few minutes and try again:" \
+			"  oc get catalogsource -n openshift-marketplace" \
+			"  oc get packagemanifests | grep cincinnati" \
+			"If the operator is not loaded, run: aba day2"
 	fi
 fi
 
@@ -57,11 +63,11 @@ tmp_line8=$(echo "$ingress_cert" | head -8 | tail -1)
 tmp_line12=$(echo "$ingress_cert" | head -12 | tail -1)
 
 if echo "$ca_bundle_crt" | grep -q "$tmp_line8" && echo "$ca_bundle_crt" | grep -q "$tmp_line12"; then
-	aba_info "CA cert already added"
+	echo_white "CA cert already added"
 else
 	ca_bundle_crt="$ca_bundle_crt\n$ingress_cert_json"
 	oc patch cm user-ca-bundle -n openshift-config --type='merge' -p '{"data":{"ca-bundle.crt":"'"$ca_bundle_crt"'"}}'
-	aba_info_ok CA cert added
+	echo_green "CA cert added"
 fi
 
 aba_info Adding trustedCA to cluster proxy ...
@@ -70,12 +76,12 @@ oc patch proxy cluster --type=merge -p '{"spec":{"trustedCA":{"name":"user-ca-bu
 #####################
 aba_info "Adding mirror registry CA cert to registry config ..."
 
-if [ -s regcreds/rootCA.pem ]; then
-        ca_cert="$(cat regcreds/rootCA.pem | sed ':a;N;$!ba;s/\n/\\n/g')"
-        aba_info "Using root CA file at $PWD/mirror/regcreds/rootCA.pem"
+if [ -s "$regcreds_dir/rootCA.pem" ]; then
+        ca_cert="$(cat "$regcreds_dir/rootCA.pem" | sed ':a;N;$!ba;s/\n/\\n/g')"
+        aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
 	kubectl patch configmap registry-config -n openshift-config --type='merge' -p '{"data":{"updateservice-registry":"'"$ca_cert"'"}}'
 else
-	aba_abort "No root CA file found at $PWD/regcreds/rootCA.pem.  Is the mirror registry available?"
+	aba_abort "No root CA file found at $regcreds_dir/rootCA.pem.  Is the mirror registry available?"
 fi
 
 #####################
@@ -159,7 +165,7 @@ aba_info -n "Obtaining the policy engine route ... "
 
 while sleep 1; do POLICY_ENGINE_GRAPH_URI="$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph{"\n"}' updateservice "${NAME}")"; SCHEME="${POLICY_ENGINE_GRAPH_URI%%:*}"; if test "${SCHEME}" = http -o "${SCHEME}" = https; then break; fi; done
 
-aba_info_ok $POLICY_ENGINE_GRAPH_URI
+echo_green "$POLICY_ENGINE_GRAPH_URI"
 
 CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
 aba_debug CH=$CH

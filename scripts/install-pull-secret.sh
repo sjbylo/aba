@@ -10,7 +10,7 @@ umask 077
 
 source <(normalize-aba-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 # Pull secret file exists
 if [ -s $pull_secret_file ]; then

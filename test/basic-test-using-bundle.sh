@@ -1,6 +1,8 @@
 #!/bin/bash -ex
 # Basic test script to show how to create a custom bundle (*light* or normal) and then install OpenShift disonnected
 
+. test/lib.sh
+
 [ "$1" ] && LIGHT="--light"   		# Test with *light* bundle with any arg.
 
 MY_HOST=$(hostname -f)    # This must be FQDN with A record pointing to IP address of this host
@@ -17,13 +19,11 @@ sudo rm -fv $(which aba)
 rm -rf ~/.oc-mirror/.cache
 rm -fv ~/bin/{oc-mirror,oc,openshift-install}
 rm -rf $TEST_DIR_CONN/aba 
+rm -rf $TEST_DIR_DISCO/aba 
 rm -f ~/.aba/.first_cluster_success
 
-# Go online
-sudo nmcli con up ens224
-#export no_proxy=.lan,.example.com
-#export http_proxy=http://10.0.1.8:3128
-#export https_proxy=http://10.0.1.8:3128
+int_up  # Internet up (from lib.sh)
+ping -c3 -W3 -i.2 8.8.8.8 &>/dev/null && echo UP || echo DOWN
 
 # Install aba
 cd $TEST_DIR_CONN
@@ -44,8 +44,8 @@ aba -y bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel fast 
 echo "aba bundle returned: $?"
 
 # Go offline
-#sudo nmcli con down ens224
-#unset http_proxy https_proxy no_proxy # Go offline
+int_down  # Internet up (from lib.sh)
+ping -c3 -W3 -i.2 8.8.8.8 &>/dev/null && echo UP || echo DOWN
 
 # Clean up
 sudo rm -vf $(which aba)
@@ -62,9 +62,10 @@ cd aba
 [ "$LIGHT" ] && mv -v $TEST_DIR_CONN/aba-vX/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
 rm -rf $TEST_DIR_CONN/aba   # Not needed anymore
 aba     # Show the bundle instructions
+aba | grep -i "bundle .*detected"  # Verify it's the bundle!
 aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME
-aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s install -y
+aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s install -y || { sleep 60; aba -d $CLUSTER_NAME mon; } # wait and try again!
 aba -d $CLUSTER_NAME day2 
 . <(./aba -d $CLUSTER_NAME login)
 time until oc get packagemanifests | grep cincinnati-operator; do sleep 5; done

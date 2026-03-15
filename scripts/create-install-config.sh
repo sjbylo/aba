@@ -7,12 +7,13 @@ aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 source <(normalize-vmware-conf)  # Some values needed for install-config.yaml
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
-verify-mirror-conf || exit 1
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 #to_output=$(normalize-cluster-conf | sed -e "s/^export //g" | paste -d '  ' - - - | column -t --output-separator " | ")
 if [ "$platform" = "bm" ]; then
@@ -98,33 +99,33 @@ if [ "$use_mirror" ]; then
 	# From this point on we are expecting to find a mirror ...
 	aba_info "Validating credentials of mirror registry ..."
 
-	if [ -s regcreds/pull-secret-mirror.json ]; then
-		export pull_secret=$(cat regcreds/pull-secret-mirror.json) 
+	if [ -s "$regcreds_dir/pull-secret-mirror.json" ]; then
+		export pull_secret=$(cat "$regcreds_dir/pull-secret-mirror.json") 
 
-		aba_info Using mirror registry pull secret file at regcreds/pull-secret-mirror.json to access registry at: $reg_host
+		aba_info Using mirror registry pull secret file at "$regcreds_dir/pull-secret-mirror.json" to access registry at: $reg_host
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
-	elif [ -s regcreds/pull-secret-full.json ]; then
-		export pull_secret=$(cat regcreds/pull-secret-full.json) 
+	elif [ -s "$regcreds_dir/pull-secret-full.json" ]; then
+		export pull_secret=$(cat "$regcreds_dir/pull-secret-full.json") 
 
-		aba_info Using mirror registry pull secret file at regcreds/pull-secret-full.json to access registry at: $reg_host
+		aba_info Using mirror registry pull secret file at "$regcreds_dir/pull-secret-full.json" to access registry at: $reg_host
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	else
 		aba_warning -p Attention \
 			"Expected to find mirror credentials but found none!" \
-			"No pull secret files found in directory: aba/mirror/regcreds" \
+			"No pull secret files found in directory: $regcreds_dir" \
 			"A mirror registry has NOT been installed or configured!  See: aba mirror --help"
 
 		show_mirror_missing_err=1
 	fi
 
 	# ... we also, need a root CA... if using our own registry.
-	if [ -s regcreds/rootCA.pem ]; then
-		export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
-		aba_info "Using root CA file at regcreds/rootCA.pem"
+	if [ -s "$regcreds_dir/rootCA.pem" ]; then
+		export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem") 
+		aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
 	else
 		# Only show this warning IF there is no internet connection?
 		# Or, only show if proxy is NOT being used?
@@ -133,7 +134,7 @@ if [ "$use_mirror" ]; then
 		#else
 		# Should check accessibility to registry.redhat.io?
 			aba_warning -p Attention \
-				"Root CA file missing: aba/mirror/regcreds/rootCA.pem" \
+				"Root CA file missing: $regcreds_dir/rootCA.pem" \
 				"No mirror registry available!" \
 				"No value: additionalTrustBundle will be added to install-config.yaml"
 
@@ -185,7 +186,7 @@ fi
 
 # Check that the release image is available in the private registry
 if [ "$additional_trust_bundle" -a "$image_content_sources" ]; then
-	scripts/create-containers-auth.sh --load
+	scripts/create-containers-auth.sh --load || exit 1
 	scripts/verify-release-image.sh
 fi
 

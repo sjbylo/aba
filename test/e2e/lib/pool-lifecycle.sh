@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # E2E Test Framework -- VM Pool Lifecycle
 # =============================================================================
@@ -68,11 +68,14 @@ VM_DEFAULT_USER="${VM_DEFAULT_USER:-steve}"
 # All SSH/SCP calls in _vm_* functions go through these wrappers to ensure
 # consistent options: no host-key prompts, connection timeouts, clean logs.
 _essh() {
-    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+    ssh -o ConnectTimeout=10 -o BatchMode=yes \
+        -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
 }
 _escp() {
-    scp -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+    scp -o ConnectTimeout=10 -o BatchMode=yes \
+        -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
 }
 
@@ -108,6 +111,33 @@ _vm_wait_ssh() {
         fi
         sleep 3
     done
+}
+
+# --- _vm_install_packages ---------------------------------------------------
+# Install all packages needed by conN and disN onto the GOLDEN VM so that
+# clones inherit them.  Nothing is installed per-clone; this is the single
+# source of truth for required RPMs.
+#
+_vm_install_packages() {
+    local host="$1"
+    local user="${2:-$VM_DEFAULT_USER}"
+
+    echo "  [vm] Installing required packages on $host ..."
+
+    cat <<-'PKGEOF' | _essh "${user}@${host}" -- sudo bash
+		set -ex
+		dnf install -y \
+		    tmux \
+		    git \
+		    make \
+		    podman \
+		    rsync \
+		    dnsmasq \
+		    bind-utils \
+		    chrony \
+		    firewalld
+		echo "Package install complete."
+	PKGEOF
 }
 
 # --- _vm_setup_ssh_keys -----------------------------------------------------
@@ -152,8 +182,6 @@ _vm_setup_time() {
 
     cat <<-TIMEEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		dnf install chrony -y
-
 		# Replace chrony.conf to use ONLY the specified NTP server
 		# (removes any internet NTP sources from the default config)
 		cat > /etc/chrony.conf <<-CHRONYEOF
@@ -216,19 +244,19 @@ _vm_setup_default_route() {
 }
 
 # --- _vm_setup_network ------------------------------------------------------
-# Configure network: VLAN interface, MTU, nmcli adjustments, hostname.
+# Configure network: VLAN interface, nmcli adjustments, hostname.
 # Auto-detects role from clone name: con* = connected, dis* = disconnected.
 #
 # Connected bastion (con#):
-#   ens192  = lab (DHCP, MTU 9000, never-default -- NOT the default route)
-#   ens224  = base for VLAN (disabled, MTU 9000)
+#   ens192  = lab (DHCP, never-default -- NOT the default route)
+#   ens224  = base for VLAN (disabled)
 #   ens224.10 = VLAN to dis# (static IP, never-default)
 #   ens256  = internet (DHCP, IS the default route)
 #   hostname = con#
 #
 # Disconnected bastion (dis#):
-#   ens192  = lab (DHCP, MTU 9000, IS the default route)
-#   ens224  = base for VLAN (disabled, MTU 9000)
+#   ens192  = lab (DHCP, IS the default route)
+#   ens224  = base for VLAN (disabled)
 #   ens224.10 = VLAN to con# (static IP, never-default)
 #   ens256  = disabled (disconnected host has no internet)
 #   hostname = dis#
@@ -268,16 +296,15 @@ _vm_setup_network_connected() {
 
 		# --- Rename default nmcli connections to match interface names ---
 		nmcli connection show
-		nmcli -g NAME connection show | grep -q "^Wired connection 1$" && \
+		nmcli -g NAME connection show | grep "^Wired connection 1$" && \
 		    nmcli connection modify "Wired connection 1" connection.id ens224
-		nmcli -g NAME connection show | grep -q "^Wired connection 2$" && \
+		nmcli -g NAME connection show | grep "^Wired connection 2$" && \
 		    nmcli connection modify "Wired connection 2" connection.id ens256
 
 		# --- ens192: lab network (NOT default route) ---
 		nmcli connection modify ens192 \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens192
 
 		# --- ens256: internet (IS the default route) ---
@@ -293,12 +320,11 @@ _vm_setup_network_connected() {
 		nmcli connection modify ens224 \
 		    ipv4.method disabled \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens224
 
 		# --- ens224.10: VLAN to disconnected bastion ---
-		nmcli -g NAME connection show | grep -q "^ens224\.10$" && \
+		nmcli -g NAME connection show | grep "^ens224\.10$" && \
 		    nmcli connection delete ens224.10
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
 		    id 10 ipv4.method manual ipv4.addresses $vlan_ip ipv4.never-default yes
@@ -338,9 +364,9 @@ _vm_setup_network_disconnected() {
 
 		# --- Rename default nmcli connections to match interface names ---
 		nmcli connection show
-		nmcli -g NAME connection show | grep -q "^Wired connection 1$" && \
+		nmcli -g NAME connection show | grep "^Wired connection 1$" && \
 		    nmcli connection modify "Wired connection 1" connection.id ens224
-		nmcli -g NAME connection show | grep -q "^Wired connection 2$" && \
+		nmcli -g NAME connection show | grep "^Wired connection 2$" && \
 		    nmcli connection modify "Wired connection 2" connection.id ens256
 
 		# --- ens256: DISABLE (disconnected host has no direct internet) ---
@@ -354,21 +380,19 @@ _vm_setup_network_disconnected() {
 		# --- ens192: lab network (NOT the default route) ---
 		nmcli connection modify ens192 \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens192
 
 		# --- ens224: base for VLAN (no IP, just carrier) ---
 		nmcli connection modify ens224 \
 		    ipv4.method disabled \
 		    ipv4.never-default yes \
-		    ipv6.method disabled \
-		    802-3-ethernet.mtu 9000
+		    ipv6.method disabled
 		nmcli connection up ens224
 
 		# --- ens224.10: VLAN to connected bastion ---
 		# Gateway = con#'s VLAN IP -> all internet traffic goes via masquerade
-		nmcli -g NAME connection show | grep -q "^ens224\.10$" && \
+		nmcli -g NAME connection show | grep "^ens224\.10$" && \
 		    nmcli connection delete ens224.10
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
 		    id 10 ipv4.method manual ipv4.addresses $vlan_ip \
@@ -425,6 +449,14 @@ _vm_setup_firewall() {
 		echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-ipforward.conf
 
 		firewall-cmd --permanent --zone=public --add-masquerade
+
+		# Remove stale test ports left over from previous runs (keep ssh)
+		for _port in 8443/tcp 5000/tcp 80/tcp; do
+		    firewall-cmd --query-port="$_port" --permanent 2>/dev/null \
+		        && firewall-cmd --remove-port="$_port" --permanent \
+		        && echo "Removed stale port $_port"
+		done
+
 		firewall-cmd --reload
 		sleep 5
 
@@ -522,13 +554,13 @@ address=/.apps.$(pool_cluster_name compact-vlan ${pool_num}).${domain}/${vlan_ap
 # --- VLAN Standard: api -> VLAN API VIP, apps -> VLAN APPS VIP ---
 address=/api.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_api_vip}
 address=/.apps.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_apps_vip}
+
+# --- Registry: registry.pN.example.com -> conN IP ---
+address=/registry.${domain}/${POOL_SUBNET:-10.0.2}.$((pool_num * 10))
 DNSEOF
 
     cat <<-SETUPEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
-
-		# Install dnsmasq and dig (bind-utils)
-		dnf install -y dnsmasq bind-utils
 
 		# Remove any listen-address restriction from the default config
 		# so dnsmasq listens on ALL interfaces (lab, VLAN, loopback).
@@ -583,6 +615,8 @@ RESOLVEOF
 		echo '--- Testing cluster DNS ---'
 		dig +short api.${sno_name}.${domain} @127.0.0.1
 		dig +short test.apps.${sno_name}.${domain} @127.0.0.1
+		echo '--- Testing registry DNS ---'
+		dig +short registry.${domain} @127.0.0.1
 		echo '--- Testing upstream forwarding ---'
 		dig +short google.com @127.0.0.1 | head -1
 	DNSEOF
@@ -602,8 +636,8 @@ _vm_cleanup_caches() {
 		rm -vrf ~/.cache/agent/
 		rm -vrf ~/bin/*
 		rm -f ~/.ssh/quay_installer*
-		rm -rfv ~/.oc-mirror/.cache
-		rm -rfv ~/*/.oc-mirror/.cache
+		rm -rf ~/.oc-mirror/.cache
+		rm -rf ~/*/.oc-mirror/.cache
 		# Ensure test VMs are located together and on the pool's datastore
 		if [ -s ~/.vmware.conf ]; then
 		    sed -i "s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g" ~/.vmware.conf
@@ -623,8 +657,6 @@ _vm_cleanup_podman() {
 
     cat <<-'PODEOF' | _essh "${user}@${host}" -- bash
 		set -ex
-		command -v podman || sudo dnf install podman -y &> /tmp/dnf-podman.log
-		echo "dnf-podman exit=$?"
 		podman system prune --all --force
 		podman rmi --all --force 2>/dev/null || true
 		sudo rm -rf ~/.local/share/containers/storage
@@ -635,6 +667,8 @@ _vm_cleanup_podman() {
 # --- _vm_cleanup_home -------------------------------------------------------
 # Wipe the home directory to ensure clean state.
 #
+# Quay/mirror-registry uses systemd user services; stop/disable them first, then
+# stop containers, then rm. Use sudo for rm so root-owned Quay files are removed.
 _vm_cleanup_home() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
@@ -642,7 +676,15 @@ _vm_cleanup_home() {
     echo "  [vm] Cleaning home directory on $host ..."
     cat <<-'HOMEEOF' | _essh "${user}@${host}" -- bash
 		set -ex
-		rm -rf ~/*
+		# Stop/disable systemd user services (Quay/mirror-registry install creates these)
+		systemctl --user stop --all 2>/dev/null || true
+		systemctl --user disable --all 2>/dev/null || true
+		# Stop all podman/docker containers so no process holds files under ~
+		podman stop -a 2>/dev/null || true
+		podman rm -af 2>/dev/null || true
+		command -v docker >/dev/null 2>&1 && docker stop $(docker ps -q) 2>/dev/null || true
+		command -v docker >/dev/null 2>&1 && docker rm -f $(docker ps -aq) 2>/dev/null || true
+		sudo rm -rf ~/*
 		echo "=== Home directory after cleanup ==="
 		ls -la ~/
 	HOMEEOF
@@ -730,14 +772,68 @@ _vm_disconnect_internet() {
 		echo '=== Routes after disconnect ==='
 		ip route
 		echo '=== Verify ens256 is DOWN ==='
-		ip link show ens256 | grep -q 'state DOWN' && echo 'GOOD: ens256 is DOWN' || echo 'WARNING: ens256 not in DOWN state'
+		ip link show ens256 | grep 'state DOWN' && echo 'GOOD: ens256 is DOWN' || echo 'WARNING: ens256 not in DOWN state'
 		echo '=== Verify no internet ==='
 		! ping -c 1 -W 3 8.8.8.8 && echo 'GOOD: no internet access' || { echo 'ERROR: internet still reachable'; exit 1; }
 	DISCEOF
 }
 
+# --- _vm_create_test_user_and_key_on_host ------------------------------------
+# Used on the GOLDEN VM only.  Generates a fresh testy_rsa key pair in the
+# default user's ~/.ssh/ on the host, creates the testy user with that public
+# key, and verifies SSH locally on the host.  The key pair is baked into the
+# golden snapshot so all clones inherit it.  Nothing is copied to bastion.
+#
+_vm_create_test_user_and_key_on_host() {
+    local host="$1"
+    local def_user="${2:-$VM_DEFAULT_USER}"
+    local test_user_name="testy"
+
+    echo "  [vm] Creating testy key and user on $host ..."
+
+    # Generate a fresh key pair in the default user's ~/.ssh/ on the host.
+    # ~/.ssh/ is hidden so it survives _vm_cleanup_home (sudo rm -rf ~/*).
+    _essh "${def_user}@${host}" -- "mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy -y 2>/dev/null; ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy"
+
+    local pub_key
+    pub_key=$(_essh "${def_user}@${host}" -- "cat ~/.ssh/testy_rsa.pub")
+
+    cat <<-USEREOF | _essh "${def_user}@${host}" -- sudo bash
+		set -ex
+		id $test_user_name && userdel $test_user_name -r -f || true
+		useradd $test_user_name -p not-used
+		mkdir -p ~${test_user_name}/.ssh
+		chmod 700 ~${test_user_name}/.ssh
+		echo "$pub_key" > ~${test_user_name}/.ssh/authorized_keys
+		chmod 600 ~${test_user_name}/.ssh/authorized_keys
+		chown -R ${test_user_name}.${test_user_name} ~${test_user_name}
+		restorecon -R /home/${test_user_name} 2>/dev/null || true
+		echo '${test_user_name} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${test_user_name}
+
+		if grep "^AllowUsers" /etc/ssh/sshd_config; then
+		    if ! grep "^AllowUsers" /etc/ssh/sshd_config | grep -w ${test_user_name}; then
+		        sed -i "/^AllowUsers/s/\$/ ${test_user_name}/" /etc/ssh/sshd_config
+		        systemctl restart sshd
+		    fi
+		fi
+	USEREOF
+
+    _vm_wait_ssh "$host" "$def_user"
+
+    echo "  [vm] Verifying testy SSH locally on $host ..."
+    local who
+    who=$(_essh "${def_user}@${host}" -- "ssh -i ~/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${test_user_name}@localhost whoami 2>&1")
+    if [ "$who" != "$test_user_name" ]; then
+        echo "  [vm] ERROR: local SSH as $test_user_name failed (got: '$who')" >&2
+        return 1
+    fi
+    echo "  [vm] testy key created and SSH to $test_user_name@localhost verified on $host"
+}
+
 # --- _vm_create_test_user ---------------------------------------------------
-# Create the "testy" user with SSH key access and sudo privileges.
+# (Re-)create the testy user using the key pair already present in the default
+# user's ~/.ssh/testy_rsa on the host (placed there during golden VM setup).
+# Does NOT read from or write to bastion.
 #
 _vm_create_test_user() {
     local host="$1"
@@ -747,7 +843,7 @@ _vm_create_test_user() {
     echo "  [vm] Creating test user '$test_user_name' on $host ..."
 
     local pub_key
-    pub_key=$(cat ~/.ssh/testy_rsa.pub)
+    pub_key=$(_essh "${def_user}@${host}" -- "cat ~/.ssh/testy_rsa.pub")
 
     cat <<-USEREOF | _essh "${def_user}@${host}" -- sudo bash
 		set -ex
@@ -762,8 +858,8 @@ _vm_create_test_user() {
 		echo '${test_user_name} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${test_user_name}
 
 		# Allow testy through sshd if AllowUsers is configured
-		if grep -q "^AllowUsers" /etc/ssh/sshd_config; then
-		    if ! grep "^AllowUsers" /etc/ssh/sshd_config | grep -qw ${test_user_name}; then
+		if grep "^AllowUsers" /etc/ssh/sshd_config; then
+		    if ! grep "^AllowUsers" /etc/ssh/sshd_config | grep -w ${test_user_name}; then
 		        sed -i "/^AllowUsers/s/\$/ ${test_user_name}/" /etc/ssh/sshd_config
 		        systemctl restart sshd
 		    fi
@@ -772,14 +868,14 @@ _vm_create_test_user() {
 
     _vm_wait_ssh "$host" "$def_user"
 
-    echo "  [vm] Verifying SSH to $test_user_name@$host ..."
+    echo "  [vm] Verifying testy SSH locally on $host ..."
     local who
-    who=$(_essh -i ~/.ssh/testy_rsa -o BatchMode=yes "${test_user_name}@${host}" -- whoami 2>&1)
+    who=$(_essh "${def_user}@${host}" -- "ssh -i ~/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${test_user_name}@localhost whoami 2>&1")
     if [ "$who" != "$test_user_name" ]; then
-        echo "  [vm] ERROR: SSH as $test_user_name failed (got: '$who')" >&2
+        echo "  [vm] ERROR: local SSH as $test_user_name failed (got: '$who')" >&2
         return 1
     fi
-    echo "  [vm] SSH to $test_user_name@$host OK"
+    echo "  [vm] SSH to $test_user_name@localhost verified on $host"
 }
 
 # --- _vm_set_aba_testing ----------------------------------------------------
@@ -850,19 +946,19 @@ _vm_verify_golden() {
 
 	cat <<-'VERIFYEOF' | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config
+		grep "^ClientAliveInterval" /etc/ssh/sshd_config
 		firewall-cmd --query-masquerade
 		[ "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ]
 		systemctl is-active chronyd
 		ping -c 3 -W 5 -i0.2 10.0.1.8
 		dnf check-update > /dev/null 2>&1 || { rc=$?; [ "$rc" -eq 100 ] && exit 1; exit "$rc"; }
-		! podman images -q 2>/dev/null | grep -q . || { echo "ERROR: podman images remain"; exit 1; }
+		! podman images -q 2>/dev/null | grep . || { echo "ERROR: podman images remain"; exit 1; }
 		[ -z "$(ls ~$SUDO_USER 2>/dev/null)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
 		id testy
-		grep -q "ABA_TESTING=1" /etc/environment
+		grep "ABA_TESTING=1" /etc/environment
 
 		# Golden VM must have no default route (fully disconnected)
-		! ip route show default | grep -q . || { echo "ERROR: default route still present"; exit 1; }
+		! ip route show default | grep . || { echo "ERROR: default route still present"; exit 1; }
 
 		# Proxy env vars must not be active in the default environment
 		[ -z "${http_proxy:-}" ] && [ -z "${https_proxy:-}" ] && [ -z "${HTTP_PROXY:-}" ] && [ -z "${HTTPS_PROXY:-}" ] \
@@ -917,7 +1013,7 @@ prepare_golden_vm() {
 				return 0
 			fi
 			echo "  Snapshot is ${age_hours}h old (max: ${max_age_hours}h) -- stale, destroying ..."
-		elif govc snapshot.tree -vm "$golden_name" 2>/dev/null | grep -q "$snapshot_name"; then
+		elif govc snapshot.tree -vm "$golden_name" 2>&1 | grep -q "$snapshot_name"; then
 			echo "  No stamp file but '$snapshot_name' snapshot exists -- reusing (recreating stamp)."
 			date +%s > "$stamp_file"
 			return 0
@@ -945,13 +1041,14 @@ prepare_golden_vm() {
 	_vm_disable_proxy_autoload "$ip" "$user"        || return 1
 	_vm_setup_firewall "$ip" "$user"      || return 1
 	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_install_packages "$ip" "$user"    || return 1
 	_vm_setup_time "$ip" "$user"          || return 1
 	_vm_dnf_update "$ip" "$user"          || return 1
 	_vm_wait_ssh "$ip" "$user"            || return 1
 	_vm_cleanup_caches "$ip" "$user"      || return 1
 	_vm_cleanup_podman "$ip" "$user"      || return 1
 	_vm_cleanup_home "$ip" "$user"        || return 1
-	_vm_create_test_user "$ip" "$user"    || return 1
+	_vm_create_test_user_and_key_on_host "$ip" "$user" || return 1
 	_vm_set_aba_testing "$ip" "$user"     || return 1
 	_vm_verify_golden "$ip" "$user"       || return 1
 
@@ -975,7 +1072,7 @@ prepare_golden_vm() {
 # (ens224.10) so the disconnected bastion can reach it via NAT masquerade.
 #
 # NICs:
-#   ens192     = private lab (DHCP, MTU 9000)
+#   ens192     = private lab (DHCP)
 #   ens224.10  = VLAN to disconnected bastion (static IP from VM_CLONE_VLAN_IPS)
 #   ens256     = internet (DHCP, default route)
 #
@@ -998,7 +1095,8 @@ configure_connected_bastion() {
     # DNS: run dnsmasq for this pool's cluster records
     _vm_setup_dnsmasq "$host" "$user" "$clone_name"
 
-    _vm_setup_time "$host" "$user"
+    _vm_dnf_update "$host" "$user"
+    _vm_wait_ssh "$host" "$user"
 
     # Clean up
     _vm_cleanup_caches "$host" "$user"
@@ -1007,7 +1105,6 @@ configure_connected_bastion() {
 
     # Config
     _vm_setup_vmware_conf "$host" "$user"
-    _vm_create_test_user "$host" "$user"
     _vm_set_aba_testing "$host" "$user"
     _vm_install_aba "$host" "$user"
 
@@ -1034,13 +1131,10 @@ configure_internal_bastion() {
     _vm_wait_ssh "$host" "$user"
     _vm_setup_ssh_keys "$host" "$user"
 
-    # Network + firewall first (NTP needs route through con# masquerade)
+    # Network + firewall first
     _vm_setup_network "$host" "$user" "$clone_name"
     _vm_setup_firewall "$host" "$user"
 
-    _vm_setup_time "$host" "$user"
-
-    # Update and reboot
     _vm_dnf_update "$host" "$user"
     _vm_wait_ssh "$host" "$user"
 
@@ -1056,8 +1150,6 @@ configure_internal_bastion() {
     _vm_remove_pull_secret "$host" "$user"
     _vm_disable_proxy_autoload "$host" "$user"
 
-    # Create test user
-    _vm_create_test_user "$host" "$user"
     _vm_set_aba_testing "$host" "$user"
 
     # Cut off internet: remove default route so disN is truly airgapped.
@@ -1260,8 +1352,6 @@ create_pools() {
 
             echo "=== Configuring $conn_vm (connected) ==="
 
-            _vm_wait_ssh "$conn_vm" "$user"
-            _vm_dnf_update "$conn_vm" "$user"
             _vm_wait_ssh "$conn_vm" "$user"
             _vm_setup_network "$conn_vm" "$user" "$conn_vm"
             _vm_setup_dnsmasq "$conn_vm" "$user" "$conn_vm"

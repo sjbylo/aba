@@ -46,16 +46,19 @@ restore_conf() {
 
 cleanup_early_exit_test() {
 	stop_tui
+	restore_pull_secret
 	restore_conf
 }
 trap cleanup_early_exit_test EXIT
 
 # --- Setup ---
 
-log_info "=== Setup: remove aba.conf for fresh start ==="
+log_info "=== Setup: remove aba.conf and pull secret for fresh start ==="
+backup_pull_secret
 backup_conf
 rm -f aba.conf
-log_info "Removed aba.conf"
+rm -f "$HOME/.pull-secret.json"
+log_info "Removed aba.conf and ~/.pull-secret.json"
 
 # ============================================================
 # Test 1: Start TUI, verify wizard starts (no resume dialog)
@@ -66,6 +69,7 @@ start_tui
 log_info "Test 1: Welcome dialog"
 if wait_for "$TUI_TITLE_WELCOME" 15; then
 	log_pass "Welcome dialog appeared"
+	screenshot "welcome"
 else
 	log_fail "Welcome dialog did not appear"
 	exit 1
@@ -73,11 +77,12 @@ fi
 send Enter
 sleep 2
 
-log_info "Test 2: Pull secret dialog (resume skipped)"
-if wait_for "$TUI_TITLE_PULL_SECRET" 20; then
-	log_pass "Pull secret dialog appeared (fresh start, no resume)"
+log_info "Test 2: Pull secret required dialog (resume skipped)"
+if wait_for "$TUI_TITLE_PULL_SECRET_REQUIRED" 20; then
+	log_pass "Pull secret required dialog appeared (fresh start, no resume)"
+	screenshot "pull-secret-required"
 else
-	log_fail "Pull secret dialog did not appear"
+	log_fail "Pull secret required dialog did not appear"
 	exit 1
 fi
 
@@ -104,6 +109,7 @@ sleep 1
 # Confirm quit dialog should appear
 if wait_for "$TUI_TITLE_CONFIRM_EXIT" 5; then
 	log_pass "Confirm exit dialog appeared"
+	screenshot "confirm-exit"
 else
 	log_fail "Confirm exit dialog did not appear"
 	exit 1

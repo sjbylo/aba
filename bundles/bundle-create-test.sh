@@ -1,6 +1,8 @@
 #!/bin/bash -e
 # Create an install bundle and test it's working by installing SNO
 
+. ../test/lib.sh
+
 #TEST_HOST=mirror.example.com  # Adjust this as needed
 #BASE_DOM=example.com
 BASE_DOM=$(hostname -d)
@@ -66,7 +68,9 @@ export ABA_TESTING=1   # No stats recorded
 
 set -x
 
-. ~steve/.proxy-set.sh  # Go online!
+#. ~steve/.proxy-set.sh  # Go online!
+int_up
+~/bin/intcheck.sh | grep UP
 # Test connectivity is not working
 echo_step Test internet connection with curl google.com ...
 curl -sfkIL google.com >/dev/null  # Must work
@@ -121,7 +125,7 @@ if podman ps | grep registry; then
 	cd ..
 	# Uninstall Quay
 	./install  # install aba
-	aba -A
+	aba --noask
 	#aba uninstall  || true
 	cd mirror
 	./mirror-registry uninstall --autoApprove -v || true
@@ -166,9 +170,9 @@ rm -rf aba
 export GIT_BRANCH=${GIT_BRANCH:-main}
 echo_step Install Aba from branch $GIT_BRANCH
 set +x
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- $GIT_BRANCH
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- $GIT_BRANCH
 #bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 set -x
 cd aba
 ####./install  # Done above
@@ -224,9 +228,9 @@ uncomment_line registry.redhat.io/ubi9/ubi		mirror/save/imageset-config-save.yam
 #      defaultChannel: release-v2.8
 #      channels:
 #      - name: "release-v2.8"
-[ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/{n;N; s/release-v2.10/release-v2.8/g}' mirror/save/imageset-config-save.yaml
+# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/{n;N; s/release-v2.1[01]/release-v2.8/g}' mirror/save/imageset-config-save.yaml
 # Append or insert line after "mtv-operator" line
-[ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/a\      defaultChannel: release-v2.8' mirror/save/imageset-config-save.yaml
+# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/a\      defaultChannel: release-v2.8' mirror/save/imageset-config-save.yaml
 # END - Exception since issue with v2.10 ##########
 
 echo_step Show image set config file ...
@@ -298,7 +302,9 @@ echo_step Removing unneeded aba repo at $WORK_DIR/aba
 rm -rf $WORK_DIR/aba # Remove the unneeded repo to save space
 
 echo_step Going offline to test the install bundle ...
-. ~steve/.proxy-unset.sh   # Go offline!
+##. ~steve/.proxy-unset.sh   # Go offline!
+int_down
+~/bin/intcheck.sh | grep DOWN
 # Test connectivity is not working
 echo_step Test internet connection with curl google.com ...
 ! curl -sfkIL google.com >/dev/null  # Must "Connection timed out"
@@ -333,7 +339,7 @@ sed -i "s/platform=bm/platform=vmw/g" aba.conf
 
 ./install
 aba
-aba -A
+aba --noask
 aba --machine-network 10.0.0.0/20 --ntp $NTP_IP --gateway-ip 10.0.1.1  # Just to be sure, needed on dual-homed bastion
 
 echo_step Install Quay and load the images ...
@@ -534,14 +540,17 @@ echo_step Remove Quay ...
 # Uninstall Quay
 cd $WORK_DIR/test-install/aba
 ./install  # install aba
-aba -A
+aba --noask
 # Use one of the following two:
 aba -d mirror uninstall -y
 #aba -d mirror uninstall-docker-registry -y
 sudo rm -rf ~/quay-install
 sudo rm -rf ~/docker-reg
 
-. ~steve/.proxy-set.sh  # Go online!
+##. ~steve/.proxy-set.sh  # Go online!
+int_down
+~/bin/intcheck.sh | grep UP
+
 # Test connectivity is working
 echo_step Test internet connection with curl google.com ...
 curl -sfkIL google.com >/dev/null  # Must work

@@ -9,7 +9,8 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-verify-aba-conf || exit 1
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 
 pw=$(cat iso-agent-based/auth/kubeadmin-password 2>/dev/null)
@@ -25,7 +26,7 @@ cat <<END
 [ABA] Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or
 [ABA] Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.
 END
-[ -f regcreds/pull-secret-mirror.json ] && \
+[ -f "$regcreds_dir/pull-secret-mirror.json" ] && \
 	echo "[ABA] Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
 	echo "[ABA] Run 'aba day2-osus' to configure the OpenShift Update Service."
 cat <<END

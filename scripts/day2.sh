@@ -17,11 +17,12 @@ umask 077
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)  # used to check int_connection value
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
-verify-mirror-conf || exit 1
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 # Stop processing (CatalogSources and Signatires etc) if this cluster is a connected cluster!
 if [ "$int_connection" ]; then
@@ -78,11 +79,11 @@ aba_info "Adding registry CA to the cluster.  See workaround: https://access.red
 echo
 cm_existing=$(oc get cm registry-config -n openshift-config || true)
 # If installed from mirror reg. and trust CA missing (cm/registry-config) does not exist...
-if [ -s regcreds/rootCA.pem -a ! "$cm_existing" ]; then
+if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 	aba_info "Adding the trust CA of the registry ($reg_host) ..."
 	aba_info "To fix https://access.redhat.com/solutions/5514331 and solve 'image pull errors in disconnected environment'."
-	export additional_trust_bundle=$(cat regcreds/rootCA.pem) 
-	aba_info "Using root CA file at regcreds/rootCA.pem"
+	export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem") 
+	aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
 
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 

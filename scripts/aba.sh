@@ -1,11 +1,29 @@
 #!/bin/bash
 # Start here, run this script to get going!
+#
+# =============================================================================
+# ABA Architecture: Connected -> Bundle -> Disconnected
+# =============================================================================
+# ABA always starts on a CONNECTED workstation with internet access.
+# It downloads all required artifacts: CLI tools, container images,
+# mirror registry tarballs (Quay + Docker), and operator catalogs.
+#
+# These are packaged into an "ABA Bundle" (via 'aba bundle' or 'aba tar')
+# which is transferred into a FULLY DISCONNECTED environment (the "DISCO").
+#
+# The disconnected bastion has NO INTERNET by design.
+# ALL dependencies must already be inside the ABA bundle/repo.
+# If an artifact is missing in the disconnected environment, the bundle
+# creation failed -- it is never acceptable to reach the internet from there.
+#
+# See: https://developers.redhat.com/articles/2025/10/14/simplify-openshift-installation-air-gapped-environments
+# =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=0.9.6
+ABA_VERSION=0.9.7
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260225194755
+ABA_BUILD=20260315224415
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -157,6 +175,13 @@ aba_debug DEBUG_ABA=$DEBUG_ABA
 aba_debug "Starting: $0 $*"
 aba_debug "ABA_ROOT=[$ABA_ROOT]"
 
+# Guard: mirror config flags require WORK_DIR to be a mirror directory.
+# Same pattern as root Makefile's MIRROR_CMDS guard (tells user to use -d mirror).
+_require_mirror_dir() {
+	grep -q "Mirror Makefile" "$WORK_DIR/Makefile" 2>/dev/null && return
+	aba_abort "Mirror config flags require a mirror directory. Use: aba -d mirror $1 ..."
+}
+
 # This will be the actual 'make' command that will eventually be run
 BUILD_COMMAND=
 
@@ -204,12 +229,27 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 [ "$*" ] && interactive_mode= && have_args=1
 
 # For non-interactive mode (aba bundle, aba -d mirror save, etc.):
-# Start CLI downloads early to maximize parallel download time
+# Start CLI downloads early to maximize parallel download time.
 # For interactive mode: Wait until after user input (line ~1152) to avoid
-# bandwidth contention that could slow down reaching the user prompts
+# bandwidth contention that could slow down reaching the user prompts.
+# When ocp_version is unknown, still download version-independent tools
+# (oc-mirror, butane, govc) via --no-version to save time.
+# Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
-	aba_debug "Non-interactive mode detected - starting CLI downloads early"
-	$ABA_ROOT/scripts/cli-download-all.sh
+	case " $* " in
+		*" clean "*|*" reset "*|*" help "*)
+			aba_debug "Housekeeping command - skipping early CLI downloads"
+			;;
+		*)
+			if [ "$ocp_version" ]; then
+				aba_debug "Non-interactive mode - starting all CLI downloads early"
+				$ABA_ROOT/scripts/cli-download-all.sh
+			else
+				aba_debug "Non-interactive mode - starting version-independent CLI downloads early"
+				$ABA_ROOT/scripts/cli-download-all.sh --no-version
+			fi
+			;;
+	esac
 fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
@@ -339,60 +379,94 @@ elif [ "$1" = "--light" ]; then
 	# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 	aba_debug Downloading operator index for version $ver 
 
+	# Catalog downloads need oc-mirror; ensure it's at least downloading
+	scripts/cli-download-all.sh oc-mirror
+
 	# Use new helper function for parallel catalog downloads
 	ver_short="${ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
-	download_all_catalogs "$ver_short" 86400  # 1-day TTL
+	download_all_catalogs "$ver_short"
 
 		shift 2
 		ocp_version=$ver
-	elif [ "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
+	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
+		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_host -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_host -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-ssh-key" -o "$1" = "-k" ]; then
+		_require_mirror_dir "$1"
 		# The ssh key used to access the linux registry host
 		# If no value, remove from mirror.conf
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_key= || { reg_ssh_key=$2; shift; }
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_ssh_key -v "$reg_ssh_key" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_ssh_key -v "$reg_ssh_key" -f $WORK_DIR/mirror.conf
 		shift
 	elif [ "$1" = "--reg-ssh-user" -o "$1" = "-U" ]; then
+		_require_mirror_dir "$1"
 		# The ssh username used to access the linux registry host
 		# If no value, remove from mirror.conf
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_ssh_user_val= || { reg_ssh_user_val=$2; shift; }
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_ssh_user -v "$reg_ssh_user_val" -f $WORK_DIR/mirror.conf
 		shift
 	elif [ "$1" = "--data-dir" ]; then
+		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n data_dir -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n data_dir -v "$2" -f $WORK_DIR/mirror.conf
+		shift 2
+	elif [ "$1" = "--vendor" ]; then
+		_require_mirror_dir "$1"
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[[ "$2" =~ ^(auto|quay|docker)$ ]] || aba_abort "invalid vendor '$2' -- must be auto, quay, or docker"
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_vendor -v "$2" -f $WORK_DIR/mirror.conf
+		shift 2
+	elif [ "$1" = "--reg-port" ]; then
+		_require_mirror_dir "$1"
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[[ "$2" =~ ^[0-9]+$ ]] || aba_abort "invalid port '$2' -- must be a number"
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_port -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-user" ]; then
+		_require_mirror_dir "$1"
 		# The username used to access the mirror registry 
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_user -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_user -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-password" ]; then
+		_require_mirror_dir "$1"
 		# The password used to access the mirror registry 
 		# Add a password in ='password'
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_pw_value= || { reg_pw_value="$2"; shift; }
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $WORK_DIR/mirror.conf
 		shift
 	elif [ "$1" = "--reg-path" ]; then
+		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" >&2 
 		# force will skip over asking to edit the conf file
-		make -sC $ABA_ROOT/mirror mirror.conf force=yes
-		replace-value-conf -n reg_path -v "$2" -f $ABA_ROOT/mirror/mirror.conf
+		make -sC $WORK_DIR mirror.conf force=yes
+		replace-value-conf -n reg_path -v "$2" -f $WORK_DIR/mirror.conf
+		shift 2
+	elif [ "$1" = "--pull-secret-mirror" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[ ! -f "$2" ] && aba_abort "file not found: $2"
+		BUILD_COMMAND="$BUILD_COMMAND pull_secret_mirror='$2'"
+		shift 2
+	elif [ "$1" = "--ca-cert" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[ ! -f "$2" ] && aba_abort "file not found: $2"
+		BUILD_COMMAND="$BUILD_COMMAND ca_cert='$2'"
 		shift 2
 	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -448,7 +522,7 @@ elif [ "$1" = "--light" ]; then
 	#	fi
 		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
-	elif [ "$1" = "--api-vip" -o "$1" = "-XXXXXX" ]; then # FIXME: opt?
+	elif [ "$1" = "--api-vip" -o "$1" = "-A" ]; then
 		# If arg ip addr then replace value in cluster.conf
 		# If arg missing remove from cluster.conf
 		api_vip=
@@ -474,7 +548,7 @@ elif [ "$1" = "--light" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND api_vip=$api_vip"
 		fi
 		shift
-	elif [ "$1" = "--ingress-vip" -o "$1" = "-YYYYY" ]; then # FIXME: opt?
+	elif [ "$1" = "--ingress-vip" -o "$1" = "-G" ]; then
 		# If arg ip addr replace value in cluster.conf
 		# If arg missing remove from cluster.conf
 		ingress_vip=
@@ -502,7 +576,7 @@ elif [ "$1" = "--light" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND ingress_vip=$ingress_vip"
 		fi
 		shift
-	elif [ "$1" = "--ports" -o "$1" = "-PP" ]; then #FIXME: opt name?
+	elif [ "$1" = "--ports" ]; then
 		# If arg missing remove from aba.conf
 		# Check arg after --ports, if "empty" then remove value from cluster.conf
 		ports_vals=""
@@ -533,9 +607,9 @@ elif [ "$1" = "--light" ]; then
 					[ "$op_set_list" ] && op_set_list="$op_set_list,$1" || op_set_list=$1
 				else
 					aba_warning "No such operator set: $1" >&2
-					aba_info -n "Available operator sets are: " >&2
-					ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
-					aba_info "(as defined in files: aba/templates/operator-sets-*)" >&2
+				aba_info -n "Available operator sets are: " >&2
+				ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
+				echo_white "(as defined in files: aba/templates/operator-sets-*)" >&2
 
 					exit 1
 				fi
@@ -554,11 +628,14 @@ elif [ "$1" = "--light" ]; then
 			ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
 			replace-value-conf -n ops -v $ops_list -f $ABA_ROOT/aba.conf
 		fi
-	elif [ "$1" = "--incl-platform" ]; then  # FIXME: Only have "--excl-platform" option and add true or false (remove: --incl-platform ??)
-		replace-value-conf -n excl_platform -v "false" -f $ABA_ROOT/aba.conf
-		shift
 	elif [ "$1" = "--excl-platform" ]; then
-		replace-value-conf -n excl_platform -v "true" -f $ABA_ROOT/aba.conf
+		if [ "$2" = "false" ]; then
+			replace-value-conf -n excl_platform -v "false" -f $ABA_ROOT/aba.conf
+			shift
+		else
+			replace-value-conf -n excl_platform -v "true" -f $ABA_ROOT/aba.conf
+			[ "$2" = "true" ] && shift
+		fi
 		shift
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -577,7 +654,7 @@ elif [ "$1" = "--light" ]; then
 		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
 		export ask=1
 		shift 
-	elif [ "$1" = "-Y" ]; then  # One off, accept the default answer to all prompts for this invocation
+	elif [ "$1" = "-Y" -o "$1" = "--yes-permanent" ]; then
 		export ASK_OVERRIDE=1  
 		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf  # And make permanent change
 		export ask=
@@ -586,7 +663,7 @@ elif [ "$1" = "--light" ]; then
 		replace-value-conf -n ask -v true -f $ABA_ROOT/aba.conf
 		export ask=1
 		shift 
-	elif [ "$1" = "--noask" -o "$1" = "-A" ]; then  # FIXME: make -y work only for a single command execution (not write into file)
+	elif [ "$1" = "--noask" ]; then
 		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
 		export ask=
 		shift 
@@ -651,7 +728,7 @@ elif [ "$1" = "--light" ]; then
 		fi
 		shift 2
 
-	elif [ "$1" = "--data-disk" -o "$1" = "-dd" ]; then
+	elif [ "$1" = "--data-disk-gb" -o "$1" = "--data-disk" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
 			if [ -f cluster.conf ]; then
 				replace-value-conf -n data_disk -v $2 -f cluster.conf
@@ -692,11 +769,10 @@ elif [ "$1" = "--light" ]; then
 		shift
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		if [ "$cur_target" = "cluster" ]; then
-			BUILD_COMMAND="$BUILD_COMMAND name='$2'"  # FIXME: This is confusing and prone to error
+		if [ "$cur_target" = "cluster" -o "$cur_target" = "mirror" ]; then
+			BUILD_COMMAND="$BUILD_COMMAND name='$2'"
 		else
-			aba_abort "can only use option $1 after target 'cluster'.  See aba cluster -h" 
-
+			aba_abort "option $1 requires target 'cluster' or 'mirror'.  See aba cluster -h or aba mirror -h"
 			exit 1
 		fi
 
@@ -744,6 +820,77 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--masters" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND masters=1"
 		shift
+	elif [ "$1" = "--num-workers" -o "$1" = "-W" ]; then
+		if echo "$2" | grep -q -E '^[0-9]+$'; then
+			if [ -f cluster.conf ]; then
+				replace-value-conf -n num_workers -v $2 -f cluster.conf
+			else
+				BUILD_COMMAND="$BUILD_COMMAND num_workers=$2"
+			fi
+		else
+			aba_abort "argument invalid [$2] after option $1"
+		fi
+		shift 2
+	elif [ "$1" = "--num-masters" ]; then
+		if echo "$2" | grep -q -E '^[0-9]+$'; then
+			if [ -f cluster.conf ]; then
+				replace-value-conf -n num_masters -v $2 -f cluster.conf
+			else
+				BUILD_COMMAND="$BUILD_COMMAND num_masters=$2"
+			fi
+		else
+			aba_abort "argument invalid [$2] after option $1"
+		fi
+		shift 2
+	elif [ "$1" = "--vlan" ]; then
+		vlan_val=
+		if [[ -n $2 && $2 != -* ]]; then
+			vlan_val=$2
+			shift
+		fi
+		if [ -f cluster.conf ]; then
+			replace-value-conf -n vlan -v "$vlan_val" -f cluster.conf
+		else
+			BUILD_COMMAND="$BUILD_COMMAND vlan=$vlan_val"
+		fi
+		shift
+	elif [ "$1" = "--ssh-key" ]; then
+		ssh_key_val=
+		if [[ -n $2 && $2 != -* ]]; then
+			ssh_key_val=$2
+			shift
+		fi
+		if [ -f cluster.conf ]; then
+			replace-value-conf -n ssh_key_file -v "$ssh_key_val" -f cluster.conf
+		else
+			BUILD_COMMAND="$BUILD_COMMAND ssh_key_file=$ssh_key_val"
+		fi
+		shift
+	elif [ "$1" = "--proxy" ]; then
+		proxy_val=
+		if [[ -n $2 && $2 != -* ]]; then
+			proxy_val=$2
+			shift
+		fi
+		if [ -f cluster.conf ]; then
+			replace-value-conf -n http_proxy -v "$proxy_val" -f cluster.conf
+			replace-value-conf -n https_proxy -v "$proxy_val" -f cluster.conf
+		else
+			BUILD_COMMAND="$BUILD_COMMAND http_proxy=$proxy_val https_proxy=$proxy_val"
+		fi
+		shift
+	elif [ "$1" = "--no-proxy" ]; then
+		no_proxy_val=
+		if [[ -n $2 && $2 != -* ]]; then
+			no_proxy_val=$2
+			shift
+		fi
+		if [ -f cluster.conf ]; then
+			replace-value-conf -n no_proxy -v "$no_proxy_val" -f cluster.conf
+		else
+			BUILD_COMMAND="$BUILD_COMMAND no_proxy=$no_proxy_val"
+		fi
+		shift
 	elif [ "$1" = "--start" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND start=--start"
 		shift
@@ -789,12 +936,12 @@ if [ "$cur_target" ]; then
 			$ABA_ROOT/scripts/oc-command.sh "$cmd"
 			exit 
 		;;
-	bundle)
-		trap - ERR  # No need for this anymore
-		aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
-		eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
-		exit 
-	;;
+		bundle)
+			trap - ERR  # No need for this anymore
+			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
+			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
+			exit 
+		;;
 	esac
 fi
 
@@ -802,6 +949,13 @@ aba_debug "interactive_mode=[$interactive_mode]"
 
 # Sanitize $BUILD_COMMAND
 BUILD_COMMAND=$(echo "$BUILD_COMMAND" | tr -s " " | sed -E -e "s/^ //g" -e "s/ $//g")
+
+# Auto-inject 'register' target when --pull-secret-mirror and --ca-cert are given without an explicit target
+if echo "$BUILD_COMMAND" | grep -q "pull_secret_mirror=" && echo "$BUILD_COMMAND" | grep -q "ca_cert="; then
+	if [ -z "$cur_target" ]; then
+		BUILD_COMMAND="register $BUILD_COMMAND"
+	fi
+fi
 
 aba_debug "ABA_ROOT=[$ABA_ROOT]" 
 aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 
@@ -851,8 +1005,6 @@ source <(normalize-aba-conf)
 export ask=1  # In interactive mode let's use the safe option!
 export ASK_OVERRIDE=  # Do NOT override $ask, even if $ask is false (re-read from aba.conf - omg this needs to be simplified!)
 export ASK_ALWAYS=1   # Force to always ask, no matter the $ask or $ASK_OVERRIDE !!
-
-#verify-aba-conf || exit 1  # Can't verify here 'cos aba.conf likely has no ocp_version or channel defined
 
 sed "s/VERSION/v$ABA_VERSION/" others/message.txt
 
@@ -1168,17 +1320,18 @@ fi
 
 # Now we know the desired openshift version...
 
-# Fetch the operator indexes (in the background to save time).
-# Use new helper function for parallel catalog downloads (runs in background)
-ocp_ver_short="${target_ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
-download_all_catalogs "$ocp_ver_short" 86400  # 1-day TTL
-# Note: Catalogs wait/check happens in scripts that actually need them
-# (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
-
-# Trigger download of all CLI binaries (for interactive mode only)
+# Trigger download of all CLI binaries first -- catalog downloads need oc-mirror
 # Note: Non-interactive mode already started these at line ~205
 # Note: Another place this is checked is in "scripts/reg-save.sh"
 scripts/cli-download-all.sh
+
+# Fetch the operator indexes (in the background to save time).
+# Use new helper function for parallel catalog downloads (runs in background)
+# NOTE: must come AFTER cli-download-all.sh since catalogs need oc-mirror
+ocp_ver_short="${target_ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
+download_all_catalogs "$ocp_ver_short"
+# Note: Catalogs wait/check happens in scripts that actually need them
+# (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
 
 # Initiate download of mirror-install and docker-reg image
 run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- make -s -C mirror download-registries
@@ -1195,7 +1348,7 @@ scripts/install-rpms.sh external
 
 ##############################################################################################################################
 source <(normalize-aba-conf)
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 export ask=1 # Must set for interactive mode!
 
 ##############################################################################################################################
@@ -1244,7 +1397,7 @@ if grep -qi "registry.redhat.io" $pull_secret_file 2>/dev/null; then
 		# Validate pull secret by testing authentication with registry.redhat.io
 		aba_info -n "Validating pull secret authentication..."
 		if validate_pull_secret "$pull_secret_file" >/dev/null 2>&1; then
-			aba_info " ✓ Authentication successful"
+			echo_white " ✓ Authentication successful"
 		else
 			echo
 			# validate_pull_secret already outputs detailed error with [ABA] prefix

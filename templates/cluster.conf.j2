@@ -51,6 +51,10 @@ int_connection={{ int_connection }}				# Internet connection mode:
 					#   direct - use NAT / direct Internet
 					#   empty  - use local mirror (default)
 
+mirror_name=mirror			# Mirror directory this cluster uses.
+					# Credentials are stored in ~/.aba/mirror/$mirror_name/.
+					# Change if using multiple mirrors (e.g. mirror2).
+
 #http_proxy=http://10.0.1.8:3128	# Optional proxy overrides (if env vars not set)
 #https_proxy=http://10.0.1.8:3128
 #no_proxy=.example.com,.lan

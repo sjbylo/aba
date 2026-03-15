@@ -29,8 +29,10 @@ ABA_ROOT="$(pwd)"
 # Check if gh is installed
 if ! command -v gh &> /dev/null; then
     echo -e "${RED}Error: GitHub CLI (gh) is not installed${NC}"
-    echo -e "${YELLOW}Install from: https://cli.github.com/${NC}"
-    echo -e "${YELLOW}Or install via: sudo dnf install gh${NC}"
+    echo -e "${YELLOW}Install with:${NC}"
+    echo -e "  sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo"
+    echo -e "  sudo dnf install gh -y"
+    echo -e "  gh auth login"
     exit 1
 fi
 

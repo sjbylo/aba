@@ -6,65 +6,153 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ## Medium Priority
 
-### 1. E2E Clone-Check: Parallelize VM Cloning and Configuration
+### Empty Values in aba.conf Propagate Into cluster.conf via Template Generation
 
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Medium  
-**Created:** 2026-02-12
-
-**Current State:**
-`suite-clone-and-check.sh` runs all steps sequentially (~11 minutes). Each `_vm_*` operation on con1 completes before the same operation starts on dis1.
-
-**Proposed Optimization -- Parallel Operations:**
-
-Steps that CAN be parallelized (independent per VM):
-- SSH wait after power-on (both VMs boot simultaneously)
-- SSH key setup on both VMs
-- NTP on both (after con1 firewall is up)
-- Cleanup (caches, podman, home) on both
-- Config (vmware.conf, test user) on both
-
-Steps that MUST stay sequential:
-- Cloning: both share the same template; `clone_with_macs` reverts the template snapshot before each clone. Fix: revert once, then clone twice.
-- con1 network + firewall + dnsmasq BEFORE dis1 network: dis1's default route goes through con1's VLAN masquerade.
-
-**Estimated time saving:** ~11 min down to ~7-8 min.
-
-### 2. E2E VM Reuse: Snapshot-Based Fast Restart
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Medium  
-**Created:** 2026-02-12
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-12
 
 **Problem:**
-Every clone-and-check run destroys and re-clones VMs from template, then reconfigures from scratch. This is the biggest time cost (~10 min) and is wasteful when the VMs are already configured correctly.
+When `cluster.conf` is generated from `templates/cluster.conf.j2`, it uses Jinja2 variables
+like `{{ machine_network }}/{{ prefix_length }}`. If aba.conf does not yet have these values
+set (e.g., the user hasn't finished the TUI wizard, or aba.conf was just created from the
+template with defaults), the rendered cluster.conf ends up with malformed entries such as:
 
-**Proposed Solution -- Three-tier reuse:**
-
-1. **Snapshot reuse (fastest, ~30s):** After clone-and-check fully configures VMs, take a govc snapshot `e2e-configured`. On subsequent runs, if VMs exist with that snapshot, revert to it and power on. Guarantees clean, known-good state.
-
-2. **Power-on + light cleanup (fast, ~60s):** Leave VMs powered off after tests. Next run powers on and runs a refresh (reset aba state, clean caches). Network/firewall/dnsmasq survive reboots. Slightly less deterministic than snapshots.
-
-3. **Full re-clone (current, ~11 min):** Destroy VMs and clone fresh from template. Used with `--fresh` flag or when VMs don't exist.
-
-**Recommended approach:** Hybrid -- snapshots for the clone-and-check / infra setup, light cleanup for the actual test suites that run on already-configured VMs. `--fresh` flag forces full re-clone.
-
-**Implementation sketch:**
-```bash
-# In suite-clone-and-check.sh or a new pool-reuse.sh:
-if vm_exists "$CON_NAME" && vm_has_snapshot "$CON_NAME" "e2e-configured"; then
-    govc snapshot.revert -vm "$CON_NAME" e2e-configured
-    govc vm.power -on "$CON_NAME"
-    # ... same for DIS_NAME
-else
-    # full clone + configure pipeline
-fi
-# After full configure:
-govc snapshot.create -vm "$CON_NAME" e2e-configured
-govc snapshot.create -vm "$DIS_NAME" e2e-configured
 ```
+machine_network=/               # CIDR for all cluster nodes
+```
+
+This causes `aba agentconf` to fail later with a confusing error like:
+```
+Error: machine_network is invalid (//24) in aba.conf
+```
+
+The error is misleading because aba.conf is actually correct — it's the stale cluster.conf
+that has the bad value. The flow is:
+1. `verify-config.sh` sources `normalize-aba-conf` (correct: `machine_network=148.100.112.0`)
+2. Then sources `normalize-cluster-conf`, which reads cluster.conf's `machine_network=/`
+3. This **overwrites** the good aba.conf value with `/`
+4. `verify-aba-conf` then validates the now-corrupted `machine_network` variable
+
+**Root Cause:**
+There is no guard preventing cluster.conf generation when required aba.conf fields are empty.
+The Jinja2 template blindly substitutes whatever values are available, including empty strings.
+
+**Potential Fixes (investigate):**
+- **Guard in create-cluster-conf.sh:** Refuse to generate cluster.conf if critical aba.conf
+  values (`machine_network`, `domain`, `ocp_version`) are empty. Abort with a clear message.
+- **Guard in the Jinja2 template:** Add a check at the top of `cluster.conf.j2` that fails
+  if required variables are undefined or empty.
+- **Guard in normalize-cluster-conf:** If cluster.conf has `machine_network=/` (no IP),
+  skip exporting it so the aba.conf value is preserved.
+- **Guard in verify-config.sh:** Source normalize-cluster-conf selectively — don't let it
+  overwrite aba.conf values for fields that are shared (machine_network, prefix_length).
+- **TUI ordering:** Verify the TUI wizard doesn't trigger cluster.conf generation before
+  aba.conf is fully populated. Check `summary_apply()` and the background `isconf` task.
+
+**User workaround:** Manually fix `machine_network=148.100.112.0/24` in cluster.conf, or
+delete cluster.conf and re-run `aba agentconf`.
+
+**Where:** `templates/cluster.conf.j2`, `scripts/create-cluster-conf.sh`,
+`scripts/verify-config.sh`, `scripts/include_all.sh:normalize-cluster-conf()`
+
+### `reg_detect_existing()` Should Probe Before Aborting on Stale `state.sh`
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-12
+
+**Problem:**
+`reg_detect_existing()` in `scripts/reg-common.sh` (lines 93-104) aborts if `~/.aba/mirror/<name>/state.sh` contains a `REG_HOST` matching the current `reg_host`. It trusts `state.sh` blindly, but the remote registry may no longer exist (e.g., VM was reverted to a snapshot, or the registry was manually removed). This causes `aba sync -H <host>` to fail with "Mirror registry is already installed" even when it isn't.
+
+**Root cause:**
+`state.sh` is designed to survive `aba clean` and `aba reset`. If the registry is removed by external means (VM revert, manual cleanup), `state.sh` becomes stale. The current code has no fallback — it aborts unconditionally.
+
+**Proposed fix:**
+Before aborting, probe the registry to verify it's actually running:
+```bash
+if [ "$_saved_host" = "$reg_host" ]; then
+    if probe_host "$reg_url/v2/" "existing registry" 2>/dev/null; then
+        aba_abort "Mirror registry is already installed at $reg_host" ...
+    else
+        aba_warning "Stale registry state: $reg_host is unreachable. Clearing state and proceeding with fresh install."
+        rm -f "$regcreds_dir/state.sh"
+    fi
+fi
+```
+
+**Where:** `scripts/reg-common.sh` function `reg_detect_existing()` (line 98)
+
+### Docker Registry v3.0.0 Debug Port Collision
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-12
+
+**Problem:**
+Docker registry v3.0.0 (`docker.io/library/registry:latest`) uses port 5001 for its debug/metrics interface by default. If a user sets `reg_port=5001` in `mirror.conf`, the main HTTP server and the debug server both try to bind to port 5001, causing the container to crash-loop with `bind: address already in use`.
+
+**Root cause:**
+In `scripts/reg-install-docker.sh`, the `podman run` command sets `REGISTRY_HTTP_ADDR=0.0.0.0:${reg_port}` but does not override the debug server address. The Docker registry v3.0.0 default debug addr is `:5001`.
+
+**Proposed fix:**
+Add `-e REGISTRY_HTTP_DEBUG_ADDR=127.0.0.1:0` (or a different port like `127.0.0.1:5002`) to the `podman run` command in `reg-install-docker.sh` to prevent the collision regardless of the user's chosen port.
+
+**Where:** `scripts/reg-install-docker.sh`, the `podman run` block (around line 74-87)
+
+### `aba install` Downloads Quay Binary Even When `reg_vendor=docker`
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-11
+
+**Problem:**
+Running `aba install` with `reg_vendor=docker` in `mirror.conf` downloads and extracts `mirror-registry-amd64.tar.gz` (the Quay appliance binary). This is wrong — Docker installs only need the Docker registry image, not the ~1GB Quay tarball. Wastes time and bandwidth.
+
+**Root cause:**
+In `templates/Makefile.mirror` line 230, `.available` has `mirror-registry` as an order-only prerequisite:
+```makefile
+.available: mirror.conf | .init .rpmsext mirror-registry
+```
+This runs the `mirror-registry` target (line 164, extracts Quay tarball) unconditionally before every install, regardless of `reg_vendor`.
+
+**Proposed fix:**
+Make the `mirror-registry` prerequisite conditional on vendor. Options:
+- Use a Make conditional: `$(if $(filter quay auto,$(reg_vendor)),mirror-registry)`
+- Or move the `ensure_quay_registry` call into `reg-install.sh` / `reg-install-quay.sh` and remove `mirror-registry` from the `.available` prerequisites entirely (let the script handle it)
+
+**Where:** `templates/Makefile.mirror` line 230
+
+### Deduplicate `aba isconf` output
+
+**Status:** Backlog
+**Context:** `aba isconf` generates both `sync/imageset-config-sync.yaml` and `save/imageset-config-save.yaml`. Each target independently calls `add-operators-to-imageset.sh`, producing duplicate operator listings in the output. The user sees the same operator list printed twice, which looks like a bug.
+**Fix options:**
+- Suppress verbose operator output on the second run (e.g. a `--quiet` flag to `add-operators-to-imageset.sh`)
+- Consolidate: generate one base config then copy/adapt for sync vs save
+- Simply note in the first run's output that both configs are being generated
+
+### Option to preserve registry data on `aba uninstall`
+
+**Status:** Backlog
+**Context:** `aba uninstall` removes the Docker registry container/service AND deletes the data directory (e.g. `/home/steve/docker-reg`). Users may want to uninstall and reinstall without re-syncing/loading gigabytes of images.
+**Proposed UX:**
+```
+[ABA] Uninstall Docker registry on localhost at bastion.example.com:8443? (Y/n): Y
+[ABA] Also delete registry data at /home/steve/docker-reg? (y/N):
+```
+Default "No" for data deletion to be safe. This applies to Docker registries; Quay may have its own handling.
+
+### Wrong path in mirror credential error message
+
+**Status:** Partially done
+**Context:** Main credential error message (reg-verify.sh lines 28-33) now uses user-facing commands. However, lines 41-42, 49, and 64 still reference `$regcreds_dir` and expose `~/.aba/mirror/` internal paths.
+
+**Remaining:** Audit ALL `aba_abort` / `aba_warning` messages across `scripts/reg-*.sh` for any references to `$regcreds_dir` or `~/.aba/mirror/`. Replace with user-facing paths and commands.
 
 ### 3. Evaluate Selective `set -euo pipefail` Adoption
 
@@ -96,102 +184,121 @@ ABA core scripts do not use strict bash mode (`set -euo pipefail`). This means u
 - http://mywiki.wooledge.org/BashFAQ/105 (why `set -e` is unreliable)
 - The `(( running++ ))` bug in `download_all_catalogs()` was caused by `set -e` + post-increment returning 0
 
-### 12. `imagesetconf` with `op-sets=all` Missing Catalog in Generated YAML
+---
 
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Small  
-**Created:** 2026-02-22
+### E2E: `create-bundle-to-disk` Leaves 57GB on conN After Cleanup
 
-**Problem:**
-When `op-sets` is set to `all` in `aba.conf`, running `aba -d mirror imagesetconf` generates imageset-config YAML files (`mirror/save/imageset-config-save.yaml` and `mirror/sync/imageset-config-sync.yaml`) that appear to be missing the `redhat-operator-index` catalog reference.
+**Status:** Backlog (deferred -- re-apply if it recurs)
+**Priority:** Medium
+**Context:** The `suite-create-bundle-to-disk.sh` creates large bundles (OCP images in `mirror/save/`, oc-mirror caches) on conN, but its end-of-suite cleanup only cleans up on disN (remote). These artifacts remain on conN. Although the next suite's `aba reset -f` would clean it, a disk check at the end of the suite can fail.
+**Fix:** Add conN self-cleanup (`aba reset -f` and `sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf`) to the end-of-suite cleanup block in `test/e2e/suites/suite-create-bundle-to-disk.sh`.
 
-The verbose output during generation shows the catalog is being processed:
-```
-operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.20
-    packages:
-```
-But a subsequent `grep 'redhat-operator-index' mirror/save/imageset-config-save.yaml` fails (exit=1), meaning the catalog string is not present in the written YAML file despite the generation logs indicating it was added.
+---
 
-**Observed in:** E2E test [7] "All-operators imageset: generate and verify YAML" (OCP 4.20.14, stable channel, amd64).
+### `aba day2` CatalogSource Errors Go Unnoticed, Causing Downstream Operator Failures
 
-**To investigate:**
-- Check if the YAML generation writes the catalog line when `packages:` is empty (all operators = no filter)
-- Compare the generated YAML content with the verbose output
-- Verify whether the issue is in YAML generation or in the test assertion (grep pattern)
-
-### 13. `run.sh verify` -- Re-run Pool Verification Without Reconfiguring
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Medium  
-**Created:** 2026-02-23
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-13
 
 **Problem:**
-After `setup-infra.sh` creates and configures conN/disN VMs, the post-configuration verification checks are embedded inline in `_configure_con_vm` and `_configure_dis_vm`. There is no way to re-run just the verification without re-running the full configuration.
+During `aba day2`, after IDMS/ITMS resources are applied, OpenShift may begin MachineConfigPool rollouts that cause temporary API unavailability. CatalogSources that were just applied can disappear (`NotFound`) during the rollout. The background wait sub-processes in `day2.sh` (lines 264-299) print errors to stderr but the overall script may not exit with non-zero, allowing execution to continue.
 
-This is useful when:
-- A pool setup failed and you want to verify the current state after a manual fix
-- VMs were rebooted and you want to confirm they are still correctly configured
-- Debugging infrastructure issues (DNS, VLAN, firewall, etc.)
+This means downstream operator installs (e.g., `aba day2-osus`) fail with confusing "package not found" errors because the CatalogSources never became ready.
 
-**Proposed solution:**
-1. Extract the con and dis verification blocks into standalone `_verify_con_vm()` and `_verify_dis_vm()` functions in `setup-infra.sh`
-2. Call those functions from the existing `_configure_con_vm` / `_configure_dis_vm` (so setup still verifies)
-3. Add a `--verify` flag to `setup-infra.sh` that only runs verification on all pools
-4. Add a `verify` subcommand to `run.sh` that calls `setup-infra.sh --verify`
-
-Usage: `run.sh verify` or `run.sh verify 3` (single pool)
-
-### 14. Dynamic Suite Dispatcher (Work-Queue Model)
-
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Medium  
-**Created:** 2026-02-23
-
-**Problem:**
-The current dispatcher in `run.sh` is static: suites are shuffled and round-robin assigned to pools at startup. Each pool's `runner.sh` receives its full suite list upfront and runs them sequentially. If one pool finishes fast suites while another is stuck on a slow one, the fast pool sits idle -- no rebalancing.
-
-**Proposed Solution -- Dynamic work-queue dispatch:**
-Pools receive one suite at a time. When a pool finishes, the dispatcher assigns the next suite from the queue. This maximises pool utilization when suite durations vary.
-
-The v1 framework (`test/e2e-v1/lib/parallel.sh`) has a complete working implementation with `dispatch_all()`, `_find_free_pool()`, `_wait_for_any()`, and `_record_result()`. Adapt this to the v2 architecture:
-
-1. **`run.sh`**: Replace the round-robin block (lines 327-459) with a dispatch loop that sends one suite at a time via `tmux send-keys` and polls for completion before dispatching the next
-2. **`runner.sh`**: Simplify to single-suite mode -- accept `POOL_NUM suite_name`, revert snapshot, run suite, write rc file, exit
-3. **Dashboard**: Keep as-is (tail summary logs per pool)
-
-**Reference:** `test/e2e-v1/lib/parallel.sh` (518 lines, complete implementation)
-
-### 15. Suite Banner in tmux on Dispatch
-
-**Status:** Backlog  
-**Priority:** Low  
-**Estimated Effort:** Small  
-**Created:** 2026-02-23
-
-**Problem:**
-When a new suite is dispatched to a tmux pane on conN, the output starts immediately with no visual separator. When scrolling up through a long log to find where a suite started, it's hard to locate the boundary.
-
-**Proposed Solution:**
-Have `runner.sh` print a large, obvious banner before each suite starts, e.g.:
-
+**Observed output:**
 ```
-################################################################################
-##                                                                            ##
-##   SUITE: airgapped-local-reg   (pool 3, con3)                             ##
-##   Started: 2026-02-23 08:15:30                                            ##
-##                                                                            ##
-################################################################################
+[ABA] Waiting for CatalogSource certified-operators to become 'ready' ...
+[ABA] Waiting for CatalogSource community-operators to become 'ready' ...
+[ABA] Waiting for CatalogSource redhat-operators to become 'ready' ...
+####Error from server (NotFound): catalogsources.operators.coreos.com "certified-operators" not found
+Error from server (NotFound): catalogsources.operators.coreos.com "community-operators" not found
 ```
 
-This makes it easy to find suite boundaries when scrolling the tmux scrollback buffer.
+The `####` shows TRANSIENT_FAILURE states, then the CatalogSources vanish entirely. The script should exit non-zero here.
+
+**Investigation pointers:**
+- `scripts/day2.sh` lines 264-303: background sub-processes wait for CatalogSources
+- Line 268: `until oc get catalogsource "$cs_name" >/dev/null; do sleep 1; done` — stderr not suppressed, but loop keeps retrying. If the CatalogSource was deleted by MCP rollout, this loop spins forever or until the 99-iteration timeout
+- Line 303: `[ "$wait_for_cs" ] && wait` — need to verify this propagates non-zero exit from background processes
+- The `aba_abort` at line 298 exits the sub-process, but does `wait` in the parent properly capture and fail?
+- Consider: should `day2.sh` wait for MCP rollout to stabilize before applying CatalogSources?
+- Also check: should the `until` loop at line 268 have a timeout to avoid spinning indefinitely?
+- Consider adding retries: if a CatalogSource disappears during MCP rollout, the script could wait for the rollout to settle and then re-apply the CatalogSources rather than just failing
+
+---
+
+### TUI Operator Add Causes `aba sync` to Skip ISC Regeneration
+
+**Status:** Fixed (2026-03-13)
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-13
+
+**Problem:**
+After adding an operator via the TUI and running `aba sync`, ABA refuses to regenerate `sync/imageset-config-sync.yaml`, saying the file won't be updated. This means newly added operators never make it into the ImageSet Config (ISC).
+
+**Root cause (two bugs):**
+
+1. **Erroneous `rm -f` of save ISC:** The TUI unconditionally deleted `mirror/save/imageset-config-save.yaml` every time the action menu was shown (`tui/abatui.sh` line 3214). This destroyed user edits silently.
+
+2. **Race condition between background isconf and action handlers:** The TUI launched `aba -d mirror isconf` in the background (non-blocking `run_once` without `-w`) before showing the action menu. Only the "View ISC" handler waited for this task to complete. The other action handlers (local registry, remote registry, bundle, save) ran `aba` commands immediately, creating concurrent `make` processes that raced over `sync/imageset-config-sync.yaml` and `sync/.created` timestamps. When timing was unlucky, the ISC ended up newer than `.created`, tricking the regeneration guard into thinking the user had hand-edited the file.
+
+**Fix:**
+- Removed the `rm -f` of save ISC
+- Added `run_once -p/-w` wait blocks in all action handlers before they run `aba` commands, matching the pattern already used by `handle_action_view_isconf`
 
 ---
 
 ## Low Priority
+
+### Clean Up TUI Debug Logging
+
+**Status:** Backlog
+**Priority:** Low
+**Created:** 2026-03-13
+
+**Problem:**
+`tui/abatui.sh` contains leftover debug logging that writes to `/tmp/aba-tui-debug.log` (e.g., lines near the background isconf launch: `echo "[DEBUG ..." >> /tmp/aba-tui-debug.log`). These were added during investigation of the ISC regeneration bug and should be removed or converted to proper `log` calls.
+
+**Files:** `tui/abatui.sh` — search for `/tmp/aba-tui-debug.log`
+
+---
+
+### Suppress `[ABA] Using .../mirror.conf file` for Simple Commands
+
+**Status:** Backlog
+**Priority:** Low
+**Context:** Running `aba ls` (or other quick informational commands) outputs `[ABA] Using /home/steve/testing/aba/sno/mirror.conf file`, which is noise for the user. This message should be downgraded to `aba_debug` so it only appears with `-v`/verbose mode, or suppressed entirely for simple read-only commands like `ls`, `status`, `run --cmd`.
+
+### Suppress `[ABA] Ensuring CLI binaries are installed` for VM Operations
+
+**Status:** Backlog
+**Priority:** Low
+**Created:** 2026-03-13
+
+**Problem:**
+Simple VM management commands like `aba shutdown`, `aba start`, `aba ls`, `aba delete` etc. print `[ABA] Ensuring CLI binaries are installed` before doing anything. This is unnecessary noise — these commands only need `govc` (already ensured separately), not the full OpenShift CLI stack.
+
+**Example:**
+```
+steve@bastion:demo1 (dev)$ aba shutdown
+[ABA] Ensuring CLI binaries are installed      <<<< not needed here
+```
+
+**Fix:** Skip the CLI binary check for VM-only operations (shutdown, start, ls, delete, ssh, etc.) or move it to `aba_debug` for those commands. The CLI ensure step should only run for commands that actually need `oc`, `openshift-install`, or `oc-mirror`.
+
+### E2E: default to git-based aba install, not local repo copy
+
+**Status:** Backlog
+**Priority:** Low
+**Context:** `run.sh deploy` currently tars the entire local aba repo and scps it to conN. This is only needed by developers testing uncommitted changes. By default, the suites should install aba from git (the real user path), and `run.sh deploy` should only copy the test framework (`test/e2e/`).
+**Proposed design:**
+- Default: `run.sh deploy` copies only the test framework to conN. The suite setup step does `git clone`/`git pull` + `./install` to get aba -- testing the real user install path.
+- `--local` flag: copies the full local repo (current behaviour) for developers testing uncommitted changes. Suite setup skips git clone since aba is already present.
+- Benefits: tests the actual user journey, catches missing files in git, CI-ready.
+- The suite setup step needs a conditional: if aba repo already exists (local deploy), use it; otherwise, git clone from the configured branch.
 
 ### 4. Improve vmw-create.sh Output Formatting
 
@@ -225,24 +332,13 @@ Format the VM creation output to be more readable, e.g.:
 - Easier to read and verify at a glance
 - Each parameter on its own line aids troubleshooting
 
-### 5. Persistent Registry State in `~/.aba/registry/`
+### 5. Persistent Registry State in `~/.aba/mirror/`
 
-**Status:** Backlog  
-**Priority:** Medium  
-**Estimated Effort:** Large  
+**Status:** Completed  
+**Completed:** Already implemented  
 **Created:** 2026-02-21  
-**Design Doc:** `ai/DESIGN-docker-registry-first-class.md` section 9
 
-**Problem:**
-Registry install-time state (cert, pull-secret params, uninstall parameters) lives in `mirror/` which gets wiped by `aba reset -f` or `make clean`. After a reset, `aba -d mirror uninstall` fails because the Makefile can't find `aba.conf`:
-
-```
-Feb 21 06:32:21      >> cd /home/steve/aba && aba -d mirror uninstall
-Makefile:116: *** "Value 'ocp_version' not set in aba.conf! Run aba in the root of Aba's repository or read the README.md file on how to get started.".  Stop.
-```
-
-**Proposed Solution:**
-Move persistent registry state to `~/.aba/registry/state.sh` and `~/.aba/registry/rootCA.pem`. Uninstall reads from this persistent state instead of depending on workspace files. Full design in `ai/DESIGN-docker-registry-first-class.md`.
+**Resolution:** Registry state (`state.sh`, `pull-secret-mirror.json`, `rootCA.pem`) is already persisted in `~/.aba/mirror/<name>/` via `reg-common.sh` `reg_post_install()`. This directory is outside the workspace and survives `aba reset -f`. The `regcreds_dir` is derived as `$HOME/.aba/mirror/$(basename "$PWD")` in `reg_load_config()`.
 
 ### 6. `aba mirror uninstall` Must Fully Clean Up Quay
 
@@ -317,35 +413,470 @@ cluster.conf (sno)  OK  (nodes=1, network=10.0.1.0/24)
 Cluster (sno)       NOT INSTALLED
 ```
 
-### 10. Rename `CATALOG_CACHE_TTL_SECS` to `CATALOG_CACHE_TTL_MINS`
-
-**Status:** Backlog  
-**Priority:** Low  
-**Estimated Effort:** Small  
-**Created:** 2026-02-20
-
-**Problem:**
-The variable name `CATALOG_CACHE_TTL_SECS` is misleading if the value is typically in minutes. Rename for clarity.
-
-### 11. E2E Framework: Graceful Stop / Signal Handling
+### 16. Audit All `[ABA]` Output for Left-Justification
 
 **Status:** Backlog  
 **Priority:** Low  
 **Estimated Effort:** Medium  
-**Created:** 2026-02-21
+**Created:** 2026-02-28
 
 **Problem:**
-There is no way to gracefully stop a running E2E test. No `trap` for SIGINT/SIGTERM, no PID file, no `--stop` command. When the main `run.sh` is killed, orphan SSH sessions on conN keep running. Stopping requires manually killing the local process and then SSHing to each conN to kill remaining processes.
+Some `[ABA]` messages appear indented or mid-line rather than at column 0. The
+expectation is that `[ABA]` is ALWAYS left-justified. In cases where the prefix
+is not appropriate (e.g., sub-messages like "invalid!"), only the message string
+should be output without the `[ABA]` prefix. In other cases, a `\n` is needed
+before the message.
 
-**Proposed:**
-- Add a `trap` in `run.sh` and `parallel.sh` to catch SIGINT/SIGTERM
-- On signal: kill child SSH sessions, notify conN to stop, write a summary of what was interrupted
-- Write a PID file so `run.sh --stop` can find and signal the running instance
-- For parallel mode: propagate the stop signal to all pool dispatchers
+**Action:** Audit all `aba_log`, `echo "[ABA]"`, and similar patterns across
+`scripts/*.sh` and `*/Makefile` to ensure consistent left-justification.
+
+### 11. E2E Framework: Graceful Stop / Signal Handling
+
+**Status:** Partially done  
+**Priority:** Low  
+**Estimated Effort:** Small (remaining)  
+**Created:** 2026-02-21
+
+**Done:**
+- `run.sh stop` subcommand: SSHes to each conN, kills the runner PID from lock file, removes lock/rc files, kills tmux session.
+- `runner.sh` has `trap 'rm -f "$LOCK_FILE"' EXIT` for lock cleanup.
+
+**Remaining:**
+- Add `trap` in `run.sh` coordinator for SIGINT/SIGTERM (propagate stop to conN)
+- Write a PID file for `run.sh` itself so a second invocation can signal/stop the first
+- Propagate stop signal to all pool dispatchers in parallel mode
+
+---
+
+## Unimplemented plans (from sessions)
+
+*These were raised in sessions or other docs; added here so we don't forget them.*
+
+### 18. E2E `--resume` Remaining Bug (1 of 4)
+
+**Status:** Backlog (bugs 2 & 3 fixed)  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03  
+**Ref:** HANDOFF_CONTEXT.md §2
+
+- ~~**Bug 2:** Fixed — `suite_begin` now copies resume file to `.resume` backup before truncating.~~
+- ~~**Bug 3:** Fixed — `test_begin`/`test_end`/`e2e_run` now use `should_skip_checkpoint` and `_E2E_SKIP_BLOCK`.~~
+- **Bug 4:** `--resume` not passed through dispatch — `_dispatch_suite` in run.sh doesn't append `--resume` to `runner_cmd`. Only restart mode passes it.
+
+### 19. E2E dnsmasq Registry DNS Record
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03  
+**Ref:** HANDOFF_CONTEXT.md §3
+
+`dig registry.pN.example.com +short` returns nothing on conN. `_vm_setup_dnsmasq` doesn't add a record for `registry.pN.example.com`. An incomplete fix exists in `git stash`.
+
+### 20. E2E Error Suppression Audit (remaining files)
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03  
+**Ref:** HANDOFF_CONTEXT.md §4
+
+Audit `|| true` and `2>/dev/null` in: `test/e2e/lib/remote.sh`, `framework.sh`, `parallel.sh`, `config-helpers.sh`. Never silently swallow failures in test suites.
+
+### 21. E2E Pool Affinity for Dispatch
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Medium  
+**Created:** 2026-03-03  
+**Ref:** HANDOFF_CONTEXT.md §6
+
+Dispatcher assigns next suite to first free pool. Suites that share prerequisites (e.g. `cluster-ops` + `network-advanced` both use pool registry) could be chained to the same pool to reuse registry. Add lightweight chaining hints.
+
+### 22. ~~Rename `.installed` / `.uninstalled` to `.available` / `.unavailable`~~
+
+**Status:** Done (2026-03-06)  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03  
+**Ref:** E2E_FIXES_LOG.md B1
+
+Done. Renamed all marker files from `.installed`/`.uninstalled` to `.available`/`.unavailable` across the codebase.
+
+### 23. Cluster VMs in Wrong vCenter Folder
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03  
+**Ref:** E2E_FIXES_LOG.md A
+
+Compact/cluster VMs land in shared `abatesting` folder instead of pool-specific folder (e.g. `pool3/`). vCenter folder path during cluster creation should incorporate pool number.
+
+### 24. `run.sh deploy --force` Confirmation Prompt
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Trivial  
+**Created:** 2026-03-03
+
+When using `deploy --force`, prompt user: "Really do this? (Y/N)?" to avoid accidental wipe of remote state.
+
+### 25. E2E PAUSED State: Clear Flag File Promptly
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Trivial  
+**Created:** 2026-03-03
+
+Clear the PAUSED flag file as soon as it is reasonable so it doesn't persist and confuse status. Documented during run.sh status / interactive menu work.
+
+### 26. E2E Spring-Clean Function
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03
+
+Function to remove state data and run verification routines to bring conN/disN back to a known good state (e.g. before a fresh full run or after debugging).
+
+### 27. E2E `--loop` Option for Continuous Dispatch
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Medium  
+**Created:** 2026-03-03
+
+Option to continuously re-queue completed (or failed) suites so pools keep getting work without user re-running `reschedule`. Deferred in favor of one-shot retry + reschedule.
+
+### 28. Investigate: Why Does `suite-connected-public` Install a Registry?
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-03
+
+Suite only tests public registry path; clarify whether installing a reg is necessary or leftover. Add to backlog for investigation.
+
+### ~~29. Docker Registry as First-Class Citizen~~
+
+**Status:** Done (2026-03-10)  
+**Created:** 2026-03-03  
+**Ref:** ai/DESIGN-docker-registry-first-class.md
+
+Done. Docker registry is now first-class: `reg-install-docker.sh`, `reg-uninstall-docker.sh`, remote install via `reg-install-remote.sh`, TUI support (Auto/Quay/Docker), `reg_vendor` config in `mirror.conf`, CLI `--vendor docker`.
+
+### 31. Warn When Registry Data Directory Already Contains Data
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-08
+
+**Problem:**
+When installing a Quay or Docker registry, if the destination `data_dir` already exists and contains data from a previous installation (or unrelated files), ABA silently proceeds. This can lead to confusing failures or data corruption.
+
+**Proposed Fix:**
+In `reg-install-quay.sh` and `reg-install-docker.sh` (and the remote variants), after `reg_setup_data_dir` resolves the path, check if the directory exists and is non-empty. If so, show a prominent red warning via `aba_warning`:
+```bash
+if [ -d "$data_dir" ] && [ "$(ls -A "$data_dir" 2>/dev/null)" ]; then
+    aba_warning "Data directory '$data_dir' already exists and is not empty!" \
+        "This may contain data from a previous registry installation." \
+        "Proceeding will install on top of existing data."
+fi
+```
+For remote installs, the check should run on the remote host via SSH.
+
+### 32. Skip Remote Copy of Registry Tarball if Already Present (and valid)
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-08
+
+**Problem:**
+`reg-install-remote.sh` always copies `mirror-registry-amd64.tar.gz` (~1GB) to the remote host via `scp`, even if an identical copy already exists there from a previous install. The same may apply to the Docker registry image (`docker-reg-image.tgz`). On slow links this wastes significant time.
+
+**Proposed Fix:**
+Before copying, check if the file already exists on the remote host with a matching size (or checksum):
+```bash
+local_size=$(stat -c %s "$tarball")
+remote_size=$(ssh "$remote" "stat -c %s '$remote_path' 2>/dev/null" || echo 0)
+if [ "$local_size" != "$remote_size" ]; then
+    scp "$tarball" "$remote:$remote_path"
+fi
+```
+Or use `rsync --checksum` / `rsync --size-only` instead of `scp` for a one-line fix.
+
+### 33. `verify` Target Runs Multiple Times Unnecessarily
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-08
+
+**Problem:**
+When running `aba` commands, the Make `verify` target is executed multiple times in a row, which is unnecessary and wastes time. Need to investigate what triggers repeated `verify` runs and ensure it only executes once per invocation.
+
+**Action:** Trace which Make dependency chains pull in `verify` and add appropriate sentinel files or order-only prerequisites to prevent redundant runs.
+
+### 34. Mirror-Registry Install Files Sometimes Missing on Remote Host
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Medium  
+**Created:** 2026-03-08
+
+**Problem:**
+During remote Quay registry installation (`aba -d mirror install -H <host>`), the `mirror-registry` binary or its supporting files are sometimes not found on the remote host, causing `./mirror-registry: No such file or directory` errors. This has been seen on `registry4` and other hosts. The root cause may involve `run_once` markers persisting across `clean`/`reset` cycles, or files not being properly copied/extracted on the remote side.
+
+**Action:** Make the remote install flow more robust:
+- Verify the binary exists on the remote host before attempting to run it
+- Re-copy/re-extract if missing, regardless of `run_once` state
+- Add pre-flight checks in `reg-install-remote.sh`
+
+### 38. `aba register` Should Validate Required Options Before Invoking Make
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Small  
+**Created:** 2026-03-08
+
+**Problem:**
+Running `aba register` without the required `--pull-secret-mirror` and `--ca-cert` flags produces a raw Make error:
+```
+[ABA] Error: pull_secret_mirror= is required (path to pull secret JSON file)
+make: *** [Makefile:73: register] Error 1
+```
+The error comes from the Makefile recipe, not from `aba.sh`. The UX should catch missing required options early in `aba.sh` (before invoking `make`) and show a helpful message with correct usage, e.g.:
+```
+[ABA] Error: 'aba register' requires --pull-secret-mirror and --ca-cert options.
+[ABA] Usage: aba -d mirror register --pull-secret-mirror <file> --ca-cert <file>
+[ABA] See 'aba mirror --help' for details.
+```
+
+**Action:** In `aba.sh`, when `cur_target` is `mirror` and `BUILD_COMMAND` contains `register`, verify that `pull_secret_mirror=` and `ca_cert=` are present in `BUILD_COMMAND` before calling `eval make`. If missing, print usage and exit. The same pattern could apply to other targets that require specific options (e.g., `password` requiring `--reg-host`).
+
+### Validate vmware.conf Parameters Are Not Empty
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-12
+
+**Problem:**
+When `vmware.conf` is loaded, critical variables like `GOVC_URL`, `GOVC_DATACENTER`, `GOVC_CLUSTER`, `GOVC_DATASTORE`, `GOVC_NETWORK`, `GOVC_USERNAME`, `GOVC_PASSWORD` may be empty or undefined. ABA does not validate these before passing them to Jinja2 templates (`install-config.yaml.j2`) or to `govc` commands. Empty values cause cryptic template errors or silent misconfigurations (e.g., blank `server:` in failureDomains).
+
+**Proposed Fix:**
+Add a `verify-vmware-conf()` function (similar to `verify-aba-conf`) that checks all required GOVC variables are non-empty when `platform=vmw`. Call it early in the cluster config pipeline (e.g., in `scripts/setup-cluster.sh` or `scripts/create-cluster-conf.sh` after sourcing vmware.conf). Abort with a clear message listing which variables are missing.
+
+**Where:** New function in `scripts/include_all.sh` or `scripts/verify-config.sh`, called from cluster setup paths.
+
+### Re-enable Quay Mirror-Registry on arm64
+
+**Status:** Backlog (waiting on Red Hat)
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-11
+
+**Problem:**
+Quay mirror-registry binary is not published for arm64 (as of 2026-03). We added conditionals to skip the download and use Docker registry instead. When Red Hat publishes the arm64 binary, we need to re-enable Quay support.
+
+**What to change (3 places):**
+1. `templates/Makefile.mirror` lines 30-35: Remove `_REGISTRY_PREREQ` conditional — revert to just `mirror-registry`
+2. `templates/Makefile.mirror` `download-registries` target: Remove `$(if $(filter aarch64,...))` — revert to `$(MR_TARBALL) docker-reg-image.tgz`
+3. `scripts/reg-install.sh`: Update `auto` resolution logic to allow `auto` -> `quay` on arm64
+
+**How to verify:** Check `https://mirror.openshift.com/pub/cgw/mirror-registry/latest/` for `mirror-registry-arm64.tar.gz`.
+
+### 35. Consolidate `mirror/save` and `mirror/sync` Into `mirror/data`
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Large  
+**Created:** 2026-03-08
+
+**Problem:**
+The current split between `mirror/save/` and `mirror/sync/` directories adds complexity. Both hold imageset configs and oc-mirror workspace data for essentially the same purpose (getting images into the mirror registry). Consolidating them into a single `mirror/data/` directory would simplify the codebase, reduce user confusion, and eliminate duplicated imageset config generation logic.
+
+**Action:** Design and implement the consolidation. Key considerations:
+- Unified imageset config (currently separate `imageset-config-save.yaml` and `imageset-config-sync.yaml`)
+- Backward compatibility for existing users with save/sync directories
+- Impact on `aba save`, `aba load`, `aba sync` CLI commands
+- Bundle workflow (save on connected side, load on disconnected side)
+
+### 40. Improve `day2.sh` Screen Output and UX
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Medium  
+**Created:** 2026-03-08
+
+**Problem:**
+The `day2.sh` script output is noisy and hard to follow. Users see walls of `oc apply` output, raw YAML, and unclear progress indicators. The script should provide a cleaner, step-by-step experience showing what it's doing and whether each step succeeded.
+
+**Action:** Review and improve `day2.sh` output:
+- Clear step headers (e.g., "Step 1/4: Configuring OperatorHub...")
+- Suppress raw `oc apply` output unless in debug mode
+- Show success/failure status per step
+- Summarize what was applied at the end
+
+### 41. Improve Overall ABA UX and Screen Output
+
+**Status:** Backlog  
+**Priority:** Medium  
+**Estimated Effort:** Large  
+**Created:** 2026-03-08
+
+**Problem:**
+ABA's screen output across all commands could be more polished and user-friendly. Issues include:
+- Inconsistent `[ABA]` prefix formatting (sometimes indented, sometimes missing)
+- Raw `make` errors shown to users instead of friendly messages
+- Internal paths (`~/.aba/...`) exposed in error messages
+- Verbose output from underlying tools (curl, podman, oc-mirror) not suppressed in normal mode
+- No clear progress indication for long-running operations
+- No summary at completion of multi-step operations
+
+**Action:** Systematic UX audit across all user-facing commands:
+- Audit all `aba_abort`, `aba_warning`, `aba_info` messages for clarity and consistency
+- Ensure `[ABA]` prefix is always left-justified (see backlog #16)
+- Suppress tool output unless `--debug` is set
+- Add progress indicators or step counters for long operations (sync, save, load, install)
+- Wrap `make` errors with user-friendly messages in `aba.sh`
+- Never expose internal paths to users (see "Wrong path in mirror credential error message")
+
+### Investigate Why `cli/Makefile` Is Missing on Bundle-Deployed Bastions
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-12
+
+**Problem:**
+On a s390x bastion that received ABA via a bundle, `cli/` was completely empty (no `Makefile`). This caused `aba clean` to fail with `No rule to make target 'out-download-all'` because `aba.sh` unconditionally calls `cli-download-all.sh`, which requires `cli/Makefile`.
+
+The immediate crash is fixed (skip CLI downloads for housekeeping commands). But the deeper question remains: why was `cli/Makefile` missing? `backup.sh` includes `${repo_dir}/cli` in the `find` list, so `cli/Makefile` should be in any bundle. Possible causes:
+- Bundle was created from a source where `cli/Makefile` was accidentally deleted
+- An older ABA version had a different `cli/` structure
+- The `install` script or `aba reset` somehow removes `cli/Makefile`
+- Bundle extraction issue on s390x
+
+**Action:** Reproduce on a clean s390x bundle deployment. Verify `cli/Makefile` is present in the tar archive (`tar tf bundle.tar | grep cli/Makefile`). Check if `./install` or `aba reset` removes it.
+
+**Where:** `scripts/backup.sh`, `install`, `cli/Makefile` reset target
+
+### Smarter Catalog Index Download Scheduling
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-13
+
+**Problem:**
+ABA downloads catalog indexes (via `download-catalog-index.sh` / `download_all_catalogs()`) eagerly, even when no operators are defined in `aba.conf` (`ops=` and `op_sets=` are empty). The download still has value (the indexes will be needed if the user later adds operators), but running it in the **foreground** blocks the user's current operation unnecessarily. If no operators are defined for this run, the indexes won't be consumed, so the user is waiting for something that has no immediate benefit.
+
+**Desired behavior:**
+- If operators ARE defined (`ops` or `op_sets` non-empty): download catalogs in the foreground as today (they're needed now).
+- If NO operators are defined: still download the catalogs (speculative prefetch), but do it in the **background** so it doesn't block the user's current command. The indexes will be ready if the user adds operators later.
+- If catalogs are already cached and fresh (within TTL): skip entirely regardless of operator config.
+
+**Where:** `scripts/include_all.sh` (`download_all_catalogs()`), `scripts/aba.sh` (where catalog downloads are triggered), `scripts/download-catalog-index.sh`
+
+**Considerations:**
+- Background downloads must not interfere with foreground operations (file locking, `run_once` state)
+- Need to handle the case where a background download is still running when the user adds operators and runs a command that needs the indexes
+- The `run_once` mechanism already provides locking; verify it handles concurrent foreground + background correctly
+
+### 36. CLI Download Retry Gaps
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-04
+
+**Problem:**
+Two gaps in CLI download retry coverage:
+
+1. **`run_once` level:** If a CLI download/install task fails with a regular exit code (e.g., exit 1 from checksum failure or disk full), `run_once` records the failure and never retries. Only signal kills (exit 128-165) trigger automatic restart. A failed task stays failed until manually reset (`run_once -r`).
+
+2. **`curl --retry` scope:** All downloads use `curl --retry 8` with default exponential backoff (1s, 2s, 4s... up to ~4 min total). However, `--retry` only covers transient HTTP errors (5xx, 408) and connection failures. HTTP 4xx errors (404, 403) are treated as permanent and not retried. Adding `--retry-all-errors` would cover these cases.
+
+**Proposed Fix (if needed):**
+- Add `--retry-all-errors` to curl invocations in `cli/Makefile` (trivial, one-line per call)
+- Consider adding a `run_once -w --retry N` flag that clears exit state and restarts on non-zero exit (more complex, only if flaky failures recur)
+
+**Current mitigation:** curl's `--retry 8` handles most transient issues. E2E test framework has its own `e2e_run -r` retry logic. Issue would only manifest during persistent CDN/mirror outages.
+
+### 37. CLI Ensure Analysis — Add Ensures to 6 Scripts
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Medium  
+**Created:** 2026-03-03  
+**Ref:** ai/CLI_ENSURE_ANALYSIS.md
+
+When moving logic out of Makefiles, add "ensure" patterns to 6 scripts as proposed in CLI_ENSURE_ANALYSIS.md.
 
 ---
 
 ## Completed
+
+### `aba shutdown` Retry and Verify
+**Completed:** 2026-03-10  
+`cluster-graceful-shutdown.sh` has 3-attempt retry logic (lines 116-145) and verification via `make -s ls` when `wait=1` and `vmware.conf` exists.
+
+### Suppress Curl Error Output During Registry Probing
+**Completed:** 2026-03-10  
+`probe_host()` in `include_all.sh` suppresses curl stderr during probing. ABA reports results in its own messaging.
+
+### Mirror Config Flags Work With Named Mirror Directories (#17)
+**Completed:** 2026-03-10  
+`aba.sh` uses `$WORK_DIR/mirror.conf` dynamically. With `-d mymirror`, `WORK_DIR` points to the named mirror directory.
+
+### E2E `_essh: command not found` in Framework Cleanup
+**Completed:** 2026-03-10  
+`runner.sh` sources `vm-helpers.sh` before `framework.sh`, making `_essh` available in cleanup paths.
+
+### E2E Dispatcher: Detect Crashed Suites (#15)
+**Completed:** 2026-03-10  
+`_check_pool()` in `run.sh` has tmux session fallback: if no `.rc` file and tmux session is gone after 5s grace, returns 255 ("Suite died without writing .rc").
+
+### Improve `.install.source` Breadcrumb File UX (#39)
+**Completed:** 2026-03-10  
+Renamed to `INSTALLED_BY_ABA.md` with verify/uninstall commands and date. Created by Quay, Docker, and remote install scripts.
+
+### Rename `CATALOG_CACHE_TTL_SECS` to `CATALOG_CACHE_TTL_MINS` (#10)
+**Status:** Won't fix  
+Name is accurate — value is in seconds (`43200`), so `_SECS` suffix is correct.
+
+### `run.sh verify` -- Pool Verification Subcommand
+**Completed:** 2026-03-02  
+Extracted `_verify_con_vm()` / `_verify_dis_vm()` into standalone functions in `setup-infra.sh`. Added `--verify` flag to `setup-infra.sh` and `verify` subcommand to `run.sh`. Supports `--pool N` for single-pool checks. Streaming output (no hang), separate per-VM logs, `_fail()` helper with bold red output, summary table with failure reasons. Auto-detects pool count from `pools.conf`.
+
+### Dynamic Suite Dispatcher (Work-Queue Model)
+**Completed:** 2026-03-02  
+`run.sh` dispatches one suite at a time to free pools, polls for completion, and assigns the next from the queue. Added `reschedule` subcommand to re-queue completed suites. Full CLI rationalization with consistent subcommand+flag structure.
+
+### Simplify E2E Suite Regcreds Setup With `aba register`
+**Completed:** 2026-03-02  
+Refactored `suite-airgapped-existing-reg.sh` to use `aba -d mirror register` with the pool registry on conN instead of manual `mkdir`/`cp` of credentials. Also added `aba -d mirror unregister` core command for externally-managed registries.
+
+### E2E Suite Banner in tmux on Dispatch
+**Completed:** 2026-02-23  
+`runner.sh` now prints a large `####` banner with suite name, pool number, hostname, and timestamp before each suite starts. Makes it easy to find suite boundaries when scrolling tmux scrollback.
+
+### E2E Clone-Check: Parallelize VM Cloning and Configuration
+**Completed:** 2026-02-22  
+`setup-infra.sh` Phase 1 clones all conN in parallel (background `&` + `wait`), then all disN. Phase 2 runs `_configure_con_vm` and `_configure_dis_vm` in parallel per pool. disN waits for conN NAT internally.
+
+### E2E VM Reuse: Snapshot-Based Fast Restart
+**Completed:** 2026-02-22  
+Implemented via `pool-ready` snapshots. `setup-infra.sh` reverts existing VMs instead of re-cloning when the snapshot exists, and skips configuration. `runner.sh` reverts disN to `pool-ready` before each suite.
+
+### `imagesetconf` with `op-sets=all` Missing Catalog
+**Completed:** 2026-02-23  
+Verified working: `add-operators-to-imageset.sh` (lines 122-130) correctly writes the `redhat-operator-index` catalog for `op-sets=all`. E2E test in `suite-create-bundle-to-disk.sh` verifies it. Original report was likely a transient test environment issue.
 
 ### E2E Suites: Refactor Embedded SSH to `e2e_run -h`
 **Completed:** 2026-02-21

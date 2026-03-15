@@ -15,7 +15,6 @@ fi
 [ ! -f $ASSETS_DIR/rendezvousIP ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
 cat $ASSETS_DIR/rendezvousIP | grep -E -q "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$" || exit 0 # Ignore if not an IP
 
-echo
 aba_info =================================================================================
 
 # Wait for the Agent port to become alive on the rendezvous node0...

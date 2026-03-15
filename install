@@ -11,14 +11,21 @@ uname -o | grep -q "^Darwin$" && echo "Install ABA on RHEL, Centos Stream or Fed
 
 # We need git, which, id, diff commands to run this script (not always available in a container) ... 
 # Other rpm packages that ABA requires are copied into the below lines at build time (which aren't available yet!)
-required_pkgs=(which file hostname diffutils git make jq python3-jinja2 python3-pyyaml ncurses)
-required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which diffutils dialog podman httpd-tools skopeo)  # Synced from templates/rpms-external.txt
-required_pkgs+=(make jq python3-jinja2 python3-pyyaml ncurses which file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd)  # Synced from templates/rpms-internal.txt
+required_pkgs=(which file hostname diffutils git make jq python3 python3-jinja2 python3-pyyaml ncurses)
+required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which diffutils dialog podman httpd-tools skopeo)  # Synced from templates/rpms-external.txt
+required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd)  # Synced from templates/rpms-internal.txt
 required_pkgs=($(printf '%s\n' "${required_pkgs[@]}" | sort -u))  # Deduplicate
 missing_pkgs=()
 
 # Check which packages are missing ...
+# On RHEL 8, `rpm -q python3` fails even after `dnf install python3` because
+# the actual RPM is `python36` (or `python3.11`, etc.).  DNF resolves the
+# virtual provide, but rpm -q does not.  So we check for /usr/bin/python3
+# instead of the RPM name to avoid re-running dnf on every invocation.
 for pkg in "${required_pkgs[@]}"; do
+	if [ "$pkg" = "python3" ]; then
+		[ -x /usr/bin/python3 ] && continue
+	fi
 	if ! rpm -q "$pkg" >/dev/null; then
 		missing_pkgs+=("$pkg")
 	fi
@@ -30,7 +37,7 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 if [ ${#missing_pkgs[@]} -gt 0 ]; then
 	# try our luck to install the missing packages ...
-	echo "Installing required rpms: ${missing_pkgs[*]} (logging to .dnf-install.log). Please wait!"
+	echo "Installing required rpms: ${missing_pkgs[*]} (logging to .dnf-install.log). Please wait!" >&2
 
 	if ! $SUDO dnf install ${missing_pkgs[*]} -y >.dnf-install.log 2>&1; then
 		echo
@@ -154,11 +161,6 @@ fi
 
 
 source scripts/include_all.sh
-
-# Most (or all) rpms are installed above.... but ...
-# Now double-check we have all the required rpms from the file: templates/rpms-external.txt
-[ -d templates ] && install_rpms $(cat templates/rpms-external.txt) # HACK - show not be needed to check
-[ -d ../templates ] && install_rpms $(cat ../templates/rpms-external.txt) # HACK - show not be needed to check
 
 # Reset ~/.aba state on manual install only
 # When -q flag is used (automatic update check from 'aba' command), preserve user state

@@ -35,7 +35,7 @@ source scripts/include_all.sh
 # Clean up previous state to force fresh download
 echo "Cleaning up previous state..."
 rm -rf ~/.aba/runner/cli:install:oc-mirror
-rm -rf mirror/.index/*-operator-index-*
+rm -rf .index/*-operator-index-*
 
 # Test 1: Verify tar output is valid
 echo ""

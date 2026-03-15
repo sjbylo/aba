@@ -1,0 +1,51 @@
+#!/bin/bash -e
+# Create a named mirror directory (same pattern as setup-cluster.sh).
+
+source scripts/include_all.sh
+
+aba_debug "Starting: $0 $*"
+
+source <(normalize-aba-conf)
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
+
+name=
+
+. <(process_args $*)
+
+[ ! "$name" ] && aba_abort "Error: mirror name missing! Usage: aba mirror --name <name>"
+
+if [ ! -d "$name" ]; then
+	mkdir "$name"
+	cd "$name"
+	ln -fs ../templates/Makefile.mirror Makefile
+	make -s init
+else
+	if [ -s "$name/Makefile" ]; then
+		if grep -q "Mirror Makefile" "$name/Makefile"; then
+			cd "$name"
+			make -s init
+		else
+			aba_abort "Error: Directory $name is not a valid mirror dir."
+		fi
+	else
+		cd "$name"
+		ln -fs ../templates/Makefile.mirror Makefile
+		make -s init
+	fi
+fi
+
+if [ -s mirror.conf ]; then
+	aba_info "Using existing '$name/mirror.conf'."
+else
+	aba_info "Creating '$name/mirror.conf'."
+fi
+
+make -s mirror.conf
+
+echo
+aba_info "Mirror directory created: $name"
+aba_info "Next steps:"
+aba_info "  Install registry:  aba -d $name install"
+aba_info "  Register existing: aba -d $name --pull-secret-mirror <file> --ca-cert <file>"
+
+exit 0

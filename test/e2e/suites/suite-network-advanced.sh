@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # Suite: Network Advanced (VLAN + bonding matrix)
 # =============================================================================
@@ -29,11 +29,10 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
-CON_HOST="con${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
-DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
+DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
-POOL_REG_DIR="$HOME/.e2e-pool-registry"
 
 # --- Suite ------------------------------------------------------------------
 
@@ -64,7 +63,7 @@ test_begin "Setup: ensure pre-populated registry"
 
 e2e_run "Install aba (needed for version resolution)" "./install"
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
-    "aba -A --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 _ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
 _ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
@@ -79,13 +78,19 @@ test_end
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
+e2e_run "Reset aba to clean state" \
+    "cd ~/aba && ./install && aba reset -f"
+
 e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rfv"
+    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+
+e2e_run "Verify /home disk usage < 10GB after reset" \
+    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
 
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 # Simulate manual edit: override dns_servers to point to pool dnsmasq
 e2e_run "Set dns_servers manually" \
@@ -115,12 +120,12 @@ e2e_run "Clear reg_ssh_key (local registry)" \
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
 
-e2e_run "Create regcreds directory" "mkdir -p mirror/regcreds"
+e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"
 e2e_run "Copy Quay root CA to regcreds" \
-    "cp -v ~/quay-install/quay-rootCA/rootCA.pem mirror/regcreds/"
+    "cp -v $POOL_REG_DIR/certs/ca.crt ~/.aba/mirror/mirror/rootCA.pem"
 
 e2e_run "Generate mirror pull secret" \
-    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > mirror/regcreds/pull-secret-mirror.json <<EOPS
+    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > ~/.aba/mirror/mirror/pull-secret-mirror.json <<EOPS
 {
   \"auths\": {
     \"${CON_HOST}:8443\": {
@@ -132,9 +137,6 @@ EOPS"
 
 e2e_run "Verify mirror registry access" "aba -d mirror verify"
 
-e2e_run "Link oc-mirror working-dir" \
-    "mkdir -p mirror/sync && ln -sfn ${POOL_REG_DIR}/sync/working-dir mirror/sync/working-dir"
-
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
 test_end
@@ -144,8 +146,8 @@ test_end
 # ============================================================================
 test_begin "VLAN: verify interface"
 
-e2e_run_remote "Verify VLAN interface ens224.10 exists on disN" \
-    "ip addr show ens224.10"
+e2e_run_remote "Verify VLAN interface ens224.10 is UP on disN" \
+    "ip addr show ens224.10 | grep 'state UP'"
 e2e_run_remote "Verify VLAN IP $(pool_vlan_gateway) on disN" \
     "ip addr show ens224.10 | grep '$(pool_vlan_gateway)'"
 
@@ -183,7 +185,7 @@ _net_test() {
     else
         govc_network="VMNET-DPG"
         machine_network="$(pool_machine_network)"
-        next_hop="10.0.1.1"
+        next_hop="${DEFAULT_GATEWAY:-10.0.1.1}"
         start_ip="$(pool_node_ip)"
     fi
 
@@ -198,7 +200,7 @@ _net_test() {
             "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" aba.conf"
     fi
 
-    e2e_run "Remove $cname cluster dir" "rm -rfv $cname"
+    e2e_run "Clean $cname cluster dir" "rm -rf $cname"
 
     e2e_run "Generate cluster.conf for $cname" \
         "aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
@@ -237,12 +239,13 @@ _net_test() {
 
     e2e_run "Create ISO for $cname" "aba --dir $cname iso"
     e2e_run "Upload ISO for $cname" "aba --dir $cname upload"
+    e2e_add_to_cluster_cleanup "$PWD/$cname"
     e2e_run "Boot VMs for $cname" "aba --dir $cname refresh"
 
     e2e_run -r 1 1 "Wait for node0 SSH ($cname)" \
         "timeout 8m bash -c 'until aba --dir $cname ssh --cmd hostname; do sleep 10; done'"
 
-    if echo "$if_check" | grep -q bond0; then
+    if echo "$if_check" | grep bond0; then
         e2e_run -q "Wait for bond0 to settle" "sleep 30"
     fi
 
@@ -325,6 +328,19 @@ _net_test "Non-VLAN standard: bonding" \
 test_begin "Cleanup"
 
 e2e_diag "Show remaining cluster dirs" "ls -d sno* compact* standard* 2>/dev/null || echo 'none'"
+
+e2e_run "Delete VLAN SNO cluster" \
+    "if [ -d $_SNO_VLAN ]; then aba --dir $_SNO_VLAN delete; else echo '[cleanup] $_SNO_VLAN already removed'; fi"
+e2e_run "Delete VLAN compact cluster" \
+    "if [ -d $_COMPACT_VLAN ]; then aba --dir $_COMPACT_VLAN delete; else echo '[cleanup] $_COMPACT_VLAN already removed'; fi"
+e2e_run "Delete VLAN standard cluster" \
+    "if [ -d $_STANDARD_VLAN ]; then aba --dir $_STANDARD_VLAN delete; else echo '[cleanup] $_STANDARD_VLAN already removed'; fi"
+e2e_run "Delete non-VLAN SNO cluster" \
+    "if [ -d $_SNO ]; then aba --dir $_SNO delete; else echo '[cleanup] $_SNO already removed'; fi"
+e2e_run "Delete non-VLAN compact cluster" \
+    "if [ -d $_COMPACT ]; then aba --dir $_COMPACT delete; else echo '[cleanup] $_COMPACT already removed'; fi"
+e2e_run "Delete non-VLAN standard cluster" \
+    "if [ -d $_STANDARD ]; then aba --dir $_STANDARD delete; else echo '[cleanup] $_STANDARD already removed'; fi"
 
 test_end
 

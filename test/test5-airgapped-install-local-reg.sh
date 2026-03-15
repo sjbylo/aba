@@ -205,7 +205,7 @@ test-cmd -m  "Delete this file that's already been copied to internal bastion: '
 # FIXME: aba should do this?
 ####ssh $reg_ssh_user@$int_bastion_hostname "rpm -q make || sudo yum install make -y"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 5 3 -m "Checking regcreds/ does not exist on $int_bastion_hostname" "test ! -d $subdir/aba/mirror/regcreds" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 5 3 -m "Checking ~/.aba/mirror/mirror/ does not exist on $int_bastion_hostname" "test ! -d ~/.aba/mirror/mirror" 
 
 ######################
 mylog Runtest: START - airgap
@@ -849,6 +849,8 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting for all co availabl
 ###test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Stopping $cluster_name cluster and wait" "yes|aba --dir $subdir/aba/$cluster_name shutdown --wait" 
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "If cluster up, shutting cluster down and wait" ". <(aba --dir $subdir/aba/$cluster_name shell) && . <(aba --dir $subdir/aba/$cluster_name login) && yes|aba --dir $subdir/aba/$cluster_name shutdown --wait || echo cluster shutdown failure"
+
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Delete cluster" "aba --dir $subdir/aba/$cluster_name delete"  # Clean up
 
 # keep it # test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Running 'aba clean' in $subdir/aba/stanadard" "aba --dir $subdir/aba/$cluster_name clean" 
 

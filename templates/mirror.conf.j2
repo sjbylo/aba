@@ -2,7 +2,7 @@
 #
 # Review all values carefully and update them for your internal or air-gapped environment.
 # Set the values according to your existing registry OR the target host where
-# 'Mirror Registry for Red Hat OpenShift' (Quay) will be installed.
+# a mirror registry (Quay or Docker) will be installed.
 
 reg_host=registry.{{ domain }}		# FQDN of the registry host (no IP address). Can be local or remote.
 					# Ensure a DNS A record resolves to an IP address that allows connections to this host.
@@ -20,15 +20,26 @@ reg_user=init				# Username for the registry.
 reg_pw='p4ssw0rd'			# Registry password. Leave empty to auto-generate one (e.g. reg_pw=).
 					# Must be at least 8 characters with no whitespace and not include: "'\`$
 
+reg_vendor=auto				# Registry type: auto, quay, or docker.
+					# auto   = Quay if available for this architecture, otherwise Docker.
+					# quay   = Mirror Registry for Red Hat OpenShift (Quay appliance).
+					# docker = Standard Docker/OCI registry (docker.io/library/registry).
+
 data_dir=				# Optional: Absolute path to storage for images and temporary files.
 					# Quay installs to $data_dir/quay-install; oc-mirror cache to $data_dir/.oc-mirror.
-					# Defaults to the user’s home directory. '~' is supported after '='.
+					# Defaults to the user's home directory. '~' is supported after '='.
 
-# The following values are only required for *installing* Quay on a *remote* host.
+# The following values are only required for installing a registry on a *remote* host.
+# Both Quay and Docker registries support remote installation.
 
-#reg_ssh_key=~/.ssh/id_rsa		# Optional: SSH private key for remote Quay installation.
-					# If unset (default), Quay is installed locally.
+#reg_ssh_key=~/.ssh/id_rsa		# Optional: SSH private key for remote registry installation.
+					# If unset (default), the registry is installed locally.
 					# The key must allow passwordless SSH access to reg_host.
 
-#reg_ssh_user=				# Optional: SSH username for remote Quay installation. Defaults to current user.
+#reg_ssh_user=				# Optional: SSH username for remote registry installation. Defaults to current user.
 
+# Override global operator settings from aba.conf for this mirror directory.
+# Uncomment to use different operators per mirror (e.g. separate mirrors for different teams).
+
+#op_sets=				# Override aba.conf op_sets for this mirror only (e.g. op_sets=acm,odf)
+#ops=					# Override aba.conf ops for this mirror only (e.g. ops=web-terminal)

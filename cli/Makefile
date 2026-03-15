@@ -96,10 +96,13 @@ endif
 # Targets
 
 # govc is optional, depends on platform != bm
-install: oc openshift-install oc-mirror butane $(govc_bin)
+# .wait-downloads prevents a race: aba.sh starts background downloads (cli-download-all.sh)
+# and then runs 'make install' — without the wait, both the background run_once AND the
+# foreground Make try to curl the same tarball simultaneously, corrupting it.
+install: .check-ocp-version .wait-downloads oc openshift-install oc-mirror butane $(govc_bin)
 
 # Force d/l of govc too
-install-all: oc openshift-install oc-mirror butane govc
+install-all: .check-ocp-version .wait-downloads oc openshift-install oc-mirror butane govc
 
 out-install:
 	echo oc openshift-install oc-mirror butane $(govc_bin)
@@ -107,15 +110,25 @@ out-install:
 out-install-all:
 	echo oc openshift-install oc-mirror butane govc
 
-# For "reset", "oc-mirror", "govc" and their download targets we DO NOT need ocp_version
-ifneq ($(filter reset oc-mirror govc download-oc-mirror download-govc download-butane,$(MAKECMDGOALS)),)
-  # reset not given
-else
-  ifeq ($(ocp_version),)
-    # ocp_version is missing!
-    $(error "Value 'ocp_version' not set in aba.conf! Run aba in the root of Aba's repository or read the README.md file on how to get started.")
-  endif
-endif
+# Only oc and openshift-install need ocp_version (their URLs contain it).
+# govc, oc-mirror, butane do NOT — they come from version-independent URLs.
+# Instead of a global gate with a fragile exemption list, check per-target.
+.PHONY: .check-ocp-version
+.check-ocp-version:
+	@if [ -z "$(ocp_version)" ]; then \
+		echo "[ABA] Error: ocp_version not set in aba.conf!"; \
+		echo "[ABA] Run 'aba --version <x.y.z>' or edit aba.conf to set ocp_version."; \
+		echo "[ABA] See README.md for getting started."; \
+		exit 1; \
+	fi
+
+# Wait for any background CLI downloads started by aba.sh (cli-download-all.sh).
+# Without this, the foreground 'make install' and the background run_once both run
+# curl on the same tarball, corrupting it (double-write race).
+# If no background downloads are running, returns immediately (~100ms).
+.PHONY: .wait-downloads
+.wait-downloads:
+	@$(SCRIPTS)/cli-download-all.sh --wait || true
 
 ##@ Help-related tasks
 .PHONY: help
@@ -123,10 +136,15 @@ help: ## Help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  aba \033[36mcommand\033[0m\n"} /^(\s|[\$\.\(\)\~\/a-zA-Z_0-9-])+:.*?##/ { printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 # Keep this like it is, otherwise the deps don't work!
+# ~/bin may be removed externally (e.g. E2E cleanup) while .init sentinel persists,
+# so every ~/bin/* target also depends on the ~/bin directory via order-only prerequisite.
 .init:
 	mkdir -p ~/bin
 	ln -fs ../scripts
 	touch .init
+
+~/bin:
+	mkdir -p ~/bin
 
 # aba.conf should never be missing!
 ../aba.conf:
@@ -171,8 +189,8 @@ download-butane: $(butane_binary_file)
 download-govc: $(govc_tar_file)
 
 # Download all CLI tarballs (govc is optional, depends on platform)
-download: download-oc download-oc-mirror download-openshift-install download-butane $(if $(govc_bin),download-govc)
-download-all: download-oc download-oc-mirror download-openshift-install download-butane download-govc
+download: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane $(if $(govc_bin),download-govc)
+download-all: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane download-govc
 
 # Output logical tool names for cli-download-all.sh
 # Task IDs become: cli:download:oc, cli:download:oc-mirror, etc.
@@ -182,12 +200,17 @@ out-download:
 out-download-all:
 	echo oc:$(ocp_version) oc-mirror openshift-install:$(ocp_version) butane govc
 
+# Version-independent tools only (oc-mirror, butane, govc don't need ocp_version)
+# govc is excluded when platform=bm (same as out-download)
+out-download-no-version:
+	echo oc-mirror butane $(govc_bin)
+
 
 ########################################
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
 oc: ~/bin/oc  ## Install oc into ~/bin
-~/bin/oc: .init $(local_oc_tar_file)
-	file $(local_oc_tar_file) | grep -q "gzip compressed data"
+~/bin/oc: .init $(local_oc_tar_file) | ~/bin
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for oc download" -i "cli:download:oc:$(ocp_version)" -- $(MAKE) --no-print-directory download-oc
 	@echo [ABA] Extracting $(local_oc_tar_file) to ~/bin/oc
 	tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || { echo [ABA] Error: Failed to extract $(local_oc_tar_file); exit 1; }
 	~/bin/oc --help >/dev/null 2>&1
@@ -219,9 +242,10 @@ $(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
 ########################################
 
 openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/bin
-~/bin/openshift-install: .init $(openshift_install_file)
+~/bin/openshift-install: .init $(openshift_install_file) | ~/bin
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for openshift-install download" -i "cli:download:openshift-install:$(ocp_version)" -- $(MAKE) --no-print-directory download-openshift-install
 	@echo [ABA] Extracting  $(openshift_install_file) to $@
-	tar -C ~/bin -xmzf $(openshift_install_file) openshift-install
+	tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || { echo [ABA] Error: Failed to extract $(openshift_install_file); exit 1; }
 	$@ --help >/dev/null || { echo [ABA] "Error: file $@ invalid!"; exit 1; }
 
 $(openshift_install_file):  ## Download openshift-install tarball
@@ -237,9 +261,10 @@ $(openshift_install_file):  ## Download openshift-install tarball
 
 ########################################
 oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
-~/bin/oc-mirror: .init $(local_oc_mirror_tar)
+~/bin/oc-mirror: .init $(local_oc_mirror_tar) | ~/bin
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for oc-mirror download" -i "cli:download:oc-mirror" -- $(MAKE) --no-print-directory download-oc-mirror
 	@echo [ABA] Extracting $(local_oc_mirror_tar) to ~/bin/oc-mirror
-	tar -C ~/bin -xmzf $(local_oc_mirror_tar) oc-mirror
+	tar -C ~/bin -xmzf $(local_oc_mirror_tar) oc-mirror || { echo [ABA] Error: Failed to extract $(local_oc_mirror_tar); exit 1; }
 	chmod +x ~/bin/oc-mirror
 #	~/bin/oc-mirror --help >/tmp/.oc-mirror-exec.log 2>&1 || { echo [ABA] "Error: ~/bin/oc-mirror failed to execute"; cp -p ~/bin/oc-mirror /tmp; exit 1; }
 
@@ -267,9 +292,10 @@ oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 ########################################
 # Use either x86_64 or arm64 
 govc: ~/bin/govc  ## Install govc to ~/bin/govc
-~/bin/govc: .init $(govc_tar_file)
+~/bin/govc: .init $(govc_tar_file) | ~/bin
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc download" -i "cli:download:govc" -- $(MAKE) --no-print-directory download-govc
 	@echo [ABA] Extracting $(govc_tar_file) to ~/bin/govc
-	tar -C ~/bin -xmzf $(govc_tar_file) govc
+	tar -C ~/bin -xmzf $(govc_tar_file) govc || { echo [ABA] Error: Failed to extract $(govc_tar_file); exit 1; }
 	~/bin/govc --help >/dev/null 2>&1
 
 govc_url = https://github.com/vmware/govmomi/releases/latest/download
@@ -284,7 +310,8 @@ $(govc_tar_file):   ## Download govc tarball
 # Use either amd64 or aarch64 
 .PHONY: butane
 butane: ~/bin/butane ## Install butane to ~/bin/butane
-~/bin/butane: $(butane_binary_file)
+~/bin/butane: $(butane_binary_file) | ~/bin
+	@$(SCRIPTS)/run-once.sh -w -m "Waiting for butane download" -i "cli:download:butane" -- $(MAKE) --no-print-directory download-butane
 	@echo [ABA] Copying butane binary to $@
 	cp $(butane_binary_file) $@
 	chmod +x $@
