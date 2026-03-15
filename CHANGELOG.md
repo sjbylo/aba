@@ -58,19 +58,6 @@ Quay/Docker now first-class, improved abatui, easier existing registry support a
 - **`reg_detect_existing()` fixed** - No longer blocks fresh installs due to stale credentials.
 - **Docker remote install** - Ensures `docker-reg-image.tgz` exists before scp.
 
-### E2E Testing
-- **New test framework** - Pool-aware dispatch, golden VM snapshots, crash detection, checkpoint resume, `--pool N` flag, tmux-based suites.
-- **Negative-paths suite** - Tests for blocked ports, stale state, missing configs.
-- **Regression tests** - stdout purity, mirror reset, save/load, bare-metal ISO, idempotent install.
-- **Old v1 framework removed** - `test/e2e-v1` deleted.
-- **E2E README with network diagram** - Documents pool topology and test architecture.
-
-### TUI Automated Tests
-- **Centralised keystroke helpers** - `send_enter`, `send_tab_enter`, `send_input`, `send_tab_tab_enter`, `send_tab_tab_tab_enter` with configurable pause before Enter.
-- **Channel and version verified in ISC** - Every ISC verification asserts expected channel and OCP version.
-- **Varied channel/version selections** - Tests alternate between stable/Latest, fast/Previous, and candidate to catch regressions.
-- **Faster action tests** - `run_and_interrupt` detects oc-mirror output and sends Ctrl-C immediately instead of waiting 90s.
-
 ---
 
 ## [0.9.6] - 2026-02-25
