@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+---
+
+## [0.9.7] - 2026-03-15
+
+Quay/Docker now first-class, improved abatui, easier existing registry support and many fixes
+
+
 ### New Features
 - **Named mirrors** - `aba mirror --name mymirror` creates an isolated mirror directory (like named clusters). Multiple enclaves each get their own credentials and config.
 - **Existing-registry registration** - Register an external registry with `--pull-secret-mirror` and `--ca-cert` flags. ABA stores credentials locally and never touches the registry. Deregister with `aba unregister`.
@@ -280,7 +287,8 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.6...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.7...HEAD
+[0.9.7]: https://github.com/sjbylo/aba/releases/tag/v0.9.7
 [0.9.6]: https://github.com/sjbylo/aba/releases/tag/v0.9.6
 [0.9.4]: https://github.com/sjbylo/aba/releases/tag/v0.9.4
 [0.9.3]: https://github.com/sjbylo/aba/releases/tag/v0.9.3
